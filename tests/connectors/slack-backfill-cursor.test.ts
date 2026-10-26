@@ -12,8 +12,7 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('backfillChannel cursor / oldest semantics', () => {
   let root: string;
@@ -25,9 +24,12 @@ describe('backfillChannel cursor / oldest semantics', () => {
     // Seed slack_cursors with a prior latest_ts.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)`,
-      ).run('default', 'C1', '1700000000.000100', new Date().toISOString());
+      db.prepare(`INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)`).run(
+        'default',
+        'C1',
+        '1700000000.000100',
+        new Date().toISOString(),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -57,17 +59,13 @@ describe('backfillChannel cursor / oldest semantics', () => {
       calls.push({ cursor, oldest });
       if (!cursor) {
         return {
-          messages: [
-            { type: 'message', channel: 'C1', user: 'U1', text: 'pageone msg', ts: '1.1' },
-          ],
+          messages: [{ type: 'message', channel: 'C1', user: 'U1', text: 'pageone msg', ts: '1.1' }],
           next_cursor: 'OPAQUE_PAGE2_TOKEN',
         };
       }
       if (cursor === 'OPAQUE_PAGE2_TOKEN') {
         return {
-          messages: [
-            { type: 'message', channel: 'C1', user: 'U1', text: 'pagetwo msg', ts: '2.2' },
-          ],
+          messages: [{ type: 'message', channel: 'C1', user: 'U1', text: 'pagetwo msg', ts: '2.2' }],
           next_cursor: null,
         };
       }
@@ -91,13 +89,7 @@ describe('backfillChannel cursor / oldest semantics', () => {
     // drains a channel every run. It does not: the persisted cursor is replayed as
     // `oldest`, so Slack bounds the range server-side. This pins that.
     const mkPage = (tss: string[], next: string | null): SlackHistoryPage => ({
-      messages: tss.map((ts) => ({
-        ts,
-        text: `m${ts}`,
-        user: 'U1',
-        type: 'message',
-        channel: 'C1',
-      })),
+      messages: tss.map((ts) => ({ ts, text: `m${ts}`, user: 'U1', type: 'message', channel: 'C1' })),
       next_cursor: next,
     });
 

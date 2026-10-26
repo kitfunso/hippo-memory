@@ -4,21 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  closeHippoDb,
-  openHippoDb,
-  withWriteScope,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import {
-  writeOutcome,
-  writeEntriesTogether,
-  writeEntryDbOnly,
-} from '../../src/store/sqlite/entry-writes.js';
+import { writeOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
@@ -55,9 +46,7 @@ function rowTexts(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): string
 
 function dueKeys(db: DatabaseSyncLike): string[] {
   // SAFETY: the SELECT names one TEXT column, key.
-  const rows = db
-    .prepare(`SELECT key FROM meta WHERE key LIKE 'mirror_due:%' ORDER BY key`)
-    .all() as Array<{
+  const rows = db.prepare(`SELECT key FROM meta WHERE key LIKE 'mirror_due:%' ORDER BY key`).all() as Array<{
     key: string;
   }>;
   return rows.map((row) => row.key);

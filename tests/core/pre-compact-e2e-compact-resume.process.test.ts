@@ -231,11 +231,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     // bytes and drop any WAL/SHM sidecars so a valid WAL can't mask the
     // corruption when the child process re-opens it.
     const dbPath = path.join(hippoRoot, 'hippo.db');
-    fs.writeFileSync(
-      dbPath,
-      'not a valid sqlite database file, just garbage bytes 0000000',
-      'utf8',
-    );
+    fs.writeFileSync(dbPath, 'not a valid sqlite database file, just garbage bytes 0000000', 'utf8');
     for (const suffix of ['-wal', '-shm', '-journal']) {
       const sidecar = dbPath + suffix;
       if (fs.existsSync(sidecar)) fs.rmSync(sidecar, { force: true });

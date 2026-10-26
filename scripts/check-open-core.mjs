@@ -30,20 +30,14 @@ export function findViolations(diff) {
     if (header) {
       file = header[1];
       if (matchesCommercial(file)) hits.push(`${file}: path`);
-    } else if (
-      file &&
-      line.startsWith('+') &&
-      !line.startsWith('+++ ') &&
-      matchesCommercial(line.slice(1))
-    ) {
+    } else if (file && line.startsWith('+') && !line.startsWith('+++ ') && matchesCommercial(line.slice(1))) {
       hits.push(`${file}: ${line.slice(1).trim().slice(0, 120)}`);
     }
   }
   return hits;
 }
 
-const git = (...args) =>
-  execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
 
 function resolveBase(argv, event) {
   const i = argv.indexOf('--base');
@@ -57,32 +51,16 @@ function main() {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const event = eventPath ? JSON.parse(readFileSync(eventPath, 'utf8')) : null;
   const base = resolveBase(process.argv, event);
-  const diff = git(
-    'diff',
-    '-U0',
-    '--no-color',
-    '--diff-filter=AMR',
-    base,
-    'HEAD',
-    '--',
-    ...SCOPED_DIRS,
-    ...EXCLUDES,
-  );
+  const diff = git('diff', '-U0', '--no-color', '--diff-filter=AMR', base, 'HEAD', '--', ...SCOPED_DIRS, ...EXCLUDES);
   const hits = findViolations(diff);
   if (hits.length === 0) return console.log(`check-open-core: clean against ${base}`);
   const notes = `${event?.pull_request?.body ?? ''}\n${git('log', '--format=%B', `${base}..HEAD`)}`;
   if (OVERRIDE_RE.test(notes)) {
-    return console.log(
-      `check-open-core: ${hits.length} match(es) cleared by "open-core: reviewed"`,
-    );
+    return console.log(`check-open-core: ${hits.length} match(es) cleared by "open-core: reviewed"`);
   }
-  console.error(
-    'check-open-core: this change adds what looks like commercial-only code (see CONTRIBUTING.md):',
-  );
+  console.error('check-open-core: this change adds what looks like commercial-only code (see CONTRIBUTING.md):');
   for (const h of hits) console.error(`  ${h}`);
-  console.error(
-    'If it is core, add a line "open-core: reviewed" to the PR body or a commit message.',
-  );
+  console.error('If it is core, add a line "open-core: reviewed" to the PR body or a commit message.');
   process.exit(1);
 }
 

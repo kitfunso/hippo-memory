@@ -51,18 +51,10 @@ let fixture: TwoTenantFixture;
 let baseline: Side;
 const entries = new Map<string, MemoryEntry>();
 
-function memory(
-  id: string,
-  tenantId: string,
-  day: number,
-  extra: Partial<MemoryEntry> = {},
-): MemoryEntry {
+function memory(id: string, tenantId: string, day: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const created = `2026-01-0${day}T00:00:00.000Z`;
   return {
-    ...createMemory(`vector conformance row ${id}`, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tenantId,
-    }),
+    ...createMemory(`vector conformance row ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId }),
     id,
     created,
     lastRetrieved: created,
@@ -116,26 +108,14 @@ const write =
   (g) =>
     g.writeVectors({ tenantId, model, replaceIndex, rows });
 const indexState: Call = async (_g, store) =>
-  (await store.vectors?.embeddingIndexState()) ?? {
-    storedModel: 'no vectors group',
-    hasVectors: false,
-  };
+  (await store.vectors?.embeddingIndexState()) ?? { storedModel: 'no vectors group', hasVectors: false };
 const sorted = <V>(map: Map<string, V> | undefined): [string, V][] =>
   [...(map ?? new Map<string, V>())].sort(([a], [b]) => (a < b ? -1 : 1));
 const stored: Call = async (_g, store) =>
-  sorted(await store.vectors?.stored('vectors', ALL_IDS)).map(([id, v]): [string, number[]] => [
-    id,
-    Array.from(v),
-  ]);
-const particles: Call = async (_g, store) =>
-  sorted(await store.vectors?.stored('particles', ALL_IDS));
+  sorted(await store.vectors?.stored('vectors', ALL_IDS)).map(([id, v]): [string, number[]] => [id, Array.from(v)]);
+const particles: Call = async (_g, store) => sorted(await store.vectors?.stored('particles', ALL_IDS));
 const particleFor = (id: string, vector: number[]): PhysicsParticle =>
-  initializeParticle(
-    entries.get(id) ?? memory(id, TENANT_A, 9),
-    vector,
-    PRODUCTION_STRENGTH,
-    SEEDED_AT,
-  );
+  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, PRODUCTION_STRENGTH, SEEDED_AT);
 
 type Row = MemoryEntry | [string, number[]] | [string, PhysicsParticle];
 const isEntry = (row: Row): row is MemoryEntry => !Array.isArray(row);
@@ -208,10 +188,7 @@ describe('VectorWrites.entriesWithoutVector', () => {
       missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 10_000 }),
       missing({ tenantId: ALL_TENANTS, model: MODEL, limit: 2.5 }),
     ]);
-    expect(side.outcomes.slice(0, 2).map(idsOf)).toEqual([
-      ['mem_2'],
-      ['mem_2', 'mem_3', 'mem_5', 'mem_6'],
-    ]);
+    expect(side.outcomes.slice(0, 2).map(idsOf)).toEqual([['mem_2'], ['mem_2', 'mem_3', 'mem_5', 'mem_6']]);
     expect(side.outcomes[2]).toEqual({ error: 'RangeError: limit must be an integer' });
   });
 });
@@ -280,11 +257,7 @@ describe('VectorWrites.writeVectors', () => {
   });
 
   it("refuses a one-row write under another model without replaceIndex, leaving tenant B's vector, and drops every tenant's index with it", async () => {
-    const row6 = {
-      memoryId: 'mem_6',
-      vector: [0, 1, 1],
-      particle: particleFor('mem_6', [0, 1, 1]),
-    };
+    const row6 = { memoryId: 'mem_6', vector: [0, 1, 1], particle: particleFor('mem_6', [0, 1, 1]) };
     const side = await conforms([
       write(TENANT_A, NEW, [row6]),
       indexState,
@@ -297,10 +270,7 @@ describe('VectorWrites.writeVectors', () => {
       particles,
       missing({ tenantId: ALL_TENANTS, model: NEW, limit: 10 }),
     ]);
-    expect(side.outcomes.slice(0, 4)).toEqual([
-      { value: { written: 0, modelMismatch: true } },
-      ...baseline.outcomes,
-    ]);
+    expect(side.outcomes.slice(0, 4)).toEqual([{ value: { written: 0, modelMismatch: true } }, ...baseline.outcomes]);
     expect(side.outcomes.slice(4, 8)).toEqual([
       { value: { written: 1, modelMismatch: false } },
       { value: { written: 1, modelMismatch: false } },

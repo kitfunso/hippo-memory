@@ -33,16 +33,10 @@ afterEach(() => {
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
-async function runVerb(
-  ...args: string[]
-): Promise<{ status: number; stdout: string; stderr: string }> {
+async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
-    return {
-      status: r.status || Number(process.exitCode ?? 0),
-      stdout: r.stdout,
-      stderr: r.stderr,
-    };
+    return { status: r.status || Number(process.exitCode ?? 0), stdout: r.stdout, stderr: r.stderr };
   } finally {
     process.exitCode = undefined;
   }
@@ -68,9 +62,7 @@ describe('hippo projects', () => {
     const json = await hippo('list', '--json');
     expect(json.status).toBe(0);
     // SAFETY: --json prints listProjects' rows; the assertions below fail on any other shape.
-    const { projects } = JSON.parse(json.stdout) as {
-      projects: Array<{ origin: string | null; live: number }>;
-    };
+    const { projects } = JSON.parse(json.stdout) as { projects: Array<{ origin: string | null; live: number }> };
     expect(projects.map((p) => [p.origin, p.live]).sort()).toEqual([
       ['', 1],
       ['repo', 2],
@@ -100,11 +92,7 @@ describe('hippo projects', () => {
     expect(applied.stdout).toContain('Merged repo-wt-a into repo');
     const backup = /Backup: (.+)/.exec(applied.stdout)?.[1]?.trim();
     expect(backup && existsSync(backup)).toBe(true);
-    expect([originOf(a.id), originOf(b.id), originOf(other.id)]).toEqual([
-      'repo',
-      'repo',
-      'elsewhere',
-    ]);
+    expect([originOf(a.id), originOf(b.id), originOf(other.id)]).toEqual(['repo', 'repo', 'elsewhere']);
   });
 
   it('refuses to merge into the user-global name and exits non-zero without writing', async () => {

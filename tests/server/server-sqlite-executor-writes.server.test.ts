@@ -60,9 +60,7 @@ const REFUSED = 'the value a person rejected';
 
 function contents(root: string): string[] {
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
-  const rows = onDb(root, (db) =>
-    db.prepare('SELECT content FROM memories ORDER BY content').all(),
-  ) as Array<{
+  const rows = onDb(root, (db) => db.prepare('SELECT content FROM memories ORDER BY content').all()) as Array<{
     content: string;
   }>;
   return rows.map((row) => row.content);
@@ -141,53 +139,30 @@ const NAMED = /"(id|newId|keyId|plaintext)":"([^"]+)"/g;
 const MISSING_MEMORY = '/v1/memories/mem_000000000000';
 
 const of = (run: Run, name: string): string => run.made.get(name) ?? 'named-by-no-earlier-step';
-const memory = (run: Run, step: string, tail = ''): string =>
-  `/v1/memories/${of(run, `${step}.id`)}${tail}`;
+const memory = (run: Run, step: string, tail = ''): string => `/v1/memories/${of(run, `${step}.id`)}${tail}`;
 
 const MEMORY_STEPS: readonly Step[] = [
-  [
-    'create',
-    (r) => post(r.server, '/v1/memories', { content: 'the first note', kind: 'raw' }, r.keys.main),
-  ],
+  ['create', (r) => post(r.server, '/v1/memories', { content: 'the first note', kind: 'raw' }, r.keys.main)],
   [
     'create a second',
-    (r) =>
-      post(r.server, '/v1/memories', { content: 'the second note', tags: ['kept'] }, r.keys.main),
+    (r) => post(r.server, '/v1/memories', { content: 'the second note', tags: ['kept'] }, r.keys.main),
   ],
-  [
-    'create a third',
-    (r) => post(r.server, '/v1/memories', { content: 'the third note' }, r.keys.main),
-  ],
+  ['create a third', (r) => post(r.server, '/v1/memories', { content: 'the third note' }, r.keys.main)],
   [
     'create for the other tenant',
     (r) => post(r.server, '/v1/memories', { content: 'their note', kind: 'raw' }, r.keys.other),
   ],
-  [
-    'create as a member',
-    (r) => post(r.server, '/v1/memories', { content: 'a member note' }, r.keys.member),
-  ],
+  ['create as a member', (r) => post(r.server, '/v1/memories', { content: 'a member note' }, r.keys.member)],
   ['create without content', (r) => post(r.server, '/v1/memories', { kind: 'raw' }, r.keys.main)],
   [
     'create with an invalid kind',
     (r) => post(r.server, '/v1/memories', { content: 'never saved', kind: 'bogus' }, r.keys.main),
   ],
   ['create with a broken body', (r) => postText(r.server, '/v1/memories', '{', r.keys.main)],
-  [
-    'create a rejected value',
-    (r) => post(r.server, '/v1/memories', { content: REFUSED }, r.keys.main),
-  ],
-  [
-    'create with an unknown key',
-    (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.unknown),
-  ],
-  [
-    'create with a revoked key',
-    (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.revoked),
-  ],
-  [
-    'create with an expired key',
-    (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.expired),
-  ],
+  ['create a rejected value', (r) => post(r.server, '/v1/memories', { content: REFUSED }, r.keys.main)],
+  ['create with an unknown key', (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.unknown)],
+  ['create with a revoked key', (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.revoked)],
+  ['create with an expired key', (r) => post(r.server, '/v1/memories', { content: 'never saved' }, r.keys.expired)],
   [
     'supersede',
     (r) =>
@@ -208,14 +183,10 @@ const MEMORY_STEPS: readonly Step[] = [
         r.keys.main,
       ),
   ],
-  [
-    'supersede without content',
-    (r) => post(r.server, memory(r, 'create a third', '/supersede'), {}, r.keys.main),
-  ],
+  ['supersede without content', (r) => post(r.server, memory(r, 'create a third', '/supersede'), {}, r.keys.main)],
   [
     'supersede with a rejected value',
-    (r) =>
-      post(r.server, memory(r, 'create a third', '/supersede'), { content: REFUSED }, r.keys.main),
+    (r) => post(r.server, memory(r, 'create a third', '/supersede'), { content: REFUSED }, r.keys.main),
   ],
   [
     'supersede a missing row',
@@ -224,55 +195,26 @@ const MEMORY_STEPS: readonly Step[] = [
   [
     "supersede the other tenant's row",
     (r) =>
-      post(
-        r.server,
-        memory(r, 'create for the other tenant', '/supersede'),
-        { content: 'never saved' },
-        r.keys.main,
-      ),
+      post(r.server, memory(r, 'create for the other tenant', '/supersede'), { content: 'never saved' }, r.keys.main),
   ],
   [
     'supersede with an unknown key',
-    (r) =>
-      post(
-        r.server,
-        memory(r, 'create a third', '/supersede'),
-        { content: 'never saved' },
-        r.keys.unknown,
-      ),
+    (r) => post(r.server, memory(r, 'create a third', '/supersede'), { content: 'never saved' }, r.keys.unknown),
   ],
-  [
-    'archive',
-    (r) =>
-      post(r.server, memory(r, 'create', '/archive'), { reason: 'no longer needed' }, r.keys.main),
-  ],
+  ['archive', (r) => post(r.server, memory(r, 'create', '/archive'), { reason: 'no longer needed' }, r.keys.main)],
   [
     'archive it again',
-    (r) =>
-      post(r.server, memory(r, 'create', '/archive'), { reason: 'no longer needed' }, r.keys.main),
+    (r) => post(r.server, memory(r, 'create', '/archive'), { reason: 'no longer needed' }, r.keys.main),
   ],
-  [
-    'archive without a reason',
-    (r) => post(r.server, memory(r, 'create', '/archive'), {}, r.keys.main),
-  ],
+  ['archive without a reason', (r) => post(r.server, memory(r, 'create', '/archive'), {}, r.keys.main)],
   [
     'archive a row that is not raw',
-    (r) =>
-      post(r.server, memory(r, 'create a third', '/archive'), { reason: 'not raw' }, r.keys.main),
+    (r) => post(r.server, memory(r, 'create a third', '/archive'), { reason: 'not raw' }, r.keys.main),
   ],
-  [
-    'archive a missing row',
-    (r) => post(r.server, `${MISSING_MEMORY}/archive`, { reason: 'missing' }, r.keys.main),
-  ],
+  ['archive a missing row', (r) => post(r.server, `${MISSING_MEMORY}/archive`, { reason: 'missing' }, r.keys.main)],
   [
     "archive the other tenant's row",
-    (r) =>
-      post(
-        r.server,
-        memory(r, 'create for the other tenant', '/archive'),
-        { reason: 'theirs' },
-        r.keys.main,
-      ),
+    (r) => post(r.server, memory(r, 'create for the other tenant', '/archive'), { reason: 'theirs' }, r.keys.main),
   ],
   [
     'archive with a revoked key',
@@ -281,53 +223,23 @@ const MEMORY_STEPS: readonly Step[] = [
   ['forget', (r) => del(r.server, memory(r, 'create a third'), r.keys.main)],
   ['forget it again', (r) => del(r.server, memory(r, 'create a third'), r.keys.main)],
   ['forget a missing row', (r) => del(r.server, MISSING_MEMORY, r.keys.main)],
-  [
-    "forget the other tenant's row",
-    (r) => del(r.server, memory(r, 'create for the other tenant'), r.keys.main),
-  ],
-  [
-    'forget with an expired key',
-    (r) => del(r.server, memory(r, 'create a second'), r.keys.expired),
-  ],
+  ["forget the other tenant's row", (r) => del(r.server, memory(r, 'create for the other tenant'), r.keys.main)],
+  ['forget with an expired key', (r) => del(r.server, memory(r, 'create a second'), r.keys.expired)],
   ['assemble', (r) => get(r.server, '/v1/sessions/sess-1/assemble', r.keys.main)],
-  [
-    'assemble a small budget',
-    (r) => get(r.server, '/v1/sessions/sess-1/assemble?budget=5&freshTail=1', r.keys.main),
-  ],
-  [
-    'assemble an unknown session',
-    (r) => get(r.server, '/v1/sessions/sess-none/assemble', r.keys.main),
-  ],
-  [
-    'assemble a bad budget',
-    (r) => get(r.server, '/v1/sessions/sess-1/assemble?budget=0', r.keys.main),
-  ],
-  [
-    'assemble as the other tenant',
-    (r) => get(r.server, '/v1/sessions/sess-1/assemble', r.keys.other),
-  ],
-  [
-    'assemble with an unknown key',
-    (r) => get(r.server, '/v1/sessions/sess-1/assemble', r.keys.unknown),
-  ],
+  ['assemble a small budget', (r) => get(r.server, '/v1/sessions/sess-1/assemble?budget=5&freshTail=1', r.keys.main)],
+  ['assemble an unknown session', (r) => get(r.server, '/v1/sessions/sess-none/assemble', r.keys.main)],
+  ['assemble a bad budget', (r) => get(r.server, '/v1/sessions/sess-1/assemble?budget=0', r.keys.main)],
+  ['assemble as the other tenant', (r) => get(r.server, '/v1/sessions/sess-1/assemble', r.keys.other)],
+  ['assemble with an unknown key', (r) => get(r.server, '/v1/sessions/sess-1/assemble', r.keys.unknown)],
 ];
 
 const KEY_STEPS: readonly Step[] = [
-  [
-    'mint',
-    (r) => post(r.server, '/v1/auth/keys', { label: 'minted', role: 'member' }, r.keys.main),
-  ],
-  [
-    'mint with no role',
-    (r) => post(r.server, '/v1/auth/keys', { label: 'defaulted' }, r.keys.main),
-  ],
+  ['mint', (r) => post(r.server, '/v1/auth/keys', { label: 'minted', role: 'member' }, r.keys.main)],
+  ['mint with no role', (r) => post(r.server, '/v1/auth/keys', { label: 'defaulted' }, r.keys.main)],
   ['mint with a bad role', (r) => post(r.server, '/v1/auth/keys', { role: 'root' }, r.keys.main)],
   ['mint with a broken body', (r) => postText(r.server, '/v1/auth/keys', '{', r.keys.main)],
   ['mint as a member', (r) => post(r.server, '/v1/auth/keys', { label: 'refused' }, r.keys.member)],
-  [
-    'mint with an unknown key',
-    (r) => post(r.server, '/v1/auth/keys', { label: 'refused' }, r.keys.unknown),
-  ],
+  ['mint with an unknown key', (r) => post(r.server, '/v1/auth/keys', { label: 'refused' }, r.keys.unknown)],
   ['list keys with the minted key', (r) => get(r.server, '/v1/auth/keys', of(r, 'mint.plaintext'))],
   ['list keys', (r) => get(r.server, '/v1/auth/keys', r.keys.main)],
   ['list keys, the dead ones too', (r) => get(r.server, '/v1/auth/keys?active=false', r.keys.main)],
@@ -337,26 +249,11 @@ const KEY_STEPS: readonly Step[] = [
   ['list keys with a revoked key', (r) => get(r.server, '/v1/auth/keys', r.keys.revoked)],
   ['revoke', (r) => del(r.server, `/v1/auth/keys/${of(r, 'mint.keyId')}`, r.keys.main)],
   ['revoke it again', (r) => del(r.server, `/v1/auth/keys/${of(r, 'mint.keyId')}`, r.keys.main)],
-  [
-    'revoke a missing key',
-    (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.unknown)}`, r.keys.main),
-  ],
-  [
-    "revoke the other tenant's key",
-    (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.other)}`, r.keys.main),
-  ],
-  [
-    'revoke as a member',
-    (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.main)}`, r.keys.member),
-  ],
-  [
-    'revoke with an expired key',
-    (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.main)}`, r.keys.expired),
-  ],
-  [
-    'list keys with the minted key, now revoked',
-    (r) => get(r.server, '/v1/auth/keys', of(r, 'mint.plaintext')),
-  ],
+  ['revoke a missing key', (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.unknown)}`, r.keys.main)],
+  ["revoke the other tenant's key", (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.other)}`, r.keys.main)],
+  ['revoke as a member', (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.main)}`, r.keys.member)],
+  ['revoke with an expired key', (r) => del(r.server, `/v1/auth/keys/${keyIdOf(r.keys.main)}`, r.keys.expired)],
+  ['list keys with the minted key, now revoked', (r) => get(r.server, '/v1/auth/keys', of(r, 'mint.plaintext'))],
   ['audit', (r) => get(r.server, '/v1/audit', r.keys.main)],
   ['audit one op', (r) => get(r.server, '/v1/audit?op=remember', r.keys.main)],
   ['audit one per page', (r) => get(r.server, '/v1/audit?limit=1', r.keys.main)],
@@ -373,12 +270,10 @@ const STEPS = [...MEMORY_STEPS, ...KEY_STEPS];
 const STORED = {
   memories: `SELECT tenant_id, kind, layer, content, tags_json, source, confidence, scope, owner, artifact_ref, source_session_id, origin_project,
     superseded_by IS NOT NULL AS superseded FROM memories ORDER BY content, kind`,
-  archive:
-    'SELECT reason, archived_by, mirror_cleaned_at IS NOT NULL AS cleaned FROM raw_archive ORDER BY id',
+  archive: 'SELECT reason, archived_by, mirror_cleaned_at IS NOT NULL AS cleaned FROM raw_archive ORDER BY id',
   keys: 'SELECT tenant_id, label, role, owner_subject, revoked_at IS NOT NULL AS revoked, expires_at IS NOT NULL AS expires FROM api_keys ORDER BY id',
   counters: `SELECT key, value FROM meta WHERE key LIKE 'total_%' ORDER BY key`,
-  tokens:
-    'SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id',
+  tokens: 'SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id',
 } as const;
 
 function storedRows(root: string, keyIds: readonly string[]): string[] {
@@ -410,12 +305,7 @@ async function runSteps(root: string, store?: HippoStore) {
   // stats.json is throttled to one write a second and flushed on close, so the mirrors are read after the stop.
   await run.server.stop();
   await store?.close();
-  return {
-    replies,
-    audit: auditRows(root, keyIds),
-    stored: storedRows(root, keyIds),
-    mirrors: mirrorFiles(root),
-  };
+  return { replies, audit: auditRows(root, keyIds), stored: storedRows(root, keyIds), mirrors: mirrorFiles(root) };
 }
 
 describe('the worker-backed write, key and audit routes against the in-process store', () => {
@@ -430,9 +320,7 @@ describe('the worker-backed write, key and audit routes against the in-process s
       expect(onWorkers.audit).toEqual(inProcess.audit);
       expect(onWorkers.stored).toEqual(inProcess.stored);
       expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-      const statusOf = Object.fromEntries(
-        onWorkers.replies.map((reply) => [reply.label, reply.status]),
-      );
+      const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
       expect(statusOf).toMatchObject({
         create: 200,
         'create without content': 400,
@@ -476,31 +364,15 @@ describe('the worker-backed write, key and audit routes against the in-process s
         const server = await start(root, store);
         const lock = holdWriteLock(root);
         const replies = [
-          await seen(
-            'create',
-            await post(server, '/v1/memories', { content: 'refused' }, key.plaintext),
-            [key.keyId],
-          ),
+          await seen('create', await post(server, '/v1/memories', { content: 'refused' }, key.plaintext), [key.keyId]),
           await seen(
             'archive',
-            await post(
-              server,
-              `/v1/memories/${memoryId}/archive`,
-              { reason: 'refused' },
-              key.plaintext,
-            ),
+            await post(server, `/v1/memories/${memoryId}/archive`, { reason: 'refused' }, key.plaintext),
             [key.keyId],
           ),
-          await seen(
-            'mint',
-            await post(
-              server,
-              '/v1/auth/keys',
-              { label: 'refused', role: 'member' },
-              key.plaintext,
-            ),
-            [key.keyId],
-          ),
+          await seen('mint', await post(server, '/v1/auth/keys', { label: 'refused', role: 'member' }, key.plaintext), [
+            key.keyId,
+          ]),
           await seen('list keys', await get(server, '/v1/auth/keys', key.plaintext), [key.keyId]),
           await seen('audit', await get(server, '/v1/audit', key.plaintext), [key.keyId]),
         ];
@@ -526,18 +398,14 @@ describe('the event loop while a memory write waits', () => {
     const key = keyFor(root, 'default');
     const { store, sent } = patientStore(root);
     const server = await start(root, store);
-    expect(
-      (await post(server, '/v1/memories', { content: 'warms the writer' }, key.plaintext)).status,
-    ).toBe(200);
+    expect((await post(server, '/v1/memories', { content: 'warms the writer' }, key.plaintext)).status).toBe(200);
 
     const lock = holdWriteLock(root);
     const order: string[] = [];
-    const write = post(server, '/v1/memories', { content: 'behind the lock' }, key.plaintext).then(
-      (res) => {
-        order.push('write');
-        return res;
-      },
-    );
+    const write = post(server, '/v1/memories', { content: 'behind the lock' }, key.plaintext).then((res) => {
+      order.push('write');
+      return res;
+    });
     await sent('entryWrites.writeEntry', 2);
     const audit = await get(server, '/v1/audit', key.plaintext);
     order.push('audit');
@@ -557,18 +425,12 @@ describe("a memory write still behind the write lock at its request's deadline",
   it('is stopped before its commit: the 504 says nothing was saved, and no row, audit row or mirror file is left', async () => {
     const root = newRoot();
     const key = keyFor(root, 'default');
-    const left = () => [
-      auditRows(root, [key.keyId]),
-      storedRows(root, [key.keyId]),
-      mirrorFiles(root),
-    ];
+    const left = () => [auditRows(root, [key.keyId]), storedRows(root, [key.keyId]), mirrorFiles(root)];
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '0');
     // A grace far past the test's own timeout, so the reply can only be the stopped thread's own word.
     const { store } = patientStore(root, { writeGraceMs: 60_000 });
     const server = await start(root, store);
-    expect(
-      (await post(server, '/v1/memories', { content: 'warms the writer' }, key.plaintext)).status,
-    ).toBe(200);
+    expect((await post(server, '/v1/memories', { content: 'warms the writer' }, key.plaintext)).status).toBe(200);
     const before = left();
     const lock = holdWriteLock(root);
     const expired = new Promise<void>((resolve) => {
@@ -578,12 +440,7 @@ describe("a memory write still behind the write lock at its request's deadline",
     });
 
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '1000');
-    const write = post(
-      server,
-      '/v1/memories',
-      { content: 'stopped before its commit' },
-      key.plaintext,
-    );
+    const write = post(server, '/v1/memories', { content: 'stopped before its commit' }, key.plaintext);
     await expired;
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '0');
     lock.release();
@@ -595,10 +452,7 @@ describe("a memory write still behind the write lock at its request's deadline",
       error: expect.stringContaining('nothing was saved'),
     });
     expect(left()).toEqual(before);
-    expect(
-      (await post(server, '/v1/memories', { content: 'after the replacement' }, key.plaintext))
-        .status,
-    ).toBe(200);
+    expect((await post(server, '/v1/memories', { content: 'after the replacement' }, key.plaintext)).status).toBe(200);
     expect(contents(root)).toEqual(['after the replacement', 'warms the writer']);
   });
 });
@@ -627,20 +481,17 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     [
       'POST /v1/memories/:id/archive',
       (p) => ({ entryWrites: p.entryWrites }),
-      (s, made) =>
-        post(s, `/v1/memories/${made.memoryId}/archive`, { reason: 'refused' }, made.token),
+      (s, made) => post(s, `/v1/memories/${made.memoryId}/archive`, { reason: 'refused' }, made.token),
     ],
     [
       'POST /v1/memories/:id/supersede',
       (p) => ({ entryWrites: p.entryWrites }),
-      (s, made) =>
-        post(s, `/v1/memories/${made.memoryId}/supersede`, { content: 'refused' }, made.token),
+      (s, made) => post(s, `/v1/memories/${made.memoryId}/supersede`, { content: 'refused' }, made.token),
     ],
     [
       'POST /v1/memories/:id/supersede, by its read of the old row',
       (p) => ({ entriesByIds: p.entriesByIds }),
-      (s, made) =>
-        post(s, `/v1/memories/${made.memoryId}/supersede`, { content: 'refused' }, made.token),
+      (s, made) => post(s, `/v1/memories/${made.memoryId}/supersede`, { content: 'refused' }, made.token),
     ],
     [
       'DELETE /v1/memories/:id',
@@ -662,21 +513,13 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
       (p) => ({ keyWrites: p.keyWrites }),
       (s, made) => post(s, '/v1/auth/keys', { label: 'refused', role: 'member' }, made.token),
     ],
-    [
-      'GET /v1/auth/keys',
-      (p) => ({ keyWrites: p.keyWrites }),
-      (s, made) => get(s, '/v1/auth/keys', made.token),
-    ],
+    ['GET /v1/auth/keys', (p) => ({ keyWrites: p.keyWrites }), (s, made) => get(s, '/v1/auth/keys', made.token)],
     [
       'DELETE /v1/auth/keys/:keyId',
       (p) => ({ keyWrites: p.keyWrites }),
       (s, made) => del(s, `/v1/auth/keys/${made.keyId}`, made.token),
     ],
-    [
-      'GET /v1/audit',
-      (p) => ({ auditLog: p.auditLog }),
-      (s, made) => get(s, '/v1/audit', made.token),
-    ],
+    ['GET /v1/audit', (p) => ({ auditLog: p.auditLog }), (s, made) => get(s, '/v1/audit', made.token)],
     [
       'GET /v1/audit, by the key row read',
       (p) => ({ findApiKey: p.findApiKey }),
@@ -684,30 +527,27 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     ],
   ];
 
-  it.each(ROUTES)(
-    '%s fails when its handler opens hippo.db on the server thread',
-    async (_route, swapped, send) => {
-      const root = newRoot();
-      const [memoryId = ''] = seedSession(root, 'default', 'sess-1', 1);
-      const caller = keyFor(root, 'default');
-      const spare = keyFor(root, 'default');
-      const before = [auditRows(root, []), storedRows(root, [])];
-      const info = vi.spyOn(log, 'info');
-      // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-      const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
-      const server = await start(root, store);
+  it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, swapped, send) => {
+    const root = newRoot();
+    const [memoryId = ''] = seedSession(root, 'default', 'sess-1', 1);
+    const caller = keyFor(root, 'default');
+    const spare = keyFor(root, 'default');
+    const before = [auditRows(root, []), storedRows(root, [])];
+    const info = vi.spyOn(log, 'info');
+    // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
+    const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+    const server = await start(root, store);
 
-      const res = await send(server, { memoryId, keyId: spare.keyId, token: caller.plaintext });
+    const res = await send(server, { memoryId, keyId: spare.keyId, token: caller.plaintext });
 
-      expect(res.status).toBe(501);
-      expect(
-        info.mock.calls
-          .map((call) => String(call[0]))
-          .filter((line) => line.includes('opened on the server thread by a route')),
-      ).toHaveLength(1);
-      expect([auditRows(root, []), storedRows(root, [])]).toEqual(before);
-    },
-  );
+    expect(res.status).toBe(501);
+    expect(
+      info.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('opened on the server thread by a route')),
+    ).toHaveLength(1);
+    expect([auditRows(root, []), storedRows(root, [])]).toEqual(before);
+  });
 });
 
 /** `inner`, with each key row read answered only once `count` of them wait, so every check reaches the bounds before any derivation can end. */
@@ -737,18 +577,13 @@ describe('a 429 and the store workers', () => {
     const root = newRoot();
     const key = keyFor(root, 'default');
     const { store, ops } = patientStore(root);
-    const server = await start(root, store, {
-      rateLimits: { perAddress: { ratePerSec: 0.001, burst: 1 } },
-    });
+    const server = await start(root, store, { rateLimits: { perAddress: { ratePerSec: 0.001, burst: 1 } } });
     expect((await get(server, '/v1/audit', key.plaintext)).status).toBe(200);
     const answered = [...ops];
 
     const refused = await get(server, '/v1/audit', key.plaintext);
 
-    expect([refused.status, await refused.text()]).toEqual([
-      429,
-      '{"error":"rate limit exceeded"}',
-    ]);
+    expect([refused.status, await refused.text()]).toEqual([429, '{"error":"rate limit exceeded"}']);
     expect(answered).toEqual([KEY_READ, 'auditLog.listAuditEvents']);
     expect(ops).toEqual(answered);
   });
@@ -760,8 +595,7 @@ describe('a 429 and the store workers', () => {
     const key = keyFor(root, 'default');
     const { store, ops } = patientStore(root);
     const server = await start(root, store);
-    const wrong = (n: number): string =>
-      `${key.keyId}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n).repeat(32)}`;
+    const wrong = (n: number): string => `${key.keyId}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n).repeat(32)}`;
 
     const replies = [];
     for (let n = 0; n < 7; n++) {
@@ -770,9 +604,7 @@ describe('a 429 and the store workers', () => {
     }
 
     expect(replies.slice(0, 5)).toEqual(Array(5).fill([401, '{"error":"invalid api key"}']));
-    expect(replies.slice(5)).toEqual(
-      Array(2).fill([429, '{"error":"too many key checks from this address"}']),
-    );
+    expect(replies.slice(5)).toEqual(Array(2).fill([429, '{"error":"too many key checks from this address"}']));
     expect(ops).toEqual(Array(7).fill(KEY_READ));
   });
 
@@ -788,19 +620,14 @@ describe('a 429 and the store workers', () => {
     const replies = await Promise.all(
       keys.map(async (key, n) => {
         const res = await fetch(`${server.url}/v1/audit`, {
-          headers: {
-            authorization: `Bearer ${key.plaintext}`,
-            'x-forwarded-for': `203.0.113.${n + 1}`,
-          },
+          headers: { authorization: `Bearer ${key.plaintext}`, 'x-forwarded-for': `203.0.113.${n + 1}` },
         });
         return res.ok ? 200 : `${res.status} ${await res.text()}`;
       }),
     );
 
     expect(replies.filter((reply) => reply === 200)).toHaveLength(10);
-    expect(replies.filter((reply) => reply !== 200)).toEqual(
-      Array(3).fill('429 {"error":"rate limit exceeded"}'),
-    );
+    expect(replies.filter((reply) => reply !== 200)).toEqual(Array(3).fill('429 {"error":"rate limit exceeded"}'));
     expect(ops.filter((op) => op === KEY_READ)).toHaveLength(13);
     expect(ops.filter((op) => op !== KEY_READ)).toEqual(Array(10).fill('auditLog.listAuditEvents'));
   });
@@ -832,10 +659,7 @@ describe('an audit write failure counted on a worker thread', () => {
 function checkpointedPredictions(root: string): number {
   const copy = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-main-file-')));
   copyFileSync(getHippoDbPath(root), getHippoDbPath(copy));
-  return onDb(
-    copy,
-    (db) => (db.prepare('SELECT COUNT(*) AS n FROM predictions').get() as { n: number }).n,
-  );
+  return onDb(copy, (db) => (db.prepare('SELECT COUNT(*) AS n FROM predictions').get() as { n: number }).n);
 }
 
 describe("a store worker's wal_autocheckpoint", () => {

@@ -20,8 +20,7 @@ oneRequestPerTest();
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
 const ROWS = 1100;
-const text = (label: string): string =>
-  `${label}: the step needs its flag or the command silently does nothing`;
+const text = (label: string): string => `${label}: the step needs its flag or the command silently does nothing`;
 
 let root: string;
 
@@ -75,9 +74,7 @@ function seedLocal(): string[] {
 }
 
 function seedGlobal(): void {
-  const spaced = createMemory(`  ${text('already global').replace(/ /g, '   ')}  `, {
-    tenantId: 'other',
-  });
+  const spaced = createMemory(`  ${text('already global').replace(/ /g, '   ')}  `, { tenantId: 'other' });
   writeEntry(getGlobalRoot(), spaced);
   const merged = createMemory(
     mergedText('[Consolidated from 2 related memories, newest first]', [

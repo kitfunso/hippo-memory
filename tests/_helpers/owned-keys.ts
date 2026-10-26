@@ -1,12 +1,7 @@
 // Self-service keys OWNER minted in both tenants, live, expired and revoked, added to the two-tenant fixture.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey, grantScope, revokeApiKey } from '../../src/store/sqlite/auth.js';
-import {
-  FIXTURE_REVOKED_AT,
-  TENANT_A,
-  TENANT_B,
-  type TwoTenantFixture,
-} from './store-conformance.js';
+import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type TwoTenantFixture } from './store-conformance.js';
 
 export const OWNER = 'sso:ann';
 export const OWNED_SCOPE = 'private:payroll';

@@ -6,11 +6,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import {
-  countMatching,
-  peakRowsRead,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -90,18 +86,12 @@ describe('hybrid recall at 10k rows', () => {
     seed(fewer, FEWER_ROWS);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     for (const store of [home, fewer]) {
-      saveStoredEmbeddingModel(
-        handlesOf(store).on,
-        resolveEmbeddingProvider(loadConfig(store).embeddings).id,
-      );
+      saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
     }
     const queryVector = vector(7);
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })),
     );
   });
 

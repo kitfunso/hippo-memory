@@ -35,8 +35,7 @@ function headers(bearer?: string) {
   return bearer ? { ...json, authorization: `Bearer ${bearer}` } : json;
 }
 
-const audit = (qs: string, bearer?: string) =>
-  fetch(`${handle.url}/v1/audit${qs}`, { headers: headers(bearer) });
+const audit = (qs: string, bearer?: string) => fetch(`${handle.url}/v1/audit${qs}`, { headers: headers(bearer) });
 const sleep = (bearer?: string) =>
   fetch(`${handle.url}/v1/sleep`, {
     method: 'POST',
@@ -44,20 +43,11 @@ const sleep = (bearer?: string) =>
     body: JSON.stringify({ dry_run: true }),
   });
 
-async function mcpCall(
-  name: string,
-  args: Record<string, string | number>,
-  bearer: string,
-): Promise<McpResponse> {
+async function mcpCall(name: string, args: Record<string, string | number>, bearer: string): Promise<McpResponse> {
   const res = await fetch(`${handle.url}/mcp`, {
     method: 'POST',
     headers: headers(bearer),
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
   });
   expect(res.status).toBe(200);
   // SAFETY: POST /mcp always answers a tools/call with a JSON-RPC envelope.
@@ -133,11 +123,7 @@ describe('host admin is unchanged', () => {
     expect(adminActor('cli').hostAdmin).toBe(true);
     const project = makeStore('host-admin-cli').base;
     const env = { ...process.env, HIPPO_HOME: globalHome, HIPPO_TENANT: 'acme' };
-    const res = spawnSync('node', [CLI, 'sleep', '--dry-run'], {
-      cwd: project,
-      env,
-      encoding: 'utf-8',
-    });
+    const res = spawnSync('node', [CLI, 'sleep', '--dry-run'], { cwd: project, env, encoding: 'utf-8' });
     expect(res.status, res.stderr).toBe(0);
   });
 });
@@ -160,12 +146,7 @@ describe('hippo_learn needs a host admin', () => {
 
   it('runs for an in-process stdio caller', async () => {
     const res = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'hippo_learn', arguments: { days: 1 } },
-      },
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_learn', arguments: { days: 1 } } },
       {
         hippoRoot: home,
         tenantId: 'default',
@@ -189,10 +170,7 @@ async function autoSleeps(): Promise<number> {
 
 describe('MCP auto-sleep stays with the host tenant', () => {
   it('does not let another tenant trigger host-wide consolidation', async () => {
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }),
-    );
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
     const res = await mcpCall(
       'hippo_remember',
       { text: 'acme deploys on tuesdays after the freeze' },

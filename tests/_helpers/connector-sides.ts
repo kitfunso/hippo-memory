@@ -85,10 +85,7 @@ export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
 }
 
 /** `store`, hippo.db's by default, with the same reads straight from hippo.db's tables. */
-export function sqliteConnectorSide(
-  hippoRoot: string,
-  store: HippoStore = sqliteStore(hippoRoot),
-): ConnectorSide {
+export function sqliteConnectorSide(hippoRoot: string, store: HippoStore = sqliteStore(hippoRoot)): ConnectorSide {
   return {
     store,
     auditRows: () => onDb(hippoRoot, (db) => auditRowsOn(db)),
@@ -97,12 +94,6 @@ export function sqliteConnectorSide(
   };
 }
 
-export function sqliteConnectorEventsSide(
-  hippoRoot: string,
-  store?: HippoStore,
-): ConnectorEventsSide {
-  return {
-    ...sqliteConnectorSide(hippoRoot, store),
-    letters: () => rowsOf<ParkedLetter>(hippoRoot, LETTERS_SQL),
-  };
+export function sqliteConnectorEventsSide(hippoRoot: string, store?: HippoStore): ConnectorEventsSide {
+  return { ...sqliteConnectorSide(hippoRoot, store), letters: () => rowsOf<ParkedLetter>(hippoRoot, LETTERS_SQL) };
 }

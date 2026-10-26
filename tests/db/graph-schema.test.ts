@@ -97,9 +97,7 @@ describe('graph schema v37', () => {
     try {
       expect(
         db
-          .prepare(
-            `SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_memories_graph_referenced_guard'`,
-          )
+          .prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_memories_graph_referenced_guard'`)
           .get(),
       ).toEqual({ name: 'trg_memories_graph_referenced_guard' });
       expect(

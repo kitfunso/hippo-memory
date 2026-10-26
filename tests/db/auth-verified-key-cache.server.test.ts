@@ -53,8 +53,7 @@ describe('verified API key cache', () => {
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
-  const adminCtx = (): FullContext =>
-    apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+  const adminCtx = (): FullContext => apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
 
   beforeEach(() => {
     home = makeRoot('key-cache');
@@ -67,12 +66,7 @@ describe('verified API key cache', () => {
   it('runs scrypt for a valid key once, then reads only the key row on a repeat', async () => {
     const key = mint();
     const first = await counted(() => verify(key.plaintext));
-    expect(first.value).toEqual({
-      tenantId: 'default',
-      keyId: key.keyId,
-      role: 'member',
-      scopes: [],
-    });
+    expect(first.value).toEqual({ tenantId: 'default', keyId: key.keyId, role: 'member', scopes: [] });
     expect(first.scrypt).toBe(1);
     expect(first.dbOpen).toBe(1);
 
@@ -111,14 +105,13 @@ describe('verified API key cache', () => {
     await verify(key.plaintext);
     await verify(other.plaintext);
     onDb(home, (db) => {
-      db.prepare(
-        `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)`,
-      ).run(key.keyId, 'slack:private:C9', new Date().toISOString());
-      db.prepare(`UPDATE api_keys SET role = 'admin' WHERE key_id = ?`).run(key.keyId);
-      db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(
+      db.prepare(`INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)`).run(
+        key.keyId,
+        'slack:private:C9',
         new Date().toISOString(),
-        other.keyId,
       );
+      db.prepare(`UPDATE api_keys SET role = 'admin' WHERE key_id = ?`).run(key.keyId);
+      db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), other.keyId);
     });
     expect(await counted(() => verify(key.plaintext))).toMatchObject({
       value: { role: 'admin', scopes: ['slack:private:C9'] },
@@ -260,11 +253,11 @@ describe('VerifiedKeyCache', () => {
     expect(cache.has('hash-a', 'hk_a.s')).toBe(true);
     cache.add('hash-c', 'hk_c.s');
     expect(cache.size).toBe(2);
-    expect([
-      cache.has('hash-b', 'hk_b.s'),
-      cache.has('hash-a', 'hk_a.s'),
-      cache.has('hash-c', 'hk_c.s'),
-    ]).toEqual([false, true, true]);
+    expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([
+      false,
+      true,
+      true,
+    ]);
   });
 
   it('a wrong secret misses without evicting the proved one', async () => {
@@ -297,13 +290,8 @@ describe('bearer requests through the server', () => {
   const mint = (role: 'admin' | 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'server-cache', role }));
 
-  async function get(
-    path: string,
-    key: { plaintext: string },
-  ): Promise<{ status: number; body: unknown }> {
-    const res = await fetch(`${handle.url}${path}`, {
-      headers: { authorization: `Bearer ${key.plaintext}` },
-    });
+  async function get(path: string, key: { plaintext: string }): Promise<{ status: number; body: unknown }> {
+    const res = await fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${key.plaintext}` } });
     return { status: res.status, body: await res.json() };
   }
 
@@ -326,22 +314,15 @@ describe('bearer requests through the server', () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
     onDb(home, (db) =>
-      db
-        .prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`)
-        .run(new Date().toISOString(), key.keyId),
+      db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), key.keyId),
     );
-    expect(await get('/v1/memories?q=x', key)).toEqual({
-      status: 401,
-      body: { error: 'invalid api key' },
-    });
+    expect(await get('/v1/memories?q=x', key)).toEqual({ status: 401, body: { error: 'invalid api key' } });
   });
 
   it('a role change written by another process decides the very next request, either way', async () => {
     const key = mint('admin');
     const setRole = (role: 'admin' | 'member'): void => {
-      onDb(home, (db) =>
-        db.prepare(`UPDATE api_keys SET role = ? WHERE key_id = ?`).run(role, key.keyId),
-      );
+      onDb(home, (db) => db.prepare(`UPDATE api_keys SET role = ? WHERE key_id = ?`).run(role, key.keyId));
     };
     expect((await get('/v1/quarantine', key)).status).toBe(200);
     setRole('member');
@@ -357,9 +338,7 @@ describe('bearer requests through the server', () => {
     const key = mint('member');
     expect((await get('/v1/memories?q=x', key)).status).toBe(200);
     onDb(home, (db) =>
-      db
-        .prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`)
-        .run('2020-01-01T00:00:00.000Z', key.keyId),
+      db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run('2020-01-01T00:00:00.000Z', key.keyId),
     );
     expect((await get('/v1/memories?q=x', key)).status).toBe(401);
   });

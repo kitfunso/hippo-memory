@@ -82,15 +82,9 @@ describe('calibration B* selection', () => {
   // Post-review P1-1 — calibration vs hypothesis seed-stream non-collision
   it('calibration and hypothesis mulberry32 streams are pairwise distinct in first 50 draws', () => {
     // Hypothesis seeds: 1000 + i for i in 0..19
-    const hypoSeeds = Array.from(
-      { length: 20 },
-      (_, i) => Math.imul(0x9e3779b9, (1000 + i) >>> 0) >>> 0,
-    );
+    const hypoSeeds = Array.from({ length: 20 }, (_, i) => Math.imul(0x9e3779b9, (1000 + i) >>> 0) >>> 0);
     // Calibration seeds (post-review P1-1 — bumped offset 100 → 10000): 1000 + 10000 + i for i in 0..9
-    const calibSeeds = Array.from(
-      { length: 10 },
-      (_, i) => Math.imul(0x9e3779b9, (1000 + 10000 + i) >>> 0) >>> 0,
-    );
+    const calibSeeds = Array.from({ length: 10 }, (_, i) => Math.imul(0x9e3779b9, (1000 + 10000 + i) >>> 0) >>> 0);
     const allSeeds = [...hypoSeeds, ...calibSeeds];
     const draws = allSeeds.map((s) => {
       const rng = mulberry32(s);

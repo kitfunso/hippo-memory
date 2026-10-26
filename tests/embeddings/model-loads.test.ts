@@ -1,14 +1,5 @@
 // A model load is bounded and backed off, and a recall stops waiting on a local model only while it downloads.
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type MockInstance,
-} from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,11 +26,7 @@ function localProvider(pipeline: PipelineFn, cacheDir: string): EmbeddingProvide
     installed: () => true,
     load: async () => ({ name: '@huggingface/transformers', mod: { env: { cacheDir }, pipeline } }),
   };
-  return resolveEmbeddingProvider(loadConfig(tempDir()).embeddings, {
-    provider: 'local',
-    model: MODEL,
-    transformers,
-  });
+  return resolveEmbeddingProvider(loadConfig(tempDir()).embeddings, { provider: 'local', model: MODEL, transformers });
 }
 
 interface Deferred<T> {
@@ -71,23 +58,18 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  for (const dir of dirs)
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('createModelLoads', () => {
   it('fails a load that hangs at the timeout, then answers from memory until the backoff window ends', async () => {
     vi.useFakeTimers();
     const failures: string[] = [];
-    const loads = createModelLoads<string>(MODEL_LOAD_POLICY, (_key, err) =>
-      failures.push(err.message),
-    );
+    const loads = createModelLoads<string>(MODEL_LOAD_POLICY, (_key, err) => failures.push(err.message));
     const start = vi.fn(() => new Promise<string>(() => {}));
 
     const first = loads.load('m', start);
-    const firstFailed = expect(first).rejects.toThrow(
-      `m did not load within ${MODEL_LOAD_POLICY.timeoutMs / 1000} s`,
-    );
+    const firstFailed = expect(first).rejects.toThrow(`m did not load within ${MODEL_LOAD_POLICY.timeoutMs / 1000} s`);
     await vi.advanceTimersByTimeAsync(MODEL_LOAD_POLICY.timeoutMs);
     await firstFailed;
 
@@ -183,17 +165,11 @@ describe('the local embedding model under a recall deadline', () => {
     await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(
       /did not load: fetch failed: getaddrinfo ENOTFOUND/,
     );
-    await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(
-      /did not load: fetch failed/,
-    );
+    await expect(provider.embed(['a memory'], 'passage')).rejects.toThrow(/did not load: fetch failed/);
 
-    const warnings = logged().filter((line) =>
-      line.includes(`local embedding model ${MODEL} did not load`),
-    );
+    const warnings = logged().filter((line) => line.includes(`local embedding model ${MODEL} did not load`));
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(
-      /^\[hippo\] warn: .*getaddrinfo ENOTFOUND huggingface\.co.*errorClass=TypeError/,
-    );
+    expect(warnings[0]).toMatch(/^\[hippo\] warn: .*getaddrinfo ENOTFOUND huggingface\.co.*errorClass=TypeError/);
     expect(pipeline).toHaveBeenCalledTimes(1);
   });
 });

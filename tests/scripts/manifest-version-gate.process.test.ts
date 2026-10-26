@@ -38,10 +38,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   ]) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
-  writeFileSync(
-    join(root, 'src', 'base', 'util', 'version.ts'),
-    `export const PACKAGE_VERSION = '${version}';\n`,
-  );
+  writeFileSync(join(root, 'src', 'base', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
   if (overrides.rawLockfile !== undefined) {
     writeFileSync(join(root, 'package-lock.json'), overrides.rawLockfile);
   } else if (!overrides.omitLockfile) {
@@ -145,10 +142,7 @@ describe('sync-version.mjs', () => {
     // npm version has already moved package.json and both lockfile fields to 2.1.0.
     const root = makeRepo('2.0.0', { lockVersion: '2.1.0', lockRootVersion: '2.1.0' });
     try {
-      writeFileSync(
-        join(root, 'package.json'),
-        JSON.stringify({ name: 'fixture', version: '2.1.0' }),
-      );
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '2.1.0' }));
       const sync = spawnSync(process.execPath, [SYNC], { cwd: root, encoding: 'utf-8' });
       expect(sync.status, sync.stderr).toBe(0);
       const r = runGate(root);

@@ -11,10 +11,7 @@ import { failureTarget } from '../_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -52,9 +49,7 @@ function logRows(root: string): LogRow[] {
     (db) =>
       // SAFETY: the SELECT names exactly the LogRow columns.
       db
-        .prepare(
-          `SELECT session_id, tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log ORDER BY id`,
-        )
+        .prepare(`SELECT session_id, tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log ORDER BY id`)
         .all() as LogRow[],
   );
 }
@@ -91,8 +86,7 @@ describe('repeat-error rate', () => {
       sessionId: string | null,
       sigHash: string,
       outcome: FailureOutcome = 'duplicate',
-    ): Promise<number> =>
-      await failureLog.record({ tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
+    ): Promise<number> => await failureLog.record({ tenantId: 'default', sessionId, tool: 'Bash', outcome, sigHash });
     await log('s1', 'A', 'stored');
     await log('s1', 'A');
     await log('s2', 'A');
@@ -100,12 +94,7 @@ describe('repeat-error rate', () => {
     await log(null, 'B');
     await log('s3', 'C', 'skipped-routine');
     await log('s4', 'C', 'store-failed');
-    await failureLog.record({
-      tenantId: 'other',
-      sessionId: 's9',
-      outcome: 'stored',
-      sigHash: 'D',
-    });
+    await failureLog.record({ tenantId: 'other', sessionId: 's9', outcome: 'stored', sigHash: 'D' });
     await log('s5', 'B');
 
     withDb(home, (db) => {
@@ -130,19 +119,10 @@ describe('repeat-error rate', () => {
   it('a session that hit a signature first never repeats it, even after another session hits it too', async () => {
     const { failureLog } = sqliteStore(home);
     for (const sessionId of ['a', 'b', 'a']) {
-      await failureLog.record({
-        tenantId: 'default',
-        sessionId,
-        outcome: 'duplicate',
-        sigHash: 'E',
-      });
+      await failureLog.record({ tenantId: 'default', sessionId, outcome: 'duplicate', sigHash: 'E' });
     }
     withDb(home, (db) =>
-      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({
-        rated: 3,
-        repeats: 1,
-        sessions: 2,
-      }),
+      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ rated: 3, repeats: 1, sessions: 2 }),
     );
   });
 
@@ -161,36 +141,14 @@ describe('repeat-error rate', () => {
       sigHash: 'A',
       now: ago(200),
     });
-    await failureLog.record({
-      tenantId: 'default',
-      sessionId: 's0',
-      outcome: 'stored',
-      sigHash: 'B',
-      now: ago(10),
-    });
-    await failureLog.record({
-      tenantId: 'default',
-      sessionId: 's1',
-      outcome: 'duplicate',
-      sigHash: 'B',
-    });
-    await failureLog.record({
-      tenantId: 'default',
-      sessionId: 's1',
-      outcome: 'stored',
-      sigHash: 'A',
-    });
+    await failureLog.record({ tenantId: 'default', sessionId: 's0', outcome: 'stored', sigHash: 'B', now: ago(10) });
+    await failureLog.record({ tenantId: 'default', sessionId: 's1', outcome: 'duplicate', sigHash: 'B' });
+    await failureLog.record({ tenantId: 'default', sessionId: 's1', outcome: 'stored', sigHash: 'A' });
     withDb(home, (db) => {
       // SAFETY: COUNT(*) aggregate row.
-      const old = db
-        .prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE session_id = 'old'`)
-        .get() as { n: number };
+      const old = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE session_id = 'old'`).get() as { n: number };
       expect(Number(old.n)).toBe(0);
-      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({
-        total: 2,
-        rated: 2,
-        repeats: 1,
-      });
+      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 2, rated: 2, repeats: 1 });
     });
   });
 });
@@ -230,9 +188,7 @@ describe('failuresPerSession', () => {
 
   it('a row before the window is not counted but still decides who hit a signature first', () => {
     const rows = [...rated([['s0', 'B']], ago(10)), ...rated([['s1', 'B']])];
-    expect(failuresPerSession(rows, ago(1))).toEqual([
-      { sessionId: 's1', failures: 1, repeats: 1 },
-    ]);
+    expect(failuresPerSession(rows, ago(1))).toEqual([{ sessionId: 's1', failures: 1, repeats: 1 }]);
   });
 });
 
@@ -243,8 +199,7 @@ describe('capture-error logs every failure, never its text', () => {
   });
 
   it('logs each outcome with its session, tool and routine rule, and only hashes of the error', async () => {
-    const error =
-      'Exit code 1\nError: connect ECONNREFUSED db.internal.example:5432 as deploy_user';
+    const error = 'Exit code 1\nError: connect ECONNREFUSED db.internal.example:5432 as deploy_user';
     const payloads: JsonValue[] = [
       { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm test' }, error },
       { session_id: 's2', tool_name: 'Bash', tool_input: { command: 'npm test' }, error },
@@ -270,8 +225,7 @@ describe('capture-error logs every failure, never its text', () => {
       ['s2', 'Bash', 'skipped-invalid', null],
       [null, 'Edit', 'stored', null],
     ]);
-    const hex = (h: string | null): boolean | null =>
-      h === null ? null : /^[0-9a-f]{16}$/.test(h);
+    const hex = (h: string | null): boolean | null => (h === null ? null : /^[0-9a-f]{16}$/.test(h));
     expect(rows.map((r) => [hex(r.sig_hash), hex(r.detail_hash)])).toEqual([
       [true, true],
       [true, true],
@@ -280,19 +234,10 @@ describe('capture-error logs every failure, never its text', () => {
       [null, null],
       [true, true],
     ]);
-    expect(rows[1]).toMatchObject({
-      sig_hash: rows[0]!.sig_hash,
-      detail_hash: rows[0]!.detail_hash,
-    });
-    const everything = JSON.stringify(
-      withDb(home, (db) => db.prepare(`SELECT * FROM failure_log`).all()),
-    );
-    expect(everything).not.toMatch(
-      /ECONNREFUSED|internal|deploy_user|pattern foo|String to replace|npm/i,
-    );
-    withDb(home, (db) =>
-      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ rated: 2, repeats: 1 }),
-    );
+    expect(rows[1]).toMatchObject({ sig_hash: rows[0]!.sig_hash, detail_hash: rows[0]!.detail_hash });
+    const everything = JSON.stringify(withDb(home, (db) => db.prepare(`SELECT * FROM failure_log`).all()));
+    expect(everything).not.toMatch(/ECONNREFUSED|internal|deploy_user|pattern foo|String to replace|npm/i);
+    withDb(home, (db) => expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ rated: 2, repeats: 1 }));
   });
 
   it('keeps a finer detail hash that tells apart failures the lesson text merges', async () => {
@@ -309,12 +254,7 @@ describe('capture-error logs every failure, never its text', () => {
       { session_id: 's1', tool_name: 'Bash', error: `${banner}missing semicolon` },
       { session_id: 's1', tool_name: 'Bash', error: `${banner}type mismatch` },
     ];
-    expect(await capturedInOrder(home, payloads)).toEqual([
-      'stored',
-      'duplicate',
-      'stored',
-      'duplicate',
-    ]);
+    expect(await capturedInOrder(home, payloads)).toEqual(['stored', 'duplicate', 'stored', 'duplicate']);
     const [a, b, c, d] = logRows(home);
     expect(b!.sig_hash).toBe(a!.sig_hash);
     expect(b!.detail_hash).not.toBe(a!.detail_hash);
@@ -323,29 +263,19 @@ describe('capture-error logs every failure, never its text', () => {
   });
 
   it('logs a failure as store-failed when storing it throws, and still throws', async () => {
-    const payload = {
-      session_id: 's1',
-      tool_name: 'Bash',
-      error: 'Exit code 2\nerror TS2304: Cannot find name foo',
-    };
+    const payload = { session_id: 's1', tool_name: 'Bash', error: 'Exit code 2\nerror TS2304: Cannot find name foo' };
     rejectLesson(home, lessonFromFailure(payload).text!);
-    await expect(captureToolFailure(failureTarget(home), payload)).rejects.toThrow(
-      RejectedValueError,
-    );
+    await expect(captureToolFailure(failureTarget(home), payload)).rejects.toThrow(RejectedValueError);
     expect(logRows(home).map((r) => [r.session_id, r.outcome, r.sig_hash !== null])).toEqual([
       ['s1', 'store-failed', true],
     ]);
-    withDb(home, (db) =>
-      expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 1, rated: 1 }),
-    );
+    withDb(home, (db) => expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({ total: 1, rated: 1 }));
   });
 
   it('pins the signature hash, because logged hashes cannot be recomputed after a change', () => {
-    expect(
-      blockHash(
-        failureSignature('Bash: Exit code 2 src/a.ts(12,3): error TS2304: Cannot find name foo'),
-      ),
-    ).toBe('19e1075d4670c921');
+    expect(blockHash(failureSignature('Bash: Exit code 2 src/a.ts(12,3): error TS2304: Cannot find name foo'))).toBe(
+      '19e1075d4670c921',
+    );
   });
 
   it('caps the session id and tool name it keeps', async () => {
@@ -367,12 +297,7 @@ describe('hippo failures', () => {
   // In process, throwing on a non-zero exit as execFileSync did, so coverage sees the hook and the report.
   // In process, with execFileSync's throw on a non-zero exit, so coverage sees the hook and the report.
   async function run(args: string[], input = '', cwd = dir): Promise<string> {
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      HIPPO_HOME: join(cwd, 'global'),
-      HOME: cwd,
-      USERPROFILE: cwd,
-    };
+    const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd, USERPROFILE: cwd };
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
     const r = await runCliAs(args, { env, cwd, input });
@@ -380,11 +305,7 @@ describe('hippo failures', () => {
     return r.stdout;
   }
   const broke = (session?: string, what = 'something real broke'): string =>
-    JSON.stringify({
-      session_id: session,
-      tool_name: 'Bash',
-      error: `Exit code 1\nError: ${what}`,
-    });
+    JSON.stringify({ session_id: session, tool_name: 'Bash', error: `Exit code 1\nError: ${what}` });
 
   it('reports outcomes and repeats from what the hook logged, including a lesson it could not save', async () => {
     expect(await run(['failures'])).toContain('No failed tool calls recorded in the last 30 days.');
@@ -395,40 +316,25 @@ describe('hippo failures', () => {
         tool_input: { command: 'npm run build' },
         error: 'Exit code 2\nsrc/a.ts(12,3): error TS2304: Cannot find name foo',
       });
-    const refused = {
-      session_id: 's3',
-      tool_name: 'Bash',
-      error: 'Exit code 1\nError: Cannot find module express',
-    };
+    const refused = { session_id: 's3', tool_name: 'Bash', error: 'Exit code 1\nError: Cannot find module express' };
     rejectLesson(join(dir, '.hippo'), lessonFromFailure(refused).text!);
     await run(['capture-error'], build('s1'));
     await run(['capture-error'], build('s2'));
     await run(
       ['capture-error'],
-      JSON.stringify({
-        session_id: 's2',
-        tool_name: 'Grep',
-        error: 'No matches found for pattern foo',
-      }),
+      JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }),
     );
     // Storing this one throws; the hook still exits 0 (run would throw otherwise) and the log keeps it.
     await run(['capture-error'], JSON.stringify(refused));
 
     const summary = JSON.parse(await run(['failures', '--json']));
     expect(summary).toMatchObject({ total: 4, rated: 3, repeats: 1, sessions: 3 });
-    expect(summary.outcomes).toMatchObject({
-      stored: 1,
-      duplicate: 1,
-      'store-failed': 1,
-      'skipped-routine': 1,
-    });
+    expect(summary.outcomes).toMatchObject({ stored: 1, duplicate: 1, 'store-failed': 1, 'skipped-routine': 1 });
     const text = await run(['failures', '--days', '7']);
     expect(text).toContain('last 7 days');
     expect(text).toContain('(1 new, 1 already in memory, 1 could not be saved)');
     expect(text).toContain('Repeats: 1 of 3 errors first happened in another session.');
-    expect(await run(['failures', '--days', '120'])).toContain(
-      'last 120 days (rows are kept 90 days)',
-    );
+    expect(await run(['failures', '--days', '120'])).toContain('last 120 days (rows are kept 90 days)');
   });
 
   it('still exits 0 and stores the lesson when the failure log is broken', async () => {

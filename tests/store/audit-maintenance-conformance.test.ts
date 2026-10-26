@@ -30,11 +30,7 @@ let fixture: TwoTenantFixture;
 const rows: Record<string, MemoryEntry> = {};
 
 function seedRow(name: string, content: string, over: Partial<MemoryEntry> = {}): void {
-  const captured = createMemory(content, {
-    source: 'capture',
-    confidence: 'observed',
-    layer: Layer.Episodic,
-  });
+  const captured = createMemory(content, { source: 'capture', confidence: 'observed', layer: Layer.Episodic });
   const row = { ...captured, tenantId: TENANT_A, originProject: 'proj', ...over };
   writeEntry(fixture.dir, row, { actor: 'cli' });
   rows[name] = row;
@@ -49,10 +45,7 @@ async function seed(): Promise<void> {
   seedRow('plainToo', 'the release train leaves on friday', { source: 'cli' });
   seedRow('raw', 'raw line: the build is red', { kind: 'raw', source: 'cli' });
   seedRow('cutB', CUT, { tenantId: TENANT_B });
-  const mirror = {
-    ...createMemory('we chose sqlite for the queue', { tenantId: TENANT_A }),
-    originProject: 'proj',
-  };
+  const mirror = { ...createMemory('we chose sqlite for the queue', { tenantId: TENANT_A }), originProject: 'proj' };
   const fields = { decisionText: 'use sqlite', context: undefined };
   await sqliteStore(fixture.dir).objects.saveObject(TENANT_A, 'decision', {
     mirror,
@@ -92,14 +85,10 @@ const id = (name: string): string => rows[name]!.id;
 describe('AuditMaintenance', () => {
   it('reads object-backed ids, deletes only what the guard lets go, and prunes one tenant before a cutoff', async () => {
     const sqlite = await conforms([
-      (g) =>
-        g.objectBackedAmong([id('backed'), id('plain'), 'mem_none']).then((found) => [...found]),
+      (g) => g.objectBackedAmong([id('backed'), id('plain'), 'mem_none']).then((found) => [...found]),
       (g) =>
         g.deleteAutomatically(
-          ['plain', 'pinnedCut', 'raw', 'backed', 'plainToo'].map((name) => ({
-            id: id(name),
-            reason: `${name} went`,
-          })),
+          ['plain', 'pinnedCut', 'raw', 'backed', 'plainToo'].map((name) => ({ id: id(name), reason: `${name} went` })),
           'sleep',
         ),
       (g) => g.deleteAutomatically([{ id: 'mem_none', reason: '' }], 'sleep'),
@@ -143,9 +132,7 @@ describe('AuditMaintenance', () => {
       { value: [] },
     ]);
     expect(sqlite.outcomes[4]).toEqual({ value: 2 });
-    expect(sqlite.audit.filter((row) => row.tenantId === TENANT_B).map((row) => row.op)).toEqual([
-      'audit_prune',
-    ]);
+    expect(sqlite.audit.filter((row) => row.tenantId === TENANT_B).map((row) => row.op)).toEqual(['audit_prune']);
   });
 
   it('plans repairs per tenant under each protection, applies the certain ones to dormant, and runs once per store', async () => {
@@ -171,11 +158,7 @@ describe('AuditMaintenance', () => {
       [id('pinnedCut'), 'protected'],
       [id('doubt'), 'review'],
     ]);
-    expect(plan(1).issues.map((issue) => issue.disposition)).toEqual([
-      'set-aside',
-      'set-aside',
-      'review',
-    ]);
+    expect(plan(1).issues.map((issue) => issue.disposition)).toEqual(['set-aside', 'set-aside', 'review']);
     expect(plan(3).appliedIds).toEqual([id('cut')]);
     expect(plan(5).appliedIds).toEqual([id('cutB')]);
     expect(sqlite.outcomes[6]).toEqual({ value: null });

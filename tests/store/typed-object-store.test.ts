@@ -29,12 +29,7 @@ oneRequestPerTest();
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
-import {
-  saveCustomerNote,
-  saveDecision,
-  savePolicy,
-  saveProjectBrief,
-} from '../../src/entry/testing.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 let home: string;
@@ -213,12 +208,7 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      note(
-        await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      note(await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), CUSTOMER_NOTE, 'default', id);
       return r && note(r);
@@ -240,18 +230,12 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      skill(
-        await closeObject(objectsAt(home), SKILL, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      skill(await closeObject(objectsAt(home), SKILL, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), SKILL, 'default', id);
       return r && skill(r);
     },
-    activeIds: async () =>
-      ids(await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' })),
+    activeIds: async () => ids(await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' })),
   },
   {
     kind: 'policy',
@@ -267,18 +251,12 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      policy(
-        await closeObject(objectsAt(home), POLICY, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      policy(await closeObject(objectsAt(home), POLICY, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), POLICY, 'default', id);
       return r && policy(r);
     },
-    activeIds: async () =>
-      ids(await loadPolicies(objectsAt(home), 'default', { status: 'active' })),
+    activeIds: async () => ids(await loadPolicies(objectsAt(home), 'default', { status: 'active' })),
   },
   {
     kind: 'project_brief',
@@ -294,18 +272,12 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      brief(
-        await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      brief(await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROJECT_BRIEF, 'default', id);
       return r && brief(r);
     },
-    activeIds: async () =>
-      ids(await loadProjectBriefs(objectsAt(home), 'default', { status: 'active', repo: 'r' })),
+    activeIds: async () => ids(await loadProjectBriefs(objectsAt(home), 'default', { status: 'active', repo: 'r' })),
   },
   {
     kind: 'process',
@@ -321,18 +293,12 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      proc(
-        await closeObject(objectsAt(home), PROCESS, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      proc(await closeObject(objectsAt(home), PROCESS, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROCESS, 'default', id);
       return r && proc(r);
     },
-    activeIds: async () =>
-      ids(await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' })),
+    activeIds: async () => ids(await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' })),
   },
   {
     kind: 'decision',
@@ -346,18 +312,12 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      decision(
-        await closeObject(objectsAt(home), DECISION, 'default', id, {
-          actor: CLI_ACTOR,
-          now: evalNow(),
-        }),
-      ),
+      decision(await closeObject(objectsAt(home), DECISION, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), DECISION, 'default', id);
       return r && decision(r);
     },
-    activeIds: async () =>
-      ids(await loadDecisions(objectsAt(home), 'default', { status: 'active' })),
+    activeIds: async () => ids(await loadDecisions(objectsAt(home), 'default', { status: 'active' })),
   },
 ];
 
@@ -390,10 +350,7 @@ describe.each(LINEAGES)('$kind supersede and close', (k) => {
     const rows = auditRows(`${k.kind}_supersede`, v1.id);
     expect(rows.length).toBe(1);
     // SAFETY: a supersede audit row's metadata is the flat object the shared lifecycle writes.
-    const meta = JSON.parse(rows[0].metadata_json) as {
-      superseded_by: number;
-      new_version?: number;
-    };
+    const meta = JSON.parse(rows[0].metadata_json) as { superseded_by: number; new_version?: number };
     expect(meta.superseded_by).toBe(v2.id);
     if (k.versioned) expect(meta.new_version).toBe(2);
   });
@@ -402,9 +359,7 @@ describe.each(LINEAGES)('$kind supersede and close', (k) => {
     const v1 = await k.save('default', 'alpha one');
     await k.save('default', 'beta two', { supersedes: v1.id });
     const before = counts();
-    await expect(k.save('default', 'gamma three', { supersedes: v1.id })).rejects.toThrow(
-      /not active/,
-    );
+    await expect(k.save('default', 'gamma three', { supersedes: v1.id })).rejects.toThrow(/not active/);
     await expect(k.save('default', 'ghost', { supersedes: 99999 })).rejects.toThrow(/not found/);
     expect(counts()).toEqual(before);
   });
@@ -433,9 +388,9 @@ describe.each(LINEAGES)('$kind supersede and close', (k) => {
     const b = await k.save('tenant-b', 'beta two');
     const db = openHippoDb(home);
     try {
-      expect(() =>
-        db.prepare(`UPDATE ${k.table} SET superseded_by = ? WHERE id = ?`).run(b.id, a.id),
-      ).toThrow(new RegExp(`superseded_by must reference a ${k.kind} in the same tenant`));
+      expect(() => db.prepare(`UPDATE ${k.table} SET superseded_by = ? WHERE id = ?`).run(b.id, a.id)).toThrow(
+        new RegExp(`superseded_by must reference a ${k.kind} in the same tenant`),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -479,20 +434,10 @@ const LISTINGS: readonly Listing[] = [
     states: CUSTOMER_NOTE.states,
     expected: ['active', 'superseded', 'closed'],
     save: async (t, body) =>
-      (
-        await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, {
-          customer: 'c',
-          note: body,
-        })
-      ).id,
+      (await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { customer: 'c', note: body }))
+        .id,
     list: async (t, s) =>
-      ids(
-        await loadCustomerNotes(
-          objectsAt(home),
-          t,
-          s === undefined ? {} : { status: unchecked(s) },
-        ),
-      ),
+      ids(await loadCustomerNotes(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), CUSTOMER_NOTE, t, id)) !== null,
   },
   {
@@ -507,14 +452,7 @@ const LISTINGS: readonly Listing[] = [
         })
       ).id,
     list: async (t, s) =>
-      ids(
-        await listObjects(
-          objectsAt(home),
-          SKILL,
-          t,
-          s === undefined ? {} : { status: unchecked(s) },
-        ),
-      ),
+      ids(await listObjects(objectsAt(home), SKILL, t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), SKILL, t, id)) !== null,
   },
   {
@@ -528,8 +466,7 @@ const LISTINGS: readonly Listing[] = [
           policyText: body,
         })
       ).id,
-    list: async (t, s) =>
-      ids(await loadPolicies(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
+    list: async (t, s) => ids(await loadPolicies(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), POLICY, t, id)) !== null,
   },
   {
@@ -537,37 +474,19 @@ const LISTINGS: readonly Listing[] = [
     states: PROJECT_BRIEF.states,
     expected: ['active', 'superseded', 'closed'],
     save: async (t, body) =>
-      (
-        await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, {
-          repo: 'r',
-          summary: body,
-        })
-      ).id,
+      (await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { repo: 'r', summary: body }))
+        .id,
     list: async (t, s) =>
-      ids(
-        await loadProjectBriefs(
-          objectsAt(home),
-          t,
-          s === undefined ? {} : { status: unchecked(s) },
-        ),
-      ),
+      ids(await loadProjectBriefs(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), PROJECT_BRIEF, t, id)) !== null,
   },
   {
     kind: 'process',
     states: PROCESS.states,
     expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) =>
-      (await cliSave(home, t, PROCESS, { processName: 'P', steps: [body] })).id,
+    save: async (t, body) => (await cliSave(home, t, PROCESS, { processName: 'P', steps: [body] })).id,
     list: async (t, s) =>
-      ids(
-        await listObjects(
-          objectsAt(home),
-          PROCESS,
-          t,
-          s === undefined ? {} : { status: unchecked(s) },
-        ),
-      ),
+      ids(await listObjects(objectsAt(home), PROCESS, t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), PROCESS, t, id)) !== null,
   },
   {
@@ -575,13 +494,8 @@ const LISTINGS: readonly Listing[] = [
     states: DECISION.states,
     expected: ['active', 'superseded', 'closed'],
     save: async (t, body) =>
-      (
-        await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, {
-          decisionText: body,
-        })
-      ).id,
-    list: async (t, s) =>
-      ids(await loadDecisions(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
+      (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { decisionText: body })).id,
+    list: async (t, s) => ids(await loadDecisions(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), DECISION, t, id)) !== null,
   },
   {
@@ -599,14 +513,7 @@ const LISTINGS: readonly Listing[] = [
         )
       ).id,
     list: async (t, s) =>
-      ids(
-        await listObjects(
-          objectsAt(home),
-          INCIDENT,
-          t,
-          s === undefined ? {} : { status: unchecked(s) },
-        ),
-      ),
+      ids(await listObjects(objectsAt(home), INCIDENT, t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), INCIDENT, t, id)) !== null,
   },
 ];

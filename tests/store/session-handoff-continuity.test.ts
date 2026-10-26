@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getSchemaVersion,
-  getCurrentSchemaVersion,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { rowToSessionHandoff } from '../../src/base/session/handoff.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -47,9 +42,7 @@ describe('schema v5+v6 migration', () => {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
       // is NOT NULL for every table row.
       const tables = db
-        .prepare(
-          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_handoffs'`,
-        )
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_handoffs'`)
         .all() as Array<{ name: string }>;
       expect(tables).toHaveLength(1);
       expect(tables[0]!.name).toBe('session_handoffs');
@@ -65,9 +58,7 @@ describe('schema v5+v6 migration', () => {
       // SAFETY: literal SELECT against the known sqlite_master schema; name
       // is NOT NULL for every index row.
       const indexes = db
-        .prepare(
-          `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_handoffs_session'`,
-        )
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_handoffs_session'`)
         .all() as Array<{ name: string }>;
       expect(indexes).toHaveLength(1);
     } finally {
@@ -197,9 +188,7 @@ describe('loadHandoffById', () => {
       // SAFETY: literal SELECT of the id column for the handoff row this
       // test just wrote via saveSessionHandoff above.
       const row = db
-        .prepare(
-          `SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`,
-        )
+        .prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`)
         .get() as { id: number } | undefined;
 
       expect(row?.id).toBeTypeOf('number');
@@ -224,32 +213,28 @@ describe('fallback session ID generation', () => {
     // Dynamically import the plugin to test getSessionIdentity indirectly
     // We test the pattern directly since the function is not exported
     const ctx = { sessionId: undefined, sessionKey: undefined, agentId: undefined };
-    const identity =
-      ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
+    const identity = ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 
     expect(identity).toMatch(/^fallback-\d+-\d+$/);
   });
 
   it('prefers sessionId over fallback', () => {
     const ctx = { sessionId: 'real-session', sessionKey: undefined, agentId: undefined };
-    const identity =
-      ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
+    const identity = ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 
     expect(identity).toBe('real-session');
   });
 
   it('uses sessionKey when sessionId is missing', () => {
     const ctx = { sessionId: undefined, sessionKey: 'key-123', agentId: undefined };
-    const identity =
-      ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
+    const identity = ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 
     expect(identity).toBe('key-123');
   });
 
   it('uses agentId when both sessionId and sessionKey are missing', () => {
     const ctx = { sessionId: undefined, sessionKey: undefined, agentId: 'agent-007' };
-    const identity =
-      ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
+    const identity = ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 
     expect(identity).toBe('agent-007');
   });
@@ -358,10 +343,7 @@ describe('session events integration with handoffs', () => {
       source: 'openclaw',
     });
 
-    const events = listSessionEvents(tmpDir, 'default', {
-      session_id: 'sess-lifecycle',
-      limit: 10,
-    });
+    const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess-lifecycle', limit: 10 });
     expect(events).toHaveLength(3);
     expect(events[0]!.eventType).toBe('session_start');
     expect(events[1]!.eventType).toBe('note');

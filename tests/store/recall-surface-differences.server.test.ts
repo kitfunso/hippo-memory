@@ -143,11 +143,7 @@ async function httpCalls(s: Store, calls: readonly RecallCall[]): Promise<HttpRe
   }
 }
 
-async function recallOn(
-  surface: Surface,
-  s: Store,
-  calls: readonly RecallCall[],
-): Promise<Recalled[]> {
+async function recallOn(surface: Surface, s: Store, calls: readonly RecallCall[]): Promise<Recalled[]> {
   if (surface === 'http') return httpCalls(s, calls);
   const out: Recalled[] = [];
   for (const c of calls) out.push(surface === 'cli' ? await viaCli(s, c) : await viaMcp(s, c));
@@ -163,39 +159,14 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
   }
 }
 
-const printedIds = (stdout: string): string[] =>
-  [...stdout.matchAll(/^--- (\S+)/gm)].map((m) => m[1]!);
-const FILLS_DOWN = [
-  'mem_p_fill5',
-  'mem_p_fill4',
-  'mem_p_fill3',
-  'mem_p_fill2',
-  'mem_p_trace',
-  'mem_p_fill1',
-];
-const FILLS_UP = [
-  'mem_p_fill0',
-  'mem_p_fill1',
-  'mem_p_fill2',
-  'mem_p_fill3',
-  'mem_p_fill4',
-  'mem_p_fill5',
-];
+const printedIds = (stdout: string): string[] => [...stdout.matchAll(/^--- (\S+)/gm)].map((m) => m[1]!);
+const FILLS_DOWN = ['mem_p_fill5', 'mem_p_fill4', 'mem_p_fill3', 'mem_p_fill2', 'mem_p_trace', 'mem_p_fill1'];
+const FILLS_UP = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
 /** The engine order CLI and MCP share over the local store; the CLI adds the global row on top. */
-const ENGINE = [
-  'mem_p_plain',
-  'mem_p_pinned',
-  ...FILLS_DOWN,
-  'mem_p_fill0',
-  'mem_p_scoped',
-  'mem_p_new',
-  'mem_p_goal',
-];
+const ENGINE = ['mem_p_plain', 'mem_p_pinned', ...FILLS_DOWN, 'mem_p_fill0', 'mem_p_scoped', 'mem_p_new', 'mem_p_goal'];
 /** HTTP's SQL load order with no mode: ten rows, the default limit. */
 const SQL_ORDER = ['mem_p_pinned', 'mem_p_plain', ...FILLS_UP, 'mem_p_trace', 'mem_p_scoped'];
-const SHOWN_ONCE = Object.fromEntries(
-  ENGINE.filter((id) => id !== 'mem_p_goal').map((id) => [id, 1]),
-);
+const SHOWN_ONCE = Object.fromEntries(ENGINE.filter((id) => id !== 'mem_p_goal').map((id) => [id, 1]));
 const positions = (n: number): number[] => Array.from({ length: n }, (_, i) => 1 - i / n);
 
 beforeAll(async () => {
@@ -282,18 +253,9 @@ describe('recall surface differences', () => {
       };
     });
     expect(got.r.status).toBe(200);
-    expect(got.r.body.results.map((r) => [r.id, r.score])).toEqual(
-      SQL_ORDER.map((id, i) => [id, positions(10)[i]]),
-    );
-    expect(got.r.body).toMatchObject({
-      total: 12,
-      windowSize: 200,
-      suppressionSummary: { droppedByBudget: 2 },
-    });
-    expect(got.audit).toEqual([
-      'localhost:cli recall_anchor_skipped_no_session',
-      'localhost:cli recall 10',
-    ]);
+    expect(got.r.body.results.map((r) => [r.id, r.score])).toEqual(SQL_ORDER.map((id, i) => [id, positions(10)[i]]));
+    expect(got.r.body).toMatchObject({ total: 12, windowSize: 200, suppressionSummary: { droppedByBudget: 2 } });
+    expect(got.audit).toEqual(['localhost:cli recall_anchor_skipped_no_session', 'localhost:cli recall 10']);
     expect(got.global).toEqual([]);
     const bumped = Object.fromEntries(SQL_ORDER.map((id) => [id, 1]));
     expect(got.written).toEqual({
@@ -311,14 +273,8 @@ describe('recall surface differences', () => {
     const goalFirst = ['mem_p_goal', ...ENGINE.filter((id) => id !== 'mem_p_goal')];
     const cli = await onFreshStore('local', async (s) => {
       // SAFETY: recallOn answers each cli call with a CliRecalled (viaCli and viaMcp above).
-      const [r] = (await recallOn('cli', s, [
-        { query: 'deploy', session: SESSION },
-      ])) as CliRecalled[];
-      return {
-        ids: printedIds(r!.output.stdout),
-        written: recallWrites(s.root),
-        audit: recallAuditOps(s.root),
-      };
+      const [r] = (await recallOn('cli', s, [{ query: 'deploy', session: SESSION }])) as CliRecalled[];
+      return { ids: printedIds(r!.output.stdout), written: recallWrites(s.root), audit: recallAuditOps(s.root) };
     });
     expect(cli.ids).toEqual(['mem_p_global', ...goalFirst]);
     expect(cli.audit).toEqual(['cli recall 13']);
@@ -327,20 +283,10 @@ describe('recall surface differences', () => {
 
     const mcp = await onFreshStore('local', async (s) => {
       // SAFETY: recallOn answers each mcp call with a McpRecalled (viaCli and viaMcp above).
-      const [r] = (await recallOn('mcp', s, [
-        { query: 'deploy', session: SESSION },
-      ])) as McpRecalled[];
-      return {
-        head: r!.output.split('\n').slice(0, 3),
-        written: recallWrites(s.root),
-        audit: recallAuditOps(s.root),
-      };
+      const [r] = (await recallOn('mcp', s, [{ query: 'deploy', session: SESSION }])) as McpRecalled[];
+      return { head: r!.output.split('\n').slice(0, 3), written: recallWrites(s.root), audit: recallAuditOps(s.root) };
     });
-    expect(mcp.head).toEqual([
-      'Found 12 memories:',
-      '',
-      '[verified] tags: goal-alpha (strength=1.00)',
-    ]);
+    expect(mcp.head).toEqual(['Found 12 memories:', '', '[verified] tags: goal-alpha (strength=1.00)']);
     expect(mcp.audit).toEqual(['mcp recall 12']);
     expect(mcp.written).toMatchObject({ ranked: goalFirst, traces: [`mcp 12 ${SESSION}`] });
     expect(mcp.written.goalLog).toEqual([`mem_p_goal ${SESSION}`]);
@@ -355,25 +301,14 @@ describe('recall surface differences', () => {
     });
     expect(http.ids).toEqual(SQL_ORDER);
     expect(http.audit).toEqual(['localhost:cli recall 10']);
-    expect(http.written).toMatchObject({
-      traces: [`api 10 ${SESSION}`],
-      ledger: [`http_recall 10 ${SESSION}`],
-    });
+    expect(http.written).toMatchObject({ traces: [`api 10 ${SESSION}`], ledger: [`http_recall 10 ${SESSION}`] });
     expect(http.written.goalLog).toEqual([]);
   });
 
   // D11: each surface keeps its own session ring, so hints and their audit rows follow the surface's own history.
   it.each([
-    [
-      'cli',
-      'mem_p_global',
-      ['cli recall 13', 'cli recall_anchor_detected_query_repeat mem_p_global', 'cli recall 13'],
-    ],
-    [
-      'mcp',
-      'mem_p_goal',
-      ['mcp recall 12', 'mcp recall 12', 'mcp recall_anchor_detected_query_repeat mem_p_goal'],
-    ],
+    ['cli', 'mem_p_global', ['cli recall 13', 'cli recall_anchor_detected_query_repeat mem_p_global', 'cli recall 13']],
+    ['mcp', 'mem_p_goal', ['mcp recall 12', 'mcp recall 12', 'mcp recall_anchor_detected_query_repeat mem_p_goal']],
     [
       'http',
       'mem_p_pinned',
@@ -386,12 +321,10 @@ describe('recall surface differences', () => {
   ] as const)(
     '%s: only a repeated query in one session gets a hint, on its own top row',
     async (surface, top, head) => {
-      const calls: RecallCall[] = ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map(
-        (query) => ({
-          query,
-          session: SESSION,
-        }),
-      );
+      const calls: RecallCall[] = ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((query) => ({
+        query,
+        session: SESSION,
+      }));
       const got = await onFreshStore('local', async (s) => {
         const out = await recallOn(surface, s, calls);
         return { hints: out.map((r) => r.hint), audit: recallAuditOps(s.root) };
@@ -407,8 +340,7 @@ describe('recall surface differences', () => {
     const got = await onFreshStore('local', async (s) => {
       const call: RecallCall = { query: 'deploy', session: SESSION };
       const hints: Record<string, (string | null)[]> = {};
-      for (const surface of SURFACES)
-        hints[surface] = (await recallOn(surface, s, [call, call])).map((r) => r.hint);
+      for (const surface of SURFACES) hints[surface] = (await recallOn(surface, s, [call, call])).map((r) => r.hint);
       return hints;
     });
     expect(got).toEqual({
@@ -463,15 +395,12 @@ describe('recall surface differences', () => {
     const cli = await onFreshStore('wide', async (s) => {
       const out = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
       // SAFETY: `hippo recall --json` prints one JSON object carrying a RecallResult-shaped suppressionSummary.
-      return (JSON.parse(out.output.stdout) as Pick<RecallResult, 'suppressionSummary'>)
-        .suppressionSummary;
+      return (JSON.parse(out.output.stdout) as Pick<RecallResult, 'suppressionSummary'>).suppressionSummary;
     });
     expect(cli).toMatchObject({ totalCandidates: 201, droppedPreRank: 0 });
     expect(cli!.droppedByBudget).toBeGreaterThan(0);
 
-    const mcpHead = await onFreshStore('wide', async (s) =>
-      (await viaMcp(s, { query: 'deploy' })).output.split('\n'),
-    );
+    const mcpHead = await onFreshStore('wide', async (s) => (await viaMcp(s, { query: 'deploy' })).output.split('\n'));
     expect(mcpHead.slice(0, 4)).toEqual([
       'Found 230 memories:',
       '',
@@ -486,12 +415,9 @@ describe('recall surface differences', () => {
       returned: body.results.length,
     });
     const http = await onFreshStore('wide', async (s) =>
-      (
-        await httpCalls(s, [
-          { query: 'deploy' },
-          { query: 'deploy', httpParams: { scorer_window: '50' } },
-        ])
-      ).map(windowOf),
+      (await httpCalls(s, [{ query: 'deploy' }, { query: 'deploy', httpParams: { scorer_window: '50' } }])).map(
+        windowOf,
+      ),
     );
     expect(http).toEqual([
       { windowSize: 200, candidates: 200, dropped: 190, returned: 10 },
@@ -503,10 +429,7 @@ describe('recall surface differences', () => {
   it('mcp audit counts the rows shown', async () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
-      return {
-        heading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0],
-        audit: recallAuditOps(s.root),
-      };
+      return { heading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0], audit: recallAuditOps(s.root) };
     });
     expect(got).toEqual({
       heading: 'Found 2 memories',
@@ -523,13 +446,7 @@ describe('recall surface differences', () => {
       );
       return out.map((r) => r.output.body.results);
     });
-    const engine = [
-      'mem_p_plain',
-      'mem_p_pinned',
-      ...[...FILLS_UP].reverse(),
-      'mem_p_trace',
-      'mem_p_scoped',
-    ];
+    const engine = ['mem_p_plain', 'mem_p_pinned', ...[...FILLS_UP].reverse(), 'mem_p_trace', 'mem_p_scoped'];
     expect(got.map((rows) => rows.map((r) => r.id))).toEqual([SQL_ORDER, engine, engine]);
     for (const rows of got) expect(rows.map((r) => r.score)).toEqual(positions(10));
   });
@@ -580,11 +497,7 @@ type HttpOutcome = { status: number; error?: string | null; code?: string | null
 const badArgs = (tool: string, message: string): McpOutcome => ({
   isError: `Invalid arguments for ${tool}: ${message}`,
 });
-const status400 = (error: string, code: string | null = null): HttpOutcome => ({
-  status: 400,
-  error,
-  code,
-});
+const status400 = (error: string, code: string | null = null): HttpOutcome => ({ status: 400, error, code });
 const thrownWindow = (got: string): McpOutcome => ({
   thrown: 'RecallContractError',
   code: 'invalid_scorer_window',
@@ -779,10 +692,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       handle = await serveKeyed({ hippoRoot: root, port: 0 }, serve);
       const http = await viaHttp(handle, { query: 'lighthouse' });
       expect(http.output.status).toBe(200);
-      expect(http.output.body.results.map((r) => r.id).sort()).toEqual([
-        'mem_d18_acme',
-        'mem_d18_beta',
-      ]);
+      expect(http.output.body.results.map((r) => r.id).sort()).toEqual(['mem_d18_acme', 'mem_d18_beta']);
     } finally {
       await handle?.stop();
       vi.unstubAllEnvs();

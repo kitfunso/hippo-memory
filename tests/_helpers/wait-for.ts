@@ -8,10 +8,7 @@ export interface WaitForOptions {
 }
 
 /** Polls `check` until it returns true; throws at the deadline so a missed event fails where it was awaited. */
-export async function waitFor(
-  check: () => boolean | Promise<boolean>,
-  opts: WaitForOptions = {},
-): Promise<void> {
+export async function waitFor(check: () => boolean | Promise<boolean>, opts: WaitForOptions = {}): Promise<void> {
   const { timeoutMs = 10_000, intervalMs = 20, what = 'condition', retryOnThrow = false } = opts;
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;

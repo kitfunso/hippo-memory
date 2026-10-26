@@ -2,14 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import {
-  closeHippoDb,
-  openHippoDb,
-  isFtsInSync,
-  getMeta,
-  setMeta,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, isFtsInSync, getMeta, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getCurrentSchemaVersion, repairFtsDrift } from '../../src/db/migrate.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

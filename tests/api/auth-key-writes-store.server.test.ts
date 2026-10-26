@@ -7,13 +7,7 @@ import { join } from 'node:path';
 import { authListRows, type AuthCreateResult } from '../../src/api/index.js';
 import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  authCreate,
-  authCreateSelf,
-  serve,
-  type Actor,
-  type ServerHandle,
-} from '../../src/server.js';
+import { authCreate, authCreateSelf, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -53,9 +47,7 @@ function hippoDbState(root: string): HippoDbState {
   const db = openHippoDb(root);
   try {
     // SAFETY: each SELECT names exactly the one column of the row type it is read as.
-    const keys = db.prepare('SELECT key_id FROM api_keys ORDER BY id').all() as {
-      key_id: string;
-    }[];
+    const keys = db.prepare('SELECT key_id FROM api_keys ORDER BY id').all() as { key_id: string }[];
     // SAFETY: as above.
     const ids = db.prepare('SELECT id FROM audit_log ORDER BY id').all() as { id: number }[];
     return { keyIds: keys.map((r) => r.key_id), auditIds: ids.map((r) => r.id) };
@@ -141,20 +133,14 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
       config: loadConfig(hippoRoot),
     };
     const first = await authCreateSelf(ctx, { label: 'laptop', ttlDays: 30, perSubject: 3 });
-    expect(first).toMatchObject({
-      tenantId: TENANT_A,
-      role: 'member',
-      expiresAt: expect.any(String),
-    });
+    expect(first).toMatchObject({ tenantId: TENANT_A, role: 'member', expiresAt: expect.any(String) });
     expect(await verifyApiKeyCached(first.plaintext, side.store)).toMatchObject({
       keyId: first.keyId,
       ownerSubject: OWNER,
     });
     const second = await authCreateSelf(ctx, { label: 'desk', ttlDays: 30, perSubject: 1 });
     expect(await verifyApiKeyCached(first.plaintext, side.store)).toBeNull();
-    expect(await verifyApiKeyCached(second.plaintext, side.store)).toMatchObject({
-      keyId: second.keyId,
-    });
+    expect(await verifyApiKeyCached(second.plaintext, side.store)).toMatchObject({ keyId: second.keyId });
     const revokes = side
       .auditRows()
       .filter((e) => e.op === 'auth_revoke')
@@ -174,14 +160,9 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const before = hippoDbState(root);
     const actor: Actor = { subject: `api_key:${fixture.keys.adminA}`, role: 'admin' };
     await expect(
-      authCreate(
-        { tenantId: TENANT_A, actor, store: sqliteStore(root), config: loadConfig(root) },
-        { label: 'x' },
-      ),
+      authCreate({ tenantId: TENANT_A, actor, store: sqliteStore(root), config: loadConfig(root) }, { label: 'x' }),
     ).rejects.toThrow(/audit table unwritable/);
-    await expect(authCreate(apiCtx(root, TENANT_A, actor), { label: 'y' })).rejects.toThrow(
-      /audit table unwritable/,
-    );
+    await expect(authCreate(apiCtx(root, TENANT_A, actor), { label: 'y' })).rejects.toThrow(/audit table unwritable/);
     expect(hippoDbState(root)).toEqual(before);
   });
 });
@@ -190,16 +171,8 @@ describe('authListRows with ctx.store', () => {
   const callers: readonly [string, () => Actor, boolean][] = [
     ['an admin', () => admin, true],
     ['a member signed in through the resolver', () => resolverMember, true],
-    [
-      'a member key with an owner',
-      () => ({ subject: `api_key:${owned.liveNew}`, role: 'member' }),
-      true,
-    ],
-    [
-      'a member key with no owner',
-      () => ({ subject: `api_key:${fixture.keys.memberA}`, role: 'member' }),
-      true,
-    ],
+    ['a member key with an owner', () => ({ subject: `api_key:${owned.liveNew}`, role: 'member' }), true],
+    ['a member key with no owner', () => ({ subject: `api_key:${fixture.keys.memberA}`, role: 'member' }), true],
     ['a member that is not a key', () => ({ subject: 'user:nobody', role: 'member' }), false],
   ];
 
@@ -212,13 +185,7 @@ describe('authListRows with ctx.store', () => {
       expect(onHippoDb.length > 0).toBe(listsAny);
       expect(
         await authListRows(
-          {
-            tenantId: TENANT_A,
-            actor,
-            store: side.store,
-            config: DEFAULT_CONFIG,
-            infra: testInfra(),
-          },
+          { tenantId: TENANT_A, actor, store: side.store, config: DEFAULT_CONFIG, infra: testInfra() },
           { active },
         ),
       ).toEqual(onHippoDb);
@@ -256,13 +223,9 @@ describe('POST and GET /v1/auth/keys under another store', () => {
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     const listed = await listVia(handle.url, minted.plaintext);
     expect(listed.status).toBe(200);
-    expect(await listed.json()).toEqual([
-      expect.objectContaining({ keyId: minted.keyId, label: 'http' }),
-    ]);
+    expect(await listed.json()).toEqual([expect.objectContaining({ keyId: minted.keyId, label: 'http' })]);
     // SAFETY: GET /v1/auth/keys answers 200 with a bare array of ApiKeyListItem.
-    const all = (await (
-      await listVia(handle.url, fixture.tokens.adminA)
-    ).json()) as ApiKeyListItem[];
+    const all = (await (await listVia(handle.url, fixture.tokens.adminA)).json()) as ApiKeyListItem[];
     expect(all[0]).toMatchObject({ keyId: minted.keyId });
     expect(side.auditRows().at(-1)).toMatchObject({
       actor: `api_key:${fixture.keys.adminA}`,

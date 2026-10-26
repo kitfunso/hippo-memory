@@ -42,10 +42,7 @@ function underEnv(raw: string): StrengthModel {
 }
 
 /** An entry 5 days past its last recall with a 3-day half-life: decay ~0.315 keeps every multiplier under the clamp. */
-function makeEntry(
-  valence: EmotionalValence,
-  content = `test memory with valence ${valence}`,
-): MemoryEntry {
+function makeEntry(valence: EmotionalValence, content = `test memory with valence ${valence}`): MemoryEntry {
   const e = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
@@ -186,42 +183,27 @@ describe('behavioral: env=0 ranking effect', () => {
   });
 
   /** Recall's strength for the `negative` variant after seeding `valences` scored under `rules`. */
-  async function recalledNegative(
-    at: string,
-    valences: EmotionalValence[],
-    rules: StrengthModel,
-  ): Promise<number> {
+  async function recalledNegative(at: string, valences: EmotionalValence[], rules: StrengthModel): Promise<number> {
     for (const valence of valences) {
       const e = makeEntry(valence, `shared ranking keyword variant ${valence} test`);
       e.strength = calculateStrength(e, NOW, rules);
       writeEntry(at, e);
     }
-    const ctx: FullContext = apiCtx(at, 'default', {
-      subject: 'test:j5-behavioral',
-      role: 'admin',
-    });
+    const ctx: FullContext = apiCtx(at, 'default', { subject: 'test:j5-behavioral', role: 'admin' });
     const result = await retrieve(ctx, { query: 'shared ranking keyword variant test' });
     expect(result.results.length).toBeGreaterThanOrEqual(valences.length);
-    const strength = result.results.find((r) =>
-      r.content.includes('variant negative test'),
-    )?.strength;
+    const strength = result.results.find((r) => r.content.includes('variant negative test'))?.strength;
     expect(strength).toEqual(expect.any(Number));
     return strength!;
   }
 
   it('9. env=0.5 (the previous floor) reduces error-tagged memory strength vs default', async () => {
     // Recall returns the strength stored at write time, so the ratio shows in what the write scored.
-    const negStrength = await recalledNegative(
-      root,
-      ['positive', 'negative', 'critical', 'neutral'],
-      underEnv('0.5'),
-    );
+    const negStrength = await recalledNegative(root, ['positive', 'negative', 'critical', 'neutral'], underEnv('0.5'));
     expect(negStrength).toBeGreaterThan(0.05);
     const root2 = makeRoot('j5-behavioral-baseline');
     try {
-      expect(negStrength).toBeLessThan(
-        await recalledNegative(root2, ['negative'], underEnv('1.0')),
-      );
+      expect(negStrength).toBeLessThan(await recalledNegative(root2, ['negative'], underEnv('1.0')));
     } finally {
       safeRmSync(root2);
     }

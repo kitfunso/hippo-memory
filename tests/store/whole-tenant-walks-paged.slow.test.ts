@@ -2,11 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  peakRowsRead,
-  recordStatements,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadAllEntries,
@@ -41,9 +37,7 @@ function seeded(pinned: boolean, extra: Partial<MemoryEntry> = {}) {
 describe('whole-tenant walks', () => {
   it('reads every pin in pages', () => {
     const { root, ids } = seeded(true);
-    const { result, reads } = recordStatements(() =>
-      loadAmbientCandidates(root, 'default', 0, () => true),
-    );
+    const { result, reads } = recordStatements(() => loadAmbientCandidates(root, 'default', 0, () => true));
     expect(result.entries.map((e) => e.id)).toEqual(ids);
     expect(peakRowsRead(reads, 'FROM memories')).toBeLessThanOrEqual(READ_PAGE_ROWS + 1);
   });
@@ -57,9 +51,7 @@ describe('whole-tenant walks', () => {
 
   it('reads the unprofiled topic summaries in pages', async () => {
     const { root, ids } = seeded(false, { dagLevel: DAG_LEVEL.topic });
-    const { result, reads } = await recordStatementsAsync(
-      async () => await loadAllL2Summaries(root),
-    );
+    const { result, reads } = await recordStatementsAsync(async () => await loadAllL2Summaries(root));
     expect(result.map((e) => e.id)).toEqual(ids);
     expect(peakRowsRead(reads, 'dag_parent_id IS NULL')).toBeLessThanOrEqual(READ_PAGE_ROWS + 1);
   });

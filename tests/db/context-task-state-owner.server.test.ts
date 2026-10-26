@@ -62,61 +62,40 @@ afterEach(async () => {
 describe('task state on a shared store', () => {
   it("B saves its own snapshot first, A saves a newer one; B's context returns B's row id and never A's", async () => {
     const { a, b } = seedTwoOwners();
-    expect(
-      (await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).activeSnapshot
-        ?.id,
-    ).toBe(b);
-    expect(
-      (await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' }))
-        .activeSnapshot?.id,
-    ).toBe(a);
+    expect((await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).activeSnapshot?.id).toBe(b);
+    expect((await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' })).activeSnapshot?.id).toBe(a);
   });
 
   it("A's next session gets A's unfinished handoff", async () => {
     saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa1'), KEY_A);
-    saveSessionHandoff(
-      home,
-      'default',
-      { version: 1, sessionId: 'sa1', summary: 'alice left off here' },
-      KEY_A,
-    );
+    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sa1', summary: 'alice left off here' }, KEY_A);
     await closeTaskSnapshotsForSession(home, 'default', 'sa1', 'session-ended', KEY_A);
-    saveSessionHandoff(
-      home,
-      'default',
-      { version: 1, sessionId: 'sb1', summary: 'bob left off here' },
-      KEY_B,
-    );
+    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sb1', summary: 'bob left off here' }, KEY_B);
     const forA = await contextGet(ctx('alice'), { currentProject: P, currentSessionId: 'sa2' });
     expect(forA.activeSnapshot).toBeUndefined();
     expect(forA.sessionHandoff?.summary).toBe('alice left off here');
-    expect(
-      (await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff
-        ?.summary,
-    ).toBe('bob left off here');
+    expect((await contextGet(ctx('bob'), { currentProject: P, currentSessionId: 'sb2' })).sessionHandoff?.summary).toBe(
+      'bob left off here',
+    );
   });
 
   it('no project gives no task state', async () => {
     const { a } = seedTwoOwners();
     expect((await contextGet(ctx('alice'), { currentProject: P })).activeSnapshot?.id).toBe(a);
-    await expect(
-      contextGet(ctx('alice'), { currentProject: { name: '', legacyName: '' } }),
-    ).rejects.toBeInstanceOf(BadRequestError);
+    await expect(contextGet(ctx('alice'), { currentProject: { name: '', legacyName: '' } })).rejects.toBeInstanceOf(
+      BadRequestError,
+    );
   });
 
   it('prompt hook context keyed the same way', async () => {
-    writeEntry(home, {
-      ...createMemory('PINNED: always check the rollback plan'),
-      pinned: true,
-      originProject: 'p',
-    });
+    writeEntry(home, { ...createMemory('PINNED: always check the rollback plan'), pinned: true, originProject: 'p' });
     seedTwoOwners();
     const forB = await buildPromptHookContext(ctx('bob'), { sessionId: 'sb2', project: P });
     expect(forB.stdout).toContain('bob task');
     expect(forB.stdout).not.toContain('alice task');
-    expect(
-      (await buildPromptHookContext(ctx('alice'), { sessionId: 'sa2', project: P })).stdout,
-    ).toContain('alice task');
+    expect((await buildPromptHookContext(ctx('alice'), { sessionId: 'sa2', project: P })).stdout).toContain(
+      'alice task',
+    );
   });
 
   it("REST GET /v1/context with owned keys: A sees A's snapshot by id, B sees B's own by id, never A's", async () => {
@@ -124,9 +103,7 @@ describe('task state on a shared store', () => {
     const keys = { alice: mintOwned('alice'), bob: mintOwned('bob') };
     handle = await serve({ hippoRoot: home, host: '127.0.0.1', port: 0 });
     const snapshotId = async (token: string): Promise<number | undefined> => {
-      const res = await fetch(`${handle!.url}/v1/context?project=p`, {
-        headers: { authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${handle!.url}/v1/context?project=p`, { headers: { authorization: `Bearer ${token}` } });
       expect(res.status).toBe(200);
       // SAFETY: the route sends the whole ContextResult; only the snapshot id is read.
       return ((await res.json()) as { activeSnapshot?: { id: number } }).activeSnapshot?.id;

@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
-import {
-  openHippoDb,
-  type DatabaseSyncLike,
-  closeHippoDb,
-  withSharedStoreHandles,
-} from '../../src/db/index.js';
+import { openHippoDb, type DatabaseSyncLike, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 

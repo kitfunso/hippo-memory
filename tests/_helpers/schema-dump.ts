@@ -19,9 +19,7 @@ export function flatSql(sql: string): string {
 /** Every schema object as one `type name: sql` line plus PRAGMA user_version, sorted so the dump compares line by line. */
 export function dumpSchema(db: DatabaseSyncLike): SchemaDump {
   // SAFETY: row shapes follow the selected columns.
-  const objects = db
-    .prepare(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`)
-    .all() as Array<{
+  const objects = db.prepare(`SELECT type, name, sql FROM sqlite_master ORDER BY type, name`).all() as Array<{
     type: string;
     name: string;
     sql: string | null;
@@ -30,8 +28,6 @@ export function dumpSchema(db: DatabaseSyncLike): SchemaDump {
   const { user_version } = db.prepare('PRAGMA user_version').get() as { user_version: number };
   return {
     userVersion: user_version,
-    objects: objects.map(
-      (o) => `${o.type} ${o.name}${o.sql === null ? '' : `: ${flatSql(o.sql)}`}`,
-    ),
+    objects: objects.map((o) => `${o.type} ${o.name}${o.sql === null ? '' : `: ${flatSql(o.sql)}`}`),
   };
 }

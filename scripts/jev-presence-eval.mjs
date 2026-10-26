@@ -74,9 +74,7 @@ if (!apiKey) {
 }
 
 // The free lint() lives in a CJS hook lib; dynamic import gets its CJS default export in an .mjs file.
-const { lint } = (
-  await import(pathToFileURL(join(homedir(), '.claude/scripts/hooks/lib/jev.js')).href)
-).default;
+const { lint } = (await import(pathToFileURL(join(homedir(), '.claude/scripts/hooks/lib/jev.js')).href)).default;
 
 // A third-party error body can echo the request; strip anything token-shaped before it hits a log or file.
 function redact(s) {
@@ -115,9 +113,7 @@ function auc(scores, labels) {
 }
 
 function rankByScore(pool, scores, targetId) {
-  const order = pool
-    .map((p, i) => ({ id: p.entry.id, score: scores[i] }))
-    .sort((a, b) => b.score - a.score);
+  const order = pool.map((p, i) => ({ id: p.entry.id, score: scores[i] })).sort((a, b) => b.score - a.score);
   const idx = order.findIndex((o) => o.id === targetId);
   return idx < 0 ? Infinity : idx + 1;
 }
@@ -157,19 +153,10 @@ console.error(`corpus ${entries.length} entries; usable cases: ${cases.length}\n
 if (PILOT_N) cases = cases.slice(0, PILOT_N);
 
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-const SEARCH_OPTS = {
-  budget: 1000000,
-  hippoRoot,
-  preparedCorpus: corpus,
-  minResults: 50,
-  mmr: true,
-  now: NOW,
-};
+const SEARCH_OPTS = { budget: 1000000, hippoRoot, preparedCorpus: corpus, minResults: 50, mmr: true, now: NOW };
 
 const ceReranker = getReranker('cross-encoder');
-const warmup = [
-  { entry: { id: '__warmup__', content: 'warm up the cross encoder' }, score: 1, tokens: 10 },
-];
+const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder' }, score: 1, tokens: 10 }];
 let fallbackWarning = null;
 const realWarn = console.warn;
 console.warn = (...a) => {
@@ -242,22 +229,13 @@ async function callJevOnce(body) {
       /* non-JSON error body */
     }
     if (res.status === 422) jevHttp.code422++;
-    return {
-      ok: res.ok,
-      status: res.status,
-      json,
-      rawText: res.ok ? null : redact(text).slice(0, 2000),
-    };
+    return { ok: res.ok, status: res.status, json, rawText: res.ok ? null : redact(text).slice(0, 2000) };
   } catch (err) {
     return {
       ok: false,
       status: null,
       json: null,
-      error: redact(
-        err?.name === 'AbortError'
-          ? `timeout after ${TIMEOUT_MS}ms`
-          : (err?.message ?? String(err)),
-      ),
+      error: redact(err?.name === 'AbortError' ? `timeout after ${TIMEOUT_MS}ms` : (err?.message ?? String(err))),
       networkError: true,
     };
   } finally {
@@ -348,9 +326,7 @@ if (PILOT_N) {
   let allOk = true;
   for (const r of rows) {
     const cComplete =
-      Array.isArray(r.cScores) &&
-      r.cScores.length === r.pool.length &&
-      r.cScores.every((v) => Number.isFinite(v));
+      Array.isArray(r.cScores) && r.cScores.length === r.pool.length && r.cScores.every((v) => Number.isFinite(v));
     const presentOk = Number.isFinite(r.J2) && r.J2 >= 0 && r.J2 <= 1;
     console.log(
       `${r.id}: ok=${r.jevOk} cComplete=${cComplete} (${r.cScores?.length ?? 0}/${r.pool.length}) present=${r.J2} presentOk=${presentOk}${r.jevError ? ` error=${r.jevError}` : ''}`,
@@ -379,9 +355,7 @@ const bestFreeArm = (aucTable.F1 ?? -1) >= (aucTable.F2 ?? -1) ? 'F1' : 'F2';
 
 const bootRng = mulberry32(21); // pinned per protocol
 const nU = usable.length;
-const draws = Array.from({ length: 2000 }, () =>
-  Array.from({ length: nU }, () => Math.floor(bootRng() * nU)),
-);
+const draws = Array.from({ length: 2000 }, () => Array.from({ length: nU }, () => Math.floor(bootRng() * nU)));
 function bootstrapDeltas(paidKey) {
   const out = [];
   for (const draw of draws) {
@@ -427,8 +401,7 @@ for (let t = 0; t < 1000; t++) {
     a2 = auc(arms.J2, shuffled),
     f1 = auc(arms.F1, shuffled),
     f2 = auc(arms.F2, shuffled);
-  if (a1 !== null && a2 !== null && f1 !== null && f2 !== null)
-    nullStats.push(Math.max(a1, a2) - Math.max(f1, f2));
+  if (a1 !== null && a2 !== null && f1 !== null && f2 !== null) nullStats.push(Math.max(a1, a2) - Math.max(f1, f2));
 }
 nullStats.sort((a, b) => a - b);
 const nullP95 = quantile(nullStats, 0.95);
@@ -456,11 +429,7 @@ function applyThreshold(judgeScores, judgeLabels, t) {
       N: notAnswerable.length,
       share: notAnswerable.length ? caughtN / notAnswerable.length : null,
     },
-    wrong: {
-      n: wrongN,
-      N: answerable.length,
-      share: answerable.length ? wrongN / answerable.length : null,
-    },
+    wrong: { n: wrongN, N: answerable.length, share: answerable.length ? wrongN / answerable.length : null },
   };
 }
 const devRows = usable.filter((r) => DEV_FILES.has(r.file));
@@ -497,10 +466,7 @@ let lane15 = null;
 const notes = [];
 try {
   const d = JSON.parse(readFileSync(LANE15_PATH, 'utf8'));
-  lane15 = {
-    jev_r1: d.contrasts['jev-vs-base'].table['R@1'].b,
-    base_r1: d.contrasts['jev-vs-base'].table['R@1'].a,
-  };
+  lane15 = { jev_r1: d.contrasts['jev-vs-base'].table['R@1'].b, base_r1: d.contrasts['jev-vs-base'].table['R@1'].a };
 } catch (err) {
   notes.push(`could not read Lane 15 reference file: ${err.message}`);
 }
@@ -530,11 +496,7 @@ writeFileSync(
         answerable: usable.filter((r) => r.answerable).length,
         not_answerable: usable.filter((r) => !r.answerable).length,
       },
-      dev_judge_split: {
-        dev_not_answerable: devNotAnswerable,
-        judge_not_answerable: judgeNotAnswerable,
-        underpowered,
-      },
+      dev_judge_split: { dev_not_answerable: devNotAnswerable, judge_not_answerable: judgeNotAnswerable, underpowered },
       auc: aucTable,
       best_free_arm: bestFreeArm,
       contrasts,
@@ -544,12 +506,7 @@ writeFileSync(
         jev_r1_this_run: jevR1ThisRun,
         lane15_reference: lane15,
         distinct_J2: new Set(usable.map((r) => r.J2)).size,
-        arm_stats: {
-          F1: armStats(arms.F1),
-          F2: armStats(arms.F2),
-          J1: armStats(arms.J1),
-          J2: armStats(arms.J2),
-        },
+        arm_stats: { F1: armStats(arms.F1), F2: armStats(arms.F2), J1: armStats(arms.J1), J2: armStats(arms.J2) },
         http: jevHttp,
         input_tokens_total: inputTokensTotal,
         cost_usd: (inputTokensTotal / 1e6) * USD_PER_MTOK,

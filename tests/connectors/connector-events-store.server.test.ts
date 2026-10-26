@@ -18,10 +18,7 @@ import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.j
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
-import {
-  sqliteConnectorEventsSide,
-  type ConnectorEventsSide,
-} from '../_helpers/connector-sides.js';
+import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
@@ -55,9 +52,11 @@ async function copyWithRoutes(): Promise<string> {
   await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
-    db.prepare(
-      'INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)',
-    ).run('101', TENANT_A, NOW);
+    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
+      '101',
+      TENANT_A,
+      NOW,
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -140,33 +139,18 @@ describe('the connector entry points on a store with connectorEvents', () => {
       });
 
     const ids = await withSqliteBlocked('port-only', async () => {
-      const stored = await message(
-        'Ev_message',
-        'the release is frozen until friday',
-        '1700.000001',
-      );
+      const stored = await message('Ev_message', 'the release is frozen until friday', '1700.000001');
       expect(stored).toEqual({ status: 'ingested', memoryId: expect.any(String) });
-      expect(
-        await message('Ev_message', 'the release is frozen until friday', '1700.000001'),
-      ).toEqual({
+      expect(await message('Ev_message', 'the release is frozen until friday', '1700.000001')).toEqual({
         status: 'duplicate',
         memoryId: stored.memoryId,
       });
-      expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({
-        status: 'skipped',
-        memoryId: null,
-      });
-      expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({
-        status: 'skipped',
-        memoryId: null,
-      });
+      expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({ status: 'skipped', memoryId: null });
+      expect(await message('Ev_empty', '   ', '1700.000002')).toEqual({ status: 'skipped', memoryId: null });
       const noted = await comment('d-1');
       expect(noted).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await comment('d-2')).toEqual({ status: 'duplicate', memoryId: noted.memoryId });
-      const held = await side.store.entriesByIds(
-        [stored.memoryId ?? '', noted.memoryId ?? ''],
-        TENANT_A,
-      );
+      const held = await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A);
       expect(new Map(held.map((r) => [r.id, [r.kind, r.artifactRef]]))).toEqual(
         new Map([
           [stored.memoryId, ['raw', MESSAGE_REF]],
@@ -174,27 +158,13 @@ describe('the connector entry points on a store with connectorEvents', () => {
         ]),
       );
 
-      expect(await deleted('Ev_deleted', '1700.000001')).toEqual({
-        status: 'archived',
-        memoryId: stored.memoryId,
-      });
-      expect(await deleted('Ev_deleted', '1700.000001')).toEqual({
-        status: 'duplicate',
-        memoryId: null,
-      });
-      expect(await deleted('Ev_unknown', '1700.999999')).toEqual({
-        status: 'not_found',
-        memoryId: null,
-      });
-      expect(await deleted('Ev_unknown', '1700.999999')).toEqual({
-        status: 'duplicate',
-        memoryId: null,
-      });
+      expect(await deleted('Ev_deleted', '1700.000001')).toEqual({ status: 'archived', memoryId: stored.memoryId });
+      expect(await deleted('Ev_deleted', '1700.000001')).toEqual({ status: 'duplicate', memoryId: null });
+      expect(await deleted('Ev_unknown', '1700.999999')).toEqual({ status: 'not_found', memoryId: null });
+      expect(await deleted('Ev_unknown', '1700.999999')).toEqual({ status: 'duplicate', memoryId: null });
       expect(await commentDeleted('d-3')).toEqual({ status: 'archived', archivedCount: 1 });
       expect(await commentDeleted('d-4')).toEqual({ status: 'duplicate', archivedCount: 0 });
-      expect(
-        await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A),
-      ).toEqual([]);
+      expect(await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A)).toEqual([]);
       return { message: stored.memoryId, comment: noted.memoryId };
     });
 
@@ -226,10 +196,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
 
 describe('both webhooks under a store that is not hippo.db', () => {
   // Generated per run, so no signing secret is ever written down.
-  const secrets = {
-    slack: randomBytes(24).toString('hex'),
-    github: randomBytes(24).toString('hex'),
-  };
+  const secrets = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
   const handles: ServerHandle[] = [];
   let side: ConnectorEventsSide;
   let served: { readonly root: string; readonly url: string };
@@ -256,18 +223,9 @@ describe('both webhooks under a store that is not hippo.db', () => {
       'x-slack-signature': slackSignature(ts, body, secret),
     };
     const res = await fetch(`${url}/v1/connectors/slack/events`, { method: 'POST', headers, body });
-    return {
-      status: res.status,
-      body: await res.json(),
-      sent: { body, ts, signature: headers['x-slack-signature'] },
-    };
+    return { status: res.status, body: await res.json(), sent: { body, ts, signature: headers['x-slack-signature'] } };
   };
-  const postGitHub = async (
-    url: string,
-    deliveryId: string,
-    payload: JsonValue,
-    secret = secrets.github,
-  ) => {
+  const postGitHub = async (url: string, deliveryId: string, payload: JsonValue, secret = secrets.github) => {
     const body = JSON.stringify(payload);
     const signature = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
     const headers = {
@@ -276,11 +234,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
       'x-github-event': 'issue_comment',
       'x-github-delivery': deliveryId,
     };
-    const res = await fetch(`${url}/v1/connectors/github/events`, {
-      method: 'POST',
-      headers,
-      body,
-    });
+    const res = await fetch(`${url}/v1/connectors/github/events`, { method: 'POST', headers, body });
     return { status: res.status, body: await res.json() };
   };
   const slackEvent = (teamId: string, eventId: string, event: JsonValue) => ({
@@ -345,14 +299,8 @@ describe('both webhooks under a store that is not hippo.db', () => {
   });
 
   it('a store with both connector groups stores, dedupes, parks and archives signed deliveries, and its folder never gets a hippo.db', async () => {
-    const stored = await postSlack(
-      served.url,
-      slackEvent('T_ACME', 'Ev_message', posted('1700.000001')),
-    );
-    expect(stored).toMatchObject({
-      status: 200,
-      body: { ok: true, status: 'ingested', memoryId: expect.any(String) },
-    });
+    const stored = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')));
+    expect(stored).toMatchObject({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const memoryId: string = stored.body.memoryId;
     // Slack signs a retry afresh, so the retry passes the replay window and the event log is what dedupes it.
     const retryTs = String(Number(stored.sent.ts) - 1);
@@ -363,22 +311,14 @@ describe('both webhooks under a store that is not hippo.db', () => {
       retryTs,
     );
     expect(retry).toMatchObject({ status: 200, body: { ok: true, status: 'duplicate', memoryId } });
-    const stray = await postSlack(
-      served.url,
-      slackEvent('T_OTHER', 'Ev_stray', posted('1700.000003')),
-    );
+    const stray = await postSlack(served.url, slackEvent('T_OTHER', 'Ev_stray', posted('1700.000003')));
     expect(stray).toMatchObject({ status: 200, body: { ok: true, status: 'dlq' } });
-    expect(
-      await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001'))),
-    ).toMatchObject({
+    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001')))).toMatchObject({
       status: 200,
       body: { ok: true, status: 'archived' },
     });
     const noted = await postGitHub(served.url, 'd-1', commentEvent('created'));
-    expect(noted).toEqual({
-      status: 200,
-      body: { ok: true, status: 'ingested', memoryId: expect.any(String) },
-    });
+    expect(noted).toEqual({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const commentId: string = noted.body.memoryId;
     expect(await postGitHub(served.url, 'd-2', commentEvent('deleted'))).toEqual({
       status: 200,
@@ -412,19 +352,13 @@ describe('both webhooks under a store that is not hippo.db', () => {
         slackTimestamp: stray.sent.ts,
       },
     ]);
-    expect(readdirSync(served.root).sort()).toEqual([
-      OTHER_STORE_MARKER,
-      'server.key',
-      'server.pid',
-    ]);
+    expect(readdirSync(served.root).sort()).toEqual([OTHER_STORE_MARKER, 'server.key', 'server.pid']);
   });
 
   it('a delivery signed with another secret is a 401 and adds no event, letter or audit row', async () => {
     const before = rows();
     const other = randomBytes(24).toString('hex');
-    expect(
-      await postSlack(served.url, slackEvent('T_ACME', 'Ev_forged', posted('1700.000009')), other),
-    ).toMatchObject({
+    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_forged', posted('1700.000009')), other)).toMatchObject({
       status: 401,
       body: { error: 'invalid Slack signature' },
     });

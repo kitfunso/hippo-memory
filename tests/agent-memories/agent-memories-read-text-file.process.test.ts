@@ -26,11 +26,7 @@ function fileWith(name: string, content: string | Buffer): string {
 describe('readTextFile', () => {
   it('returns the text and the modified time of the file it read', () => {
     const file = fileWith('note.md', 'A note.\n');
-    expect(readTextFile(file)).toEqual({
-      ok: true,
-      text: 'A note.\n',
-      mtimeMs: fs.statSync(file).mtimeMs,
-    });
+    expect(readTextFile(file)).toEqual({ ok: true, text: 'A note.\n', mtimeMs: fs.statSync(file).mtimeMs });
   });
 
   it('reads a file exactly at the size cap and sets aside one byte over it', () => {

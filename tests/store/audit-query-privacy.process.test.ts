@@ -98,9 +98,7 @@ describe('auditQueryFields', () => {
 describe('recall audits store a query hash, never the text', () => {
   it('context recall row has no query key', async () => {
     await contextGet(ctx, { currentProject: cwdProject(), q: QUERY, crossProject: true });
-    const rows = auditRows(localRoot).filter(
-      (r) => r.op === 'recall' && r.metadata.mode === 'context',
-    );
+    const rows = auditRows(localRoot).filter((r) => r.op === 'recall' && r.metadata.mode === 'context');
     expect(rows).toHaveLength(1);
     expectHashedOnly(rows[0], QUERY);
   });
@@ -152,12 +150,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       infra: testInfra(),
     };
     await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'hippo_recall', arguments: { query: QUERY } },
-      },
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,
     );
     const handle: ServerHandle = await serveKeyed({ hippoRoot: localRoot, port: 0 }, serve);

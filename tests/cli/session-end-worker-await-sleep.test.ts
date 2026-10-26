@@ -30,18 +30,12 @@ describe('__session-end-worker awaits handleSleep before finishing', () => {
     const env = withScratchEnv(dir);
 
     // In process, so coverage sees the worker; a rejection it failed to catch would still fail the run.
-    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], {
-      cwd: dir,
-      env,
-    });
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: dir, env });
     expect(init.status).toBe(0);
 
     // Corrupt hippo.db so runSleep's DB open throws synchronously and
     // fast — deterministic, and independent of any lock-timing behavior.
-    writeFileSync(
-      join(dir, 'hippo.db'),
-      'not a sqlite database, deliberately corrupted for this test',
-    );
+    writeFileSync(join(dir, 'hippo.db'), 'not a sqlite database, deliberately corrupted for this test');
 
     const logFile = join(dir, 'worker-await.log');
     const result = await runCliAs(['__session-end-worker', '--log-file', logFile], {

@@ -13,10 +13,7 @@ import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import * as api from '../../src/api/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { importProjectMemories } from '../../src/api/agent-memories.js';
@@ -103,8 +100,7 @@ async function hippo(root: string, ...args: string[]): Promise<string> {
   return r.stdout;
 }
 
-const json = (out: string): { results: { id: string; content: string }[] } =>
-  JSON.parse(out.trim().split('\n').pop()!);
+const json = (out: string): { results: { id: string; content: string }[] } => JSON.parse(out.trim().split('\n').pop()!);
 
 type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 
@@ -168,10 +164,7 @@ async function sleepMany(root: string): Promise<void> {
 describe('sleep keeps both versions', () => {
   it('a look-alike pair keeps both facts across several sleeps', async () => {
     const root = newRoot();
-    const facts = [
-      'The staging service listens on port 4400.',
-      'The analytics service listens on port 7700.',
-    ];
+    const facts = ['The staging service listens on port 4400.', 'The analytics service listens on port 7700.'];
     for (const text of facts) write(root, text);
 
     await sleepMany(root);
@@ -217,9 +210,7 @@ describe('sleep keeps both versions', () => {
     }
     expect(readEntry(root, a.id)!.halfLifeDays).toBe(demoted);
     expect(readEntry(root, b.id)!.halfLifeDays).toBe(demoted);
-    expect(loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(
-      1,
-    );
+    expect(loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(1);
   });
 
   it('dedup keeps a pair whose text differs in a value', async () => {
@@ -258,10 +249,7 @@ describe('merge caps', () => {
   it('merges at most five sources; the rest stay unmerged and keep their half-life', async () => {
     const root = newRoot();
     const sources = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot'].map((name) =>
-      write(
-        root,
-        `The nightly build for the ${name} service writes its cache to the shared volume.`,
-      ),
+      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`),
     );
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(1);
@@ -276,10 +264,9 @@ describe('merge caps', () => {
 
   it('merges at most 2,000 characters of source text', async () => {
     const root = newRoot();
-    const body =
-      'The nightly build writes its cache to the shared volume and prunes entries older than a week. '
-        .repeat(9)
-        .trim();
+    const body = 'The nightly build writes its cache to the shared volume and prunes entries older than a week. '
+      .repeat(9)
+      .trim();
     const sources = ['alpha', 'bravo', 'charlie'].map((name) => write(root, `${name}: ${body}`));
     for (const e of sources) expect(e.content.length).toBeGreaterThan(700); // two fit under the cap, three do not
     for (const e of sources) expect(e.content.length).toBeLessThan(1000);
@@ -298,9 +285,7 @@ describe('merge caps', () => {
     const root = newRoot();
     const checklist =
       'Deploy checklist: build the image, run the migrations, warm the cache, flip the traffic, watch the error rate. ';
-    const seed = write(root, checklist.repeat(20).trim(), {
-      created: new Date(Date.now() - DAY_MS).toISOString(),
-    }); // oldest, so it seeds first
+    const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY_MS).toISOString() }); // oldest, so it seeds first
     const steps = [
       'Deploy step: build the image and run the migrations.',
       'Deploy step: warm the cache, flip the traffic and watch the error rate.',
@@ -312,9 +297,7 @@ describe('merge caps', () => {
 
   it('text with no word tokens never merges', async () => {
     const root = newRoot();
-    const rows = ['预发布服务监听端口四千四百', '分析服务监听端口七千七百'].map((text) =>
-      write(root, text),
-    );
+    const rows = ['预发布服务监听端口四千四百', '分析服务监听端口七千七百'].map((text) => write(root, text));
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
     halfLifeKept(root, rows);
@@ -324,13 +307,9 @@ describe('merge caps', () => {
   function sevenLookAlikes(root: string): MemoryEntry[] {
     const start = Date.now() - DAY_MS;
     return ['alpha', 'bravo', 'delta', 'gamma', 'kappa', 'omega', 'sigma'].map((name, i) =>
-      write(
-        root,
-        `The nightly build for the ${name} service writes its cache to the shared volume.`,
-        {
-          created: new Date(start + i * 60_000).toISOString(),
-        },
-      ),
+      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`, {
+        created: new Date(start + i * 60_000).toISOString(),
+      }),
     );
   }
 
@@ -355,9 +334,9 @@ describe('merge caps', () => {
     );
     const db = openHippoDb(root);
     try {
-      expect(
-        listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds,
-      ).toEqual(rows.slice(0, 5).map((e) => e.id));
+      expect(listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(
+        rows.slice(0, 5).map((e) => e.id),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -366,9 +345,7 @@ describe('merge caps', () => {
   it('a merge rejected before this release still covers the rows past the cap', async () => {
     const root = newRoot();
     const rows = sevenLookAlikes(root);
-    reject(root, [
-      `[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`,
-    ]); // the old format merged every look-alike
+    reject(root, [`[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`]); // the old format merged every look-alike
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
@@ -380,11 +357,7 @@ describe('merged row', () => {
   it('writes each distinct text once', async () => {
     const root = newRoot();
     const staging = 'The staging service listens on port 4400.';
-    for (const text of [
-      staging,
-      staging.replace(' ', '  '),
-      'The analytics service listens on port 7700.',
-    ]) {
+    for (const text of [staging, staging.replace(' ', '  '), 'The analytics service listens on port 7700.']) {
       write(root, text);
     }
 
@@ -420,19 +393,14 @@ describe('merged row', () => {
 
     const again = newRoot();
     writeAll(again);
-    reject(again, [
-      `[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`,
-    ]); // the old format: longest first
+    reject(again, [`[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`]); // the old format: longest first
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect((await consolidate(again, { now: FIXED_NOW })).semanticCreated).toBe(0);
   });
 
   it('a merge rejected before this release stays rejected', async () => {
     const root = newRoot();
-    const pair = [
-      'The staging service listens on port 4400.',
-      'The analytics service listens on port 7700.',
-    ];
+    const pair = ['The staging service listens on port 4400.', 'The analytics service listens on port 7700.'];
     const triple = ['billing', 'orders', 'search'].map(
       (db) => `Nightly backups of the ${db} database run at 02:00 UTC.`,
     );
@@ -464,21 +432,14 @@ describe('a retired version leaves the merged row', () => {
   const NEW = 'The web app dev server now runs on port 5173 locally.';
   const ctx = (root: string): FullContext => apiCtx(root, 'default', api.adminActor('cli'));
   const recalled = async (root: string): Promise<string> =>
-    (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results
-      .map((r) => r.content)
-      .join('\n');
+    (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string =>
     loadAllEntries(root, 'default')
       .filter((e) => !e.supersededBy)
       .map((e) => e.content)
       .join('\n');
 
-  async function mergedPair(): Promise<{
-    root: string;
-    old: MemoryEntry;
-    next: MemoryEntry;
-    row: MemoryEntry;
-  }> {
+  async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     const root = newRoot();
     const old = write(root, OLD, { created: new Date(Date.now() - DAY_MS).toISOString() });
@@ -509,12 +470,7 @@ describe('a retired version leaves the merged row', () => {
     const { root, old, next, row } = await mergedPair();
     const db = openHippoDb(root);
     try {
-      insertDormantRow(db, {
-        entry: row,
-        strength: 0.01,
-        reason: 'decay',
-        dormantAt: new Date().toISOString(),
-      });
+      insertDormantRow(db, { entry: row, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
     } finally {
       closeHippoDb(db);
     }
@@ -528,18 +484,12 @@ describe('a retired version leaves the merged row', () => {
     expect(await recalled(root)).not.toContain('port 3000');
     expect(restored.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
     expect(restored.parents).toEqual([next.id]);
-    expect(out).toContain(
-      `Dormant merged rows that held it keep their other texts in: ${dormant.id}`,
-    );
+    expect(out).toContain(`Dormant merged rows that held it keep their other texts in: ${dormant.id}`);
   });
 
   it('a superseded version leaves the merged row at the next sleep', async () => {
     const { root, old, next } = await mergedPair();
-    await api.supersede(
-      ctx(root),
-      old.id,
-      'The web app dev server runs on port 5173, set in vite.config.ts.',
-    );
+    await api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
 
     await consolidate(root, { now: new Date(Date.now() + DAY_MS) });
 
@@ -602,9 +552,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   it('api recall with a fresh tail', async () => {
     const { root, row } = await mergedStore();
     expect(
-      (await api.retrieve(ctx(root), { query: QUERY, window: { freshTailCount: 5 } })).results.map(
-        (r) => r.id,
-      ),
+      (await api.retrieve(ctx(root), { query: QUERY, window: { freshTailCount: 5 } })).results.map((r) => r.id),
     ).toEqual([row.id]);
   });
 
@@ -629,9 +577,9 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('CLI recall filtered to the episodic layer still shows the sources', async () => {
     const { root } = await mergedStore();
-    const shown = json(
-      await hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic'),
-    ).results.map((r) => r.content);
+    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map(
+      (r) => r.content,
+    );
     expect(shown.sort()).toEqual([...FACTS].sort());
   });
 
@@ -673,9 +621,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   it('a pinned memory never merges, so the per-prompt block still shows it after a sleep', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     const root = newRoot();
-    const pin = write(root, 'Deploy rule: the staging service listens on port 4400.', {
-      pinned: true,
-    });
+    const pin = write(root, 'Deploy rule: the staging service listens on port 4400.', { pinned: true });
     write(root, 'Deploy rule: the staging service listens on port 4401.');
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
@@ -686,10 +632,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     const root = newRoot();
     const text = 'Deploy rule: the staging service listens on port 4400.';
-    const pin = write(root, text, {
-      pinned: true,
-      created: new Date(Date.now() - DAY_MS).toISOString(),
-    });
+    const pin = write(root, text, { pinned: true, created: new Date(Date.now() - DAY_MS).toISOString() });
     const old = write(root, `[Consolidated from 2 related memories]\n\n${text}`, {
       layer: Layer.Semantic,
       source: 'consolidation',
@@ -771,10 +714,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
   it('import', () => {
     const root = newRoot();
     write(root, OLD);
-    const result = importEntries([NEW, OLD.replace(' ', '  ')], 'test', [], {
-      tenantId: 'default',
-      hippoRoot: root,
-    });
+    const result = importEntries([NEW, OLD.replace(' ', '  ')], 'test', [], { tenantId: 'default', hippoRoot: root });
     expect([result.imported, result.skipped]).toEqual([1, 1]);
   });
 
@@ -808,12 +748,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
     expect(
       (
-        await autoShare(...sharingStores(root), {
-          embed: TEST_RUN,
-          tenantId: ALL_TENANTS,
-          minScore: 0,
-          dryRun: true,
-        })
+        await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, dryRun: true })
       ).map((e) => e.content),
     ).toEqual([LONG_NEW]);
   });
@@ -824,8 +759,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);
-    const contents = (rs: { entry: MemoryEntry }[]): string[] =>
-      rs.map((r) => r.entry.content).sort();
+    const contents = (rs: { entry: MemoryEntry }[]): string[] => rs.map((r) => r.entry.content).sort();
 
     expect(
       contents(

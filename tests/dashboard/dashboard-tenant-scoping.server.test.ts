@@ -16,11 +16,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function post(
-  port: number,
-  path: string,
-  payload: string = '{}',
-): Promise<{ status: number; body: string }> {
+function post(port: number, path: string, payload: string = '{}'): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       {
@@ -71,12 +67,7 @@ describe('dashboard tenant-scoping', () => {
     writeEntry(hippoRoot, a);
 
     // Run the dashboard as tenant_b on an ephemeral port.
-    server = await serveDashboard({
-      hippoRoot,
-      port: 0,
-      token: DASHBOARD_TOKEN,
-      tenantId: 'tenant_b',
-    });
+    server = await serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'tenant_b' });
     const { port } = server;
 
     const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');
@@ -86,9 +77,7 @@ describe('dashboard tenant-scoping', () => {
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: the SELECT names one column of the row seeded above, which exists.
-      const row = db.prepare(`SELECT pinned FROM memories WHERE id = ?`).get(a.id) as {
-        pinned: number;
-      };
+      const row = db.prepare(`SELECT pinned FROM memories WHERE id = ?`).get(a.id) as { pinned: number };
       expect(row.pinned).toBe(0);
     } finally {
       closeHippoDb(db);

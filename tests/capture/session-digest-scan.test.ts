@@ -3,14 +3,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  readSessionScan,
-  scanSessionTranscript,
-} from '../../src/surface/capture/session-digest.js';
+import { readSessionScan, scanSessionTranscript } from '../../src/surface/capture/session-digest.js';
 
 const CWD = '/work/repo';
-const jsonl = <T>(records: readonly T[]): string =>
-  records.map((r) => JSON.stringify(r)).join('\n') + '\n';
+const jsonl = <T>(records: readonly T[]): string => records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 
 interface LineFlags {
   isSidechain?: boolean;
@@ -39,19 +35,14 @@ describe('Claude Code transcripts', () => {
       jsonl([
         userSays('fix the upload retry'),
         assistantSays([text('Looking now.')]),
-        assistantSays([
-          text('Fixed `retry()` because tokens expire.'),
-          toolUse('t9', 'Read', { file_path: 'a.ts' }),
-        ]),
+        assistantSays([text('Fixed `retry()` because tokens expire.'), toolUse('t9', 'Read', { file_path: 'a.ts' })]),
         assistantSays([text('Sub-agent reply.')], { isSidechain: true }),
         assistantSays([text('Meta note.')], { isMeta: true }),
       ]),
     );
     expect(scan.finalText).toBe('Fixed `retry()` because tokens expire.');
     expect(scan.cwd).toBe(CWD);
-    expect(scan.turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual([
-      'fix the upload retry',
-    ]);
+    expect(scan.turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual(['fix the upload retry']);
   });
 
   it.each([
@@ -63,11 +54,7 @@ describe('Claude Code transcripts', () => {
       jsonl([
         userSays('fix the upload retry'),
         assistantSays([text('Fixed `retry()` because tokens expire.')]),
-        {
-          type: 'assistant',
-          cwd: CWD,
-          message: { role: 'assistant', model: '<synthetic>', content: [text(notice)] },
-        },
+        { type: 'assistant', cwd: CWD, message: { role: 'assistant', model: '<synthetic>', content: [text(notice)] } },
       ]),
     );
     expect(scan.finalText).toBe('Fixed `retry()` because tokens expire.');
@@ -88,9 +75,7 @@ describe('Claude Code transcripts', () => {
         assistantSays([toolUse('x1', 'Edit', { file_path: `${CWD}/src/failed.ts` })]),
         toolResult('x1', true),
         assistantSays([toolUse('u1', 'Write', { file_path: `${CWD}/src/unanswered.ts` })]),
-        assistantSays([toolUse('s1', 'Edit', { file_path: `${CWD}/src/side.ts` })], {
-          isSidechain: true,
-        }),
+        assistantSays([toolUse('s1', 'Edit', { file_path: `${CWD}/src/side.ts` })], { isSidechain: true }),
         toolResult('s1'),
       ]),
     );
@@ -105,26 +90,18 @@ describe('Claude Code transcripts', () => {
 
   it('does not count tool results or meta lines as prompts', () => {
     const scan = scanSessionTranscript(
-      jsonl([
-        userSays('the real request'),
-        userSays('injected by a hook', { isMeta: true }),
-        toolResult('e1'),
-      ]),
+      jsonl([userSays('the real request'), userSays('injected by a hook', { isMeta: true }), toolResult('e1')]),
     );
-    expect(scan.turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual([
-      'the real request',
-    ]);
+    expect(scan.turns.filter((t) => t.role === 'user').map((t) => t.text)).toEqual(['the real request']);
   });
 });
 
 const item = <T>(payload: T) => ({ type: 'response_item', payload });
-const codexUser = (t: string) =>
-  item({ type: 'message', role: 'user', content: [{ type: 'input_text', text: t }] });
+const codexUser = (t: string) => item({ type: 'message', role: 'user', content: [{ type: 'input_text', text: t }] });
 // JSON.stringify drops an undefined phase, which is how an unphased message looks on disk.
 const codexSays = (t: string, phase?: string) =>
   item({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: t }], phase });
-const patch = (...headers: string[]): string =>
-  ['*** Begin Patch', ...headers, '*** End Patch'].join('\n');
+const patch = (...headers: string[]): string => ['*** Begin Patch', ...headers, '*** End Patch'].join('\n');
 const OK = 'Success. Updated the following files:\nM src/a.ts\n';
 
 describe('Codex rollouts', () => {
@@ -162,26 +139,16 @@ describe('Codex rollouts', () => {
           type: 'function_call',
           call_id: 'f1',
           name: 'apply_patch',
-          arguments: JSON.stringify({
-            input: patch('*** Update File: src/old.ts', '*** Move to: src/moved.ts'),
-          }),
+          arguments: JSON.stringify({ input: patch('*** Update File: src/old.ts', '*** Move to: src/moved.ts') }),
         }),
-        item({
-          type: 'function_call_output',
-          call_id: 'f1',
-          output: [{ type: 'input_text', text: OK }],
-        }),
+        item({ type: 'function_call_output', call_id: 'f1', output: [{ type: 'input_text', text: OK }] }),
         item({
           type: 'custom_tool_call',
           call_id: 'c2',
           name: 'apply_patch',
           input: patch('*** Delete File: src/failed.ts'),
         }),
-        item({
-          type: 'custom_tool_call_output',
-          call_id: 'c2',
-          output: 'error: patch did not apply',
-        }),
+        item({ type: 'custom_tool_call_output', call_id: 'c2', output: 'error: patch did not apply' }),
         item({
           type: 'custom_tool_call',
           call_id: 'c3',
@@ -197,12 +164,7 @@ describe('Codex rollouts', () => {
         { type: 'event_msg', payload: { type: 'patch_apply_end', call_id: 'c4', success: true } },
       ]),
     );
-    expect(scan.edits.map((e) => e.filePath)).toEqual([
-      'src/new.ts',
-      'src/old.ts',
-      'src/moved.ts',
-      'src/evented.ts',
-    ]);
+    expect(scan.edits.map((e) => e.filePath)).toEqual(['src/new.ts', 'src/old.ts', 'src/moved.ts', 'src/evented.ts']);
   });
 
   it('reads heredoc patches from shell calls against the cwd in effect at the call', () => {
@@ -214,9 +176,7 @@ describe('Codex rollouts', () => {
           type: 'function_call',
           call_id: 'h1',
           name: 'shell',
-          arguments: JSON.stringify({
-            command: ['bash', '-lc', `cd pkg && apply_patch <<'EOF'\n${body}\nEOF`],
-          }),
+          arguments: JSON.stringify({ command: ['bash', '-lc', `cd pkg && apply_patch <<'EOF'\n${body}\nEOF`] }),
         }),
         item({ type: 'function_call_output', call_id: 'h1', output: OK }),
         { type: 'turn_context', payload: { cwd: `${CWD}/sub` } },
@@ -240,9 +200,7 @@ describe('Codex rollouts', () => {
       ]),
     );
     expect(scan.cwd).toBe(CWD);
-    expect(
-      scan.edits.map((e) => [e.filePath, e.base?.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')]),
-    ).toEqual([
+    expect(scan.edits.map((e) => [e.filePath, e.base?.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')])).toEqual([
       ['lib.ts', `${CWD}/pkg`],
       ['lib.ts', `${CWD}/sub/tools`],
       ['lib.ts', '/other'],
@@ -255,10 +213,7 @@ describe('the transcript on disk', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-scan-'));
     try {
       const file = path.join(dir, 't.jsonl');
-      fs.writeFileSync(
-        file,
-        jsonl([userSays('fix the upload retry'), assistantSays([text('Fixed the retry.')])]),
-      );
+      fs.writeFileSync(file, jsonl([userSays('fix the upload retry'), assistantSays([text('Fixed the retry.')])]));
       const logged: string[] = [];
       expect(readSessionScan(file, (m) => logged.push(m))?.finalText).toBe('Fixed the retry.');
       expect(logged).toEqual([]);

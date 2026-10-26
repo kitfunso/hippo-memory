@@ -23,19 +23,12 @@ interface KeyCase {
 const defaultsOf = (key: ConfigKey): Record<string, JsonValue> =>
   Object.fromEntries(Object.entries(DEFAULT_CONFIG[key]));
 
-const block = (
-  key: ConfigKey,
-  good: Record<string, JsonValue>,
-): Pick<KeyCase, 'key' | 'good' | 'read'> => ({
+const block = (key: ConfigKey, good: Record<string, JsonValue>): Pick<KeyCase, 'key' | 'good' | 'read'> => ({
   key,
   good,
   read: { ...defaultsOf(key), ...good },
 });
-const scalar = (key: ConfigKey, good: JsonValue): Pick<KeyCase, 'key' | 'good' | 'read'> => ({
-  key,
-  good,
-  read: good,
-});
+const scalar = (key: ConfigKey, good: JsonValue): Pick<KeyCase, 'key' | 'good' | 'read'> => ({ key, good, read: good });
 const enabledField = { name: 'enabled', value: 'yes' };
 
 const CASES: KeyCase[] = [
@@ -65,21 +58,9 @@ const CASES: KeyCase[] = [
     bad: [],
     badField: { name: 'dt', value: 'fast', reads: 0.1 },
   },
-  {
-    ...block('mmr', { lambda: 0.2 }),
-    bad: 'on',
-    badField: { name: 'lambda', value: 2, reads: 0.7 },
-  },
-  {
-    ...block('search', { localBump: 2 }),
-    bad: null,
-    badField: { name: 'localBump', value: 0, reads: 1.2 },
-  },
-  {
-    ...block('replay', { count: 0 }),
-    bad: 3,
-    badField: { name: 'count', value: 'many', reads: 5 },
-  },
+  { ...block('mmr', { lambda: 0.2 }), bad: 'on', badField: { name: 'lambda', value: 2, reads: 0.7 } },
+  { ...block('search', { localBump: 2 }), bad: null, badField: { name: 'localBump', value: 0, reads: 1.2 } },
+  { ...block('replay', { count: 0 }), bad: 3, badField: { name: 'count', value: 'many', reads: 5 } },
   { ...scalar('autoTraceCapture', false), bad: 'no' },
   { ...scalar('autoTraceWindowDays', 3), bad: -1 },
   {
@@ -180,18 +161,19 @@ describe('every top-level config key is checked', () => {
     });
   });
 
-  describe.each(
-    CASES.flatMap((c) => (c.badField === undefined ? [] : [{ key: c.key, field: c.badField }])),
-  )('$key block', ({ key, field }) => {
-    it(`names ${field.name} when only that field holds a bad value`, () => {
-      const { cfg, warnings } = load({ [key]: { [field.name]: field.value } });
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toMatch(WARNING);
-      expect(warnings[0]).toContain(`"${key}.${field.name}"`);
-      const base = defaultsOf(key);
-      expect(cfg[key]).toEqual({ ...base, [field.name]: field.reads ?? base[field.name] });
-    });
-  });
+  describe.each(CASES.flatMap((c) => (c.badField === undefined ? [] : [{ key: c.key, field: c.badField }])))(
+    '$key block',
+    ({ key, field }) => {
+      it(`names ${field.name} when only that field holds a bad value`, () => {
+        const { cfg, warnings } = load({ [key]: { [field.name]: field.value } });
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toMatch(WARNING);
+        expect(warnings[0]).toContain(`"${key}.${field.name}"`);
+        const base = defaultsOf(key);
+        expect(cfg[key]).toEqual({ ...base, [field.name]: field.reads ?? base[field.name] });
+      });
+    },
+  );
 
   it('reads a malformed pinnedInject.promptRecall as off, with one warning', () => {
     const { cfg, warnings } = load({ pinnedInject: { promptRecall: 'false' } });

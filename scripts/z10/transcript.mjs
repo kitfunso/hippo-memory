@@ -20,10 +20,7 @@ function promptBody(content) {
   if (blocks.some((b) => b.type === 'tool_result')) return null;
   const texts = blocks.filter((b) => b.type === 'text' && isText(b.text));
   if (texts.length === 0) return null;
-  return {
-    text: texts.map((b) => b.text).join('\n'),
-    image: blocks.some((b) => b.type === 'image'),
-  };
+  return { text: texts.map((b) => b.text).join('\n'), image: blocks.some((b) => b.type === 'image') };
 }
 
 function kindOf(text) {
@@ -122,8 +119,7 @@ export function pairTurns(parsed, rows, hash) {
     return -1;
   };
   const after = (i) => {
-    for (let k = i + 1; k < rows.length; k++)
-      if (pairs.has(rows[k].id)) return pairs.get(rows[k].id).cand;
+    for (let k = i + 1; k < rows.length; k++) if (pairs.has(rows[k].id)) return pairs.get(rows[k].id).cand;
     return cands.length;
   };
 
@@ -140,11 +136,7 @@ export function pairTurns(parsed, rows, hash) {
   rows.forEach((row, i) => {
     if (pairs.has(row.id) || row.emitted.length === 0) return;
     for (let c = before(i) + 1; c < after(i); c++) {
-      if (
-        !taken.has(c) &&
-        cands[c].fired &&
-        cands[c].attachments.some((a) => row.emitted.includes(hash(a)))
-      ) {
+      if (!taken.has(c) && cands[c].fired && cands[c].attachments.some((a) => row.emitted.includes(hash(a)))) {
         bind(row, c, 'attachment');
         return;
       }
@@ -159,16 +151,12 @@ export function pairTurns(parsed, rows, hash) {
     let j = i;
     while (j < rows.length && !pairs.has(rows[j].id)) j++;
     const free = [];
-    for (let c = before(i) + 1; c < after(j - 1); c++)
-      if (positional(cands[c]) && !taken.has(c)) free.push(c);
-    if (free.length === j - i)
-      for (let k = 0; k < free.length; k++) bind(rows[i + k], free[k], 'position');
+    for (let c = before(i) + 1; c < after(j - 1); c++) if (positional(cands[c]) && !taken.has(c)) free.push(c);
+    if (free.length === j - i) for (let k = 0; k < free.length; k++) bind(rows[i + k], free[k], 'position');
     i = j;
   }
 
   const fired = cands.filter((c) => c.fired);
-  const gaps = fired
-    .filter((c) => !taken.has(c.index))
-    .map((c) => ({ cand: c.index, ordinal: fired.indexOf(c) }));
+  const gaps = fired.filter((c) => !taken.has(c.index)).map((c) => ({ cand: c.index, ordinal: fired.indexOf(c) }));
   return { pairs, gaps };
 }

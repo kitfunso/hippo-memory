@@ -4,14 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  authRevoke,
-  ForbiddenError,
-  NotFoundError,
-  serve,
-  type Actor,
-  type ServerHandle,
-} from '../../src/server.js';
+import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
@@ -65,10 +58,7 @@ describe('authRevoke with ctx.store', () => {
     const side = portOnlySide(copyOf());
     const { memberA } = fixture.keys;
     expect(
-      await authRevoke(
-        { tenantId: TENANT_A, actor: admin, store: side.store, config: loadConfig(hippoRoot) },
-        memberA,
-      ),
+      await authRevoke({ tenantId: TENANT_A, actor: admin, store: side.store, config: loadConfig(hippoRoot) }, memberA),
     ).toEqual({ ok: true, revokedAt: NOW });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect((await side.store.findApiKey(memberA))?.revokedAt).toBe(NOW);

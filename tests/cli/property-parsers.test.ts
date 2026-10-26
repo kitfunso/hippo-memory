@@ -9,18 +9,7 @@ import { ApiError } from '../../src/base/errors/api-errors.js';
 import type { KeysetPosition } from '../../src/base/util/keyset.js';
 import { parseCursor } from '../../src/api/cursor.js';
 import { pageOf } from '../../src/surface/server/cursor.js';
-import {
-  arr,
-  both,
-  forAll,
-  int,
-  just,
-  map,
-  oneOf,
-  pick,
-  str,
-  type Gen,
-} from '../_helpers/property.js';
+import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
 
 /** The id the parser returned, or the exit code its refusal carries. */
 function idOrExit(raw: string) {
@@ -42,10 +31,7 @@ describe('typed-object id parser properties', () => {
 
   it('an id written with padding and leading zeros comes back as that id', async () => {
     const pad = str(' \t\n', 0, 2);
-    const written = both(
-      both(oneOf([int(1, 9999), int(1, Number.MAX_SAFE_INTEGER)]), int(0, 3)),
-      both(pad, pad),
-    );
+    const written = both(both(oneOf([int(1, 9999), int(1, Number.MAX_SAFE_INTEGER)]), int(0, 3)), both(pad, pad));
     await forAll(0x1d01, 400, written, ([[id, zeros], [before, after]]) => {
       expect(idOrExit(`${before}${'0'.repeat(zeros)}${id}${after}`)).toEqual({ id });
     });
@@ -61,10 +47,7 @@ describe('typed-object id parser properties', () => {
 
   // Digits past 2^53 would come back as the nearest number a double holds, which is not the id that was typed.
   it('an id too long to be held exactly is refused', async () => {
-    const digits = map(
-      both(str('123456789', 1, 1), str('0123456789', 16, 24)),
-      ([lead, rest]) => lead + rest,
-    );
+    const digits = map(both(str('123456789', 1, 1), str('0123456789', 16, 24)), ([lead, rest]) => lead + rest);
     await forAll(0x1d03, 200, digits, (raw) => {
       expect(idOrExit(raw)).toEqual({ exit: 1 });
     });
@@ -139,25 +122,18 @@ describe('keyset cursor properties', () => {
       for (const keyPart of PARTS) {
         for (const idPart of PARTS) {
           const mine = keyPart === partOf(key) && idPart === partOf(id);
-          expect(positionOrStatus(cursor, keyPart, idPart)).toEqual(
-            mine ? { pos: { key, id } } : { status: 400 },
-          );
+          expect(positionOrStatus(cursor, keyPart, idPart)).toEqual(mine ? { pos: { key, id } } : { status: 400 });
         }
       }
     });
   });
 
   it('any other string is refused with a 400, or yields parts of the types asked for', async () => {
-    await forAll(
-      0xc0751,
-      400,
-      both(HOSTILE_CURSOR, both(pick(PARTS), pick(PARTS))),
-      ([raw, [keyPart, idPart]]) => {
-        const { pos, status } = positionOrStatus(raw, keyPart, idPart);
-        if (pos === undefined) expect(status).toBe(400);
-        else expect([fits(pos.key, keyPart), fits(pos.id, idPart)]).toEqual([true, true]);
-      },
-    );
+    await forAll(0xc0751, 400, both(HOSTILE_CURSOR, both(pick(PARTS), pick(PARTS))), ([raw, [keyPart, idPart]]) => {
+      const { pos, status } = positionOrStatus(raw, keyPart, idPart);
+      if (pos === undefined) expect(status).toBe(400);
+      else expect([fits(pos.key, keyPart), fits(pos.id, idPart)]).toEqual([true, true]);
+    });
   });
 });
 
@@ -182,9 +158,7 @@ interface FlagDraw {
   readonly value: string;
 }
 
-const VERBS: ReadonlyMap<string, VerbFlags> = new Map(
-  Object.entries(COMMANDS).map(([verb, row]) => [verb, row.flags]),
-);
+const VERBS: ReadonlyMap<string, VerbFlags> = new Map(Object.entries(COMMANDS).map(([verb, row]) => [verb, row.flags]));
 const declaredBy = (verb: VerbFlags): string[] =>
   [verb.switches, verb.values, verb.numbers, verb.lists].flatMap((names) => names ?? []);
 // A flag no verb declares parses as a value flag, and `help` belongs to the entry point.
@@ -197,22 +171,16 @@ function familyOn(verb: VerbFlags | undefined, name: string): Family {
 
 // A verb that reads one of its flags unlike the other verbs with that name: a parse that ignored the verb would get it wrong.
 const OWN_KIND_VERBS = [...VERBS]
-  .filter(([, verb]) =>
-    declaredBy(verb).some((name) => familyOn(verb, name) !== familyOn(undefined, name)),
-  )
+  .filter(([, verb]) => declaredBy(verb).some((name) => familyOn(verb, name) !== familyOn(undefined, name)))
   .map(([name]) => name);
 // A command the table lacks parses each flag by the kind its declaring verbs agree on.
 const UNLISTED_COMMANDS = ['', 'no-such-verb'];
-const COMMAND = oneOf([
-  pick([...VERBS.keys(), ...UNLISTED_COMMANDS]),
-  pick([...OWN_KIND_VERBS, ...UNLISTED_COMMANDS]),
-]);
+const COMMAND = oneOf([pick([...VERBS.keys(), ...UNLISTED_COMMANDS]), pick([...OWN_KIND_VERBS, ...UNLISTED_COMMANDS])]);
 
 /** The flag names of `family` on `command`: the ones the verb declares when `own` and it has any, else every name any verb declares. */
 function namesOn(command: string, family: Family, own: boolean): string[] {
   const verb = VERBS.get(command);
-  const inFamily = (names: readonly string[]) =>
-    names.filter((name) => familyOn(verb, name) === family);
+  const inFamily = (names: readonly string[]) => names.filter((name) => familyOn(verb, name) === family);
   const declared = inFamily(own && verb ? declaredBy(verb) : []);
   return declared.length > 0 ? declared : inFamily(NAMES);
 }
@@ -288,10 +256,7 @@ describe('parseArgs properties', () => {
         return itemOf(draw, names[draw.index % names.length]);
       });
       const { args, flags } = parseOf(items);
-      const typed = [
-        ...items.flatMap((item) => item.tokens),
-        ...(tail === null ? [] : ['--', ...tail]),
-      ];
+      const typed = [...items.flatMap((item) => item.tokens), ...(tail === null ? [] : ['--', ...tail])];
       expect(parseArgs(['node', 'hippo', command, ...typed])).toEqual({
         command,
         args: [...args, ...(tail ?? [])],

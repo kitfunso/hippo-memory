@@ -2,10 +2,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import {
-  previousSecretInForce,
-  SLACK_PREVIOUS,
-} from '../../src/surface/connectors/previous-secret.js';
+import { previousSecretInForce, SLACK_PREVIOUS } from '../../src/surface/connectors/previous-secret.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 
@@ -18,9 +15,7 @@ const AT = Date.parse('2026-12-01T00:00:00Z');
 
 let stderr: MockInstance<typeof process.stderr.write>;
 const warnings = (): string[] =>
-  stderr.mock.calls
-    .map((call) => String(call[0]))
-    .filter((line) => line.includes('SLACK_SIGNING_SECRET_PREVIOUS'));
+  stderr.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('SLACK_SIGNING_SECRET_PREVIOUS'));
 
 beforeEach(() => {
   onceKeysPerCase();
@@ -39,12 +34,8 @@ describe('previousSecretInForce', () => {
     expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '', AT)).toBe(OLD_SECRET);
     expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, UNTIL, BEFORE)).toBe(OLD_SECRET);
     expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, UNTIL, AT)).toBeUndefined();
-    expect(
-      previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT),
-    ).toBeUndefined();
-    expect(
-      previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT - 1),
-    ).toBe(OLD_SECRET);
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT)).toBeUndefined();
+    expect(previousSecretInForce(SLACK_PREVIOUS, OLD_SECRET, '2026-12-01T09:00:00+09:00', AT - 1)).toBe(OLD_SECRET);
   });
 
   it('returns nothing when no previous secret is set, and warns about nothing', () => {
@@ -86,11 +77,7 @@ describe('POST /v1/connectors/slack/events with a previous secret', () => {
     const signature = `v0=${createHmac('sha256', OLD_SECRET).update(`v0:${ts}:${BODY}`).digest('hex')}`;
     const res = await fetch(`${handle.url}/v1/connectors/slack/events`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-slack-request-timestamp': ts,
-        'x-slack-signature': signature,
-      },
+      headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': signature },
       body: BODY,
     });
     return res.status;

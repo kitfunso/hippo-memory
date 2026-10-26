@@ -42,10 +42,7 @@ type HookHandler = (
   ctx: { workspaceDir?: string },
 ) => { appendSystemContext?: string } | undefined;
 
-type VoidHookHandler<Event = unknown, Ctx = unknown> = (
-  event: Event,
-  ctx: Ctx,
-) => void | Promise<void>;
+type VoidHookHandler<Event = unknown, Ctx = unknown> = (event: Event, ctx: Ctx) => void | Promise<void>;
 
 type HippoMemoryPluginConfig = {
   budget?: number;
@@ -70,9 +67,7 @@ type HippoPluginConfig = {
 
 /** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
  *  factory form is callable, and only the built form carries `execute` directly. */
-function isToolFactory(
-  registration: ToolDef | ((ctx: ToolCtx) => ToolDef),
-): registration is (ctx: ToolCtx) => ToolDef {
+function isToolFactory(registration: ToolDef | ((ctx: ToolCtx) => ToolDef)): registration is (ctx: ToolCtx) => ToolDef {
   return !('execute' in registration);
 }
 
@@ -89,12 +84,8 @@ function makeApi(config: HippoPluginConfig) {
         error: vi.fn(),
         debug: vi.fn(),
       },
-      registerTool: vi.fn((tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) =>
-        toolRegistrations.push(tool),
-      ),
-      on: vi.fn((event: string, handler: HookHandler | VoidHookHandler) =>
-        hooks.set(event, handler),
-      ),
+      registerTool: vi.fn((tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) => toolRegistrations.push(tool)),
+      on: vi.fn((event: string, handler: HookHandler | VoidHookHandler) => hooks.set(event, handler)),
     },
     getTool(name: string, ctx: ToolCtx = {}) {
       for (const registration of toolRegistrations) {
@@ -227,11 +218,7 @@ describe('openclaw hippo plugin', () => {
     register(harness.api);
 
     const hook = harness.getVoidHook<
-      {
-        toolName: string;
-        params: Record<string, string | number | boolean | null>;
-        error?: string;
-      },
+      { toolName: string; params: Record<string, string | number | boolean | null>; error?: string },
       { agentId?: string; sessionId?: string; toolName: string }
     >('after_tool_call');
 

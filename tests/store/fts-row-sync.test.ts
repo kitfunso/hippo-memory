@@ -15,9 +15,7 @@ function ftsContents(id: string): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: rows' shape matches the single `content` column selected.
-    const rows = db.prepare(`SELECT content FROM memories_fts WHERE id = ?`).all(id) as Array<{
-      content: string;
-    }>;
+    const rows = db.prepare(`SELECT content FROM memories_fts WHERE id = ?`).all(id) as Array<{ content: string }>;
     return rows.map((r) => r.content);
   } finally {
     closeHippoDb(db);
@@ -26,9 +24,7 @@ function ftsContents(id: string): string[] {
 
 describe('full-text row per memory', () => {
   it('a new memory gets exactly one full-text row', () => {
-    const entry = createMemory('fresh row gets one fts row', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    });
+    const entry = createMemory('fresh row gets one fts row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
     expect(ftsContents(entry.id)).toEqual(['fresh row gets one fts row']);
   });

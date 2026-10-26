@@ -11,11 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -96,12 +92,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       config: cliConfig(home),
       infra: testInfra(),
     };
-    const res = await callTool(
-      1,
-      'hippo_recall',
-      { query: 'migration effort will take 3 days' },
-      ctx,
-    );
+    const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).toContain('## Planning fallacy hint');
     expect(text).toContain('migration-effort');
@@ -140,12 +131,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       config: cliConfig(home),
       infra: testInfra(),
     };
-    const res = await callTool(
-      1,
-      'hippo_recall',
-      { query: 'migration effort will take 3 days' },
-      ctx,
-    );
+    const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');
   });

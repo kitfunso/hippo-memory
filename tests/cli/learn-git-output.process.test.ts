@@ -60,9 +60,7 @@ function seededStore(): string {
   return root;
 }
 
-function rowsOf(
-  root: string,
-): Record<string, { source: string; confidence: string; tags: string[] }> {
+function rowsOf(root: string): Record<string, { source: string; confidence: string; tags: string[] }> {
   return Object.fromEntries(
     loadAllEntries(root, 'default').map((e) => [
       e.content,
@@ -76,9 +74,7 @@ async function learn(
   flags: Record<string, string | boolean>,
   repo = '',
 ): Promise<{ status: number; stdout: string; stderr: string }> {
-  const r = await runInProcess(() =>
-    handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }),
-  );
+  const r = await runInProcess(() => handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }));
   const mask = (text: string): string => (repo ? text.replaceAll(basename(repo), '<repo>') : text);
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }
@@ -119,9 +115,7 @@ describe('hippo learn --git (in process)', () => {
       expect(first.stdout).toContain(
         '[<repo>] 2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.',
       );
-      expect(first.stdout).toContain(
-        'Git learn complete: 2 new lessons added, 1 duplicates skipped across 1 repos.',
-      );
+      expect(first.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped across 1 repos.');
 
       const rows = rowsOf(root);
       expect(Object.keys(rows)).toHaveLength(4);
@@ -138,9 +132,7 @@ describe('hippo learn --git (in process)', () => {
       expect(again.stdout).toContain(
         '[<repo>] 0 new lessons added, 3 duplicates skipped, 1 low-information subject(s) dropped.',
       );
-      expect(again.stdout).toContain(
-        'Git learn complete: 0 new lessons added, 3 duplicates skipped across 1 repos.',
-      );
+      expect(again.stdout).toContain('Git learn complete: 0 new lessons added, 3 duplicates skipped across 1 repos.');
       expect(Object.keys(rowsOf(root))).toHaveLength(4);
     },
     GIT_HEAVY_MS,
@@ -155,9 +147,7 @@ describe('hippo learn --git (in process)', () => {
       const r = await learn(root, { git: true, days: '30' });
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('   Invalidated 1 memories referencing "webpack"');
-      expect(r.stdout).toContain(
-        '2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.',
-      );
+      expect(r.stdout).toContain('2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.');
       expect(r.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped.');
       expect(r.stdout).not.toContain('across');
       expect(LEARNED.every((content) => rowsOf(root)[content]?.source === 'git-learn')).toBe(true);

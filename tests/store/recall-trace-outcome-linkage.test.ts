@@ -72,9 +72,7 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
       try {
         // SAFETY: recall_traces.id is INTEGER PRIMARY KEY AUTOINCREMENT
         // (src/db/index.ts schema), so every row carries a numeric id.
-        const traces = db
-          .prepare(`SELECT * FROM recall_traces WHERE pipeline = 'cli'`)
-          .all() as RecallTraceRow[];
+        const traces = db.prepare(`SELECT * FROM recall_traces WHERE pipeline = 'cli'`).all() as RecallTraceRow[];
         expect(traces).toHaveLength(1);
         // SAFETY: recall_trace_outcomes.outcome and .memory_ids_json are
         // NOT NULL text columns (src/db/index.ts schema), guaranteed on every row.
@@ -114,9 +112,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
       try {
         // SAFETY: `COUNT(*) AS c` always yields exactly one row with a
         // numeric `c` column.
-        const outcomes = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as {
-          c: number;
-        };
+        const outcomes = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
         expect(outcomes.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -133,10 +129,7 @@ describe('applyOutcome with an explicit traceId (store linkage)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'explicit-trace-opt-target' });
-      const recallResult = await retrieve(ctx, {
-        query: 'explicit-trace-opt-target',
-        window: { limit: 5 },
-      });
+      const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', window: { limit: 5 } });
       expect(recallResult.results).toHaveLength(1);
 
       const db = openHippoDb(home);
@@ -144,20 +137,14 @@ describe('applyOutcome with an explicit traceId (store linkage)', () => {
       try {
         // SAFETY: `SELECT id` names exactly one numeric column, and this
         // trace was just created by the recall() call above.
-        const trace = db.prepare(`SELECT id FROM recall_traces WHERE pipeline = 'api'`).get() as {
-          id: number;
-        };
+        const trace = db.prepare(`SELECT id FROM recall_traces WHERE pipeline = 'api'`).get() as { id: number };
         traceId = trace.id;
       } finally {
         closeHippoDb(db);
       }
 
       const ids = recallResult.results.map((r) => r.id);
-      const target = {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        ...scopeReaderOf(ctx.actor),
-      };
+      const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor) };
       const at = openHippoDb(home);
       try {
         writeOutcome(at, storeFilesOf(home), { ...target, ids, good: true }, traceId);
@@ -169,9 +156,7 @@ describe('applyOutcome with an explicit traceId (store linkage)', () => {
       try {
         // SAFETY: recall_trace_outcomes.outcome is a NOT NULL text column
         // (src/db/index.ts schema), guaranteed on every row.
-        const rows = db2
-          .prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`)
-          .all(traceId) as Array<{
+        const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<{
           outcome: string;
         }>;
         expect(rows).toHaveLength(1);
@@ -195,9 +180,7 @@ describe('applyOutcome with an explicit traceId (store linkage)', () => {
       try {
         // SAFETY: `COUNT(*) AS c` always yields exactly one row with a
         // numeric `c` column.
-        const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as {
-          c: number;
-        };
+        const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);

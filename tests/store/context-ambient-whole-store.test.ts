@@ -48,15 +48,9 @@ describe('ambient summary over the whole store', () => {
   it('a query matching 2 of 3 memories still reports 3 memories and no false narrow focus', async () => {
     writeEntry(
       store,
-      createMemory('always run the migration dry run before deploying', {
-        pinned: true,
-        tags: ['deploy'],
-      }),
+      createMemory('always run the migration dry run before deploying', { pinned: true, tags: ['deploy'] }),
     );
-    writeEntry(
-      store,
-      createMemory('the deploy pipeline uses blue green rollout for the api', { tags: ['deploy'] }),
-    );
+    writeEntry(store, createMemory('the deploy pipeline uses blue green rollout for the api', { tags: ['deploy'] }));
     writeEntry(store, createMemory('lunch options near the office include a noodle bar'));
 
     const result = await contextGet(ctx, { q: 'deploy', currentProject: '' });
@@ -69,49 +63,34 @@ describe('ambient summary over the whole store', () => {
   });
 
   // Seeds more rows than the 2000-row cap in a real store, and a runner's disk sets how long that takes.
-  it(
-    'a no-query read of a store past the candidate cap reports its true total',
-    { timeout: 30_000 },
-    async () => {
-      const CAP = 2000;
-      const total = CAP + 25;
-      const db = openHippoDb(store);
-      db.exec('BEGIN');
-      try {
-        for (let i = 0; i < total; i++) {
-          writeEntryDbOnly(
-            db,
-            createMemory(`capped store note ${i} about the build step`, { tags: [`t${i % 7}`] }),
-          );
-        }
-        db.exec('COMMIT');
-      } catch (error) {
-        db.exec('ROLLBACK');
-        throw error;
-      } finally {
-        closeHippoDb(db);
+  it('a no-query read of a store past the candidate cap reports its true total', { timeout: 30_000 }, async () => {
+    const CAP = 2000;
+    const total = CAP + 25;
+    const db = openHippoDb(store);
+    db.exec('BEGIN');
+    try {
+      for (let i = 0; i < total; i++) {
+        writeEntryDbOnly(db, createMemory(`capped store note ${i} about the build step`, { tags: [`t${i % 7}`] }));
       }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      closeHippoDb(db);
+    }
 
-      const result = await contextGet(ctx, { currentProject: '', budget: 200 });
+    const result = await contextGet(ctx, { currentProject: '', budget: 200 });
 
-      expect(result.ambientState?.totalMemories).toBe(total);
-      expect(renderAmbientSummary(result.ambientState!)).toContain(`${total} memories`);
-    },
-  );
+    expect(result.ambientState?.totalMemories).toBe(total);
+    expect(renderAmbientSummary(result.ambientState!)).toContain(`${total} memories`);
+  });
 });
 
 describe('SQL ambient tallies match the JS tallies over the same rows', () => {
   const NOW = new Date('2026-06-01T00:00:00.000Z');
   const VALENCES: EmotionalValence[] = ['neutral', 'positive', 'negative', 'critical'];
-  const TAGS = [
-    ['error'],
-    ['critical', 'ops'],
-    ['error:db'],
-    ['Error'],
-    ['ops'],
-    [],
-    ['ops', 'ops'],
-  ];
+  const TAGS = [['error'], ['critical', 'ops'], ['error:db'], ['Error'], ['ops'], [], ['ops', 'ops']];
 
   function row(i: number): MemoryEntry {
     const created = new Date(NOW.getTime() - (i * 13 + 1) * 3600000).toISOString();
@@ -140,10 +119,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     ['default flags', {}],
     ['decay ablated', { HIPPO_ABLATE_DECAY: '1' }],
     ['recall boost ablated', { HIPPO_ABLATE_RECALL_BOOST: '1' }],
-    [
-      'outcome ablated, loss aversion 1.5',
-      { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' },
-    ],
+    ['outcome ablated, loss aversion 1.5', { HIPPO_ABLATE_OUTCOME: '1', HIPPO_LOSS_AVERSION_RATIO: '1.5' }],
   ])('%s', async (_label, env: Record<string, string>) => {
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
     writeEntriesTogether(
@@ -161,24 +137,13 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     }
 
     // Both sides score by the ratio the CLI root reads from the environment.
-    const sql = await cliStore(store).contextReads.ambientTallies('default', {
-      currentProject: [],
-      now: NOW,
-    });
+    const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
     const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
-    foldAmbientRows(
-      js,
-      live,
-      NOW,
-      withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio),
-    );
+    foldAmbientRows(js, live, NOW, withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio));
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);
-    expect(ambientStateFromTallies(sql).avgStrength).toBeCloseTo(
-      ambientStateFromTallies(js).avgStrength,
-      9,
-    );
+    expect(ambientStateFromTallies(sql).avgStrength).toBeCloseTo(ambientStateFromTallies(js).avgStrength, 9);
   });
 });

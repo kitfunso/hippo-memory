@@ -22,12 +22,7 @@ import {
   type RecallStoreSetting,
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  writeEntry,
-  saveActiveTaskSnapshot,
-  appendSessionEvent,
-  saveSessionHandoff,
-} from '../_helpers/root-forms.js';
+import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -148,21 +143,17 @@ describe('fitRecall', () => {
     expect(fitted.length).toBeGreaterThanOrEqual(1);
     expect(fitted.length).toBeLessThan(ranked.length);
     expect(fitted.reduce((sum, r) => sum + cost(r), 0)).toBeLessThanOrEqual(room);
-    expect(
-      idsOf(fitRecall(ranked, { ...plain, room: 0, budget: Infinity, floor: 1, cost })),
-    ).toEqual(idsOf(ranked.slice(0, 1)));
+    expect(idsOf(fitRecall(ranked, { ...plain, room: 0, budget: Infinity, floor: 1, cost }))).toEqual(
+      idsOf(ranked.slice(0, 1)),
+    );
   });
 
   it('drops the lowest-ranked row until the rendered text fits the budget, and never below the floor', async () => {
     const ranked = (await rankDeploy()).results;
     const free = { ...plain, room: 0, cost: () => 0 };
     const budget = estimateTokens(textOf(ranked.slice(0, 2)));
-    expect(idsOf(fitRecall(ranked, { ...free, budget, floor: 0 }))).toEqual(
-      idsOf(ranked.slice(0, 2)),
-    );
-    expect(idsOf(fitRecall(ranked, { ...free, budget: 0, floor: 1 }))).toEqual(
-      idsOf(ranked.slice(0, 1)),
-    );
+    expect(idsOf(fitRecall(ranked, { ...free, budget, floor: 0 }))).toEqual(idsOf(ranked.slice(0, 2)));
+    expect(idsOf(fitRecall(ranked, { ...free, budget: 0, floor: 1 }))).toEqual(idsOf(ranked.slice(0, 1)));
   });
 });
 
@@ -173,9 +164,7 @@ describe('recallStoreSetting and recallRowOrigin', () => {
     const off = recallRowOrigin(ctx(), absent);
     expect(off.globalOn).toBe(false);
     // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
-    expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(
-      false,
-    );
+    expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(false);
     // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
     initTestStore(globalRoot);
     const s = recallStoreSetting(ctx(), 'team-a');
@@ -241,10 +230,7 @@ describe('loadScopedContinuity', () => {
     const c = await loadScopedContinuity(ctx(), setting(null), true);
     expect(snapshotText(c.activeSnapshot!)).toContain('Route recall through the api');
     expect(handoffText(c.sessionHandoff!)).toContain('Pick up at the test file.');
-    expect(c.recentSessionEvents.map((e) => e.content).sort()).toEqual([
-      'open trail event',
-      'team trail event',
-    ]);
+    expect(c.recentSessionEvents.map((e) => e.content).sort()).toEqual(['open trail event', 'team trail event']);
   });
 
   it('keeps only the rows in the active scope, so a row from another scope drops', async () => {

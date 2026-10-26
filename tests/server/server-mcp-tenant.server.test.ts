@@ -37,64 +37,59 @@ describe('MCP-over-HTTP tenant context', () => {
     }
   });
 
-  it.skipIf(needsHippoDb('db'))(
-    'Bearer token for tenant alpha lands the memory under tenant_id=alpha',
-    async () => {
-      // Mint an API key bound to tenant 'alpha' directly via the auth helper —
-      // the same path the /v1/auth/keys POST exercises end-to-end.
-      const db = openHippoDb(home);
-      let plaintext: string;
-      try {
-        const minted = createApiKey(db, { tenantId: 'alpha', label: 'mcp-test' });
-        plaintext = minted.plaintext;
-      } finally {
-        closeHippoDb(db);
-      }
+  it.skipIf(needsHippoDb('db'))('Bearer token for tenant alpha lands the memory under tenant_id=alpha', async () => {
+    // Mint an API key bound to tenant 'alpha' directly via the auth helper —
+    // the same path the /v1/auth/keys POST exercises end-to-end.
+    const db = openHippoDb(home);
+    let plaintext: string;
+    try {
+      const minted = createApiKey(db, { tenantId: 'alpha', label: 'mcp-test' });
+      plaintext = minted.plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
 
-      const sentinel = `mcp-tenant-canary-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const sentinel = `mcp-tenant-canary-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-      const res = await fetch(`${handle.url}/mcp`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-          authorization: `Bearer ${plaintext}`,
+    const res = await fetch(`${handle.url}/mcp`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        authorization: `Bearer ${plaintext}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'hippo_remember',
+          arguments: { text: sentinel },
         },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'tools/call',
-          params: {
-            name: 'hippo_remember',
-            arguments: { text: sentinel },
-          },
-        }),
-      });
-      expect(res.status).toBe(200);
-      // SAFETY: this is the MCP server's own JSON-RPC response to a
-      // `tools/call`; the handler always replies with `{ result: { content } }`
-      // on success, matching this narrow read-only shape.
-      const body = (await res.json()) as { result?: { content: Array<{ text: string }> } };
-      const replyText = body.result?.content?.[0]?.text ?? '';
-      expect(replyText).toMatch(/Remembered/i);
+      }),
+    });
+    expect(res.status).toBe(200);
+    // SAFETY: this is the MCP server's own JSON-RPC response to a
+    // `tools/call`; the handler always replies with `{ result: { content } }`
+    // on success, matching this narrow read-only shape.
+    const body = (await res.json()) as { result?: { content: Array<{ text: string }> } };
+    const replyText = body.result?.content?.[0]?.text ?? '';
+    expect(replyText).toMatch(/Remembered/i);
 
-      // Inspect the row directly: tenant_id MUST be 'alpha'. The bug we are
-      // guarding against would have written 'default' here.
-      const verify = openHippoDb(home);
-      try {
-        // SAFETY: the SELECT list above names exactly these two columns, so
-        // every returned row has this shape.
-        const rows = verify
-          .prepare(`SELECT tenant_id, content FROM memories WHERE content = ?`)
-          .all(sentinel) as Array<{
-          tenant_id: string;
-          content: string;
-        }>;
-        expect(rows.length).toBe(1);
-        expect(rows[0]!.tenant_id).toBe('alpha');
-      } finally {
-        closeHippoDb(verify);
-      }
-    },
-  );
+    // Inspect the row directly: tenant_id MUST be 'alpha'. The bug we are
+    // guarding against would have written 'default' here.
+    const verify = openHippoDb(home);
+    try {
+      // SAFETY: the SELECT list above names exactly these two columns, so
+      // every returned row has this shape.
+      const rows = verify.prepare(`SELECT tenant_id, content FROM memories WHERE content = ?`).all(sentinel) as Array<{
+        tenant_id: string;
+        content: string;
+      }>;
+      expect(rows.length).toBe(1);
+      expect(rows[0]!.tenant_id).toBe('alpha');
+    } finally {
+      closeHippoDb(verify);
+    }
+  });
 });

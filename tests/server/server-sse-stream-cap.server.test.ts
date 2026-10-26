@@ -84,8 +84,6 @@ describe('/mcp/stream concurrent stream cap', () => {
     expect((await openStream(auth)).status).toBe(200);
     expect((await openStream(auth)).status).toBe(429);
     expect((await openStream()).status).toBe(200);
-    expect((await openStream({ authorization: `Bearer ${mintKey('sse-cap-b')}` })).status).toBe(
-      200,
-    );
+    expect((await openStream({ authorization: `Bearer ${mintKey('sse-cap-b')}` })).status).toBe(200);
   });
 });

@@ -37,9 +37,7 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   vi.stubEnv('HIPPO_HOME', path.join(home, 'global'));
   process.chdir(cwd);
   try {
-    const r = await runInProcess(() =>
-      runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']),
-    );
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']));
     // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;

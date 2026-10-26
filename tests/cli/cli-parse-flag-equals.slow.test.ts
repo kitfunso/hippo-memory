@@ -101,18 +101,9 @@ describe('parseArgs: --flag=value (glued form)', () => {
   });
 
   it('case 14g: a flag two verbs read differently parses by the verb typed, and as a value on a verb that reads neither', () => {
-    expect(parseArgs(argv('last-sleep', '--keep', 'x'))).toMatchObject({
-      flags: { keep: true },
-      args: ['x'],
-    });
-    expect(parseArgs(argv('resolve', '7', '--keep', 'mem_1'))).toMatchObject({
-      flags: { keep: 'mem_1' },
-      args: ['7'],
-    });
-    expect(parseArgs(argv('status', '--keep', 'x'))).toMatchObject({
-      flags: { keep: 'x' },
-      args: [],
-    });
+    expect(parseArgs(argv('last-sleep', '--keep', 'x'))).toMatchObject({ flags: { keep: true }, args: ['x'] });
+    expect(parseArgs(argv('resolve', '7', '--keep', 'mem_1'))).toMatchObject({ flags: { keep: 'mem_1' }, args: ['7'] });
+    expect(parseArgs(argv('status', '--keep', 'x'))).toMatchObject({ flags: { keep: 'x' }, args: [] });
   });
 });
 
@@ -150,19 +141,13 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
 
   it('case 14e: each verb declares exactly the flags it reads, so no declared flag is dead and no read flag is missing', () => {
     expect(found.unfollowed).toEqual([]);
-    const read = Object.fromEntries(
-      found.verbs.map(({ verb, flags }) => [verb, Object.keys(flags).sort()]),
-    );
-    const declared = Object.fromEntries(
-      Object.entries(rows).map(([verb, { flags }]) => [verb, namesOf(flags).sort()]),
-    );
+    const read = Object.fromEntries(found.verbs.map(({ verb, flags }) => [verb, Object.keys(flags).sort()]));
+    const declared = Object.fromEntries(Object.entries(rows).map(([verb, { flags }]) => [verb, namesOf(flags).sort()]));
     expect(declared).toEqual(read);
   });
 
   it('case 14h: every verb is silent on each flag it declares and names one flag that only another verb declares', () => {
-    const everyFlag = [
-      ...new Set(Object.values(rows).flatMap(({ flags }) => namesOf(flags))),
-    ].sort();
+    const everyFlag = [...new Set(Object.values(rows).flatMap(({ flags }) => namesOf(flags)))].sort();
     const wrong: string[] = [];
     for (const [verb, { flags }] of Object.entries(rows)) {
       const own = namesOf(flags);
@@ -181,9 +166,7 @@ describe('init --no-hooks', () => {
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '');
     try {
       expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init')).flags)).toBe(true);
-      expect(
-        shouldAutoRepairCodexWrapper('init', parseArgs(argv('init', '--no-hooks')).flags),
-      ).toBe(false);
+      expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init', '--no-hooks')).flags)).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -224,12 +207,7 @@ describe('runCli: --flag=value end-to-end guards', () => {
       flag: 'force',
       why: 'is never read as the truthy string "false"',
     },
-    {
-      id: '27',
-      args: ['audit', '--fix=false'],
-      flag: 'fix',
-      why: 'is rejected before any memory is deleted',
-    },
+    { id: '27', args: ['audit', '--fix=false'], flag: 'fix', why: 'is rejected before any memory is deleted' },
     {
       id: '28',
       args: ['remember', 'use pnpm', '--pin', 'true'],
@@ -331,9 +309,9 @@ describe('runCli: --flag=value end-to-end guards', () => {
     const plain = await runCli(['recall', 'deploy steps', '--json']);
     const res = await runCli(['recall', 'deploy steps', '--json', '--archive']);
     expect(plain.stderr).not.toContain('ignoring unknown flag');
-    expect(res.stderr.split('\n').filter((line) => line.includes('ignoring unknown flag'))).toEqual(
-      ['hippo: ignoring unknown flag --archive. A later release will reject it.'],
-    );
+    expect(res.stderr.split('\n').filter((line) => line.includes('ignoring unknown flag'))).toEqual([
+      'hippo: ignoring unknown flag --archive. A later release will reject it.',
+    ]);
     expect({ status: res.status, stdout: res.stdout }).toEqual({ status: 0, stdout: plain.stdout });
   });
 
@@ -344,17 +322,12 @@ describe('runCli: --flag=value end-to-end guards', () => {
     expect(ownStderr(res.stderr)).toBe(
       `hippo: ignoring unknown flag --json. A later release will reject it.\n${plainStderr}`,
     );
-    expect({ status: res.status, stdout: res.stdout }).toEqual({
-      status: plain.status,
-      stdout: plain.stdout,
-    });
+    expect({ status: res.status, stdout: res.stdout }).toEqual({ status: plain.status, stdout: plain.stdout });
     expect(plainStderr).toContain('Memory not found: no-such-id');
   });
 
   it('case 30d: a --dry-run the verb lacks is refused by name only, never also called ignored', async () => {
-    expect((await runCli(['reject', 'X', '--dry-run'])).stderr).not.toContain(
-      'ignoring unknown flag',
-    );
+    expect((await runCli(['reject', 'X', '--dry-run'])).stderr).not.toContain('ignoring unknown flag');
   });
 
   it.each([
@@ -386,9 +359,7 @@ describe('runCli: --flag=value end-to-end guards', () => {
     const share = await runCli(['share', '--auto', '--dry-run']);
     expect(share.status).toBe(0);
     expect(share.stderr).not.toContain('has no --dry-run');
-    expect((await runCli(['brief', 'refresh', 'my-repo', '--dry-run'])).stderr).not.toContain(
-      'has no --dry-run',
-    );
+    expect((await runCli(['brief', 'refresh', 'my-repo', '--dry-run'])).stderr).not.toContain('has no --dry-run');
   });
 
   it('case 36: sleep --dry-run imports no MEMORY.md file and learns no commits', async () => {

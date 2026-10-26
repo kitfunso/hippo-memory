@@ -92,14 +92,9 @@ describe('sleep enqueue-hook', () => {
   // -- Producer --------------------------------------------------------------
 
   it('1. saveDecision enqueues one pending queue item for its tenant', async () => {
-    const d = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        decisionText: 'Adopt Postgres',
-      },
-    );
+    const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt Postgres',
+    });
     const q = pending(tc.hippoRoot);
     expect(q).toHaveLength(1);
     expect(q[0].memoryId).toBe(d.memoryId);
@@ -128,35 +123,17 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('4. close and project-brief refresh also enqueue (dirty on every graph-source mutation)', async () => {
-    const d = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        decisionText: 'to be closed',
-      },
-    );
-    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, {
-      actor: CLI_ACTOR,
-      now: evalNow(),
+    const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      decisionText: 'to be closed',
     });
-    await saveProjectBrief(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        repo: 'myrepo',
-        summary: 'first',
-      },
-    );
+    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, { actor: CLI_ACTOR, now: evalNow() });
+    await saveProjectBrief(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      repo: 'myrepo',
+      summary: 'first',
+    });
     await refreshedBrief(
       objectsAt(tc.hippoRoot),
-      {
-        now: evalNow(),
-        baseHalfLifeDays: loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-        tenantId: T,
-        actor: 'cli',
-      },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(tc.hippoRoot).defaultHalfLifeDays, tenantId: T, actor: 'cli' },
       'myrepo',
     ); // delegates to saveProjectBrief
     // save(d) + close(d) + saveBrief + refresh(->saveBrief) = 4 enqueues
@@ -195,22 +172,12 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('7. multi-tenant: two dirty tenants both rebuild + drain; entities stay tenant-isolated', async () => {
-    await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      'tenantA',
-      {
-        decisionText: 'TenantA adopts Postgres as the system of record',
-      },
-    );
-    await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      'tenantB',
-      {
-        decisionText: 'TenantB adopts Kafka for the event streaming backbone',
-      },
-    );
+    await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantA', {
+      decisionText: 'TenantA adopts Postgres as the system of record',
+    });
+    await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantB', {
+      decisionText: 'TenantB adopts Kafka for the event streaming backbone',
+    });
     const r = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r.graph?.tenants).toBe(2);
     expect(loadEntities(tc.hippoRoot, 'tenantA', { limit: 100 }).length).toBe(1);
@@ -253,22 +220,12 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('10. fault isolation: one tenant extract throwing leaves it pending, others drain, sleep completes', async () => {
-    await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      'tenantFail',
-      {
-        decisionText: 'TenantFail standardizes on the GraphQL API gateway',
-      },
-    );
-    await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      'tenantOk',
-      {
-        decisionText: 'TenantOk migrates services onto the gRPC mesh',
-      },
-    );
+    await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantFail', {
+      decisionText: 'TenantFail standardizes on the GraphQL API gateway',
+    });
+    await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantOk', {
+      decisionText: 'TenantOk migrates services onto the gRPC mesh',
+    });
     const phases: Partial<SleepPhases> = {
       extractGraph: (store, tid) => {
         if (tid === 'tenantFail') throw new Error('boom: extract failed for tenantFail');
@@ -284,14 +241,9 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('11. end-to-end: a supersede edge is built by sleep with NO manual extract', async () => {
-    const d1 = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        decisionText: 'Adopt Postgres',
-      },
-    );
+    const d1 = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt Postgres',
+    });
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'Adopt Postgres (managed)',
       supersedesDecisionId: d1.id,
@@ -309,14 +261,9 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('14. a tenant still rebuilds when an earlier sleep phase deletes its queued mirror', async () => {
-    const d = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        decisionText: 'Adopt Postgres as the system of record',
-      },
-    );
+    const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt Postgres as the system of record',
+    });
     expect(pending(tc.hippoRoot)).toHaveLength(1);
     // Simulate dedup/audit removing the queued mirror mid-sleep: the queue row
     // FK-cascade-deletes, so a drain-TIME tenant load would drop T entirely. The
@@ -349,14 +296,9 @@ describe('sleep enqueue-hook', () => {
   });
 
   it('16. atomic rebuild: graphRebuild.applyOps rolls back all writes on a throw', async () => {
-    const d = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      T,
-      {
-        decisionText: 'Adopt Postgres as the system of record',
-      },
-    );
+    const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
+      decisionText: 'Adopt Postgres as the system of record',
+    });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two
     // concurrent rebuilds serialize on the write lock instead of duplicating rows.
@@ -367,14 +309,9 @@ describe('sleep enqueue-hook', () => {
       sourceObject: { type: 'decision', id: d.id } as const,
     });
     // The second op names another tenant's memory, so its insert throws after the first one wrote.
-    const foreign = await saveDecision(
-      objectsAt(tc.hippoRoot),
-      loadConfig(tc.hippoRoot).defaultHalfLifeDays,
-      'other',
-      {
-        decisionText: 'Adopt Redis as a cache',
-      },
-    );
+    const foreign = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'other', {
+      decisionText: 'Adopt Redis as a cache',
+    });
     await expect(
       sqliteStore(tc.hippoRoot).graphRebuild.applyOps(
         T,
@@ -435,8 +372,6 @@ describe('sleep enqueue-hook', () => {
     const r = await runSleep(tc.ctx, { noShare: true }, phases);
 
     expect(r.graph?.tenants).toBe(1);
-    expect(detailLines(r)).toContain(
-      'graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them',
-    );
+    expect(detailLines(r)).toContain('graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them');
   });
 });

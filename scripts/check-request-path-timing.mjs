@@ -61,10 +61,7 @@ function* countEach(rows, work) {
 async function countWork(run) {
   const work = { statements: 0, rows: 0, opens: 0 };
   const exec = DatabaseSync.prototype.exec;
-  const originals = ['run', 'get', 'all', 'iterate'].map((name) => [
-    name,
-    StatementSync.prototype[name],
-  ]);
+  const originals = ['run', 'get', 'all', 'iterate'].map((name) => [name, StatementSync.prototype[name]]);
   DatabaseSync.prototype.exec = function (sql) {
     work.statements += 1;
     if (STORE_OPEN.test(sql)) work.opens += 1;
@@ -103,16 +100,13 @@ function seed(root, sourceOf) {
   try {
     for (let i = 0; i < MEMORIES; i++) {
       const w = (k) => WORDS[(i * 7 + k * 13) % WORDS.length];
-      const entry = createMemory(
-        `note ${i}: the ${w(1)} ${w(2)} path needs ${w(3)} before ${w(4)}, step ${i % 97}`,
-        {
-          tags: i % 50 === 0 ? ['error'] : [w(5)],
-          pinned: i % 500 === 0,
-          source: sourceOf(i),
-          tenantId: 'default',
-          baseHalfLifeDays: 30,
-        },
-      );
+      const entry = createMemory(`note ${i}: the ${w(1)} ${w(2)} path needs ${w(3)} before ${w(4)}, step ${i % 97}`, {
+        tags: i % 50 === 0 ? ['error'] : [w(5)],
+        pinned: i % 500 === 0,
+        source: sourceOf(i),
+        tenantId: 'default',
+        baseHalfLifeDays: 30,
+      });
       const created = new Date(started - (i % 365) * DAY_MS - i * 1000).toISOString();
       writeEntryDbOnly(db, { ...entry, created, lastRetrieved: created, originProject: 'proj' });
     }
@@ -162,8 +156,7 @@ const tool =
   async () => {
     const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
     const res = await runSqliteRequest(() => handleMcpRequest(call, mcpCtx), 'server');
-    if (res?.error || res?.result?.isError)
-      throw new Error(`${name} failed: ${JSON.stringify(res)}`);
+    if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
   };
 
 // As the CLI and the prompt hook run it: one request scope, so each store opens and is set up once.
@@ -204,25 +197,15 @@ const keyLookup = async () => {
 const unthrottled = { perCaller: 'off' };
 const server = await serve({ hippoRoot: localRoot, port: 0, rateLimits: unthrottled });
 const inProcess = sqliteStore(copyRoot);
-const inProcessServer = await serve({
-  hippoRoot: copyRoot,
-  port: 0,
-  store: inProcess,
-  rateLimits: unthrottled,
-});
+const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inProcess, rateLimits: unthrottled });
 // Each server's own local key, as the CLI on this machine sends it.
 const keyOf = new Map([
   [server.url, readLocalKey(localRoot)],
   [inProcessServer.url, readLocalKey(copyRoot)],
 ]);
-const keyed = (url, headers = {}) => ({
-  headers: { ...headers, authorization: `Bearer ${keyOf.get(url)}` },
-});
+const keyed = (url, headers = {}) => ({ headers: { ...headers, authorization: `Bearer ${keyOf.get(url)}` } });
 const httpRecall = (url, limit) => async () => {
-  const res = await fetch(
-    `${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`,
-    keyed(url),
-  );
+  const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`, keyed(url));
   const body = await res.json();
   if (!res.ok || body.results.length === 0) {
     throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
@@ -230,8 +213,7 @@ const httpRecall = (url, limit) => async () => {
 };
 const httpContext = (url) => async () => {
   const res = await fetch(`${url}/v1/context?q=${encodeURIComponent('kafka redis')}`, keyed(url));
-  if (!res.ok)
-    throw new Error(`GET /v1/context failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(`GET /v1/context failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 };
 const httpTool =
   (url, name, args = {}) =>
@@ -250,32 +232,18 @@ const httpTool =
 
 // The dashboard builds its snapshot on a reader thread, so a statement on this thread during one of its reads fails here.
 const dashboardToken = randomBytes(16).toString('hex');
-const dashboard = await serveDashboard({
-  hippoRoot: localRoot,
-  port: 0,
-  token: dashboardToken,
-  tenantId: 'default',
-});
+const dashboard = await serveDashboard({ hippoRoot: localRoot, port: 0, token: dashboardToken, tenantId: 'default' });
 const minted = await fetch(`${dashboard.url}/api/overview?token=${dashboard.ticket()}`);
 const dashboardCookie = (minted.headers.get('set-cookie') ?? '').split(';')[0];
 const dashboardRead = (pathAndQuery) => async () => {
-  const res = await fetch(`${dashboard.url}${pathAndQuery}`, {
-    headers: { cookie: dashboardCookie },
-  });
-  if (!res.ok)
-    throw new Error(
-      `GET ${pathAndQuery} failed: ${res.status} ${(await res.text()).slice(0, 200)}`,
-    );
+  const res = await fetch(`${dashboard.url}${pathAndQuery}`, { headers: { cookie: dashboardCookie } });
+  if (!res.ok) throw new Error(`GET ${pathAndQuery} failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 };
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
   ['contextGet, no query', inHook(() => contextGet(ctx, { currentProject: 'proj' })), [59, 917, 3]],
-  [
-    'contextGet, query',
-    inHook(() => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' })),
-    [69, 661, 3],
-  ],
+  ['contextGet, query', inHook(() => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' })), [69, 661, 3]],
   [
     'contextGet, pinned only',
     inHook(() => contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })),
@@ -290,11 +258,7 @@ const cases = [
     'ambient tallies, 2 stores',
     () => {
       for (const root of [localRoot, globalRoot]) {
-        loadAmbientTallies(root, 'default', {
-          project: ['proj'],
-          currentProject: ['proj'],
-          now: new Date(),
-        });
+        loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
       }
     },
     [19, 6, 2],
@@ -303,16 +267,8 @@ const cases = [
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [32, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 4, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
-  [
-    'served predictions list',
-    () => served.objects.listObjects('default', 'prediction', { limit: 20 }),
-    [0, 0, 0],
-  ],
-  [
-    'served decisions list',
-    () => served.objects.listObjects('default', 'decision', { limit: 20 }),
-    [0, 0, 0],
-  ],
+  ['served predictions list', () => served.objects.listObjects('default', 'prediction', { limit: 20 }), [0, 0, 0]],
+  ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
   // A running server reuses the read handle an earlier request returned to its store runtime, so it opens none.
   ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 0]],
@@ -324,20 +280,12 @@ const cases = [
   // Context reaches the global store too, which serve() also answers from worker threads.
   ['served http context', httpContext(server.url), [0, 0, 0]],
   ['served mcp hippo_context', httpTool(server.url, 'hippo_context'), [0, 0, 0]],
-  [
-    'served mcp hippo_recall',
-    httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }),
-    [0, 0, 0],
-  ],
+  ['served mcp hippo_recall', httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }), [0, 0, 0]],
   ['dashboard overview, fresh', dashboardRead('/api/overview?fresh=1'), [0, 0, 0]],
   // Page 1 takes a new snapshot, so its list is sorted again; page 5 of that snapshot reads the list page 1 kept.
   ['dashboard page 1, fresh', dashboardRead('/api/projects/p%3Aproj/memories?fresh=1'), [0, 0, 0]],
   ['dashboard page 5', dashboardRead('/api/projects/p%3Aproj/memories?offset=400'), [0, 0, 0]],
-  [
-    'dashboard search',
-    dashboardRead(`/api/search?q=${encodeURIComponent('kafka redis')}`),
-    [0, 0, 0],
-  ],
+  ['dashboard search', dashboardRead(`/api/search?q=${encodeURIComponent('kafka redis')}`), [0, 0, 0]],
 ];
 
 let overworked = false;
@@ -364,8 +312,7 @@ try {
       (work.statements > maxStatements || work.rows > maxRows || work.opens > maxOpens);
     overworked ||= overWork;
     // A request that moves to a worker thread, or an open whose pragma text changes, counts nothing here, and the ceiling would pass it unread.
-    uncounted ||=
-      (maxStatements > 0 && work.statements === 0) || (maxOpens > 0 && work.opens === 0);
+    uncounted ||= (maxStatements > 0 && work.statements === 0) || (maxOpens > 0 && work.opens === 0);
     console.log(
       `${label.padEnd(28)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`,
     );

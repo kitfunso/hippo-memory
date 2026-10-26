@@ -47,11 +47,7 @@ function withFakeHome() {
           fs.rmSync(fake, { recursive: true, force: true });
           return true;
         },
-        {
-          what: 'the fake home to come free of the exited worker',
-          timeoutMs: 15_000,
-          retryOnThrow: true,
-        },
+        { what: 'the fake home to come free of the exited worker', timeoutMs: 15_000, retryOnThrow: true },
       ),
   };
 }
@@ -190,14 +186,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     // Simulate a Codex update clobbering the shim with a fresh real launcher.
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
 
-    const installedCli = path.join(
-      env.home,
-      'npm',
-      'node_modules',
-      'hippo-memory',
-      'bin',
-      'hippo.js',
-    );
+    const installedCli = path.join(env.home, 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
     recordOptedInCli(installedCli);
     const result = repairCodexWrapperIfInstalled(installedCli);
 
@@ -256,35 +245,28 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     installCodexWrapper(realCodex);
 
     const forwarded = ['exec', 'fix the bug & ship', 'a "quoted" word', ''];
-    execFileSync(
-      'node',
-      [path.join(process.cwd(), 'bin', 'hippo.js'), 'codex-run', '--', ...forwarded],
-      {
-        cwd: env.home,
-        env: {
-          ...process.env,
-          PATH: prevPathForChild,
-          HOME: env.home,
-          USERPROFILE: env.home,
-          HIPPO_HOME: path.join(env.home, '.hippo-global'),
-          HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-          ARGV_OUT: argvOut,
-        },
-        stdio: 'pipe',
+    execFileSync('node', [path.join(process.cwd(), 'bin', 'hippo.js'), 'codex-run', '--', ...forwarded], {
+      cwd: env.home,
+      env: {
+        ...process.env,
+        PATH: prevPathForChild,
+        HOME: env.home,
+        USERPROFILE: env.home,
+        HIPPO_HOME: path.join(env.home, '.hippo-global'),
+        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+        ARGV_OUT: argvOut,
       },
-    );
+      stdio: 'pipe',
+    });
 
     expect(JSON.parse(fs.readFileSync(argvOut, 'utf8'))).toEqual(forwarded);
 
     // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
     const workerLog = resolveCodexWrapperPaths().logFile;
-    await waitFor(
-      () => fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'),
-      {
-        what: 'the session-end worker to log its skip',
-        timeoutMs: 15_000,
-      },
-    );
+    await waitFor(() => fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'), {
+      what: 'the session-end worker to log its skip',
+      timeoutMs: 15_000,
+    });
     expect(fs.readFileSync(workerLog, 'utf8')).toContain('skip: no hippo store');
   });
 });
@@ -310,11 +292,7 @@ describe('resolveCodexSessionTranscript', () => {
     const before = JSON.stringify({ session_id: 'old-session', ts: 1, text: 'before' }) + '\n';
     fs.writeFileSync(historyPath, before, 'utf8');
     const startOffset = Buffer.byteLength(before);
-    fs.appendFileSync(
-      historyPath,
-      JSON.stringify({ session_id: 'new-session', ts: 2, text: 'after' }) + '\n',
-      'utf8',
-    );
+    fs.appendFileSync(historyPath, JSON.stringify({ session_id: 'new-session', ts: 2, text: 'after' }) + '\n', 'utf8');
 
     const wanted = path.join(sessionsDir, 'rollout-2026-04-15T21-18-20-new-session.jsonl');
     const other = path.join(sessionsDir, 'rollout-2026-04-15T20-00-00-old-session.jsonl');
@@ -383,17 +361,10 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
 
   const rollout = (text: string): string =>
     [
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } },
       {
         type: 'response_item',
-        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
-      },
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: 'Noted.' }],
-        },
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Noted.' }] },
       },
     ]
       .map((line) => JSON.stringify(line))
@@ -468,9 +439,7 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
       USERPROFILE: root,
       APPDATA: path.join(root, 'appdata'),
       CODEX_HOME: homeB,
-      PATH: [path.join(root, 'real-bin'), path.dirname(process.execPath), ...systemDirs].join(
-        path.delimiter,
-      ),
+      PATH: [path.join(root, 'real-bin'), path.dirname(process.execPath), ...systemDirs].join(path.delimiter),
     };
     delete childEnv.CLAUDE_CODE_SESSION_ID;
     delete childEnv.HIPPO_SESSION_ID;

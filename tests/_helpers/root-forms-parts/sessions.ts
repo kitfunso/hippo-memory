@@ -33,8 +33,7 @@ export function saveActiveTaskSnapshot(
 ): TaskSnapshot {
   return onHandle(
     hippoRoot,
-    (db) =>
-      taskSnapshotsSql.saveActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, snapshot, key),
+    (db) => taskSnapshotsSql.saveActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, snapshot, key),
     openStore,
   );
 }
@@ -53,11 +52,7 @@ export function saveSessionHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key?: ContinuityKey,
 ): SessionHandoff {
-  return onHandle(
-    hippoRoot,
-    (db) => handoffsSql.saveSessionHandoff(db, tenantId, handoff, key),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => handoffsSql.saveSessionHandoff(db, tenantId, handoff, key), openStore);
 }
 
 export function loadLatestHandoff(
@@ -67,18 +62,10 @@ export function loadLatestHandoff(
   opts: HandoffFilter = {},
   key?: ContinuityKey,
 ): SessionHandoff | null {
-  return onHandle(
-    hippoRoot,
-    (db) => handoffsSql.readLatestHandoff(db, tenantId, sessionId, opts, key),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => handoffsSql.readLatestHandoff(db, tenantId, sessionId, opts, key), openStore);
 }
 
-export function loadHandoffById(
-  hippoRoot: string,
-  tenantId: string,
-  id: number,
-): SessionHandoff | null {
+export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
   return onHandle(hippoRoot, (db) => handoffsSql.readHandoff(db, tenantId, id), openStore);
 }
 
@@ -88,11 +75,7 @@ export function stampHandoffOutcome(
   sessionId: string,
   outcome: HandoffOutcome,
 ): number {
-  return onHandle(
-    hippoRoot,
-    (db) => handoffsSql.stampHandoffOutcome(db, tenantId, sessionId, outcome),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => handoffsSql.stampHandoffOutcome(db, tenantId, sessionId, outcome), openStore);
 }
 
 export function writeSessionEndHandoff(
@@ -101,23 +84,14 @@ export function writeSessionEndHandoff(
 ): SessionHandoff | null {
   const files = storeFilesOf(hippoRoot);
   const { tenantId, key } = request;
-  return onHandle(
-    hippoRoot,
-    (db) => handoffsSql.writeSessionEndHandoff(db, files, tenantId, request, key),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => handoffsSql.writeSessionEndHandoff(db, files, tenantId, request, key), openStore);
 }
 
-export function loadLastRecall(
-  hippoRoot: string,
-): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
   return onHandle(hippoRoot, (db) => readLastRecall(db), openStore);
 }
 
-export function saveIndex(
-  hippoRoot: string,
-  index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>,
-): void {
+export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   return onHandle(hippoRoot, (db) => indexAndStatsSql.saveIndex(db, index), openStore);
 }
 
@@ -137,24 +111,14 @@ export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  onHandle(
-    hippoRoot,
-    (db) => indexAndStatsSql.appendConsolidationRun(db, storeFilesOf(hippoRoot), run),
-    openStore,
-  );
+  onHandle(hippoRoot, (db) => indexAndStatsSql.appendConsolidationRun(db, storeFilesOf(hippoRoot), run), openStore);
 }
 
 export function loadSessionDecayContext(hippoRoot: string): ReturnType<typeof sessionDecayContext> {
-  return sessionDecayContext(
-    onHandle(hippoRoot, (db) => indexAndStatsSql.readSleepHistory(db), openStore),
-  );
+  return sessionDecayContext(onHandle(hippoRoot, (db) => indexAndStatsSql.readSleepHistory(db), openStore));
 }
 
-export function loadActiveTaskSnapshot(
-  hippoRoot: string,
-  tenantId: string,
-  key?: ContinuityKey,
-): TaskSnapshot | null {
+export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
   return onHandle(
     hippoRoot,
     (db) => taskSnapshotsSql.readActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, key),
@@ -176,10 +140,7 @@ export async function clearActiveTaskSnapshot(
   tenantId: string,
   clearedStatus: string = 'cleared',
 ): Promise<boolean> {
-  return (
-    (await sqliteStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status: clearedStatus })) >
-    0
-  );
+  return (await sqliteStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status: clearedStatus })) > 0;
 }
 
 export async function closeTaskSnapshotsForSession(
@@ -189,12 +150,7 @@ export async function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
   key?: ContinuityKey,
 ): Promise<number> {
-  return await sqliteStore(hippoRoot).sessions.clear(
-    tenantId,
-    'snapshot',
-    { status, sessionId },
-    key ?? null,
-  );
+  return await sqliteStore(hippoRoot).sessions.clear(tenantId, 'snapshot', { status, sessionId }, key ?? null);
 }
 
 export function listSessionEvents(
@@ -202,23 +158,11 @@ export function listSessionEvents(
   tenantId: string,
   options: { session_id?: string; task?: string; limit?: number } = {},
 ): SessionEvent[] {
-  return onHandle(
-    hippoRoot,
-    (db) => sessionsSql.listSessionEvents(db, tenantId, options),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => sessionsSql.listSessionEvents(db, tenantId, options), openStore);
 }
 
-export function findUntracedSessions(
-  hippoRoot: string,
-  tenantId: string,
-  sinceMs: number,
-): UntracedSession[] {
-  return onHandle(
-    hippoRoot,
-    (db) => sessionsSql.listUntracedSessions(db, tenantId, sinceMs),
-    openStore,
-  );
+export function findUntracedSessions(hippoRoot: string, tenantId: string, sinceMs: number): UntracedSession[] {
+  return onHandle(hippoRoot, (db) => sessionsSql.listUntracedSessions(db, tenantId, sinceMs), openStore);
 }
 
 export async function wmPush(
@@ -233,11 +177,7 @@ export async function wmPush(
     tenantId?: string;
   },
 ): Promise<number> {
-  return await sqliteStore(hippoRoot).sessions.save(
-    opts.tenantId ?? resolveTenantId({}),
-    'working_memory',
-    opts,
-  );
+  return await sqliteStore(hippoRoot).sessions.save(opts.tenantId ?? resolveTenantId({}), 'working_memory', opts);
 }
 
 export async function wmRead(
@@ -268,13 +208,6 @@ export async function wmClear(
   );
 }
 
-export function updateStats(
-  hippoRoot: string,
-  delta: Parameters<typeof indexAndStatsSql.updateStats>[2],
-): void {
-  onHandle(
-    hippoRoot,
-    (db) => indexAndStatsSql.updateStats(db, storeFilesOf(hippoRoot), delta),
-    openStore,
-  );
+export function updateStats(hippoRoot: string, delta: Parameters<typeof indexAndStatsSql.updateStats>[2]): void {
+  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStats(db, storeFilesOf(hippoRoot), delta), openStore);
 }

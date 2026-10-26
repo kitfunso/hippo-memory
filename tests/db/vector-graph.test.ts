@@ -1,12 +1,7 @@
 // The handwritten HNSW graph against an exact scan of the same vectors.
 import { describe, it, expect, vi } from 'vitest';
 import { mulberry32 } from '../_helpers/property.js';
-import {
-  createVectorGraph,
-  insertNode,
-  searchGraph,
-  type VectorGraph,
-} from '../../src/db/vector-graph.js';
+import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from '../../src/db/vector-graph.js';
 
 // Some cases build two 3000-node graphs, which can pass the unit budget on a busy runner.
 vi.setConfig({ testTimeout: 20_000 });
@@ -41,12 +36,7 @@ function cosine(a: Float32Array, b: Float32Array): number {
   return d / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-function exactTop(
-  vectors: Float32Array[],
-  q: Float32Array,
-  k: number,
-  skip = new Set<number>(),
-): number[] {
+function exactTop(vectors: Float32Array[], q: Float32Array, k: number, skip = new Set<number>()): number[] {
   const scored: { node: number; score: number }[] = [];
   vectors.forEach((v, node) => {
     if (!skip.has(node)) scored.push({ node, score: cosine(q, v) });
@@ -81,8 +71,7 @@ function ids(
 
 describe('vector graph', () => {
   it('returns exactly the brute-force top 50 when ef covers every node', () => {
-    for (const q of queries.slice(0, 5))
-      expect(ids(graph, q, { k: 50, ef: N })).toEqual(exactTop(vectors, q, 50));
+    for (const q of queries.slice(0, 5)) expect(ids(graph, q, { k: 50, ef: N })).toEqual(exactTop(vectors, q, 50));
   });
 
   it('reaches recall@50 of at least .98 at ef 128', () => {
@@ -97,11 +86,7 @@ describe('vector graph', () => {
   it('builds the same graph from the same seed and insert order', () => {
     const again = build(vectors, 42);
     expect(again.nodes).toEqual(graph.nodes);
-    expect([again.entry, again.maxLevel, again.rng]).toEqual([
-      graph.entry,
-      graph.maxLevel,
-      graph.rng,
-    ]);
+    expect([again.entry, again.maxLevel, again.rng]).toEqual([graph.entry, graph.maxLevel, graph.rng]);
   });
 
   it('changes the graph when the seed changes', () => {
@@ -142,15 +127,11 @@ describe('vector graph', () => {
   it('returns exactly the admitted brute-force top 50 when ef covers every node', () => {
     const q = queries[0];
     const banned = new Set(exactTop(vectors, q, 20));
-    expect(ids(graph, q, { k: 50, ef: N, admit: (n) => !banned.has(n) })).toEqual(
-      exactTop(vectors, q, 50, banned),
-    );
+    expect(ids(graph, q, { k: 50, ef: N, admit: (n) => !banned.has(n) })).toEqual(exactTop(vectors, q, 50, banned));
   });
 
   it('aborts when the visit budget runs out', () => {
-    expect(searchGraph(graph, queries[0], { k: 50, ef: 128, visitBudget: 10, vectorOf })).toEqual({
-      aborted: true,
-    });
+    expect(searchGraph(graph, queries[0], { k: 50, ef: 128, visitBudget: 10, vectorOf })).toEqual({ aborted: true });
   });
 
   it('rejects a wrong dimension and a repeated node', () => {

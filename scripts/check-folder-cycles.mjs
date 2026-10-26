@@ -104,15 +104,9 @@ export function findFolderCycles(srcDir) {
     .filter((comp) => comp.length > 1)
     .map((comp) => {
       const members = new Set(comp);
-      const crosses = (a, b) =>
-        folderOf(a) !== folderOf(b) && members.has(folderOf(a)) && members.has(folderOf(b));
-      const edges = [...files].flatMap(([a, deps]) =>
-        deps.filter((b) => crosses(a, b)).map((b) => [a, b]),
-      );
-      return {
-        folders: [...comp].sort(),
-        edges: edges.sort((x, y) => x.join(' ').localeCompare(y.join(' '))),
-      };
+      const crosses = (a, b) => folderOf(a) !== folderOf(b) && members.has(folderOf(a)) && members.has(folderOf(b));
+      const edges = [...files].flatMap(([a, deps]) => deps.filter((b) => crosses(a, b)).map((b) => [a, b]));
+      return { folders: [...comp].sort(), edges: edges.sort((x, y) => x.join(' ').localeCompare(y.join(' '))) };
     })
     .sort((a, b) => a.folders[0].localeCompare(b.folders[0]));
 }

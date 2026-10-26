@@ -108,11 +108,7 @@ export function teardown(): void {
       env.HIPPO_TEST_TMP_USERHOME?.trim(),
       env.HIPPO_TEST_TMP_RUN?.trim(),
     ]) {
-      if (
-        dir &&
-        dir.startsWith(realTmp) &&
-        /[\\/]hippo-test-(home|userhome|tmp)-[^\\/]+$/.test(dir)
-      ) {
+      if (dir && dir.startsWith(realTmp) && /[\\/]hippo-test-(home|userhome|tmp)-[^\\/]+$/.test(dir)) {
         try {
           rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
         } catch (err) {

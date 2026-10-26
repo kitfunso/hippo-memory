@@ -14,12 +14,7 @@ import type {
   ObjectRefusal,
   SavableKind,
 } from '../../src/base/records/object-types.js';
-import type {
-  IncidentOpen,
-  IncidentOpenRefusal,
-  ObjectListQuery,
-  ObjectSave,
-} from '../../src/base/ports/store.js';
+import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/ports/store.js';
 import {
   runOnFixture,
   seedTwoTenants,
@@ -57,8 +52,7 @@ interface KindCase {
 }
 
 export const odd = (n: number): boolean => n % 2 === 1;
-const refreshKeys = (n: number): Metadata =>
-  odd(n) ? { refreshed: false } : { refreshed: true, receipt_count: n };
+const refreshKeys = (n: number): Metadata => (odd(n) ? { refreshed: false } : { refreshed: true, receipt_count: n });
 
 export const CASES: readonly KindCase[] = [
   {
@@ -66,10 +60,7 @@ export const CASES: readonly KindCase[] = [
     idKey: 'decision_id',
     versioned: false,
     filtered: false,
-    fields: (n) => ({
-      decisionText: `decision ${n}`,
-      context: odd(n) ? `context ${n}` : undefined,
-    }),
+    fields: (n) => ({ decisionText: `decision ${n}`, context: odd(n) ? `context ${n}` : undefined }),
     own: (n) => ({ decisionText: `decision ${n}`, context: odd(n) ? `context ${n}` : null }),
     createKeys: (n) => ({ has_context: odd(n) }),
   },
@@ -114,16 +105,8 @@ export const CASES: readonly KindCase[] = [
     idKey: 'skill_id',
     versioned: true,
     filtered: false,
-    fields: (n) => ({
-      name: `skill ${n}`,
-      instructions: `do ${n}`,
-      trigger: odd(n) ? `when ${n}` : null,
-    }),
-    own: (n) => ({
-      skillName: `skill ${n}`,
-      instructions: `do ${n}`,
-      trigger: odd(n) ? `when ${n}` : null,
-    }),
+    fields: (n) => ({ name: `skill ${n}`, instructions: `do ${n}`, trigger: odd(n) ? `when ${n}` : null }),
+    own: (n) => ({ skillName: `skill ${n}`, instructions: `do ${n}`, trigger: odd(n) ? `when ${n}` : null }),
     createKeys: (n, version) => ({ version, has_trigger: odd(n) }),
   },
   {
@@ -131,11 +114,7 @@ export const CASES: readonly KindCase[] = [
     idKey: 'brief_id',
     versioned: true,
     filtered: true,
-    fields: (n, group) => ({
-      repo: group,
-      summary: `summary ${n}`,
-      receiptCount: odd(n) ? undefined : n,
-    }),
+    fields: (n, group) => ({ repo: group, summary: `summary ${n}`, receiptCount: odd(n) ? undefined : n }),
     own: (n, group) => ({ repo: group, summary: `summary ${n}` }),
     createKeys: (n, version, group) => ({ repo: group, version, ...refreshKeys(n) }),
     supersedeKeys: refreshKeys,
@@ -333,14 +312,7 @@ export const created = (c: KindCase, nth: number, id: number, d: Draft, version 
     d.tenantId,
   );
 export const remembered = (nth: number, d: Draft): AuditEvent =>
-  auditRow(
-    nth,
-    d.save.at,
-    'remember',
-    d.save.mirror.id,
-    { kind: 'distilled', scope: null },
-    d.tenantId,
-  );
+  auditRow(nth, d.save.at, 'remember', d.save.mirror.id, { kind: 'distilled', scope: null }, d.tenantId);
 /** `d` is the successor that replaced row `replaced` and took id `id`. */
 export function superseded(
   c: KindCase,
@@ -352,10 +324,7 @@ export function superseded(
 ): AuditEvent {
   const own: Metadata = { [c.idKey]: replaced, superseded_by: id };
   if (c.versioned) own.new_version = version;
-  return auditRow(nth, d.save.at, supersedeOp(c.kind), String(replaced), {
-    ...own,
-    ...c.supersedeKeys?.(d.n),
-  });
+  return auditRow(nth, d.save.at, supersedeOp(c.kind), String(replaced), { ...own, ...c.supersedeKeys?.(d.n) });
 }
 
 export function auditRowsAt(root: string): AuditEvent[] {
@@ -398,11 +367,7 @@ export function opening(n: number, opts: OpeningOptions = {}): Opening {
     tenantId,
     open: {
       mirror,
-      fields: {
-        incidentText: `incident ${n}`,
-        context: opts.context,
-        linkedMemoryIds: opts.links ?? [],
-      },
+      fields: { incidentText: `incident ${n}`, context: opts.context, linkedMemoryIds: opts.links ?? [] },
       actor: ACTOR,
       at,
     },
@@ -464,23 +429,12 @@ export function opened(nth: number, id: number, o: Opening): AuditEvent[] {
   };
   return [
     auditRow(nth, o.open.at, 'incident_open', String(id), metadata, o.tenantId),
-    auditRow(
-      nth + 1,
-      o.open.at,
-      'remember',
-      mirrorIdOf(o),
-      { kind: 'distilled', scope: null },
-      o.tenantId,
-    ),
+    auditRow(nth + 1, o.open.at, 'remember', mirrorIdOf(o), { kind: 'distilled', scope: null }, o.tenantId),
   ];
 }
 
 export const CLOSABLE = ['open', 'resolved'] as const;
-export const DRAINED = {
-  status: 'resolved',
-  resolutionText: 'drained the queue',
-  resolvedAt: T4,
-} as const;
+export const DRAINED = { status: 'resolved', resolutionText: 'drained the queue', resolvedAt: T4 } as const;
 
 /** Incident ids 1 to 6, id 4 in the other tenant: two instants each shared by two of the tenant's rows, then 2 resolved and 1 closed. */
 export function seededIncidents() {
@@ -494,11 +448,7 @@ export function seededIncidents() {
   ];
   return {
     openings,
-    calls: [
-      ...openings.map(openIncident),
-      resolve(2, T4, 'drained the queue'),
-      close('incident', 1, T4, CLOSABLE),
-    ],
+    calls: [...openings.map(openIncident), resolve(2, T4, 'drained the queue'), close('incident', 1, T4, CLOSABLE)],
   };
 }
 export const SEED_CALLS = 8;

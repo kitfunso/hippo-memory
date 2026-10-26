@@ -23,10 +23,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-type Step =
-  | { op: 'flush file'; bytes: number }
-  | { op: 'flush folder' }
-  | { op: 'rename'; from: string; to: string };
+type Step = { op: 'flush file'; bytes: number } | { op: 'flush folder' } | { op: 'rename'; from: string; to: string };
 
 /** Records each flush and rename as it happens, then lets it through. A crash cannot be staged, so the order of the calls is the evidence. */
 function recordSteps(): Step[] {
@@ -35,9 +32,7 @@ function recordSteps(): Step[] {
   const rename = fs.renameSync.bind(fs);
   vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
     const stat = fs.fstatSync(fd);
-    steps.push(
-      stat.isDirectory() ? { op: 'flush folder' } : { op: 'flush file', bytes: stat.size },
-    );
+    steps.push(stat.isDirectory() ? { op: 'flush folder' } : { op: 'flush file', bytes: stat.size });
     fsync(fd);
   });
   vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
@@ -97,35 +92,30 @@ describe('writeFileAtomic through the rename path', () => {
     expect(fs.readdirSync(dir)).toEqual(['settings.json']);
   });
 
-  it.skipIf(WINDOWS)(
-    'a folder that cannot be flushed is a warning, and the new content still lands',
-    () => {
-      const fsync = fs.fsyncSync.bind(fs);
-      vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
-        if (fs.fstatSync(fd).isDirectory()) {
-          throw Object.assign(new Error('EINVAL: invalid argument, fsync'), { code: 'EINVAL' });
-        }
-        fsync(fd);
-      });
-      syncBuiltinESMExports();
-      const logged = captureLog();
+  it.skipIf(WINDOWS)('a folder that cannot be flushed is a warning, and the new content still lands', () => {
+    const fsync = fs.fsyncSync.bind(fs);
+    vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
+      if (fs.fstatSync(fd).isDirectory()) {
+        throw Object.assign(new Error('EINVAL: invalid argument, fsync'), { code: 'EINVAL' });
+      }
+      fsync(fd);
+    });
+    syncBuiltinESMExports();
+    const logged = captureLog();
 
-      writeFileAtomic(file, NEW_TEXT);
+    writeFileAtomic(file, NEW_TEXT);
 
-      expect(fs.readFileSync(file, 'utf8')).toBe(NEW_TEXT);
-      expect(logged()).toEqual([
-        `[hippo] warn: could not flush the folder ${dir} to disk after replacing a file in it: EINVAL: invalid argument, fsync`,
-      ]);
-    },
-  );
+    expect(fs.readFileSync(file, 'utf8')).toBe(NEW_TEXT);
+    expect(logged()).toEqual([
+      `[hippo] warn: could not flush the folder ${dir} to disk after replacing a file in it: EINVAL: invalid argument, fsync`,
+    ]);
+  });
 });
 
 describe('writeFileAtomic when the platform refuses the rename', () => {
   it('writes in place and logs one warning that names the file and says the write was not atomic', () => {
     vi.spyOn(fs, 'renameSync').mockImplementation(() => {
-      throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), {
-        code: 'EXDEV',
-      });
+      throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' });
     });
     syncBuiltinESMExports();
     const logged = captureLog();

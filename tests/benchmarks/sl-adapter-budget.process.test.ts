@@ -10,10 +10,7 @@ describe('sequential-learning adapter recall budget', () => {
     try {
       // One more memory than the adapter's five-result cap, so budget 2000 fills the cap and budget 1 must cut it.
       for (let i = 0; i < 6; i++) {
-        await hippoAdapter.store(`lesson ${i}: do not commit broken code, item ${i}`, [
-          'lesson',
-          `lesson_${i}`,
-        ]);
+        await hippoAdapter.store(`lesson ${i}: do not commit broken code, item ${i}`, ['lesson', `lesson_${i}`]);
       }
       const wide = await hippoAdapter.recall('do not commit broken code', 2000);
       const tiny = await hippoAdapter.recall('do not commit broken code', 1);

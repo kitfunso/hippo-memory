@@ -27,8 +27,7 @@ function rootWithUnreachableConfig(): string {
 describe.skipIf(modeBitsDoNotBind)(
   'a config.json behind a folder that denies search (skipped on win32 and as root)',
   () => {
-    const message = (root: string): string =>
-      `${join(root, 'config.json')} could not be reached (EACCES)`;
+    const message = (root: string): string => `${join(root, 'config.json')} could not be reached (EACCES)`;
 
     it('makes loadConfig throw with the path, the code and the fix, not return the defaults', () => {
       const root = rootWithUnreachableConfig();

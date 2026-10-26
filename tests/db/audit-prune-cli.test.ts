@@ -22,10 +22,7 @@ interface CliRunResult {
 }
 
 async function runCli(cwd: string, args: string[], opts: RunOptions = {}): Promise<CliRunResult> {
-  const r = await runCliAs(args, {
-    cwd,
-    env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...opts.env },
-  });
+  const r = await runCliAs(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...opts.env } });
   if (r.status === 0) return { stdout: r.stdout, stderr: '' };
   if (opts.ok === false) return { stdout: r.stdout, stderr: r.stderr };
   throw new Error(`CLI exit ${r.status}: ${r.stderr}\nstdout: ${r.stdout}`);
@@ -92,14 +89,7 @@ describe('hippo audit prune CLI', () => {
     seed(root, 'tenant-a', 100, 4);
     seed(root, 'tenant-b', 100, 6);
 
-    const { stdout } = await runCli(root, [
-      'audit',
-      'prune',
-      '--older-than',
-      '30d',
-      '--tenant',
-      'tenant-a',
-    ]);
+    const { stdout } = await runCli(root, ['audit', 'prune', '--older-than', '30d', '--tenant', 'tenant-a']);
     expect(stdout).toMatch(/deleted 4 rows for tenant "tenant-a"/);
 
     // tenant-b should be untouched

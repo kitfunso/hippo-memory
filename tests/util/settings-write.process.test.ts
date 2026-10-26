@@ -8,10 +8,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { escapeRegex } from '../../src/base/util/escape.js';
 import { installCopilot } from '../../src/surface/hooks-install/copilot.js';
-import {
-  installJsonHooks,
-  resolveJsonHookPaths,
-} from '../../src/surface/hooks-install/json-hooks.js';
+import { installJsonHooks, resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { registerWorkspace, workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -38,9 +35,7 @@ function seed(): string {
 /** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
 async function holdOpen(file: string) {
   const script = `const fs = require('node:fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
-  const child = spawn(process.execPath, ['-e', script, file], {
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
+  const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   await once(child.stdout, 'data');
   return child;
 }
@@ -61,82 +56,76 @@ function skipPauses(onPause: () => void = () => undefined): () => number {
   return () => pauses.mock.calls.reduce((total, [, , , ms]) => total + (ms ?? 0), 0);
 }
 
-describe.skipIf(!WINDOWS)(
-  'a settings.json another program has open (Windows refuses a rename onto it)',
-  () => {
-    afterEach(() => {
-      vi.restoreAllMocks();
-      syncBuiltinESMExports();
+describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows refuses a rename onto it)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    syncBuiltinESMExports();
+  });
+
+  it('waits for the program to let go, then writes', () => {
+    const file = seed();
+    // This process holds the file and lets go at hippo's first pause, so the retry, not a race, decides what happens.
+    let held: number | undefined = fs.openSync(file, 'r');
+    const letGo = (): void => {
+      if (held !== undefined) fs.closeSync(held);
+      held = undefined;
+    };
+    const pausedMs = skipPauses(letGo);
+
+    try {
+      expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
+    } finally {
+      letGo();
+    }
+
+    // One 10 ms pause, then the rename: an in-place write would come only after the whole retry budget.
+    expect(pausedMs()).toBe(10);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
+  });
+
+  it('after the retry, writes in place when the program only has the file open for reading', async () => {
+    const file = seed();
+    const holder = await holdOpen(file);
+    const pausedMs = skipPauses();
+
+    try {
+      expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
+    } finally {
+      holder.kill();
+      await once(holder, 'exit');
+    }
+
+    expect(pausedMs()).toBe(RETRY_BUDGET_MS);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
+  });
+
+  // The write is stubbed to EBUSY: no Windows open mode here lets a program stop writes while the file stays readable.
+  it('gives up with an error that names the file when the in-place write is refused too, and leaves no temp file', async () => {
+    const file = seed();
+    const target = fs.realpathSync(file);
+    const write = fs.writeFileSync.bind(fs);
+    const holder = await holdOpen(file);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
+      if (dest === target) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+      write(dest, data, options);
     });
+    syncBuiltinESMExports();
+    const pausedMs = skipPauses();
 
-    it('waits for the program to let go, then writes', () => {
-      const file = seed();
-      // This process holds the file and lets go at hippo's first pause, so the retry, not a race, decides what happens.
-      let held: number | undefined = fs.openSync(file, 'r');
-      const letGo = (): void => {
-        if (held !== undefined) fs.closeSync(held);
-        held = undefined;
-      };
-      const pausedMs = skipPauses(letGo);
+    try {
+      expect(() => installJsonHooks('claude-code')).toThrow(new RegExp(`${escapeRegex(target)}.*in use`));
+    } finally {
+      holder.kill();
+      await once(holder, 'exit');
+    }
 
-      try {
-        expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
-      } finally {
-        letGo();
-      }
-
-      // One 10 ms pause, then the rename: an in-place write would come only after the whole retry budget.
-      expect(pausedMs()).toBe(10);
-      expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
-      expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
-    });
-
-    it('after the retry, writes in place when the program only has the file open for reading', async () => {
-      const file = seed();
-      const holder = await holdOpen(file);
-      const pausedMs = skipPauses();
-
-      try {
-        expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
-      } finally {
-        holder.kill();
-        await once(holder, 'exit');
-      }
-
-      expect(pausedMs()).toBe(RETRY_BUDGET_MS);
-      expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
-      expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
-    });
-
-    // The write is stubbed to EBUSY: no Windows open mode here lets a program stop writes while the file stays readable.
-    it('gives up with an error that names the file when the in-place write is refused too, and leaves no temp file', async () => {
-      const file = seed();
-      const target = fs.realpathSync(file);
-      const write = fs.writeFileSync.bind(fs);
-      const holder = await holdOpen(file);
-      vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
-        if (dest === target)
-          throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
-        write(dest, data, options);
-      });
-      syncBuiltinESMExports();
-      const pausedMs = skipPauses();
-
-      try {
-        expect(() => installJsonHooks('claude-code')).toThrow(
-          new RegExp(`${escapeRegex(target)}.*in use`),
-        );
-      } finally {
-        holder.kill();
-        await once(holder, 'exit');
-      }
-
-      expect(pausedMs()).toBe(RETRY_BUDGET_MS);
-      expect(fs.readFileSync(file, 'utf8')).toBe('{"theme":"dark"}');
-      expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
-    });
-  },
-);
+    expect(pausedMs()).toBe(RETRY_BUDGET_MS);
+    expect(fs.readFileSync(file, 'utf8')).toBe('{"theme":"dark"}');
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
+  });
+});
 
 function refuseRename(code: string): void {
   vi.spyOn(fs, 'renameSync').mockImplementation(() => {
@@ -151,18 +140,15 @@ describe('a rename the platform refuses (a bind-mounted file, a mount point)', (
     syncBuiltinESMExports();
   });
 
-  it.each(['EBUSY', 'EXDEV'])(
-    '%s: the file is written in place, so the install still lands',
-    (code) => {
-      const file = seed();
-      refuseRename(code);
+  it.each(['EBUSY', 'EXDEV'])('%s: the file is written in place, so the install still lands', (code) => {
+    const file = seed();
+    refuseRename(code);
 
-      expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
+    expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
 
-      expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
-      expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
-    },
-  );
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
+  });
 
   it('another failure, such as a full disk, is thrown and leaves the file and folder as they were', () => {
     const file = seed();
@@ -178,9 +164,7 @@ describe('a rename the platform refuses (a bind-mounted file, a mount point)', (
     seed();
     refuseRename('ENOSPC');
     vi.spyOn(fs, 'rmSync').mockImplementation(() => {
-      throw Object.assign(new Error('EPERM: another program holds the temp file'), {
-        code: 'EPERM',
-      });
+      throw Object.assign(new Error('EPERM: another program holds the temp file'), { code: 'EPERM' });
     });
     syncBuiltinESMExports();
 
@@ -258,13 +242,7 @@ const OTHER_CONFIG_FILES: ReadonlyArray<readonly [string, (home: string) => Rewr
           {
             theme: 'dark',
             hooks: {
-              SessionEnd: [
-                {
-                  hooks: [
-                    { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
-                  ],
-                },
-              ],
+              SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] }],
             },
           },
           null,

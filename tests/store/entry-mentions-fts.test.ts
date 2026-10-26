@@ -19,15 +19,7 @@ const CONTENTS = [
   'journal_mode WAL needs the express-js adapter',
   'Unrelated sentence about lunch',
 ];
-const TARGETS = [
-  'café',
-  'Straße',
-  'cache-key',
-  'express-js',
-  'journal_mode',
-  'naïve approach',
-  'ascii',
-];
+const TARGETS = ['café', 'Straße', 'cache-key', 'express-js', 'journal_mode', 'naïve approach', 'ascii'];
 
 function setFts(root: string, flag: '0' | '1'): void {
   const db = new DatabaseSync(join(root, 'hippo.db'));
@@ -54,9 +46,7 @@ describe('listEntriesMentioning on the FTS path', () => {
   it('matches the same rows for invalidation on both paths', async () => {
     for (const from of TARGETS) {
       const target = { from, to: null, type: 'removal' as const };
-      const viaFts = await invalidateMatching(sqliteStore(root), target, 'default', {
-        dryRun: true,
-      });
+      const viaFts = await invalidateMatching(sqliteStore(root), target, 'default', { dryRun: true });
       setFts(root, '0');
       const viaLike = await invalidateMatching(sqliteStore(root), target, 'default', {
         dryRun: true,
@@ -64,26 +54,16 @@ describe('listEntriesMentioning on the FTS path', () => {
       setFts(root, '1');
       expect(viaFts.targets.slice().sort()).toEqual(viaLike.targets.slice().sort());
     }
-    const hit = await invalidateMatching(
-      sqliteStore(root),
-      { from: 'café', to: null, type: 'removal' },
-      'default',
-      {
-        dryRun: true,
-      },
-    );
+    const hit = await invalidateMatching(sqliteStore(root), { from: 'café', to: null, type: 'removal' }, 'default', {
+      dryRun: true,
+    });
     expect(hit.targets).toHaveLength(1);
   });
 
   it('matches an exact tag through the tags column', async () => {
-    const result = await invalidateMatching(
-      sqliteStore(root),
-      { from: 'ops', to: null, type: 'removal' },
-      'default',
-      {
-        dryRun: true,
-      },
-    );
+    const result = await invalidateMatching(sqliteStore(root), { from: 'ops', to: null, type: 'removal' }, 'default', {
+      dryRun: true,
+    });
     expect(result.targets).toHaveLength(CONTENTS.length);
   });
 });

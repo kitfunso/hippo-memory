@@ -3,12 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
-import {
-  envAblateDecay,
-  envAllowCleartext,
-  envRuntimeSettings,
-  validateFlags,
-} from '../../src/base/util/env.js';
+import { envAblateDecay, envAllowCleartext, envRuntimeSettings, validateFlags } from '../../src/base/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -62,9 +57,7 @@ describe('serve with flags', () => {
 
   it('refuses to boot on HIPPO_ALLOW_CLEARTEXT=yes and names the variable', async () => {
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', 'yes');
-    await expect(serve({ hippoRoot: home, port: 0, host: '127.0.0.1' })).rejects.toThrow(
-      /HIPPO_ALLOW_CLEARTEXT/,
-    );
+    await expect(serve({ hippoRoot: home, port: 0, host: '127.0.0.1' })).rejects.toThrow(/HIPPO_ALLOW_CLEARTEXT/);
   });
 
   it('answers a keyless request 401 whatever the removed keyless switches say', async () => {

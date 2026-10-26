@@ -19,9 +19,7 @@ const sorted = Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.lo
 
 if (process.argv.includes('--update')) {
   writeFileSync(BASELINE, JSON.stringify(sorted, null, 2) + '\n');
-  console.log(
-    `Wrote ${BASELINE}: ${report.diagnostics.length} hits over ${Object.keys(sorted).length} rules.`,
-  );
+  console.log(`Wrote ${BASELINE}: ${report.diagnostics.length} hits over ${Object.keys(sorted).length} rules.`);
   process.exit(0);
 }
 

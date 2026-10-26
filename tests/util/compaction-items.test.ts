@@ -30,10 +30,7 @@ describe('parseCompactionItems: heading', () => {
     ['numbered bold', '10. **Memories for hippo**'],
     ['any case', 'MEMORIES FOR HIPPO'],
   ])('finds the %s shape', (_name, heading) => {
-    expect(parse('summary text', '', heading, '- one', '- two')).toEqual({
-      found: true,
-      items: ['one', 'two'],
-    });
+    expect(parse('summary text', '', heading, '- one', '- two')).toEqual({ found: true, items: ['one', 'two'] });
   });
 
   it('does not match the phrase inside prose', () => {
@@ -48,22 +45,12 @@ describe('parseCompactionItems: heading', () => {
   });
 
   it('uses the last heading when the phrase heads a section twice', () => {
-    const out = parse(
-      'Memories for hippo:',
-      '- old',
-      '',
-      'Other section',
-      'Memories for hippo:',
-      '- new',
-    );
+    const out = parse('Memories for hippo:', '- old', '', 'Other section', 'Memories for hippo:', '- new');
     expect(out.items).toEqual(['new']);
   });
 
   it('reports found=false for a summary without the section', () => {
-    expect(parse('1. Primary Request', '- a bullet that is not ours')).toEqual({
-      found: false,
-      items: [],
-    });
+    expect(parse('1. Primary Request', '- a bullet that is not ours')).toEqual({ found: false, items: [] });
   });
 
   it('reports found=true and no items for a heading with nothing after it', () => {
@@ -73,52 +60,22 @@ describe('parseCompactionItems: heading', () => {
 
 describe('parseCompactionItems: items', () => {
   it('reads dash, star and numbered markers without the marker', () => {
-    const out = parse(
-      'Memories for hippo:',
-      '- dash',
-      '* star',
-      '1. dot',
-      '2) paren',
-      '  - indented dash',
-    );
+    const out = parse('Memories for hippo:', '- dash', '* star', '1. dot', '2) paren', '  - indented dash');
     expect(out.items).toEqual(['dash', 'star', 'dot', 'paren', 'indented dash']);
   });
 
   it('makes a nested bullet its own item', () => {
-    const out = parse(
-      'Memories for hippo:',
-      '- parent',
-      '  - child',
-      '    * grandchild',
-      '- sibling',
-    );
+    const out = parse('Memories for hippo:', '- parent', '  - child', '    * grandchild', '- sibling');
     expect(out.items).toEqual(['parent', 'child', 'grandchild', 'sibling']);
   });
 
   it('joins an indented unmarked line onto the previous item with one space', () => {
-    const out = parse(
-      'Memories for hippo:',
-      '- first part of a long',
-      '    second part   ',
-      '  third',
-      '- next',
-    );
+    const out = parse('Memories for hippo:', '- first part of a long', '    second part   ', '  third', '- next');
     expect(out.items).toEqual(['first part of a long second part third', 'next']);
   });
 
   it('allows blank lines between items and before a wrapped line', () => {
-    const out = parse(
-      'Memories for hippo:',
-      '',
-      '- one',
-      '',
-      '',
-      '- two',
-      '',
-      '  wrapped',
-      '',
-      '- three',
-    );
+    const out = parse('Memories for hippo:', '', '- one', '', '', '- two', '', '  wrapped', '', '- three');
     expect(out.items).toEqual(['one', 'two wrapped', 'three']);
   });
 
@@ -157,9 +114,7 @@ describe('parseCompactionItems: items', () => {
   });
 
   it('keeps an item that only starts with none', () => {
-    expect(parse('Memories for hippo:', '- none of the tests ran').items).toEqual([
-      'none of the tests ran',
-    ]);
+    expect(parse('Memories for hippo:', '- none of the tests ran').items).toEqual(['none of the tests ran']);
   });
 
   it('never cuts an item, however long', () => {
@@ -206,14 +161,12 @@ describe('selectItemRows', () => {
 
 describe('compactSummaryBody', () => {
   it('returns the summary body with the analysis block removed', () => {
-    const text =
-      '<analysis>\nthinking\n</analysis>\n\n<summary>\n1. Intent\n\nMemories for hippo:\n- a\n</summary>';
+    const text = '<analysis>\nthinking\n</analysis>\n\n<summary>\n1. Intent\n\nMemories for hippo:\n- a\n</summary>';
     expect(compactSummaryBody(text)).toBe('1. Intent\n\nMemories for hippo:\n- a');
   });
 
   it('removes an analysis block that mentions the summary tag', () => {
-    const text =
-      '<analysis>I will write a <summary> next.</analysis>\n<summary>\nreal body\n</summary>';
+    const text = '<analysis>I will write a <summary> next.</analysis>\n<summary>\nreal body\n</summary>';
     expect(compactSummaryBody(text)).toBe('real body');
   });
 
@@ -235,9 +188,9 @@ describe('compactSummaryBody', () => {
   });
 
   it('removes every closed analysis block, from its first opening tag, and keeps an unclosed one', () => {
-    expect(
-      compactSummaryBody('a<analysis>1</analysis>b<analysis><analysis>2</analysis>c<analysis>open'),
-    ).toBe('abc<analysis>open');
+    expect(compactSummaryBody('a<analysis>1</analysis>b<analysis><analysis>2</analysis>c<analysis>open')).toBe(
+      'abc<analysis>open',
+    );
   });
 });
 
@@ -257,10 +210,7 @@ describe('hostile input is read in linear time', () => {
   it(
     'finds no heading in a line of 300,000 tabs between two letters',
     () => {
-      expect(parseCompactionItems(`x${'\t'.repeat(3 * REPEATS)}x`)).toEqual({
-        found: false,
-        items: [],
-      });
+      expect(parseCompactionItems(`x${'\t'.repeat(3 * REPEATS)}x`)).toEqual({ found: false, items: [] });
     },
     LIMIT_MS,
   );
@@ -288,10 +238,7 @@ describe('parseCompactionItems: odd whitespace', () => {
   });
 
   it('finds a heading behind a long run of trailing stars, colons and spaces', () => {
-    expect(parse(`## **Memories for hippo${'*: \t'.repeat(50)}`, '- one')).toEqual({
-      found: true,
-      items: ['one'],
-    });
+    expect(parse(`## **Memories for hippo${'*: \t'.repeat(50)}`, '- one')).toEqual({ found: true, items: ['one'] });
   });
 });
 
@@ -315,18 +262,13 @@ describe('post-compact payload fixtures', () => {
   });
 
   it('reads the item counts each payload lists', () => {
-    const counts = payloads.map(
-      (p) => parseCompactionItems(compactSummaryBody(p.compact_summary)).items.length,
-    );
+    const counts = payloads.map((p) => parseCompactionItems(compactSummaryBody(p.compact_summary)).items.length);
     expect(counts).toEqual([4, 1, 2, 2, 0]);
   });
 
   it('gives zero items for the "- none" payload', () => {
     const last = payloads[payloads.length - 1];
-    expect(parseCompactionItems(compactSummaryBody(last.compact_summary))).toEqual({
-      found: true,
-      items: [],
-    });
+    expect(parseCompactionItems(compactSummaryBody(last.compact_summary))).toEqual({ found: true, items: [] });
   });
 
   it('reads the plain-colon and the bold heading shapes as whole standalone sentences', () => {

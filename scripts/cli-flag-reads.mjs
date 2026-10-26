@@ -9,20 +9,13 @@ import { fileURLToPath } from 'node:url';
 const ARRAY_CALLBACKS = new Set(['map', 'filter', 'some', 'every', 'find', 'forEach', 'flatMap']);
 const VALUE_CALLS = new Set(['String', 'Number', 'parseInt', 'parseFloat', 'Array.isArray']);
 // Object.keys is left out: it lists names, as a validator does, and reads no value.
-const WHOLE_OBJECT_CALLS = new Set([
-  'Object.entries',
-  'Object.values',
-  'JSON.stringify',
-  'Object.assign',
-]);
+const WHOLE_OBJECT_CALLS = new Set(['Object.entries', 'Object.values', 'JSON.stringify', 'Object.assign']);
 const EQUALITY = new Set(['===', '!==', '==', '!=']);
 const KIND_RANK = ['value', 'unknown', 'on-off', 'presence'];
 
 /** One kind for several uses: any value use wins, and an unclassed use hides an on/off one. */
 function mergeKinds(kinds) {
-  const seen = kinds
-    .map((kind) => (kind === 'returned' ? 'unknown' : kind))
-    .filter((kind) => kind !== 'write');
+  const seen = kinds.map((kind) => (kind === 'returned' ? 'unknown' : kind)).filter((kind) => kind !== 'write');
   return KIND_RANK.find((kind) => seen.includes(kind)) ?? 'unknown';
 }
 
@@ -59,10 +52,7 @@ function where(env, node) {
 
 function lineText(node) {
   const sf = node.getSourceFile();
-  return sf.text
-    .split('\n')
-    [sf.getLineAndCharacterOfPosition(node.getStart()).line].trim()
-    .slice(0, 160);
+  return sf.text.split('\n')[sf.getLineAndCharacterOfPosition(node.getStart()).line].trim().slice(0, 160);
 }
 
 function strip(ts, expr) {
@@ -100,9 +90,7 @@ function literalKeys(env, expr) {
   if (!e) return null;
   if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return [e.text];
   if (ts.isArrayLiteralExpression(e)) {
-    const parts = e.elements.map((el) =>
-      literalKeys(env, ts.isSpreadElement(el) ? el.expression : el),
-    );
+    const parts = e.elements.map((el) => literalKeys(env, ts.isSpreadElement(el) ? el.expression : el));
     return parts.includes(null) ? null : parts.flat();
   }
   if (ts.isNewExpression(e) && e.expression.getText() === 'Set' && e.arguments?.length === 1) {
@@ -152,8 +140,7 @@ function functionOf(env, expr) {
   if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
   const decl = sym?.valueDeclaration;
   if (decl && isFunctionLike(ts, decl)) return decl;
-  const init =
-    decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
+  const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
   return init && isFunctionLike(ts, init) ? init : null;
 }
 
@@ -161,11 +148,9 @@ function functionOf(env, expr) {
 function tableHandlers(env, call) {
   const { ts, checker } = env;
   const callee = strip(ts, call.expression);
-  if (!ts.isElementAccessExpression(callee) || !ts.isIdentifier(strip(ts, callee.expression)))
-    return null;
+  if (!ts.isElementAccessExpression(callee) || !ts.isIdentifier(strip(ts, callee.expression))) return null;
   const decl = checker.getSymbolAtLocation(strip(ts, callee.expression))?.valueDeclaration;
-  const table =
-    decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
+  const table = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
   if (!table || !ts.isObjectLiteralExpression(table)) return null;
   return table.properties.map((prop) =>
     ts.isPropertyAssignment(prop)
@@ -197,12 +182,8 @@ function argumentKind(env, call, arg, depth) {
   if (VALUE_CALLS.has(name)) return 'value';
   const decl = depth < 2 ? checker.getResolvedSignature(call)?.declaration : undefined;
   const param =
-    decl && isFunctionLike(ts, decl) && decl.body
-      ? decl.parameters[call.arguments.indexOf(arg)]
-      : undefined;
-  return param && ts.isIdentifier(param.name)
-    ? mergeKinds(usesOf(env, param.name, decl.body, depth))
-    : 'unknown';
+    decl && isFunctionLike(ts, decl) && decl.body ? decl.parameters[call.arguments.indexOf(arg)] : undefined;
+  return param && ts.isIdentifier(param.name) ? mergeKinds(usesOf(env, param.name, decl.body, depth)) : 'unknown';
 }
 
 function operandKind(ts, binary, operand) {
@@ -238,14 +219,9 @@ function useKind(env, node, depth = 0) {
   }
   if (!p) return 'unknown';
   if (ts.isAsExpression(p)) {
-    return /string|number/.test(p.type.getText())
-      ? 'value'
-      : p.type.getText() === 'boolean'
-        ? 'on-off'
-        : 'unknown';
+    return /string|number/.test(p.type.getText()) ? 'value' : p.type.getText() === 'boolean' ? 'on-off' : 'unknown';
   }
-  if (ts.isPrefixUnaryExpression(p) && p.operator === ts.SyntaxKind.ExclamationToken)
-    return 'on-off';
+  if (ts.isPrefixUnaryExpression(p) && p.operator === ts.SyntaxKind.ExclamationToken) return 'on-off';
   if (ts.isTypeOfExpression(p) || ts.isTemplateSpan(p)) return 'value';
   if (ts.isCallExpression(p) && p.arguments.includes(cur)) return argumentKind(env, p, cur, depth);
   if (ts.isBinaryExpression(p)) return operandKind(ts, p, cur);
@@ -268,9 +244,7 @@ function bind(env, scope, name, kind) {
   const target = ts.isIdentifier(name)
     ? name
     : kind === 'ctx' && ts.isObjectBindingPattern(name)
-      ? name.elements.find(
-          (el) => (el.propertyName ?? el.name).getText() === 'flags' && ts.isIdentifier(el.name),
-        )?.name
+      ? name.elements.find((el) => (el.propertyName ?? el.name).getText() === 'flags' && ts.isIdentifier(el.name))?.name
       : undefined;
   const sym = target ? checker.getSymbolAtLocation(target) : undefined;
   if (sym) scope[ts.isIdentifier(name) ? kind : 'flags'].add(sym);
@@ -333,8 +307,7 @@ function boundParams(env, scope, decl, callArgs) {
   const { ts, checker } = env;
   const bound = new Map();
   decl.parameters.forEach((param, index) => {
-    const value =
-      callArgs[index] && ts.isIdentifier(param.name) ? valueOf(env, scope, callArgs[index]) : null;
+    const value = callArgs[index] && ts.isIdentifier(param.name) ? valueOf(env, scope, callArgs[index]) : null;
     const sym = value && value !== ABSENT ? checker.getSymbolAtLocation(param.name) : undefined;
     if (sym) bound.set(sym, value);
   });
@@ -351,9 +324,7 @@ function newScope(env, fn, taint, bound) {
     keyParams: new Map(),
   };
   fn.parameters.forEach((param, index) => {
-    const sym = env.ts.isIdentifier(param.name)
-      ? env.checker.getSymbolAtLocation(param.name)
-      : undefined;
+    const sym = env.ts.isIdentifier(param.name) ? env.checker.getSymbolAtLocation(param.name) : undefined;
     if (sym) scope.paramIndex.set(sym, index);
     if (taint.has(index)) bind(env, scope, param.name, taint.get(index));
   });
@@ -368,11 +339,7 @@ function taintOf(env, scope, expr) {
     const sym = checker.getSymbolAtLocation(e);
     return sym && scope.flags.has(sym) ? 'flags' : sym && scope.ctx.has(sym) ? 'ctx' : null;
   }
-  if (
-    ts.isPropertyAccessExpression(e) &&
-    e.name.text === 'flags' &&
-    taintOf(env, scope, e.expression) === 'ctx'
-  ) {
+  if (ts.isPropertyAccessExpression(e) && e.name.text === 'flags' && taintOf(env, scope, e.expression) === 'ctx') {
     return 'flags';
   }
   if (!ts.isObjectLiteralExpression(e)) return null;
@@ -408,8 +375,7 @@ function addRead(env, scope, keyExpr, node, kind) {
   }
   const keys = keysOf(env, scope, ident);
   if (!keys) noteUnfollowed(env, node, 'computed key');
-  for (const key of keys ?? [])
-    scope.reads.push({ key, kind, at: where(env, node), text: lineText(node) });
+  for (const key of keys ?? []) scope.reads.push({ key, kind, at: where(env, node), text: lineText(node) });
 }
 
 /** The names a key takes: a literal, a loop over literals, or a member of a known config; none for a member it lacks. */
@@ -444,11 +410,7 @@ function followCall(env, scope, call) {
   const decls = tableHandlers(env, call) ?? [
     target && isFunctionLike(ts, target) ? target : checker.getResolvedSignature(call)?.declaration,
   ];
-  if (
-    decls.some(
-      (d) => !d || !isFunctionLike(ts, d) || !d.body || d.getSourceFile().isDeclarationFile,
-    )
-  ) {
+  if (decls.some((d) => !d || !isFunctionLike(ts, d) || !d.body || d.getSourceFile().isDeclarationFile)) {
     noteUnfollowed(env, call, 'call not followed');
     return;
   }
@@ -460,13 +422,7 @@ function followCall(env, scope, call) {
       // A helper that hands the value back is classed by what its caller does with it.
       else {
         for (const kind of kinds) {
-          addRead(
-            env,
-            scope,
-            callArgs[index],
-            call,
-            kind === 'returned' ? useKind(env, call) : kind,
-          );
+          addRead(env, scope, callArgs[index], call, kind === 'returned' ? useKind(env, call) : kind);
         }
       }
     }
@@ -499,22 +455,14 @@ function visitNode(env, scope, node) {
     const kind = useKind(env, node);
     if (kind !== 'write') addRead(env, scope, node.argumentExpression, node, kind);
   } else if (ts.isPropertyAccessExpression(node) && onFlags(node.expression)) {
-    scope.reads.push({
-      key: node.name.text,
-      kind: useKind(env, node),
-      at: where(env, node),
-      text: lineText(node),
-    });
+    scope.reads.push({ key: node.name.text, kind: useKind(env, node), at: where(env, node), text: lineText(node) });
   } else if (
     ts.isBinaryExpression(node) &&
     node.operatorToken.kind === ts.SyntaxKind.InKeyword &&
     onFlags(node.right)
   ) {
     addRead(env, scope, node.left, node, 'presence');
-  } else if (
-    (ts.isForInStatement(node) || ts.isSpreadAssignment(node)) &&
-    onFlags(node.expression)
-  ) {
+  } else if ((ts.isForInStatement(node) || ts.isSpreadAssignment(node)) && onFlags(node.expression)) {
     noteUnfollowed(env, node, 'whole object');
   } else if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
     followCall(env, scope, node);
@@ -525,10 +473,7 @@ function visitNode(env, scope, node) {
 /** One function's reads, given which parameters (by index) are the flags object or a context holding it. */
 function analyze(env, fn, taint, bound = new Map()) {
   const boundKey = [...bound]
-    .map(
-      ([sym, value]) =>
-        `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`,
-    )
+    .map(([sym, value]) => `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`)
     .sort();
   const memoKey = `${fn.pos}:${fn.getSourceFile().fileName}:${[...taint].sort().join(',')}:${boundKey.join(',')}`;
   if (env.memo.has(memoKey)) return env.memo.get(memoKey);
@@ -547,26 +492,20 @@ function rowHandler(env, call) {
   const [load, name] = call.arguments;
   let loaded = null;
   const find = (node) => {
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword)
-      loaded = node.arguments[0];
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) loaded = node.arguments[0];
     else ts.forEachChild(node, find);
   };
   find(load);
   const moduleSym = loaded ? checker.getSymbolAtLocation(loaded) : undefined;
   let sym =
-    moduleSym && ts.isStringLiteral(name)
-      ? checker.tryGetMemberInModuleExports(name.text, moduleSym)
-      : undefined;
+    moduleSym && ts.isStringLiteral(name) ? checker.tryGetMemberInModuleExports(name.text, moduleSym) : undefined;
   if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
   const decl = sym?.valueDeclaration;
-  const init =
-    decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
-  const fn =
-    decl && isFunctionLike(ts, decl) ? decl : init && isFunctionLike(ts, init) ? init : null;
+  const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
+  const fn = decl && isFunctionLike(ts, decl) ? decl : init && isFunctionLike(ts, init) ? init : null;
   if (fn) return { run: fn, bound: new Map() };
   const factory = init && ts.isCallExpression(init) ? valueOf(env, null, init.expression) : null;
-  const made =
-    factory && factory !== ABSENT && isFunctionLike(ts, factory) ? valueOf(env, null, init) : null;
+  const made = factory && factory !== ABSENT && isFunctionLike(ts, factory) ? valueOf(env, null, init) : null;
   if (!made || made === ABSENT || !isFunctionLike(ts, made)) {
     throw new Error(`verb row handler not found: ${where(env, call)}`);
   }
@@ -591,8 +530,7 @@ function commandRows(env) {
     }
     ts.forEachChild(node, find);
   };
-  for (const sf of program.getSourceFiles())
-    if (path.dirname(path.resolve(sf.fileName)) === verbsDir) find(sf);
+  for (const sf of program.getSourceFiles()) if (path.dirname(path.resolve(sf.fileName)) === verbsDir) find(sf);
   if (rows.length === 0) throw new Error('no verb rows found in src/surface/cli/verbs/');
   return rows;
 }
@@ -611,8 +549,7 @@ export function collectVerbReads(repo = '.') {
       flags[key] = mergeKinds(byKey.get(key).map((read) => read.kind));
       if (flags[key] !== 'unknown') continue;
       for (const read of byKey.get(key)) {
-        if (mergeKinds([read.kind]) === 'unknown')
-          unclassed.push(`${verb} --${key}  ${read.at}  ${read.text}`);
+        if (mergeKinds([read.kind]) === 'unknown') unclassed.push(`${verb} --${key}  ${read.at}  ${read.text}`);
       }
     }
     return { verb, flags };

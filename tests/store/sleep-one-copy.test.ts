@@ -45,11 +45,7 @@ describe('sleep after consolidation', () => {
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
     const root = newRoot();
-    const kept = [
-      'the deploy runs on friday',
-      'billing is owned by alice',
-      'staging restarts on sunday',
-    ];
+    const kept = ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday'];
     for (const text of kept) writeEntry(root, createMemory(text, { tags: ['ops'] }));
     const junk = createMemory('nope');
     writeEntry(root, junk);
@@ -75,16 +71,10 @@ describe('sleep after consolidation', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
     const wholeReads = async (noShare: boolean): Promise<number> => {
       const root = newRoot();
-      for (const text of [
-        'the deploy runs on friday',
-        'billing is owned by alice',
-        'staging restarts on sunday',
-      ]) {
+      for (const text of ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday']) {
         writeEntry(root, createMemory(text, { tags: ['ops'] }));
       }
-      const { result, statements } = await recordStatementsAsync(() =>
-        runSleep(ctxFor(root), { noShare }),
-      );
+      const { result, statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare }));
       expect(result.shared).toBeUndefined();
       return countMatching(statements, HOST_WIDE_READ);
     };

@@ -18,11 +18,7 @@ import {
 } from '../../src/db/index.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
-import {
-  projectNameList,
-  projectNameMerge,
-  projectNameRepair,
-} from '../../src/api/objects/projects.js';
+import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -46,16 +42,8 @@ afterEach(() => {
 });
 
 const T = 'default';
-const row = (
-  text: string,
-  origin: string | null,
-  extra: Partial<MemoryEntry> = {},
-): MemoryEntry => {
-  const entry = {
-    ...createMemory(text, { layer: Layer.Semantic }),
-    originProject: origin,
-    ...extra,
-  };
+const row = (text: string, origin: string | null, extra: Partial<MemoryEntry> = {}): MemoryEntry => {
+  const entry = { ...createMemory(text, { layer: Layer.Semantic }), originProject: origin, ...extra };
   writeEntry(home, entry);
   return entry;
 };
@@ -100,9 +88,7 @@ describe('hippo projects merge', () => {
     const r = await projectNameMerge(ctx(), { from: 'repo-wt-a', into: 'repo', dryRun: false });
     const rows = byId();
     expect(rows.has(copy.id)).toBe(false);
-    expect(
-      listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.originProject,
-    ).toBe('repo');
+    expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.originProject).toBe('repo');
     expect(rows.get(held.id)!.originProject).toBe('repo');
     // The next sync renames its container prefix, so the import keeps its id, source and tag.
     expect(rows.get(kept.id)).toMatchObject({
@@ -118,9 +104,7 @@ describe('hippo projects merge', () => {
     expect(mirror(copy.id)).toBeNull();
     expect(existsSync(r.backup!)).toBe(true);
     // SAFETY: the SELECT names the one column of the row type.
-    const audit = db
-      .prepare(`SELECT metadata_json FROM audit_log WHERE op = 'project_merge'`)
-      .all() as Array<{
+    const audit = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'project_merge'`).all() as Array<{
       metadata_json: string;
     }>;
     expect(audit).toHaveLength(1);
@@ -131,19 +115,15 @@ describe('hippo projects merge', () => {
 
   it('refuses user-global and unknown as either side', async () => {
     open();
-    await expect(projectNameMerge(ctx(), { from: '', into: 'repo', dryRun: true })).rejects.toThrow(
+    await expect(projectNameMerge(ctx(), { from: '', into: 'repo', dryRun: true })).rejects.toThrow(/user-global/);
+    await expect(projectNameMerge(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true })).rejects.toThrow(
       /user-global/,
     );
-    await expect(
-      projectNameMerge(ctx(), { from: 'repo-wt-a', into: ' ', dryRun: true }),
-    ).rejects.toThrow(/user-global/);
   });
 
   it('re-tags dormant rows and compaction records too, so a restore does not come back hidden', async () => {
     open();
-    const faded = createMemory('a faded worktree lesson about the cache', {
-      layer: Layer.Semantic,
-    });
+    const faded = createMemory('a faded worktree lesson about the cache', { layer: Layer.Semantic });
     db.prepare(
       `INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES (?, ?, ?, ?, 'decay', 0.01, ?)`,
     ).run(
@@ -179,9 +159,7 @@ describe('hippo projects repair', () => {
     const global = merged([g1.id]);
     open();
 
-    expect((await projectNameRepair(ctx(), { dryRun: true })).toProject).toEqual([
-      { id: one.id, origin: 'proj-b' },
-    ]);
+    expect((await projectNameRepair(ctx(), { dryRun: true })).toProject).toEqual([{ id: one.id, origin: 'proj-b' }]);
     expect(byId().get(one.id)!.originProject).toBe('');
 
     const r = await projectNameRepair(ctx(), { dryRun: false });
@@ -213,8 +191,7 @@ describe('hippo projects repair', () => {
     expect(r.setAside.slice().sort()).toEqual(aside.map((e) => e.id).sort());
     for (const e of tagged) expect(rows.get(e.id)!.originProject).toBe('proj-b');
     for (const e of aside) expect(rows.has(e.id)).toBe(false);
-    for (const e of [b1, b2, c1, ...bystanders])
-      expect(rows.get(e.id)!.originProject).toBe(e.originProject);
+    for (const e of [b1, b2, c1, ...bystanders]) expect(rows.get(e.id)!.originProject).toBe(e.originProject);
     expect(mirror(tagged[0].id)).toContain('origin_project: proj-b');
     expect(mirror(aside[0].id)).toBeNull();
   });
@@ -326,9 +303,7 @@ describe('hippo projects list', () => {
     // The command runs as a request of its own, whose first open reads the schema version afresh.
     currentRequestStores()?.close();
     // The rows already have the last migration's shape, so only its run is counted.
-    const up = vi
-      .spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up')
-      .mockImplementation(() => undefined);
+    const up = vi.spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up').mockImplementation(() => undefined);
     try {
       expect((await projectNameList(ctx())).map((p) => p.origin)).toContain('repo-wt-a');
       expect(up).toHaveBeenCalledTimes(1);

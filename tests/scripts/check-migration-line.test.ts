@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  describeGap,
-  findMigrationGaps,
-  readMigrationVersions,
-} from '../../scripts/check-migration-line.mjs';
+import { describeGap, findMigrationGaps, readMigrationVersions } from '../../scripts/check-migration-line.mjs';
 
 describe('findMigrationGaps', () => {
   it('passes a consecutive list and an empty one', () => {
@@ -22,12 +18,8 @@ describe('findMigrationGaps', () => {
   });
 
   it('names a single missing version, a repeat and a list out of order', () => {
-    expect(describeGap(findMigrationGaps([8, 10])[0])).toBe(
-      'v8 is followed by v10, so v9 is missing.',
-    );
-    expect(describeGap(findMigrationGaps([4, 4])[0])).toBe(
-      'v4 follows v4, out of order or repeated.',
-    );
+    expect(describeGap(findMigrationGaps([8, 10])[0])).toBe('v8 is followed by v10, so v9 is missing.');
+    expect(describeGap(findMigrationGaps([4, 4])[0])).toBe('v4 follows v4, out of order or repeated.');
     expect(findMigrationGaps([5, 4])).toEqual([{ after: 5, next: 4 }]);
   });
 });

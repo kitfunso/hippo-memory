@@ -13,14 +13,9 @@ import { pushGoal } from '../_helpers/root-forms.js';
 const savedCwd = process.cwd();
 
 /** `hippo recall <query> --json` in this process under `sessionId` ('' for none), with the empty recall rings a fresh `hippo` starts with. */
-async function recallCli(
-  query: string,
-  sessionId: string,
-): Promise<Array<{ content: string; score: number }>> {
+async function recallCli(query: string, sessionId: string): Promise<Array<{ content: string; score: number }>> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
-  const res = await runInProcess(() =>
-    runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '4000']),
-  );
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '4000']));
   expect(res.status, res.stderr).toBe(0);
   const parsed = JSON.parse(res.stdout.slice(res.stdout.indexOf('{')));
   return parsed.results ?? [];

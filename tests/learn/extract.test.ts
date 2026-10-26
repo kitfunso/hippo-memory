@@ -5,29 +5,18 @@ import { extractFacts } from '../../src/domain/learn/extract.js';
 function mockFetcher(body: string, ok = true): typeof fetch {
   // A real Response satisfies typeof fetch's return type directly, so no
   // cast is needed: extractFacts only reads res.ok and res.json().
-  return async () =>
-    new Response(JSON.stringify({ content: [{ text: body }] }), { status: ok ? 200 : 500 });
+  return async () => new Response(JSON.stringify({ content: [{ text: body }] }), { status: ok ? 200 : 500 });
 }
 
 describe('extractFacts', () => {
   it('returns correct ExtractedFact[] from mocked Claude response', async () => {
     const response = JSON.stringify([
-      {
-        content: 'Alice prefers dark roast coffee',
-        tags: ['speaker:Alice', 'topic:coffee'],
-        valence: 'neutral',
-      },
-      {
-        content: 'Bob joined the team in March 2025',
-        tags: ['speaker:Bob', 'topic:team'],
-        valence: 'positive',
-      },
+      { content: 'Alice prefers dark roast coffee', tags: ['speaker:Alice', 'topic:coffee'], valence: 'neutral' },
+      { content: 'Bob joined the team in March 2025', tags: ['speaker:Bob', 'topic:team'], valence: 'positive' },
     ]);
     const fetcher = mockFetcher(response);
 
-    const facts = await extractFacts('some conversation text', {
-      llm: anthropicLlm({ apiKey: 'test', fetcher }),
-    });
+    const facts = await extractFacts('some conversation text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
     expect(facts).toHaveLength(2);
     expect(facts[0]!.content).toBe('Alice prefers dark roast coffee');
@@ -39,17 +28,13 @@ describe('extractFacts', () => {
 
   it('returns [] on API failure', async () => {
     const fetcher = mockFetcher('ignored', false);
-    const facts = await extractFacts('some text', {
-      llm: anthropicLlm({ apiKey: 'test', fetcher }),
-    });
+    const facts = await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
   });
 
   it('returns [] on malformed JSON', async () => {
     const fetcher = mockFetcher('this is not json at all');
-    const facts = await extractFacts('some text', {
-      llm: anthropicLlm({ apiKey: 'test', fetcher }),
-    });
+    const facts = await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
   });
 
@@ -57,12 +42,8 @@ describe('extractFacts', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const fetcher = mockFetcher('this is not json at all');
-      expect(
-        await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) }),
-      ).toEqual([]);
-      const warned = stderr.mock.calls
-        .map((c) => String(c[0]))
-        .filter((l) => l.includes('fact extraction failed'));
+      expect(await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) })).toEqual([]);
+      const warned = stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('fact extraction failed'));
       expect(warned).toHaveLength(1);
       expect(warned[0]).toMatch(
         /^\[hippo\] warn: fact extraction failed: unparseable response: .* errorClass=SyntaxError/,
@@ -80,9 +61,7 @@ describe('extractFacts', () => {
     }));
     const fetcher = mockFetcher(JSON.stringify(tenFacts));
 
-    const facts = await extractFacts('long conversation', {
-      llm: anthropicLlm({ apiKey: 'test', fetcher }),
-    });
+    const facts = await extractFacts('long conversation', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toHaveLength(8);
   });
 

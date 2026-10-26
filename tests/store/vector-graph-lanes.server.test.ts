@@ -28,11 +28,7 @@ describe('a nearest-row read on a store over the threshold', () => {
     const vectors = clusteredVectors(ROWS, DIM, 21);
     seedVectorRows(
       root,
-      vectors.map((vector, i) => ({
-        id: `m-${i}`,
-        tenantId: i % 2 === 0 ? 'even' : 'odd',
-        vector,
-      })),
+      vectors.map((vector, i) => ({ id: `m-${i}`, tenantId: i % 2 === 0 ? 'even' : 'odd', vector })),
     );
     vi.stubEnv('HIPPO_LOG', 'info');
     const logged = stderrText();
@@ -51,21 +47,15 @@ describe('a nearest-row read on a store over the threshold', () => {
     });
 
     await store.vectors.nearestEntries(vectors[0], spec('even'));
-    await waitFor(
-      () => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`),
-      {
-        what: 'the first reader to log its vector graph ready',
-        timeoutMs: 20_000,
-      },
-    );
+    await waitFor(() => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`), {
+      what: 'the first reader to log its vector graph ready',
+      timeoutMs: 20_000,
+    });
 
     for (const [n, tenant] of ['even', 'odd', 'even', 'odd'].entries()) {
       const q = near(vectors[n * 50], n);
       const call = (mode: 'pinned-read' | 'read') =>
-        executor.call<MemoryEntry[]>('vectors.nearestEntries', [q, spec(tenant)], {
-          mode,
-          requestId: undefined,
-        });
+        executor.call<MemoryEntry[]>('vectors.nearestEntries', [q, spec(tenant)], { mode, requestId: undefined });
       // The pinned call holds the first reader, so the plain read goes to the second.
       const [pinned, plain] = await Promise.all([call('pinned-read'), call('read')]);
 

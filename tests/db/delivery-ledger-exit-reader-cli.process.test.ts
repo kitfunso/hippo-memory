@@ -31,34 +31,15 @@ describe('the command line', () => {
   it('the script prints the verdict the function returns', () => {
     const m = present();
     const block = 'the block that was sent';
-    write(
-      event('r13', {
-        emittedHash: blockHash(block),
-        promptHash: blockHash('a prompt'),
-        candidates: [row(m.id)],
-      }),
-    );
+    write(event('r13', { emittedHash: blockHash(block), promptHash: blockHash('a prompt'), candidates: [row(m.id)] }));
     const t = transcript([{ prompt: 'a prompt', attach: block }]);
     const r = spawnSync(
       process.execPath,
-      [
-        SCRIPT,
-        '--store',
-        dir,
-        '--session',
-        'r13',
-        '--memory',
-        m.id,
-        '--transcript',
-        t,
-        '--no-global',
-      ],
+      [SCRIPT, '--store', dir, '--session', 'r13', '--memory', m.id, '--transcript', t, '--no-global'],
       { encoding: 'utf8' },
     );
     expect(r.status, r.stderr).toBe(0);
-    expect(JSON.parse(r.stdout)).toEqual(
-      JSON.parse(JSON.stringify(read('r13', m.id, { transcript: t }))),
-    );
+    expect(JSON.parse(r.stdout)).toEqual(JSON.parse(JSON.stringify(read('r13', m.id, { transcript: t }))));
     expect(JSON.parse(r.stdout).class).toBe('application-unknown');
   });
 
@@ -123,9 +104,7 @@ describe('store paths through a link', () => {
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),
     );
-    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', {
-      pinned: true,
-    });
+    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
     const G = link(p.globalRoot, path.join(p.dir, 'global-link'));
     if (G === null) return ctx.skip();
     try {
@@ -133,9 +112,7 @@ describe('store paths through a link', () => {
       fs.mkdirSync(bare);
       const r = fire(p, 'r27', PROMPT, { cwd: bare, env: { HIPPO_HOME: G } });
       const want = blockHash(realpathOrResolve(G));
-      expect(rawRows(p.globalRoot, 'r27').map((x) => [x.store_hash, x.write_store])).toEqual([
-        [want, 'global'],
-      ]);
+      expect(rawRows(p.globalRoot, 'r27').map((x) => [x.store_hash, x.write_store])).toEqual([[want, 'global']]);
       const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r27' });
       const v = verdictOf({ store: G, global: G, session: 'r27', memory: g.id, transcript: t });
       expect(v.class).toBe('application-unknown');
@@ -153,9 +130,7 @@ describe('store paths through a link', () => {
       path.join(p.globalRoot, 'config.json'),
       JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }),
     );
-    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', {
-      pinned: true,
-    });
+    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
     const L = link(p.dir, `${p.dir}-link`);
     if (L === null) return ctx.skip();
     const G = path.join(L, 'global');
@@ -166,18 +141,7 @@ describe('store paths through a link', () => {
       const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r28' });
       const out = spawnSync(
         process.execPath,
-        [
-          SCRIPT,
-          '--store',
-          G,
-          '--session',
-          'r28',
-          '--memory',
-          g.id,
-          '--transcript',
-          t,
-          '--no-global',
-        ],
+        [SCRIPT, '--store', G, '--session', 'r28', '--memory', g.id, '--transcript', t, '--no-global'],
         { encoding: 'utf8', env: { ...process.env, HIPPO_HOME: G } },
       );
       expect(out.status, out.stderr).toBe(0);

@@ -24,10 +24,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -52,19 +49,12 @@ describe('consolidateDb lazy open', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
     const shortText = 'renew the expiring vpn certificate before the weekend';
-    const longText =
-      'renew the expiring vpn certificate before the weekend and alert the network team';
+    const longText = 'renew the expiring vpn certificate before the weekend and alert the network team';
     const e1 = {
-      ...createMemory(shortText, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Episodic,
-      }),
+      ...createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }),
       created: new Date(Date.now() - 60_000).toISOString(),
     };
-    const e2 = createMemory(longText, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Episodic,
-    });
+    const e2 = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     writeEntry(home, e1);
     writeEntry(home, e2);
 
@@ -102,14 +92,8 @@ describe('consolidateDb lazy open', () => {
 
     const shortText = 'back up the primary database before the migration';
     const longText = 'back up the primary database before the migration and verify checksums';
-    const e1 = createMemory(shortText, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Episodic,
-    });
-    const e2 = createMemory(longText, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Episodic,
-    });
+    const e1 = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const e2 = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     writeEntry(home, e1);
     writeEntry(home, e2);
 

@@ -32,12 +32,7 @@ function importsOf(text) {
   if (!found) {
     found = readFacts(text, 'file.ts', ['imports', 'dynamic'])
       .imports.filter((i) => isLocalSpec(i.spec))
-      .map((i) => ({
-        spec: i.spec,
-        line: i.line,
-        kind: i.typeOnly ? 'typeOnly' : 'runtime',
-        names: i.names,
-      }));
+      .map((i) => ({ spec: i.spec, line: i.line, kind: i.typeOnly ? 'typeOnly' : 'runtime', names: i.names }));
     IMPORT_CACHE.set(text, found);
   }
   return found;
@@ -73,15 +68,12 @@ function mapProblems(map, srcDir) {
     ['folder', map.folders, folders],
     ['root file', map.rootFiles, roots],
   ]) {
-    for (const name of actual)
-      if (!(name in listed)) problems.push(`${kind} src/${name} is not listed in ${MAP}`);
+    for (const name of actual) if (!(name in listed)) problems.push(`${kind} src/${name} is not listed in ${MAP}`);
     for (const name of Object.keys(listed)) {
-      if (!actual.includes(name))
-        problems.push(`${kind} src/${name} is listed in ${MAP} but does not exist`);
+      if (!actual.includes(name)) problems.push(`${kind} src/${name} is listed in ${MAP} but does not exist`);
     }
     for (const [name, layer] of Object.entries(listed)) {
-      if (!map.order.includes(layer))
-        problems.push(`${kind} src/${name} names unknown layer "${layer}"`);
+      if (!map.order.includes(layer)) problems.push(`${kind} src/${name} names unknown layer "${layer}"`);
     }
   }
   return problems;
@@ -173,19 +165,13 @@ function cliStoreProblems(srcDir) {
   return [
     ...found
       .filter((e) => !allowedKeys.has(key(e)))
-      .map(
-        (e) =>
-          `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`,
-      ),
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`),
     ...allowed
       .filter((e) => !String(e.why ?? '').trim())
       .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} gives no reason`),
     ...allowed
       .filter((e) => !foundKeys.has(key(e)))
-      .map(
-        (e) =>
-          `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`,
-      ),
+      .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
   ];
 }
 
@@ -222,8 +208,7 @@ function findLocalImports(srcDir) {
       const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
       const key = `${from}\t${to}`;
-      if (to?.startsWith(LOCAL_DIR) && !out.has(key))
-        out.set(key, { file: from, target: to, line });
+      if (to?.startsWith(LOCAL_DIR) && !out.has(key)) out.set(key, { file: from, target: to, line });
     }
   }
   return [...out.values()];
@@ -240,9 +225,7 @@ function findLocalNames(srcDir) {
     if (/^(api|domain)\//.test(from) && text.includes('isLocalStore')) banned.add('isLocalStore');
     if (from.startsWith('api/') && text.includes('hippoRoot')) banned.add('hippoRoot');
     if (banned.size === 0) continue;
-    for (const id of readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((i) =>
-      banned.has(i.name),
-    )) {
+    for (const id of readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((i) => banned.has(i.name))) {
       out.push(
         id.name === 'hippoRoot'
           ? `src/${from}:${id.line} names hippoRoot; read what the folder gave from a port method`
@@ -295,8 +278,7 @@ function findAdapterNames(map, rule, srcDir) {
   for (const file of tsFiles(root)) {
     const from = relative(root, file).replace(/\\/g, '/');
     const text = readFileSync(file, 'utf8');
-    if (from.startsWith(`${rule.folder}/`) || from === rule.root || !SQLITE_WORD.test(text))
-      continue;
+    if (from.startsWith(`${rule.folder}/`) || from === rule.root || !SQLITE_WORD.test(text)) continue;
     const unnamed = (rule.unnamedIn ?? []).includes(layerIn(map, from));
     const { identifiers, strings } = readFacts(text, 'file.ts', ['identifiers', 'strings']);
     for (const id of identifiers) {
@@ -306,9 +288,7 @@ function findAdapterNames(map, rule, srcDir) {
     }
     // A module path is the import rule's to report.
     const specs = new Set(importsOf(text).map((i) => i.spec));
-    const named = (unnamed ? strings : []).filter(
-      (str) => SQLITE_WORD.test(str.text) && !specs.has(str.text),
-    );
+    const named = (unnamed ? strings : []).filter((str) => SQLITE_WORD.test(str.text) && !specs.has(str.text));
     for (const str of named) out.push(`src/${from}:${str.line} says SQLite in a string`);
   }
   return out;
@@ -339,14 +319,11 @@ function adapterProblems(map, srcDir) {
     ...found
       .filter((e) => !entrances.has(e.file))
       .map(
-        (e) =>
-          `src/${e.file}:${e.line} imports src/${e.target}; take the store from src/${rule.root} or the Context`,
+        (e) => `src/${e.file}:${e.line} imports src/${e.target}; take the store from src/${rule.root} or the Context`,
       ),
     ...found
       .filter((e) => entrances.has(e.file) && !entrances.get(e.file).has(e.target))
-      .map(
-        (e) => `src/${e.file}:${e.line} imports src/${e.target} past the adapter's doors in ${MAP}`,
-      ),
+      .map((e) => `src/${e.file}:${e.line} imports src/${e.target} past the adapter's doors in ${MAP}`),
     ...findAdapterNames(map, rule, srcDir),
     ...staleAdapterFile(rule, 'root', rule.root, srcDir, found),
     ...(kit ? staleAdapterFile(rule, 'testKit', kit.file, srcDir, found) : []),
@@ -387,8 +364,7 @@ function findApartReaches(map, srcDir) {
     for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
       const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
-      if (to && barred.some((folder) => to.startsWith(`${folder}/`)))
-        out.push(`src/${from}:${line} imports src/${to}`);
+      if (to && barred.some((folder) => to.startsWith(`${folder}/`))) out.push(`src/${from}:${line} imports src/${to}`);
     }
   }
   return out;
@@ -464,9 +440,7 @@ const problems = mapProblems(map, 'src');
 if (problems.length > 0) {
   console.error(`${MAP} does not match src/:`);
   for (const p of problems) console.error(`  ${p}`);
-  console.error(
-    `Add the folder or file to ${MAP} under the layer it belongs to, or remove the stale entry.`,
-  );
+  console.error(`Add the folder or file to ${MAP} under the layer it belongs to, or remove the stale entry.`);
   process.exit(1);
 }
 
@@ -497,9 +471,7 @@ if (sqliteProblems.length > 0 && !args.includes('--list')) {
 
 const dashboardReaches = findDashboardReaches('src');
 if (dashboardReaches.length > 0 && !args.includes('--list')) {
-  console.error(
-    'The dashboard imports the store or the CLI; read and write through a src/api function instead:',
-  );
+  console.error('The dashboard imports the store or the CLI; read and write through a src/api function instead:');
   for (const r of dashboardReaches) console.error(`  ${r}`);
   process.exit(1);
 }
@@ -509,25 +481,20 @@ if (apiStoreReaches.length > 0 && !args.includes('--list')) {
   console.error(
     'The api imports a store module past the port; read it through the port, or move the shared rule to src/base:',
   );
-  for (const e of apiStoreReaches)
-    console.error(`  src/${e.file}:${e.line} imports src/${e.target}`);
+  for (const e of apiStoreReaches) console.error(`  src/${e.file}:${e.line} imports src/${e.target}`);
   process.exit(1);
 }
 
 const localProblems = localReachProblems('src');
 if (localProblems.length > 0 && !args.includes('--list')) {
-  console.error(
-    'The api or domain reaches the local store past its port groups, or the api names the folder:',
-  );
+  console.error('The api or domain reaches the local store past its port groups, or the api names the folder:');
   for (const p of localProblems) console.error(`  ${p}`);
   process.exit(1);
 }
 
 const apartReaches = findApartReaches(map, 'src');
 if (apartReaches.length > 0 && !args.includes('--list')) {
-  console.error(
-    `A folder imports one ${MAP} keeps it apart from; take the service from the Context its root built:`,
-  );
+  console.error(`A folder imports one ${MAP} keeps it apart from; take the service from the Context its root built:`);
   for (const r of apartReaches) console.error(`  ${r}`);
   process.exit(1);
 }
@@ -540,11 +507,7 @@ if (barrelReaches.length > 0 && !args.includes('--list')) {
 }
 
 const dbReach = findDbReaches(map, 'src');
-if (
-  dbReach.reaches.length + dbReach.stale.length > 0 &&
-  !args.includes('--update') &&
-  !args.includes('--list')
-) {
+if (dbReach.reaches.length + dbReach.stale.length > 0 && !args.includes('--update') && !args.includes('--list')) {
   const layer = map.dbReach.layer;
   for (const r of dbReach.reaches) console.error(`  ${r}`);
   for (const s of dbReach.stale) console.error(`  ${MAP} dbReach.allowed: ${s}`);
@@ -587,10 +550,6 @@ if (edges.length > 0 || rootFiles > cap) {
   process.exit(1);
 }
 if (rootFiles < cap) {
-  console.log(
-    'Root files went down; run `node scripts/check-layers.mjs --update` to lock that in.',
-  );
+  console.log('Root files went down; run `node scripts/check-layers.mjs --update` to lock that in.');
 }
-console.log(
-  `Layer order OK: no upward imports, ${rootFiles} root files (cap ${cap} in ${BASELINE}).`,
-);
+console.log(`Layer order OK: no upward imports, ${rootFiles} root files (cap ${cap} in ${BASELINE}).`);

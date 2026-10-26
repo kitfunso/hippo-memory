@@ -8,10 +8,7 @@ import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { adminActor, type RecallOptions } from '../../src/api/index.js';
 import type { RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import {
-  startHashedEmbeddings,
-  type HashedEmbeddings,
-} from '../_helpers/hashed-embedding-server.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedVectors } from '../_helpers/recall-vector-seed.js';
 import {
   CLEARED_ENV,
@@ -42,14 +39,7 @@ interface Wide {
 // The seeded prediction's claim is a semantic row with a fresh id each run.
 const CLAIM = '<claim>';
 const stable = (id: string): string => (id.startsWith('sem_') ? CLAIM : id);
-const FILLS = [
-  'mem_p_fill0',
-  'mem_p_fill1',
-  'mem_p_fill2',
-  'mem_p_fill3',
-  'mem_p_fill4',
-  'mem_p_fill5',
-];
+const FILLS = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
 
 /** The band's BM25 order for "deploy": the pinned row, the exact match, the summary's children, then the fillers. */
 const BM25 = ['mem_p_pinned', 'mem_p_plain', 'mem_x_child1', 'mem_x_child2', ...FILLS];
@@ -115,11 +105,7 @@ const BAND: readonly BandCase[] = [
     { query: 'deploy', window: { freshTailCount: 1, freshTailSessionId: SESSION } },
     ['mem_x_raw', ...BM25],
   ],
-  [
-    'overflow summary',
-    { query: 'deploy', window: { limit: 2 } },
-    [...BM25.slice(0, 2), 'mem_x_summary'],
-  ],
+  ['overflow summary', { query: 'deploy', window: { limit: 2 } }, [...BM25.slice(0, 2), 'mem_x_summary']],
   [
     'hybrid rollout limit 5',
     { query: 'rollout', mode: 'hybrid', window: { limit: 5 } },
@@ -196,12 +182,7 @@ const CORE: readonly CoreCase[] = [
       'mem_p_pinned',
     ],
   ],
-  [
-    'core explicit private scope',
-    'deploy',
-    { rank: { explicitScope: 'slack:private:C1' } },
-    CORE_ORDER,
-  ],
+  ['core explicit private scope', 'deploy', { rank: { explicitScope: 'slack:private:C1' } }, CORE_ORDER],
   [
     'core explain physics',
     'deploy rollout',
@@ -279,9 +260,7 @@ describe('recall ranker order', () => {
   });
 
   it.each(BAND)('band ranker: %s', async (_name, opts, order) => {
-    const ids = await onStore(async (s) =>
-      (await retrieve(ctxOf(s), opts)).results.map((r) => stable(r.id)),
-    );
+    const ids = await onStore(async (s) => (await retrieve(ctxOf(s), opts)).results.map((r) => stable(r.id)));
     expect(ids).toEqual(order);
   });
 
@@ -315,11 +294,7 @@ describe('recall ranker order', () => {
         {
           rank: rankOpts(s, c),
           sources: c.global
-            ? {
-                root: s.globalRoot,
-                store: sqliteStore(s.globalRoot),
-                config: loadConfig(s.globalRoot),
-              }
+            ? { root: s.globalRoot, store: sqliteStore(s.globalRoot), config: loadConfig(s.globalRoot) }
             : undefined,
           show: (ranking) => {
             ranked = ranking.results.map((r) => stable(r.entry.id));

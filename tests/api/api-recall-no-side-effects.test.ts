@@ -64,11 +64,7 @@ describe('api.recall divergence from printRecall (no last_retrieval_ids side-eff
       expect(afterRecall).toEqual([]);
 
       // api.contextGet - SHOULD mutate. (contextGet opts use `q`, not `query`.)
-      const ctxResult = await contextGet(ctx, {
-        currentProject: cwdProject(),
-        q: 'target',
-        budget: 1000,
-      });
+      const ctxResult = await contextGet(ctx, { currentProject: cwdProject(), q: 'target', budget: 1000 });
       expect(ctxResult.entries).toHaveLength(2);
       const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
       expect([...afterContext].sort()).toEqual(ctxResult.entries.map((e) => e.entry.id).sort());

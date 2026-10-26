@@ -18,9 +18,7 @@ import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.j
 
 // Read from the dispatch table so a verb added later is covered without editing this file.
 const ROWS = Object.entries<VerbRow>(COMMANDS);
-const ALIASES = ROWS.flatMap(([verb, row]) =>
-  (row.aliases ?? []).map((alias) => [alias, verb] as const),
-);
+const ALIASES = ROWS.flatMap(([verb, row]) => (row.aliases ?? []).map((alias) => [alias, verb] as const));
 const VERBS = [...ROWS.map(([verb]) => verb), ...ALIASES.map(([alias]) => alias)];
 const SUBCOMMANDS = [
   ['audit', 'prune'],
@@ -36,9 +34,7 @@ const OWN_FLAG = new Map([
 ]);
 const CLI = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 // No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
-const ENV = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'),
-);
+const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 
 // No-op spies, so a verb that ignored --help is caught without running.
 const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS).map(
@@ -46,31 +42,12 @@ const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void
 );
 
 // Pinned rather than read from the rows, so a row that gains or loses --dry-run fails here first.
-const DRY_RUN_VERBS = [
-  'audit',
-  'capture',
-  'dedup',
-  'forget',
-  'import',
-  'invalidate',
-  'refine',
-  'setup',
-  'sleep',
-];
+const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep'];
 // Declared flags the help does not name yet: document one, then delete it here; the list may only shrink.
 const UNDOCUMENTED = new Map(
   Object.entries({
     remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
-    recall: [
-      'classic',
-      'equal-sources',
-      'layer',
-      'limit',
-      'local-bump',
-      'outcome',
-      'physics',
-      'scope',
-    ],
+    recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
     drill: ['depth'],
     explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
     eval: ['baseline', 'save-baseline', 'suite'],
@@ -92,11 +69,7 @@ const UNDOCUMENTED = new Map(
 );
 // Named flags whose help line says nothing of what they do: describe one, then delete it here; the list may only shrink.
 const UNDESCRIBED = new Map(
-  Object.entries({
-    snapshot: ['next-step', 'summary', 'task'],
-    session: ['content'],
-    import: ['scope'],
-  }),
+  Object.entries({ snapshot: ['next-step', 'summary', 'task'], session: ['content'], import: ['scope'] }),
 );
 const namesOf = (flags: VerbFlags): string[] => [
   ...(flags.switches ?? []),
@@ -134,9 +107,7 @@ interface HelpRun extends InProcessResult {
 }
 
 function written(): string[] {
-  const paths = Object.values(dirs).flatMap((dir) =>
-    readdirSync(dir).map((name) => join(dir, name)),
-  );
+  const paths = Object.values(dirs).flatMap((dir) => readdirSync(dir).map((name) => join(dir, name)));
   for (const path of paths) rmSync(path, { recursive: true, force: true });
   return paths;
 }
@@ -148,11 +119,7 @@ async function run(args: string[]): Promise<HelpRun> {
   return { ...res, ran, written: written() };
 }
 
-const pick = ({ status, stdout, stderr }: InProcessResult): InProcessResult => ({
-  status,
-  stdout,
-  stderr,
-});
+const pick = ({ status, stdout, stderr }: InProcessResult): InProcessResult => ({ status, stdout, stderr });
 
 beforeAll(async () => {
   dirs = {
@@ -179,25 +146,14 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   it('hippo --help is the header, each row block in table order, the listed-last blocks, then the examples', async () => {
     await expect(USAGE_HEADER).toMatchFileSnapshot(helpFile('_header'));
     await expect(USAGE_EXAMPLES).toMatchFileSnapshot(helpFile('_examples'));
-    const blocks = [
-      ...ROWS.flatMap(([, row]) => row.usage ?? []),
-      ...ROWS.flatMap(([, row]) => row.listedLast ?? []),
-    ];
-    expect(full).toEqual({
-      status: 0,
-      stderr: '',
-      stdout: `${USAGE_HEADER}${blocks.join('')}${USAGE_EXAMPLES}\n`,
-    });
+    const blocks = [...ROWS.flatMap(([, row]) => row.usage ?? []), ...ROWS.flatMap(([, row]) => row.listedLast ?? [])];
+    expect(full).toEqual({ status: 0, stderr: '', stdout: `${USAGE_HEADER}${blocks.join('')}${USAGE_EXAMPLES}\n` });
   });
 
   it('the dispatch table lists its verbs, aliases and help blocks in the pinned order', async () => {
     const listing = [
       ...ROWS.map(([verb, row]) =>
-        [
-          verb,
-          ...(row.aliases ?? []).map((alias) => `alias ${alias}`),
-          ...(row.usage ? [] : ['no block']),
-        ].join(', '),
+        [verb, ...(row.aliases ?? []).map((alias) => `alias ${alias}`), ...(row.usage ? [] : ['no block'])].join(', '),
       ),
       ...ROWS.filter(([, row]) => row.listedLast).map(([verb]) => `${verb}, listed last`),
     ];
@@ -249,19 +205,13 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect(names.filter((name) => !/^handle[A-Z]/.test(name))).toEqual([]);
   });
 
-  it.for(VERBS)(
-    'hippo %s --dry-run runs the verb only where its row honours the flag',
-    async (verb) => {
-      const res = await run([verb, '--dry-run']);
-      expect([res.ran, res.written]).toEqual([DRY_RUN_VERBS.includes(verb) ? [verb] : [], []]);
-      if (res.ran.length === 0) {
-        expect([res.status, res.stderr]).toEqual([
-          2,
-          expect.stringContaining(`hippo ${verb} has no --dry-run`),
-        ]);
-      }
-    },
-  );
+  it.for(VERBS)('hippo %s --dry-run runs the verb only where its row honours the flag', async (verb) => {
+    const res = await run([verb, '--dry-run']);
+    expect([res.ran, res.written]).toEqual([DRY_RUN_VERBS.includes(verb) ? [verb] : [], []]);
+    if (res.ran.length === 0) {
+      expect([res.status, res.stderr]).toEqual([2, expect.stringContaining(`hippo ${verb} has no --dry-run`)]);
+    }
+  });
 
   it('hippo init -h prints the init block and installs nothing', async () => {
     const res = await run(['init', '-h']);
@@ -291,8 +241,7 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     {
       args: ['frobnicate', '--zzz'],
       status: 1,
-      stderr:
-        'hippo: ignoring unknown flag --zzz. A later release will reject it.\nUnknown command: frobnicate\n',
+      stderr: 'hippo: ignoring unknown flag --zzz. A later release will reject it.\nUnknown command: frobnicate\n',
     },
   ])('unknown verb: hippo $args', async ({ args, status, stderr }) => {
     const res = await run(args);
@@ -302,9 +251,7 @@ describe('CLI help output is byte-identical and runs nothing', () => {
 
   it.each(['--version', '-v'])('hippo %s prints the package version', async (flag) => {
     // SAFETY: package.json always carries a string version.
-    const { version } = JSON.parse(
-      readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'),
-    ) as {
+    const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
       version: string;
     };
     expect(pick(await run([flag]))).toEqual({ status: 0, stdout: `${version}\n`, stderr: '' });
@@ -372,11 +319,7 @@ describe('usage blocks', () => {
         missing: declared.filter((name) => !named.has(name)).sort(),
         undeclared: [...named].filter((name) => !declared.includes(name)),
         undescribed: declared.filter((name) => named.has(name) && !describes(lines, name)).sort(),
-      }).toEqual({
-        missing: UNDOCUMENTED.get(verb) ?? [],
-        undeclared: [],
-        undescribed: UNDESCRIBED.get(verb) ?? [],
-      });
+      }).toEqual({ missing: UNDOCUMENTED.get(verb) ?? [], undeclared: [], undescribed: UNDESCRIBED.get(verb) ?? [] });
     },
   );
 
@@ -388,9 +331,7 @@ describe('usage blocks', () => {
       '  verb list [--under N]',
       '                           Lists rows',
     ];
-    expect(['bare', 'gap', 'tight', 'under'].filter((name) => !describes(lines, name))).toEqual([
-      'bare',
-    ]);
+    expect(['bare', 'gap', 'tight', 'under'].filter((name) => !describes(lines, name))).toEqual(['bare']);
   });
 
   it('a block holds only its verb, and an alias prints its verb block', () => {

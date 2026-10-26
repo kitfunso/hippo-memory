@@ -77,8 +77,7 @@ describe('assertClientScope, isPersonalScope and ownScopeTouches', () => {
     for (const scope of ['personal:x', 'Personal:private:a']) {
       expect(() => assertClientScope(scope), scope).toThrow(BadRequestError);
     }
-    for (const scope of ['team', SLACK, null, undefined])
-      expect(() => assertClientScope(scope)).not.toThrow();
+    for (const scope of ['team', SLACK, null, undefined]) expect(() => assertClientScope(scope)).not.toThrow();
   });
 
   it('spots personal:private: in any case only', () => {
@@ -102,26 +101,26 @@ describe('readerReaches, the read rule a store write by id applies', () => {
   const admin = { ownScope: null, role: 'admin' } as const;
 
   it('opens a restricted scope to an admin, or a member with that exact grant, and nobody else', () => {
-    expect([
-      readerReaches(member, SLACK),
-      readerReaches(granted, SLACK),
-      readerReaches(admin, SLACK),
-    ]).toEqual([false, true, true]);
+    expect([readerReaches(member, SLACK), readerReaches(granted, SLACK), readerReaches(admin, SLACK)]).toEqual([
+      false,
+      true,
+      true,
+    ]);
     expect(readerReaches(granted, 'slack:private:C2')).toBe(false);
     expect(readerReaches(member, 'quarantine:private:team')).toBe(false);
     expect(readerReaches(member, 'Team:Private:x')).toBe(false);
   });
 
   it('reads a null or public scope for anyone, and a personal one for its owner alone', () => {
-    expect([
-      readerReaches(member, null),
-      readerReaches(member, 'team'),
-      readerReaches(member, A_SCOPE),
-    ]).toEqual([true, true, true]);
-    expect([
-      readerReaches(admin, A_SCOPE),
-      readerReaches({ ...granted, grants: [B_SCOPE] }, B_SCOPE),
-    ]).toEqual([false, false]);
+    expect([readerReaches(member, null), readerReaches(member, 'team'), readerReaches(member, A_SCOPE)]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect([readerReaches(admin, A_SCOPE), readerReaches({ ...granted, grants: [B_SCOPE] }, B_SCOPE)]).toEqual([
+      false,
+      false,
+    ]);
   });
 });
 

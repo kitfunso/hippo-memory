@@ -122,11 +122,7 @@ describe('dedupe partitions by restricted scope', () => {
       layer: Layer.Semantic,
       scope: 'slack:private:C1',
     });
-    const pub = createMemory(text, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic,
-      scope: null,
-    });
+    const pub = createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, scope: null });
     writeEntry(home, { ...priv, strength: 0.9 });
     writeEntry(home, { ...pub, strength: 0.1 });
 
@@ -251,15 +247,11 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
       const privParents = db
-        .prepare(
-          `SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privFacts.length)})`,
-        )
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privFacts.length)})`)
         .all(...privFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
       const pubParents = db
-        .prepare(
-          `SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(pubFacts.length)})`,
-        )
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(pubFacts.length)})`)
         .all(...pubFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
       expect(privParents).toHaveLength(1);
       expect(pubParents).toHaveLength(1);
@@ -318,9 +310,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 
       // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
       const privParents = db
-        .prepare(
-          `SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privL2s.length)})`,
-        )
+        .prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privL2s.length)})`)
         .all(...privL2s.map((l2) => l2.id)) as Array<{ dag_parent_id: string }>;
       expect(privParents).toHaveLength(1);
       expect(privParents[0]!.dag_parent_id).toBe(privateL3!.id);
@@ -343,13 +333,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = await storeExtractedFacts(
-      sqliteStore(home),
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-      evalNow(),
-    );
+    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.scope).toBe('slack:private:C1');
@@ -379,12 +363,7 @@ describe('assembleBriefFromReceipts excludes restricted receipts', () => {
       summary: 'seed',
     });
     addReceipt(home, 'hippo', 'the public deploy went out on schedule', null);
-    addReceipt(
-      home,
-      'hippo',
-      'the private incident channel discussed the outage',
-      'slack:private:C1',
-    );
+    addReceipt(home, 'hippo', 'the private incident channel discussed the outage', 'slack:private:C1');
     addReceipt(home, 'hippo', 'another restricted note in mixed case', 'Slack:Private:C9');
 
     const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');

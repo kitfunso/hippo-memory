@@ -44,23 +44,10 @@ describe('graph-view personal scope', () => {
     home = makeRoot('graphview-scope');
     const team = mem(home, 'team decision about deploy windows', null);
     const priv = mem(home, 'alice private note about deploy windows', OWN_A);
-    const eTeam = insertEntityAt(home, T, {
-      entityType: 'decision',
-      name: 'TEAM',
-      memoryId: team.id,
-    }).id;
-    const ePriv = insertEntityAt(home, T, {
-      entityType: 'decision',
-      name: 'PRIV-A',
-      memoryId: priv.id,
-    }).id;
+    const eTeam = insertEntityAt(home, T, { entityType: 'decision', name: 'TEAM', memoryId: team.id }).id;
+    const ePriv = insertEntityAt(home, T, { entityType: 'decision', name: 'PRIV-A', memoryId: priv.id }).id;
     // A team-sourced edge into A's entity must still go when its endpoint goes.
-    insertRelationAt(home, T, {
-      fromEntityId: eTeam,
-      toEntityId: ePriv,
-      relType: 'references',
-      memoryId: team.id,
-    });
+    insertRelationAt(home, T, { fromEntityId: eTeam, toEntityId: ePriv, relType: 'references', memoryId: team.id });
     const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Anchored',
       policyText: 'kept by its object',
@@ -91,24 +78,16 @@ describe('graph-view personal scope', () => {
   });
 
   it('focus on a hidden name is empty for B, and B focusing a neighbour does not reach it', async () => {
-    const a = await buildGraphModel(sqliteStore(home).graphReads, T, {
-      entity: 'PRIV-A',
-      reader: alice,
-    });
+    const a = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: alice });
     expect(names(a)).toEqual(['PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
 
-    expect(
-      await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob }),
-    ).toEqual({
+    expect(await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'PRIV-A', reader: bob })).toEqual({
       nodes: [],
       edges: [],
       truncated: false,
     });
-    const viaTeam = await buildGraphModel(sqliteStore(home).graphReads, T, {
-      entity: 'TEAM',
-      reader: bob,
-    });
+    const viaTeam = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'TEAM', reader: bob });
     expect(names(viaTeam)).toEqual(['TEAM']);
     expect(viaTeam.edges).toHaveLength(0);
   });

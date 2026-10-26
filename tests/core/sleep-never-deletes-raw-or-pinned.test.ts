@@ -58,9 +58,7 @@ function summarizer(text: string) {
     }),
   );
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
-  return vi.fn<typeof fetch>(
-    async () => new Response(JSON.stringify({ content: [{ text }] }), { status: 200 }),
-  );
+  return vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text }] }), { status: 200 }));
 }
 
 afterEach(() => {
@@ -71,26 +69,21 @@ afterEach(() => {
 });
 
 describe('consolidate never deletes a raw row', () => {
-  it.each([false, true])(
-    'memoryValue.enabled=%s: the decayed raw row stays, the plain row goes',
-    async (mv) => {
-      const root = newRoot(JSON.stringify({ memoryValue: { enabled: mv } }));
-      const raw = rawRow('slack message: the deploy moved to friday');
-      const plain = createMemory7('an ordinary memory that should decay away');
-      writeEntry(root, raw);
-      writeEntry(root, plain);
+  it.each([false, true])('memoryValue.enabled=%s: the decayed raw row stays, the plain row goes', async (mv) => {
+    const root = newRoot(JSON.stringify({ memoryValue: { enabled: mv } }));
+    const raw = rawRow('slack message: the deploy moved to friday');
+    const plain = createMemory7('an ordinary memory that should decay away');
+    writeEntry(root, raw);
+    writeEntry(root, plain);
 
-      await consolidate(root, { now: sixtyDaysOn() });
+    await consolidate(root, { now: sixtyDaysOn() });
 
-      expect(readEntry(root, raw.id)?.kind).toBe('raw');
-      expect(readEntry(root, plain.id)).toBeNull();
-      // A second sleep has nothing left to remove: the plain row is already gone and the raw row is never deleted.
-      await expect(consolidate(root, { now: sixtyDaysOn() })).resolves.toMatchObject({
-        removed: 0,
-      });
-      expect(readEntry(root, raw.id)?.kind).toBe('raw');
-    },
-  );
+    expect(readEntry(root, raw.id)?.kind).toBe('raw');
+    expect(readEntry(root, plain.id)).toBeNull();
+    // A second sleep has nothing left to remove: the plain row is already gone and the raw row is never deleted.
+    await expect(consolidate(root, { now: sixtyDaysOn() })).resolves.toMatchObject({ removed: 0 });
+    expect(readEntry(root, raw.id)?.kind).toBe('raw');
+  });
 });
 
 describe('the sleep audit and dedup respect raw and pinned rows', () => {
@@ -147,12 +140,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     const root = newRoot();
     const pinned = createMemory7('nope', { pinned: true });
     writeEntry(root, pinned);
-    const staleIssue = {
-      memoryId: pinned.id,
-      content: 'nope',
-      severity: 'error' as const,
-      reason: 'too short',
-    };
+    const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
     const result = await runSleep(
       ctxFor(root),
@@ -168,11 +156,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
 
   it('a dry run previews the dedup and audit deletes and deletes nothing', async () => {
     const root = newRoot();
-    const rows = [
-      createMemory7('nope'),
-      createMemory7(CACHE_FACT),
-      { ...createMemory(CACHE_FACT), strength: 0.5 },
-    ];
+    const rows = [createMemory7('nope'), createMemory7(CACHE_FACT), { ...createMemory(CACHE_FACT), strength: 0.5 }];
     for (const e of rows) writeEntry(root, e);
 
     const result = await sleepWholeStore(ctxFor(root), { dryRun: true, noShare: true });
@@ -204,12 +188,8 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a mid-sleep pin, forget and supersede all survive the batch flush', async () => {
     const root = newRoot();
     const condemned = createMemory7('a fact that decays below the threshold by day sixty');
-    const forgotten = createMemory7('the staging cluster restarts every sunday at noon', {
-      baseHalfLifeDays: 30,
-    });
-    const replaced = createMemory7('invoices are exported as csv files on the first monday', {
-      baseHalfLifeDays: 30,
-    });
+    const forgotten = createMemory7('the staging cluster restarts every sunday at noon', { baseHalfLifeDays: 30 });
+    const replaced = createMemory7('invoices are exported as csv files on the first monday', { baseHalfLifeDays: 30 });
     for (const e of [condemned, forgotten, replaced]) writeEntry(root, e);
 
     let calls = 0;
@@ -217,11 +197,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       if (calls++ === 0) {
         writeEntry(root, { ...readEntry(root, condemned.id)!, pinned: true });
         deleteEntry(root, forgotten.id);
-        await supersede(
-          ctxFor(root),
-          replaced.id,
-          'invoices are exported as parquet files on the first monday',
-        );
+        await supersede(ctxFor(root), replaced.id, 'invoices are exported as parquet files on the first monday');
       }
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     });
@@ -252,17 +228,9 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       'alice moved the deploy to friday',
       'alice owns the billing service',
       'alice reviews every schema change',
-    ].map((text) =>
-      createMemory7(text, {
-        layer: Layer.Semantic,
-        dagLevel: 1,
-        tags: ['extracted', 'speaker:alice'],
-      }),
-    );
+    ].map((text) => createMemory7(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
-    const fetcher = summarizer(
-      'Alice moved the deploy to Friday, owns billing and reviews schema changes.',
-    );
+    const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
 
     await consolidate(root, { now: new Date(Date.now() + DAY_MS), fetcher });
     await consolidate(root, { now: new Date(Date.now() + 2 * DAY_MS), fetcher });
@@ -314,9 +282,6 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       { snapshot },
     );
 
-    expect(readEntry(root, loaded!.id)).toMatchObject({
-      strength: loaded!.strength,
-      retrievalCount: 1,
-    });
+    expect(readEntry(root, loaded!.id)).toMatchObject({ strength: loaded!.strength, retrievalCount: 1 });
   });
 });

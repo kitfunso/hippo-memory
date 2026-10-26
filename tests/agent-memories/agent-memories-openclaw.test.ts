@@ -29,10 +29,7 @@ function write(file: string, content: string | Buffer): string {
   return file;
 }
 
-function ctxFor(
-  env: Record<string, string | undefined> = {},
-  over: Partial<AdapterContext> = {},
-): AdapterContext {
+function ctxFor(env: Record<string, string | undefined> = {}, over: Partial<AdapterContext> = {}): AdapterContext {
   return { home: at('home'), env, platform: process.platform, ...REAL_IO, ...over };
 }
 
@@ -69,9 +66,7 @@ describe('openclaw adapter: workspace precedence', () => {
   ];
 
   it.each(cases)('%s', (_name, relEnv, expected) => {
-    const env = Object.fromEntries(
-      Object.entries(relEnv).map(([k, v]) => [k, k === 'OPENCLAW_PROFILE' ? v : at(v)]),
-    );
+    const env = Object.fromEntries(Object.entries(relEnv).map(([k, v]) => [k, k === 'OPENCLAW_PROFILE' ? v : at(v)]));
     const workspace = at(...expected);
     write(path.join(workspace, 'MEMORY.md'), '- the memory that belongs to this workspace');
     // Every other candidate holds a decoy so a wrong pick shows in the items.
@@ -82,9 +77,7 @@ describe('openclaw adapter: workspace precedence', () => {
     const listing = openclawAdapter.list(ctxFor(env), 'user');
     expect(listing).toMatchObject({ tool: 'openclaw', home: workspace, warnings: [] });
     expect(listing.containers.map((c) => c.path)).toEqual([path.join(workspace, 'MEMORY.md')]);
-    expect(listing.containers[0].items.map((i) => i.text)).toEqual([
-      'the memory that belongs to this workspace',
-    ]);
+    expect(listing.containers[0].items.map((i) => i.text)).toEqual(['the memory that belongs to this workspace']);
   });
 
   it('uses OPENCLAW_WORKSPACE_DIR as written, without ~ expansion', () => {

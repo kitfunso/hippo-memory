@@ -39,8 +39,7 @@ describe('refining one consolidated entry', () => {
   describe('failure logging', () => {
     const API_KEY = 'refine-test-key-0000';
     let stderr: MockInstance<typeof process.stderr.write>;
-    const warnLines = (): string[] =>
-      stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('refine'));
+    const warnLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('refine'));
     beforeEach(() => {
       stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     });
@@ -68,14 +67,11 @@ describe('refining one consolidated entry', () => {
       ],
       [
         'the reply is too short',
-        async (): Promise<Response> =>
-          new Response(JSON.stringify({ content: [{ text: 'ok' }] }), { status: 200 }),
+        async (): Promise<Response> => new Response(JSON.stringify({ content: [{ text: 'ok' }] }), { status: 200 }),
         /empty or too short/,
       ],
     ])('returns null and logs one warning when %s', async (_label, fetcher, pattern) => {
-      const result = await refineOne('merged', [], {
-        llm: anthropicLlm({ apiKey: API_KEY, fetcher }),
-      });
+      const result = await refineOne('merged', [], { llm: anthropicLlm({ apiKey: API_KEY, fetcher }) });
       expect(result).toBeNull();
       const lines = warnLines();
       expect(lines).toHaveLength(1);
@@ -102,13 +98,10 @@ describe('refineStore', () => {
   it('refines consolidated semantic memories and tags them llm-refined', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\nOriginal clumsy merged content here',
-        {
-          layer: Layer.Semantic,
-          tags: ['test'],
-        },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\nOriginal clumsy merged content here', {
+        layer: Layer.Semantic,
+        tags: ['test'],
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('Clean refined summary.');
@@ -159,10 +152,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('new refined content');
-      const result = await refineStore(dir, {
-        llm: anthropicLlm({ apiKey: 'test', fetcher }),
-        all: true,
-      });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), all: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toBe('new refined content');
@@ -180,10 +170,7 @@ describe('refineStore', () => {
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('would-be new content');
-      const result = await refineStore(dir, {
-        llm: anthropicLlm({ apiKey: 'test', fetcher }),
-        dryRun: true,
-      });
+      const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }), dryRun: true });
 
       expect(result.refined).toBe(1);
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
@@ -216,12 +203,9 @@ describe('refineStore', () => {
   it('counts API failures separately from skips', async () => {
     const dir = tmpStore();
     try {
-      const semantic = createMemory(
-        '[Consolidated from 2 related memories]\n\ncontent that will fail',
-        {
-          layer: Layer.Semantic,
-        },
-      );
+      const semantic = createMemory('[Consolidated from 2 related memories]\n\ncontent that will fail', {
+        layer: Layer.Semantic,
+      });
       writeEntry(dir, semantic);
 
       const fetcher = mockFetcher('ignored', false); // API error

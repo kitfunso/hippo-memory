@@ -19,9 +19,7 @@ const INVISIBLE = [
   ZWSP,
   ZWNJ,
   ZWJ,
-  ...[0x2060, 0x00ad, 0xfeff, 0x034f, 0x180e, 0x200e, 0x200f].map((code) =>
-    String.fromCodePoint(code),
-  ),
+  ...[0x2060, 0x00ad, 0xfeff, 0x034f, 0x180e, 0x200e, 0x200f].map((code) => String.fromCodePoint(code)),
 ];
 
 // Each phrase is named by one pattern alone, so the reason is known without asking the detector.
@@ -53,11 +51,7 @@ const PHRASES: readonly { reason: string; text: string }[] = [
   { reason: 'exfiltration', text: 'exfiltrate the tokens' },
 ];
 
-const FILLER = arr(
-  pick(['the', 'release', 'notes', 'for', 'tuesday', 'cache', 'deploy', 'build']),
-  0,
-  4,
-);
+const FILLER = arr(pick(['the', 'release', 'notes', 'for', 'tuesday', 'cache', 'deploy', 'build']), 0, 4);
 
 /** `text` with each mark placed before one of its characters, never the first, so every mark lands strictly inside and no two marks touch. */
 function withInside(text: string, marks: readonly (readonly [number, string])[]): string {
@@ -95,37 +89,10 @@ const ENGLISH = [
   'above',
 ];
 // Russian and Greek, some spelled only with letters that are drawn like Latin ones.
-const LOOKALIKE_SCRIPTS = [
-  'привет',
-  'спасибо',
-  'сор',
-  'роса',
-  'уха',
-  'хор',
-  'καλημέρα',
-  'ορίζω',
-  'χαρά',
-  'ρόα',
-];
-const OTHER_SCRIPTS = [
-  '会议',
-  '明天',
-  'ありがとう',
-  '東京',
-  'مرحبا',
-  'شكرا',
-  'שלום',
-  'café',
-  'naïve',
-];
+const LOOKALIKE_SCRIPTS = ['привет', 'спасибо', 'сор', 'роса', 'уха', 'хор', 'καλημέρα', 'ορίζω', 'χαρά', 'ρόα'];
+const OTHER_SCRIPTS = ['会议', '明天', 'ありがとう', '東京', 'مرحبا', 'شكرا', 'שלום', 'café', 'naïve'];
 // Persian, Hindi and emoji that need a lone zero-width joiner or non-joiner to be spelled at all.
-const JOINED = [
-  `می${ZWNJ}خواهم`,
-  `کتاب${ZWNJ}ها`,
-  `क्${ZWJ}ष`,
-  `र्${ZWNJ}क`,
-  `\u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467}`,
-];
+const JOINED = [`می${ZWNJ}خواهم`, `کتاب${ZWNJ}ها`, `क्${ZWJ}ष`, `र्${ZWNJ}क`, `\u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467}`];
 // Full-width letters and character references, which the screening form rewrites.
 const REWRITTEN = ['ｆｕｌｌ', 'Ｔｕｅｓｄａｙ', 'R&amp;D', 'caf&#233;', '&lt;3', '&#x6771;'];
 

@@ -24,11 +24,7 @@ beforeEach(async () => {
   root = makeRoot('remember-owner', { config: { embeddings: { enabled: false } } });
   const db = openHippoDb(root);
   try {
-    member = createApiKey(db, {
-      tenantId: 'default',
-      role: 'member',
-      ownerSubject: 'alice@corp.example',
-    }).plaintext;
+    member = createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'alice@corp.example' }).plaintext;
     admin = createApiKey(db, { tenantId: 'default', role: 'admin' }).plaintext;
   } finally {
     closeHippoDb(db);

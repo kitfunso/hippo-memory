@@ -30,8 +30,7 @@ describe('a lesson copied to the global store', () => {
     p = project();
     const note = 'office note: the coffee machine schedule changes for team lunch on friday';
     const target = seed(p.hippoRoot, `${note} oldest`, { created: '2026-05-01T00:00:00.000Z' });
-    for (let i = 0; i < 6; i++)
-      seed(p.hippoRoot, `${note} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
+    for (let i = 0; i < 6; i++) seed(p.hippoRoot, `${note} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     fire(p, 'r29', 'first question about deploys');
     const shared = hippo(p, ['share', target.id, '--force']);
     expect(shared.status, shared.stderr).toBe(0);
@@ -40,16 +39,8 @@ describe('a lesson copied to the global store', () => {
     const db = new DatabaseSync(path.join(p.globalRoot, 'hippo.db'), { readOnly: true });
     const raw = db.prepare('SELECT created, source FROM memories WHERE id = ?').get(copyId);
     db.close();
-    expect([raw?.created, String(raw?.source).startsWith('shared:')]).toEqual([
-      target.created,
-      true,
-    ]);
-    const v = verdictOf({
-      store: p.hippoRoot,
-      session: 'r29',
-      memory: copyId,
-      global: p.globalRoot,
-    });
+    expect([raw?.created, String(raw?.source).startsWith('shared:')]).toEqual([target.created, true]);
+    const v = verdictOf({ store: p.hippoRoot, session: 'r29', memory: copyId, global: p.globalRoot });
     expect([v.class, v.reason, v.memory_store, v.turns.map((t) => t.cand_reason)]).toEqual([
       'not-written',
       'written-after',
@@ -63,19 +54,9 @@ describe('pairing', () => {
   it('transcript lines of another session are skipped and counted, and lines of this session pair', () => {
     const m = present();
     const block = 'the block that was sent';
-    write(
-      event('r18', {
-        promptHash: blockHash('a prompt'),
-        emittedHash: blockHash(block),
-        candidates: [row(m.id)],
-      }),
-    );
+    write(event('r18', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
     const lines = (sessionId: string) => {
-      const user = JSON.stringify({
-        type: 'user',
-        sessionId,
-        message: { role: 'user', content: 'a prompt' },
-      });
+      const user = JSON.stringify({ type: 'user', sessionId, message: { role: 'user', content: 'a prompt' } });
       const hook = JSON.stringify({
         type: 'attachment',
         sessionId,
@@ -96,29 +77,16 @@ ${hook}
       return f;
     };
     const foreign = read('r18', m.id, { transcript: file('foreign', 'someone-else') });
-    expect([foreign.class, foreign.notes]).toEqual([
-      'delivery-unconfirmed',
-      ['transcript-foreign-lines:2'],
-    ]);
+    expect([foreign.class, foreign.notes]).toEqual(['delivery-unconfirmed', ['transcript-foreign-lines:2']]);
     expect(foreign.turns[0].delivery).toBe('unconfirmed');
     const own = read('r18', m.id, { transcript: file('own', 'r18') });
-    expect([own.class, own.notes, own.turns[0].delivery]).toEqual([
-      'application-unknown',
-      [],
-      'confirmed',
-    ]);
+    expect([own.class, own.notes, own.turns[0].delivery]).toEqual(['application-unknown', [], 'confirmed']);
   });
 
   it('torn and non-object transcript lines are skipped and noted, and a torn attachment reads unconfirmed', () => {
     const m = present();
     const block = 'the block that was sent';
-    write(
-      event('r22', {
-        promptHash: blockHash('a prompt'),
-        emittedHash: blockHash(block),
-        candidates: [row(m.id)],
-      }),
-    );
+    write(event('r22', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
     const user = JSON.stringify({ type: 'user', message: { role: 'user', content: 'a prompt' } });
     const hook = JSON.stringify({
       type: 'attachment',
@@ -138,14 +106,10 @@ ${hook}
     const clean = read('r22', m.id, { transcript: file('clean', user, hook) });
     expect(clean.class).toBe('application-unknown');
     expect(clean.notes.some((n: string) => n.startsWith('transcript-skipped-lines'))).toBe(false);
-    const noisy = read('r22', m.id, {
-      transcript: file('noisy', '{"type":"user",', user, 'null', hook),
-    });
+    const noisy = read('r22', m.id, { transcript: file('noisy', '{"type":"user",', user, 'null', hook) });
     expect(fields(noisy)).toEqual(fields(clean));
     expect(noisy.notes).toContain('transcript-skipped-lines:2');
-    const torn = read('r22', m.id, {
-      transcript: file('torn', user, hook.slice(0, hook.length / 2)),
-    });
+    const torn = read('r22', m.id, { transcript: file('torn', user, hook.slice(0, hook.length / 2)) });
     expect(torn.class).toBe('delivery-unconfirmed');
     expect(torn.notes).toContain('transcript-skipped-lines:1');
   });
@@ -171,13 +135,7 @@ ${hook}
       v.turn,
       v.turns[0].paired_by,
       v.notes.some((n: string) => n.startsWith('gap:')),
-    ]).toEqual([
-      'delivery-unconfirmed',
-      'no-paired-prompt',
-      { event_id: id, turn_seq: 1 },
-      null,
-      false,
-    ]);
+    ]).toEqual(['delivery-unconfirmed', 'no-paired-prompt', { event_id: id, turn_seq: 1 }, null, false]);
   });
 });
 
@@ -210,10 +168,7 @@ describe('the transcript parser', () => {
       JSON.stringify({ type: 'attachment', attachment: { type: 'file' } }),
       user('meta line', { isMeta: true }),
       user('summary line', { isCompactSummary: true }),
-      JSON.stringify({
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
-      }),
+      JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] } }),
       user([{ type: 'tool_result', tool_use_id: 't', content: 'out' }]),
       user([
         { type: 'text', text: 'see' },
@@ -248,21 +203,13 @@ describe('the transcript parser', () => {
       false,
     ]);
     expect([parsed.compactions, parsed.skipped]).toEqual([[{ pos: 17 }], [18]]);
-    expect(parsed.candidates.map((c: { queued: boolean }) => c.queued)).toEqual(
-      Array(10).fill(false),
-    );
+    expect(parsed.candidates.map((c: { queued: boolean }) => c.queued)).toEqual(Array(10).fill(false));
   });
 
   it('a queued_command attachment is a candidate kinded by its text, and the hooks under it are its own', () => {
     const attach = (a: Json) => JSON.stringify({ type: 'attachment', attachment: a });
     const queued = (prompt: string | Json[], extra: Json = {}) =>
-      attach({
-        type: 'queued_command',
-        prompt,
-        commandMode: 'prompt',
-        origin: { kind: 'human' },
-        ...extra,
-      });
+      attach({ type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, ...extra });
     const hook = (text: string) =>
       attach({
         type: 'hook_additional_context',

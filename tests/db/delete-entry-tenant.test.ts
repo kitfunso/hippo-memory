@@ -25,10 +25,7 @@ afterEach(() => {
 
 // SAFETY: COUNT(*) AS n always returns one row with a numeric n.
 const held = (): number =>
-  Number(
-    (db.prepare('SELECT COUNT(*) AS n FROM memories WHERE id = ?').get(entry.id) as { n: number })
-      .n,
-  );
+  Number((db.prepare('SELECT COUNT(*) AS n FROM memories WHERE id = ?').get(entry.id) as { n: number }).n);
 
 it("leaves another tenant's row and answers as missing", () => {
   expect(deleteEntryCore(db, entry.id, 'tenant-b', { actor: 'test' })).toBeNull();

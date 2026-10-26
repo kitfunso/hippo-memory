@@ -41,9 +41,7 @@ export function stageWinner(
   ];
   const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
   const committed = new Promise<void>((resolve, reject) => {
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`race winner exited with ${code}`)),
-    );
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`race winner exited with ${code}`))));
   });
   // The test awaits `committed` later; until then an unhandled rejection must not end the run.
   committed.catch(() => undefined);

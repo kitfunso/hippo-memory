@@ -12,13 +12,7 @@ import type {
   ContinuityKey,
   MemoryEntry,
 } from '../../src/entry/store-kit.js';
-import {
-  CONTEXT_NOW,
-  OWN_SCOPE,
-  OWNER,
-  PROJECT,
-  seedContextRows,
-} from '../_helpers/context-fixture.js';
+import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   runOnFixture,
@@ -114,21 +108,13 @@ describe("the context's unfinished handoff, through Sessions.read 'handoff'", ()
     const calls: (readonly [string, GroupCall<'sessions', unknown>])[] = [];
     for (const [k, key] of KEYS) {
       for (const hours of [72, 2, 1000]) {
-        calls.push([
-          `unfinished ${k} ${hours}h`,
-          (g) => g.read(TENANT_A, 'handoff', unfinished(hours * HOUR), key),
-        ]);
+        calls.push([`unfinished ${k} ${hours}h`, (g) => g.read(TENANT_A, 'handoff', unfinished(hours * HOUR), key)]);
       }
     }
-    calls.push([
-      'unfinished globex',
-      (g) => g.read(TENANT_B, 'handoff', unfinished(72 * HOUR), null),
-    ]);
+    calls.push(['unfinished globex', (g) => g.read(TENANT_B, 'handoff', unfinished(72 * HOUR), null)]);
     const out = await conformsOn('sessions', calls);
 
-    expect(out.get('unfinished no key 72h')).toMatchObject({
-      value: { summary: 'partial handoff for session b' },
-    });
+    expect(out.get('unfinished no key 72h')).toMatchObject({ value: { summary: 'partial handoff for session b' } });
     expect(out.get('unfinished no key 2h')).toEqual({ value: null });
     expect(out.get('unfinished alice 72h')).toMatchObject({ value: { summary: 'alice handoff' } });
     expect(out.get('unfinished no owner 72h')).toEqual({ value: null });
@@ -161,51 +147,24 @@ describe('ContextReads.ambientCandidates', () => {
       ['own window', ambient(TENANT_A, 10, { origins: own })],
       ['full scan', ambient(TENANT_A, 10)],
       ['fractional', ambient(TENANT_A, 3.7)],
-      [
-        'own names only',
-        ambient(TENANT_A, 3, { origins: { names: [PROJECT], userGlobal: false } }),
-      ],
+      ['own names only', ambient(TENANT_A, 3, { origins: { names: [PROJECT], userGlobal: false } })],
       ['no names', ambient(TENANT_A, 2, { origins: { names: [], userGlobal: false } })],
       ['drifted', ambient(TENANT_B, 2)],
-      [
-        'recall',
-        ambient(TENANT_A, 0, {
-          recall: { terms: ['rollout', 'billing', 'zebra', 'deploy'], limit: 5 },
-        }),
-      ],
-      [
-        'recall no term indexed',
-        ambient(TENANT_A, 0, { recall: { terms: ['nothingmatches', 'Rollout'], limit: 5 } }),
-      ],
-      [
-        'recall own scope',
-        ambient(TENANT_A, 0, { recall: { terms: ['rollout'], limit: 20, ownScope: OWN_SCOPE } }),
-      ],
-      [
-        'recall split term',
-        ambient(TENANT_A, 2, { recall: { terms: ['zebra_cache', 'queue'], limit: 3 } }),
-      ],
+      ['recall', ambient(TENANT_A, 0, { recall: { terms: ['rollout', 'billing', 'zebra', 'deploy'], limit: 5 } })],
+      ['recall no term indexed', ambient(TENANT_A, 0, { recall: { terms: ['nothingmatches', 'Rollout'], limit: 5 } })],
+      ['recall own scope', ambient(TENANT_A, 0, { recall: { terms: ['rollout'], limit: 20, ownScope: OWN_SCOPE } })],
+      ['recall split term', ambient(TENANT_A, 2, { recall: { terms: ['zebra_cache', 'queue'], limit: 3 } })],
       ['no tenant', ambient('', 3)],
     ]);
 
     expect(out.get('drifted')).toMatchObject({
-      value: {
-        result: {
-          entries: expect.arrayContaining([expect.objectContaining({ id: 'mem_b_drift' })]),
-        },
-      },
+      value: { result: { entries: expect.arrayContaining([expect.objectContaining({ id: 'mem_b_drift' })]) } },
     });
     expect(out.get('recall')).toMatchObject({
-      value: {
-        result: {
-          recall: expect.arrayContaining([expect.objectContaining({ id: 'mem_a_error' })]),
-        },
-      },
+      value: { result: { recall: expect.arrayContaining([expect.objectContaining({ id: 'mem_a_error' })]) } },
     });
     expect(out.get('recall no term indexed')).toMatchObject({ value: { result: { recall: [] } } });
-    expect(out.get('no names')).toMatchObject({
-      value: { result: { entries: [{ id: 'mem_a_pin' }] } },
-    });
+    expect(out.get('no names')).toMatchObject({ value: { result: { entries: [{ id: 'mem_a_pin' }] } } });
     // Pins are read oldest first: the other project's pin, then the private one the default deny refuses.
     expect(out.get('pins only')).toMatchObject({
       value: {
@@ -245,18 +204,9 @@ describe('ContextReads.contextCandidates', () => {
       ['cap 3', (g) => g.contextCandidates(TENANT_A, { cap: 3, now: NOW })],
       ['cap 0', (g) => g.contextCandidates(TENANT_A, { cap: 0, now: NOW })],
       ['cap 2.9', (g) => g.contextCandidates(TENANT_A, { cap: 2.9, now: NOW })],
-      [
-        'exact scope',
-        (g) => g.contextCandidates(TENANT_A, { exactScope: 'team:eng', cap: 2000, now: NOW }),
-      ],
-      [
-        'own scope',
-        (g) => g.contextCandidates(TENANT_A, { ownScope: OWN_SCOPE, cap: 12, now: NOW }),
-      ],
-      [
-        'own scope, every row',
-        (g) => g.contextCandidates(TENANT_A, { ownScope: OWN_SCOPE, cap: 2000, now: NOW }),
-      ],
+      ['exact scope', (g) => g.contextCandidates(TENANT_A, { exactScope: 'team:eng', cap: 2000, now: NOW })],
+      ['own scope', (g) => g.contextCandidates(TENANT_A, { ownScope: OWN_SCOPE, cap: 12, now: NOW })],
+      ['own scope, every row', (g) => g.contextCandidates(TENANT_A, { ownScope: OWN_SCOPE, cap: 2000, now: NOW })],
       ['project', (g) => g.contextCandidates(TENANT_A, { project: [PROJECT], cap: 10, now: NOW })],
       ['empty project', (g) => g.contextCandidates(TENANT_A, { project: [], cap: 10, now: NOW })],
       ['globex', (g) => g.contextCandidates(TENANT_B, { cap: 2000, now: NOW })],
@@ -294,9 +244,7 @@ const comparable = (t: AmbientTallies) => ({
 function tagsOf(outcome: Outcome<unknown> | undefined): string[] {
   if (outcome === undefined || !('value' in outcome)) return [];
   // SAFETY: every tally call resolves to comparable(), whose tagCounts are [tag, count] pairs.
-  return (outcome.value as ReturnType<typeof comparable>).tagCounts.map(([tag]) =>
-    tag.toLowerCase(),
-  );
+  return (outcome.value as ReturnType<typeof comparable>).tagCounts.map(([tag]) => tag.toLowerCase());
 }
 
 describe('ContextReads.ambientTallies', () => {
@@ -304,9 +252,7 @@ describe('ContextReads.ambientTallies', () => {
     const tally =
       (tenantId: string, filter: Partial<AmbientStoreFilter> = {}): Call =>
       async (g) =>
-        comparable(
-          await g.ambientTallies(tenantId, { currentProject: [PROJECT], now: NOW, ...filter }),
-        );
+        comparable(await g.ambientTallies(tenantId, { currentProject: [PROJECT], now: NOW, ...filter }));
     const out = await conforms([
       ['every row', tally(TENANT_A)],
       ['project', tally(TENANT_A, { project: [PROJECT] })],
@@ -330,11 +276,7 @@ describe('ContextReads.ambientTallies', () => {
 /** Digest, vault and tagged rows over both tenants, apart from the contextGet fixture so its windows stay as they are. */
 function seedRowReads(dir: string): void {
   const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
-  const row = (
-    content: string,
-    minute: number,
-    over: Parameters<typeof createMemory>[1] = {},
-  ): MemoryEntry => ({
+  const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({
     ...createMemory(content, { tenantId: TENANT_A, ...over }),
     created: at(minute),
     id: `mem_r_${minute}`,
@@ -346,32 +288,13 @@ function seedRowReads(dir: string): void {
     row('digest with no session', 3, digest),
     row('digest extracted from a raw row', 4, { ...digest, extractedFrom: 'mem_r_9' }),
     { ...row('digest replaced since', 5, digest), supersededBy: 'mem_r_2' },
-    row('digest tag only in content: session-digest', 6, {
-      source: 'session-digest',
-      tags: ['other'],
-    }),
+    row('digest tag only in content: session-digest', 6, { source: 'session-digest', tags: ['other'] }),
     row('digest of tenant b', 7, { ...digest, tenantId: TENANT_B }),
-    row('vault note a', 8, {
-      kind: 'raw',
-      artifactRef: 'vault:notes:a.md',
-      tags: ['vault', 'pipeline'],
-    }),
-    row('vault note other case', 9, {
-      kind: 'raw',
-      artifactRef: 'vault:Notes:b.md',
-      tags: ['vault'],
-    }),
-    row('vault note under a wildcard name', 10, {
-      kind: 'raw',
-      artifactRef: 'vault:notesX:c.md',
-      tags: ['vault'],
-    }),
+    row('vault note a', 8, { kind: 'raw', artifactRef: 'vault:notes:a.md', tags: ['vault', 'pipeline'] }),
+    row('vault note other case', 9, { kind: 'raw', artifactRef: 'vault:Notes:b.md', tags: ['vault'] }),
+    row('vault note under a wildcard name', 10, { kind: 'raw', artifactRef: 'vault:notesX:c.md', tags: ['vault'] }),
     row('vault note distilled', 11, { artifactRef: 'vault:notes:d.md', tags: ['vault'] }),
-    row('vault note of tenant b', 12, {
-      kind: 'raw',
-      artifactRef: 'vault:notes:e.md',
-      tenantId: TENANT_B,
-    }),
+    row('vault note of tenant b', 12, { kind: 'raw', artifactRef: 'vault:notes:e.md', tenantId: TENANT_B }),
     { ...row('same minute, later id', 13, { tags: ['pipeline'] }), id: 'mem_r_13b' },
     row('same minute, earlier id', 13, { tags: ['pipeline', 'deploy'] }),
   ];

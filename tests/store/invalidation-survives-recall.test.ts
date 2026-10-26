@@ -44,11 +44,7 @@ describe('a deliberate stale tier survives being read', () => {
     expect(invalidated.confidence).toBe('stale');
     expect(invalidated.tags).toContain('invalidated');
 
-    await contextGet(ctx(), {
-      currentProject: cwdProject(),
-      q: 'legacy pipeline deploys',
-      budget: 2000,
-    });
+    await contextGet(ctx(), { currentProject: cwdProject(), q: 'legacy pipeline deploys', budget: 2000 });
 
     const afterRead = readEntry(home, id)!;
     expect(afterRead.retrievalCount).toBeGreaterThan(invalidated.retrievalCount);
@@ -57,10 +53,7 @@ describe('a deliberate stale tier survives being read', () => {
   });
 
   it('markRetrieved does not move the stored tier of a deliberately stale entry', () => {
-    const entry = {
-      ...createMemory('an invalidated fact', { confidence: 'observed' }),
-      confidence: 'stale' as const,
-    };
+    const entry = { ...createMemory('an invalidated fact', { confidence: 'observed' }), confidence: 'stale' as const };
 
     const [updated] = markRetrieved([entry]);
 
@@ -84,18 +77,13 @@ describe('a deliberate stale tier survives being read', () => {
   });
 
   it('still applies the retrieval boosts a read is supposed to apply', () => {
-    const entry = {
-      ...createMemory('a stale fact', { confidence: 'observed' }),
-      confidence: 'stale' as const,
-    };
+    const entry = { ...createMemory('a stale fact', { confidence: 'observed' }), confidence: 'stale' as const };
 
     const [updated] = markRetrieved([entry]);
 
     expect(updated.retrievalCount).toBe(entry.retrievalCount + 1);
     expect(updated.halfLifeDays).toBe(entry.halfLifeDays + 2);
-    expect(new Date(updated.lastRetrieved).getTime()).toBeGreaterThan(
-      new Date(entry.lastRetrieved).getTime() - 1,
-    );
+    expect(new Date(updated.lastRetrieved).getTime()).toBeGreaterThan(new Date(entry.lastRetrieved).getTime() - 1);
   });
 
   it('leaves every other tier untouched, so the fix is not a blanket freeze', () => {

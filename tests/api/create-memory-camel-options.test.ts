@@ -27,10 +27,7 @@ describe('public createMemory camelCase options', () => {
 
   it('drops the snake_case keys 2.x accepted, in the type and at run time', () => {
     // @ts-expect-error snake_case option keys were removed in 3.0
-    const entry = createMemory('snake keys are gone', {
-      dag_level: 3,
-      artifact_ref: 'file:///b.md',
-    });
+    const entry = createMemory('snake keys are gone', { dag_level: 3, artifact_ref: 'file:///b.md' });
     expect(entry.dagLevel).toBe(0);
     expect(entry.artifactRef).toBeNull();
   });
@@ -45,9 +42,9 @@ describe('public createMemory camelCase options', () => {
 
   it('gives an absent or undefined half-life base the default, as 2.x did', () => {
     const absent = createMemory('no half-life base');
-    expect(
-      createMemory('undefined half-life base', { baseHalfLifeDays: undefined }).halfLifeDays,
-    ).toBe(absent.halfLifeDays);
+    expect(createMemory('undefined half-life base', { baseHalfLifeDays: undefined }).halfLifeDays).toBe(
+      absent.halfLifeDays,
+    );
     expect(Number.isFinite(absent.halfLifeDays)).toBe(true);
   });
 });

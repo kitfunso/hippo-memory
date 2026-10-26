@@ -7,11 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { loadConfig } from '../../src/host/config-file.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { mcpActor } from '../../src/surface/mcp/protocol.js';
 import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -40,9 +36,7 @@ function initRepo(beforeCommit?: readonly string[]): string {
 
 function contextText(res: McpResponse | null): string {
   // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}].
-  return (
-    (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
-  );
+  return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
 }
 
 /** What an untyped transport (a .mjs script, an older add-on) sends: the compiler cannot stop it omitting the role. */
@@ -56,10 +50,7 @@ function roleless(hippoRoot: string): McpContext {
 }
 
 function callTool(name: string, args: Record<string, number>, ctx: McpContext) {
-  return handleMcpRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    ctx,
-  );
+  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }
 
 describe('mcpActor', () => {
@@ -135,9 +126,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
         config: loadConfig(hippoRoot),
         infra: testInfra(),
       };
-      await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow(
-        'hippo_learn requires a host admin',
-      );
+      await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow('hippo_learn requires a host admin');
     }
     expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
   });
@@ -162,9 +151,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
       store: sqliteStore(hippoRoot),
     });
     expect(text).toMatch(/^Git learn: 1 new/);
-    expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(
-      true,
-    );
+    expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);
   });
 });
 
@@ -177,14 +164,8 @@ describe('hippo_context reads the server git state only for stdio or a host admi
     // The server's checkout sits on a feature branch, so the git auto-detect would query for its name.
     repoDir = initRepo(['checkout', '-q', '-b', 'zebra-migration']);
     hippoRoot = makeRoot('role-ctx');
-    writeEntry(
-      hippoRoot,
-      createMemory('zebra migration runbook lives in the ops wiki', { tenantId: 'default' }),
-    );
-    writeEntry(
-      hippoRoot,
-      createMemory('quarterly invoices are filed under finance', { tenantId: 'default' }),
-    );
+    writeEntry(hippoRoot, createMemory('zebra migration runbook lives in the ops wiki', { tenantId: 'default' }));
+    writeEntry(hippoRoot, createMemory('quarterly invoices are filed under finance', { tenantId: 'default' }));
     originalCwd = process.cwd();
     process.chdir(repoDir);
   });

@@ -13,11 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 // The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
@@ -39,10 +35,7 @@ type RecallToolArgs = {
 };
 
 function callTool(reqId: number, name: string, args: RecallToolArgs, ctx: McpContext) {
-  return handleMcpRequest(
-    { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    ctx,
-  );
+  return handleMcpRequest({ jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }
 
 function extractText(res: McpResponse | null): string {
@@ -59,9 +52,7 @@ function countAuditOps(root: string, op: string): number {
   try {
     // SAFETY: COUNT(*) always returns exactly one row shaped { n: number };
     // better-sqlite3's .get() types as `unknown` with no query-shape knowledge.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as {
-      n: number;
-    };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -109,24 +100,12 @@ describe('mcp hippo_recall anchoringHint', () => {
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
-    await callTool(
-      2,
-      'hippo_recall',
-      { query: 'frobnicate baz different words', session_id: 'sess1' },
-      ctx,
-    );
-    const res3 = await callTool(
-      3,
-      'hippo_recall',
-      { query: 'frobnicate quux yet another', session_id: 'sess1' },
-      ctx,
-    );
+    await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);
+    const res3 = await callTool(3, 'hippo_recall', { query: 'frobnicate quux yet another', session_id: 'sess1' }, ctx);
     const text = extractText(res3);
     expect(text).toContain('## Anchoring hint');
     expect(text).toContain('[anchored_on:');
-    expect(countAuditOps(home, 'recall_anchor_detected_memory_dominance')).toBeGreaterThanOrEqual(
-      1,
-    );
+    expect(countAuditOps(home, 'recall_anchor_detected_memory_dominance')).toBeGreaterThanOrEqual(1);
     // Plan v3 Acceptance §6: suppressedByInterference must bump on ALL THREE
     // user-facing surfaces when R2 fires. MCP's WYSIATI line surfaces the
     // mcpSuppressionSummary counter — assert the bump is visible there.
@@ -147,12 +126,7 @@ describe('mcp hippo_recall anchoringHint', () => {
       infra: testInfra(),
       callers: createCallerState(),
     };
-    const res = await callTool(
-      1,
-      'hippo_recall',
-      { query: 'frobnicate baz quux', session_id: 'sess1' },
-      ctx,
-    );
+    const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Anchoring hint');
   });
@@ -189,18 +163,8 @@ describe('mcp hippo_recall anchoringHint', () => {
     };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
-    await callTool(
-      2,
-      'hippo_recall',
-      { query: 'frobnicate baz different words', session_id: 'sess1' },
-      ctx,
-    );
-    const res3 = await callTool(
-      3,
-      'hippo_recall',
-      { query: 'frobnicate quux yet another', session_id: 'sess1' },
-      ctx,
-    );
+    await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);
+    const res3 = await callTool(3, 'hippo_recall', { query: 'frobnicate quux yet another', session_id: 'sess1' }, ctx);
     const text = extractText(res3);
     expect(text).not.toContain('## Anchoring hint');
   });

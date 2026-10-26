@@ -30,9 +30,7 @@ function seed(): string[] {
     for (let i = 0; i < ROWS; i++) {
       const stamp = new Date(Date.now() - i * DAY_MS).toISOString();
       const entry = {
-        ...createMemory(`note ${i}: a plain line about the build and the deploy`, {
-          baseHalfLifeDays: 30,
-        }),
+        ...createMemory(`note ${i}: a plain line about the build and the deploy`, { baseHalfLifeDays: 30 }),
         id: `m${String(i).padStart(4, '0')}`,
         created: stamp,
         lastRetrieved: stamp,
@@ -80,16 +78,12 @@ describe('contextGet with no query', () => {
   });
 
   it('pages a larger budget deeper, up to the cap', async () => {
-    const small = await recordStatementsAsync(() =>
-      contextGet(apiCtx(root), { currentProject: 'proj', budget: 300 }),
-    );
+    const small = await recordStatementsAsync(() => contextGet(apiCtx(root), { currentProject: 'proj', budget: 300 }));
     const large = await recordStatementsAsync(() =>
       contextGet(apiCtx(root), { currentProject: 'proj', budget: 20_000 }),
     );
 
-    expect(peakRowsRead(large.reads, CANDIDATE_READ)).toBeGreaterThan(
-      peakRowsRead(small.reads, CANDIDATE_READ),
-    );
+    expect(peakRowsRead(large.reads, CANDIDATE_READ)).toBeGreaterThan(peakRowsRead(small.reads, CANDIDATE_READ));
     expect(peakRowsRead(large.reads, CANDIDATE_READ)).toBeLessThanOrEqual(2000);
   });
 });

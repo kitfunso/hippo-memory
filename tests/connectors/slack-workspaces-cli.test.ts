@@ -37,15 +37,7 @@ describe('hippo slack workspaces CLI', () => {
   });
 
   it('add registers a team→tenant mapping and prints the envelope', async () => {
-    const { stdout } = await runCli(root, [
-      'slack',
-      'workspaces',
-      'add',
-      '--team',
-      'T01',
-      '--tenant',
-      'acme',
-    ]);
+    const { stdout } = await runCli(root, ['slack', 'workspaces', 'add', '--team', 'T01', '--tenant', 'acme']);
     expect(stdout).toMatch(/added: T01 -> acme/);
   });
 
@@ -81,32 +73,22 @@ describe('hippo slack workspaces CLI', () => {
   });
 
   it('remove reports not-found for unknown team', async () => {
-    const { stderr } = await runCli(
-      root,
-      ['slack', 'workspaces', 'remove', '--team', 'T_UNKNOWN'],
-      { ok: false },
-    );
+    const { stderr } = await runCli(root, ['slack', 'workspaces', 'remove', '--team', 'T_UNKNOWN'], { ok: false });
     expect(stderr).toMatch(/no workspace registered/);
   });
 
   it('add without --team prints usage and exits 1', async () => {
-    const { stderr } = await runCli(root, ['slack', 'workspaces', 'add', '--tenant', 'acme'], {
-      ok: false,
-    });
+    const { stderr } = await runCli(root, ['slack', 'workspaces', 'add', '--tenant', 'acme'], { ok: false });
     expect(stderr).toMatch(/Usage:.*--team.*--tenant/);
   });
 
   it('add without --tenant prints usage and exits 1', async () => {
-    const { stderr } = await runCli(root, ['slack', 'workspaces', 'add', '--team', 'T01'], {
-      ok: false,
-    });
+    const { stderr } = await runCli(root, ['slack', 'workspaces', 'add', '--team', 'T01'], { ok: false });
     expect(stderr).toMatch(/Usage:.*--team.*--tenant/);
   });
 
   it('unknown workspaces action prints workspaces usage and exits 1', async () => {
-    const { stdout, stderr } = await runCli(root, ['slack', 'workspaces', 'frobnicate'], {
-      ok: false,
-    });
+    const { stdout, stderr } = await runCli(root, ['slack', 'workspaces', 'frobnicate'], { ok: false });
     const combined = stdout + stderr;
     expect(combined).toMatch(/hippo slack workspaces <add\|list\|remove>/);
   });

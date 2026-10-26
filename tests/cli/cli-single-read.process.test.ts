@@ -80,9 +80,7 @@ describe('hippo forget --dry-run (built CLI, no server)', () => {
     const would = (id: string, text: string): Ran =>
       printed(`Would forget ${id} (dry run, nothing changed): "${text}"\n`);
     expect(await s.run('forget', short, '--dry-run')).toEqual(would(short, CLEAN));
-    expect(await s.run('forget', long, '--dry-run')).toEqual(
-      would(long, `${LONG.slice(0, 80)}...`),
-    );
+    expect(await s.run('forget', long, '--dry-run')).toEqual(would(long, `${LONG.slice(0, 80)}...`));
     expectUntouched(s, before);
   });
 
@@ -97,16 +95,12 @@ describe('hippo forget --dry-run (built CLI, no server)', () => {
         `Cannot forget ${raw}: it is a raw, append-only memory. Archive it instead: hippo forget ${raw} --archive --reason "<why>"`,
       ),
     );
-    expect(
-      await s.run('forget', raw, '--dry-run', '--archive', '--reason', 'asked to remove it'),
-    ).toEqual(
-      printed(
-        `Would archive ${raw} (dry run, nothing changed): "raw slack message about the billing retry count"\n`,
-      ),
+    expect(await s.run('forget', raw, '--dry-run', '--archive', '--reason', 'asked to remove it')).toEqual(
+      printed(`Would archive ${raw} (dry run, nothing changed): "raw slack message about the billing retry count"\n`),
     );
-    expect(
-      await s.run('forget', plain, '--dry-run', '--archive', '--reason', 'asked to remove it'),
-    ).toEqual(refused(`Could not archive ${plain}: memory ${plain} is not raw (kind=distilled)`));
+    expect(await s.run('forget', plain, '--dry-run', '--archive', '--reason', 'asked to remove it')).toEqual(
+      refused(`Could not archive ${plain}: memory ${plain} is not raw (kind=distilled)`),
+    );
     expectUntouched(s, before);
   });
 
@@ -115,12 +109,8 @@ describe('hippo forget --dry-run (built CLI, no server)', () => {
     const other = s.seed(CLEAN, { tenantId: 'other' });
     s.settle();
     const before = held(s);
-    expect(await s.run('forget', MISSING, '--dry-run')).toEqual(
-      refused(`Memory not found: ${MISSING}`),
-    );
-    expect(await s.run('forget', other, '--dry-run')).toEqual(
-      refused(`Memory not found: ${other}`),
-    );
+    expect(await s.run('forget', MISSING, '--dry-run')).toEqual(refused(`Memory not found: ${MISSING}`));
+    expect(await s.run('forget', other, '--dry-run')).toEqual(refused(`Memory not found: ${other}`));
     expect(await runOnUnreadableStore(s, 'forget', other, '--dry-run')).toEqual(UNREADABLE);
     expectUntouched(s, before);
   });
@@ -175,12 +165,8 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     );
     s.settle();
     const before = held(s);
-    expect(await s.run('resolve', '7')).toEqual(
-      refused('Conflict 7 not found or already resolved.'),
-    );
-    expect(await s.run('resolve', '1')).toEqual(
-      refused('Conflict 1 not found or already resolved.'),
-    );
+    expect(await s.run('resolve', '7')).toEqual(refused('Conflict 7 not found or already resolved.'));
+    expect(await s.run('resolve', '1')).toEqual(refused('Conflict 1 not found or already resolved.'));
     expect(await runOnUnreadableStore(s, 'resolve', '1')).toEqual(UNREADABLE);
     expectUntouched(s, before);
   });
@@ -266,9 +252,7 @@ describe('hippo inspect (built CLI, no server)', () => {
     s.settle();
     const before = held(s);
     expect(await s.run('inspect', MISSING)).toEqual(refused(`Memory not found: ${MISSING}`));
-    expect(await s.run('inspect', 'mem_inspect_other')).toEqual(
-      refused('Memory not found: mem_inspect_other'),
-    );
+    expect(await s.run('inspect', 'mem_inspect_other')).toEqual(refused('Memory not found: mem_inspect_other'));
     expect(await s.run('inspect')).toEqual(refused('Please provide a memory ID.'));
     expect(await runOnUnreadableStore(s, 'inspect', 'mem_inspect_other')).toEqual(UNREADABLE);
     expectUntouched(s, before);
@@ -278,15 +262,11 @@ describe('hippo inspect (built CLI, no server)', () => {
 describe('hippo share (built CLI, no server)', () => {
   it('a row whose transfer score is too low is not shared', async () => {
     const s = new Store({ global: true, spawned: true });
-    const id = s.seed('the deploy cron reads its endpoint from config', {
-      tags: ['deploy', 'cron', 'config'],
-    });
+    const id = s.seed('the deploy cron reads its endpoint from config', { tags: ['deploy', 'cron', 'config'] });
     s.settle();
     const before = held(s);
     expect(await s.run('share', id)).toEqual(
-      printed(
-        'Transfer score too low (0.05). This memory looks project-specific.\nUse --force to share anyway.\n',
-      ),
+      printed('Transfer score too low (0.05). This memory looks project-specific.\nUse --force to share anyway.\n'),
     );
     expect(s.audit('global')).toEqual([]);
     expectUntouched(s, before);
@@ -358,8 +338,7 @@ describe('hippo trace <id> (built CLI, no server)', () => {
     ];
     expect(await s.run('trace', 'mem_trace_child')).toEqual(
       printed(
-        traced('mem_trace_child', 'local', CLEAN, 'billing') +
-          lineage(...parents.map((p) => `${p.id}: ${p.content}`)),
+        traced('mem_trace_child', 'local', CLEAN, 'billing') + lineage(...parents.map((p) => `${p.id}: ${p.content}`)),
       ),
     );
     const json = await s.run('trace', 'mem_trace_child', '--json');
@@ -391,10 +370,7 @@ describe('hippo trace <id> (built CLI, no server)', () => {
     s.settle();
     const before = held(s);
     expect(await s.run('trace', 'mem_trace_global')).toEqual(
-      printed(
-        traced('mem_trace_global', 'global', CLEAN, '(none)') +
-          lineage('mem_trace_hidden: (not found)'),
-      ),
+      printed(traced('mem_trace_global', 'global', CLEAN, '(none)') + lineage('mem_trace_hidden: (not found)')),
     );
     expectUntouched(s, before);
   });
@@ -406,12 +382,8 @@ describe('hippo trace <id> (built CLI, no server)', () => {
     s.settle();
     const before = held(s);
     expect(await s.run('trace', MISSING)).toEqual(refused(`Memory not found: ${MISSING}`));
-    expect(await s.run('trace', 'mem_trace_other')).toEqual(
-      refused('Memory not found: mem_trace_other'),
-    );
-    expect(await s.run('trace', 'mem_trace_gother')).toEqual(
-      refused('Memory not found: mem_trace_gother'),
-    );
+    expect(await s.run('trace', 'mem_trace_other')).toEqual(refused('Memory not found: mem_trace_other'));
+    expect(await s.run('trace', 'mem_trace_gother')).toEqual(refused('Memory not found: mem_trace_gother'));
     expect(await runOnUnreadableStore(s, 'trace', 'mem_trace_other')).toEqual(UNREADABLE);
     expect(await clocked().run('trace', MISSING)).toEqual(refused(`Memory not found: ${MISSING}`));
     expectUntouched(s, before);

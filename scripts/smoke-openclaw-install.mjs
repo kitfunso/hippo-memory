@@ -72,9 +72,7 @@ try {
 
   const listOutput = run('openclaw plugins list', repoRoot);
   if (!/hippo-memory/i.test(listOutput)) {
-    throw new Error(
-      `Expected installed plugin to appear in openclaw plugins list, got:\n${listOutput}`,
-    );
+    throw new Error(`Expected installed plugin to appear in openclaw plugins list, got:\n${listOutput}`);
   }
 
   const installDir = path.join(stateDir, 'extensions', 'hippo-memory');
@@ -103,9 +101,7 @@ try {
     );
   }
   if (rootManifest.id !== 'hippo-memory') {
-    throw new Error(
-      `Expected installed root plugin manifest id to be hippo-memory, got: ${rootManifest.id}`,
-    );
+    throw new Error(`Expected installed root plugin manifest id to be hippo-memory, got: ${rootManifest.id}`);
   }
 
   console.log('OpenClaw npm install smoke test passed.');

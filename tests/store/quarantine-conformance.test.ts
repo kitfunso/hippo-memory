@@ -49,13 +49,7 @@ interface ScopeView {
   readonly scope: string | null;
 }
 
-type Value =
-  | QuarantinedMemory[]
-  | string[]
-  | string[][]
-  | ScopeView[]
-  | QuarantineApproval
-  | QuarantineRejection;
+type Value = QuarantinedMemory[] | string[] | string[][] | ScopeView[] | QuarantineApproval | QuarantineRejection;
 type Call = GroupCall<'quarantine', Value>;
 type Side = SideResult<Value>;
 
@@ -74,10 +68,7 @@ const at =
     vi.setSystemTime(new Date(iso));
     return call(g, store);
   };
-const all = (query: Partial<QuarantineListQuery> = {}): QuarantineListQuery => ({
-  status: 'all',
-  ...query,
-});
+const all = (query: Partial<QuarantineListQuery> = {}): QuarantineListQuery => ({ status: 'all', ...query });
 const list =
   (query: QuarantineListQuery, tenantId = TENANT_A): Call =>
   (g) =>
@@ -195,11 +186,7 @@ describe('Quarantine.listQuarantined', () => {
       list(all(), 'nobody'),
       list({ status: 'pending' }, 'solo'),
     ]);
-    expect(values(side)).toEqual([
-      [],
-      [],
-      [pending(HELD.solo, null, 5, heldContent(HELD.solo), 'solo')],
-    ]);
+    expect(values(side)).toEqual([[], [], [pending(HELD.solo, null, 5, heldContent(HELD.solo), 'solo')]]);
     expect(added(side)).toEqual([]);
   });
 
@@ -216,10 +203,7 @@ describe('Quarantine.listQuarantined', () => {
   it('leaves a record out of pending once its memory row is gone from the tenant, and reads it elsewhere with null content', async () => {
     const side = await conforms([list(all({ limit: 2 })), list(all({ limit: 1 }), TENANT_B)]);
     expect(values(side)).toEqual([
-      [
-        pending(HELD.moved, 'team:alpha', 4, heldContent(HELD.moved)),
-        pending(HELD.gone, 'team:alpha', 3, null),
-      ],
+      [pending(HELD.moved, 'team:alpha', 4, heldContent(HELD.moved)), pending(HELD.gone, 'team:alpha', 3, null)],
       [pending(HELD.a1, 'team:alpha', 3, null, TENANT_B)],
     ]);
   });
@@ -233,13 +217,7 @@ describe('Quarantine.listQuarantined', () => {
       ids(all({ limit: 1 })),
       ids({ status: 'pending', limit: 2 }),
     ]);
-    expect(values(side)).toEqual([
-      A_ALL,
-      A_ALL.slice(0, n - 1),
-      A_ALL,
-      [HELD.moved],
-      [HELD.moved, HELD.a3],
-    ]);
+    expect(values(side)).toEqual([A_ALL, A_ALL.slice(0, n - 1), A_ALL, [HELD.moved], [HELD.moved, HELD.a3]]);
   });
 
   it('reads 100 records with no limit given, and every record at and above the count', async () => {
@@ -249,12 +227,7 @@ describe('Quarantine.listQuarantined', () => {
       ids(all({ limit: BULK_RECORDS }), BULK_TENANT),
       ids(all({ limit: 1000 }), BULK_TENANT),
     ]);
-    expect(values(side)).toEqual([
-      BULK_IDS.slice(0, 100),
-      BULK_IDS.slice(0, 100),
-      BULK_IDS,
-      BULK_IDS,
-    ]);
+    expect(values(side)).toEqual([BULK_IDS.slice(0, 100), BULK_IDS.slice(0, 100), BULK_IDS, BULK_IDS]);
   });
 
   it('narrows by status once records are decided', async () => {
@@ -268,13 +241,7 @@ describe('Quarantine.listQuarantined', () => {
       ids(all()),
       ids({ status: 'approved' }, TENANT_B),
     ]);
-    expect(values(side).slice(3)).toEqual([
-      [HELD.a1],
-      [HELD.gone, HELD.a2],
-      [HELD.moved, HELD.a3],
-      A_ALL,
-      [],
-    ]);
+    expect(values(side).slice(3)).toEqual([[HELD.a1], [HELD.gone, HELD.a2], [HELD.moved, HELD.a3], A_ALL, []]);
   });
 
   it('resumes below a position alone, between two records sharing a timestamp and inside the asking tenant', async () => {
@@ -295,13 +262,7 @@ describe('Quarantine.listQuarantined', () => {
   });
 
   it('pages by cursor with no record twice and none missed, a page boundary falling inside a shared timestamp', async () => {
-    const side = await conforms([
-      pages(3),
-      pages(2),
-      pages(1),
-      pages(50, BULK_TENANT),
-      pages(4, 'nobody'),
-    ]);
+    const side = await conforms([pages(3), pages(2), pages(1), pages(50, BULK_TENANT), pages(4, 'nobody')]);
     expect(values(side)).toEqual([
       [A_ALL.slice(0, 3), A_ALL.slice(3)],
       [A_ALL.slice(0, 2), A_ALL.slice(2, 4), A_ALL.slice(4)],
@@ -432,12 +393,7 @@ describe('Quarantine.decideQuarantined reject', () => {
   });
 
   it("refuses an unknown id and another tenant's id, writing nothing", async () => {
-    const side = await conforms([
-      reject('mem_unknown'),
-      reject(HELD.a2, TENANT_B),
-      reject(HELD.b1),
-      ...STATE,
-    ]);
+    const side = await conforms([reject('mem_unknown'), reject(HELD.a2, TENANT_B), reject(HELD.b1), ...STATE]);
     expect(values(side).slice(0, 3)).toEqual([
       { outcome: 'not_quarantined' },
       { outcome: 'not_quarantined' },
@@ -478,18 +434,10 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
     try {
       // SAFETY: each SELECT names exactly the columns of the type it is read as.
       const record = db
-        .prepare(
-          'SELECT status, decided_at, decided_by FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?',
-        )
-        .get(TENANT_A, HELD.a1) as {
-        status: string;
-        decided_at: string | null;
-        decided_by: string | null;
-      };
+        .prepare('SELECT status, decided_at, decided_by FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?')
+        .get(TENANT_A, HELD.a1) as { status: string; decided_at: string | null; decided_by: string | null };
       // SAFETY: as above.
-      const memory = db.prepare('SELECT scope FROM memories WHERE id = ?').get(HELD.a1) as {
-        scope: string | null;
-      };
+      const memory = db.prepare('SELECT scope FROM memories WHERE id = ?').get(HELD.a1) as { scope: string | null };
       return { record, scope: memory.scope, auditId: auditHighId(root) };
     } finally {
       closeHippoDb(db);
@@ -516,17 +464,17 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
       scope: ALPHA_HELD,
       auditId: nextAuditId - 1,
     });
-    await expect(
-      sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'approve', ACTOR),
-    ).rejects.toThrow(/audit table unwritable/);
+    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'approve', ACTOR)).rejects.toThrow(
+      /audit table unwritable/,
+    );
     expect(stored()).toEqual(before);
   });
 
   it('reject rejects and leaves the record pending', async () => {
     const before = stored();
-    await expect(
-      sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'reject', ACTOR),
-    ).rejects.toThrow(/audit table unwritable/);
+    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'reject', ACTOR)).rejects.toThrow(
+      /audit table unwritable/,
+    );
     expect(stored()).toEqual(before);
   });
 });

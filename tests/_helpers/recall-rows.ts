@@ -16,9 +16,7 @@ export function recallAuditOps(root: string): string[] {
   try {
     // SAFETY: the SELECT names exactly the four audit_log columns AuditRow declares.
     const rows = db
-      .prepare(
-        "SELECT actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'recall%' ORDER BY id",
-      )
+      .prepare("SELECT actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'recall%' ORDER BY id")
       .all() as AuditRow[];
     return rows.map((a) => {
       // SAFETY: recall audit metadata is the object recallAuditMetadata or a hint helper wrote (src/api/recall/finish.ts).

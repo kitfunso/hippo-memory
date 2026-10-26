@@ -10,13 +10,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import {
-  initGitRepo,
-  commit,
-  ANCHOR,
-  BEFORE_ANCHOR,
-  AFTER_ANCHOR,
-} from '../_helpers/churn-git-repo.js';
+import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 
 // ---------------------------------------------------------------------------
 // CLI wiring: `hippo invalidate --churn` and `hippo sleep`
@@ -51,25 +45,18 @@ describe('hippo invalidate --churn (CLI)', () => {
   });
 
   it('rejects --churn combined with a pattern', async () => {
-    const { stderr } = await runCli(repoDir, ['invalidate', 'somepattern', '--churn'], env, {
-      ok: false,
-    });
+    const { stderr } = await runCli(repoDir, ['invalidate', 'somepattern', '--churn'], env, { ok: false });
     expect(stderr).toContain('Usage: hippo invalidate --churn');
   });
 
   it('rejects --churn combined with --id', async () => {
-    const { stderr } = await runCli(repoDir, ['invalidate', '--churn', '--id', 'mem_x'], env, {
-      ok: false,
-    });
+    const { stderr } = await runCli(repoDir, ['invalidate', '--churn', '--id', 'mem_x'], env, { ok: false });
     expect(stderr).toContain('Usage: hippo invalidate --churn');
   });
 
   it('dry-run previews the tag without writing, then a live run tags it', async () => {
     const hippoRoot = path.join(repoDir, '.hippo');
-    const mem = createMemory('see k.ts for the setup', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: [],
-    });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);
@@ -88,10 +75,7 @@ describe('hippo invalidate --churn (CLI)', () => {
 
   it("also tags this repo's memories in the global store", async () => {
     initTestStore(globalRoot);
-    const mem = createMemory('see k.ts for the setup', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: [],
-    });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(globalRoot, mem);
@@ -103,10 +87,7 @@ describe('hippo invalidate --churn (CLI)', () => {
   });
 
   it('exits non-zero when the git read fails', async () => {
-    const mem = createMemory('see k.ts for the setup', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: [],
-    });
+    const mem = createMemory('see k.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(path.join(repoDir, '.hippo'), mem);
@@ -133,10 +114,7 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
   });
 
   function setupChurnMemory(hippoRoot: string): string {
-    const mem = createMemory('see m.ts for the setup', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: [],
-    });
+    const mem = createMemory('see m.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
     mem.created = ANCHOR;
     mem.originProject = path.basename(repoDir).toLowerCase();
     writeEntry(hippoRoot, mem);
@@ -157,10 +135,7 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
 
   it('tags on sleep when churnStaleness.enabled is true', async () => {
     const hippoRoot = path.join(repoDir, '.hippo');
-    fs.writeFileSync(
-      path.join(hippoRoot, 'config.json'),
-      JSON.stringify({ churnStaleness: { enabled: true } }),
-    );
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: { enabled: true } }));
     const memId = setupChurnMemory(hippoRoot);
 
     const { stdout } = await runCli(repoDir, ['sleep'], env);

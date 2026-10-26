@@ -35,33 +35,15 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
 }
 
 async function seed(dir: string): Promise<void> {
-  const a = (
-    content: string,
-    iso: string,
-    over: Parameters<typeof createMemory>[1] = {},
-  ): MemoryEntry => at(createMemory(content, { tenantId: TENANT_A, ...over }), iso);
+  const a = (content: string, iso: string, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
+    at(createMemory(content, { tenantId: TENANT_A, ...over }), iso);
   const raw = a('slack: the tier moved to 120', ago(30 * 24 * HOUR), { kind: 'raw' });
-  const newFact = a('belief: the tier is 120', ago(HOUR), {
-    extractedFrom: raw.id,
-    layer: Layer.Semantic,
-  });
-  const oldFact = {
-    ...a('belief: the tier is 100', ago(40 * 24 * HOUR)),
-    supersededBy: newFact.id,
-  };
-  const dangling = {
-    ...a('belief: replaced by a deleted row', ago(20 * 24 * HOUR)),
-    supersededBy: 'mem_gone',
-  };
-  const pinned = a('pinned: the deploy window is friday', ago(3 * HOUR), {
-    pinned: true,
-    confidence: 'verified',
-  });
-  const aged = a('an aged note about the old cluster', ago(2 * 24 * HOUR), {
-    confidence: 'inferred',
-  });
-  const b = (content: string, iso: string): MemoryEntry =>
-    at(createMemory(content, { tenantId: TENANT_B }), iso);
+  const newFact = a('belief: the tier is 120', ago(HOUR), { extractedFrom: raw.id, layer: Layer.Semantic });
+  const oldFact = { ...a('belief: the tier is 100', ago(40 * 24 * HOUR)), supersededBy: newFact.id };
+  const dangling = { ...a('belief: replaced by a deleted row', ago(20 * 24 * HOUR)), supersededBy: 'mem_gone' };
+  const pinned = a('pinned: the deploy window is friday', ago(3 * HOUR), { pinned: true, confidence: 'verified' });
+  const aged = a('an aged note about the old cluster', ago(2 * 24 * HOUR), { confidence: 'inferred' });
+  const b = (content: string, iso: string): MemoryEntry => at(createMemory(content, { tenantId: TENANT_B }), iso);
   const recentB = b('tenant b: the invoice run is tuesday', ago(HOUR / 2));
   const olderB = b('tenant b: the old invoice run', ago(5 * HOUR));
   for (const e of [raw, newFact, oldFact, dangling, pinned, aged, recentB, olderB]) {
@@ -116,17 +98,10 @@ afterEach(() => vi.useRealTimers());
 describe('Reports.stats', () => {
   it('returns the counters and the newest fifty sleep runs, oldest first', async () => {
     const [stats] = await conforms([(r) => r.stats()]);
-    expect(stats).toMatchObject({
-      value: { total_remembered: 5, total_recalled: 3, total_forgotten: 1 },
-    });
+    expect(stats).toMatchObject({ value: { total_remembered: 5, total_recalled: 3, total_forgotten: 1 } });
     const runs = 'value' in stats ? stats.value.consolidation_runs : null;
     expect(Array.isArray(runs) && runs.length).toBe(50);
-    expect(Array.isArray(runs) && runs[0]).toEqual({
-      timestamp: ago(51 * HOUR),
-      decayed: 51,
-      merged: 0,
-      removed: 1,
-    });
+    expect(Array.isArray(runs) && runs[0]).toEqual({ timestamp: ago(51 * HOUR), decayed: 51, merged: 0, removed: 1 });
   });
 });
 
@@ -145,9 +120,9 @@ describe('Reports.correctionLinks and rawProvenance', () => {
   it('join each superseded row to a successor that exists and its source, and count the raw rows', async () => {
     const [links] = await conforms([(r) => r.correctionLinks({ limit: 500 })]);
     const [raw] = await conforms([(r) => r.rawProvenance({ limit: 500 })]);
-    expect(
-      'value' in links && links.value.links.map((l) => [l.correctedAt, l.sourceCreated]),
-    ).toEqual([[ago(HOUR), ago(30 * 24 * HOUR)]]);
+    expect('value' in links && links.value.links.map((l) => [l.correctedAt, l.sourceCreated])).toEqual([
+      [ago(HOUR), ago(30 * 24 * HOUR)],
+    ]);
     expect('value' in raw && raw.value.total).toBe(1);
   });
 });

@@ -1,12 +1,7 @@
 // Schema v62 adds four partial indexes for the sleep path; each real read must plan onto its index.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import {
-  closeHippoDb,
-  getSchemaVersion,
-  openHippoDb,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { cleanupArchivedMirrors } from '../../src/db/raw-archive-mirror-cleanup.js';
 import { conflictResolveAudits } from '../../src/store/sqlite/conflicts.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -45,11 +40,9 @@ function plan(db: DatabaseSyncLike, sql: string): string {
 
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
-  return (
-    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{
-      name: string;
-    }>
-  ).map((r) => r.name);
+  return (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>).map(
+    (r) => r.name,
+  );
 }
 
 function count(db: DatabaseSyncLike, table: string): number {
@@ -80,14 +73,9 @@ function seedMemories(): void {
 
 function seedLogs(): void {
   withDb((db) => {
-    const audit = db.prepare(
-      `INSERT INTO audit_log (ts, actor, op, metadata_json) VALUES (?, 'a', ?, '{}')`,
-    );
+    const audit = db.prepare(`INSERT INTO audit_log (ts, actor, op, metadata_json) VALUES (?, 'a', ?, '{}')`);
     for (let i = 0; i < 20; i++) {
-      audit.run(
-        `2026-01-01T00:00:${String(i).padStart(2, '0')}Z`,
-        i < 2 ? 'conflict_resolve' : 'remember',
-      );
+      audit.run(`2026-01-01T00:00:${String(i).padStart(2, '0')}Z`, i < 2 ? 'conflict_resolve' : 'remember');
     }
     const raw = db.prepare(
       `INSERT INTO raw_archive (memory_id, archived_at, reason, payload_json, mirror_cleaned_at) VALUES (?, 'now', 'r', '{}', ?)`,
@@ -111,9 +99,7 @@ describe('schema v62', () => {
 
   it('reads dirty summaries through the dirty index', async () => {
     seedMemories();
-    const { statements } = await recordStatementsAsync(
-      async () => await loadAllDirtySummaries(home, 5),
-    );
+    const { statements } = await recordStatementsAsync(async () => await loadAllDirtySummaries(home, 5));
     const sql = statements.find((s) => s.includes('summary_dirty = 1')) ?? failNoSql();
     withDb((db) => expectIndexNoSort(plan(db, sql), DIRTY));
   });

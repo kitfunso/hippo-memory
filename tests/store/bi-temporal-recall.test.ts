@@ -12,9 +12,7 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 oneRequestPerTest();
 
 async function hippo(home: string, globalHome: string, ...args: string[]): Promise<string> {
-  return (
-    await runCliOut(args, { cwd: home, env: { ...process.env, HIPPO_HOME: globalHome } })
-  ).trim();
+  return (await runCliOut(args, { cwd: home, env: { ...process.env, HIPPO_HOME: globalHome } })).trim();
 }
 
 describe('recall with bi-temporal filter', () => {
@@ -50,10 +48,7 @@ describe('recall with bi-temporal filter', () => {
   });
 
   it('markRetrieved is no-op for superseded memories', () => {
-    const entry = createMemory('old fact here', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Episodic,
-    });
+    const entry = createMemory('old fact here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     entry.supersededBy = 'mem_successor';
     const origCount = entry.retrievalCount;
     const origHalfLife = entry.halfLifeDays;

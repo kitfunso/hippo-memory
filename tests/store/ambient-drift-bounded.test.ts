@@ -11,19 +11,13 @@ const MINUTE = 60_000;
 
 function row(id: string, minute: number): MemoryEntry {
   const at = new Date(BASE + minute * MINUTE).toISOString();
-  return {
-    ...createMemory(`row ${id} body`, { tenantId: 'default' }),
-    id,
-    created: at,
-    validFrom: at,
-  };
+  return { ...createMemory(`row ${id} body`, { tenantId: 'default' }), id, created: at, validFrom: at };
 }
 
 function rawCreated(root: string, id: string): string {
   const db = openHippoDb(root);
   try {
-    return (db.prepare('SELECT created FROM memories WHERE id = ?').get(id) as { created: string })
-      .created;
+    return (db.prepare('SELECT created FROM memories WHERE id = ?').get(id) as { created: string }).created;
   } finally {
     closeHippoDb(db);
   }
@@ -41,16 +35,10 @@ function plant(root: string, stamps: Record<string, string>): void {
 }
 
 // contextGet's order: the instant Date reads, then id, newest first.
-function wholeReadNewest(
-  root: string,
-  admit: (e: Pick<MemoryEntry, 'id'>) => boolean,
-  n: number,
-): string[] {
+function wholeReadNewest(root: string, admit: (e: Pick<MemoryEntry, 'id'>) => boolean, n: number): string[] {
   const db = openHippoDb(root);
   try {
-    const rows = db
-      .prepare('SELECT id, created FROM memories WHERE superseded_by IS NULL')
-      .all() as Array<{
+    const rows = db.prepare('SELECT id, created FROM memories WHERE superseded_by IS NULL').all() as Array<{
       id: string;
       created: string;
     }>;
@@ -67,8 +55,7 @@ function wholeReadNewest(
 
 const ids = (entries: readonly MemoryEntry[]) => entries.map((e) => e.id).sort();
 
-const instant = (e: MemoryEntry) =>
-  Number.isNaN(Date.parse(e.created)) ? -Infinity : Date.parse(e.created);
+const instant = (e: MemoryEntry) => (Number.isNaN(Date.parse(e.created)) ? -Infinity : Date.parse(e.created));
 const newest = (entries: readonly MemoryEntry[], n: number) =>
   [...entries]
     .sort((a, b) => instant(b) - instant(a) || (a.id < b.id ? 1 : -1))
@@ -94,10 +81,7 @@ describe('the ambient recent read with legacy stamps still in the store', () => 
     // Newest of all by instant, though its text sorts below every ISO stamp of the same day.
     'r-offset': '2026-06-01 09:00:00+00:00',
     // Inside the window by instant, written with a space and an offset.
-    'r-spaced': new Date(BASE + 35.5 * MINUTE)
-      .toISOString()
-      .replace('T', ' ')
-      .replace('Z', '+00:00'),
+    'r-spaced': new Date(BASE + 35.5 * MINUTE).toISOString().replace('T', ' ').replace('Z', '+00:00'),
     'r-unreadable': 'garbage',
   };
 
@@ -115,9 +99,7 @@ describe('the ambient recent read with legacy stamps still in the store', () => 
   it('returns the window a whole read sorted by instant returns', () => {
     const all = () => true;
     // The first window is max(4 * 5, 32) rows, all kept, so the load returns all of them.
-    expect(ids(loadAmbientCandidates(root, 'default', 5, all).entries)).toEqual(
-      wholeReadNewest(root, all, 32).sort(),
-    );
+    expect(ids(loadAmbientCandidates(root, 'default', 5, all).entries)).toEqual(wholeReadNewest(root, all, 32).sort());
     expect(ids(loadAmbientCandidates(root, 'default', 5, all).entries)).toContain('r-offset');
     // Refusing the newest rows walks keyset pages past the first window, still by instant.
     const old = (e: Pick<MemoryEntry, 'id'>) => e.id < 'r05' || e.id === 'r-spaced';

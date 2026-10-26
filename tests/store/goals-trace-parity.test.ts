@@ -32,11 +32,7 @@ describe('session goal boost trace parity (side-channel)', () => {
   });
 
   function seed(content: string, tags: string[]): MemoryEntry {
-    const entry = createMemory(content, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags,
-      tenantId,
-    });
+    const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags, tenantId });
     writeEntry(hippoRoot, entry);
     return entry;
   }

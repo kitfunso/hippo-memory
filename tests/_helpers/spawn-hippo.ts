@@ -14,11 +14,7 @@ export interface HippoSpawnOptions {
 
 function spawnArgs(args: readonly string[], opts: HippoSpawnOptions) {
   const { cwd, env, input, timeout } = opts;
-  return [
-    opts.exe ?? process.execPath,
-    [HIPPO_BIN, ...args],
-    { cwd, env, input, timeout, encoding: 'utf8' },
-  ] as const;
+  return [opts.exe ?? process.execPath, [HIPPO_BIN, ...args], { cwd, env, input, timeout, encoding: 'utf8' }] as const;
 }
 
 /** Returns stdout; a non-zero exit throws the execFileSync error (stdout, stderr and status on it). */
@@ -28,10 +24,7 @@ export function hippoOut(args: readonly string[], opts: HippoSpawnOptions = {}):
 }
 
 /** Never throws on a non-zero exit; the caller reads status, stdout and stderr. */
-export function hippoRun(
-  args: readonly string[],
-  opts: HippoSpawnOptions = {},
-): SpawnSyncReturns<string> {
+export function hippoRun(args: readonly string[], opts: HippoSpawnOptions = {}): SpawnSyncReturns<string> {
   const [exe, argv, options] = spawnArgs(args, opts);
   return spawnSync(exe, argv, options);
 }

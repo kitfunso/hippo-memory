@@ -1,9 +1,10 @@
 {
-  "printWidth": 100,
+  "printWidth": 120,
   "singleQuote": true,
   "semi": true,
   "trailingComma": "all",
   "arrowParens": "always",
+  "overrides": [{ "files": ["src/**"], "options": { "printWidth": 100 } }],
   "ignorePatterns": [
     "scripts/token-eval/**",
     "tests/eval/token-eval-*",

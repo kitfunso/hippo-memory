@@ -37,10 +37,7 @@ interface ContextBody {
   readonly entries: ReadonlyArray<{ readonly entry: { readonly content: string } }>;
 }
 interface McpBody {
-  readonly result?: {
-    readonly content: ReadonlyArray<{ readonly text: string }>;
-    readonly isError?: boolean;
-  };
+  readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }>; readonly isError?: boolean };
 }
 
 let home: string;
@@ -121,11 +118,7 @@ describe('context reads on a shared store', () => {
   it('GET /v1/context refuses a blank project, too many aliases and an overlong name', async () => {
     const h = await start(true);
     const elevenAliases = Array.from({ length: 11 }, (_, i) => `alias=a${i}`).join('&');
-    for (const query of [
-      '?project=%20%20',
-      `?project=acme&${elevenAliases}`,
-      `?project=${'x'.repeat(257)}`,
-    ]) {
+    for (const query of ['?project=%20%20', `?project=acme&${elevenAliases}`, `?project=${'x'.repeat(257)}`]) {
       expect((await contextTexts(h, query)).status).toBe(400);
     }
   });
@@ -166,12 +159,9 @@ describe('context reads on a shared store', () => {
         const { status, texts } = await contextTexts(h, '?project=acme%2Fapp');
         expect(status).toBe(200);
         expect(texts).toContain(ROWS.acme);
-        for (const hidden of [ROWS.beta, ROWS.none, ROWS.global])
-          expect(texts).not.toContain(hidden);
+        for (const hidden of [ROWS.beta, ROWS.none, ROWS.global]) expect(texts).not.toContain(hidden);
       }
-      expect(
-        warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation')),
-      ).toHaveLength(1);
+      expect(warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation'))).toHaveLength(1);
     } finally {
       warn.mockRestore();
     }
@@ -198,9 +188,9 @@ describe('context reads on a shared store', () => {
     await start(true);
     const ctx: FullContext = apiCtx(home, 'default', adminActor('shared-ctx-test'));
     await expect(contextGet(ctx, { currentProject: '' })).rejects.toBeInstanceOf(BadRequestError);
-    await expect(
-      contextGet(ctx, { currentProject: { name: '  ', legacyName: '' } }),
-    ).rejects.toBeInstanceOf(BadRequestError);
+    await expect(contextGet(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(
+      BadRequestError,
+    );
   });
 });
 
@@ -226,11 +216,7 @@ function armRows(root: string): number {
   const db = openHippoDb(root);
   try {
     // SAFETY: the SELECT names one column, n.
-    return (
-      db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as {
-        n: number;
-      }
-    ).n;
+    return (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number }).n;
   } finally {
     closeHippoDb(db);
   }
@@ -244,11 +230,7 @@ describe('the prompt hook on a shared store', () => {
     const names = ['', '  ', 'Acme/App'];
     for (const [i, name] of names.entries()) {
       await expect(
-        buildPromptHookContext(
-          ctx,
-          { sessionId: `s-${i}`, project: { name, legacyName: '' } },
-          opts,
-        ),
+        buildPromptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts),
       ).rejects.toBeInstanceOf(BadRequestError);
     }
     expect(armRows(root)).toBe(0);
@@ -269,16 +251,12 @@ describe('hippo context on a shared store', () => {
   it('exits 1 with the refusal when the folder names no project', () => {
     home = makeRoot('shared-cli', { config: { sharedStore: true } });
     const cwd = makeRoot('shared-cli-cwd', { init: false });
-    const r = spawnSync(
-      process.execPath,
-      [resolve(__dirname, '..', '..', 'bin', 'hippo.js'), 'context'],
-      {
-        cwd,
-        env: { ...process.env, HIPPO_HOME: home },
-        encoding: 'utf8',
-        timeout: 60_000,
-      },
-    );
+    const r = spawnSync(process.execPath, [resolve(__dirname, '..', '..', 'bin', 'hippo.js'), 'context'], {
+      cwd,
+      env: { ...process.env, HIPPO_HOME: home },
+      encoding: 'utf8',
+      timeout: 60_000,
+    });
     expect(r.status, r.stderr).toBe(1);
     expect(r.stderr).toContain("a shared store needs the caller's project");
   });

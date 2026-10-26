@@ -90,12 +90,7 @@ const MODELS = {
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 // Required files (must be present in the tarball)
-const FILES_REQUIRED = [
-  'config.json',
-  'tokenizer.json',
-  'tokenizer_config.json',
-  'special_tokens_map.json',
-];
+const FILES_REQUIRED = ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json'];
 // Optional files (copied if present; absent files do NOT fail extraction)
 const FILES_OPTIONAL = [
   'vocab.txt', // WordPiece-tokenized models (BERT family); absent for SentencePiece (XLM-R)
@@ -120,9 +115,7 @@ Supported --model values:
     out.dest = process.env.HIPPO_MODEL_CACHE || resolve('benchmarks/longmemeval/data/model-cache');
   }
   if (!MODELS[out.model]) {
-    console.error(
-      `[fetch_embedding_model] unknown --model ${out.model}; supported: ${Object.keys(MODELS).join(', ')}`,
-    );
+    console.error(`[fetch_embedding_model] unknown --model ${out.model}; supported: ${Object.keys(MODELS).join(', ')}`);
     exit(2);
   }
   return out;

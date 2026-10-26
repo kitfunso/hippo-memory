@@ -43,13 +43,7 @@ import { processGit } from '../../src/infra/git-runner.js';
 const T = 'default';
 const OWN_A = 'personal:private:alice';
 const OWN_B = 'personal:private:bob';
-const SCOPES = {
-  a: OWN_A,
-  b: OWN_B,
-  team: null,
-  slack: 'slack:private:C1',
-  legacy: 'unknown:legacy',
-} as const;
+const SCOPES = { a: OWN_A, b: OWN_B, team: null, slack: 'slack:private:C1', legacy: 'unknown:legacy' } as const;
 const QUERY = [1, 0, 0];
 const now = new Date();
 
@@ -63,21 +57,14 @@ function mem(content: string, opts: Partial<CreateMemoryOptions>): MemoryEntry {
 // Five rows that every site could match on "zebrafish", one per scope, plus raw rows for the session count.
 function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) =>
-    mem(`zebrafish note ${k} keeps the build cache warm`, {
-      scope,
-      tags: [`who:${k}`, 'path:hippo'],
-    }),
+    mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }),
   );
   batchWriteAndDeleteInFolder(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
   for (const k of ['a', 'b', 'team'] as const) {
     writeEntry(
       root,
-      mem(`raw transcript line from ${k}`, {
-        scope: SCOPES[k],
-        kind: 'raw',
-        sourceSessionId: 'sess-1',
-      }),
+      mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }),
     );
   }
 }
@@ -148,8 +135,7 @@ describe('owner-taking read sites', () => {
   });
 
   it('context candidates: A sees its row, B and no-owner do not', () => {
-    const load = (ownScope?: string): string[] =>
-      keysOf(loadContextCandidates(root, T, { ownScope, cap: 100, now }));
+    const load = (ownScope?: string): string[] => keysOf(loadContextCandidates(root, T, { ownScope, cap: 100, now }));
     expect(load(OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B)).toEqual(['b', 'team']);
     expect(load()).toEqual(['team']);
@@ -157,10 +143,7 @@ describe('owner-taking read sites', () => {
 
   it('ambient prompt recall: A sees its row, B and no-owner do not', () => {
     const load = (ownScope?: string): string[] =>
-      keysOf(
-        loadAmbientCandidates(root, T, 0, () => true, { terms: ['zebrafish'], limit: 50, ownScope })
-          .recall ?? [],
-      );
+      keysOf(loadAmbientCandidates(root, T, 0, () => true, { terms: ['zebrafish'], limit: 50, ownScope }).recall ?? []);
     expect(load(OWN_A)).toEqual(['a', 'team']);
     expect(load(OWN_B)).toEqual(['b', 'team']);
     expect(load()).toEqual(['team']);
@@ -185,28 +168,14 @@ describe('owner-taking read sites', () => {
 
 describe('deny-only read sites', () => {
   it('handoffs: the default-deny read skips a newer personal handoff', () => {
-    saveSessionHandoff(root, T, {
-      version: 1,
-      sessionId: 's-team',
-      summary: 'team handoff',
-      scope: null,
-    });
-    saveSessionHandoff(root, T, {
-      version: 1,
-      sessionId: 's-a',
-      summary: 'alice handoff',
-      scope: OWN_A,
-    });
+    saveSessionHandoff(root, T, { version: 1, sessionId: 's-team', summary: 'team handoff', scope: null });
+    saveSessionHandoff(root, T, { version: 1, sessionId: 's-a', summary: 'alice handoff', scope: OWN_A });
     expect(loadLatestHandoff(root, T)?.summary).toBe('alice handoff');
-    expect(loadLatestHandoff(root, T, undefined, { scopeFilter: 'default-deny' })?.summary).toBe(
-      'team handoff',
-    );
+    expect(loadLatestHandoff(root, T, undefined, { scopeFilter: 'default-deny' })?.summary).toBe('team handoff');
   });
 
   it('brief receipts: only the team row counts, though A can read its own', async () => {
-    expect(keysOf(loadContextCandidates(root, T, { ownScope: OWN_A, cap: 100, now }))).toContain(
-      'a',
-    );
+    expect(keysOf(loadContextCandidates(root, T, { ownScope: OWN_A, cap: 100, now }))).toContain('a');
     const brief = await briefFromReceipts(objectsAt(root), T, 'hippo');
     expect(brief.receiptCount).toBe(1);
     expect(brief.markdown).toContain('zebrafish note team');
@@ -233,9 +202,7 @@ describe('deny-only read sites', () => {
     try {
       expect(saveItems(db, storeFilesOf(root), ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       // SAFETY: the SELECT names only the content column.
-      const written = db
-        .prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`)
-        .all() as Array<{
+      const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{
         content: string;
       }>;
       expect(written.map((r) => r.content)).toEqual([items[0]]);
@@ -249,11 +216,7 @@ describe('deny-only read sites', () => {
     try {
       // SAFETY: one COUNT row.
       expect(
-        (
-          db
-            .prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%zebrafish%'`)
-            .get() as { c: number }
-        ).c,
+        (db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%zebrafish%'`).get() as { c: number }).c,
       ).toBe(5);
     } finally {
       closeHippoDb(db);
@@ -287,13 +250,7 @@ describe('admin read sites', () => {
     const actors: ScopeActor[] = [{ role: 'admin', owner: 'alice' }, { role: 'admin' }];
     for (const actor of actors) {
       const texts = scopes.map((_, i) => `gannet row ${i}`);
-      const rows = loadTextsHolding(
-        root,
-        T,
-        texts,
-        undefined,
-        touchableScopeSql('', personalScopeOf(actor)),
-      );
+      const rows = loadTextsHolding(root, T, texts, undefined, touchableScopeSql('', personalScopeOf(actor)));
       const viaSql = rows.map((r) => scopes[Number(r.content.split(' ')[2])]);
       const viaJs = scopes.filter((s) => s === null || canReadScope(actor, s));
       expect(new Set(viaSql), actor.owner).toEqual(new Set(viaJs));
@@ -306,10 +263,7 @@ describe('admin read sites', () => {
   ])(
     "%s learn: another person's personal row never answers duplicate; a legacy row and the caller's own do",
     async (_, profile) => {
-      fs.writeFileSync(
-        path.join(root, 'config.json'),
-        JSON.stringify({ embeddings: { enabled: false } }),
-      );
+      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       const repo = path.join(dir, 'repo');
       fs.mkdirSync(repo);
       const git = (...args: string[]): void => {
@@ -324,9 +278,7 @@ describe('admin read sites', () => {
       const ctx = apiCtx(root, T, { ...adminActor('learn-test'), owner: 'alice' });
       const run = () => learn(ctx, { repoPath: repo, days: 7, profile, git: processGit });
       const move = (from: string | null, to: string): void => {
-        const row = loadAllEntries(root, T).find(
-          (e) => e.source === profile.source && (e.scope ?? null) === from,
-        )!;
+        const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;
         writeEntry(root, { ...row, scope: to });
       };
       expect(await run()).toMatchObject({ added: 1, skipped: 0 });

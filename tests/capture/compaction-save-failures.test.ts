@@ -27,9 +27,7 @@ const payload = (): PostCompactPayload => ({
   trigger: 'auto',
   cwd: s.proj,
   transcriptPath: null,
-  compactSummary: summaryWith([
-    'The billing service uses pnpm, so npm install is never run there.',
-  ]),
+  compactSummary: summaryWith(['The billing service uses pnpm, so npm install is never run there.']),
 });
 
 // Each case holds the lock while the save waits out COMPACTION_DB_WAIT_MS, so it runs for seconds by design.
@@ -39,9 +37,7 @@ describe('saveCompaction reports each failure once', { timeout: 30_000 }, () => 
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const result = await saveCompaction(compactionFolder(s.hippoRoot), payload(), (m) =>
-        logs.push(m),
-      );
+      const result = await saveCompaction(compactionFolder(s.hippoRoot), payload(), (m) => logs.push(m));
       expect(result.deferred).toBe(true);
     } finally {
       db.exec('ROLLBACK');
@@ -53,16 +49,11 @@ describe('saveCompaction reports each failure once', { timeout: 30_000 }, () => 
 
   it('a spool that cannot be written is logged once to the hook and once to the structured log', async () => {
     const errors = vi.spyOn(logger, 'error').mockImplementation(() => {});
-    fs.writeFileSync(
-      path.join(s.hippoRoot, 'compactions-spool'),
-      'a file where the directory should be',
-    );
+    fs.writeFileSync(path.join(s.hippoRoot, 'compactions-spool'), 'a file where the directory should be');
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const result = await saveCompaction(compactionFolder(s.hippoRoot), payload(), (m) =>
-        logs.push(m),
-      );
+      const result = await saveCompaction(compactionFolder(s.hippoRoot), payload(), (m) => logs.push(m));
       expect(result.deferred).toBe(false);
     } finally {
       db.exec('ROLLBACK');

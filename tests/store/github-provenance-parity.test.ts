@@ -11,10 +11,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
-import type {
-  GitHubIssueEvent,
-  GitHubIssueCommentEvent,
-} from '../../src/surface/connectors/github/types.js';
+import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/surface/connectors/github/types.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -98,9 +95,7 @@ describe('GitHub connector — provenance coverage parity', () => {
 
     // GitHub-specific: at least 50 rows are tagged source:github, and every
     // such row has a non-null owner shaped `user:github:<login>`.
-    const githubEntries = entries.filter(
-      (e) => e.kind === 'raw' && e.tags.includes('source:github'),
-    );
+    const githubEntries = entries.filter((e) => e.kind === 'raw' && e.tags.includes('source:github'));
     expect(githubEntries.length).toBeGreaterThanOrEqual(50);
     for (const e of githubEntries) {
       expect(e.owner).not.toBeNull();

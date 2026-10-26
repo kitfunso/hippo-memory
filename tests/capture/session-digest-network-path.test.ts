@@ -74,13 +74,9 @@ const digest = async (finalText: string, edits: DigestEdit[] = []): Promise<stri
 
 describe('network paths in a digest', () => {
   it('still probes a local repo path, so the checks below are live', async () => {
-    expect(await digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe(
-      'Changed: src/a.ts',
-    );
+    expect(await digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
     // Every module's existsSync is recorded; the digest's own probes walk the missing file up to its folder.
-    expect(probes).toEqual(
-      expect.arrayContaining([repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]),
-    );
+    expect(probes).toEqual(expect.arrayContaining([repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]));
   });
 
   it.each([

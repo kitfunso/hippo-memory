@@ -7,13 +7,7 @@ import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/entry.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
 import { removeAfterRequest } from './one-request-per-test.js';
-const FIXTURE = path.resolve(
-  __dirname,
-  '..',
-  'fixtures',
-  'compaction',
-  'post-compact-payloads.jsonl',
-);
+const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
   dir: string;
@@ -29,12 +23,7 @@ export function scratch(): Scratch {
   const proj = path.join(dir, 'proj');
   fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
   const globalRoot = path.join(dir, 'global');
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HIPPO_HOME: globalRoot,
-    HOME: dir,
-    USERPROFILE: dir,
-  };
+  const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: globalRoot, HOME: dir, USERPROFILE: dir };
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.HIPPO_SESSION_ID;
   return { dir, proj, env, hippoRoot: path.join(proj, '.hippo'), globalRoot };
@@ -54,19 +43,13 @@ export function runHippo(
 }
 
 export async function initProject(s: Scratch): Promise<void> {
-  expect(
-    (await runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env)).status,
-  ).toBe(0);
+  expect((await runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], s.proj, s.env)).status).toBe(0);
 }
 
 export async function initGlobal(s: Scratch): Promise<void> {
   expect(
-    (
-      await runCliAs(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], {
-        cwd: s.proj,
-        env: s.env,
-      })
-    ).status,
+    (await runCliAs(['init', '--global', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: s.proj, env: s.env }))
+      .status,
   ).toBe(0);
 }
 
@@ -88,21 +71,12 @@ export function postCompactPayload(
   summary: string | null,
   extra: Record<string, string> = {},
 ): string {
-  const base = {
-    session_id: sessionId,
-    cwd,
-    hook_event_name: 'PostCompact',
-    trigger: 'auto',
-    ...extra,
-  };
+  const base = { session_id: sessionId, cwd, hook_event_name: 'PostCompact', trigger: 'auto', ...extra };
   return JSON.stringify(summary === null ? base : { ...base, compact_summary: summary });
 }
 
 /** A compact_summary shaped like Claude Code's, with the requested memories list. */
-export function summaryWith(
-  items: string[],
-  body = '1. Primary Request: fix the flaky login test.',
-): string {
+export function summaryWith(items: string[], body = '1. Primary Request: fix the flaky login test.'): string {
   const list = items.map((item) => `- ${item}`).join('\n');
   return `<analysis>\nScratch thinking that must not be stored.\n</analysis>\n\n<summary>\n${body}\n\nMemories for hippo:\n${list}\n</summary>`;
 }
@@ -155,11 +129,7 @@ export function compactionMemories(hippoRoot: string): CompactionMemoryRow[] {
   );
 }
 
-export function run(
-  hippoRoot: string,
-  sql: string,
-  ...params: Array<string | number | null>
-): void {
+export function run(hippoRoot: string, sql: string, ...params: Array<string | number | null>): void {
   const db = openHippoDb(hippoRoot);
   try {
     db.prepare(sql).run(...params);

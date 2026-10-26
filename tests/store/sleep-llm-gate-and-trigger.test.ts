@@ -38,8 +38,7 @@ function llmReturning(res: () => Response) {
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
   return vi.fn<typeof fetch>(async () => res());
 }
-const emptyFacts = () =>
-  new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+const emptyFacts = () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -101,8 +100,7 @@ describe('the sleep LLM gate', () => {
       const root = rootWithCandidates();
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const fetcher = llmReturning(
-        () =>
-          new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }),
+        () => new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }),
       );
 
       const result = await consolidate(root, { fetcher });
@@ -179,9 +177,7 @@ describe('the sleep LLM gate', () => {
 
       expect(seen.launched).toBeGreaterThan(FAIL_AT);
       expect(seen.launched).toBeLessThanOrEqual(FAIL_AT + 1 + 3);
-      expect(detailLines(result).join('\n')).toContain(
-        `${COUNT - FAIL_AT - 1} of ${COUNT} candidates skipped`,
-      );
+      expect(detailLines(result).join('\n')).toContain(`${COUNT - FAIL_AT - 1} of ${COUNT} candidates skipped`);
     });
   });
 
@@ -218,9 +214,7 @@ describe('the configured base half-life', () => {
   it('api.remember uses defaultHalfLifeDays from config.json', async () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
-    const { id } = await remember(ctx, {
-      content: 'the on-call rotation hands over every tuesday',
-    });
+    const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
     expect(readEntry(root, id)?.halfLifeDays).toBe(14);
   });
 });

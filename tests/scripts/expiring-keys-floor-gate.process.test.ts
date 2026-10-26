@@ -38,10 +38,7 @@ function writeTree(root: string, version: string, floors: Floors, schema: number
     `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`,
   );
   const list = Array.from({ length: schema - 50 }, (_, i) => `v${51 + i}`).join(', ');
-  writeFileSync(
-    join(root, 'src', 'db', 'migrations', 'index.ts'),
-    `export const MIGRATIONS = [${list}];\n`,
-  );
+  writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
 }
 
 /** A git repo at `version` with schema v54 in its tree; `tag` first commits a release shipping `schema` under that name.
@@ -76,17 +73,13 @@ afterAll(() => {
 
 describe('check-expiring-keys-floor.mjs', () => {
   it('passes when the floor is the package version and no release carries that tag yet', () => {
-    const r = runGate(
-      makeRepo('1.1.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.0.0', schema: 52 }),
-    );
+    const r = runGate(makeRepo('1.1.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('1.1.0');
   });
 
   it('passes when the floor names a tagged release that ships v53', () => {
-    const r = runGate(
-      makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.2.0' }, { name: '1.1.0', schema: 53 }),
-    );
+    const r = runGate(makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.2.0' }, { name: '1.1.0', schema: 53 }));
     expect(r.status, r.stderr).toBe(0);
   });
 
@@ -97,17 +90,13 @@ describe('check-expiring-keys-floor.mjs', () => {
   });
 
   it('fails when the floor names a tagged release that predates v53', () => {
-    const r = runGate(
-      makeRepo('1.1.0', { expiring: '1.0.0', owner: '1.1.0' }, { name: '1.0.0', schema: 52 }),
-    );
+    const r = runGate(makeRepo('1.1.0', { expiring: '1.0.0', owner: '1.1.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('v1.0.0 does not ship schema v53');
   });
 
   it('fails when a floor names an untagged version that is not the package version', () => {
-    const r = runGate(
-      makeRepo('1.2.0', { expiring: '1.1.5', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }),
-    );
+    const r = runGate(makeRepo('1.2.0', { expiring: '1.1.5', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status).toBe(1);
     expect(r.stderr).toContain(
       'EXPIRING_KEYS_MIN_BINARY 1.1.5 names no release tag and is not the package version 1.2.0',
@@ -115,17 +104,13 @@ describe('check-expiring-keys-floor.mjs', () => {
   });
 
   it('TASK_OWNER_MIN_BINARY above the package fails', () => {
-    const r = runGate(
-      makeRepo('1.1.0', { expiring: '1.1.0', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }),
-    );
+    const r = runGate(makeRepo('1.1.0', { expiring: '1.1.0', owner: '1.2.0' }, { name: '1.0.0', schema: 52 }));
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('TASK_OWNER_MIN_BINARY 1.2.0 is above the package version 1.1.0');
   });
 
   it('TASK_OWNER_MIN_BINARY naming a tag without v54 fails', () => {
-    const r = runGate(
-      makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.1.0', schema: 53 }),
-    );
+    const r = runGate(makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.1.0', schema: 53 }));
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('v1.1.0 does not ship schema v54');
   });
@@ -137,9 +122,7 @@ describe('check-expiring-keys-floor.mjs', () => {
   });
 
   it('both floors valid passes', () => {
-    const r = runGate(
-      makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.1.0', schema: 54 }),
-    );
+    const r = runGate(makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.1.0', schema: 54 }));
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('TASK_OWNER_MIN_BINARY 1.1.0');
   });

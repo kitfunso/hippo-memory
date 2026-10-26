@@ -30,8 +30,7 @@ afterEach(() => {
   removeAfterRequest(root);
 });
 
-const run = (...args: string[]): Promise<InProcessResult> =>
-  runInProcess(() => runCli(['node', 'hippo', ...args]));
+const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function remember(text: string, ...extra: string[]): Promise<string> {
   const r = await run('remember', text, '--force', ...extra);
@@ -61,9 +60,7 @@ describe('hippo remember output', () => {
     const r = await run('remember', 'some note about the release train', '--kind', 'raw');
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Invalid --kind: "raw". Must be one of: distilled, superseded');
-    expect(r.stderr).toContain(
-      "(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)",
-    );
+    expect(r.stderr).toContain("(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)");
   });
 });
 
@@ -129,9 +126,7 @@ describe('hippo trace <id>', () => {
 describe('hippo explain', () => {
   it('keeps the --json shape and the text table', async () => {
     await remember('haddock fishing rules changed in spring');
-    const json: { results: object[] } = JSON.parse(
-      (await run('explain', 'haddock', '--json')).stdout,
-    );
+    const json: { results: object[] } = JSON.parse((await run('explain', 'haddock', '--json')).stdout);
     expect(Object.keys(json)).toEqual(['query', 'mode', 'candidates', 'returned', 'results']);
     expect(Object.keys(json.results[0])).toEqual([
       'rank',
@@ -150,16 +145,12 @@ describe('hippo explain', () => {
     expect(text).toContain('Rank  Score   Strength  Age    Layer      ID                Preview');
     expect(text).toMatch(/\n\[1\] \S+ {3}composite=/);
     expect(text).toContain('    final:     ');
-    expect(
-      text.trimEnd().endsWith('Note: explain does not mark memories as retrieved (read-only).'),
-    ).toBe(true);
+    expect(text.trimEnd().endsWith('Note: explain does not mark memories as retrieved (read-only).')).toBe(true);
   });
 
   it('says so when nothing matches', async () => {
     await remember('haddock fishing rules changed in spring');
-    expect((await run('explain', 'zzqqxx')).stdout).toMatch(
-      /^No memories matched "zzqqxx" \(scanned \d+\)\.\n$/,
-    );
+    expect((await run('explain', 'zzqqxx')).stdout).toMatch(/^No memories matched "zzqqxx" \(scanned \d+\)\.\n$/);
   });
 });
 
@@ -198,9 +189,7 @@ describe('hippo hook', () => {
     const list = (await run('hook', 'list')).stdout;
     expect(list.startsWith('Available hooks:\n\n')).toBe(true);
     expect(list).toContain('  claude-code     -> CLAUDE.md (');
-    expect(
-      list.endsWith('\nUsage: hippo hook install <name>\n       hippo hook uninstall <name>\n'),
-    ).toBe(true);
+    expect(list.endsWith('\nUsage: hippo hook install <name>\n       hippo hook uninstall <name>\n')).toBe(true);
     const bad = await run('hook', 'nope');
     expect(bad.status).toBe(1);
     expect(bad.stderr).toContain('Usage: hippo hook <install|uninstall|list> [target]');
@@ -213,9 +202,7 @@ describe('hippo hook', () => {
     const r = await run('hook', 'install', 'claude-code');
     expect(r.status, r.stderr).toBe(0);
     // The CLI prints process.cwd(), which macOS resolves through the /var -> /private/var link.
-    expect(r.stdout).toContain(
-      `CLAUDE.md not found in ${fs.realpathSync(root)} — skipping agent-instructions patch.`,
-    );
+    expect(r.stdout).toContain(`CLAUDE.md not found in ${fs.realpathSync(root)} — skipping agent-instructions patch.`);
     expect(r.stdout).toContain('Installed hippo session-end SessionEnd hook in ');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
     expect(fs.existsSync(path.join(root, '.claude', 'settings.json'))).toBe(true);

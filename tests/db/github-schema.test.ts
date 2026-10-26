@@ -109,9 +109,13 @@ describe('schema v24 — github connector tables', () => {
       ]) {
         expect(names.has(col), `missing column: ${col}`).toBe(true);
       }
-      db.prepare(
-        `INSERT INTO github_dlq (tenant_id, raw_payload, error, received_at, bucket) VALUES (?,?,?,?,?)`,
-      ).run('default', '{}', 'parse error', '2026-05-04T00:00:00Z', 'parse_error');
+      db.prepare(`INSERT INTO github_dlq (tenant_id, raw_payload, error, received_at, bucket) VALUES (?,?,?,?,?)`).run(
+        'default',
+        '{}',
+        'parse error',
+        '2026-05-04T00:00:00Z',
+        'parse_error',
+      );
       // SAFETY: SELECT id, retry_count projects exactly these two NOT NULL columns.
       const row = db.prepare(`SELECT id, retry_count FROM github_dlq LIMIT 1`).get() as {
         id: number;
@@ -127,14 +131,14 @@ describe('schema v24 — github connector tables', () => {
   it('github_installations has PK on installation_id', () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?,?,?)`,
-      ).run('100', 'acme', '2026-05-04T00:00:00Z');
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?,?,?)`).run(
+        '100',
+        'acme',
+        '2026-05-04T00:00:00Z',
+      );
       expect(() =>
         db
-          .prepare(
-            `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?,?,?)`,
-          )
+          .prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?,?,?)`)
           .run('100', 'other', '2026-05-04T00:00:01Z'),
       ).toThrow();
     } finally {
@@ -145,19 +149,21 @@ describe('schema v24 — github connector tables', () => {
   it('github_repositories has composite PK', () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`,
-      ).run('acme/repo', 'tenant-a', '2026-05-04T00:00:00Z');
+      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`).run(
+        'acme/repo',
+        'tenant-a',
+        '2026-05-04T00:00:00Z',
+      );
       // Same repo for different tenant: NOT a collision (composite PK).
-      db.prepare(
-        `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`,
-      ).run('acme/repo', 'tenant-b', '2026-05-04T00:00:01Z');
+      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`).run(
+        'acme/repo',
+        'tenant-b',
+        '2026-05-04T00:00:01Z',
+      );
       // Same (repo, tenant): collides.
       expect(() =>
         db
-          .prepare(
-            `INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`,
-          )
+          .prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`)
           .run('acme/repo', 'tenant-a', '2026-05-04T00:00:02Z'),
       ).toThrow();
     } finally {

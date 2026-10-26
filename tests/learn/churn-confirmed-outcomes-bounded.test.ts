@@ -47,11 +47,7 @@ function addOutcomes(root: string, outcomes: readonly Outcome[]): void {
 }
 
 function seedHistory(root: string): void {
-  const old = Array.from({ length: OLD_TARGETS }, (_, i): Outcome => [
-    `old-${i}`,
-    '2020-01-01T00:00:00.000Z',
-    true,
-  ]);
+  const old = Array.from({ length: OLD_TARGETS }, (_, i): Outcome => [`old-${i}`, '2020-01-01T00:00:00.000Z', true]);
   addOutcomes(root, [
     ...old,
     ['new-a', '2026-03-01T00:00:00.000Z', true],
@@ -76,32 +72,22 @@ describe('confirmedOutcomeTimes', () => {
       ['new-b', '2026-05-01T00:00:00.000Z'],
     ]);
     expect(outcomeRows(reads)).toBe(2);
-    expect((await learning.confirmedOutcomeTimes('default', '2019-01-01T00:00:00.000Z')).size).toBe(
-      OLD_TARGETS + 2,
-    );
+    expect((await learning.confirmedOutcomeTimes('default', '2019-01-01T00:00:00.000Z')).size).toBe(OLD_TARGETS + 2);
   });
 
   it('plans the read as a range on the (tenant_id, op, ts) index, so rows before the bound are never visited', async () => {
     const root = newRoot();
     seedHistory(root);
     const { statements } = await recordStatementsAsync(
-      async () =>
-        await sqliteStore(root).learning.confirmedOutcomeTimes(
-          'default',
-          '2026-01-01T00:00:00.000Z',
-        ),
+      async () => await sqliteStore(root).learning.confirmedOutcomeTimes('default', '2026-01-01T00:00:00.000Z'),
     );
-    const sql = statements.find(
-      (s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'),
-    );
+    const sql = statements.find((s) => s.includes('FROM audit_log') && s.includes('GROUP BY target_id'));
     expect(sql).toContain('GROUP BY target_id');
 
     const db = openHippoDb(root);
     try {
       // SAFETY: an EXPLAIN QUERY PLAN row carries a text `detail` column.
-      const rows = db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all('default', '2026-01-01T00:00:00.000Z') as Array<{
+      const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('default', '2026-01-01T00:00:00.000Z') as Array<{
         detail: string;
       }>;
       expect(rows.map((row) => row.detail).join('\n')).toMatch(
@@ -117,10 +103,7 @@ describe('detectChurnStale', () => {
   it('starts its outcome read at the oldest candidate, so older outcomes never reach it', async () => {
     const root = newRoot();
     seedHistory(root);
-    const entry = {
-      ...createMemory('a plain note about the team', { tenantId: 'default' }),
-      originProject: 'proj',
-    };
+    const entry = { ...createMemory('a plain note about the team', { tenantId: 'default' }), originProject: 'proj' };
     writeEntry(root, entry);
 
     const { result, reads } = await recordStatementsAsync(() =>

@@ -161,11 +161,7 @@ describe('live population', () => {
     seed(store.hippoRoot, 'archived row', { kind: 'archived' });
     seed(store.hippoRoot, 'quarantined row', { scope: quarantineScopeFor(null) });
     // Quarantine wins over superseded, so this row is counted once, as quarantined.
-    seed(store.hippoRoot, 'both', {
-      kind: 'superseded',
-      supersededBy: successor.id,
-      scope: quarantineScopeFor('x'),
-    });
+    seed(store.hippoRoot, 'both', { kind: 'superseded', supersededBy: successor.id, scope: quarantineScopeFor('x') });
 
     const read = await overview();
 
@@ -177,10 +173,7 @@ describe('live population', () => {
 describe('vector coverage', () => {
   it('imports a legacy embeddings.json on the read and counts it in that same read', async () => {
     const row = seed(store.hippoRoot, 'a row');
-    writeFileSync(
-      join(store.hippoRoot, 'embeddings.json'),
-      JSON.stringify({ [row.id]: [0.1, 0.2] }),
-    );
+    writeFileSync(join(store.hippoRoot, 'embeddings.json'), JSON.stringify({ [row.id]: [0.1, 0.2] }));
 
     const read = await overview();
 
@@ -197,9 +190,7 @@ describe('vector coverage', () => {
     expect(read.total).toBe(1);
     expect(read.embeddingCoverage).toBe(0);
     expect(existsSync(join(store.hippoRoot, 'embeddings.json'))).toBe(false);
-    expect(readdirSync(store.hippoRoot).some((f) => f.startsWith('embeddings.json.corrupt-'))).toBe(
-      true,
-    );
+    expect(readdirSync(store.hippoRoot).some((f) => f.startsWith('embeddings.json.corrupt-'))).toBe(true);
   });
 
   it('counts a vector write at once, and moves the id once the coalescing window has passed', async () => {
@@ -255,9 +246,7 @@ describe('through the server', () => {
     expect((await get(dash.port, `/api/memory/${target.id}`)).status).toBe(200);
     clock += COALESCE_MS + 1;
 
-    expect(parse<Overview>(await get(dash.port, '/api/overview')).snapshotId).toBe(
-      first.snapshotId,
-    );
+    expect(parse<Overview>(await get(dash.port, '/api/overview')).snapshotId).toBe(first.snapshotId);
   });
 
   it('reads the detail embedded flag at each read, so a new vector shows inside the window', async () => {
@@ -304,9 +293,7 @@ describe('through the server', () => {
     });
     const plain = parse<Overview>(await get(dash.port, '/api/overview'));
     const sameOrigin = parse<Overview>(
-      await call(dash.port, 'GET', '/api/overview?fresh=1', {
-        headers: { 'Sec-Fetch-Site': 'same-origin' },
-      }),
+      await call(dash.port, 'GET', '/api/overview?fresh=1', { headers: { 'Sec-Fetch-Site': 'same-origin' } }),
     );
 
     expect(crossSite.status).toBe(403);

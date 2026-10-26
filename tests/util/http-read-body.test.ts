@@ -23,8 +23,7 @@ function trickle(): Readable {
   });
 }
 
-const liveTimers = (): number =>
-  process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
+const liveTimers = (): number => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
 
 describe('readBody deadline', () => {
   it('fails a never-ending stream with BodyTimeoutError once the deadline passes, and not before', async () => {
@@ -48,9 +47,7 @@ describe('readBody deadline', () => {
   it('returns a body that arrives in time and leaves no timer behind', async () => {
     const before = liveTimers();
     expect(
-      await readBody(asRequest(Readable.from([Buffer.from('{"a":'), Buffer.from('1}')])), {
-        deadlineMs: 60_000,
-      }),
+      await readBody(asRequest(Readable.from([Buffer.from('{"a":'), Buffer.from('1}')])), { deadlineMs: 60_000 }),
     ).toBe('{"a":1}');
     expect(liveTimers()).toBe(before);
   });
@@ -58,10 +55,7 @@ describe('readBody deadline', () => {
   it('leaves no timer behind when the read ends over its cap', async () => {
     const before = liveTimers();
     await expect(
-      readBody(asRequest(Readable.from([Buffer.from('abcdef')])), {
-        maxBytes: 4,
-        deadlineMs: 60_000,
-      }),
+      readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4, deadlineMs: 60_000 }),
     ).rejects.toBeInstanceOf(BodyTooLargeError);
     expect(liveTimers()).toBe(before);
   });
@@ -73,18 +67,14 @@ describe('readBody deadline', () => {
         this.destroy(new Error('socket reset'));
       },
     });
-    await expect(readBody(asRequest(broken), { deadlineMs: 60_000 })).rejects.toThrow(
-      'socket reset',
-    );
+    await expect(readBody(asRequest(broken), { deadlineMs: 60_000 })).rejects.toThrow('socket reset');
     expect(liveTimers()).toBe(before);
   });
 
   it('keeps the cap when no deadline is given', async () => {
-    await expect(
-      readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4 }),
-    ).rejects.toBeInstanceOf(BodyTooLargeError);
-    expect(await readBody(asRequest(Readable.from([Buffer.from('abcd')])), { maxBytes: 4 })).toBe(
-      'abcd',
+    await expect(readBody(asRequest(Readable.from([Buffer.from('abcdef')])), { maxBytes: 4 })).rejects.toBeInstanceOf(
+      BodyTooLargeError,
     );
+    expect(await readBody(asRequest(Readable.from([Buffer.from('abcd')])), { maxBytes: 4 })).toBe('abcd');
   });
 });

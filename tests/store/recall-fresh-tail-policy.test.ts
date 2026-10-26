@@ -79,9 +79,7 @@ describe('fresh-tail policy', () => {
     // RecallContractError before either cast reads its fields.
     expect((thrown as RecallContractError).code).toBe('fresh_tail_requires_session_id');
     // SAFETY: same guaranteed RecallContractError instance as above.
-    expect((thrown as RecallContractError).message).toContain(
-      'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
-    );
+    expect((thrown as RecallContractError).message).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
   });
 
   it('env=1, freshTailSessionId set → no throw, session-scoped rows surface', async () => {
@@ -138,9 +136,7 @@ describe('fresh-tail policy', () => {
       const tail = r.results.filter((it) => it.isFreshTail);
       expect(tail).toHaveLength(3);
       expect(new Set(tail.map((it) => it.id)).size).toBe(3);
-      expect(
-        r.results.filter((it) => it.content.startsWith(`v-${val}-event`) && it.isFreshTail),
-      ).toHaveLength(3);
+      expect(r.results.filter((it) => it.content.startsWith(`v-${val}-event`) && it.isFreshTail)).toHaveLength(3);
     }
   });
 });

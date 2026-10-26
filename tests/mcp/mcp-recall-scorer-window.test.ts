@@ -76,18 +76,15 @@ describe('MCP hippo_recall scorer_window', () => {
   afterEach(() => removeAfterRequest(home));
 
   // 'abc' is Number-coerced by the transport so recall() rejects it like HTTP does.
-  it.each([0, 'abc'])(
-    'scorer_window=%s throws RecallContractError with code=invalid_scorer_window',
-    async (value) => {
-      const call = callTool(
-        'hippo_recall',
-        { query: 'alpha', scorer_window: value },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-      );
-      await expect(call).rejects.toBeInstanceOf(RecallContractError);
-      await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
-    },
-  );
+  it.each([0, 'abc'])('scorer_window=%s throws RecallContractError with code=invalid_scorer_window', async (value) => {
+    const call = callTool(
+      'hippo_recall',
+      { query: 'alpha', scorer_window: value },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+    );
+    await expect(call).rejects.toBeInstanceOf(RecallContractError);
+    await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
+  });
 
   it('scorer_window+fresh_tail_count exercises the api.recall appendix path', async () => {
     // The appendix-marker assertion is non-deterministic in this test

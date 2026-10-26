@@ -36,8 +36,7 @@ function seedPin(root: string, content: string): string {
   return entry.id;
 }
 
-const idsOf = (r: { entries: Array<{ entry: { id: string } }> }): string[] =>
-  r.entries.map((e) => e.entry.id);
+const idsOf = (r: { entries: Array<{ entry: { id: string } }> }): string[] => r.entries.map((e) => e.entry.id);
 
 beforeEach(() => {
   tmpRoot = makeRoot('no-reach', { init: false });
@@ -57,9 +56,7 @@ const OPTS = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT } as 
 describe('contextGet without a reach', () => {
   it('reads the global store only when the root gave a reach', async () => {
     const withReach = apiCtx(local);
-    expect(idsOf(await contextGet(withReach, OPTS))).toEqual(
-      expect.arrayContaining([localPin, globalPin]),
-    );
+    expect(idsOf(await contextGet(withReach, OPTS))).toEqual(expect.arrayContaining([localPin, globalPin]));
     const { reach: _reach, ...bare } = withReach;
     expect(idsOf(await contextGet(bare, OPTS))).toEqual([localPin]);
   });

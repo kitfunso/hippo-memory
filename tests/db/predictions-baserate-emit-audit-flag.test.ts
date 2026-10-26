@@ -31,9 +31,7 @@ function countPredictBaserateAudits(root: string): number {
   try {
     // SAFETY: literal COUNT(*) query against the known audit_log schema
     // always returns a single { n } row.
-    const row = db
-      .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'predict_baserate'`)
-      .get() as { n: number };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'predict_baserate'`).get() as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -55,11 +53,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
   });
 
   it('default emitAudit=true on n>0 path: emits exactly one predict_baserate audit', async () => {
-    const p = await savePrediction(root, 'default', {
-      classTag: 'pop',
-      claimText: 'populated case',
-      estimateValue: 2,
-    });
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
     await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop');
@@ -69,23 +63,13 @@ describe('computePredictionBaserate emitAudit flag', () => {
 
   it('emitAudit=false on n=0 path: skips audit emit', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);
-    const br = computePredictionBaserate(
-      root,
-      'default',
-      'empty-class',
-      'recall',
-      /*emitAudit=*/ false,
-    );
+    const br = computePredictionBaserate(root, 'default', 'empty-class', 'recall', /*emitAudit=*/ false);
     expect(br.nClosed).toBe(0);
     expect(countPredictBaserateAudits(root)).toBe(0);
   });
 
   it('emitAudit=false on n>0 path: skips audit emit', async () => {
-    const p = await savePrediction(root, 'default', {
-      classTag: 'pop',
-      claimText: 'populated case',
-      estimateValue: 2,
-    });
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
     await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop', 'recall', /*emitAudit=*/ false);
@@ -100,9 +84,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
       // SAFETY: literal SELECT of the actor column for the predict_baserate
       // row this test's computePredictionBaserate call just wrote.
       const row = db
-        .prepare(
-          `SELECT actor FROM audit_log WHERE op = 'predict_baserate' ORDER BY id DESC LIMIT 1`,
-        )
+        .prepare(`SELECT actor FROM audit_log WHERE op = 'predict_baserate' ORDER BY id DESC LIMIT 1`)
         .get() as { actor: string };
       expect(row.actor).toBe('mcp');
     } finally {

@@ -25,16 +25,10 @@ afterEach(() => {
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
-async function runVerb(
-  ...args: string[]
-): Promise<{ status: number; stdout: string; stderr: string }> {
+async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
-    return {
-      status: r.status || Number(process.exitCode ?? 0),
-      stdout: r.stdout,
-      stderr: r.stderr,
-    };
+    return { status: r.status || Number(process.exitCode ?? 0), stdout: r.stdout, stderr: r.stderr };
   } finally {
     process.exitCode = undefined;
   }
@@ -72,9 +66,7 @@ describe('hippo capture --file', () => {
     expect(loadEveryTenantEntries(join(cwd, '.hippo'))).toHaveLength(0);
 
     expect((await capture('--file', notes)).status).toBe(0);
-    const specRows = loadEveryTenantEntries(join(cwd, '.hippo')).filter((e) =>
-      e.tags.includes('spec'),
-    );
+    const specRows = loadEveryTenantEntries(join(cwd, '.hippo')).filter((e) => e.tags.includes('spec'));
     expect(specRows.map((e) => e.content).sort()).toEqual([
       'retries are capped at five attempts per batch',
       'the importer accepts utf-16 encoded files',

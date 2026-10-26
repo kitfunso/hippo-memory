@@ -68,9 +68,7 @@ describe('schema v55', () => {
   it('a fresh store has both columns and the partial unique index', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect([...tableColumns(db, 'delivery_events')]).toEqual(
-        expect.arrayContaining(['tool_use_id', 'failure_id']),
-      );
+      expect([...tableColumns(db, 'delivery_events')]).toEqual(expect.arrayContaining(['tool_use_id', 'failure_id']));
       expect(indexSql(db, INDEX)).toMatch(
         /UNIQUE INDEX .*\(tenant_id, session_id, tool_use_id\)\s+WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL/s,
       );
@@ -82,14 +80,10 @@ describe('schema v55', () => {
     rewindToV54();
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect([...tableColumns(db, 'delivery_events')]).toEqual(
-        expect.arrayContaining(['tool_use_id', 'failure_id']),
-      );
+      expect([...tableColumns(db, 'delivery_events')]).toEqual(expect.arrayContaining(['tool_use_id', 'failure_id']));
       expect(indexSql(db, INDEX)).toContain(INDEX);
       // SAFETY: the SELECT names exactly these three columns.
-      const rows = db
-        .prepare('SELECT session_id, tool_use_id, failure_id FROM delivery_events')
-        .all();
+      const rows = db.prepare('SELECT session_id, tool_use_id, failure_id FROM delivery_events').all();
       expect(rows).toEqual([{ session_id: 's1', tool_use_id: null, failure_id: null }]);
       const before = [...tableColumns(db, 'delivery_events')];
       const sql = indexSql(db, INDEX);

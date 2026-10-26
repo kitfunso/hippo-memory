@@ -49,9 +49,7 @@ beforeEach(() => {
   ({ base: cwd, root } = makeStore('open-fast-path'));
   writeEntry(
     root,
-    createMemory('the quokka deploy key rotates every ninety days', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    }),
+    createMemory('the quokka deploy key rotates every ninety days', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
   );
 });
 
@@ -116,17 +114,13 @@ describe('store open fast path', () => {
     const statements = openAndClose();
 
     expect(statements.filter((sql) => DDL.test(sql))).toEqual([]);
-    expect(
-      statements.filter((sql) => /COUNT\(\*\)/i.test(sql) && !/sqlite_master|FROM meta/i.test(sql)),
-    ).toEqual([]);
+    expect(statements.filter((sql) => /COUNT\(\*\)/i.test(sql) && !/sqlite_master|FROM meta/i.test(sql))).toEqual([]);
   });
 
   it('every CREATE the slow path runs names an object in the required list, and every listed object is created', () => {
     withOutOfBandDamage((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
-    const created = new Set(
-      openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])),
-    );
+    const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
 
     expect([...created].filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
     expect(REQUIRED_SCHEMA_OBJECTS.filter((name) => !created.has(name))).toEqual([]);
@@ -217,9 +211,7 @@ describe('one open reads the store once', () => {
   it("a later openStore in one request asks once whether a memory row is there, for both of setup's steps", () => {
     withRequestStoresSync(() => {
       openStore(root);
-      expect(captureStatements(() => openStore(root))).toEqual([
-        'SELECT 1 AS x FROM memories LIMIT 1',
-      ]);
+      expect(captureStatements(() => openStore(root))).toEqual(['SELECT 1 AS x FROM memories LIMIT 1']);
     });
   });
 
@@ -259,27 +251,23 @@ describe('full-text drift repair moved off the open path', () => {
 
     withDb((db) => {
       expect(ftsRowCounts(db)).toEqual({ memories: 1, fts: 1 });
-      expect(
-        db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH 'quokka'`).all(),
-      ).toHaveLength(1);
+      expect(db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH 'quokka'`).all()).toHaveLength(1);
     });
-    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(
-      true,
-    );
+    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(true);
   });
 
   it('doctor warns on drift and points at sleep', async () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
     expect(
-      (
-        await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })
-      ).checks.find((c) => c.id === 'fts'),
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+        (c) => c.id === 'fts',
+      ),
     ).toMatchObject({ status: 'pass' });
     desyncFts();
     expect(
-      (
-        await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })
-      ).checks.find((c) => c.id === 'fts'),
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+        (c) => c.id === 'fts',
+      ),
     ).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
   });
 });

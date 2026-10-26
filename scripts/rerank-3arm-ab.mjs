@@ -30,26 +30,17 @@ if (!['jev', 'clef-flash', 'clef'].includes(ARM)) {
   process.exit(1);
 }
 // A 300-query clef run is far past the Workers AI free allocation, so hosted needs an explicit opt-in.
-if (
-  ARM !== 'jev' &&
-  !process.env.HIPPO_CLEF_ENDPOINT?.trim() &&
-  process.env.RERANK_ALLOW_HOSTED !== '1'
-) {
-  console.error(
-    'Set HIPPO_CLEF_ENDPOINT to a private CLEF server, or RERANK_ALLOW_HOSTED=1 to bill Workers AI.',
-  );
+if (ARM !== 'jev' && !process.env.HIPPO_CLEF_ENDPOINT?.trim() && process.env.RERANK_ALLOW_HOSTED !== '1') {
+  console.error('Set HIPPO_CLEF_ENDPOINT to a private CLEF server, or RERANK_ALLOW_HOSTED=1 to bill Workers AI.');
   process.exit(1);
 }
 const COST_PER_CALL_USD = ARM === 'jev' ? 0.0004 : 0;
 const COST_CAP_USD = 1.0;
-const JEV_CONCURRENCY =
-  Number(process.env.RERANK_CONCURRENCY) > 0 ? Number(process.env.RERANK_CONCURRENCY) : 8;
+const JEV_CONCURRENCY = Number(process.env.RERANK_CONCURRENCY) > 0 ? Number(process.env.RERANK_CONCURRENCY) : 8;
 // The Jev path keeps its frozen Lane 15 name; other arms are dated by the day they ran so a rerun never overwrites.
 const OUTPUT_PATH = join(
   'results',
-  ARM === 'jev'
-    ? 'rerank-3arm-2026-09-18.json'
-    : `rerank-3arm-${ARM}-${new Date().toISOString().slice(0, 10)}.json`,
+  ARM === 'jev' ? 'rerank-3arm-2026-09-18.json' : `rerank-3arm-${ARM}-${new Date().toISOString().slice(0, 10)}.json`,
 );
 const LANE12_CONTROL = { 'recall@budget': 0.6967, 'R@1': 0.2633, 'R@5': 0.46, MRR: 0.3608 };
 
@@ -92,9 +83,7 @@ console.error(
 );
 
 const expectedCost = cases.length * COST_PER_CALL_USD;
-console.log(
-  `Expected ${ARM} cost: ${cases.length} calls x $${COST_PER_CALL_USD} = $${expectedCost.toFixed(4)}`,
-);
+console.log(`Expected ${ARM} cost: ${cases.length} calls x $${COST_PER_CALL_USD} = $${expectedCost.toFixed(4)}`);
 if (expectedCost > COST_CAP_USD) {
   console.error(
     `STOPPING before any calls: expected cost $${expectedCost.toFixed(2)} exceeds the $${COST_CAP_USD.toFixed(2)} cap.`,
@@ -103,14 +92,7 @@ if (expectedCost > COST_CAP_USD) {
 }
 
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-const SEARCH_OPTS = {
-  budget: 1000000,
-  hippoRoot,
-  preparedCorpus: corpus,
-  minResults: 50,
-  mmr: true,
-  now: NOW,
-};
+const SEARCH_OPTS = { budget: 1000000, hippoRoot, preparedCorpus: corpus, minResults: 50, mmr: true, now: NOW };
 
 /** hippo's real cut (search.ts:777-786), ported so all three arms can share
  *  one hybridSearch call instead of three separately-budgeted ones. */
@@ -156,10 +138,7 @@ console.warn = (...a) => {
 };
 const warmup = [
   {
-    entry: {
-      id: '__warmup__',
-      content: 'warm up the cross encoder model before timing real queries',
-    },
+    entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' },
     score: 1,
     tokens: 10,
   },
@@ -176,15 +155,11 @@ try {
 }
 console.warn = realWarn;
 if (fallbackWarning) {
-  console.error(
-    'CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.',
-  );
+  console.error('CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.');
   console.error('Captured warning:', fallbackWarning);
   process.exit(1);
 }
-console.error(
-  `cross-encoder model load ok: ${modelLoadMs.toFixed(1)}ms (warmup excluded from per-query timings)\n`,
-);
+console.error(`cross-encoder model load ok: ${modelLoadMs.toFixed(1)}ms (warmup excluded from per-query timings)\n`);
 
 // ---------- Phase 1: one hybridSearch + cross-encoder pass per query ----------
 const rows = [];
@@ -319,17 +294,12 @@ console.log(`hippoRoot: ${hippoRoot}`);
 console.log(`NOW pinned: ${NOW.toISOString()}`);
 console.log(`usable cases: ${rows.length}`);
 console.log(`median returned-set size (post-budget-cut): ${median(baseCutSizes)}`);
-for (const [name, fn] of Object.entries(METRICS))
-  console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
+for (const [name, fn] of Object.entries(METRICS)) console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
 // Sanity check: same NOW pin as Lane 12, so the base arm should reproduce its control numbers exactly.
-console.log(
-  '\nReproduction check against Lane 12 control (docs/EXPERIMENT-PROTOCOL.md:1949-1955, same NOW pin):',
-);
+console.log('\nReproduction check against Lane 12 control (docs/EXPERIMENT-PROTOCOL.md:1949-1955, same NOW pin):');
 for (const [k, v] of Object.entries(LANE12_CONTROL)) {
   const mine = METRICS[k](baseRanks);
-  console.log(
-    `  ${k.padEnd(14)} lane12=${f(v)} mine=${f(mine)} ${Math.abs(mine - v) < 0.0001 ? 'MATCH' : 'DIFFERS'}`,
-  );
+  console.log(`  ${k.padEnd(14)} lane12=${f(v)} mine=${f(mine)} ${Math.abs(mine - v) < 0.0001 ? 'MATCH' : 'DIFFERS'}`);
 }
 console.log('======================================================================\n');
 
@@ -411,8 +381,7 @@ const jevTop1ChangedCount = rows.filter((r) => r.jevTop1Changed).length;
 const jevFellBackCount = rows.filter((r) => r.jevFellBack).length;
 const fallbackReasons = {};
 for (const r of rows) {
-  if (r.fallbackReason)
-    fallbackReasons[r.fallbackReason] = (fallbackReasons[r.fallbackReason] ?? 0) + 1;
+  if (r.fallbackReason) fallbackReasons[r.fallbackReason] = (fallbackReasons[r.fallbackReason] ?? 0) + 1;
 }
 
 console.log('\n======================================================================');
@@ -440,9 +409,7 @@ console.log(
 console.log(
   `${ARM} HTTP calls: ${jevStats.calls} total, ${jevStats.ok} ok, ${jevStats.failed} failed, ${jevStats.partial} partial (partial = ok response missing a valid noul for >=1 candidate)`,
 );
-console.log(
-  `${ARM} per-query fallback (base order kept for that query's head): ${jevFellBackCount}/${rows.length}`,
-);
+console.log(`${ARM} per-query fallback (base order kept for that query's head): ${jevFellBackCount}/${rows.length}`);
 for (const [reason, n] of Object.entries(fallbackReasons)) console.log(`  ${n} x ${reason}`);
 
 const actualCost = jevStats.calls * COST_PER_CALL_USD;
@@ -460,8 +427,7 @@ if (jevFellBackCount > 0) {
 } else if (jevVoid) {
   verdict = `UNDECIDABLE: ${ARM} arm is degenerate (<=1 distinct score), reported VOID not flat.`;
 } else if (ceVoid) {
-  verdict =
-    'UNDECIDABLE: cross-encoder arm is degenerate (<=1 distinct score), reported VOID not flat.';
+  verdict = 'UNDECIDABLE: cross-encoder arm is degenerate (<=1 distinct score), reported VOID not flat.';
 } else {
   const gate = contrasts[`${ARM}-vs-crossenc`].table[PRIMARY].ci_98_75;
   verdict =
@@ -520,11 +486,7 @@ writeFileSync(
       integrity: {
         cross_encoder: { void: ceVoid, ...ceScoreStats, target_only: ceTargetStats },
         jev: { void: jevVoid, ...jevScoreStats, target_only: jevTargetStats },
-        top1_changed: {
-          cross_encoder: ceTop1ChangedCount,
-          jev: jevTop1ChangedCount,
-          total: rows.length,
-        },
+        top1_changed: { cross_encoder: ceTop1ChangedCount, jev: jevTop1ChangedCount, total: rows.length },
         jev_http: jevStats,
         jev_fallback_count: jevFellBackCount,
         fallback_reasons: fallbackReasons,

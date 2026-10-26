@@ -2,11 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  countMatching,
-  recordStatements,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -45,10 +41,7 @@ async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   try {
     for (let i = 0; i < count; i++) {
       const e = createMemory(`seeded memory number ${i} about topic${i % 7}`, { tenantId });
-      writeEntryDbOnly(db, {
-        ...e,
-        created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
-      });
+      writeEntryDbOnly(db, { ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() });
       ids.push(e.id);
     }
     db.exec('COMMIT');
@@ -92,9 +85,7 @@ describe('memoryList paging', () => {
   it('pages the same rows in the same order as one whole read', async () => {
     await seed(7);
     const ctx = cliApiContext(root, 'default');
-    const { result, statements } = await recordStatementsAsync(() =>
-      memoryList(ctx, {}, { pageSize: 3 }),
-    );
+    const { result, statements } = await recordStatementsAsync(() => memoryList(ctx, {}, { pageSize: 3 }));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(3);
   });
@@ -129,16 +120,12 @@ describe('loadContextCandidates', () => {
 
   it('skips the decay rank when every match fits under the cap, and still ranks past it', async () => {
     await seed(6);
-    const under = recordStatements(() =>
-      loadContextCandidates(root, 'default', { cap: 10, now: NOW }),
-    );
+    const under = recordStatements(() => loadContextCandidates(root, 'default', { cap: 10, now: NOW }));
     expect(under.result).toHaveLength(6);
     expect(countMatching(under.statements, 'julianday')).toBe(0);
     expect(under.result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
 
-    const over = recordStatements(() =>
-      loadContextCandidates(root, 'default', { cap: 4, now: NOW }),
-    );
+    const over = recordStatements(() => loadContextCandidates(root, 'default', { cap: 4, now: NOW }));
     expect(over.result).toHaveLength(4);
     expect(countMatching(over.statements, 'julianday')).toBe(1);
   });
@@ -185,17 +172,9 @@ describe('rejections.apply', () => {
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(5);
+    expect(countMatching(statements, /^SELECT id, content, source, scope, created FROM memories .*LIMIT \?$/)).toBe(1);
     expect(
-      countMatching(
-        statements,
-        /^SELECT id, content, source, scope, created FROM memories .*LIMIT \?$/,
-      ),
-    ).toBe(1);
-    expect(
-      countMatching(
-        statements,
-        /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/,
-      ),
+      countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/),
     ).toBe(0);
   });
 });

@@ -20,9 +20,7 @@ const STOP = new Set(
 );
 
 const hippoRoot = join(homedir(), '.hippo');
-const lane4 = JSON.parse(
-  readFileSync('results/jev-classify-lane4-cli-holdout-2026-09-18.json', 'utf8'),
-);
+const lane4 = JSON.parse(readFileSync('results/jev-classify-lane4-cli-holdout-2026-09-18.json', 'utf8'));
 
 let s = 90210;
 const rng = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
@@ -40,19 +38,12 @@ const tagSet = new Set(
     .slice(0, K)
     .map((r) => r.id),
 );
-console.error(
-  `corpus rows scored by Jev: ${present.length}; tagging top ${K} (base rate ${baseRate.toFixed(3)})`,
-);
+console.error(`corpus rows scored by Jev: ${present.length}; tagging top ${K} (base rate ${baseRate.toFixed(3)})`);
 
 /** The Jev arm: error tag, negative valence, doubled half-life (memory.ts:394). */
 const jevEntries = entries.map((e) =>
   tagSet.has(e.id)
-    ? {
-        ...e,
-        tags: [...e.tags, 'error'],
-        emotional_valence: 'negative',
-        half_life_days: e.half_life_days * 2,
-      }
+    ? { ...e, tags: [...e.tags, 'error'], emotional_valence: 'negative', half_life_days: e.half_life_days * 2 }
     : e,
 );
 
@@ -69,8 +60,7 @@ function makeQuery(content) {
   if (toks.length < QUERY_TOKENS) return null;
   const picked = [];
   const pool = [...toks];
-  for (let i = 0; i < QUERY_TOKENS && pool.length; i++)
-    picked.push(...pool.splice(Math.floor(rng() * pool.length), 1));
+  for (let i = 0; i < QUERY_TOKENS && pool.length; i++) picked.push(...pool.splice(Math.floor(rng() * pool.length), 1));
   return picked.join(' ');
 }
 
@@ -109,20 +99,14 @@ for (let i = 0; i < cases.length; i++) {
 }
 
 const at = (ranks, k) => ranks.filter((r) => r <= k).length / ranks.length;
-const mrr = (ranks) =>
-  ranks.reduce((a, r) => a + (Number.isFinite(r) ? 1 / r : 0), 0) / ranks.length;
+const mrr = (ranks) => ranks.reduce((a, r) => a + (Number.isFinite(r) ? 1 / r : 0), 0) / ranks.length;
 const B = out.map((o) => o.base),
   J = out.map((o) => o.jev);
 const f = (x) => x.toFixed(4);
 
 console.log(`\nLane 5 — paired retrieval A/B, n=${out.length} queries\n`);
 console.log('metric      baseline     Jev arm       delta');
-const METRICS = {
-  'R@1': (r) => at(r, 1),
-  'R@5': (r) => at(r, 5),
-  'R@10': (r) => at(r, 10),
-  MRR: mrr,
-};
+const METRICS = { 'R@1': (r) => at(r, 1), 'R@5': (r) => at(r, 5), 'R@10': (r) => at(r, 10), MRR: mrr };
 const table = {};
 for (const [name, fn] of Object.entries(METRICS)) {
   const b = fn(B),
@@ -162,9 +146,7 @@ for (const [name, fn] of Object.entries(METRICS)) {
 }
 
 const pass = cis['R@5'].lo > 0 && !(cis['R@1'].hi < 0);
-console.log(
-  `\nVERDICT: ${pass ? 'SHIP' : 'DO NOT SHIP'} (rule: R@5 CI excludes 0 upward AND no R@1 loss)`,
-);
+console.log(`\nVERDICT: ${pass ? 'SHIP' : 'DO NOT SHIP'} (rule: R@5 CI excludes 0 upward AND no R@1 loss)`);
 const changed = out.filter((o) => o.base !== o.jev).length;
 console.log(`queries whose rank changed at all: ${changed}/${out.length}`);
 

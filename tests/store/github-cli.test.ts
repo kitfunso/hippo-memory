@@ -12,11 +12,7 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
-import {
-  GitHubPayloadParseError,
-  handleGitHub,
-  parseParkedPayload,
-} from '../../src/surface/cli/github.js';
+import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -36,9 +32,7 @@ function stubGitHubIssues(issues: readonly JsonValue[]): void {
     'fetch',
     vi.fn(
       async (url: string | URL) =>
-        new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), {
-          status: 200,
-        }),
+        new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 }),
     ),
   );
 }
@@ -66,10 +60,7 @@ describe('hippo github CLI', () => {
 
   it('backfill --repo without GITHUB_TOKEN exits 2 with actionable error', async () => {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-    const { status, stderr } = await runCliAs(['github', 'backfill', '--repo', 'a/b'], {
-      cwd: root,
-      env,
-    });
+    const { status, stderr } = await runCliAs(['github', 'backfill', '--repo', 'a/b'], { cwd: root, env });
     expect(status).toBe(2);
     expect(stderr).toMatch(/GITHUB_TOKEN/);
   });
@@ -180,17 +171,10 @@ describe('hippo github CLI', () => {
   });
   const COMMENT_EVENTS = [
     ['issue_comment', { issue: { number: 42 } }, 'github://acme/repo/issue/42/comment/999'],
-    [
-      'pull_request_review_comment',
-      { pull_request: { number: 7 } },
-      'github://acme/repo/pull/7/review_comment/999',
-    ],
+    ['pull_request_review_comment', { pull_request: { number: 7 } }, 'github://acme/repo/pull/7/review_comment/999'],
   ] as const;
 
-  function commentBody(
-    parent: (typeof COMMENT_EVENTS)[number][1],
-    action: 'created' | 'deleted',
-  ): string {
+  function commentBody(parent: (typeof COMMENT_EVENTS)[number][1], action: 'created' | 'deleted'): string {
     return JSON.stringify({
       action,
       ...parent,
@@ -222,13 +206,11 @@ describe('hippo github CLI', () => {
       GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
     });
   const liveRaws = (artifactRef: string) =>
-    loadAllEntries(hippoRoot, 'default').filter(
-      (e) => e.kind === 'raw' && e.artifactRef === artifactRef,
-    );
+    loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = async (id: number) =>
-    (
-      await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', { limit: 100 })
-    ).find((row) => row.id === id)?.retryCount;
+    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
+      (row) => row.id === id,
+    )?.retryCount;
 
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);
@@ -252,9 +234,7 @@ describe('hippo github CLI', () => {
 
       const archived = await replay(deleted);
       expect(archived.status).toBe(0);
-      expect(archived.stdout).toContain(
-        'replay ok: status=replayed memory_id=archived retry_count=1',
-      );
+      expect(archived.stdout).toContain('replay ok: status=replayed memory_id=archived retry_count=1');
       expect(liveRaws(artifactRef)).toHaveLength(0);
       expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
@@ -282,9 +262,7 @@ describe('hippo github CLI', () => {
 
     const refused = await replay(id);
     expect(refused.status).toBe(1);
-    expect(refused.stderr).toContain(
-      'replay failed: status=sig_fail retry_count=1 reason=signature did not verify',
-    );
+    expect(refused.stderr).toContain('replay failed: status=sig_fail retry_count=1 reason=signature did not verify');
     expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
     const rotated = await runCli(root, ['github', 'dlq', 'replay', String(id)], {

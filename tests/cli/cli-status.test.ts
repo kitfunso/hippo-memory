@@ -78,10 +78,10 @@ describe('hippo status', () => {
   it('reports an empty store as zeros', async () => {
     await run('init');
     const out = await run('status');
-    expect([
-      field(out, 'Total memories'),
-      field(out, 'Pinned'),
-      field(out, 'Total remembered'),
-    ]).toEqual(['0', '0', '0']);
+    expect([field(out, 'Total memories'), field(out, 'Pinned'), field(out, 'Total remembered')]).toEqual([
+      '0',
+      '0',
+      '0',
+    ]);
   });
 });

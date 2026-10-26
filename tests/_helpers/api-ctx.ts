@@ -19,22 +19,10 @@ export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
 }
 
 /** A Context on hippo.db under `hippoRoot` with its store built at the eval rules and clock, as the CLI root hands it. */
-export function apiCtx(
-  hippoRoot: string,
-  tenantId = 'default',
-  actor: Actor = adminActor('test'),
-): FullContext {
+export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = adminActor('test')): FullContext {
   const store = sqliteStore(hippoRoot, evalStoreRules(undefined));
   const reach = testReach(hippoRoot, store);
-  return {
-    hippoRoot,
-    tenantId,
-    actor,
-    store,
-    reach,
-    config: loadConfig(hippoRoot),
-    infra: testInfra(),
-  };
+  return { hippoRoot, tenantId, actor, store, reach, config: loadConfig(hippoRoot), infra: testInfra() };
 }
 
 /** The project this test process runs in, which contextGet read for itself before the surface named it. */

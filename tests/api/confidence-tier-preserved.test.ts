@@ -22,16 +22,10 @@ beforeEach(() => {
   tmpDir = makeRoot('confidence-tier', { init: false });
   // replay picking this test's own fixtures would confound the assertions
   // on stored confidence, so disable it via the store's own config file.
-  fs.writeFileSync(
-    path.join(tmpDir, 'config.json'),
-    JSON.stringify({ replay: { count: 0 } }),
-    'utf8',
-  );
+  fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 });
 
-function agedEntry(
-  overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['confidence'] },
-): MemoryEntry {
+function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['confidence'] }): MemoryEntry {
   const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
   return {
     ...createMemory('an aged memory used to probe the confidence tier', {

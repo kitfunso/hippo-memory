@@ -286,8 +286,7 @@ function declaredNames(dtsPath: string): string[] {
       if (name) names.push(name);
     }
   }
-  for (const decl of text.matchAll(/^export declare (?:function|const|class) (\w+)/gm))
-    names.push(decl[1]!);
+  for (const decl of text.matchAll(/^export declare (?:function|const|class) (\w+)/gm)) names.push(decl[1]!);
   return names;
 }
 
@@ -304,9 +303,7 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
   });
 
   it('declares the same names in the built .d.ts files, types included', () => {
-    expect(sorted(declaredNames('dist/server.d.ts'))).toEqual(
-      sorted([...SERVER_VALUES, ...SERVER_TYPES]),
-    );
+    expect(sorted(declaredNames('dist/server.d.ts'))).toEqual(sorted([...SERVER_VALUES, ...SERVER_TYPES]));
     expect(sorted(declaredNames('dist/entry/store-kit.d.ts'))).toEqual(
       sorted([...STORE_KIT_VALUES, ...STORE_KIT_TYPES]),
     );
@@ -332,9 +329,7 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
       timeout: 30_000,
     });
     if (child.status !== 0) {
-      throw new Error(
-        `self-reference import failed (run \`npm run build\` first):\n${child.stderr}`,
-      );
+      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
     }
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.

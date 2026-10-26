@@ -70,32 +70,29 @@ describe('POST /v1/sleep', () => {
     expect(body.removed).toEqual(expect.any(Number));
   });
 
-  it.skipIf(needsHippoDb('sleep'))(
-    'dry_run=true previews dedup/audit and skips share/ambient',
-    async () => {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-      await remember(ctx, { content: 'dry-run-canary' });
+  it.skipIf(needsHippoDb('sleep'))('dry_run=true previews dedup/audit and skips share/ambient', async () => {
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctx, { content: 'dry-run-canary' });
 
-      const res = await fetch(`${handle.url}/v1/sleep`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dry_run: true }),
-      });
-      expect(res.status).toBe(200);
-      const body = await jsonAs<{
-        dryRun: boolean;
-        deduped?: unknown;
-        audit?: unknown;
-        shared?: unknown;
-        ambient?: unknown;
-      }>(res);
-      expect(body.dryRun).toBe(true);
-      expect(body.deduped).toBeUndefined();
-      expect(body.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });
-      expect(body.shared).toBeUndefined();
-      expect(body.ambient).toBeUndefined();
-    },
-  );
+    const res = await fetch(`${handle.url}/v1/sleep`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dry_run: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{
+      dryRun: boolean;
+      deduped?: unknown;
+      audit?: unknown;
+      shared?: unknown;
+      ambient?: unknown;
+    }>(res);
+    expect(body.dryRun).toBe(true);
+    expect(body.deduped).toBeUndefined();
+    expect(body.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });
+    expect(body.shared).toBeUndefined();
+    expect(body.ambient).toBeUndefined();
+  });
 
   it.skipIf(needsHippoDb('sleep'))('runs the full pipeline on a populated store', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
@@ -171,14 +168,8 @@ describe('POST /v1/sleep', () => {
       // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
       // Bearer). Verify both tenants' rows are visible to dedupe (they share
       // hippoRoot).
-      const tenantA: FullContext = apiCtx(home, 'tenant_a', {
-        subject: 'localhost:cli',
-        role: 'admin',
-      });
-      const tenantB: FullContext = apiCtx(home, 'tenant_b', {
-        subject: 'localhost:cli',
-        role: 'admin',
-      });
+      const tenantA: FullContext = apiCtx(home, 'tenant_a', { subject: 'localhost:cli', role: 'admin' });
+      const tenantB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
       const dupContent = 'highly similar content x'.repeat(20);
       await remember(tenantA, { content: dupContent + ' tenant_a marker' });
       await remember(tenantB, { content: dupContent + ' tenant_b marker' });
@@ -202,11 +193,7 @@ describe('POST /v1/sleep', () => {
     const db = openHippoDb(home);
     let plaintext: string;
     try {
-      ({ plaintext } = createApiKey(db, {
-        tenantId: 'default',
-        label: 'remote-sleep',
-        role: 'admin',
-      }));
+      ({ plaintext } = createApiKey(db, { tenantId: 'default', label: 'remote-sleep', role: 'admin' }));
     } finally {
       closeHippoDb(db);
     }
@@ -221,37 +208,30 @@ describe('POST /v1/sleep', () => {
   });
 
   const postSleep = (): Promise<Response> =>
-    fetch(`${handle.url}/v1/sleep`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
+    fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 
-  it.skipIf(needsHippoDb('sleep'))(
-    'answers GET /health while a sleep is still running',
-    async () => {
-      await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
-        content: 'a memory for the sleep to write',
-      });
-      // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
-      const lock = openHippoDb(home);
-      lock.exec('BEGIN IMMEDIATE');
-      const order: string[] = [];
-      // Probed once the server has the sleep request, so the probe cannot be answered ahead of it.
-      const health = new Promise<Response>((resolve, reject) => {
-        handle.server?.once('request', () => fetch(`${handle.url}/health`).then(resolve, reject));
-      });
-      const slept = postSleep().then((res) => {
-        order.push('sleep');
-        return res;
-      });
-      const healthStatus = (await health).status;
-      order.push('health');
-      lock.exec('ROLLBACK');
-      closeHippoDb(lock);
-      expect([healthStatus, (await slept).status, order]).toEqual([200, 200, ['health', 'sleep']]);
-    },
-  );
+  it.skipIf(needsHippoDb('sleep'))('answers GET /health while a sleep is still running', async () => {
+    await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+      content: 'a memory for the sleep to write',
+    });
+    // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
+    const lock = openHippoDb(home);
+    lock.exec('BEGIN IMMEDIATE');
+    const order: string[] = [];
+    // Probed once the server has the sleep request, so the probe cannot be answered ahead of it.
+    const health = new Promise<Response>((resolve, reject) => {
+      handle.server?.once('request', () => fetch(`${handle.url}/health`).then(resolve, reject));
+    });
+    const slept = postSleep().then((res) => {
+      order.push('sleep');
+      return res;
+    });
+    const healthStatus = (await health).status;
+    order.push('health');
+    lock.exec('ROLLBACK');
+    closeHippoDb(lock);
+    expect([healthStatus, (await slept).status, order]).toEqual([200, 200, ['health', 'sleep']]);
+  });
 
   it.skipIf(needsHippoDb('sleep'))(
     'still answers 503 with Retry-After when another connection holds the write lock',
@@ -279,11 +259,7 @@ describe('POST /v1/sleep', () => {
       lock.exec('BEGIN IMMEDIATE');
       const sleeps = [postSleep(), postSleep(), postSleep()];
       const refused = await Promise.race(sleeps);
-      const refusal = [
-        refused.status,
-        refused.headers.get('retry-after'),
-        await jsonAs<{ error: string }>(refused),
-      ];
+      const refusal = [refused.status, refused.headers.get('retry-after'), await jsonAs<{ error: string }>(refused)];
       lock.exec('ROLLBACK');
       closeHippoDb(lock);
       const statuses = (await Promise.all(sleeps)).map((res) => res.status).sort();

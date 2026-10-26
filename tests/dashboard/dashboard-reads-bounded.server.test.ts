@@ -8,14 +8,7 @@ import { buildMemoryPage, buildSearch, type MemoryQuery } from '../../src/api/da
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
-import {
-  dashboardOf,
-  embed,
-  isoAgo,
-  makeStore,
-  NOW,
-  type TmpStore,
-} from '../_helpers/dashboard-fixture.js';
+import { dashboardOf, embed, isoAgo, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 const BASE_ROWS = 100;
@@ -38,9 +31,7 @@ let store: TmpStore;
 
 function baseRows(): MemoryEntry[] {
   return Array.from({ length: BASE_ROWS }, (_, i) => ({
-    ...createMemory(`alpha row ${i} ${i % 3 === 0 ? 'needle' : 'hay'}`, {
-      tags: i % 5 === 0 ? ['Tagged'] : [],
-    }),
+    ...createMemory(`alpha row ${i} ${i % 3 === 0 ? 'needle' : 'hay'}`, { tags: i % 5 === 0 ? ['Tagged'] : [] }),
     id: `mem_b${String(i).padStart(3, '0')}`,
     originProject: 'alpha',
     layer: LAYERS[i % 4],
@@ -56,9 +47,7 @@ function growAlphaTo(root: string, copies: number): void {
   const db = openHippoDb(root);
   try {
     // SAFETY: PRAGMA table_info answers one row per column, each with its name.
-    const columns = (
-      db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>
-    ).map((c) => c.name);
+    const columns = (db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>).map((c) => c.name);
     const picked = columns.map((c) => (c === 'id' ? `memories.id || '~' || k.n` : c)).join(', ');
     db.prepare(
       `WITH RECURSIVE k(n) AS (SELECT (SELECT COUNT(*) FROM memories WHERE origin_project = 'alpha') / :base ` +
@@ -75,8 +64,7 @@ async function rowsReadPerRead(): Promise<Record<string, number>> {
   const { reads, clock } = dashboardOf(store.hippoRoot, () => NOW);
   try {
     const stamp = await clock.at('default');
-    const rowsOf = async <T>(read: () => Promise<T>): Promise<number> =>
-      (await recordStatementsAsync(read)).rowsRead;
+    const rowsOf = async <T>(read: () => Promise<T>): Promise<number> => (await recordStatementsAsync(read)).rowsRead;
     const project = await buildProjectDetail(reads, stamp, 'p:alpha');
     expect(project?.scatter.mode).toBe('grid');
     return {
@@ -84,20 +72,10 @@ async function rowsReadPerRead(): Promise<Record<string, number>> {
       project: await rowsOf(() => buildProjectDetail(reads, stamp, 'p:alpha')),
       page: await rowsOf(() => buildMemoryPage(reads, stamp, 'p:alpha', QUERY)),
       deepPage: await rowsOf(() =>
-        buildMemoryPage(reads, stamp, 'p:alpha', {
-          ...QUERY,
-          sort: 'content',
-          dir: 'desc',
-          offset: 4_000,
-        }),
+        buildMemoryPage(reads, stamp, 'p:alpha', { ...QUERY, sort: 'content', dir: 'desc', offset: 4_000 }),
       ),
       filteredPage: await rowsOf(() =>
-        buildMemoryPage(reads, stamp, 'p:alpha', {
-          ...QUERY,
-          chip: 'risk',
-          q: 'needle',
-          sort: 'last',
-        }),
+        buildMemoryPage(reads, stamp, 'p:alpha', { ...QUERY, chip: 'risk', q: 'needle', sort: 'last' }),
       ),
       search: await rowsOf(() => buildSearch(reads, stamp, 'needle')),
     };
@@ -110,12 +88,7 @@ beforeAll(() => {
   store = makeStore('hippo-dash-bounded');
   writeEntriesTogether(store.hippoRoot, [
     ...baseRows(),
-    {
-      ...createMemory('beta row', { tags: [] }),
-      id: 'mem_beta1',
-      originProject: 'beta',
-      created: isoAgo(3),
-    },
+    { ...createMemory('beta row', { tags: [] }), id: 'mem_beta1', originProject: 'beta', created: isoAgo(3) },
   ]);
   replaceDetectedConflicts(store.hippoRoot, [
     { memory_a_id: 'mem_b001', memory_b_id: 'mem_b002', reason: 'inside alpha', score: 0.9 },
@@ -143,10 +116,7 @@ describe('dashboard reads at five times the rows', () => {
     try {
       const stamp = await clock.at('default');
       const overview = await buildOverview(reads, stamp);
-      const page = await buildMemoryPage(reads, stamp, 'p:alpha', {
-        ...QUERY,
-        offset: BASE_ROWS * FIVE_TIMES - 10,
-      });
+      const page = await buildMemoryPage(reads, stamp, 'p:alpha', { ...QUERY, offset: BASE_ROWS * FIVE_TIMES - 10 });
       const search = await buildSearch(reads, stamp, 'needle');
 
       expect(overview.total).toBe(BASE_ROWS * FIVE_TIMES + 1);

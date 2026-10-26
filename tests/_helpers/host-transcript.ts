@@ -12,14 +12,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
-import {
-  hippo,
-  hippoIn,
-  promptPayload,
-  PROMPT_HOOK,
-  type Project,
-  type RunOptions,
-} from './delivery-boundary.js';
+import { hippo, hippoIn, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
 import type { InProcessResult } from './run-in-process.js';
 import { writeEntry } from './root-forms.js';
 
@@ -194,11 +187,9 @@ const hookLine = (text: string, hookName = 'UserPromptSubmit'): string =>
     },
   });
 
-export const additionalContextOf = (stdout: string): string =>
-  JSON.parse(stdout).hookSpecificOutput.additionalContext;
+export const additionalContextOf = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
-const toolResult = (id: string): string =>
-  user([{ type: 'tool_result', tool_use_id: id, content: 'out' }]);
+const toolResult = (id: string): string => user([{ type: 'tool_result', tool_use_id: id, content: 'out' }]);
 
 /** A prompt sent while the agent was busy: Claude Code writes it as an attachment after the tool results, never as a user line. */
 const queuedLines = (prompt: string): string[] => [
@@ -207,13 +198,7 @@ const queuedLines = (prompt: string): string[] => [
   line({ type: 'queue-operation', operation: 'remove', content: prompt }),
   line({
     type: 'attachment',
-    attachment: {
-      type: 'queued_command',
-      prompt,
-      commandMode: 'prompt',
-      origin: { kind: 'human' },
-      humanTurn: true,
-    },
+    attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, humanTurn: true },
   }),
 ];
 
@@ -230,8 +215,7 @@ function turnLines(turn: TurnSpec): string[] {
   ];
   if (turn.fired === false) return out;
   out.push(hookLine('decoy: another hook wrote this', 'DecoyHook'));
-  const attach =
-    turn.attach !== undefined ? turn.attach : turn.stdout ? additionalContextOf(turn.stdout) : null;
+  const attach = turn.attach !== undefined ? turn.attach : turn.stdout ? additionalContextOf(turn.stdout) : null;
   if (attach !== null) out.push(hookLine(attach));
   out.push(user('<meta>caveat for the model</meta>', { isMeta: true }));
   return out;
@@ -246,11 +230,7 @@ const NOISE = [
 ];
 
 /** Writes the transcript under the project's scratch folder and returns its path. */
-export function writeHostTranscript(
-  p: Project,
-  turns: TurnSpec[],
-  opts: TranscriptOptions = {},
-): string {
+export function writeHostTranscript(p: Project, turns: TurnSpec[], opts: TranscriptOptions = {}): string {
   const file = path.join(p.dir, `${opts.name ?? 'host'}.jsonl`);
   const lines = [...(opts.noise === false ? [] : NOISE), ...turns.flatMap(turnLines)];
   fs.writeFileSync(file, `${lines.join('\n')}\n`);
@@ -270,12 +250,7 @@ export function configure(p: Project, cfg: Config = {}): void {
   const { holdout, ...inject } = cfg;
   const config: Json = {
     deliveryLedger: { enabled: true },
-    pinnedInject: {
-      promptRecall: false,
-      promptRecallThreshold: 0.1,
-      promptRecallMinShared: 1,
-      ...inject,
-    },
+    pinnedInject: { promptRecall: false, promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...inject },
   };
   if (holdout) config.pilot = { holdoutRateBp: 10_000 };
   fs.writeFileSync(path.join(p.hippoRoot, 'config.json'), JSON.stringify(config));
@@ -283,10 +258,7 @@ export function configure(p: Project, cfg: Config = {}): void {
 
 /** One memory written in-process; pass `created` where row order matters, since same-millisecond rows fall back to random ids. */
 export function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    ...extra,
-  };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
   writeEntry(root, entry);
   return entry;
 }

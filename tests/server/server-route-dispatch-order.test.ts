@@ -25,17 +25,13 @@ describe('route lookup', () => {
       const path = samplePath(route);
       expect(findV1Route(route.method, path)?.route, `${route.method} ${path}`).toBe(route);
       for (const method of METHODS) {
-        expect(findV1Route(method, path)?.route ?? null, `${method} ${path}`).toBe(
-          walkAllRows(method, path),
-        );
+        expect(findV1Route(method, path)?.route ?? null, `${method} ${path}`).toBe(walkAllRows(method, path));
       }
     }
   });
 
   it('lets a pattern row above a literal one keep the literal path, as the walk does', () => {
-    const literal = V1_ROUTES.find(
-      (route) => 'path' in route && route.path === '/v1/predictions/stats',
-    )!;
+    const literal = V1_ROUTES.find((route) => 'path' in route && route.path === '/v1/predictions/stats')!;
     const pattern = {
       ...V1_ROUTES.find((route) => 'pattern' in route)!,
       method: 'GET',
@@ -128,9 +124,7 @@ describe('route lookup by method', () => {
         expect(looked, `${method} ${path}`).toEqual(outcome(() => walkAllRows(method, path)));
       }
     }
-    expect(
-      outcome(() => findV1Route('DELETE', '/v1/memories/%E0%A4%A/archive')?.route ?? null),
-    ).toMatch(/URI/);
+    expect(outcome(() => findV1Route('DELETE', '/v1/memories/%E0%A4%A/archive')?.route ?? null)).toMatch(/URI/);
     expect(outcome(() => findV1Route('GET', '/v1/nope/%E0%A4%A')?.route ?? null)).toBeNull();
   });
 });

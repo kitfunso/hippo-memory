@@ -83,12 +83,8 @@ describe('prompt recall reuses the ambient load connection', () => {
       spy.mockRestore();
     }
 
-    const ambientConns = new Set(
-      calls.filter((c) => c.sql.includes('pinned = 1 AND')).map((c) => c.conn),
-    );
-    const ftsConns = new Set(
-      calls.filter((c) => c.sql.includes('memories_fts MATCH ?')).map((c) => c.conn),
-    );
+    const ambientConns = new Set(calls.filter((c) => c.sql.includes('pinned = 1 AND')).map((c) => c.conn));
+    const ftsConns = new Set(calls.filter((c) => c.sql.includes('memories_fts MATCH ?')).map((c) => c.conn));
 
     expect(ambientConns.size).toBe(2); // one per store, local + global
     expect(ftsConns.size).toBe(2);

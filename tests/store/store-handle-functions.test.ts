@@ -4,10 +4,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -61,21 +58,14 @@ describe('failure log functions', () => {
       sigHash: 'a',
       detailHash: 'b',
     });
-    expect(
-      read((db) => summarizeFailures(db, 'default', '1970-01-01T00:00:00.000Z')),
-    ).toMatchObject({
+    expect(read((db) => summarizeFailures(db, 'default', '1970-01-01T00:00:00.000Z'))).toMatchObject({
       total: 1,
       sessions: 1,
     });
   });
 
   it('requestOutcome reads a request outcome and settleOutcome rewrites it', async () => {
-    await log().record({
-      tenantId: 'default',
-      sessionId: 's1',
-      outcome: 'store-failed',
-      requestId: 'r1',
-    });
+    await log().record({ tenantId: 'default', sessionId: 's1', outcome: 'store-failed', requestId: 'r1' });
     expect(await log().requestOutcome('default', 'r1', 's1')).toBe('store-failed');
     await log().settleOutcome('default', 'r1', 'stored');
     expect(await log().requestOutcome('default', 'r1', 's1')).toBe('stored');
@@ -96,9 +86,7 @@ describe('compactions.start and compactions.markSnapshotSaved', () => {
     const sessionRows = () =>
       read((db) =>
         db
-          .prepare(
-            `SELECT id, status, snapshot_saved FROM compactions WHERE tenant_id = ? AND session_id = ?`,
-          )
+          .prepare(`SELECT id, status, snapshot_saved FROM compactions WHERE tenant_id = ? AND session_id = ?`)
           .all('default', 's1'),
       );
     expect(sessionRows()).toEqual([{ id, status: 'started', snapshot_saved: 0 }]);
@@ -128,18 +116,14 @@ describe('compactions.saveCallerItems', () => {
 });
 
 describe('captures.write', () => {
-  const write = async (...args: Parameters<Captures['write']>) =>
-    await sqliteStore(root).captures.write(...args);
+  const write = async (...args: Parameters<Captures['write']>) => await sqliteStore(root).captures.write(...args);
   const entry = (content: string) => createMemory(content, { source: 'capture' });
 
   it('writes each new entry and counts a rejected value', async () => {
     const rejected = 'Never cache the session token in local storage.';
     reject(rejected);
     const first = 'Always run the migration dry run before the real one.';
-    const outcomes = await write([entry(first), entry(rejected)], {
-      lean: true,
-      dedup: { tenantId: 'default' },
-    });
+    const outcomes = await write([entry(first), entry(rejected)], { lean: true, dedup: { tenantId: 'default' } });
     expect(outcomes).toEqual(['captured', 'rejected']);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
   });
@@ -192,14 +176,7 @@ describe('captureExtractedItems', () => {
       },
     };
     const keys = new Set<string>();
-    expect(
-      await captureExtractedItems(
-        { store: { captures }, config, embed },
-        options,
-        [item(text)],
-        keys,
-      ),
-    ).toEqual({
+    expect(await captureExtractedItems({ store: { captures }, config, embed }, options, [item(text)], keys)).toEqual({
       captured: 0,
       skipped: 1,
       rejected: 0,

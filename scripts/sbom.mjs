@@ -66,19 +66,13 @@ function readName(pkgJsonPath) {
 // npm 11.17's --omit dev on ui/ wrongly drops react, react-dom and scheduler; take the
 // full lockfile-only BOM instead and filter by the development property ourselves.
 function npmSbom(dir) {
-  const result = spawnSync(
-    'npm',
-    ['sbom', '--sbom-format', 'cyclonedx', '--package-lock-only', '--offline'],
-    {
-      cwd: dir,
-      encoding: 'utf8',
-      shell: process.platform === 'win32',
-    },
-  );
+  const result = spawnSync('npm', ['sbom', '--sbom-format', 'cyclonedx', '--package-lock-only', '--offline'], {
+    cwd: dir,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
   if (result.status !== 0) {
-    throw new Error(
-      `npm sbom failed in ${dir}:\n${result.stderr || result.error?.message || 'unknown error'}`,
-    );
+    throw new Error(`npm sbom failed in ${dir}:\n${result.stderr || result.error?.message || 'unknown error'}`);
   }
   return JSON.parse(result.stdout);
 }

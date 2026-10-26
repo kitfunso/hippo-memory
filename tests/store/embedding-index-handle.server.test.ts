@@ -71,77 +71,66 @@ async function live({ root, ids }: Seeded): Promise<Live> {
   };
 }
 
-describe.each<Kind>(['in process', 'on the store worker'])(
-  'the embedding index handle %s',
-  (kind) => {
-    it('opens a session as plain data, and a close ends that session only', async () => {
-      const { root } = await seeded();
-      const index = KINDS[kind](root);
-      const first = await index.open();
-      const second = await index.open();
-      expect(structuredClone(first)).toEqual(first);
-      expect([second.id === first.id, second.key]).toEqual([false, first.key]);
-      await index.step(first.id, { kind: 'close' });
-      await expect(index.step(first.id, { kind: 'summary' })).rejects.toThrow(
-        `no open index session '${first.id}'`,
-      );
-      expect(await index.step(second.id, { kind: 'summary' })).toEqual({ vectors: 2, dims: 4 });
-      await expect(index.step(second.id, { kind: 'stage', rows: [] })).rejects.toThrow(
-        'no vector rebuild is open',
-      );
-      await index.step(second.id, { kind: 'close' });
-    });
+describe.each<Kind>(['in process', 'on the store worker'])('the embedding index handle %s', (kind) => {
+  it('opens a session as plain data, and a close ends that session only', async () => {
+    const { root } = await seeded();
+    const index = KINDS[kind](root);
+    const first = await index.open();
+    const second = await index.open();
+    expect(structuredClone(first)).toEqual(first);
+    expect([second.id === first.id, second.key]).toEqual([false, first.key]);
+    await index.step(first.id, { kind: 'close' });
+    await expect(index.step(first.id, { kind: 'summary' })).rejects.toThrow(`no open index session '${first.id}'`);
+    expect(await index.step(second.id, { kind: 'summary' })).toEqual({ vectors: 2, dims: 4 });
+    await expect(index.step(second.id, { kind: 'stage', rows: [] })).rejects.toThrow('no vector rebuild is open');
+    await index.step(second.id, { kind: 'close' });
+  });
 
-    it('stages a rebuild that reaches the live index only at its commit', async () => {
-      const seed = await seeded();
-      const [a, b, c] = seed.ids;
-      const before = await live(seed);
-      expect(before).toEqual({
-        vectors: { [a]: vector(1), [b]: vector(2) },
-        state: { storedModel: OLD, hasVectors: true },
-      });
-      const index = KINDS[kind](seed.root);
-      const { id } = await index.open();
-      expect(await index.step(id, { kind: 'lock' })).toBe(true);
-      await index.step(id, { kind: 'begin' });
-      await expect(index.step(id, { kind: 'begin' })).rejects.toThrow(
-        'a vector rebuild is already open on this session',
-      );
-      expect(await index.step(id, { kind: 'stage', rows: [[b, vector(3)]] })).toBe(1);
-      expect(await index.step(id, { kind: 'stage', rows: [[c, vector(4)]] })).toBe(1);
-      expect(await live(seed)).toEqual(before);
-      await index.step(id, { kind: 'commit', model: NEW });
-      await expect(index.step(id, { kind: 'stage', rows: [] })).rejects.toThrow(
-        'no vector rebuild is open',
-      );
-      await index.step(id, { kind: 'close' });
-      expect(await live(seed)).toEqual({
-        vectors: { [b]: vector(3), [c]: vector(4) },
-        state: { storedModel: NEW, hasVectors: true },
-      });
+  it('stages a rebuild that reaches the live index only at its commit', async () => {
+    const seed = await seeded();
+    const [a, b, c] = seed.ids;
+    const before = await live(seed);
+    expect(before).toEqual({
+      vectors: { [a]: vector(1), [b]: vector(2) },
+      state: { storedModel: OLD, hasVectors: true },
     });
+    const index = KINDS[kind](seed.root);
+    const { id } = await index.open();
+    expect(await index.step(id, { kind: 'lock' })).toBe(true);
+    await index.step(id, { kind: 'begin' });
+    await expect(index.step(id, { kind: 'begin' })).rejects.toThrow('a vector rebuild is already open on this session');
+    expect(await index.step(id, { kind: 'stage', rows: [[b, vector(3)]] })).toBe(1);
+    expect(await index.step(id, { kind: 'stage', rows: [[c, vector(4)]] })).toBe(1);
+    expect(await live(seed)).toEqual(before);
+    await index.step(id, { kind: 'commit', model: NEW });
+    await expect(index.step(id, { kind: 'stage', rows: [] })).rejects.toThrow('no vector rebuild is open');
+    await index.step(id, { kind: 'close' });
+    expect(await live(seed)).toEqual({
+      vectors: { [b]: vector(3), [c]: vector(4) },
+      state: { storedModel: NEW, hasVectors: true },
+    });
+  });
 
-    it('drops a staging whose session closes before the commit', async () => {
-      const seed = await seeded();
-      const [a, , c] = seed.ids;
-      const before = await live(seed);
-      const index = KINDS[kind](seed.root);
-      const aborted = await index.open();
-      expect(await index.step(aborted.id, { kind: 'lock' })).toBe(true);
-      await index.step(aborted.id, { kind: 'begin' });
-      await index.step(aborted.id, { kind: 'stage', rows: [[c, vector(9)]] });
-      await index.step(aborted.id, { kind: 'close' });
-      expect(await live(seed)).toEqual(before);
-      // The next rebuild commits only the rows it staged itself.
-      const { id } = await index.open();
-      await index.step(id, { kind: 'begin' });
-      await index.step(id, { kind: 'stage', rows: [[a, vector(5)]] });
-      await index.step(id, { kind: 'commit', model: NEW });
-      await index.step(id, { kind: 'close' });
-      expect((await live(seed)).vectors).toEqual({ [a]: vector(5) });
-    });
-  },
-);
+  it('drops a staging whose session closes before the commit', async () => {
+    const seed = await seeded();
+    const [a, , c] = seed.ids;
+    const before = await live(seed);
+    const index = KINDS[kind](seed.root);
+    const aborted = await index.open();
+    expect(await index.step(aborted.id, { kind: 'lock' })).toBe(true);
+    await index.step(aborted.id, { kind: 'begin' });
+    await index.step(aborted.id, { kind: 'stage', rows: [[c, vector(9)]] });
+    await index.step(aborted.id, { kind: 'close' });
+    expect(await live(seed)).toEqual(before);
+    // The next rebuild commits only the rows it staged itself.
+    const { id } = await index.open();
+    await index.step(id, { kind: 'begin' });
+    await index.step(id, { kind: 'stage', rows: [[a, vector(5)]] });
+    await index.step(id, { kind: 'commit', model: NEW });
+    await index.step(id, { kind: 'close' });
+    expect((await live(seed)).vectors).toEqual({ [a]: vector(5) });
+  });
+});
 
 describe('the embedding index lock', () => {
   const PAIRS: readonly (readonly [holder: Kind, waiter: Kind])[] = [
@@ -149,20 +138,17 @@ describe('the embedding index lock', () => {
     ['on the store worker', 'in process'],
   ];
 
-  it.each(PAIRS)(
-    'held %s, keeps a session %s out until the holder closes',
-    async (holderKind, waiterKind) => {
-      const { root } = await seeded();
-      const holder = KINDS[holderKind](root);
-      const waiter = KINDS[waiterKind](root);
-      const held = await holder.open();
-      const waiting = await waiter.open();
-      expect(waiting.key).toBe(held.key);
-      expect(await holder.step(held.id, { kind: 'lock' })).toBe(true);
-      expect(await waiter.step(waiting.id, { kind: 'lock' })).toBe(false);
-      await holder.step(held.id, { kind: 'close' });
-      expect(await waiter.step(waiting.id, { kind: 'lock' })).toBe(true);
-      await waiter.step(waiting.id, { kind: 'close' });
-    },
-  );
+  it.each(PAIRS)('held %s, keeps a session %s out until the holder closes', async (holderKind, waiterKind) => {
+    const { root } = await seeded();
+    const holder = KINDS[holderKind](root);
+    const waiter = KINDS[waiterKind](root);
+    const held = await holder.open();
+    const waiting = await waiter.open();
+    expect(waiting.key).toBe(held.key);
+    expect(await holder.step(held.id, { kind: 'lock' })).toBe(true);
+    expect(await waiter.step(waiting.id, { kind: 'lock' })).toBe(false);
+    await holder.step(held.id, { kind: 'close' });
+    expect(await waiter.step(waiting.id, { kind: 'lock' })).toBe(true);
+    await waiter.step(waiting.id, { kind: 'close' });
+  });
 });

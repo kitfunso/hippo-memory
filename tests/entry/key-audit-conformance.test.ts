@@ -70,10 +70,7 @@ describe('KeyWrites.changeApiKey revoke', () => {
   it("answers another tenant's key as unknown and leaves it live", async () => {
     const { memberB } = fixture.keys;
     const side = await conforms([revoke(TENANT_A, memberB), revokedAtOf(memberB)]);
-    expect(side.outcomes).toEqual([
-      { error: `NotFoundError: Unknown key_id: ${memberB}` },
-      { value: null },
-    ]);
+    expect(side.outcomes).toEqual([{ error: `NotFoundError: Unknown key_id: ${memberB}` }, { value: null }]);
     expect(side.audit).toEqual(baseline.audit);
   });
 
@@ -86,11 +83,7 @@ describe('KeyWrites.changeApiKey revoke', () => {
   it('revokes at the given time and appends one auth_revoke row under the next id', async () => {
     const { memberA } = fixture.keys;
     const next = nextAuditId(fixture.dir);
-    const side = await conforms([
-      revoke(TENANT_A, memberA),
-      revokedAtOf(memberA),
-      revoke(TENANT_A, memberA),
-    ]);
+    const side = await conforms([revoke(TENANT_A, memberA), revokedAtOf(memberA), revoke(TENANT_A, memberA)]);
     expect(side.outcomes).toEqual([{ value: AT }, { value: AT }, { value: AT }]);
     expect(side.audit).toEqual([
       ...baseline.audit,

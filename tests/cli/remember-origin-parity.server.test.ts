@@ -23,10 +23,7 @@ function projectStore(config: Record<string, JsonValue>): string {
   const store = path.join(tmp, 'proj', '.hippo');
   fs.mkdirSync(store, { recursive: true });
   initTestStore(store);
-  fs.writeFileSync(
-    path.join(store, 'config.json'),
-    JSON.stringify({ ...config, embeddings: { enabled: false } }),
-  );
+  fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ ...config, embeddings: { enabled: false } }));
   return store;
 }
 
@@ -34,12 +31,7 @@ function projectStore(config: Record<string, JsonValue>): string {
 async function directRemember(store: string, text: string): Promise<string> {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   try {
-    await handleRemember({
-      hippoRoot: store,
-      tenantId: 'default',
-      args: [text],
-      flags: { force: true },
-    });
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: { force: true } });
   } finally {
     log.mockRestore();
   }

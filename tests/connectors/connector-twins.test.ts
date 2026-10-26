@@ -31,14 +31,8 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   const sl = { connector: 'slack', eventId: 'Ev1' } as const;
 
   it('an empty body is logged with no memory, and both logs answer the same record shape', async () => {
-    expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([
-      { seen: false },
-      { seen: false },
-    ]);
-    const results = [
-      await rememberWithEventLog(ctx, gh, null),
-      await rememberWithEventLog(ctx, sl, null),
-    ];
+    expect([githubEventRecord(root, 'k1'), slackEventRecord(root, 'Ev1')]).toEqual([{ seen: false }, { seen: false }]);
+    const results = [await rememberWithEventLog(ctx, gh, null), await rememberWithEventLog(ctx, sl, null)];
     expect(results).toEqual([
       { status: 'skipped', memoryId: null },
       { status: 'skipped', memoryId: null },
@@ -87,8 +81,7 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
     });
     const steps = (signed: boolean) => ({
       dlq: githubDlq,
-      refuseSignature: () =>
-        signed ? null : { status: 'sig_missing' as const, reason: 'no signature' },
+      refuseSignature: () => (signed ? null : { status: 'sig_missing' as const, reason: 'no signature' }),
       isEnvelope: (v: JsonValue): v is JsonValue => isJsonObject(v),
       notEnvelope: 'not an object',
       reingest: async () => ({
@@ -111,9 +104,6 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
       retryCount: 1,
       reason: 'no tenant',
     });
-    expect(
-      (await sqliteStore(root).connectorEvents.deadLetters('github', 'default', { id }))[0]
-        ?.retryCount,
-    ).toBe(1);
+    expect((await sqliteStore(root).connectorEvents.deadLetters('github', 'default', { id }))[0]?.retryCount).toBe(1);
   });
 });

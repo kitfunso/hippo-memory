@@ -16,14 +16,7 @@ import { initTestStore } from './store-template.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
-export const PROMPT_HOOK = [
-  'context',
-  '--pinned-only',
-  '--include-recent',
-  '5',
-  '--format',
-  'additional-context',
-];
+export const PROMPT_HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 export const PIN = 'PINNED: always check the rollback plan before deploy';
 export const SNAPSHOT_TASK = 'finish the boundary ledger rows for the compaction hooks';
 
@@ -65,10 +58,7 @@ export function project(config: Config = {}): Project {
   };
   const p: Project = { ...s, env, cwd: s.proj };
   writeConfig(p, config);
-  writeEntry(s.hippoRoot, {
-    ...createMemory(PIN, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    pinned: true,
-  });
+  writeEntry(s.hippoRoot, { ...createMemory(PIN, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true });
   return p;
 }
 
@@ -92,16 +82,9 @@ export function hippo(p: Project, args: string[], opts: RunOptions = {}): SpawnS
 }
 
 /** A run whose detached session-end worker cannot start, so no worker sleeps on the store while the test reads it. */
-export function hippoNoWorker(
-  p: Project,
-  args: string[],
-  opts: RunOptions = {},
-): SpawnSyncReturns<string> {
+export function hippoNoWorker(p: Project, args: string[], opts: RunOptions = {}): SpawnSyncReturns<string> {
   const preload = path.join(p.dir, 'no-worker.mjs');
-  fs.writeFileSync(
-    preload,
-    `process.execPath = ${JSON.stringify(path.join(p.dir, 'no-such-node'))};\n`,
-  );
+  fs.writeFileSync(preload, `process.execPath = ${JSON.stringify(path.join(p.dir, 'no-such-node'))};\n`);
   return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], {
     cwd: opts.cwd ?? p.cwd,
     env: { ...p.env, ...opts.env },
@@ -111,24 +94,12 @@ export function hippoNoWorker(
 }
 
 /** `hippo` run through runCli in this process, for a case that reads rows and printed bytes but not the process. */
-export function hippoIn(
-  p: Project,
-  args: string[],
-  opts: RunOptions = {},
-): Promise<InProcessResult> {
-  return runCliAs(args, {
-    cwd: opts.cwd ?? p.cwd,
-    env: { ...p.env, ...opts.env },
-    input: opts.input ?? '',
-  });
+export function hippoIn(p: Project, args: string[], opts: RunOptions = {}): Promise<InProcessResult> {
+  return runCliAs(args, { cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '' });
 }
 
 /** hippoNoWorker in this process: the worker spawn reads process.execPath when it starts, so a missing one fails it. */
-export async function hippoInNoWorker(
-  p: Project,
-  args: string[],
-  opts: RunOptions = {},
-): Promise<InProcessResult> {
+export async function hippoInNoWorker(p: Project, args: string[], opts: RunOptions = {}): Promise<InProcessResult> {
   const execPath = process.execPath;
   process.execPath = path.join(p.dir, 'no-such-node');
   try {
@@ -138,10 +109,7 @@ export async function hippoInNoWorker(
   }
 }
 
-export const sessionEndPayload = (
-  sessionId: string,
-  extra: { [field: string]: string } = {},
-): string =>
+export const sessionEndPayload = (sessionId: string, extra: { [field: string]: string } = {}): string =>
   JSON.stringify({
     session_id: sessionId,
     transcript_path: 'no-such-transcript.jsonl',
@@ -163,10 +131,7 @@ export function hippoAsync(
   opts: Omit<RunOptions, 'input'> & { input: string | null },
 ): Promise<AsyncRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [HIPPO_JS, ...args], {
-      cwd: p.cwd,
-      env: { ...p.env, ...opts.env },
-    });
+    const child = spawn(process.execPath, [HIPPO_JS, ...args], { cwd: p.cwd, env: { ...p.env, ...opts.env } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d: Buffer) => {
@@ -182,10 +147,7 @@ export function hippoAsync(
 }
 
 /** The default transcript does not exist, so the hook records the boundary and skips the snapshot. */
-export const preCompactPayload = (
-  sessionId: string,
-  extra: { [field: string]: string } = {},
-): string =>
+export const preCompactPayload = (sessionId: string, extra: { [field: string]: string } = {}): string =>
   JSON.stringify({
     session_id: sessionId,
     transcript_path: 'no-such-transcript.jsonl',
@@ -195,12 +157,7 @@ export const preCompactPayload = (
   });
 
 export const resumePayload = (sessionId: string, extra: { [field: string]: string } = {}): string =>
-  JSON.stringify({
-    session_id: sessionId,
-    hook_event_name: 'SessionStart',
-    source: 'compact',
-    ...extra,
-  });
+  JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source: 'compact', ...extra });
 
 export const promptPayload = (
   sessionId: string,
@@ -214,10 +171,7 @@ export function writeTranscript(p: Project, name = 'transcript'): string {
     { type: 'user', message: { role: 'user', content: SNAPSHOT_TASK } },
     {
       type: 'assistant',
-      message: {
-        role: 'assistant',
-        content: [{ type: 'text', text: 'Next step: run the delivery ledger tests.' }],
-      },
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: run the delivery ledger tests.' }] },
     },
   ];
   fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
@@ -281,21 +235,12 @@ export function eventsN(p: Project, sessionId: string | null, n: number): Delive
 
 export function eventCount(p: Project): number {
   // SAFETY: a single COUNT(*) aggregate aliased `c`.
-  return withDb(
-    p,
-    (db) => (db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c,
-  );
+  return withDb(p, (db) => (db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c);
 }
 
-export function tableRows(
-  p: Project,
-  sql: string,
-): Array<{ [column: string]: string | number | null }> {
+export function tableRows(p: Project, sql: string): Array<{ [column: string]: string | number | null }> {
   // SAFETY: callers pass a SELECT; rows are column-name to cell maps.
-  return withDb(
-    p,
-    (db) => db.prepare(sql).all() as Array<{ [column: string]: string | number | null }>,
-  );
+  return withDb(p, (db) => db.prepare(sql).all() as Array<{ [column: string]: string | number | null }>);
 }
 
 export const ledgerLines = (stderr: string): string[] =>

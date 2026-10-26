@@ -22,11 +22,7 @@ import {
 } from '../../src/store/rules/graph-delta.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  countMatching,
-  peakRowsRead,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -35,21 +31,8 @@ import { writeEntriesTogether } from '../_helpers/root-forms.js';
 const T = 'default';
 const OTHER = 'acme';
 const NOW = '2026-10-01T00:00:00.000Z';
-const ENTITY_TYPES: readonly EntityType[] = [
-  'person',
-  'project',
-  'customer',
-  'system',
-  'policy',
-  'decision',
-];
-const REL_TYPES: readonly RelationType[] = [
-  'owns',
-  'supersedes',
-  'depends-on',
-  'blocked-by',
-  'references',
-];
+const ENTITY_TYPES: readonly EntityType[] = ['person', 'project', 'customer', 'system', 'policy', 'decision'];
+const REL_TYPES: readonly RelationType[] = ['owns', 'supersedes', 'depends-on', 'blocked-by', 'references'];
 // A pair cut in half is stored as U+FFFD and a padded name trimmed, so neither matches its desired twin.
 const NAMES = ['Alpha', 'Beta', 'Gamma Ray', 'cut \uD83D', 'cut �', ' Padded '];
 const DELTA_READ = 'json_each';
@@ -124,14 +107,12 @@ function seedGraph(
     sourceObject: pick(r, objects),
   }));
   // Exact copies, so a key can hold two edges that both match the wanted one in full.
-  for (const edge of [...edges, ...edges.filter(() => r() < 0.3)])
-    insertRelationRow(db, tenant, edge);
+  for (const edge of [...edges, ...edges.filter(() => r() < 0.3)]) insertRelationRow(db, tenant, edge);
 }
 
 function memoryIdsOf(desired: DesiredGraph): string[] {
   const ids = new Set<string>();
-  for (const row of [...desired.entities, ...desired.relations])
-    if (row.memoryId !== null) ids.add(row.memoryId);
+  for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
   return [...ids];
 }
 
@@ -166,10 +147,7 @@ const keyOf = (row: StoredEntity): NaturalKey | null =>
     ? null
     : {
         entityType: column<EntityType>(row.entity_type),
-        sourceObject: {
-          type: column<SourceObjectType>(row.source_object_type),
-          id: row.source_object_id,
-        },
+        sourceObject: { type: column<SourceObjectType>(row.source_object_type), id: row.source_object_id },
       };
 
 /** A rebuild's desired graph: most stored keys again, some renamed or moved, new keys, twins and restated edges. */
@@ -199,10 +177,7 @@ function desiredGraph(
   }));
   const entities = [...reused, ...fresh];
   const twins = entities.filter(() => r() < 0.1).map((e) => ({ ...e, name: 'Later twin' }));
-  const ends: NaturalKey[] = [
-    ...entities,
-    ...storedKeys.filter((k): k is NaturalKey => k !== null),
-  ];
+  const ends: NaturalKey[] = [...entities, ...storedKeys.filter((k): k is NaturalKey => k !== null)];
   const restated = stored.relations.flatMap((row): DesiredRelation[] => {
     const from = keyOf(stored.entities.find((e) => e.id === row.from_entity_id)!);
     const to = keyOf(stored.entities.find((e) => e.id === row.to_entity_id)!);
@@ -213,10 +188,7 @@ function desiredGraph(
         to,
         relType: column<RelationType>(row.rel_type),
         memoryId: r() < 0.8 ? row.memory_id : pick(r, memories),
-        sourceObject: {
-          type: column<SourceObjectType>(row.source_object_type),
-          id: row.source_object_id!,
-        },
+        sourceObject: { type: column<SourceObjectType>(row.source_object_type), id: row.source_object_id! },
       },
     ];
   });
@@ -229,11 +201,7 @@ function desiredGraph(
   }));
   return {
     entities: shuffled(r, [...entities, ...twins]),
-    relations: shuffled(r, [
-      ...restated,
-      ...made,
-      ...restated.slice(0, 3).map((x) => ({ ...x, memoryId: null })),
-    ]),
+    relations: shuffled(r, [...restated, ...made, ...restated.slice(0, 3).map((x) => ({ ...x, memoryId: null }))]),
   };
 }
 
@@ -283,10 +251,9 @@ describe('graphDelta on hippo.db', () => {
         );
         const stored = withDb(root, (db) => storedGraph(db, tenant, desired));
         const expected = diffGraph(stored, desired);
-        expect(
-          await sqliteStore(root).graphReads.graphDelta(tenant, desired),
-          `seed ${seed} ${tenant}`,
-        ).toEqual(expected);
+        expect(await sqliteStore(root).graphReads.graphDelta(tenant, desired), `seed ${seed} ${tenant}`).toEqual(
+          expected,
+        );
         for (const op of expected) seen.add(op.op);
         kept += stored.entities.length - expected.filter((op) => op.op === 'deleteEntity').length;
       }
@@ -335,11 +302,7 @@ describe('graphDelta reads', () => {
       expect(peakRowsRead(steady.reads, DELTA_READ)).toBe(0);
 
       withDb(root, (db) =>
-        db
-          .prepare(
-            `UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`,
-          )
-          .run(),
+        db.prepare(`UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`).run(),
       );
       const renamed = deriveGraph(await loadGraphSources(objectsAt(root), T));
       const one = await recordStatementsAsync(() => store.graphReads.graphDelta(T, renamed));

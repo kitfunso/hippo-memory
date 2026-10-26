@@ -9,10 +9,7 @@ import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.j
 import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
-import {
-  listEntryTextKeysPage,
-  iterateEveryTenantEntries,
-} from '../../../src/store/sqlite/entry-reads.js';
+import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
 import { listEntriesWhere } from '../../../src/store/sqlite/entry-filter.js';
 import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
 import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
@@ -27,11 +24,7 @@ import type {
   ContextCandidateFilter,
   RecentOrigins,
 } from '../../../src/base/ports/store/context-reads.js';
-import type {
-  SourceTally,
-  EntryTextKey,
-  RecallSearchEntriesOptions,
-} from '../../../src/base/ports/store/sharing.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/ports/store/sharing.js';
 import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
@@ -62,8 +55,7 @@ export function loadAmbientCandidates(
   const judge = (e: MemoryEntry) => (admit(e) ? null : ('admission' as const));
   return onHandle(
     hippoRoot,
-    (db) =>
-      candidatesSql.listAmbientCandidates(db, tenantId, { recentNeeded, judge, recall, origins }),
+    (db) => candidatesSql.listAmbientCandidates(db, tenantId, { recentNeeded, judge, recall, origins }),
     openStore,
   );
 }
@@ -87,11 +79,7 @@ export function loadTextsHolding(
   project?: readonly string[],
   admit?: SqlFragment,
 ): HeldText[] {
-  return onHandle(
-    hippoRoot,
-    (db) => candidatesSql.listTextsHolding(db, tenantId, texts, project, admit),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => candidatesSql.listTextsHolding(db, tenantId, texts, project, admit), openStore);
 }
 
 export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {
@@ -129,11 +117,7 @@ export function loadEntriesByIds(
   ids: readonly string[],
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryEntry[] {
-  return onHandle(
-    hippoRoot,
-    (db) => entryReadsSql.readEntriesInIdOrder(db, ids, tenantId),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => entryReadsSql.readEntriesInIdOrder(db, ids, tenantId), openStore);
 }
 
 export function loadSessionRawMemories(
@@ -144,22 +128,14 @@ export function loadSessionRawMemories(
   origins?: readonly string[],
 ): MemoryEntry[] {
   if (!sessionId) return [];
-  const raws = {
-    tenantId,
-    kinds: ['raw'],
-    live: true,
-    sessionId,
-    origins: origins && ['', ...origins],
-  } as const;
+  const raws = { tenantId, kinds: ['raw'], live: true, sessionId, origins: origins && ['', ...origins] } as const;
   return onHandle(
     hippoRoot,
     (db) =>
       cap !== undefined && cap > 0
         ? listEntriesWhere(db, raws, { limit: cap, newest: true }).entries.reverse()
         : Array.from(
-            rowsInPages((after?: EntryCursor) =>
-              listEntriesWhere(db, raws, { limit: READ_PAGE_ROWS, after }),
-            ),
+            rowsInPages((after?: EntryCursor) => listEntriesWhere(db, raws, { limit: READ_PAGE_ROWS, after })),
           ),
     openStore,
   );
@@ -175,8 +151,7 @@ export function countSessionRawMemories(
 ): number {
   return onHandle(
     hippoRoot,
-    (db) =>
-      entryReadsSql.countSessionRawMemories(db, { sessionId, tenantId, scope, ownScope, origins }),
+    (db) => entryReadsSql.countSessionRawMemories(db, { sessionId, tenantId, scope, ownScope, origins }),
     openStore,
   );
 }
@@ -195,11 +170,7 @@ export function loadFreshRawMemories(
   );
 }
 
-export function readEntry(
-  hippoRoot: string,
-  id: string,
-  tenantId: TenantId = ALL_TENANTS,
-): MemoryEntry | null {
+export function readEntry(hippoRoot: string, id: string, tenantId: TenantId = ALL_TENANTS): MemoryEntry | null {
   return onHandle(hippoRoot, (db) => entryReadsSql.readEntry(db, id, tenantId), openStore);
 }
 
@@ -207,11 +178,7 @@ export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => [...iterateEveryTenantEntries(db)], openStore);
 }
 
-export function loadEntryTextKeys(
-  hippoRoot: string,
-  tenantId: TenantId = ALL_TENANTS,
-  pageRows = 500,
-): EntryTextKey[] {
+export function loadEntryTextKeys(hippoRoot: string, tenantId: TenantId = ALL_TENANTS, pageRows = 500): EntryTextKey[] {
   return onHandle(
     hippoRoot,
     (db) => {
@@ -243,11 +210,7 @@ export function loadRecallEntries(
 ): MemoryEntry[] {
   return onHandle(
     hippoRoot,
-    (db) =>
-      searchRowsSql.listRecallEntries(db, query, {
-        ...options,
-        tenantId: options.tenantId ?? ALL_TENANTS,
-      }),
+    (db) => searchRowsSql.listRecallEntries(db, query, { ...options, tenantId: options.tenantId ?? ALL_TENANTS }),
     openStore,
   );
 }
@@ -269,11 +232,7 @@ export function loadSearchEntries(
   limit?: number,
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryEntry[] {
-  return onHandle(
-    hippoRoot,
-    (db) => searchRowsSql.listSearchEntries(db, query, limit, tenantId),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => searchRowsSql.listSearchEntries(db, query, limit, tenantId), openStore);
 }
 
 export function writePromotedEntry(
@@ -281,9 +240,5 @@ export function writePromotedEntry(
   entry: MemoryEntry,
   opts: Parameters<typeof entryWritesSql.writePromotedEntry>[3],
 ): void {
-  onHandle(
-    hippoRoot,
-    (db) => entryWritesSql.writePromotedEntry(db, storeFilesOf(hippoRoot), entry, opts),
-    openStore,
-  );
+  onHandle(hippoRoot, (db) => entryWritesSql.writePromotedEntry(db, storeFilesOf(hippoRoot), entry, opts), openStore);
 }

@@ -30,8 +30,7 @@ afterEach(async () => {
 
 function metaCount(db: DatabaseSyncLike, key: string): number {
   return Number(
-    (db.prepare('SELECT COUNT(*) AS n FROM meta WHERE key = ?').get(key) as { n: number | bigint })
-      ?.n ?? -1,
+    (db.prepare('SELECT COUNT(*) AS n FROM meta WHERE key = ?').get(key) as { n: number | bigint })?.n ?? -1,
   );
 }
 
@@ -106,11 +105,7 @@ let holderStdin: Writable | null = null;
 async function holdWriteLock(holdMs?: number): Promise<void> {
   const script = path.join(root, 'holder.cjs');
   fs.writeFileSync(script, HOLDER);
-  const args = [
-    script,
-    path.join(root, 'hippo.db'),
-    ...(holdMs === undefined ? [] : [String(holdMs)]),
-  ];
+  const args = [script, path.join(root, 'hippo.db'), ...(holdMs === undefined ? [] : [String(holdMs)])];
   const child = spawn(process.execPath, args, { stdio: ['pipe', 'pipe', 'inherit'] });
   holderStdin = child.stdin;
   holder = new Promise<void>((resolve) => {
@@ -148,9 +143,7 @@ describe('withWriteScope busyWaitMs', () => {
     let clock = 1_000_000;
     let waits = 0;
     try {
-      expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(
-        DEFAULT_BUSY_WAIT_MS,
-      );
+      expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock();
       vi.spyOn(Date, 'now').mockImplementation(() => clock);

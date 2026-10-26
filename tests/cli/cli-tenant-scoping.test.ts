@@ -112,11 +112,7 @@ describe('CLI tenant-scoping', () => {
   });
 
   function seed(tenantId: string, content: string): string {
-    const entry = createMemory(content, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tenantId,
-      tags: ['x'],
-    });
+    const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, tags: ['x'] });
     writeEntry(hippoRoot, entry);
     return entry.id;
   }
@@ -132,14 +128,9 @@ describe('CLI tenant-scoping', () => {
     const db = openHippoDb(hippoRoot);
     try {
       const row = db
-        .prepare(
-          `SELECT tenant_id, metadata_json FROM audit_log WHERE op = 'forget' AND target_id = ?`,
-        )
+        .prepare(`SELECT tenant_id, metadata_json FROM audit_log WHERE op = 'forget' AND target_id = ?`)
         .get(bJunk);
-      expect(row).toMatchObject({
-        tenant_id: 'tenant_b',
-        metadata_json: expect.stringContaining('audit --fix: '),
-      });
+      expect(row).toMatchObject({ tenant_id: 'tenant_b', metadata_json: expect.stringContaining('audit --fix: ') });
     } finally {
       closeHippoDb(db);
     }
@@ -158,9 +149,7 @@ describe('CLI tenant-scoping', () => {
     const old = seed('tenant_b', 'B original content');
     const res = await runCli('tenant_b', 'supersede', old, 'B replacement content');
     expect(res.status, res.out).toBe(0);
-    const successor = loadEveryTenantEntries(hippoRoot).find(
-      (e) => e.content === 'B replacement content',
-    );
+    const successor = loadEveryTenantEntries(hippoRoot).find((e) => e.content === 'B replacement content');
     expect(successor?.tenantId).toBe('tenant_b');
   });
 });

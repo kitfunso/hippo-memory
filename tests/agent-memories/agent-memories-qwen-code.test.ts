@@ -57,8 +57,7 @@ describe('qwen-code base folder', () => {
       QWEN_HOME: path.join(tmp, 'qhome'),
     };
     const fallback = path.join(tmp, '.qwen');
-    for (const dir of [...Object.values(dirs), fallback])
-      write(path.join(dir, 'memories', 'n.md'), `from ${dir}`);
+    for (const dir of [...Object.values(dirs), fallback]) write(path.join(dir, 'memories', 'n.md'), `from ${dir}`);
 
     for (let i = 0; i <= keys.length; i++) {
       const env = Object.fromEntries(keys.slice(i).map((key) => [key, dirs[key]]));
@@ -72,9 +71,7 @@ describe('qwen-code base folder', () => {
 
   it('ignores an empty variable', () => {
     write(path.join(tmp, '.qwen', 'memories', 'n.md'));
-    expect(list(ctxOf({ QWEN_CODE_MEMORY_BASE_DIR: '' }), 'user').home).toBe(
-      path.join(tmp, '.qwen'),
-    );
+    expect(list(ctxOf({ QWEN_CODE_MEMORY_BASE_DIR: '' }), 'user').home).toBe(path.join(tmp, '.qwen'));
   });
 
   it('returns no container and no warning when the folder is missing', () => {
@@ -124,9 +121,7 @@ describe('qwen-code project container', () => {
     const root = path.join(tmp, 'plain', 'proj');
     fs.mkdirSync(root, { recursive: true });
     write(path.join(projectDirFor(root), 'n.md'));
-    expect(list(ctxOf({}, path.join(root, '..', 'proj')), 'project').containers[0].path).toBe(
-      projectDirFor(root),
-    );
+    expect(list(ctxOf({}, path.join(root, '..', 'proj')), 'project').containers[0].path).toBe(projectDirFor(root));
   });
 
   it('keys by the project root itself when QWEN_CODE_MEMORY_PROJECT_SCOPE is workspace', () => {
@@ -173,10 +168,7 @@ describe('qwen-code items', () => {
     const when = Date.UTC(2026, 0, 2, 3, 4, 5);
     const files = [
       write(path.join(memories(), 'plain.md'), '  Prefer pnpm.  \n'),
-      write(
-        path.join(memories(), 'fm.md'),
-        '---\nname: x\ndescription: y\n---\nUse tabs in Makefiles.\n',
-      ),
+      write(path.join(memories(), 'fm.md'), '---\nname: x\ndescription: y\n---\nUse tabs in Makefiles.\n'),
       write(path.join(memories(), 'pinned', 'always.md'), 'Never force push.'),
       write(path.join(memories(), 'a', 'b', 'deep.md'), 'Deep note.'),
     ];

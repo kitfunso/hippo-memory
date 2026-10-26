@@ -24,10 +24,7 @@ describe('the WAL checkpointer stop', () => {
       encoding: 'utf-8',
       timeout: 30_000,
     });
-    expect(
-      child.stdout.trim(),
-      `run \`npm run build\` first if the import failed:\n${child.stderr}`,
-    ).toBe('stopped');
+    expect(child.stdout.trim(), `run \`npm run build\` first if the import failed:\n${child.stderr}`).toBe('stopped');
     expect(child.status).toBe(0);
   });
 });

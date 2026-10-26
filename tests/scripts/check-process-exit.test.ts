@@ -44,13 +44,11 @@ describe('check-process-exit', () => {
     file('entry.ts', 'process.exit(1);\nprocess.exit(2);\n');
     expect(findProcessExits(dir, allowed)).toEqual([]);
     file('entry.ts', 'process.exit(1);\nprocess.exit(2);\nprocess.exit(3);\n');
-    expect(findProcessExits(dir, allowed).map((hit) => [hit.line, hit.found, hit.allowed])).toEqual(
-      [
-        [1, 3, 2],
-        [2, 3, 2],
-        [3, 3, 2],
-      ],
-    );
+    expect(findProcessExits(dir, allowed).map((hit) => [hit.line, hit.found, hit.allowed])).toEqual([
+      [1, 3, 2],
+      [2, 3, 2],
+      [3, 3, 2],
+    ]);
   });
 
   it('passes on the real src tree', () => {

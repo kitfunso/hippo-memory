@@ -47,14 +47,10 @@ describe('multihopSearch', () => {
     );
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankMultihop(
-      'In which month did John achieve career-high and then get an endorsement?',
-      entries,
-      {
-        now: evalNow(),
-        budget: 4000,
-      },
-    );
+    const results = rankMultihop('In which month did John achieve career-high and then get an endorsement?', entries, {
+      now: evalNow(),
+      budget: 4000,
+    });
 
     const contents = results.map((r) => r.entry.content);
     expect(contents.some((c) => c.includes('career-high'))).toBe(true);
@@ -132,10 +128,7 @@ describe('multihopSearch', () => {
     it('fits to the memory text when no cost is given', () => {
       const entries = loadAllEntries(hippoRoot, 'default');
       const one = entries[0].content.length / 4;
-      const results = rankMultihop(query, entries, {
-        now: evalNow(),
-        budget: Math.ceil(one * 2.5),
-      });
+      const results = rankMultihop(query, entries, { now: evalNow(), budget: Math.ceil(one * 2.5) });
       expect(results.reduce((s, r) => s + r.tokens, 0)).toBeLessThanOrEqual(Math.ceil(one * 2.5));
     });
   });

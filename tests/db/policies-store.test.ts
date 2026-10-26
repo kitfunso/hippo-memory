@@ -16,12 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  POLICY,
-  loadPolicies,
-  policiesAsOf,
-  normalizePolicyDate,
-} from '../../src/domain/objects/policies.js';
+import { POLICY, loadPolicies, policiesAsOf, normalizePolicyDate } from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -142,17 +137,12 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x2',
       supersedesPolicyId: b.id,
     });
-    await closeObject(objectsAt(home), POLICY, 'default', c.id, {
-      actor: CLI_ACTOR,
-      now: evalNow(),
-    });
+    await closeObject(objectsAt(home), POLICY, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
     const active = await loadPolicies(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
-    expect(
-      (await loadPolicies(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id),
-    ).toEqual([c.id]);
+    expect((await loadPolicies(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     expect((await loadPolicies(objectsAt(home), 'default')).length).toBe(4);
   });
 
@@ -183,16 +173,11 @@ describe('policies store (bi-temporal first-class object)', () => {
     ).rejects.toThrow(/invalid valid_from/);
     expect(countRows(home, 'policies')).toBe(p0); // nothing persisted on any rejection
     // overflow rolls forward (JS Date), accepted + canonical
-    const roll = await savePolicy(
-      objectsAt(home),
-      loadConfig(home).defaultHalfLifeDays,
-      'default',
-      {
-        policyName: 'Roll',
-        policyText: 'x',
-        validFrom: '2026-02-30',
-      },
-    );
+    const roll = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+      policyName: 'Roll',
+      policyText: 'x',
+      validFrom: '2026-02-30',
+    });
     expect(roll.validFrom).toBe('2026-03-02T00:00:00.000Z');
   });
 
@@ -218,29 +203,19 @@ describe('policies store (bi-temporal first-class object)', () => {
     });
 
     // mid-window: both? W is in force (Jan-Jun), O in force (Mar onward) at 2026-04-01
-    const apr = (await policiesAsOf(objectsAt(home), 'default', '2026-04-01'))
-      .map((x) => x.policyName)
-      .sort();
+    const apr = (await policiesAsOf(objectsAt(home), 'default', '2026-04-01')).map((x) => x.policyName).sort();
     expect(apr).toEqual(['O', 'W']);
     // before any: 2025-12-01 -> none
     expect((await policiesAsOf(objectsAt(home), 'default', '2025-12-01')).length).toBe(0);
     // == valid_from boundary IS in force
-    expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2026-01-01', { name: 'W' })).length,
-    ).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-01-01', { name: 'W' })).length).toBe(1);
     // == valid_to boundary is NOT in force (half-open)
-    expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'W' })).length,
-    ).toBe(0);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'W' })).length).toBe(0);
     // just before valid_to IS in force
-    expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2026-05-31', { name: 'W' })).length,
-    ).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-05-31', { name: 'W' })).length).toBe(1);
     // name filter
     expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2026-04-01', { name: 'O' })).map(
-        (x) => x.policyName,
-      ),
+      (await policiesAsOf(objectsAt(home), 'default', '2026-04-01', { name: 'O' })).map((x) => x.policyName),
     ).toEqual(['O']);
 
     // superseded rows excluded: supersede W, the superseded row must not appear
@@ -292,13 +267,8 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x',
       validFrom: '2026-01-01',
     });
-    await closeObject(objectsAt(home), POLICY, 'default', p.id, {
-      actor: CLI_ACTOR,
-      now: evalNow(),
-    });
-    expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length,
-    ).toBe(0);
+    await closeObject(objectsAt(home), POLICY, 'default', p.id, { actor: CLI_ACTOR, now: evalNow() });
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 
   it('read-side date-only as-of resolves to end-of-day so a same-day policy is in force', async () => {
@@ -312,17 +282,11 @@ describe('policies store (bi-temporal first-class object)', () => {
     const today = new Date().toISOString().slice(0, 10);
     // a date-only as-of for today resolves to end-of-day, so a policy created
     // earlier today IS in force.
-    expect((await policiesAsOf(objectsAt(home), 'default', today, { name: 'Today' })).length).toBe(
-      1,
-    );
+    expect((await policiesAsOf(objectsAt(home), 'default', today, { name: 'Today' })).length).toBe(1);
     // a precise as-of clearly BEFORE creation correctly excludes it (honest).
-    expect(
-      (
-        await policiesAsOf(objectsAt(home), 'default', '2020-01-01T00:00:00.000Z', {
-          name: 'Today',
-        })
-      ).length,
-    ).toBe(0);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2020-01-01T00:00:00.000Z', { name: 'Today' })).length).toBe(
+      0,
+    );
   });
 
   it('CRIT regression: a date-only valid_from is in force for a date-only as-of on the same day (normalization)', async () => {
@@ -340,8 +304,6 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyName: 'Now',
       policyText: 'x',
     });
-    expect(
-      (await policiesAsOf(objectsAt(home), 'default', '2099-01-01', { name: 'Now' })).length,
-    ).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2099-01-01', { name: 'Now' })).length).toBe(1);
   });
 });

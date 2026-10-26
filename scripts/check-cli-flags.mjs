@@ -43,9 +43,7 @@ function isHandRead(n) {
     );
   }
   if (ts.isTemplateSpan(n)) return isFlagRead(n.expression);
-  return (
-    ts.isAsExpression(n) && n.type.kind === ts.SyntaxKind.StringKeyword && isFlagRead(n.expression)
-  );
+  return ts.isAsExpression(n) && n.type.kind === ts.SyntaxKind.StringKeyword && isFlagRead(n.expression);
 }
 
 /**
@@ -59,8 +57,7 @@ export function handFlagLines(text) {
   const { sourceFile } = readFacts(text, 'file.ts', []);
   const lines = new Set();
   const visit = (n) => {
-    if (isHandRead(n))
-      lines.add(sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1);
+    if (isHandRead(n)) lines.add(sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1);
     ts.forEachChild(n, visit);
   };
   visit(sourceFile);

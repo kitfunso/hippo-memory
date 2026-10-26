@@ -8,19 +8,13 @@ const storeDir = fileURLToPath(new URL('../../src/store/', import.meta.url));
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory()
-      ? sources(join(dir, e.name))
-      : e.name.endsWith('.ts')
-        ? [join(dir, e.name)]
-        : [],
+    e.isDirectory() ? sources(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : [],
   );
 }
 
 describe('the store picks no embedding provider', () => {
   it('no src/store file imports the provider resolver', () => {
-    const offenders = sources(storeDir).filter((f) =>
-      /embeddings\/provider\.js/.test(readFileSync(f, 'utf8')),
-    );
+    const offenders = sources(storeDir).filter((f) => /embeddings\/provider\.js/.test(readFileSync(f, 'utf8')));
     expect(offenders).toEqual([]);
   });
 

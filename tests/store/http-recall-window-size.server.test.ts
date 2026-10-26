@@ -64,14 +64,11 @@ describe('HTTP /v1/memories windowSize serialization', () => {
   it('serve() sets keepAliveTimeout=65000 and headersTimeout=70000 on the underlying server', () => {
     expect(handle.server?.keepAliveTimeout).toBe(65000);
     expect(handle.server?.headersTimeout).toBe(70000);
-    type ServerWithKeepAliveBuffer = NonNullable<typeof handle.server> & {
-      keepAliveTimeoutBuffer?: number;
-    };
+    type ServerWithKeepAliveBuffer = NonNullable<typeof handle.server> & { keepAliveTimeoutBuffer?: number };
     // SAFETY: keepAliveTimeoutBuffer is a real but undocumented node:http Server property
     // (Node 22.19+/24.6+); handle.server is the live server instance under test, so the
     // extra optional field is a compatible narrowing, not an unrelated shape.
-    const buffer =
-      (handle.server as ServerWithKeepAliveBuffer | undefined)?.keepAliveTimeoutBuffer ?? 0;
+    const buffer = (handle.server as ServerWithKeepAliveBuffer | undefined)?.keepAliveTimeoutBuffer ?? 0;
     // Pin the ordering invariant itself, not just the two constants: the
     // headers timer must clear the effective keep-alive expiry.
     expect(handle.server!.headersTimeout).toBeGreaterThan(handle.server!.keepAliveTimeout + buffer);

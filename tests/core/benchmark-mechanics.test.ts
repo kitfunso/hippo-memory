@@ -6,12 +6,7 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import {
-  createMemory7,
-  tmpDir,
-  daysAgo,
-  useBenchmarkCorpus,
-} from '../_helpers/benchmark-corpus.js';
+import { createMemory7, tmpDir, daysAgo, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -131,10 +126,7 @@ describe('Outcome feedback', () => {
 describe('Token budget', () => {
   it('total returned tokens respect budget of 100', () => {
     const entries = loadAllEntries(tmpDir, 'default');
-    const results = rankBm25('production deployment rules', entries, {
-      now: evalNow(),
-      budget: 100,
-    });
+    const results = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100 });
 
     const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
     expect(totalTokens).toBeLessThanOrEqual(100);
@@ -158,15 +150,8 @@ describe('Token budget', () => {
 
   it('minResults guarantees at least N results regardless of budget', () => {
     const entries = loadAllEntries(tmpDir, 'default');
-    const withMin = rankBm25('production deployment rules', entries, {
-      now: evalNow(),
-      budget: 100,
-      minResults: 5,
-    });
-    const withoutMin = rankBm25('production deployment rules', entries, {
-      now: evalNow(),
-      budget: 100,
-    });
+    const withMin = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100, minResults: 5 });
+    const withoutMin = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100 });
     expect(withMin.length).toBeGreaterThanOrEqual(Math.min(5, entries.length));
     expect(withMin.length).toBeGreaterThanOrEqual(withoutMin.length);
   });

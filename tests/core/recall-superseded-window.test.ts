@@ -77,11 +77,7 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const root = newRoot();
     const { current, old } = seedVersions(root, oldCreatedFirst);
     const windowIds = (includeSuperseded: boolean): string[] =>
-      listRecallEntriesInFolder(root, query, {
-        limit: 1,
-        tenantId: 'default',
-        includeSuperseded,
-      }).map((e) => e.id);
+      listRecallEntriesInFolder(root, query, { limit: 1, tenantId: 'default', includeSuperseded }).map((e) => e.id);
 
     expect(windowIds(true)).toEqual([old.id]);
     expect(windowIds(false)).toEqual([current.id]);
@@ -92,9 +88,9 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const { current } = seedVersions(root, false);
 
     expect(
-      (
-        await retrieve(ctxFor(root), { query: 'deploy', window: { limit: 1, scorerWindow: 1 } })
-      ).results.map((r) => r.id),
+      (await retrieve(ctxFor(root), { query: 'deploy', window: { limit: 1, scorerWindow: 1 } })).results.map(
+        (r) => r.id,
+      ),
     ).toEqual([current.id]);
   });
 });
@@ -115,10 +111,7 @@ describe('a superseded summary never stands in for its children', () => {
 
   it('in assemble', async () => {
     const root = newRoot();
-    const summary = summaryWithChildren(root, 'older detail', {
-      kind: 'raw',
-      sourceSessionId: 'sess-s',
-    });
+    const summary = summaryWithChildren(root, 'older detail', { kind: 'raw', sourceSessionId: 'sess-s' });
     const summaryIds = async (): Promise<string[]> =>
       (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items
         .filter((it) => it.isSummary)

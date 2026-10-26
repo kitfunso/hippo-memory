@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import {
-  closeHippoDb,
-  openHippoDb,
-  setFtsInSync,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
 import { mergedText, storedTextKeys, duplicateKey } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -40,9 +35,7 @@ const STORED = [
   row('never rotate keys on a Friday'),
   row('კავშირი ქართული ტექსტი'),
   row('concatenation of unrelated words'),
-  row(mergedText('Merged lessons', ['concat is not the same as join', 'other text']), {
-    source: 'consolidation',
-  }),
+  row(mergedText('Merged lessons', ['concat is not the same as join', 'other text']), { source: 'consolidation' }),
 ];
 
 // The answer with no bound: every text the tenant's rows hold.
@@ -64,30 +57,20 @@ describe('loadTextsHolding through the full-text index', () => {
     withDb(root, (db) => setFtsInSync(db, true));
   });
 
-  it.each([true, false])(
-    'finds exactly the lessons a whole scan finds, index in sync: %s',
-    (inSync) => {
-      withDb(root, (db) => setFtsInSync(db, inSync));
-      const keys = storedTextKeys(loadTextsHolding(root, 'default', words));
-      const whole = wholeScanKeys(root);
-      expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual(
-        LESSONS.map((l) => whole.has(duplicateKey(l))),
-      );
-      expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual([true, true, true, true]);
-    },
-  );
+  it.each([true, false])('finds exactly the lessons a whole scan finds, index in sync: %s', (inSync) => {
+    withDb(root, (db) => setFtsInSync(db, inSync));
+    const keys = storedTextKeys(loadTextsHolding(root, 'default', words));
+    const whole = wholeScanKeys(root);
+    expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual(LESSONS.map((l) => whole.has(duplicateKey(l))));
+    expect(LESSONS.map((l) => keys.has(duplicateKey(l)))).toEqual([true, true, true, true]);
+  });
 
   it('asks the index, not a tenant scan, for texts it can name', () => {
-    const { statements } = recordStatements(() =>
-      loadTextsHolding(root, 'default', words.slice(0, 2)),
-    );
+    const { statements } = recordStatements(() => loadTextsHolding(root, 'default', words.slice(0, 2)));
     const held = statements.filter((sql) => sql.includes('memories_fts MATCH'));
     expect(held).toHaveLength(1);
     // SAFETY: EXPLAIN QUERY PLAN answers id, parent, notused and detail for each step.
-    const plan = withDb(
-      root,
-      (db) => db.prepare(`EXPLAIN QUERY PLAN ${held[0]}`).all() as Array<{ detail: string }>,
-    );
+    const plan = withDb(root, (db) => db.prepare(`EXPLAIN QUERY PLAN ${held[0]}`).all() as Array<{ detail: string }>);
     expect(plan.map((p) => p.detail).filter((d) => /^SCAN memories(?!_fts)/.test(d))).toEqual([]);
   });
 
@@ -102,9 +85,7 @@ describe('loadTextsHolding through the full-text index', () => {
     const after = recordStatements(() => loadTextsHolding(root, 'default', named));
     expect(after.rowsRead).toBe(before.rowsRead);
     expect(after.statements.length).toBe(before.statements.length);
-    expect(after.result.map((r) => r.content).sort()).toEqual(
-      before.result.map((r) => r.content).sort(),
-    );
+    expect(after.result.map((r) => r.content).sort()).toEqual(before.result.map((r) => r.content).sort());
   });
 });
 
@@ -154,8 +135,7 @@ describe('loadTextsHolding statements', () => {
 describe('SPACE_CODES', () => {
   it('lists every code point JavaScript reads as a space, and only those', () => {
     const spaces: number[] = [];
-    for (let code = 0; code <= 0x10ffff; code++)
-      if (/^\s$/u.test(String.fromCodePoint(code))) spaces.push(code);
+    for (let code = 0; code <= 0x10ffff; code++) if (/^\s$/u.test(String.fromCodePoint(code))) spaces.push(code);
     expect([...SPACE_CODES]).toEqual(spaces);
     expect(bareText(`a${EVERY_SPACE}b`)).toBe('ab');
   });

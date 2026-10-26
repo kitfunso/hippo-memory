@@ -206,9 +206,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     // No memory in any of the three tenants.
     expect(entriesByTenant('known-tenant')).toHaveLength(0);
     expect(entriesByTenant('deployment-fallback')).toHaveLength(0);
-    expect(
-      loadEveryTenantEntries(root).filter((e) => e.tags.includes('source:slack')),
-    ).toHaveLength(0);
+    expect(loadEveryTenantEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
   });
 
   it('single-workspace install (empty slack_workspaces) routes via HIPPO_TENANT', async () => {

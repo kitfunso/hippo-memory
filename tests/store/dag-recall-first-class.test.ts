@@ -93,10 +93,7 @@ describe('first-class DAG recall (scoring layer)', () => {
   it('per-call summaryDeboost=1.0 disables', async () => {
     const summary = makeL2Summary('disable-deboost test summary');
     writeEntry(hippoRoot, summary);
-    const results = await hybridSearch('disable-deboost', [summary], {
-      explain: true,
-      summaryDeboost: 1.0,
-    });
+    const results = await hybridSearch('disable-deboost', [summary], { explain: true, summaryDeboost: 1.0 });
     expect(results[0]?.breakdown?.summaryDeboost).toBe(1.0);
   });
 
@@ -104,10 +101,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('env-deboost test summary');
     writeEntry(hippoRoot, summary);
-    const results = await hybridSearch('env-deboost', [summary], {
-      explain: true,
-      runtime: envRuntimeSettings(),
-    });
+    const results = await hybridSearch('env-deboost', [summary], { explain: true, runtime: envRuntimeSettings() });
     expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.5);
   });
 
@@ -117,10 +111,7 @@ describe('first-class DAG recall (scoring layer)', () => {
 
     for (const bad of ['2.0', '0.0', 'NaN', '-0.5', 'garbage']) {
       vi.stubEnv('HIPPO_SUMMARY_DEBOOST', bad);
-      const results = await hybridSearch('out-of-range', [summary], {
-        explain: true,
-        runtime: envRuntimeSettings(),
-      });
+      const results = await hybridSearch('out-of-range', [summary], { explain: true, runtime: envRuntimeSettings() });
       expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.85);
     }
   });
@@ -129,10 +120,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     vi.stubEnv('HIPPO_SUMMARY_DEBOOST', '0.5');
     const summary = makeL2Summary('override-env summary');
     writeEntry(hippoRoot, summary);
-    const results = await hybridSearch('override-env', [summary], {
-      explain: true,
-      summaryDeboost: 0.7,
-    });
+    const results = await hybridSearch('override-env', [summary], { explain: true, summaryDeboost: 0.7 });
     expect(results[0]?.breakdown?.summaryDeboost).toBeCloseTo(0.7);
   });
 
@@ -239,11 +227,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     const entries = [summary, f1, f2, f3];
 
     // Run twice: once with deboost ON (default), once disabled
-    const withDeboost = await hybridSearch('mmr-test', entries, {
-      explain: true,
-      mmr: true,
-      mmrLambda: 0.5,
-    });
+    const withDeboost = await hybridSearch('mmr-test', entries, { explain: true, mmr: true, mmrLambda: 0.5 });
     const withoutDeboost = await hybridSearch('mmr-test', entries, {
       explain: true,
       mmr: true,
@@ -263,11 +247,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     // We do NOT assert reranker final order; reranker is free to reorder.
     let recordedInputs: SearchResult[] | null = null;
     const recordingReranker = vi.fn(
-      async (
-        _query: string,
-        results: SearchResult[],
-        _opts?: RerankerOptions,
-      ): Promise<RerankResult[]> => {
+      async (_query: string, results: SearchResult[], _opts?: RerankerOptions): Promise<RerankResult[]> => {
         recordedInputs = JSON.parse(JSON.stringify(results)); // deep snapshot
         // Reverse order (the "prerogative" branch — we don't assert this)
         return [...results].reverse().map((r, i) => ({
@@ -314,16 +294,12 @@ describe('first-class DAG recall (scoring layer)', () => {
     // Empty global root (no global path; the function tolerates missing dir)
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-e4-global-empty-'));
     try {
-      const results = await searchBothHybrid(
-        'shared-test',
-        ...sharingStores(hippoRoot, globalRoot),
-        {
-          now: evalNow(),
-          tenantId: ALL_TENANTS,
-          embedderFor: resolveEmbeddingProvider,
-          explain: true,
-        },
-      );
+      const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), {
+        now: evalNow(),
+        tenantId: ALL_TENANTS,
+        embedderFor: resolveEmbeddingProvider,
+        explain: true,
+      });
       const sResult = findResult(results, summary.id);
       const br = sResult?.breakdown;
       expect(br?.summaryDeboost).toBeCloseTo(0.85);

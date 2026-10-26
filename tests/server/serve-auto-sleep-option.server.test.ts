@@ -20,18 +20,13 @@ beforeEach(() => {
 
 afterEach(async () => {
   for (const h of handles.splice(0)) await h.stop();
-  for (const r of roots.splice(0))
-    rmSync(r, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   vi.unstubAllEnvs();
 });
 
 /** Starts a server over a fresh root with auto-sleep at threshold 2, and mints a host-tenant key. */
-async function startServer(
-  autoSleep: ServeOptions['autoSleep'],
-): Promise<{ root: string; url: string; key: string }> {
-  const root = makeRoot('serve-autosleep', {
-    config: { autoSleep: { enabled: true, threshold: 2 } },
-  });
+async function startServer(autoSleep: ServeOptions['autoSleep']): Promise<{ root: string; url: string; key: string }> {
+  const root = makeRoot('serve-autosleep', { config: { autoSleep: { enabled: true, threshold: 2 } } });
   roots.push(root);
   const db = openHippoDb(root);
   let key: string;
@@ -48,11 +43,7 @@ async function startServer(
 async function remember(url: string, key: string, text: string): Promise<void> {
   const res = await fetch(`${url}/mcp`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json',
-      authorization: `Bearer ${key}`,
-    },
+    headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${key}` },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -73,11 +64,7 @@ async function rememberRest(url: string, key: string, text: string): Promise<voi
   expect(res.status).toBe(200);
 }
 
-const NOTES = [
-  'the deploy moved to friday',
-  'alice owns the billing service',
-  'bob reviews every schema change',
-];
+const NOTES = ['the deploy moved to friday', 'alice owns the billing service', 'bob reviews every schema change'];
 
 describe('serve autoSleep option', () => {
   it('autoSleep: false adds no consolidation run past the threshold', async () => {
@@ -88,14 +75,11 @@ describe('serve autoSleep option', () => {
     expect(sleepRuns(root)).toBe(0);
   });
 
-  it.skipIf(needsHippoDb('sleep'))(
-    'the option unset adds one consolidation run past the threshold',
-    async () => {
-      const { root, url, key } = await startServer(undefined);
-      for (const note of NOTES) await remember(url, key, note);
-      await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
-    },
-  );
+  it.skipIf(needsHippoDb('sleep'))('the option unset adds one consolidation run past the threshold', async () => {
+    const { root, url, key } = await startServer(undefined);
+    for (const note of NOTES) await remember(url, key, note);
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+  });
 
   it.skipIf(needsHippoDb('sleep'))(
     'a REST remember past the threshold adds one consolidation run, as hippo_remember does',
@@ -136,9 +120,7 @@ describe('serve autoSleep option', () => {
             const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
             expect(
               lines.some(
-                (l) =>
-                  l.includes('auto-sleep consolidate failed') &&
-                  l.includes('did not finish within 1 ms'),
+                (l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms'),
               ),
             ).toBe(true);
           },

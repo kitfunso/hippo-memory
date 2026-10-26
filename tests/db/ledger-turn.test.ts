@@ -49,10 +49,7 @@ function onDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 function ledgerSurfaces(): string[] {
   // SAFETY: the SELECT names exactly this one TEXT column.
   return onDb(
-    (db) =>
-      db.prepare('SELECT surface FROM token_ledger ORDER BY id').all() as Array<{
-        surface: string;
-      }>,
+    (db) => db.prepare('SELECT surface FROM token_ledger ORDER BY id').all() as Array<{ surface: string }>,
   ).map((r) => r.surface);
 }
 
@@ -67,11 +64,7 @@ function recorder(): DeliveryRecorder {
     storeHash: HASH,
     writeStore: 'local',
     tenantId: 'default',
-    stdinText: JSON.stringify({
-      session_id: 's1',
-      prompt: 'the raw prompt text',
-      hook_event_name: 'UserPromptSubmit',
-    }),
+    stdinText: JSON.stringify({ session_id: 's1', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit' }),
   });
 }
 
@@ -90,18 +83,13 @@ describe('Ledger.recordTurn', () => {
     const delivery = rec.takeEvent() ?? undefined;
     const run = await recordStatementsAsync(
       async () =>
-        await sqliteStore(root).ledger.recordTurn({
-          uses: [use(), use({ surface: 'hook_recall' })],
-          delivery,
-        }),
+        await sqliteStore(root).ledger.recordTurn({ uses: [use(), use({ surface: 'hook_recall' })], delivery }),
     );
     expect(countMatching(run.statements, STORE_OPEN)).toBe(1);
-    const lastTokenRow = run.statements
-      .map((sql) => sql.includes('INSERT INTO token_ledger'))
-      .lastIndexOf(true);
-    expect(
-      run.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events')),
-    ).toBeGreaterThan(lastTokenRow);
+    const lastTokenRow = run.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
+    expect(run.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(
+      lastTokenRow,
+    );
     expect(ledgerSurfaces()).toEqual(['hook', 'hook_recall']);
     expect(deliveryCount()).toBe(1);
   });

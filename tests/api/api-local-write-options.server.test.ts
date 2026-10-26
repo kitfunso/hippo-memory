@@ -31,9 +31,7 @@ let root: string;
 let ctx: FullContext;
 
 beforeEach(() => {
-  root = makeRoot('local-write-options', {
-    config: { embeddings: { enabled: false }, autoSleep: { enabled: false } },
-  });
+  root = makeRoot('local-write-options', { config: { embeddings: { enabled: false }, autoSleep: { enabled: false } } });
   ctx = apiCtx(root, 'default', adminActor('cli'));
 });
 
@@ -49,17 +47,7 @@ function row(id: string | null | undefined): MemoryEntry {
 
 /** The fields the local group and the supersede overrides can set. */
 function settable(entry: MemoryEntry) {
-  const {
-    layer,
-    pinned,
-    confidence,
-    source,
-    schemaFit,
-    traceOutcome,
-    sourceSessionId,
-    halfLifeDays,
-    tags,
-  } = entry;
+  const { layer, pinned, confidence, source, schemaFit, traceOutcome, sourceSessionId, halfLifeDays, tags } = entry;
   return {
     layer,
     pinned,
@@ -103,20 +91,11 @@ describe('in process', () => {
   it('weaken starts the row at its strength and multiplies the half-life, never below one day', async () => {
     const plain = row((await remember(ctx, { content: NOTE })).id);
     const weak = row(
-      (
-        await remember(ctx, {
-          content: NEWER,
-          local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } },
-        })
-      ).id,
+      (await remember(ctx, { content: NEWER, local: { weaken: { strength: 0.3, halfLifeFactor: 0.5 } } })).id,
     );
     const floored = row(
-      (
-        await remember(ctx, {
-          content: `${NEWER} again`,
-          local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } },
-        })
-      ).id,
+      (await remember(ctx, { content: `${NEWER} again`, local: { weaken: { strength: 0.3, halfLifeFactor: 0.0001 } } }))
+        .id,
     );
     expect(weak.strength).toBe(0.3);
     expect(weak.halfLifeDays).toBe(plain.halfLifeDays * 0.5);
@@ -160,10 +139,7 @@ describe('from a client', () => {
     await handle.stop();
   });
 
-  async function post(
-    path: string,
-    body: Record<string, JsonValue>,
-  ): Promise<Record<string, JsonValue>> {
+  async function post(path: string, body: Record<string, JsonValue>): Promise<Record<string, JsonValue>> {
     const res = await fetch(`${handle.url}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -191,11 +167,7 @@ describe('from a client', () => {
       overrides: { layer: 'semantic', tags: ['paging'], pinned: true },
     };
     const done = await post(`/v1/memories/${String(old['id'])}/supersede`, body);
-    expect(settable(row(String(done['newId'])))).toMatchObject({
-      layer: 'episodic',
-      tags: ['billing'],
-      pinned: false,
-    });
+    expect(settable(row(String(done['newId'])))).toMatchObject({ layer: 'episodic', tags: ['billing'], pinned: false });
   });
 
   it('hippo_remember stores the same row with a local group in its arguments as without one', async () => {
@@ -209,9 +181,7 @@ describe('from a client', () => {
     await call({ text: NOTE });
     await call({ text: NEWER, local: LOCAL });
     const stored = (content: string) =>
-      settable(
-        loadAllEntries(root, 'default').find((entry) => entry.content === content) ?? row(null),
-      );
+      settable(loadAllEntries(root, 'default').find((entry) => entry.content === content) ?? row(null));
     expect(stored(NEWER)).toEqual(stored(NOTE));
     expect(stored(NEWER).pinned).toBe(false);
   });

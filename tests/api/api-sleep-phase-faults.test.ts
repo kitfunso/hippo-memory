@@ -102,9 +102,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       },
     };
 
-    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow(
-      'phase 1 fault: consolidate threw',
-    );
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 1 fault: consolidate threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -123,9 +121,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       },
     };
 
-    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow(
-      'phase 2 fault: deduplicateStore threw',
-    );
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 2 fault: deduplicateStore threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -146,9 +142,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       },
     };
 
-    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow(
-      'phase 3 fault: auditMemories threw',
-    );
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 3 fault: auditMemories threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -191,9 +185,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       },
     };
 
-    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow(
-      'phase 5 fault: computeAmbientState threw',
-    );
+    await expect(runSleep(testCtx.ctx, {}, stubPhases)).rejects.toThrow('phase 5 fault: computeAmbientState threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
@@ -264,9 +256,7 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
         fields: expect.objectContaining({ errorClass: 'Error' }),
       },
     ]);
-    expect(detailLines(seen ?? { dryRun: false })).toContain(
-      `  ⚠️ physics simulation skipped: ${boom.message}`,
-    );
+    expect(detailLines(seen ?? { dryRun: false })).toContain(`  ⚠️ physics simulation skipped: ${boom.message}`);
     const logged = warn.mock.calls.find(([message]) => message.includes('physics pass failed'));
     expect(logged?.[1]).toEqual(
       expect.objectContaining({
@@ -306,9 +296,7 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
         },
       },
     );
-    expect(detailLines(result).some((d) => d.includes('extract failed for a dirty tenant'))).toBe(
-      true,
-    );
+    expect(detailLines(result).some((d) => d.includes('extract failed for a dirty tenant'))).toBe(true);
     const logged = warn.mock.calls.find(([message]) => message.includes('graph extract failed'));
     expect(logged?.[1]).toEqual(expect.objectContaining({ errorClass: 'Error' }));
   });
@@ -324,9 +312,7 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
         },
       },
     );
-    const logged = warn.mock.calls.find(([message]) =>
-      message.includes('dirty-tenant snapshot failed'),
-    );
+    const logged = warn.mock.calls.find(([message]) => message.includes('dirty-tenant snapshot failed'));
     expect(logged?.[1]).toEqual(expect.objectContaining({ errorClass: 'Error' }));
   });
 });

@@ -65,11 +65,7 @@ describe('api tenant isolation', () => {
     // The original row must still exist on the local root, untouched.
     const db = openHippoDb(home);
     try {
-      const row = queryRow<{ tenant_id: string }>(
-        db,
-        `SELECT tenant_id FROM memories WHERE id = ?`,
-        created.id,
-      );
+      const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db);
@@ -94,9 +90,7 @@ describe('api tenant isolation', () => {
     const winner = await stageSupersedeWinner(alpha(), created.id, 'the winner');
     const refused = supersede(alpha(), created.id, 'the loser');
     await expect(refused).rejects.toBeInstanceOf(ConflictError);
-    await expect(refused).rejects.toThrow(
-      `Memory ${created.id} already superseded by another writer`,
-    );
+    await expect(refused).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
     await winner.committed;
 
     const db = openHippoDb(home);
@@ -108,14 +102,9 @@ describe('api tenant isolation', () => {
       );
       expect(old?.superseded_by).toBe(winner.successorId);
       // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
-      const rows = queryRow<{ c: number }>(
-        db,
-        `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`,
-      );
+      const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
       expect(Number(rows?.c)).toBe(2);
-      expect(
-        listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId),
-      ).toEqual([created.id]);
+      expect(listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId)).toEqual([created.id]);
     } finally {
       closeHippoDb(db);
     }
@@ -234,11 +223,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     const db = openHippoDb(home);
     let alphaPlaintext: string;
     try {
-      const created = createApiKey(db, {
-        tenantId: 'alpha',
-        label: 'alpha-bootstrap',
-        role: 'admin',
-      });
+      const created = createApiKey(db, { tenantId: 'alpha', label: 'alpha-bootstrap', role: 'admin' });
       alphaPlaintext = created.plaintext;
     } finally {
       closeHippoDb(db);
@@ -266,11 +251,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     // Confirm in the DB: the api_keys row carries tenant_id='alpha'.
     const db2 = openHippoDb(home);
     try {
-      const row = queryRow<{ tenant_id: string }>(
-        db2,
-        `SELECT tenant_id FROM api_keys WHERE key_id = ?`,
-        body.keyId,
-      );
+      const row = queryRow<{ tenant_id: string }>(db2, `SELECT tenant_id FROM api_keys WHERE key_id = ?`, body.keyId);
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db2);

@@ -52,21 +52,15 @@ async function createIncident(
 describe('HTTP /v1/incidents (incident first-class object)', () => {
   it('GET /v1/incidents lists and filters by status', async () => {
     await createIncident('open one');
-    const toClose = (await jsonAs<{ incident: Incident }>(await createIncident('to close')))
-      .incident;
-    await fetch(`${handle.url}/v1/incidents/${toClose.id}/close`, {
-      method: 'POST',
-      headers: authHeaders(apiKey),
-    });
+    const toClose = (await jsonAs<{ incident: Incident }>(await createIncident('to close'))).incident;
+    await fetch(`${handle.url}/v1/incidents/${toClose.id}/close`, { method: 'POST', headers: authHeaders(apiKey) });
 
     const allRes = await fetch(`${handle.url}/v1/incidents`, { headers: authHeaders(apiKey) });
     expect(allRes.status).toBe(200);
     const all = await jsonAs<{ incidents: Incident[] }>(allRes);
     expect(all.incidents.length).toBe(2);
 
-    const openRes = await fetch(`${handle.url}/v1/incidents?status=open`, {
-      headers: authHeaders(apiKey),
-    });
+    const openRes = await fetch(`${handle.url}/v1/incidents?status=open`, { headers: authHeaders(apiKey) });
     const open = await jsonAs<{ incidents: Incident[] }>(openRes);
     expect(open.incidents.length).toBe(1);
     expect(open.incidents[0].status).toBe('open');

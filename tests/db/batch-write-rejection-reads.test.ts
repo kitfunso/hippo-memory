@@ -2,19 +2,12 @@
 // reads stay flat as a batch grows; it still refuses each write that would bring a rejected text back, and audits it.
 import { describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb, SLEEP_DB_WAIT_MS } from '../../src/db/index.js';
 import type { FlushComponent } from '../../src/base/ports/store/consolidation.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  countMatching,
-  recordStatements,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -67,21 +60,15 @@ function tombstone(home: string, rows: readonly MemoryEntry[]): void {
 function auditedRefusals(home: string): Array<[string, string, unknown]> {
   const db = openHippoDb(home);
   try {
-    const events = TENANTS.flatMap((tenantId) =>
-      listAuditEvents(db, { tenantId, op: 'reject_refusal' }),
-    );
-    return events
-      .map((e): [string, string, unknown] => [e.targetId ?? '', e.actor, e.metadata.digest])
-      .sort();
+    const events = TENANTS.flatMap((tenantId) => listAuditEvents(db, { tenantId, op: 'reject_refusal' }));
+    return events.map((e): [string, string, unknown] => [e.targetId ?? '', e.actor, e.metadata.digest]).sort();
   } finally {
     closeHippoDb(db);
   }
 }
 
 const refusalsOf = (rows: readonly MemoryEntry[]): Array<[string, string, unknown]> =>
-  rows
-    .map((row): [string, string, unknown] => [row.id, 'sleep-batch', rejectionDigest(row.content)])
-    .sort();
+  rows.map((row): [string, string, unknown] => [row.id, 'sleep-batch', rejectionDigest(row.content)]).sort();
 
 function batchOf(perTenant: number): Batch {
   const home = makeRoot('batch-rejection-reads');
@@ -89,10 +76,7 @@ function batchOf(perTenant: number): Batch {
     Array.from({ length: perTenant }, (_, i) => note(t, `deploy note ${i} for the batch`)),
   );
   writeEntriesTogether(home, live.flat());
-  const changed = live.map(([first], i) => ({
-    ...first!,
-    content: `${TENANTS[i]} the changed text is rejected`,
-  }));
+  const changed = live.map(([first], i) => ({ ...first!, content: `${TENANTS[i]} the changed text is rejected` }));
   const fresh = TENANTS.map((t) => note(t, 'the fresh text is rejected'));
   const kept = live.map((rows) => rows[1]!);
   tombstone(home, [...changed, ...fresh, ...kept]);
@@ -106,24 +90,18 @@ function batchOf(perTenant: number): Batch {
 }
 
 describe('a sleep batch over rejected texts', () => {
-  it.each([3, 30])(
-    'reads tombstones once per tenant for %i rows a tenant, and refuses only new text',
-    (perTenant) => {
-      const { home, ops, kept, refused } = batchOf(perTenant);
-      const { statements } = recordStatements(() => batchWriteAndDeleteInFolder(home, ops, []));
-      expect(countMatching(statements, 'FROM rejected_values')).toBe(TENANTS.length);
+  it.each([3, 30])('reads tombstones once per tenant for %i rows a tenant, and refuses only new text', (perTenant) => {
+    const { home, ops, kept, refused } = batchOf(perTenant);
+    const { statements } = recordStatements(() => batchWriteAndDeleteInFolder(home, ops, []));
+    expect(countMatching(statements, 'FROM rejected_values')).toBe(TENANTS.length);
 
-      for (const row of kept)
-        expect(readEntry(home, row.id, row.tenantId)?.retrievalCount).toBe(row.retrievalCount + 1);
-      for (const row of refused.slice(0, 2)) {
-        expect(readEntry(home, row.id, row.tenantId)?.content).toBe(
-          `${row.tenantId} deploy note 0 for the batch`,
-        );
-      }
-      for (const row of refused.slice(2)) expect(readEntry(home, row.id, row.tenantId)).toBeNull();
-      expect(auditedRefusals(home)).toEqual(refusalsOf(refused));
-    },
-  );
+    for (const row of kept) expect(readEntry(home, row.id, row.tenantId)?.retrievalCount).toBe(row.retrievalCount + 1);
+    for (const row of refused.slice(0, 2)) {
+      expect(readEntry(home, row.id, row.tenantId)?.content).toBe(`${row.tenantId} deploy note 0 for the batch`);
+    }
+    for (const row of refused.slice(2)) expect(readEntry(home, row.id, row.tenantId)).toBeNull();
+    expect(auditedRefusals(home)).toEqual(refusalsOf(refused));
+  });
 });
 
 const oneRow = (refresh: { id: string; strength: number } | MemoryEntry): FlushComponent => ({
@@ -146,18 +124,11 @@ describe("sleep's flush over one-row components", () => {
       writeEntriesTogether(home, live);
       const fresh = TENANTS.map((t) => note(t, 'the flushed text is rejected'));
       tombstone(home, fresh);
-      const components = [
-        ...live.map((row) => oneRow({ id: row.id, strength: 0.5 })),
-        ...fresh.map(oneRow),
-      ];
+      const components = [...live.map((row) => oneRow({ id: row.id, strength: 0.5 })), ...fresh.map(oneRow)];
       const budget = { holdMs: Infinity, clock: () => 0, pause: async () => undefined };
 
       const { statements } = await recordStatementsAsync(() =>
-        commitInChunks(home, components, {
-          snapshot: new Map(),
-          budget,
-          busyWaitMs: SLEEP_DB_WAIT_MS,
-        }),
+        commitInChunks(home, components, { snapshot: new Map(), budget, busyWaitMs: SLEEP_DB_WAIT_MS }),
       );
       expect(countMatching(statements, LIVE_ROWS)).toBe(windows);
       expect(countMatching(statements, 'FROM rejected_values')).toBe(TENANTS.length * windows);

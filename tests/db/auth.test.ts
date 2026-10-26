@@ -18,9 +18,7 @@ describe('auth', () => {
       // generic overload); this SELECT names exactly one column (key_hash)
       // against the row created by createApiKey above, so the row shape is
       // guaranteed.
-      const row = db.prepare(`SELECT key_hash FROM api_keys WHERE key_id=?`).get(keyId) as {
-        key_hash: string;
-      };
+      const row = db.prepare(`SELECT key_hash FROM api_keys WHERE key_id=?`).get(keyId) as { key_hash: string };
       expect(row.key_hash).not.toBe(plaintext);
       expect(row.key_hash.length).toBeGreaterThan(20);
     } finally {

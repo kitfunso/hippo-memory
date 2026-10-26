@@ -36,10 +36,7 @@ describe('DAG drill-down search', () => {
     writeEntry(hippoRoot, f2);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankBm25('John basketball career goals', entries, {
-      now: evalNow(),
-      budget: 4000,
-    });
+    const results = rankBm25('John basketball career goals', entries, { now: evalNow(), budget: 4000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(f1.id);

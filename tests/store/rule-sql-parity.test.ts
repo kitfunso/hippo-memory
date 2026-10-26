@@ -51,9 +51,7 @@ describe('strengthSql parity under a loss-aversion ratio', () => {
         const rules = withLossAversion(PRODUCTION_STRENGTH, ratio);
         const strength = strengthSql(NOW, rules);
         // SAFETY: the SELECT names exactly the columns id and s.
-        const rows = db
-          .prepare(`SELECT id, ${strength.sql} AS s FROM memories`)
-          .all(...strength.params) as Array<{
+        const rows = db.prepare(`SELECT id, ${strength.sql} AS s FROM memories`).all(...strength.params) as Array<{
           id: string;
           s: number;
         }>;
@@ -61,10 +59,9 @@ describe('strengthSql parity under a loss-aversion ratio', () => {
         for (const row of rows) {
           const entry = entries.find((e) => e.id === row.id);
           if (!entry) throw new Error(`unexpected row ${row.id}`);
-          expect(
-            Math.abs(row.s - calculateStrength(entry, NOW, { lossAversionRatio: ratio })),
-            row.id,
-          ).toBeLessThan(1e-9);
+          expect(Math.abs(row.s - calculateStrength(entry, NOW, { lossAversionRatio: ratio })), row.id).toBeLessThan(
+            1e-9,
+          );
         }
       } finally {
         closeHippoDb(db);

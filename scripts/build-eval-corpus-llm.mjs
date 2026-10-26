@@ -145,9 +145,7 @@ async function main() {
 
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   fs.writeFileSync(OUT_PATH, JSON.stringify({ cases }, null, 2));
-  console.error(
-    `\nWrote ${cases.length} cases (from ${chosen.length} seed memories) to ${OUT_PATH}`,
-  );
+  console.error(`\nWrote ${cases.length} cases (from ${chosen.length} seed memories) to ${OUT_PATH}`);
 }
 
 main().catch((err) => {

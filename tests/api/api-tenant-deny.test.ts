@@ -72,11 +72,7 @@ describe('api tenant deny - rawArchive and forget', () => {
     // Original row must still exist.
     const db = openHippoDb(home);
     try {
-      const row = selectRow<{ tenant_id: string }>(
-        db,
-        `SELECT tenant_id FROM memories WHERE id = ?`,
-        created.id,
-      );
+      const row = selectRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
       expect(row!.tenant_id).toBe('alpha');
     } finally {
       closeHippoDb(db);
@@ -87,19 +83,12 @@ describe('api tenant deny - rawArchive and forget', () => {
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'owning-tenant forget happy-path',
     });
-    const result = await forget(
-      apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }),
-      created.id,
-    );
+    const result = await forget(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), created.id);
     expect(result.ok).toBe(true);
 
     const db = openHippoDb(home);
     try {
-      const row = selectRow<{ id?: string }>(
-        db,
-        `SELECT id FROM memories WHERE id = ?`,
-        created.id,
-      );
+      const row = selectRow<{ id?: string }>(db, `SELECT id FROM memories WHERE id = ?`, created.id);
       expect(row).toBeUndefined();
     } finally {
       closeHippoDb(db);

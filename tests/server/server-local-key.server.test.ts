@@ -51,27 +51,24 @@ function parsed(text: string): ReplyBody {
 
 function call(path: string, { method = 'GET', headers = {}, body }: Call = {}): Promise<Reply> {
   return new Promise((resolve, reject) => {
-    const req = request(
-      { host: '127.0.0.1', port: handle.port, method, path, headers: { ...headers } },
-      (res) => {
-        const status = res.statusCode ?? 0;
-        // An accepted event stream never ends on its own, so its status line is the whole answer.
-        if (String(res.headers['content-type']).startsWith('text/event-stream')) {
-          res.destroy();
-          resolve({ status, error: '', json: {} });
-          return;
-        }
-        let text = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk: string) => {
-          text += chunk;
-        });
-        res.on('end', () => {
-          const json = parsed(text);
-          resolve({ status, error: json.error ?? '', json });
-        });
-      },
-    );
+    const req = request({ host: '127.0.0.1', port: handle.port, method, path, headers: { ...headers } }, (res) => {
+      const status = res.statusCode ?? 0;
+      // An accepted event stream never ends on its own, so its status line is the whole answer.
+      if (String(res.headers['content-type']).startsWith('text/event-stream')) {
+        res.destroy();
+        resolve({ status, error: '', json: {} });
+        return;
+      }
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk: string) => {
+        text += chunk;
+      });
+      res.on('end', () => {
+        const json = parsed(text);
+        resolve({ status, error: json.error ?? '', json });
+      });
+    });
     req.on('error', reject);
     req.end(body);
   });
@@ -143,15 +140,8 @@ describe('a request with no key', () => {
     ['an MCP call', '/mcp', 'POST'],
     ['the MCP event stream', '/mcp/stream', 'GET'],
   ])('refuses %s', async (_name, path, method) => {
-    const body =
-      method === 'POST'
-        ? JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
-        : undefined;
-    const reply = await call(path, {
-      method,
-      headers: { 'content-type': 'application/json' },
-      body,
-    });
+    const body = method === 'POST' ? JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) : undefined;
+    const reply = await call(path, { method, headers: { 'content-type': 'application/json' }, body });
     expect(reply.status).toBe(401);
     expect(reply.error).toMatch(/^auth required: /);
   });
@@ -186,19 +176,16 @@ describe('the local key serve writes', () => {
     expect(statSync(localKeyPath(home)).mode & 0o777).toBe(0o600);
   });
 
-  it.skipIf(needsHippoDb('db'))(
-    'signs a member of the server tenant, audited as localhost:cli',
-    async () => {
-      expect((await remember('local-key-canary', asLocalKey())).status).toBe(200);
-      expect(rememberActors()).toEqual(['localhost:cli']);
-      const sleep = await call('/v1/sleep', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...asLocalKey() },
-        body: '{"dry_run":true}',
-      });
-      expect(sleep.status).toBe(403);
-    },
-  );
+  it.skipIf(needsHippoDb('db'))('signs a member of the server tenant, audited as localhost:cli', async () => {
+    expect((await remember('local-key-canary', asLocalKey())).status).toBe(200);
+    expect(rememberActors()).toEqual(['localhost:cli']);
+    const sleep = await call('/v1/sleep', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...asLocalKey() },
+      body: '{"dry_run":true}',
+    });
+    expect(sleep.status).toBe(403);
+  });
 
   it('is fresh at every start, so the key of an earlier run is refused', async () => {
     const before = localKey();
@@ -214,11 +201,7 @@ describe('the local key serve writes', () => {
     const second = await serve({ hippoRoot: other, port: 0, host: '127.0.0.1' });
     try {
       expect(
-        (
-          await recall({
-            authorization: `Bearer ${readFileSync(localKeyPath(other), 'utf8').trim()}`,
-          })
-        ).status,
+        (await recall({ authorization: `Bearer ${readFileSync(localKeyPath(other), 'utf8').trim()}` })).status,
       ).toBe(401);
     } finally {
       await second.stop();
@@ -228,11 +211,7 @@ describe('the local key serve writes', () => {
 
 describe('GET /health', () => {
   it('gives this machine its version and pid with no key', async () => {
-    expect((await call('/health')).json).toMatchObject({
-      ok: true,
-      pid: process.pid,
-      version: expect.any(String),
-    });
+    expect((await call('/health')).json).toMatchObject({ ok: true, pid: process.pid, version: expect.any(String) });
   });
 
   it.each(NOT_LOCAL)('gives %s liveness only', async (_name, headers) => {

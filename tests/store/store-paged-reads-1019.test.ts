@@ -28,10 +28,7 @@ describe('syncMirrorFiles', () => {
       // Rows with no mirror files, so the sync below writes every one.
       seed.exec('BEGIN');
       for (let i = 0; i < 530; i++) {
-        writeEntryDbOnly(seed, {
-          ...createMemory(`paged mirror row number ${i}`),
-          id: `mem_page_${i}`,
-        });
+        writeEntryDbOnly(seed, { ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` });
       }
       seed.exec('COMMIT');
     } finally {
@@ -49,8 +46,7 @@ describe('syncMirrorFiles', () => {
       closeHippoDb(db);
     }
 
-    for (const [i, f] of files.entries())
-      expect(fs.readFileSync(f, 'utf8')).toBe(serializeEntry(entries[i]!));
+    for (const [i, f] of files.entries()) expect(fs.readFileSync(f, 'utf8')).toBe(serializeEntry(entries[i]!));
   });
 });
 
@@ -67,18 +63,12 @@ describe('writeRecallTrace', () => {
       });
       const count = (id: number | null) =>
         // SAFETY: COUNT(*) AS n returns one row of that shape.
-        (
-          db
-            .prepare('SELECT COUNT(*) AS n FROM recall_trace_results WHERE trace_id = ?')
-            .get(id) as { n: number }
-        ).n;
+        (db.prepare('SELECT COUNT(*) AS n FROM recall_trace_results WHERE trace_id = ?').get(id) as { n: number }).n;
       expect(count(empty)).toBe(0);
       expect(count(many)).toBe(250);
       // SAFETY: the SELECT names the single memory_id column.
       const last = db
-        .prepare(
-          'SELECT memory_id FROM recall_trace_results WHERE trace_id = ? AND result_rank = 250',
-        )
+        .prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? AND result_rank = 250')
         .get(many) as { memory_id: string };
       expect(last.memory_id).toBe('m249');
     } finally {

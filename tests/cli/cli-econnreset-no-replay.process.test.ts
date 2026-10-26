@@ -48,9 +48,7 @@ async function startResettingServer(
       req.on('data', (c: Buffer) => chunks.push(c));
       req.on('end', async () => {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        await remember(apiCtx(hippoRoot, 'default', { subject: 'stub', role: 'admin' }), {
-          content: body.content,
-        });
+        await remember(apiCtx(hippoRoot, 'default', { subject: 'stub', role: 'admin' }), { content: body.content });
         res.socket?.destroy();
       });
       return;
@@ -61,10 +59,7 @@ async function startResettingServer(
   return { server, port: await boundPort(server), posts };
 }
 
-function runCli(
-  cwd: string,
-  args: string[],
-): Promise<{ status: number; stdout: string; stderr: string }> {
+function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const env = { ...process.env, ...ROUTED_CLI_ENV };
     const child = spawn(process.execPath, [CLI_PATH, ...args], {
@@ -89,9 +84,7 @@ function countMemories(hippoRoot: string, content: string): number {
   const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
-    const row = db.prepare('SELECT COUNT(*) AS n FROM memories WHERE content = ?').get(content) as {
-      n: number;
-    };
+    const row = db.prepare('SELECT COUNT(*) AS n FROM memories WHERE content = ?').get(content) as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -108,11 +101,9 @@ describe('classifyTransportFailure', () => {
   it('calls connect-phase failures safe to replay', () => {
     expect(classifyTransportFailure(fetchError('ECONNREFUSED'))).toBe('never-sent');
     expect(classifyTransportFailure(fetchError('ENOTFOUND'))).toBe('never-sent');
-    expect(
-      classifyTransportFailure(
-        Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }),
-      ),
-    ).toBe('never-sent');
+    expect(classifyTransportFailure(Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }))).toBe(
+      'never-sent',
+    );
   });
 
   it('calls a socket that broke mid-request unsafe to replay', () => {
@@ -121,17 +112,15 @@ describe('classifyTransportFailure', () => {
     expect(classifyTransportFailure(fetchError('UND_ERR_SOCKET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('ECONNRESET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('EPIPE'))).toBe('delivery-unknown');
-    expect(
-      classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })),
-    ).toBe('delivery-unknown');
+    expect(classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe(
+      'delivery-unknown',
+    );
     // No syscall code to go on, so the conservative answer is the only safe one.
     expect(classifyTransportFailure(fetchError(undefined))).toBe('delivery-unknown');
   });
 
   it('calls a server response no transport failure at all', () => {
-    expect(
-      classifyTransportFailure(new HttpResponseError('not found: mem_ECONNREFUSED', 404)),
-    ).toBe('none');
+    expect(classifyTransportFailure(new HttpResponseError('not found: mem_ECONNREFUSED', 404))).toBe('none');
     expect(classifyTransportFailure(new Error('something else went wrong'))).toBe('none');
     // Message text alone never classifies: only the error class or syscall code does.
     expect(classifyTransportFailure(new Error('connect ECONNREFUSED 127.0.0.1:9'))).toBe('none');
@@ -147,13 +136,7 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     const { server, port, posts } = await startResettingServer(hippoRoot, startedAt);
     writeFileSync(
       join(hippoRoot, 'server.pid'),
-      JSON.stringify({
-        schema: 1,
-        pid: process.pid,
-        port,
-        url: `http://127.0.0.1:${port}`,
-        started_at: startedAt,
-      }),
+      JSON.stringify({ schema: 1, pid: process.pid, port, url: `http://127.0.0.1:${port}`, started_at: startedAt }),
     );
 
     // Spawned, not exec'd: execFileSync blocks this process's event loop, so the

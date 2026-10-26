@@ -1,15 +1,5 @@
 // A recall waits a bounded time for its query vector: a stalled API provider costs one budget, then BM25 ranks alone and one line says why.
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type MockInstance,
-} from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -23,22 +13,13 @@ import { retrieve } from '../../src/api/index.js';
 import { physicsSearch } from '../../src/entry/folder-search.js';
 import { embedQueryBy } from '../../src/domain/search/vector.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import {
-  hashedVector,
-  startHashedEmbeddings,
-  type HashedEmbeddings,
-} from '../_helpers/hashed-embedding-server.js';
+import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  saveEmbeddingIndex,
-  writeEntry,
-  loadAllEntries,
-  loadEmbeddingIndex,
-} from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -62,27 +43,19 @@ function seedStore(): string {
   dirs.push(root);
   writeFileSync(
     join(root, 'config.json'),
-    JSON.stringify({
-      embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
-    }),
+    JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }),
   );
   const index: Record<string, number[]> = {};
   for (const [content, vector] of [
     [LEXICAL, hashedVector(LEXICAL)],
     [VECTOR_ONLY, hashedVector(QUERY)],
   ] as const) {
-    const entry = createMemory(content, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tenantId: TENANT,
-    });
+    const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
     writeEntry(root, entry);
     index[entry.id] = vector;
   }
   saveEmbeddingIndex(root, index);
-  saveStoredEmbeddingModel(
-    handlesOf(root).on,
-    resolveEmbeddingProvider(loadConfig(root).embeddings).id,
-  );
+  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   return root;
 }
 
@@ -109,8 +82,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await embeddings.close();
-  for (const dir of dirs)
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of dirs) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 beforeEach(() => {
@@ -151,9 +123,7 @@ describe("a recall's query embedding", () => {
     expect(sent).toBe(1);
     expect(fallbackLines()).toHaveLength(1);
     expect(fallbackLines()[0]).toMatch(
-      new RegExp(
-        `^\\[hippo\\] warn: .*the openai embedding provider gave no query vector within ${BUDGET_MS} ms`,
-      ),
+      new RegExp(`^\\[hippo\\] warn: .*the openai embedding provider gave no query vector within ${BUDGET_MS} ms`),
     );
     expect(fallbackLines()[0]).not.toContain(QUERY);
   });
@@ -185,9 +155,7 @@ describe("a recall's query embedding", () => {
     expect(fetched).toHaveBeenCalledTimes(1);
     expect(embeddings.requests() - before).toBe(1);
     expect(fallbackLines()).toHaveLength(1);
-    expect(fallbackLines()[0]).toContain(
-      `the openai embedding provider gave no query vector within ${BUDGET_MS} ms`,
-    );
+    expect(fallbackLines()[0]).toContain(`the openai embedding provider gave no query vector within ${BUDGET_MS} ms`);
   });
 
   it('sends the request again after a dropped connection, and ranks with vectors', async () => {

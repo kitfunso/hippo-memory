@@ -108,12 +108,7 @@ function writeRoot(parts: RootParts): string {
   );
   put(
     'README.md',
-    [
-      '| Framework | Install |',
-      '|---|---|',
-      ...parts.frameworks.map((f) => `| ${f} | x |`),
-      '',
-    ].join('\n'),
+    ['| Framework | Install |', '|---|---|', ...parts.frameworks.map((f) => `| ${f} | x |`), ''].join('\n'),
   );
   put('extensions/mcp/README.md', parts.mcpReadme);
   put('package.json', JSON.stringify({ keywords: parts.keywords }));
@@ -159,30 +154,19 @@ describe('check-agent-inventory', () => {
   });
 
   it('fails on an unlisted MCP setup heading or package keyword', () => {
-    failsWith(
-      { mcpReadme: baseParts().mcpReadme.replace('### Alpha', '### Yankee') },
-      'setup heading names "Yankee"',
-    );
+    failsWith({ mcpReadme: baseParts().mcpReadme.replace('### Alpha', '### Yankee') }, 'setup heading names "Yankee"');
     failsWith({ keywords: ['memory', 'yankee'] }, 'package.json keywords names "yankee"');
   });
 
   it('fails when a cited path does not exist', () => {
     failsWith(
-      {
-        entry: {
-          ...baseEntry(),
-          sources: ['extensions/mcp', 'integrations/alpha.md', 'src/gone.ts'],
-        },
-      },
+      { entry: { ...baseEntry(), sources: ['extensions/mcp', 'integrations/alpha.md', 'src/gone.ts'] } },
       'path does not exist: src/gone.ts',
     );
   });
 
   it('fails when an integration doc is cited by no entry', () => {
-    failsWith(
-      { integrationDocs: ['alpha.md', 'orphan.md'] },
-      "integrations/orphan.md is not in any entry's sources",
-    );
+    failsWith({ integrationDocs: ['alpha.md', 'orphan.md'] }, "integrations/orphan.md is not in any entry's sources");
   });
 
   it('fails verified without live evidence and shipped without a pre-loss route', () => {
@@ -193,10 +177,7 @@ describe('check-agent-inventory', () => {
       fixtureEvidence: ['tests/alpha.test.ts'],
       liveEvidence: [],
     };
-    failsWith(
-      { entry: { ...baseEntry(), modes: [mode] } },
-      'checkpointBeforeLoss verified needs liveEvidence',
-    );
+    failsWith({ entry: { ...baseEntry(), modes: [mode] } }, 'checkpointBeforeLoss verified needs liveEvidence');
     failsWith(
       { entry: { ...baseEntry(), routes: { ...baseEntry().routes, preLossSave: null } } },
       'checkpointBeforeLoss shipped needs a preLossSave route',

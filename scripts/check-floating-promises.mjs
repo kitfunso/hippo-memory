@@ -35,8 +35,7 @@ export function findFloatingPromises(program, srcDir) {
     if (sf.isDeclarationFile || !sf.fileName.startsWith(`${root}/`)) continue;
     const visit = (node) => {
       // `void f()` only silences the lint rule: a rejection still reaches the process-wide handler.
-      const call =
-        ts.isExpressionStatement(node) || ts.isVoidExpression(node) ? node.expression : undefined;
+      const call = ts.isExpressionStatement(node) || ts.isVoidExpression(node) ? node.expression : undefined;
       if (
         call !== undefined &&
         ts.isCallExpression(call) &&
@@ -44,11 +43,7 @@ export function findFloatingPromises(program, srcDir) {
         isPromise(checker.getTypeAtLocation(call))
       ) {
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-        hits.push({
-          file: sf.fileName.slice(root.length + 1),
-          line: line + 1,
-          text: node.getText(sf).split('\n')[0],
-        });
+        hits.push({ file: sf.fileName.slice(root.length + 1), line: line + 1, text: node.getText(sf).split('\n')[0] });
       }
       ts.forEachChild(node, visit);
     };

@@ -11,11 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -49,10 +45,7 @@ function extractText(res: McpResponse | null): string {
   // SAFETY: hippo_recall's MCP tool result envelope always carries
   // result.content per src/surface/mcp/server.ts; McpResponse.result is typed
   // unknown at the transport layer since it varies per tool.
-  return (
-    (res as { result?: { content: Array<{ text: string }> } } | null)?.result?.content?.[0]?.text ??
-    ''
-  );
+  return (res as { result?: { content: Array<{ text: string }> } } | null)?.result?.content?.[0]?.text ?? '';
 }
 
 /** Query a single row from the hippo SQLite handle. */
@@ -91,11 +84,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     });
     await pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const res = await callTool(
-      'hippo_recall',
-      { query: 'auth', budget: 2000, session_id: sessionId },
-      ctx,
-    );
+    const res = await callTool('hippo_recall', { query: 'auth', budget: 2000, session_id: sessionId }, ctx);
     const text = extractText(res);
     expect(text).toContain('auth bug fix details');
     // Side effect proves the boost ran on the MCP physics/hybrid path: the

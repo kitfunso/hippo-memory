@@ -37,11 +37,7 @@ export function oneOf<T>(gens: readonly Gen<T>[]): Gen<T> {
 
 function intSample(value: number, origin: number): Sample<number> {
   const smaller = (): Sample<number>[] => {
-    const steps = new Set([
-      origin,
-      value - Math.trunc((value - origin) / 2),
-      value - Math.sign(value - origin),
-    ]);
+    const steps = new Set([origin, value - Math.trunc((value - origin) / 2), value - Math.sign(value - origin)]);
     steps.delete(value);
     return [...steps].map((step) => intSample(step, origin));
   };
@@ -65,10 +61,7 @@ export function map<T, U>(gen: Gen<T>, f: (value: T) => U): Gen<U> {
 function pairSample<A, B>(a: Sample<A>, b: Sample<B>): Sample<[A, B]> {
   return {
     value: [a.value, b.value],
-    smaller: () => [
-      ...a.smaller().map((s) => pairSample(s, b)),
-      ...b.smaller().map((s) => pairSample(a, s)),
-    ],
+    smaller: () => [...a.smaller().map((s) => pairSample(s, b)), ...b.smaller().map((s) => pairSample(a, s))],
   };
 }
 
@@ -85,10 +78,7 @@ function arrSample<T>(items: readonly Sample<T>[], min: number): Sample<T[]> {
     const out: Sample<T[]>[] = [];
     const half = Math.ceil(items.length / 2);
     if (half > 0 && items.length - half >= min) {
-      out.push(
-        arrSample(items.slice(half), min),
-        arrSample(items.slice(0, items.length - half), min),
-      );
+      out.push(arrSample(items.slice(half), min), arrSample(items.slice(0, items.length - half), min));
     }
     if (items.length > min) {
       for (let i = 0; i < Math.min(items.length, DROP_LIMIT); i++) {
@@ -167,21 +157,14 @@ async function shrink<T>(start: Sample<T>, startError: Error, check: Check<T>) {
 
 /** Printable ASCII only, so an invisible or look-alike character in a failing input can be read and pasted back. */
 function show<T>(value: T): string {
-  return inspect(value, {
-    depth: 8,
-    breakLength: Infinity,
-    maxArrayLength: 200,
-    maxStringLength: 4000,
-  }).replace(/[^\x20-\x7e\n]/gu, (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`);
+  return inspect(value, { depth: 8, breakLength: Infinity, maxArrayLength: 200, maxStringLength: 4000 }).replace(
+    /[^\x20-\x7e\n]/gu,
+    (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`,
+  );
 }
 
 /** Runs `check` on `runs` inputs drawn from `gen`; a throw fails the property, naming the seed, the run and the smallest input that still fails. */
-export async function forAll<T>(
-  seed: number,
-  runs: number,
-  gen: Gen<T>,
-  check: Check<T>,
-): Promise<void> {
+export async function forAll<T>(seed: number, runs: number, gen: Gen<T>, check: Check<T>): Promise<void> {
   const rng = mulberry32(seed);
   for (let run = 0; run < runs; run++) {
     const drawn = gen(rng);

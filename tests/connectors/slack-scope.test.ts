@@ -3,9 +3,7 @@ import { scopeFromChannel } from '../../src/surface/connectors/slack/scope.js';
 
 describe('scopeFromChannel', () => {
   it('public channel → slack:public:<id>', () => {
-    expect(scopeFromChannel({ id: 'C123', is_private: false, is_im: false, is_mpim: false })).toBe(
-      'slack:public:C123',
-    );
+    expect(scopeFromChannel({ id: 'C123', is_private: false, is_im: false, is_mpim: false })).toBe('slack:public:C123');
   });
   it('private channel → slack:private:<id>', () => {
     expect(scopeFromChannel({ id: 'C456', is_private: true })).toBe('slack:private:C456');

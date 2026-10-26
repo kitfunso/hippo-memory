@@ -1,19 +1,9 @@
 // The api functions the dashboard's reader thread runs: a memory's detail, and the detail after a dashboard write.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, memoryPin } from '../../src/api/index.js';
-import {
-  dashboardDetailAfterWrite,
-  dashboardMemoryDetail,
-} from '../../src/api/dashboard/detail.js';
+import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../src/api/dashboard/detail.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
-import {
-  NOW,
-  dashboardOf,
-  makeStore,
-  seed,
-  type DashboardView,
-  type TmpStore,
-} from '../_helpers/dashboard-fixture.js';
+import { NOW, dashboardOf, makeStore, seed, type DashboardView, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 let store: TmpStore;
 let ctx: FullContext;
@@ -40,12 +30,7 @@ describe('dashboardMemoryDetail', () => {
 
     const detail = await dashboardMemoryDetail(ctx, view, live.id, at);
 
-    expect(detail).toMatchObject({
-      id: live.id,
-      content: 'a live fact',
-      tags: ['ops'],
-      snapshotId: held,
-    });
+    expect(detail).toMatchObject({ id: live.id, content: 'a live fact', tags: ['ops'], snapshotId: held });
   });
 
   it('answers null for a superseded row, another tenant row and a missing id', async () => {

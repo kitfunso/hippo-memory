@@ -17,30 +17,22 @@ afterEach(() => {
 });
 
 describe('legacy index.json and stats.json shapes', () => {
-  it.each(['null', '[]', '"text"', '7'])(
-    'opens a store whose index.json holds %s, twice',
-    (body) => {
-      const root = path.join(dir, '.hippo');
-      fs.mkdirSync(root, { recursive: true });
-      fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');
-      fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
-      // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
-      const memoryCount = (): number =>
-        onHandle(
-          root,
-          (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n,
-          openStore,
-        );
-      expect(memoryCount()).toBe(0);
-      expect(memoryCount()).toBe(0);
-      expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);
-    },
-  );
+  it.each(['null', '[]', '"text"', '7'])('opens a store whose index.json holds %s, twice', (body) => {
+    const root = path.join(dir, '.hippo');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');
+    fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
+    // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
+    const memoryCount = (): number =>
+      onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStore);
+    expect(memoryCount()).toBe(0);
+    expect(memoryCount()).toBe(0);
+    expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);
+  });
 });
 
 describe('packageScriptsAt', () => {
-  const git = (...args: string[]): string =>
-    execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
   const commit = (pkg: string): string => {
     fs.writeFileSync(path.join(dir, 'package.json'), pkg, 'utf8');
     git('add', 'package.json');
@@ -50,9 +42,7 @@ describe('packageScriptsAt', () => {
 
   it('returns the scripts when every value is a string', () => {
     git('init', '-q');
-    expect(
-      packageScriptsAt({ root: dir, git: processGit }, commit('{"scripts":{"a":"b"}}')),
-    ).toEqual({ a: 'b' });
+    expect(packageScriptsAt({ root: dir, git: processGit }, commit('{"scripts":{"a":"b"}}'))).toEqual({ a: 'b' });
   });
 
   it.each(['{"scripts":"build"}', '{"scripts":["x"]}', '{"scripts":{"a":1}}', '{"scripts":null}'])(

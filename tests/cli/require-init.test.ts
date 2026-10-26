@@ -26,9 +26,7 @@ describe('requireInit', () => {
     expect(thrown).toBeInstanceOf(CliExit);
     expect(thrown).toMatchObject({ code: 1 });
     expect(exit).not.toHaveBeenCalled();
-    expect(String(errs.mock.calls[0]?.[0])).toMatch(
-      /^No hippo store at .*\. Run `hippo init` first\.$/,
-    );
+    expect(String(errs.mock.calls[0]?.[0])).toMatch(/^No hippo store at .*\. Run `hippo init` first\.$/);
   });
 
   it('returns for an initialised store', () => {

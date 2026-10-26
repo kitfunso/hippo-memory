@@ -32,16 +32,10 @@ afterEach(() => {
 });
 
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
-async function runVerb(
-  ...args: string[]
-): Promise<{ status: number; stdout: string; stderr: string }> {
+async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
-    return {
-      status: r.status || Number(process.exitCode ?? 0),
-      stdout: r.stdout,
-      stderr: r.stderr,
-    };
+    return { status: r.status || Number(process.exitCode ?? 0), stdout: r.stdout, stderr: r.stderr };
   } finally {
     process.exitCode = undefined;
   }
@@ -83,10 +77,7 @@ describe('hippo import --markdown', () => {
 describe('hippo import embedding backfill', () => {
   it('a backfill that fails still imports, and warns with the rows left without a vector and the command that finishes them', async () => {
     // An API provider with no key makes the backfill reject after the rows are saved.
-    writeFileSync(
-      join(hippoRoot, 'config.json'),
-      JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
-    );
+    writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }));
     writeFileSync(
       join(cwd, 'notes.md'),
       '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n',
@@ -114,20 +105,13 @@ describe('hippo import --vault', () => {
   it('imports each note once, skips unchanged notes, and archives a note deleted from the vault', async () => {
     const vault = join(cwd, 'vault');
     mkdirSync(vault);
-    writeFileSync(
-      join(vault, 'deploy.md'),
-      '# Deploy\nThe deploy runs from the main branch only.\n',
-    );
+    writeFileSync(join(vault, 'deploy.md'), '# Deploy\nThe deploy runs from the main branch only.\n');
     writeFileSync(join(vault, 'cache.md'), '# Cache\nThe cache is cleared every night at two.\n');
 
-    expect((await hippo('--vault', vault, '--name', 'notes')).stdout).toMatch(
-      /Notes found: +2\n +Imported: +2/,
-    );
+    expect((await hippo('--vault', vault, '--name', 'notes')).stdout).toMatch(/Notes found: +2\n +Imported: +2/);
     expect(contents().join('\n')).toMatch(/cache is cleared[\s\S]*deploy runs/);
 
-    expect((await hippo('--vault', vault, '--name', 'notes')).stdout).toMatch(
-      /Skipped \(unchanged\): +2/,
-    );
+    expect((await hippo('--vault', vault, '--name', 'notes')).stdout).toMatch(/Skipped \(unchanged\): +2/);
 
     rmSync(join(vault, 'cache.md'));
     const synced = await hippo('--vault', vault, '--name', 'notes');

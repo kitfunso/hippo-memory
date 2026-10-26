@@ -10,8 +10,7 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('handleMessageDeleted', () => {
   let root: string;
@@ -65,10 +64,7 @@ describe('handleMessageDeleted', () => {
 
   it('cross-tenant deletion event cannot archive another tenants row', async () => {
     // Ingest under tenant 'acme'.
-    const acmeCtx: FullContext = apiCtx(root, 'acme', {
-      subject: 'connector:slack',
-      role: 'admin',
-    });
+    const acmeCtx: FullContext = apiCtx(root, 'acme', { subject: 'connector:slack', role: 'admin' });
     const ingested = await ingestMessage(acmeCtx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -78,10 +74,7 @@ describe('handleMessageDeleted', () => {
     expect(ingested.status).toBe('ingested');
 
     // Fire deletion under tenant 'default' for the same artifact_ref.
-    const defaultCtx: FullContext = apiCtx(root, 'default', {
-      subject: 'connector:slack',
-      role: 'admin',
-    });
+    const defaultCtx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
     const r = await handleMessageDeleted(defaultCtx, {
       teamId: 'T1',
       channelId: 'C1',

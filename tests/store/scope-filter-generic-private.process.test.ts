@@ -90,10 +90,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   });
 
   it('api.recall denies github:private:owner/repo to a no-scope caller', async () => {
-    writeEntry(
-      home,
-      createMemory('github private body', { scope: 'github:private:acme/secret-repo' }),
-    );
+    writeEntry(home, createMemory('github private body', { scope: 'github:private:acme/secret-repo' }));
 
     const result = await retrieve(ctx(home), { query: 'github private body' });
     const ids = result.results.map((r) => r.content);
@@ -111,10 +108,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall returns acme:private:demo when scope matches exactly', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = await retrieve(ctx(home), {
-      query: 'secret content',
-      filter: { scope: 'acme:private:demo' },
-    });
+    const result = await retrieve(ctx(home), { query: 'secret content', filter: { scope: 'acme:private:demo' } });
     const contents = result.results.map((r) => r.content);
     expect(contents).toContain('acme private secret content');
   });
@@ -122,10 +116,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall does NOT leak acme:private:demo to a different explicit scope', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = await retrieve(ctx(home), {
-      query: 'secret content',
-      filter: { scope: 'slack:public:Cgeneral' },
-    });
+    const result = await retrieve(ctx(home), { query: 'secret content', filter: { scope: 'slack:public:Cgeneral' } });
     const contents = result.results.map((r) => r.content);
     expect(contents).not.toContain('acme private secret content');
   });
@@ -140,10 +131,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'github:private:acme/secret-repo',
     });
 
-    const result = await retrieve(ctx(home), {
-      query: 'anything',
-      window: { includeContinuity: true },
-    });
+    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true } });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -157,10 +145,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = await retrieve(ctx(home), {
-      query: 'anything',
-      window: { includeContinuity: true },
-    });
+    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true } });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -197,10 +182,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('regex does NOT match a scope that merely contains "private" mid-string', async () => {
     // `acme:public:my-private-channel` should NOT trigger default-deny —
     // the segment is "public" not "private". Guards against a sloppy substring match.
-    writeEntry(
-      home,
-      createMemory('not-actually-private memory', { scope: 'acme:public:my-private-channel' }),
-    );
+    writeEntry(home, createMemory('not-actually-private memory', { scope: 'acme:public:my-private-channel' }));
 
     const result = await retrieve(ctx(home), { query: 'private memory' });
     const contents = result.results.map((r) => r.content);
@@ -208,10 +190,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   });
 
   it('MCP hippo_recall denies github:private:* to no-scope caller', async () => {
-    writeEntry(
-      home,
-      createMemory('mcp github private body', { scope: 'github:private:acme/secret-repo' }),
-    );
+    writeEntry(home, createMemory('mcp github private body', { scope: 'github:private:acme/secret-repo' }));
     writeEntry(home, createMemory('mcp public body', { scope: 'github:public:acme/open' }));
 
     const res = await callMcpTool(home, 'hippo_recall', { query: 'body' });
@@ -236,10 +215,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   });
 
   it('MCP hippo_recall denies jira:private:* memory to no-scope caller', async () => {
-    writeEntry(
-      home,
-      createMemory('mcp jira ticket private text', { scope: 'jira:private:PROJ-1' }),
-    );
+    writeEntry(home, createMemory('mcp jira ticket private text', { scope: 'jira:private:PROJ-1' }));
 
     const res = await callMcpTool(home, 'hippo_recall', { query: 'jira ticket' });
     const text = extractText(res);

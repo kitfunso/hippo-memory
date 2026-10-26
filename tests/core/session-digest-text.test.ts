@@ -39,18 +39,12 @@ afterEach(() => {
 
 /** The digest a session ending on `finalText` stores, '' for none. A fresh store each call, so no earlier digest echoes.
  *  One request, as the session-end hook runs it, so its store calls share one handle that closes before the next rm. */
-async function digest(
-  finalText: string,
-  opts: { echo?: string[]; edits?: DigestEdit[] } = {},
-): Promise<string> {
+async function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] } = {}): Promise<string> {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   return withSharedStoreHandles(() => digestInOneRequest(finalText, opts));
 }
 
-async function digestInOneRequest(
-  finalText: string,
-  opts: { echo?: string[]; edits?: DigestEdit[] },
-): Promise<string> {
+async function digestInOneRequest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] }): Promise<string> {
   initTestStore(hippoRoot);
   const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
   const log: string[] = [];
@@ -81,9 +75,7 @@ describe('splitting the final message', () => {
   });
 
   it('holds e.g. and i.e. out of the split', () => {
-    expect(
-      digestSentences('Use a lock, e.g. a mutex in `pool.ts`, because two writers race.'),
-    ).toHaveLength(1);
+    expect(digestSentences('Use a lock, e.g. a mutex in `pool.ts`, because two writers race.')).toHaveLength(1);
   });
 
   it('drops fences, headings, tables, quotes and rules; strips bullets and bold', () => {
@@ -97,39 +89,25 @@ describe('splitting the final message', () => {
       '---',
       '- **Retry** the upload in `upload.ts` because tokens expire.',
     ].join('\n');
-    expect(digestSentences(text)).toEqual([
-      'Retry the upload in `upload.ts` because tokens expire.',
-    ]);
+    expect(digestSentences(text)).toEqual(['Retry the upload in `upload.ts` because tokens expire.']);
   });
 
   it('drops questions and lead-ins that end in a colon', async () => {
-    expect(
-      await digest(
-        'Should `retry()` back off in `upload.ts`?\nThe changes in `upload.ts` are:\n- none',
-      ),
-    ).toBe('');
+    expect(await digest('Should `retry()` back off in `upload.ts`?\nThe changes in `upload.ts` are:\n- none')).toBe('');
   });
 });
 
 describe('which sentences a digest keeps', () => {
   it('drops a sentence sharing six tokens in a row with a prompt, and keeps one sharing five', async () => {
     const echo = ['please fix the flaky upload retry in the storage client today'];
-    expect(
-      await digest('The flaky upload retry in the cache now waits because tokens expire.', {
-        echo,
-      }),
-    ).toBe('');
-    expect(
-      await digest('Fixed flaky upload retry in the parser because tokens expire.', { echo }),
-    ).toBe('Fixed flaky upload retry in the parser because tokens expire.');
+    expect(await digest('The flaky upload retry in the cache now waits because tokens expire.', { echo })).toBe('');
+    expect(await digest('Fixed flaky upload retry in the parser because tokens expire.', { echo })).toBe(
+      'Fixed flaky upload retry in the parser because tokens expire.',
+    );
   });
 
   it('drops sentences that open on a referent, and keeps There', async () => {
-    expect(
-      await digest(
-        'This fixes the lock in `a.ts`. All 9 pass in `b.ts`. Both tests use `c.ts` now.',
-      ),
-    ).toBe('');
+    expect(await digest('This fixes the lock in `a.ts`. All 9 pass in `b.ts`. Both tests use `c.ts` now.')).toBe('');
     expect(await digest('There is a race in `a.ts` because the lock is shared.')).toBe(
       'There is a race in `a.ts` because the lock is shared.',
     );
@@ -155,30 +133,20 @@ describe('which sentences a digest keeps', () => {
   });
 
   it('keeps at most five sentences', async () => {
-    const text = Array.from(
-      { length: 8 },
-      (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`,
-    ).join(' ');
+    const text = Array.from({ length: 8 }, (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`).join(' ');
     expect(lines(await digest(text))).toEqual(
       Array.from({ length: 5 }, (_, i) => `Fixed \`step${i}()\` because input ${i} was empty.`),
     );
   });
 
   it('drops a sentence over 300 chars', async () => {
-    expect(
-      await digest(
-        `Retried \`upload()\` ${'with a longer wait '.repeat(16)}because tokens expire.`,
-      ),
-    ).toBe('');
+    expect(await digest(`Retried \`upload()\` ${'with a longer wait '.repeat(16)}because tokens expire.`)).toBe('');
   });
 
   it('writes content that passes the recent-N quality floor', async () => {
-    const out = await digest(
-      'Retry `upload()` with backoff because the token expires mid-transfer.',
-      {
-        edits: [{ filePath: path.join(repo, 'src', 'upload.ts'), base: null }],
-      },
-    );
+    const out = await digest('Retry `upload()` with backoff because the token expires mid-transfer.', {
+      edits: [{ filePath: path.join(repo, 'src', 'upload.ts'), base: null }],
+    });
     expect(out).toContain('Changed: src/upload.ts');
     expect(isContentWorthStoring(out)).toBe(true);
   });
@@ -196,9 +164,7 @@ describe('secrets and paths in sentences', () => {
   it('redacts before the 300-char cap, so a long token costs its sentence nothing', async () => {
     const sentence = `Called \`hook()\` with ${jwt(100)} because staging needs it.`;
     expect(sentence.length).toBeGreaterThan(300);
-    expect(await digest(sentence)).toBe(
-      'Called `hook()` with [REDACTED] because staging needs it.',
-    );
+    expect(await digest(sentence)).toBe('Called `hook()` with [REDACTED] because staging needs it.');
   });
 
   it('redacts before the total cap, so a kept secret is masked and costs no other sentence its place', async () => {
@@ -226,12 +192,9 @@ describe('secrets and paths in sentences', () => {
 
   it('redacts a secret inside a path, in a sentence and in the Changed line', async () => {
     const file = path.join(repo, 'src', 'AKIAIOSFODNN7EXAMPLE.ts');
-    const out = await digest(
-      `Moved the loader into src/AKIAIOSFODNN7EXAMPLE.ts because \`load()\` reads it.`,
-      {
-        edits: [{ filePath: file, base: null }],
-      },
-    );
+    const out = await digest(`Moved the loader into src/AKIAIOSFODNN7EXAMPLE.ts because \`load()\` reads it.`, {
+      edits: [{ filePath: file, base: null }],
+    });
     expect(out).not.toContain('AKIAIOSFODNN7EXAMPLE');
     expect(lines(out)).toEqual([
       'Moved the loader into src/[REDACTED].ts because `load()` reads it.',
@@ -240,9 +203,7 @@ describe('secrets and paths in sentences', () => {
   });
 
   it('rewrites an absolute path inside the repo to a repo-relative one', async () => {
-    const out = await digest(
-      `Fixed the race in ${path.join(repo, 'src', 'pool.ts')} because the lock was shared.`,
-    );
+    const out = await digest(`Fixed the race in ${path.join(repo, 'src', 'pool.ts')} because the lock was shared.`);
     expect(out).toBe('Fixed the race in src/pool.ts because the lock was shared.');
   });
 
@@ -303,14 +264,9 @@ describe('the Changed line', () => {
   });
 
   it('caps the list at ten files', async () => {
-    const edits = Array.from({ length: 15 }, (_, i): DigestEdit => ({
-      filePath: at('src', `f${i}.ts`),
-      base: null,
-    }));
+    const edits = Array.from({ length: 15 }, (_, i): DigestEdit => ({ filePath: at('src', `f${i}.ts`), base: null }));
     const out = await digest('', { edits });
-    expect(out).toBe(
-      `Changed: ${Array.from({ length: 10 }, (_, i) => `src/f${i}.ts`).join(', ')} (+5 more)`,
-    );
+    expect(out).toBe(`Changed: ${Array.from({ length: 10 }, (_, i) => `src/f${i}.ts`).join(', ')} (+5 more)`);
   });
 
   it('keeps the Changed line when the sentences fill the cap', async () => {
@@ -332,15 +288,8 @@ describe('the Changed line', () => {
     const file = at('src', 'win.ts');
     fs.writeFileSync(file, '');
     const gitBash = `/${file[0].toLowerCase()}${file.slice(2).replace(/\\/g, '/')}`;
-    for (const filePath of [
-      gitBash,
-      `\\\\?\\${file}`,
-      file.toUpperCase(),
-      file.replace(/\\/g, '/'),
-    ]) {
-      expect(await digest('', { edits: [{ filePath, base: null }] }), filePath).toMatch(
-        /^Changed: src\/win\.ts$/i,
-      );
+    for (const filePath of [gitBash, `\\\\?\\${file}`, file.toUpperCase(), file.replace(/\\/g, '/')]) {
+      expect(await digest('', { edits: [{ filePath, base: null }] }), filePath).toMatch(/^Changed: src\/win\.ts$/i);
     }
   });
 });

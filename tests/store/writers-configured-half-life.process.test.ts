@@ -24,12 +24,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
-import {
-  writeEntry,
-  loadAllEntries,
-  readEntry,
-  appendSessionEvent,
-} from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
@@ -90,11 +85,7 @@ function fetcher(text: string) {
   );
 }
 
-function seed(
-  root: string,
-  content: string,
-  opts: Partial<Parameters<typeof createMemory>[1]> = {},
-): MemoryEntry {
+function seed(root: string, content: string, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
   const entry = createMemory(content, { baseHalfLifeDays: CONFIGURED, ...opts });
   writeEntry(root, entry);
   return entry;
@@ -120,9 +111,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     'CLI supersede',
     (root) => {
       const old = seed(root, 'the staging database lives in eu-west-1');
-      return added(root, () =>
-        hippo(root, 'supersede', old.id, 'the staging database lives in eu-central-1'),
-      );
+      return added(root, () => hippo(root, 'supersede', old.id, 'the staging database lives in eu-central-1'));
     },
   ],
   [
@@ -153,12 +142,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       git('config', 'commit.gpgsign', 'false');
       fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
       git('add', 'a.txt');
-      git(
-        'commit',
-        '-q',
-        '-m',
-        'fix: the parser dropped the trailing newline on windows paths during export',
-      );
+      git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
       // A fresh process names the project from the repo made after the store; in process that git config is never read.
       return added(root, () =>
         execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
@@ -220,10 +204,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     'file import',
     (root) => {
       const file = path.join(tmp(), 'notes.txt');
-      fs.writeFileSync(
-        file,
-        'The nightly backup runs at 02:00 UTC.\n\nRestores are tested every quarter.\n',
-      );
+      fs.writeFileSync(file, 'The nightly backup runs at 02:00 UTC.\n\nRestores are tested every quarter.\n');
       return added(root, () => importGenericFile(file, { tenantId: 'default', hippoRoot: root }));
     },
   ],
@@ -231,13 +212,9 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     'vault import result',
     async (root) => {
       const vault = tmp();
-      fs.writeFileSync(
-        path.join(vault, 'note.md'),
-        'The on-call rota changes every Monday at 09:00.\n',
-      );
+      fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
       // The row itself goes through remember(); the result's copy must say what was stored.
-      return (await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' }))
-        .entries;
+      return (await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' })).entries;
     },
   ],
   [
@@ -293,10 +270,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         buildDag(sqliteStore(root), facts, {
           now: evalNow(),
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
-          llm: anthropicLlm({
-            apiKey: 'test-key',
-            fetcher: fetcher('alice files, notes and closes tickets'),
-          }),
+          llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }),
         }),
       );
     },
@@ -316,10 +290,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
         buildEntityProfiles(sqliteStore(root), l2s, {
           now: evalNow(),
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
-          llm: anthropicLlm({
-            apiKey: 'test-key',
-            fetcher: fetcher('alice is the typed-python API owner'),
-          }),
+          llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }),
         }),
       );
     },
@@ -344,24 +315,17 @@ describe('writers on a configured default half-life', () => {
 });
 
 describe('an invalid configured default half-life', () => {
-  it.each([0, -30, 'forever'])(
-    '%s warns, and writers fall back to the built-in default',
-    async (value) => {
-      const root = store();
-      fs.writeFileSync(
-        path.join(root, 'config.json'),
-        JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }),
-      );
-      const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const old = seed(root, 'the deploy window is Tuesday afternoon');
-      const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
-      const [entry] = await added(root, () =>
-        api.supersede(ctx, old.id, 'the deploy window is Thursday morning'),
-      );
-      expect(entry.halfLifeDays).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
-      expect(
-        warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"')),
-      ).toBe(true);
-    },
-  );
+  it.each([0, -30, 'forever'])('%s warns, and writers fall back to the built-in default', async (value) => {
+    const root = store();
+    fs.writeFileSync(
+      path.join(root, 'config.json'),
+      JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }),
+    );
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const old = seed(root, 'the deploy window is Tuesday afternoon');
+    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
+    const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
+    expect(entry.halfLifeDays).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
+    expect(warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"'))).toBe(true);
+  });
 });

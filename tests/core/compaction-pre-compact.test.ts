@@ -42,10 +42,7 @@ beforeEach(() => {
       '\n' +
       JSON.stringify({
         type: 'assistant',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Looking at the login test now.' }],
-        },
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Looking at the login test now.' }] },
       }) +
       '\n',
   );
@@ -110,9 +107,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     const result = await preCompact('s1', empty);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(`${INSTRUCTION}\n`);
-    expect(compactionRows(s.hippoRoot)).toMatchObject([
-      { session_id: 's1', status: 'started', snapshot_saved: 0 },
-    ]);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'started', snapshot_saved: 0 }]);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
   });
 
@@ -131,11 +126,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
       '{"session_id":"s1"}',
       JSON.stringify({ session_id: 's1', transcript_path: null }),
     ]) {
-      const result = await runCliAs(['pre-compact', '--log-file', logFile], {
-        cwd: s.proj,
-        env: s.env,
-        input,
-      });
+      const result = await runCliAs(['pre-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe('');
     }
@@ -169,15 +160,12 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
         env: s.env,
         input: postCompactPayload(session, s.proj, summaryWith([item])),
       });
-    expect(
-      oneLine(
-        (await post('s2', 'Session two keeps its own memories, whatever session one saved.'))
-          .stdout,
-      ),
-    ).toBe('Hippo saved 1 memory from this compaction.');
-    expect(
-      oneLine((await post('s1', 'Session one restores its own snapshot after compaction.')).stdout),
-    ).toBe('Hippo saved 1 memory from this compaction and restored your task snapshot.');
+    expect(oneLine((await post('s2', 'Session two keeps its own memories, whatever session one saved.')).stdout)).toBe(
+      'Hippo saved 1 memory from this compaction.',
+    );
+    expect(oneLine((await post('s1', 'Session one restores its own snapshot after compaction.')).stdout)).toBe(
+      'Hippo saved 1 memory from this compaction and restored your task snapshot.',
+    );
   });
 });
 

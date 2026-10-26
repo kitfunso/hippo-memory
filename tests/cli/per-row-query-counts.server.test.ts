@@ -1,12 +1,7 @@
 // Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
 // Row reads by id and the read surfaces: outcome, quarantine, drill-down, strengthening, the dashboard and hippo_status.
 import { describe, it, expect } from 'vitest';
-import {
-  recordStatements,
-  recordStatementsAsync,
-  countMatching,
-  STORE_OPEN,
-} from '../_helpers/count-statements.js';
+import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { outcome } from '../../src/api/memories/outcome.js';
@@ -19,12 +14,7 @@ import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { dashboardOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  loadEntriesByIds,
-  replaceDetectedConflicts,
-  strengthenRetrieved,
-  readEntry,
-} from '../_helpers/root-forms.js';
+import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
@@ -78,9 +68,7 @@ describe('quarantineList', () => {
           actor: 'test',
         }),
       );
-      const { result, statements } = await recordStatementsAsync(() =>
-        quarantineList(ctxFor(root), { limit: 500 }),
-      );
+      const { result, statements } = await recordStatementsAsync(() => quarantineList(ctxFor(root), { limit: 500 }));
       expect(result).toHaveLength(n);
       expect(result.every((item) => item.contentPreview.includes('zephyrine'))).toBe(true);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
@@ -93,10 +81,7 @@ describe('drillDown', () => {
   it('reads one query per DAG level, not one per parent', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-drill');
-      const summary = memory('summary of the zephyrine cache work', {
-        dagLevel: 2,
-        layer: Layer.Semantic,
-      });
+      const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
       const mids = rows(n, 'mid', { dagLevel: 1, dagParentId: summary.id });
       const leaves = mids.map((m, i) =>
         memory(`leaf ${i} under the zephyrine cache`, { dagLevel: 0, dagParentId: m.id }),
@@ -115,10 +100,7 @@ describe('drillDown', () => {
     const read: number[] = [];
     for (const n of SIZES) {
       const root = freshRoot('qc-drill-page');
-      const summary = memory('summary of the zephyrine cache work', {
-        dagLevel: 2,
-        layer: Layer.Semantic,
-      });
+      const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
       // Newest first on disk, so the page is the oldest five only if the read sorts by created.
       const children = Array.from({ length: n }, (_, i) =>
         memory(`child ${i} of the zephyrine cache`, {
@@ -128,9 +110,7 @@ describe('drillDown', () => {
         }),
       );
       seed(ctxFor(root), [summary, ...children]);
-      const { result, rowsRead } = await recordStatementsAsync(() =>
-        drillDown(ctxFor(root), summary.id, { limit: 5 }),
-      );
+      const { result, rowsRead } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { limit: 5 }));
       if ('failure' in result) throw new Error(result.failure);
       expect(result.children.map((c) => c.id)).toEqual(
         children
@@ -138,10 +118,7 @@ describe('drillDown', () => {
           .reverse()
           .map((c) => c.id),
       );
-      expect({ total: result.totalChildren, truncated: result.truncated }).toEqual({
-        total: n,
-        truncated: true,
-      });
+      expect({ total: result.totalChildren, truncated: result.truncated }).toEqual({ total: n, truncated: true });
       read.push(rowsRead);
     }
     expect(read[1]).toBe(read[0]);
@@ -149,10 +126,7 @@ describe('drillDown', () => {
 
   it('finds children through the parent index, with a page and without one', async () => {
     const root = freshRoot('qc-drill-plan');
-    const summary = memory('summary of the zephyrine cache work', {
-      dagLevel: 2,
-      layer: Layer.Semantic,
-    });
+    const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
     const mids = rows(3, 'mid', { dagLevel: 1, dagParentId: summary.id });
     seed(ctxFor(root), [
       summary,
@@ -164,23 +138,17 @@ describe('drillDown', () => {
       await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
     });
     const childReads = [
-      ...new Set(
-        statements.filter((sql) =>
-          sql.includes('WHERE dag_parent_id IN (SELECT value FROM json_each(?))'),
-        ),
-      ),
+      ...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (SELECT value FROM json_each(?))'))),
     ];
     expect(childReads.length).toBeGreaterThanOrEqual(3);
     const db = openStore(root);
     try {
       for (const sql of childReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
-        const plan = (
-          db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>
-        ).map((step) => step.detail);
-        expect(plan, sql).toContain(
-          'SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)',
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
+          (step) => step.detail,
         );
+        expect(plan, sql).toContain('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
       }
     } finally {
       closeHippoDb(db);
@@ -243,32 +211,15 @@ describe('the dashboard detail', () => {
       const [subject, ...others] = rows(n + 1, 'detail');
       seed(ctxFor(root), [subject, ...others]);
       replaceDetectedConflicts(root, [
-        ...others.map((e) => ({
-          memory_a_id: subject.id,
-          memory_b_id: e.id,
-          reason: 'names the subject',
-          score: 0.9,
-        })),
-        {
-          memory_a_id: others[0].id,
-          memory_b_id: others[1].id,
-          reason: 'between two others',
-          score: 0.8,
-        },
+        ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
+        { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
       const view = dashboardOf(root, () => Date.now());
       const { result, statements } = await recordStatementsAsync(() =>
-        dashboardDetailAfterWrite(
-          ctxFor(root),
-          view,
-          { changed: false, entry: subject },
-          Date.now(),
-        ),
+        dashboardDetailAfterWrite(ctxFor(root), view, { changed: false, entry: subject }, Date.now()),
       );
       await view.reads.close();
-      expect(result?.conflicts.map((c) => c.other.id).sort()).toEqual(
-        others.map((e) => e.id).sort(),
-      );
+      expect(result?.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
       expect(result?.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
       work.push([countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)]);
     }
@@ -289,9 +240,7 @@ describe('the dashboard overview', () => {
       const { reads, clock } = dashboardOf(root, () => Date.now());
       try {
         const stamp = await clock.at('default');
-        const { result, statements, rowsRead } = await recordStatementsAsync(() =>
-          buildOverview(reads, stamp),
-        );
+        const { result, statements, rowsRead } = await recordStatementsAsync(() => buildOverview(reads, stamp));
         expect(result.total).toBe(4);
         expect(result.excluded).toEqual({ superseded: n, archived: n, quarantined: 0 });
         expect(countMatching(statements, ROW_READ)).toBe(0);
@@ -311,10 +260,7 @@ describe('hippo_status', () => {
       const root = freshRoot('qc-status');
       const own = [
         ...rows(n - 3, 'status'),
-        memory('status row long faded', {
-          lastRetrieved: '2020-01-01T00:00:00.000Z',
-          halfLifeDays: 1,
-        }),
+        memory('status row long faded', { lastRetrieved: '2020-01-01T00:00:00.000Z', halfLifeDays: 1 }),
         memory('status row pinned', { pinned: true, tags: ['errors-seen'] }),
         memory('status row tagged as an error', { tags: ['deploy', 'error'] }),
       ];
@@ -322,21 +268,11 @@ describe('hippo_status', () => {
       seed(ctxFor(root), [...own, ...elsewhere]);
       replaceDetectedConflicts(root, [
         { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },
-        {
-          memory_a_id: elsewhere[0].id,
-          memory_b_id: elsewhere[1].id,
-          reason: 'other tenant pair',
-          score: 0.9,
-        },
+        { memory_a_id: elsewhere[0].id, memory_b_id: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
       ]);
       const { result, rowsRead } = await recordStatementsAsync(() =>
         handleMcpRequest(
-          {
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'tools/call',
-            params: { name: 'hippo_status', arguments: {} },
-          },
+          { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
           {
             hippoRoot: root,
             tenantId: 'default',
@@ -380,17 +316,15 @@ describe('an id-list read of one tenant', () => {
     runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 
-    const idReads = [
-      ...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN ('))),
-    ];
+    const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
     expect(idReads).toHaveLength(1);
     const db = openStore(root);
     try {
       for (const sql of idReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
-        const plan = (
-          db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>
-        ).map((step) => step.detail);
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
+          (step) => step.detail,
+        );
         expect(plan[0], sql).toBe('SEARCH memories USING INDEX sqlite_autoindex_memories_1 (id=?)');
       }
     } finally {

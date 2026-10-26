@@ -47,22 +47,19 @@ interface Task {
 const TRAP_CATEGORIES: TrapCategory[] = [
   {
     id: 'overwrite_production',
-    lesson:
-      'Never overwrite production files directly. Create versioned copies and let a human promote.',
+    lesson: 'Never overwrite production files directly. Create versioned copies and let a human promote.',
     tags: ['production', 'overwrite', 'deploy'],
     recallQueries: ['deploying model to production', 'updating production file'],
   },
   {
     id: 'bare_except',
-    lesson:
-      'Never use bare except: pass. It swallows all errors silently. Log and re-raise specific exceptions.',
+    lesson: 'Never use bare except: pass. It swallows all errors silently. Log and re-raise specific exceptions.',
     tags: ['error-handling', 'exception', 'python'],
     recallQueries: ['handling errors in data pipeline', 'exception handling pattern'],
   },
   {
     id: 'emoji_windows',
-    lesson:
-      'No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.',
+    lesson: 'No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.',
     tags: ['windows', 'encoding', 'emoji', 'print'],
     recallQueries: ['adding status output to script', 'print statements python windows'],
   },
@@ -74,29 +71,25 @@ const TRAP_CATEGORIES: TrapCategory[] = [
   },
   {
     id: 'sharpe_inflation',
-    lesson:
-      'Walk-forward Sharpe overestimates by ~50%. Use CPCV-deflated Sharpe for honest reporting.',
+    lesson: 'Walk-forward Sharpe overestimates by ~50%. Use CPCV-deflated Sharpe for honest reporting.',
     tags: ['quant', 'sharpe', 'backtest', 'oos'],
     recallQueries: ['reporting OOS backtest results', 'model performance sharpe ratio'],
   },
   {
     id: 'constants_sync',
-    lesson:
-      'Frontend and backend trading constants must stay in sync. Mismatch causes wrong position sizing.',
+    lesson: 'Frontend and backend trading constants must stay in sync. Mismatch causes wrong position sizing.',
     tags: ['frontend', 'backend', 'constants', 'sync'],
     recallQueries: ['changing risk parameters', 'updating trading constants'],
   },
   {
     id: 'slop_words',
-    lesson:
-      'Remove AI slop words (comprehensive, robust, leverage, harness) from agent-generated text.',
+    lesson: 'Remove AI slop words (comprehensive, robust, leverage, harness) from agent-generated text.',
     tags: ['copywriting', 'review', 'agent-output'],
     recallQueries: ['reviewing agent-generated copy', 'publishing marketing text'],
   },
   {
     id: 'exit_code_trust',
-    lesson:
-      'Exit code 0 does not guarantee data freshness. Always verify actual file timestamps and data values.',
+    lesson: 'Exit code 0 does not guarantee data freshness. Always verify actual file timestamps and data values.',
     tags: ['monitoring', 'staleness', 'exit-code'],
     recallQueries: ['checking if data refresh succeeded', 'verifying cache freshness'],
   },
@@ -109,8 +102,7 @@ const TRAP_CATEGORIES: TrapCategory[] = [
   },
   {
     id: 'unverified_metrics',
-    lesson:
-      'Always run the actual backtest to verify metrics. Never accept claimed numbers from agent output.',
+    lesson: 'Always run the actual backtest to verify metrics. Never accept claimed numbers from agent output.',
     tags: ['verification', 'metrics', 'agent-output'],
     recallQueries: ['model upgrade metrics improved', 'verifying model performance claims'],
   },
@@ -228,10 +220,7 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
   // For static mode: pre-load all lessons
   if (mode === 'static') {
     for (const cat of TRAP_CATEGORIES) {
-      const entry = createMemory(cat.lesson, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: cat.tags,
-      });
+      const entry = createMemory(cat.lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: cat.tags });
       writeEntry(tmpDir, entry);
     }
   }
@@ -247,12 +236,7 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
 
     if (mode === 'none') {
       // No memory: always hits the trap
-      results.push({
-        taskId: task.id,
-        trapCategory: task.trapCategory,
-        trapHit: true,
-        memoryRecalled: false,
-      });
+      results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: true, memoryRecalled: false });
       continue;
     }
 
@@ -269,9 +253,7 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
       const textMatch = cat.lesson
         .split(' ')
         .slice(0, 5)
-        .some(
-          (word) => word.length > 4 && r.entry.content.toLowerCase().includes(word.toLowerCase()),
-        );
+        .some((word) => word.length > 4 && r.entry.content.toLowerCase().includes(word.toLowerCase()));
       return contentMatch || textMatch;
     });
 
@@ -282,20 +264,10 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
         const toUpdate = markRetrieved(topIds.map((r) => r.entry));
         for (const u of toUpdate) writeEntry(tmpDir, u);
       }
-      results.push({
-        taskId: task.id,
-        trapCategory: task.trapCategory,
-        trapHit: false,
-        memoryRecalled: true,
-      });
+      results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: false, memoryRecalled: true });
     } else {
       // Agent missed the trap — hits it
-      results.push({
-        taskId: task.id,
-        trapCategory: task.trapCategory,
-        trapHit: true,
-        memoryRecalled: false,
-      });
+      results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: true, memoryRecalled: false });
 
       // For hippo mode: learn from the mistake
       if (mode === 'hippo') {
@@ -357,10 +329,7 @@ describe('Agent evaluation: sequential learning benchmark', () => {
   it('all 10 trap categories appear at least twice', () => {
     for (const cat of TRAP_CATEGORIES) {
       const appearances = tasks.filter((t) => t.trapCategory === cat.id).length;
-      expect(
-        appearances,
-        `Trap category ${cat.id} appears ${appearances} times`,
-      ).toBeGreaterThanOrEqual(2);
+      expect(appearances, `Trap category ${cat.id} appears ${appearances} times`).toBeGreaterThanOrEqual(2);
     }
   });
 });

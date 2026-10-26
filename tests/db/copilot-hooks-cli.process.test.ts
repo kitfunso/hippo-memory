@@ -8,11 +8,7 @@ import { getHippoDbPath, HOOK_DB_WAIT_MS } from '../../src/db/index.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
-import {
-  copilotEventsJsonl,
-  copilotPayload,
-  writeCopilotSessionLog,
-} from '../_helpers/copilot-hooks.js';
+import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
 import {
   runHippo,
@@ -86,19 +82,13 @@ describe('hippo context --format copilot', () => {
     const first = await hippo(CONTEXT_ARGS, s.dir, s.env, payload);
     const again = await hippo(CONTEXT_ARGS, s.dir, s.env, payload);
     expect(again.status, again.stderr).toBe(0);
-    expect(JSON.parse(again.stdout).additionalContext).toBe(
-      JSON.parse(first.stdout).additionalContext,
-    );
+    expect(JSON.parse(again.stdout).additionalContext).toBe(JSON.parse(first.stdout).additionalContext);
   });
 
   it('books the delivery event and the token ledger under the session id with runtime copilot', async () => {
     enableLedger(s.hippoRoot);
-    expect(
-      (await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('sessionStart', s.proj))).status,
-    ).toBe(0);
-    expect(
-      (await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('SessionStart', s.proj))).status,
-    ).toBe(0);
+    expect((await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('sessionStart', s.proj))).status).toBe(0);
+    expect((await hippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('SessionStart', s.proj))).status).toBe(0);
     for (const sessionId of [SESSION, 'vscode-sess-1']) {
       const events = deliveryEvents(sessionId);
       expect(events).toHaveLength(1);
@@ -121,22 +111,11 @@ describe('hippo capture-error --runtime copilot', () => {
   // postToolUseFailure payloads from the GH hooks reference; the error strings are synthetic, as neither harness documents them.
   it('stores no memory for a quiet grep or bash failure, and logs both in the payload cwd store', async () => {
     for (const name of ['postToolUseFailureGrep', 'postToolUseFailureBash'] as const) {
-      const r = await hippo(
-        ['capture-error', '--runtime', 'copilot'],
-        s.dir,
-        s.env,
-        copilotPayload(name, s.proj),
-      );
+      const r = await hippo(['capture-error', '--runtime', 'copilot'], s.dir, s.env, copilotPayload(name, s.proj));
       expect(r.status, r.stderr).toBe(0);
     }
-    expect(loadAllEntries(s.hippoRoot, 'default').filter((e) => e.tags.includes('error'))).toEqual(
-      [],
-    );
-    expect(
-      rows<FailureRow>(
-        `SELECT session_id, tool, outcome, skip_rule FROM failure_log ORDER BY rowid`,
-      ),
-    ).toEqual([
+    expect(loadAllEntries(s.hippoRoot, 'default').filter((e) => e.tags.includes('error'))).toEqual([]);
+    expect(rows<FailureRow>(`SELECT session_id, tool, outcome, skip_rule FROM failure_log ORDER BY rowid`)).toEqual([
       { session_id: SESSION, tool: 'grep', outcome: 'skipped-routine', skip_rule: 'search-tool' },
       { session_id: SESSION, tool: 'bash', outcome: 'skipped-routine', skip_rule: 'quiet-exit' },
     ]);
@@ -188,24 +167,14 @@ describe('hippo session-end --runtime copilot', () => {
     expect(log).toContain('capturing session...');
     expect(log).not.toContain('skip capture');
     expect(
-      loadAllEntries(s.hippoRoot, 'default').some((e) =>
-        e.content.includes('retry budget at three attempts'),
-      ),
+      loadAllEntries(s.hippoRoot, 'default').some((e) => e.content.includes('retry budget at three attempts')),
     ).toBe(true);
   });
 
   it('with no --log-file logs to copilot-sleep.log under the hippo logs folder, the file the hooks table used to name', async () => {
-    const r = await hippo(
-      ['session-end', '--runtime', 'copilot'],
-      s.dir,
-      s.env,
-      copilotPayload('sessionEnd', s.proj),
-    );
+    const r = await hippo(['session-end', '--runtime', 'copilot'], s.dir, s.env, copilotPayload('sessionEnd', s.proj));
     expect(r.status, r.stderr).toBe(0);
-    const log = await waitForLog(
-      path.join(s.dir, '.hippo', 'logs', 'copilot-sleep.log'),
-      WORKER_DONE,
-    );
+    const log = await waitForLog(path.join(s.dir, '.hippo', 'logs', 'copilot-sleep.log'), WORKER_DONE);
     expect(log).toContain('consolidating memory...');
   });
 });
@@ -258,12 +227,7 @@ describe('hippo pre-compact --runtime copilot', () => {
       `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'a claude code task' } })}\n`,
     );
     const logFile = path.join(s.dir, 'pre-compact.log');
-    const r = await hippo(
-      ['pre-compact', '--runtime', 'copilot', '--log-file', logFile],
-      s.proj,
-      s.env,
-      '',
-    );
+    const r = await hippo(['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.proj, s.env, '');
     expect(r.status, r.stderr).toBe(0);
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
   });

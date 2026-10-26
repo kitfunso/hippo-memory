@@ -63,25 +63,19 @@ function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) tsFiles(p, out);
-    else if (/\.[cm]?ts$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name))
-      out.push(p.split(sep).join('/'));
+    else if (/\.[cm]?ts$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.split(sep).join('/'));
   }
   return out.sort();
 }
 
 const isCli = (f) => f.startsWith('src/surface/cli/') || f === 'src/cli.ts';
-const isDataLayer = (f) =>
-  f.startsWith('src/db/') || f.startsWith('src/store/') || f === 'src/db/index.ts';
+const isDataLayer = (f) => f.startsWith('src/db/') || f.startsWith('src/store/') || f === 'src/db/index.ts';
 
 /** Names that open a database in this file: the opener names plus every local alias bound to one. */
 function openerNames(sf) {
   const names = new Set(OPENERS);
   const visit = (n) => {
-    if (
-      (ts.isImportSpecifier(n) || ts.isBindingElement(n)) &&
-      n.propertyName &&
-      ts.isIdentifier(n.propertyName)
-    ) {
+    if ((ts.isImportSpecifier(n) || ts.isBindingElement(n)) && n.propertyName && ts.isIdentifier(n.propertyName)) {
       if (OPENERS.has(n.propertyName.text) && ts.isIdentifier(n.name)) names.add(n.name.text);
     }
     ts.forEachChild(n, visit);
@@ -99,8 +93,7 @@ function countOpeners(sf) {
       const e = node.expression;
       if (ts.isIdentifier(e) && names.has(e.text)) n++;
       else if (ts.isPropertyAccessExpression(e) && OPENERS.has(e.name.text)) n++;
-    } else if (ts.isExportSpecifier(node) && OPENERS.has((node.propertyName ?? node.name).text))
-      n++;
+    } else if (ts.isExportSpecifier(node) && OPENERS.has((node.propertyName ?? node.name).text)) n++;
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -109,8 +102,7 @@ function countOpeners(sf) {
 
 /** `<x>.store`, or a local named `store`, which is how an api function holds the port. */
 const endsInStore = (e) => (ts.isPropertyAccessExpression(e) ? e.name : e).text === 'store';
-const isKindOfStore = (e) =>
-  ts.isPropertyAccessExpression(e) && e.name.text === 'kind' && endsInStore(e.expression);
+const isKindOfStore = (e) => ts.isPropertyAccessExpression(e) && e.name.text === 'kind' && endsInStore(e.expression);
 
 /** Ternaries on `<x>.store` or a local `store`, and `store.kind` comparisons against a string: the per-backend branches in src/api. */
 function countStoreBranches(sf) {
@@ -118,11 +110,7 @@ function countStoreBranches(sf) {
   const visit = (node) => {
     if (ts.isConditionalExpression(node) && endsInStore(node.condition)) n++;
     else if (ts.isBinaryExpression(node) && /^[!=]==?$/.test(node.operatorToken.getText(sf))) {
-      const other = isKindOfStore(node.left)
-        ? node.right
-        : isKindOfStore(node.right)
-          ? node.left
-          : undefined;
+      const other = isKindOfStore(node.left) ? node.right : isKindOfStore(node.right) ? node.left : undefined;
       if (other && ts.isStringLiteralLike(other)) n++;
     }
     ts.forEachChild(node, visit);
@@ -164,10 +152,7 @@ function countPrepares(sf) {
 function countTxLiterals(sf) {
   let n = 0;
   const visit = (node) => {
-    const literal =
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node);
+    const literal = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node);
     if (literal && node.text.trim().startsWith('BEGIN')) n++;
     ts.forEachChild(node, visit);
   };
@@ -179,11 +164,7 @@ function countTxLiterals(sf) {
 function countTenantResolves(sf) {
   let n = 0;
   const visit = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'resolveTenantId'
-    ) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'resolveTenantId') {
       n++;
     }
     ts.forEachChild(node, visit);
@@ -192,8 +173,7 @@ function countTenantResolves(sf) {
   return n;
 }
 
-const reachesDataLayer = (file, spec) =>
-  spec.startsWith('.') && isDataLayer(posix.join(posix.dirname(file), spec));
+const reachesDataLayer = (file, spec) => spec.startsWith('.') && isDataLayer(posix.join(posix.dirname(file), spec));
 const namesOnlyTypes = (clause) =>
   clause.isTypeOnly ||
   (!clause.name &&
@@ -216,23 +196,16 @@ const DOMAIN = Object.entries(JSON.parse(readFileSync('layers.json', 'utf8')).fo
   .filter(([, layer]) => layer === 'domain')
   .map(([folder]) => `src/${folder}/`);
 const isDomain = (f) => DOMAIN.some((d) => f.startsWith(d));
-const isValueImport = (s) =>
-  ts.isImportDeclaration(s) && !(s.importClause && namesOnlyTypes(s.importClause));
+const isValueImport = (s) => ts.isImportDeclaration(s) && !(s.importClause && namesOnlyTypes(s.importClause));
 const isValueReexport = (s) =>
   ts.isExportDeclaration(s) &&
   !s.isTypeOnly &&
-  !(
-    s.exportClause &&
-    ts.isNamedExports(s.exportClause) &&
-    s.exportClause.elements.every((e) => e.isTypeOnly)
-  );
+  !(s.exportClause && ts.isNamedExports(s.exportClause) && s.exportClause.elements.every((e) => e.isTypeOnly));
 
 /** Value imports, value re-exports and `import()` calls of src/store or src/db: what domain code reads past the port. */
 function countDomainStoreImports(file, sf) {
   const reaches = (spec) => spec && ts.isStringLiteral(spec) && reachesDataLayer(file, spec.text);
-  let n = sf.statements.filter(
-    (s) => (isValueImport(s) || isValueReexport(s)) && reaches(s.moduleSpecifier),
-  ).length;
+  let n = sf.statements.filter((s) => (isValueImport(s) || isValueReexport(s)) && reaches(s.moduleSpecifier)).length;
   const visit = (node) => {
     if (
       ts.isCallExpression(node) &&
@@ -254,26 +227,14 @@ const COMPOSITION_ROOTS = new Map([
   ['src/surface/cli/api-context.ts', 'the CLI and the stdio MCP host build their store here'],
   ['src/surface/server/boot.ts', 'the HTTP server builds its store holder here'],
   ['src/surface/mcp/stdio.ts', 'the stdio MCP server, the one entry with no store found yet'],
-  [
-    'src/surface/server/sleep-child.ts',
-    'the sleep child is a process entry of its own, handed only a folder',
-  ],
-  [
-    'src/surface/server/dashboard-reader-thread.ts',
-    'a thread entry of its own, handed only a folder',
-  ],
-  [
-    'src/index.ts',
-    'the package root: consolidate(hippoRoot) builds the store of the folder it names',
-  ],
+  ['src/surface/server/sleep-child.ts', 'the sleep child is a process entry of its own, handed only a folder'],
+  ['src/surface/server/dashboard-reader-thread.ts', 'a thread entry of its own, handed only a folder'],
+  ['src/index.ts', 'the package root: consolidate(hippoRoot) builds the store of the folder it names'],
   [
     'src/entry/folder-search.ts',
     'the published hybridSearch and physicsSearch build the store of the folder they name',
   ],
-  [
-    'src/entry/importers.ts',
-    'the published importers build the store of the folder their options name',
-  ],
+  ['src/entry/importers.ts', 'the published importers build the store of the folder their options name'],
 ]);
 const LAYERS = JSON.parse(readFileSync('layers.json', 'utf8'));
 const layerOf = (f) => {
@@ -287,9 +248,7 @@ function runsSql(file) {
     const sf = parse(file);
     let found = sf.statements.some(
       (s) =>
-        ts.isImportDeclaration(s) &&
-        ts.isStringLiteral(s.moduleSpecifier) &&
-        s.moduleSpecifier.text === 'node:sqlite',
+        ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === 'node:sqlite',
     );
     const visit = (node) => {
       if (found) return;
@@ -308,9 +267,7 @@ function runsSql(file) {
 }
 
 const isPortFile = (f) =>
-  f === 'src/base/ports/store.ts' ||
-  f === 'src/base/ports/store-groups.ts' ||
-  f.startsWith('src/base/ports/store/');
+  f === 'src/base/ports/store.ts' || f === 'src/base/ports/store-groups.ts' || f.startsWith('src/base/ports/store/');
 
 /** The data layer and the port it implements: neither may be counted as code outside the store. */
 const isStoreSide = (f) => isDataLayer(f) || isPortFile(f);
@@ -328,10 +285,7 @@ function portSqlImports(file, sf) {
     .filter((s) => {
       const target = resolveSpec(file, s.moduleSpecifier.text);
       return (
-        target &&
-        isDataLayer(target) &&
-        !isPortFile(target) &&
-        (target.startsWith('src/store/') || runsSql(target))
+        target && isDataLayer(target) && !isPortFile(target) && (target.startsWith('src/store/') || runsSql(target))
       );
     })
     .map((s) => `${file}:${lineOf(sf, s)}`);
@@ -363,11 +317,7 @@ function callsOf(file, sf, names) {
   const hits = [];
   if (names.size === 0) return hits;
   const visit = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      names.has(node.expression.text)
-    ) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) {
       hits.push(`${file}:${lineOf(sf, node)}`);
     }
     ts.forEachChild(node, visit);
@@ -402,11 +352,7 @@ function declaredValue(sf, name) {
   const visit = (n) => {
     if (ts.isVariableDeclaration(n) && n.name.getText(sf) === name && n.initializer) {
       let init = n.initializer;
-      while (
-        ts.isAsExpression(init) ||
-        ts.isSatisfiesExpression(init) ||
-        ts.isParenthesizedExpression(init)
-      ) {
+      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) {
         init = init.expression;
       }
       found = init;
@@ -418,10 +364,7 @@ function declaredValue(sf, name) {
 }
 
 const propNamed = (row, name) =>
-  row.properties.find(
-    (p) =>
-      p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name,
-  );
+  row.properties.find((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name);
 const rowLabel = (row, sf) => {
   const m = propNamed(row, 'method');
   const where = ['path', 'pattern', 'regex'].map((k) => propNamed(row, k)).find(Boolean);
@@ -434,34 +377,26 @@ const builtRows = (row) => /^\.\.\.(kindRows|objectRoutes|versionedRoutes)\(/.te
 /** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal hippoDbOnly) and the sorted `METHOD path` of the hippoDbOnly rows. A spread of one kind's built rows needs none, as kind-routes.ts builds them all and names no status. */
 function readRoutes(sf) {
   const array = declaredValue(sf, 'V1_ROUTES');
-  if (!array || !ts.isArrayLiteralExpression(array))
-    return routeFail('V1_ROUTES is not declared as an array literal');
-  if (
-    array.elements.some(builtRows) &&
-    /storeReady|hippoDbOnly/.test(readFileSync(KIND_ROWS, 'utf8'))
-  ) {
+  if (!array || !ts.isArrayLiteralExpression(array)) return routeFail('V1_ROUTES is not declared as an array literal');
+  if (array.elements.some(builtRows) && /storeReady|hippoDbOnly/.test(readFileSync(KIND_ROWS, 'utf8'))) {
     return routeFail('builds rows that name a storeReady or hippoDbOnly', KIND_ROWS);
   }
   let needsHippoDb = 0;
   const hippoDbOnly = [];
   for (const row of array.elements.filter((r) => !builtRows(r))) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
-    if (!ts.isObjectLiteralExpression(row))
-      return routeFail(`V1_ROUTES has a spread or non-object element (${at})`);
+    if (!ts.isObjectLiteralExpression(row)) return routeFail(`V1_ROUTES has a spread or non-object element (${at})`);
     const label = rowLabel(row, sf);
     const store = propNamed(row, 'storeReady');
     const only = propNamed(row, 'hippoDbOnly');
-    if (store && only)
-      return routeFail(`V1_ROUTES row ${label} declares both storeReady and hippoDbOnly`);
+    if (store && only) return routeFail(`V1_ROUTES row ${label} declares both storeReady and hippoDbOnly`);
     if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) {
       return routeFail(`V1_ROUTES row ${label} has a storeReady that is not a string literal`);
     }
     if (only) {
       const reason = ts.isPropertyAssignment(only) && only.initializer;
       if (!reason || !ts.isStringLiteralLike(reason) || reason.text.trim() === '') {
-        return routeFail(
-          `V1_ROUTES row ${label} has a hippoDbOnly that is not a non-empty string literal`,
-        );
+        return routeFail(`V1_ROUTES row ${label} has a hippoDbOnly that is not a non-empty string literal`);
       }
       hippoDbOnly.push(label);
       needsHippoDb++;
@@ -494,14 +429,8 @@ function recallRecordsIn(file, sf) {
   const visit = (node) => {
     if (ts.isIdentifier(node) && RECALL_RECORDERS.has(node.text)) at(node, node.text);
     else if (ts.isCallExpression(node)) {
-      const callee = ts.isPropertyAccessExpression(node.expression)
-        ? node.expression.name
-        : node.expression;
-      if (
-        ts.isIdentifier(callee) &&
-        callee.text === 'recordTokens' &&
-        node.arguments.some(namesRecallLabel)
-      ) {
+      const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
+      if (ts.isIdentifier(callee) && callee.text === 'recordTokens' && node.arguments.some(namesRecallLabel)) {
         at(node, 'recordTokens with a recall label');
       }
     }
@@ -518,13 +447,7 @@ function strayRecallRecords() {
     .flatMap((file) =>
       recallRecordsIn(
         file,
-        ts.createSourceFile(
-          file,
-          readFileSync(file, 'utf8'),
-          ts.ScriptTarget.Latest,
-          true,
-          ts.ScriptKind.TS,
-        ),
+        ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
       ),
     );
 }
@@ -546,25 +469,16 @@ function topLevelFunctions(sf) {
   const fns = new Map();
   const exported = (s) => s.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
   for (const s of sf.statements) {
-    if (ts.isFunctionDeclaration(s) && s.name && s.body)
-      fns.set(s.name.text, { node: s, exported: exported(s) });
+    if (ts.isFunctionDeclaration(s) && s.name && s.body) fns.set(s.name.text, { node: s, exported: exported(s) });
     for (const d of ts.isVariableStatement(s) ? s.declarationList.declarations : []) {
       const init = d.initializer;
-      if (
-        ts.isIdentifier(d.name) &&
-        init &&
-        (ts.isArrowFunction(init) || ts.isFunctionExpression(init))
-      ) {
+      if (ts.isIdentifier(d.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
         fns.set(d.name.text, { node: d, exported: exported(s) });
       }
     }
   }
   const localExports = sf.statements.filter(
-    (s) =>
-      ts.isExportDeclaration(s) &&
-      !s.moduleSpecifier &&
-      s.exportClause &&
-      ts.isNamedExports(s.exportClause),
+    (s) => ts.isExportDeclaration(s) && !s.moduleSpecifier && s.exportClause && ts.isNamedExports(s.exportClause),
   );
   for (const s of localExports) {
     for (const e of s.exportClause.elements) {
@@ -611,14 +525,11 @@ function folderFormsIn(file, sf) {
     visit(ts.isVariableDeclaration(node) ? node.initializer : node);
     named.set(name, names);
   }
-  const opens = new Set(
-    [...named].filter(([, names]) => [...names].some((c) => openers.has(c))).map(([n]) => n),
-  );
+  const opens = new Set([...named].filter(([, names]) => [...names].some((c) => openers.has(c))).map(([n]) => n));
   // A helper that opens makes every same-file caller open too, however deep the chain.
   for (let grew = true; grew;) {
     const before = opens.size;
-    for (const [name, names] of named)
-      if ([...names].some((c) => c !== name && opens.has(c))) opens.add(name);
+    for (const [name, names] of named) if ([...names].some((c) => c !== name && opens.has(c))) opens.add(name);
     grew = opens.size > before;
   }
   return [...opens]
@@ -636,8 +547,7 @@ function strayStoreTopFiles() {
 }
 
 /** The store adapters and the port they implement. */
-const storeAndPortFiles = () =>
-  ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
+const storeAndPortFiles = () => ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
 
 /** Every folder form in src/store and the port outside the SQLite adapter, named exceptions included. */
 function folderFormsAboveAdapter() {
@@ -669,9 +579,7 @@ const isDbDefinitionFile = (f) =>
 
 /** Method names of an `interface SqliteLocal` in any src file: each is a write only hippo.db can run, so the list grows only by a hand edit of the baseline. */
 function localMethods(sf) {
-  const local = sf.statements.find(
-    (s) => ts.isInterfaceDeclaration(s) && s.name.text === 'SqliteLocal',
-  );
+  const local = sf.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === 'SqliteLocal');
   return local ? local.members.map((m) => m.name.getText(sf)).sort() : [];
 }
 
@@ -685,12 +593,7 @@ function measure() {
   let hippoDbOnlyRoutesList = [];
   const carrierFilesList = [];
   const storeFilesWithoutSqlList = [];
-  const sites = {
-    portImportsFromSql: [],
-    buildsOutsideRoots: [],
-    groupChecksInApi: [],
-    portFunctionParams: [],
-  };
+  const sites = { portImportsFromSql: [], buildsOutsideRoots: [], groupChecksInApi: [], portFunctionParams: [] };
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -729,8 +632,7 @@ function measure() {
     sqliteLocalMethods.push(...localMethods(sf));
     sites.portImportsFromSql.push(...portSqlImports(file, sf));
     sites.portFunctionParams.push(...portFunctionParams(file));
-    if (buildsOutsideRootsHere(file))
-      sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
+    if (buildsOutsideRootsHere(file)) sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
     if (checksGroupsHere(file)) sites.groupChecksInApi.push(...callsOf(file, sf, GROUP_CHECKS));
   }
   for (const k of Object.keys(sites)) if (NUMBERS.includes(k)) out[k] = sites[k].length;
@@ -754,15 +656,12 @@ function rises(base, cur) {
   const rose = [];
   // A key the baseline has never held is a first write, not a rise; once written it ratchets like the rest.
   const firstWrite = (k) => base !== null && base[k] === undefined;
-  for (const k of NUMBERS)
-    if (!firstWrite(k) && cur[k] > (base?.[k] ?? 0)) rose.push([k, base?.[k] ?? 0, cur[k]]);
-  for (const site of cur.sites.portFunctionParams)
-    rose.push([site, 'data only', 'takes a function, send it as data']);
+  for (const k of NUMBERS) if (!firstWrite(k) && cur[k] > (base?.[k] ?? 0)) rose.push([k, base?.[k] ?? 0, cur[k]]);
+  for (const site of cur.sites.portFunctionParams) rose.push([site, 'data only', 'takes a function, send it as data']);
   for (const key of BY_FILE_KEYS) {
     if (firstWrite(key)) continue;
     const was = base?.[key] ?? {};
-    for (const [f, n] of Object.entries(cur[key]))
-      if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
+    for (const [f, n] of Object.entries(cur[key])) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
   }
   if (!firstWrite('carrierFiles') && cur.carrierFiles > (base?.carrierFiles ?? 0)) {
     rose.push(['carrierFiles', base?.carrierFiles ?? 0, cur.carrierFiles]);
@@ -804,12 +703,8 @@ if (strays.length > 0) {
 
 const loose = storeAndPortFiles().flatMap(looseTenants);
 if (loose.length > 0) {
-  console.error(
-    `A store function or port method can be called without its tenant:\n  ${loose.join('\n  ')}`,
-  );
-  console.error(
-    'Take `tenantId: string`, or `TenantId` if a real caller sends ALL_TENANTS (src/base/util/tenant.ts).',
-  );
+  console.error(`A store function or port method can be called without its tenant:\n  ${loose.join('\n  ')}`);
+  console.error('Take `tenantId: string`, or `TenantId` if a real caller sends ALL_TENANTS (src/base/util/tenant.ts).');
   process.exit(1);
 }
 
@@ -838,8 +733,7 @@ if (args.includes('--list')) {
   for (const f of current.storeFilesWithoutSqlList) console.log(`no SQL\t${f}`);
   for (const site of folderFormsAboveAdapter()) console.log(`folderFormsAboveAdapter\t${site}`);
   for (const key of BY_FILE_KEYS) {
-    for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a))
-      console.log(`${n}\t${f}`);
+    for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
   }
   process.exit(0);
 }
@@ -889,15 +783,11 @@ if (strayTop.length > 0) {
 const fell =
   baseline &&
   (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
-    BY_FILE_KEYS.some((key) =>
-      Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n),
-    ) ||
+    BY_FILE_KEYS.some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
     (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length ||
     (baseline.hippoDbOnlyRoutesList ?? []).length > current.hippoDbOnlyRoutesList.length ||
     current.carrierFiles < (baseline.carrierFiles ?? 0));
 if (fell) {
-  console.log(
-    'Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.',
-  );
+  console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
 }
 console.log(`Store-port ratchet OK: ${total}, none above ${BASELINE}.`);

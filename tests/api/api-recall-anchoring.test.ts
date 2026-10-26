@@ -20,11 +20,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
-import {
-  hashQueryText,
-  type RecallHistorySnapshot,
-  type RecallHistoryEntry,
-} from '../../src/api/recall/finish.js';
+import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../../src/api/recall/finish.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -52,11 +48,7 @@ function seedQueryMatchingMemory(root: string, content: string): string {
   return mem.id;
 }
 
-function entry(
-  queryHash: number,
-  topMemoryId: string | null,
-  anchoredOn?: string,
-): RecallHistoryEntry {
+function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: string): RecallHistoryEntry {
   const e: RecallHistoryEntry = { queryHash, topMemoryId, ts: new Date().toISOString() };
   if (anchoredOn !== undefined) e.anchoredOn = anchoredOn;
   return e;
@@ -67,9 +59,7 @@ function countAuditOps(root: string, op: string): number {
   try {
     // SAFETY: literal COUNT(*) query against the known audit_log schema
     // always returns a single { n } row.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as {
-      n: number;
-    };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -142,10 +132,7 @@ describe('api.recall anchoringHint', () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(0);
-    await retrieve(ctxFor(root), {
-      query: 'frobnicate baz quux',
-      hints: { recallHistory: snapshot },
-    });
+    await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(1);
   });
 
@@ -168,24 +155,15 @@ describe('api.recall anchoringHint', () => {
   it('suppressedByInterference stays 0 on R1 query_repeat (only memory_dominance counts)', async () => {
     const memId = seedQueryMatchingMemory(root, 'foo bar baz');
     const snapshot: RecallHistorySnapshot = [entry(hashQueryText('foo bar baz'), memId)];
-    const result = await retrieve(ctxFor(root), {
-      query: 'foo bar baz',
-      hints: { recallHistory: snapshot },
-    });
+    const result = await retrieve(ctxFor(root), { query: 'foo bar baz', hints: { recallHistory: snapshot } });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
   it('api.recall is return-value pure: identical opts.recallHistory snapshot → identical anchoringHint result', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
-    const r1 = await retrieve(ctxFor(root), {
-      query: 'frobnicate baz quux',
-      hints: { recallHistory: snapshot },
-    });
-    const r2 = await retrieve(ctxFor(root), {
-      query: 'frobnicate baz quux',
-      hints: { recallHistory: snapshot },
-    });
+    const r1 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
+    const r2 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(r1.anchoringHint).toEqual(r2.anchoringHint);
     // Audit_log will have 2 rows (one per call) — that's expected and not a purity violation.
   });
@@ -196,10 +174,7 @@ describe('api.recall anchoringHint', () => {
     // ctx is tenant-default; snapshot rows reference memId which is also tenant-default.
     // Pass to a tenant-b ctx — top will be null (no matching memory in tenant-b).
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
-    const result = await retrieve(ctxB, {
-      query: 'frobnicate baz quux',
-      hints: { recallHistory: snapshot },
-    });
+    const result = await retrieve(ctxB, { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     // No matching memory in tenant-b → top null → R2 cannot fire (current can't extend dominance).
     expect(result.anchoringHint).toBeUndefined();
   });

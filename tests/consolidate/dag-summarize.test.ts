@@ -41,9 +41,7 @@ describe('generateDagSummary', () => {
 
   it('returns null when response text is too short', async () => {
     const mockFetcher = async () =>
-      new Response(JSON.stringify({ content: [{ type: 'text', text: 'too short' }] }), {
-        status: 200,
-      });
+      new Response(JSON.stringify({ content: [{ type: 'text', text: 'too short' }] }), { status: 200 });
     const summary = await generateDagSummary('label', ['fact'], {
       llm: anthropicLlm({ apiKey: 'test', fetcher: mockFetcher }),
     });

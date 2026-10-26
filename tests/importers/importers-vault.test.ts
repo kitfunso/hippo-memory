@@ -47,9 +47,7 @@ describe('importVault (a) — fixture vault → kind=raw with source:vault tags'
     expect(all.length).toBe(result.total);
     const raws = all.filter((e) => e.kind === 'raw');
     // ≥95% as kind='raw' with both provenance tags.
-    const provenanced = raws.filter(
-      (e) => e.tags.includes('source:vault') && e.tags.includes('vault:obs'),
-    );
+    const provenanced = raws.filter((e) => e.tags.includes('source:vault') && e.tags.includes('vault:obs'));
     expect(provenanced.length / all.length).toBeGreaterThanOrEqual(0.95);
     // Every imported row carries an artifactRef under the vault prefix.
     for (const e of all) {
@@ -130,9 +128,7 @@ describe('importVault (d) — deleted source file archives the raw row', () => {
     const first = await importVault(vaultDir, opts({ name: 'v' }));
     expect(first.imported).toBe(2);
 
-    const dropId = loadAllEntries(tmpDir, 'default').find(
-      (e) => e.artifactRef === 'vault:v:drop.md',
-    )!.id;
+    const dropId = loadAllEntries(tmpDir, 'default').find((e) => e.artifactRef === 'vault:v:drop.md')!.id;
 
     // Remove one note from the source folder.
     fs.rmSync(path.join(vaultDir, 'drop.md'));
@@ -157,10 +153,7 @@ describe('importVault (d) — deleted source file archives the raw row', () => {
 
 describe('importVault (e) — wikilinks become wikilink-candidate tags', () => {
   it('maps [[target]] and [[target|alias]] to wikilink-candidate:<target>', async () => {
-    writeNote(
-      'w.md',
-      '# W\nlinks [[plain-target]] and [[real|Display Alias]] and dup [[plain-target]]',
-    );
+    writeNote('w.md', '# W\nlinks [[plain-target]] and [[real|Display Alias]] and dup [[plain-target]]');
     await importVault(vaultDir, opts({ name: 'v' }));
 
     const e = loadAllEntries(tmpDir, 'default')[0];
@@ -175,12 +168,7 @@ describe('importVault (e) — wikilinks become wikilink-candidate tags', () => {
     expect(wlCount).toBe(1);
     // Full expected provenance + wikilink set (order-independent).
     expect(e.tags).toEqual(
-      expect.arrayContaining([
-        'source:vault',
-        'vault:v',
-        'wikilink-candidate:plain-target',
-        'wikilink-candidate:real',
-      ]),
+      expect.arrayContaining(['source:vault', 'vault:v', 'wikilink-candidate:plain-target', 'wikilink-candidate:real']),
     );
   });
 });
@@ -191,10 +179,7 @@ describe('importVault (e) — wikilinks become wikilink-candidate tags', () => {
 
 describe('importVault (f) — frontmatter tags and aliases map to tags', () => {
   it('maps flow-list + block-list tags and aliases (alias:<x>) with no dup surprises', async () => {
-    writeNote(
-      'fm.md',
-      '---\ntags: [alpha, beta]\naliases: [Nick, Other]\n---\n# FM\nbody no links',
-    );
+    writeNote('fm.md', '---\ntags: [alpha, beta]\naliases: [Nick, Other]\n---\n# FM\nbody no links');
     await importVault(vaultDir, opts({ name: 'v' }));
     const e = loadAllEntries(tmpDir, 'default')[0];
 
@@ -210,9 +195,7 @@ describe('importVault (f) — frontmatter tags and aliases map to tags', () => {
     const uniq = new Set(e.tags);
     expect(uniq.size).toBe(e.tags.length);
     const nonHash = e.tags.filter((t) => !t.startsWith('content-hash:')).sort();
-    expect(nonHash).toEqual(
-      ['alias:Nick', 'alias:Other', 'alpha', 'beta', 'source:vault', 'vault:v'].sort(),
-    );
+    expect(nonHash).toEqual(['alias:Nick', 'alias:Other', 'alpha', 'beta', 'source:vault', 'vault:v'].sort());
   });
 
   it('parses block-style (indented dash) frontmatter tag lists', async () => {

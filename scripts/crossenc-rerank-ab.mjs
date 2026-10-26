@@ -54,14 +54,7 @@ console.error(
 
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const NOW = new Date(); // pinned once so recency decay cannot drift mid-run
-const SEARCH_OPTS = {
-  budget: 1000000,
-  hippoRoot,
-  preparedCorpus: corpus,
-  minResults: 50,
-  mmr: true,
-  now: NOW,
-};
+const SEARCH_OPTS = { budget: 1000000, hippoRoot, preparedCorpus: corpus, minResults: 50, mmr: true, now: NOW };
 
 /** hippo's real production cut (search.ts:410-411, 777-786): admit at least
  *  minResults, then stop once the running token total exceeds budget. */
@@ -94,10 +87,7 @@ console.warn = (...a) => {
 
 const warmup = [
   {
-    entry: {
-      id: '__warmup__',
-      content: 'warm up the cross encoder model before timing real queries',
-    },
+    entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' },
     score: 1,
     tokens: 10,
   },
@@ -115,9 +105,7 @@ try {
 console.warn = realWarn;
 
 if (fallbackWarning) {
-  console.error(
-    'CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.',
-  );
+  console.error('CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.');
   console.error('Captured warning:', fallbackWarning);
   console.error('Reporting this failure rather than producing numbers from a substitute.');
   process.exit(1);
@@ -181,13 +169,10 @@ console.log(`hippoRoot: ${hippoRoot}`);
 console.log(
   'search: hybridSearch(query, entries, { budget: 1000000, hippoRoot, preparedCorpus, minResults: 50, mmr: true, now: NOW })',
 );
-console.log(
-  `  then cut at budget=4000, minResults=1 (search.ts:410-411, 777-786); NOW pinned at ${NOW.toISOString()}`,
-);
+console.log(`  then cut at budget=4000, minResults=1 (search.ts:410-411, 777-786); NOW pinned at ${NOW.toISOString()}`);
 console.log(`usable cases: ${cases.length}`);
 console.log(`median returned-set size (post-budget-cut): ${median(baseCutSizes)}`);
-for (const [name, fn] of Object.entries(METRICS))
-  console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
+for (const [name, fn] of Object.entries(METRICS)) console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
 console.log('======================================================================\n');
 
 // One resample index matrix per report, shared across every metric below (not redrawn per metric).
@@ -220,11 +205,8 @@ for (const [name, fn] of Object.entries(METRICS)) {
   );
 }
 
-const verdict =
-  ci9875[PRIMARY].lo > 0 && !(ci9875['R@1'].hi < 0) ? 'CROSS-ENCODER BEATS BASE' : 'DO NOT PROMOTE';
-console.log(
-  `\nVERDICT: ${verdict}  (rule: ${PRIMARY} 98.75% CI excludes 0 upward AND R@1 does not lose)`,
-);
+const verdict = ci9875[PRIMARY].lo > 0 && !(ci9875['R@1'].hi < 0) ? 'CROSS-ENCODER BEATS BASE' : 'DO NOT PROMOTE';
+console.log(`\nVERDICT: ${verdict}  (rule: ${PRIMARY} 98.75% CI excludes 0 upward AND R@1 does not lose)`);
 
 const ceLatencies = out.map((o) => o.ceLatencyMs);
 const meanLatency = ceLatencies.reduce((a, x) => a + x, 0) / ceLatencies.length;
@@ -232,9 +214,7 @@ console.log(
   `\ncross-encoder rerank latency per query (ms, excludes model load): median ${median(ceLatencies).toFixed(1)}, mean ${meanLatency.toFixed(1)}`,
 );
 console.log(`model load time (one-off): ${modelLoadMs.toFixed(1)}ms`);
-console.log(
-  'cost: $0 API spend either arm; the tradeoff against Jev is this latency, not dollars.',
-);
+console.log('cost: $0 API spend either arm; the tradeoff against Jev is this latency, not dollars.');
 
 mkdirSync('results', { recursive: true });
 const outPath = join('results', 'crossenc-rerank-ab-2026-09-18.json');
@@ -259,11 +239,7 @@ writeFileSync(
       ci_98_75_verdict: ci9875,
       ci_95_diagnostic: ci95,
       verdict,
-      latency_ms: {
-        model_load: modelLoadMs,
-        per_query_median: median(ceLatencies),
-        per_query_mean: meanLatency,
-      },
+      latency_ms: { model_load: modelLoadMs, per_query_median: median(ceLatencies), per_query_mean: meanLatency },
       rows: out,
     },
     null,

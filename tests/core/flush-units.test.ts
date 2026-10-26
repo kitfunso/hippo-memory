@@ -13,9 +13,7 @@ import type { FlushComponent } from '../../src/base/ports/store/consolidation.js
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.
 const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
-  StatementSync: {
-    prototype: ReturnType<DatabaseSyncLike['prepare']> & { readonly sourceSQL: string };
-  };
+  StatementSync: { prototype: ReturnType<DatabaseSyncLike['prepare']> & { readonly sourceSQL: string } };
 };
 
 const ROW_OP = /INSERT INTO memories\(|^DELETE FROM memories WHERE id = \?$/;
@@ -103,10 +101,7 @@ describe('commitInChunks', () => {
     const sources = Array.from({ length: 5 }, (_, i) => createMemory(`source ${i} alpha${i} text`));
     const retired = Array.from({ length: 5 }, (_, i) => createMemory(`retired ${i} beta${i} text`));
     for (const row of [...sources, ...retired]) writeEntry(root, row);
-    const semantic = createMemory('merged text of five sources', {
-      layer: Layer.Semantic,
-      source: 'consolidation',
-    });
+    const semantic = createMemory('merged text of five sources', { layer: Layer.Semantic, source: 'consolidation' });
     const largest: FlushComponent = {
       refreshes: [],
       writes: [semantic, ...sources.map((e) => ({ ...e, halfLifeDays: 3 }))],

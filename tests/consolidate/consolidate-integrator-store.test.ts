@@ -5,12 +5,7 @@ import { consolidate, type SleepStore } from '../../src/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import {
-  openHippoDb,
-  closeHippoDb,
-  ftsRowCounts,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, ftsRowCounts, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -34,9 +29,7 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 function seedDrift(root: string): void {
   writeEntry(
     root,
-    createMemory('the walrus build cache clears on tuesdays', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    }),
+    createMemory('the walrus build cache clears on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
   );
   withDb(root, (db) => db.prepare(`DELETE FROM memories_fts WHERE content LIKE '%walrus%'`).run());
 }
@@ -60,9 +53,7 @@ describe('consolidate on an integrator store with the sleep groups', () => {
 
     const result = await consolidate(store);
 
-    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(
-      true,
-    );
+    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(true);
     expect(withDb(b, ftsRowCounts)).toEqual({ memories: 1, fts: 1 });
     expect(withDb(a, ftsRowCounts)).toEqual({ memories: 1, fts: 0 });
   });

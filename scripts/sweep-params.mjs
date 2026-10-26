@@ -164,45 +164,31 @@ function line(r, flag = '') {
 const md = [];
 md.push(`# Parameter sweep results`);
 md.push('');
-md.push(
-  `Corpus: \`${path.basename(CORPUS_PATH)}\` (${cases.length} cases, local + global in scope)`,
-);
-md.push(
-  `Sweep space: ${combos.length} combinations across lambda x emb-weight x local-bump x mmr-toggle`,
-);
+md.push(`Corpus: \`${path.basename(CORPUS_PATH)}\` (${cases.length} cases, local + global in scope)`);
+md.push(`Sweep space: ${combos.length} combinations across lambda x emb-weight x local-bump x mmr-toggle`);
 md.push('');
 md.push('## Top 15 by NDCG@10');
 md.push('');
 md.push('| Rank | Config | MRR | R@5 | R@10 | NDCG@10 |');
 md.push('|---|---|---|---|---|---|');
 rows.slice(0, 15).forEach((r, i) => {
-  const cfg = r.mmr
-    ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}`
-    : `no-MMR emb=${r.emb} bump=${r.bump}`;
+  const cfg = r.mmr ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}` : `no-MMR emb=${r.emb} bump=${r.bump}`;
   const flag = r.isDefault ? ' **(default)**' : '';
-  md.push(
-    `| ${i + 1} | ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`,
-  );
+  md.push(`| ${i + 1} | ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`);
 });
 md.push('');
 md.push(`## Pareto frontier (${pareto.length} configs)`);
 md.push('');
-md.push(
-  'These are non-dominated across all four metrics. Any improvement on one metric costs something on another.',
-);
+md.push('These are non-dominated across all four metrics. Any improvement on one metric costs something on another.');
 md.push('');
 md.push('| Config | MRR | R@5 | R@10 | NDCG@10 |');
 md.push('|---|---|---|---|---|');
 pareto
   .sort((a, b) => b.ndcg - a.ndcg)
   .forEach((r) => {
-    const cfg = r.mmr
-      ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}`
-      : `no-MMR emb=${r.emb} bump=${r.bump}`;
+    const cfg = r.mmr ? `lambda=${r.lambda} emb=${r.emb} bump=${r.bump}` : `no-MMR emb=${r.emb} bump=${r.bump}`;
     const flag = r.isDefault ? ' **(default)**' : '';
-    md.push(
-      `| ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`,
-    );
+    md.push(`| ${cfg}${flag} | ${r.mrr.toFixed(3)} | ${pct(r.r5)} | ${pct(r.r10)} | ${r.ndcg.toFixed(3)} |`);
   });
 md.push('');
 md.push(`## Default vs best`);
@@ -217,9 +203,7 @@ if (defaultRow && best && defaultRow !== best) {
   md.push(
     `| default | ${defaultRow.mrr.toFixed(3)} | ${pct(defaultRow.r5)} | ${pct(defaultRow.r10)} | ${defaultRow.ndcg.toFixed(3)} |`,
   );
-  md.push(
-    `| best    | ${best.mrr.toFixed(3)} | ${pct(best.r5)} | ${pct(best.r10)} | ${best.ndcg.toFixed(3)} |`,
-  );
+  md.push(`| best    | ${best.mrr.toFixed(3)} | ${pct(best.r5)} | ${pct(best.r10)} | ${best.ndcg.toFixed(3)} |`);
   md.push(
     `| delta   | ${(best.mrr - defaultRow.mrr >= 0 ? '+' : '') + (best.mrr - defaultRow.mrr).toFixed(3)} | ${(best.r5 - defaultRow.r5 >= 0 ? '+' : '') + ((best.r5 - defaultRow.r5) * 100).toFixed(1)}pp | ${(best.r10 - defaultRow.r10 >= 0 ? '+' : '') + ((best.r10 - defaultRow.r10) * 100).toFixed(1)}pp | ${(best.ndcg - defaultRow.ndcg >= 0 ? '+' : '') + (best.ndcg - defaultRow.ndcg).toFixed(3)} |`,
   );

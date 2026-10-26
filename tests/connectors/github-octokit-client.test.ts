@@ -8,9 +8,7 @@ import { paddedJsonResponse } from '../_helpers/padded-response.js';
 
 describe('parseNextLink', () => {
   it('parses a sole rel="next" link', () => {
-    expect(parseNextLink('<https://api.github.com/x?page=2>; rel="next"')).toBe(
-      'https://api.github.com/x?page=2',
-    );
+    expect(parseNextLink('<https://api.github.com/x?page=2>; rel="next"')).toBe('https://api.github.com/x?page=2');
   });
 
   it('ignores rel="last" when no rel="next" is present', () => {
@@ -22,8 +20,7 @@ describe('parseNextLink', () => {
   });
 
   it('extracts rel="next" from a multi-rel header', () => {
-    const header =
-      '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=10>; rel="last"';
+    const header = '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=10>; rel="last"';
     expect(parseNextLink(header)).toBe('https://api.github.com/x?page=2');
   });
 
@@ -64,9 +61,9 @@ describe('realGitHubFetcher: non-200 must throw', () => {
       'fetch',
       vi.fn(async () => makeResponse(401, 'Bad credentials')),
     );
-    await expect(
-      realGitHubFetcher({ url: 'https://api.github.com/user', token: 'bad' }),
-    ).rejects.toBeInstanceOf(GitHubFetchError);
+    await expect(realGitHubFetcher({ url: 'https://api.github.com/user', token: 'bad' })).rejects.toBeInstanceOf(
+      GitHubFetchError,
+    );
   });
 
   it('throws GitHubFetchError on 404 Not Found', async () => {
@@ -97,8 +94,7 @@ describe('realGitHubFetcher: non-200 must throw', () => {
 });
 
 describe('realGitHubFetcher: a 200 reply that is not a list', () => {
-  const URL_WITH_QUERY =
-    'https://api.github.com/repos/acme/app/issues?state=all&per_page=100&since=2026-01-01';
+  const URL_WITH_QUERY = 'https://api.github.com/repos/acme/app/issues?state=all&per_page=100&since=2026-01-01';
   const GITHUB_CAP_BYTES = 32 * 1024 * 1024;
 
   afterEach(() => {
@@ -129,9 +125,7 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   }
 
   it('throws on an HTML error page served with status 200', async () => {
-    const err = await failure(
-      new Response('<html><body>Whoa there!</body></html>', { status: 200 }),
-    );
+    const err = await failure(new Response('<html><body>Whoa there!</body></html>', { status: 200 }));
     expectNamesTheReply(err, /reply is not JSON/);
     expect(err.cause).toBeInstanceOf(Error);
   });
@@ -141,10 +135,7 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   });
 
   it('throws on an object body, so an error document never reaches ingest as items', async () => {
-    const body = JSON.stringify({
-      message: 'Moved Permanently',
-      documentation_url: 'https://docs.github.com',
-    });
+    const body = JSON.stringify({ message: 'Moved Permanently', documentation_url: 'https://docs.github.com' });
     expectNamesTheReply(await failure(new Response(body, { status: 200 })), /not a JSON array/);
   });
 

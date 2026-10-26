@@ -26,9 +26,7 @@ function donorStore(): string {
   const donor = path.join(tmp, 'donor');
   fs.mkdirSync(donor);
   initTestStore(donor);
-  const pin = createMemory('PINNED: always check the rollback plan', {
-    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-  });
+  const pin = createMemory('PINNED: always check the rollback plan', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(donor, { ...pin, pinned: true, originProject: 'p' });
   return donor;
 }
@@ -36,19 +34,13 @@ function donorStore(): string {
 function ledgerRows(donor: string, sessionId: string): number {
   const db = openHippoDb(donor);
   try {
-    return tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter(
-      (r) => r.sessionId === sessionId,
-    ).length;
+    return tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter((r) => r.sessionId === sessionId).length;
   } finally {
     closeHippoDb(db);
   }
 }
 
-const REQUEST = {
-  sessionId: 's1',
-  project: { name: 'p', legacyName: 'p' },
-  payload: { prompt: 'hi' },
-};
+const REQUEST = { sessionId: 's1', project: { name: 'p', legacyName: 'p' }, payload: { prompt: 'hi' } };
 
 describe('promptHookContext on a store that is not SQLite', () => {
   it('books no ledger row and leaves no hippo.db under the root', async () => {
@@ -56,13 +48,7 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
     const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other' };
-    const ctx = {
-      hippoRoot: root,
-      tenantId: 'default',
-      actor: adminActor('test'),
-      store,
-      config: loadConfig(root),
-    };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
     expect(fs.existsSync(path.join(root, 'hippo.db'))).toBe(false);
@@ -76,19 +62,8 @@ describe('promptHookContext on a store that is not SQLite', () => {
     fs.mkdirSync(root);
     const { folderFiles, ledger } = sqliteStore(donor);
     // String keys only, so the copy is not marked as hippo.db: the port groups alone decide its reach.
-    const store = {
-      ...withoutFolderGroups(sqliteStore(donor)),
-      kind: 'other',
-      folderFiles,
-      ledger,
-    };
-    const ctx = {
-      hippoRoot: root,
-      tenantId: 'default',
-      actor: adminActor('test'),
-      store,
-      config: loadConfig(root),
-    };
+    const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other', folderFiles, ledger };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);
     expect(out.stdout).toContain('rollback plan');
     expect(ledgerRows(donor, 's1')).toBeGreaterThan(0);

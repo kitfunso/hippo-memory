@@ -53,11 +53,7 @@ describe('git-learned rows and the global store', () => {
     writeEntry(hippoRoot, seed);
     writeEntry(
       hippoRoot,
-      createMemory(ORDINARY, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: ['error'],
-        tenantId: 'default',
-      }),
+      createMemory(ORDINARY, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'], tenantId: 'default' }),
     );
     expect(transferScore(seed)).toBeGreaterThanOrEqual(0.6);
   });
@@ -68,11 +64,7 @@ describe('git-learned rows and the global store', () => {
 
   it('autoShare copies the ordinary error row and skips the git-learned one', async () => {
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = await autoShare(...sharingStores(hippoRoot), {
-      embed: TEST_RUN,
-      tenantId: ALL_TENANTS,
-      stats,
-    });
+    const shared = await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, stats });
     expect(shared.map((e) => e.content)).toEqual([ORDINARY]);
     expect(globalContents()).toEqual([ORDINARY]);
     expect(stats.neverAutoShareSkipped).toBe(1);
@@ -80,22 +72,14 @@ describe('git-learned rows and the global store', () => {
 
   it('sleep with autoShareOnSleep on does not copy the git-learned row', async () => {
     expect(loadConfig(hippoRoot).autoShareOnSleep).toBe(true);
-    const result = await sleepWholeStore(
-      apiCtx(hippoRoot, 'default', adminActor('test:gitshare')),
-      {},
-    );
+    const result = await sleepWholeStore(apiCtx(hippoRoot, 'default', adminActor('test:gitshare')), {});
     expect(result.shared).toBe(1);
     expect(globalContents()).toEqual([ORDINARY]);
   });
 
   it('a hand-run share of a git-learned row still copies it', async () => {
     expect(
-      (
-        await shareMemory(...sharingStores(hippoRoot), seed.id, {
-          embed: TEST_RUN,
-          tenantId: 'default',
-        })
-      )?.content,
+      (await shareMemory(...sharingStores(hippoRoot), seed.id, { embed: TEST_RUN, tenantId: 'default' }))?.content,
     ).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
@@ -132,9 +116,7 @@ describe('git-learned rows and the global store', () => {
     // Stands in for the summary model, so no API key is read.
     const fetcher = async (): Promise<Response> =>
       new Response(
-        JSON.stringify({
-          content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }],
-        }),
+        JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }),
         { status: 200 },
       );
     const facts = (
@@ -193,15 +175,7 @@ describe('hippo share --auto --dry-run', () => {
     const git = (...args: string[]): void => {
       execFileSync(
         'git',
-        [
-          '-c',
-          'user.name=Test User',
-          '-c',
-          'user.email=test@example.com',
-          '-c',
-          'commit.gpgsign=false',
-          ...args,
-        ],
+        ['-c', 'user.name=Test User', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args],
         { cwd: proj, stdio: 'ignore' },
       );
     };

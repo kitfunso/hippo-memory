@@ -15,23 +15,13 @@ import { initTestStore } from './store-template.js';
 
 export const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
   hippoRun(args, { cwd, env, input });
-export const CONTEXT_ARGS = [
-  'context',
-  '--pinned-only',
-  '--include-recent',
-  '5',
-  '--format',
-  'copilot',
-];
+export const CONTEXT_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'copilot'];
 export const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.ts';
 export const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';
 export const SESSION = 'copilot-sess-1';
 export const WORKER_DONE = `active snapshot(s) for session ${SESSION}`;
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
-export const RECORD_SPAWN = path
-  .resolve(__dirname, '..', '_helpers', 'record-spawn.cjs')
-  .split(path.sep)
-  .join('/');
+export const RECORD_SPAWN = path.resolve(__dirname, '..', '_helpers', 'record-spawn.cjs').split(path.sep).join('/');
 export const CURSOR_SAVE_FAULT = path
   .resolve(__dirname, '..', '_helpers', 'cursor-save-fault.cjs')
   .split(path.sep)
@@ -44,14 +34,7 @@ export const hippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input
 // Seeding runs the CLI entry in process: remember is setup here, and only the hook runs need a real process.
 export async function pin(text: string, global: boolean): Promise<void> {
   const { HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME } = s.env;
-  for (const [k, v] of Object.entries({
-    HIPPO_HOME,
-    HOME,
-    USERPROFILE,
-    COPILOT_HOME,
-    APPDATA,
-    XDG_CONFIG_HOME,
-  })) {
+  for (const [k, v] of Object.entries({ HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME })) {
     vi.stubEnv(k, v);
   }
   for (const k of ['CLAUDE_CODE_SESSION_ID', 'HIPPO_SESSION_ID']) vi.stubEnv(k, undefined);
@@ -71,9 +54,7 @@ export async function pin(text: string, global: boolean): Promise<void> {
 export function patchConfig(hippoRoot: string, patch: { [key: string]: JsonValue }): void {
   const file = path.join(hippoRoot, 'config.json');
   // SAFETY: config.json is a JSON object hippo init wrote, or absent.
-  const config = (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}) as {
-    [key: string]: JsonValue;
-  };
+  const config = (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}) as { [key: string]: JsonValue };
   fs.writeFileSync(file, JSON.stringify({ ...config, ...patch }));
 }
 
@@ -121,14 +102,9 @@ export function initStoreIn(dir: string): string {
 // The detached workers are real processes, so a wait gets a generous bound under load.
 export const WORKER_WAIT_MS = 25_000;
 
-export const readLog = (logFile: string): string =>
-  fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+export const readLog = (logFile: string): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
-export async function waitForLog(
-  logFile: string,
-  marker: string,
-  timeoutMs = WORKER_WAIT_MS,
-): Promise<string> {
+export async function waitForLog(logFile: string, marker: string, timeoutMs = WORKER_WAIT_MS): Promise<string> {
   await waitFor(() => readLog(logFile).includes(marker), { what: `log line ${marker}`, timeoutMs });
   return readLog(logFile);
 }

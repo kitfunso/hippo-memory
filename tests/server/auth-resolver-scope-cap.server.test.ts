@@ -19,9 +19,7 @@ async function statusWithScopes(scopes: readonly string[]): Promise<number> {
     port: 0,
     authResolver: () => ({ tenantId: 'default', subject: 'user-1', role: 'member', scopes }),
   });
-  const res = await fetch(`${handle.url}/v1/memories?q=x`, {
-    headers: { authorization: 'Bearer ext.token' },
-  });
+  const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer ext.token' } });
   await res.body?.cancel();
   return res.status;
 }
@@ -29,9 +27,7 @@ async function statusWithScopes(scopes: readonly string[]): Promise<number> {
 const scope = (i: number, length = 32): string => `team:${i}:`.padEnd(length, 'x');
 
 it('accepts 1024 scopes of the longest allowed length', async () => {
-  expect(await statusWithScopes(Array.from({ length: 1024 }, (_, i) => scope(i, MAX_ID_LEN)))).toBe(
-    200,
-  );
+  expect(await statusWithScopes(Array.from({ length: 1024 }, (_, i) => scope(i, MAX_ID_LEN)))).toBe(200);
 });
 
 it('refuses 1025 scopes', async () => {
@@ -49,17 +45,12 @@ async function statusesOfWrongTokens(count: number): Promise<number[]> {
     hippoRoot: makeRoot('resolver-failed-auth'),
     host: '127.0.0.1',
     port: 0,
-    rateLimits: {
-      perAddress: 'off',
-      failedAuthPerAddress: { ratePerSec: 0.001, burst: GUESSES - 1 },
-    },
+    rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.001, burst: GUESSES - 1 } },
     authResolver: () => null,
   });
   const statuses: number[] = [];
   for (let i = 0; i < count; i++) {
-    const res = await fetch(`${handle.url}/v1/memories?q=x`, {
-      headers: { authorization: `Bearer wrong.${i}` },
-    });
+    const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: `Bearer wrong.${i}` } });
     await res.body?.cancel();
     statuses.push(res.status);
   }
@@ -82,9 +73,7 @@ it('aborts the signal it hands the resolver when the deadline passes, and answer
       return new Promise(() => undefined);
     },
   });
-  const res = await fetch(`${handle.url}/v1/memories?q=x`, {
-    headers: { authorization: 'Bearer ext.token' },
-  });
+  const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer ext.token' } });
   await res.body?.cancel();
   expect([res.status, signal?.aborted]).toEqual([503, true]);
 });
@@ -96,9 +85,7 @@ async function statusForSubject(subject: string): Promise<number> {
     port: 0,
     authResolver: () => ({ tenantId: 'default', subject, role: 'member' }),
   });
-  const res = await fetch(`${handle.url}/v1/memories?q=x`, {
-    headers: { authorization: 'Bearer ext.token' },
-  });
+  const res = await fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer ext.token' } });
   await res.body?.cancel();
   await handle.stop();
   handle = undefined;

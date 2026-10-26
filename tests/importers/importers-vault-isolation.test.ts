@@ -5,14 +5,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import {
-  tmpDir,
-  vaultDir,
-  useVaultImport,
-  writeNote,
-  opts,
-  archivedRows,
-} from '../_helpers/importers-vault.js';
+import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
@@ -62,9 +55,7 @@ describe('importVault (i) — LIKE-escape isolation on vault name', () => {
     // Build vault "ab" with one note.
     writeNote('n.md', '# N\nab vault note');
     await importVault(vaultDir, opts({ name: 'ab' }));
-    const abId = loadAllEntries(tmpDir, 'default').find(
-      (e) => e.artifactRef === 'vault:ab:n.md',
-    )!.id;
+    const abId = loadAllEntries(tmpDir, 'default').find((e) => e.artifactRef === 'vault:ab:n.md')!.id;
 
     // Build vault "a%" with its own note in a SEPARATE source folder.
     const otherVault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-pct-'));
@@ -151,11 +142,7 @@ describe('importVault (l) — case-differing vault name does not archive the oth
     const aId = aRows[0].id;
     const upperVault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-A-'));
     try {
-      fs.writeFileSync(
-        path.join(upperVault, 'x.md'),
-        'content for vault A note, long enough',
-        'utf8',
-      );
+      fs.writeFileSync(path.join(upperVault, 'x.md'), 'content for vault A note, long enough', 'utf8');
       await importVault(upperVault, opts({ name: 'A' }));
       expect(loadAllEntries(tmpDir, 'default').filter((e) => e.id === aId).length).toBe(1); // 'a' untouched
       expect(archivedRows().length).toBe(0);
@@ -171,9 +158,7 @@ describe('importVault (m) — dryRun previews without mutating', () => {
     const result = await importVault(vaultDir, opts({ name: 'v', dryRun: true }));
     expect(result.total).toBe(1);
     expect(result.imported).toBe(1); // preview counts it
-    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(
-      0,
-    ); // nothing written
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(0); // nothing written
   });
 });
 
@@ -201,9 +186,7 @@ describe('importVault (o) — rejects a vault name containing the ":" delimiter'
 describe('importVault (p) — rejects global mode', () => {
   it('throws on global:true (raw rows are tenant-local)', async () => {
     writeNote('m.md', 'content long enough to store here');
-    await expect(importVault(vaultDir, opts({ name: 'v', global: true }))).rejects.toThrow(
-      /global/,
-    );
+    await expect(importVault(vaultDir, opts({ name: 'v', global: true }))).rejects.toThrow(/global/);
   });
 });
 
@@ -212,16 +195,12 @@ describe('importVault (q) — dryRun previews deletions without archiving', () =
     writeNote('keep.md', 'keep this note, long enough to store');
     writeNote('gone.md', 'this note will be removed, long enough');
     await importVault(vaultDir, opts({ name: 'v' }));
-    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(
-      2,
-    );
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(2);
     fs.rmSync(path.join(vaultDir, 'gone.md'));
     const result = await importVault(vaultDir, opts({ name: 'v', dryRun: true }));
     expect(result.archived).toBe(1); // would archive the removed note
     expect(archivedRows().length).toBe(0); // but nothing actually archived
-    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(
-      2,
-    ); // both still live
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(2); // both still live
   });
 });
 
@@ -237,11 +216,7 @@ describe('importVault (r): does not import the Hippo store mirror files', () => 
     );
     // and a .git internal markdown
     fs.mkdirSync(path.join(vaultDir, '.git'), { recursive: true });
-    fs.writeFileSync(
-      path.join(vaultDir, '.git', 'COMMIT_NOTE.md'),
-      'git internal not a note',
-      'utf8',
-    );
+    fs.writeFileSync(path.join(vaultDir, '.git', 'COMMIT_NOTE.md'), 'git internal not a note', 'utf8');
     const result = await importVault(vaultDir, opts({ name: 'v' }));
     expect(result.total).toBe(1); // only real-note.md
     expect(result.imported).toBe(1);
@@ -254,11 +229,7 @@ describe('importVault (r): does not import the Hippo store mirror files', () => 
 describe('importVault (s): vault root IS the store imports nothing', () => {
   it('returns empty when folderPath resolves to hippoRoot', async () => {
     fs.mkdirSync(path.join(tmpDir, 'episodic'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmpDir, 'episodic', 'mirror.md'),
-      'store mirror content here',
-      'utf8',
-    );
+    fs.writeFileSync(path.join(tmpDir, 'episodic', 'mirror.md'), 'store mirror content here', 'utf8');
     const result = await importVault(tmpDir, opts({ name: 'v' })); // folderPath === hippoRoot
     expect(result.total).toBe(0);
     expect(result.imported).toBe(0);

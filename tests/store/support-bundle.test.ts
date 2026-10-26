@@ -1,14 +1,6 @@
 /** `hippo support-bundle`: read-only, secret-free, one redacted JSON file. Real stores, canaries built at runtime. */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  rmSync,
-  realpathSync,
-  existsSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -222,9 +214,7 @@ describe('buildSupportBundle', () => {
     expect(parsed.stores[0].path.startsWith('~')).toBe(true);
     expect(Array.isArray(parsed.doctor.checks)).toBe(true);
     // codex joins only where CODEX_HOME names a folder on this machine; no global store, so no projects check.
-    expect(
-      parsed.doctor.checks.map((c: { id: string }) => c.id).filter((id: string) => id !== 'codex'),
-    ).toEqual([
+    expect(parsed.doctor.checks.map((c: { id: string }) => c.id).filter((id: string) => id !== 'codex')).toEqual([
       'node',
       'store',
       'schema',
@@ -261,9 +251,7 @@ describe('buildSupportBundle', () => {
       aliasHome,
     ).toEqual([]);
     // Exact, so a swap of only the user's own home (~\AppData\...\global) does not pass for this one.
-    const globalStore = JSON.parse(JSON.stringify(bundle)).stores.find(
-      (st: { kind: string }) => st.kind === 'global',
-    );
+    const globalStore = JSON.parse(JSON.stringify(bundle)).stores.find((st: { kind: string }) => st.kind === 'global');
     expect(globalStore.path).toBe(join('~', 'global'));
   });
 
@@ -271,10 +259,7 @@ describe('buildSupportBundle', () => {
     const s = seed();
     const aliasHome = join(tmpdir(), basename(s.home));
     mkdirSync(join(s.home, 'tmp'));
-    writeFileSync(
-      join(s.home, '.hippo', 'logs', 'alias.log'),
-      `wrote ${join(aliasHome, 'tmp', 'scratch.txt')}\n`,
-    );
+    writeFileSync(join(s.home, '.hippo', 'logs', 'alias.log'), `wrote ${join(aliasHome, 'tmp', 'scratch.txt')}\n`);
     const saved = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
     // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
     for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
@@ -361,9 +346,7 @@ describe('buildSupportBundle', () => {
     expect(tail).toContain(`${basename(s.home)}ty`);
     expect(tail).not.toContain('~ty');
     // A name that only ends in the home's folder name is another name, except on Windows, where the path below the drive names the user.
-    expect(tail).toContain(
-      process.platform === 'win32' ? 'glued x~-proj' : `glued x${claudeFolder(s.home)}-proj`,
-    );
+    expect(tail).toContain(process.platform === 'win32' ? 'glued x~-proj' : `glued x${claudeFolder(s.home)}-proj`);
   });
 
   it.skipIf(process.platform !== 'win32')(
@@ -400,18 +383,11 @@ describe('buildSupportBundle', () => {
         now: FIXED_NOW,
       });
       const tail: string[] = JSON.parse(JSON.stringify(bundle)).logs.tails['shell.log'];
-      expect(tail.slice(0, 4)).toEqual([
-        'cd ~/proj && npm test',
-        'ls ~/proj',
-        'ls ~/proj',
-        'ls ~/proj',
-      ]);
+      expect(tail.slice(0, 4)).toEqual(['cd ~/proj && npm test', 'ls ~/proj', 'ls ~/proj', 'ls ~/proj']);
       // A mount or share no list names keeps its prefix, but the path that names the user still goes.
       for (const leaf of [basename(s.home), basename(homedir())].map((n) => n.toLowerCase())) {
         expect(
-          tail.filter(
-            (t) => t.toLowerCase().includes(leaf) || t.toLowerCase().includes(claudeFolder(leaf)),
-          ),
+          tail.filter((t) => t.toLowerCase().includes(leaf) || t.toLowerCase().includes(claudeFolder(leaf))),
           leaf,
         ).toEqual([]);
       }
@@ -438,10 +414,7 @@ describe('buildSupportBundle', () => {
         `foo-q-${n}-proj`,
       ];
       const swapped = async (home: string, input: string[]): Promise<string[]> => {
-        writeFileSync(
-          join(s.hippoRoot, 'config.json'),
-          JSON.stringify({ gitLearnPatterns: input }),
-        );
+        writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
         const bundle = await buildSupportBundle({
           diagnosticsBodies,
           tenantId: 'default',
@@ -465,10 +438,7 @@ describe('buildSupportBundle', () => {
           ...lines(n).slice(7),
         ]);
       }
-      expect(await swapped('\\home', ['\\home\\proj', '/usr/home/proj'])).toEqual([
-        '~\\proj',
-        '/usr/home/proj',
-      ]);
+      expect(await swapped('\\home', ['\\home\\proj', '/usr/home/proj'])).toEqual(['~\\proj', '/usr/home/proj']);
       expect(await swapped('Q:\\', lines('x'))).toEqual(lines('x'));
     },
   );

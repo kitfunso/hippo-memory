@@ -61,9 +61,7 @@ describe('a write scope that fails in the middle rolls back', () => {
     run(
       "CREATE TRIGGER refuse_meta BEFORE UPDATE ON meta WHEN NEW.key = 'last_trace_id' BEGIN SELECT RAISE(ABORT, 'refused'); END",
     );
-    expect(() => saveIndex(root, { last_retrieval_ids: ['marker'], last_trace_id: 't' })).toThrow(
-      'refused',
-    );
+    expect(() => saveIndex(root, { last_retrieval_ids: ['marker'], last_trace_id: 't' })).toThrow('refused');
     expect(count("SELECT COUNT(*) AS n FROM meta WHERE value LIKE '%marker%'")).toBe(before);
   });
 
@@ -88,9 +86,7 @@ describe('a write scope that fails in the middle rolls back', () => {
         lastSimulation: new Date().toISOString(),
       });
       expect(() => savePhysicsState(db, [particle(a.id), particle(b.id)])).toThrow('refused');
-      expect(
-        (db.prepare('SELECT COUNT(*) AS n FROM memory_physics').get() as { n: number })?.n,
-      ).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) AS n FROM memory_physics').get() as { n: number })?.n).toBe(0);
     } finally {
       closeHippoDb(db);
     }
@@ -102,9 +98,9 @@ describe('a write scope that fails in the middle rolls back', () => {
       `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`,
     );
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    await expect(
-      auditPrune(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 }),
-    ).rejects.toThrow('refused');
+    await expect(auditPrune(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
+      'refused',
+    );
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 
@@ -126,9 +122,7 @@ describe('a write scope that fails in the middle rolls back', () => {
         source: 'test',
       }),
     ).toThrow('refused');
-    expect(
-      count(`SELECT COUNT(*) AS n FROM task_snapshots WHERE status = 'active' AND task = 'first'`),
-    ).toBe(1);
+    expect(count(`SELECT COUNT(*) AS n FROM task_snapshots WHERE status = 'active' AND task = 'first'`)).toBe(1);
   });
 
   it('closePrediction leaves the prediction open when its audit row is refused', async () => {
@@ -140,9 +134,9 @@ describe('a write scope that fails in the middle rolls back', () => {
       targetDate: '2026-06-15',
     });
     refuse('audit_log', "NEW.op = 'predict_close'");
-    await expect(
-      closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 }),
-    ).rejects.toThrow('refused');
+    await expect(closePrediction(root, 'default', pred.id, { closureState: 'closed', actualValue: 3 })).rejects.toThrow(
+      'refused',
+    );
     expect(count(`SELECT COUNT(*) AS n FROM predictions WHERE closure_state = 'open'`)).toBe(1);
   });
 

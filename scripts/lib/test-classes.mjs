@@ -35,8 +35,7 @@ export const UNIT_OWN_TIMEOUT_CEILING_MS = 30_000;
 /** A test that names the child process module starts a child. */
 export const STARTS_A_CHILD = /\bchild_process\b/;
 /** The worker store and the dashboard start their threads inside src, so a test that builds one never names the thread module. */
-export const STARTS_A_SERVER =
-  /\bworker_threads\b|\bserve\(|\bserveDashboard\(|\bworkerSqliteStore\(/;
+export const STARTS_A_SERVER = /\bworker_threads\b|\bserve\(|\bserveDashboard\(|\bworkerSqliteStore\(/;
 
 /**
  * The project a test file's name puts it in.
@@ -57,8 +56,7 @@ const OWN_TIMEOUT = /\}, *(\d[\d_]*)\)|\btestTimeout: *(\d[\d_]*)/g;
  */
 export function longestOwnTimeoutMs(source) {
   let longest = 0;
-  for (const m of source.matchAll(OWN_TIMEOUT))
-    longest = Math.max(longest, Number((m[1] ?? m[2]).replaceAll('_', '')));
+  for (const m of source.matchAll(OWN_TIMEOUT)) longest = Math.max(longest, Number((m[1] ?? m[2]).replaceAll('_', '')));
   return longest;
 }
 
@@ -70,19 +68,14 @@ const localImports = new Map();
 
 function resolveLocal(from, spec) {
   const base = resolve(dirname(from), spec.replace(/\.js$/, '.ts'));
-  return (
-    [base, `${base}.ts`, `${base}/index.ts`].find((p) => existsSync(p) && statSync(p).isFile()) ??
-    null
-  );
+  return [base, `${base}.ts`, `${base}/index.ts`].find((p) => existsSync(p) && statSync(p).isFile()) ?? null;
 }
 
 /** The files a source loads at startup (type-only imports are erased) and whether it names child_process itself. */
 function importsOf(file) {
   const cached = localImports.get(file);
   if (cached) return cached;
-  const live = readFacts(readFileSync(file, 'utf8'), file, ['imports']).imports.filter(
-    (i) => !i.typeOnly,
-  );
+  const live = readFacts(readFileSync(file, 'utf8'), file, ['imports']).imports.filter((i) => !i.typeOnly);
   const facts = {
     child: live.some((i) => CHILD_MODULE.test(i.spec)),
     deps: live

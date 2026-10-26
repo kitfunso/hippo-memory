@@ -75,12 +75,7 @@ describe('share and promote refuse personal rows', () => {
       `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
     );
     expect(
-      (
-        await shareMemory(...sharingStores(hippoRoot), team.id, {
-          embed: TEST_RUN,
-          tenantId: 'default',
-        })
-      )?.content,
+      (await shareMemory(...sharingStores(hippoRoot), team.id, { embed: TEST_RUN, tenantId: 'default' }))?.content,
     ).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
@@ -89,9 +84,7 @@ describe('share and promote refuse personal rows', () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
     expect(
-      (
-        await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS })
-      ).map((e) => e.content),
+      (await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS })).map((e) => e.content),
     ).toEqual([TEAM]);
     expect(globalContents()).toEqual([TEAM]);
   });

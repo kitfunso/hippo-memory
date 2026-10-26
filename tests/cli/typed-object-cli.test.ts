@@ -121,8 +121,7 @@ afterEach(() => {
   removeAfterRequest(env.cwd);
 });
 
-const hippo = (...args: string[]): Promise<InProcessResult> =>
-  runInProcess(() => runCli(['node', 'hippo', ...args]));
+const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 /** Stdout of a verb that must succeed. */
 async function ok(...args: string[]): Promise<string> {
@@ -183,25 +182,11 @@ describe('typed-object CLI rules one noun has', () => {
     // Both stay active for the same customer; the list row shows customer=, not the body.
     const active = await ok('note', 'list', '--customer', 'Acme', '--status', 'active');
     expect((active.match(/customer="Acme"/g) ?? []).length).toBe(2);
-    expect(
-      await ok('note', 'supersede', id, '--text', 'note two v2', '--change', 'corrected'),
-    ).toMatch(/v2/);
+    expect(await ok('note', 'supersede', id, '--text', 'note two v2', '--change', 'corrected')).toMatch(/v2/);
   });
 
   it('policy new -> supersede version chain + asof query', async () => {
-    const id = idOf(
-      await ok(
-        'policy',
-        'new',
-        'Window',
-        '--text',
-        'v1',
-        '--from',
-        '2026-01-01',
-        '--to',
-        '2026-06-01',
-      ),
-    );
+    const id = idOf(await ok('policy', 'new', 'Window', '--text', 'v1', '--from', '2026-01-01', '--to', '2026-06-01'));
     const sup = await ok(
       'policy',
       'supersede',
@@ -220,51 +205,31 @@ describe('typed-object CLI rules one noun has', () => {
     expect(asof).toContain('Window');
     expect(asof).toContain('v2');
     // valid_to is exclusive, so its own instant is out of force.
-    expect(await ok('policy', 'asof', '2026-06-01', '--name', 'Window')).toContain(
-      'No active policies in force',
-    );
+    expect(await ok('policy', 'asof', '2026-06-01', '--name', 'Window')).toContain('No active policies in force');
   });
 
   it('policy new rejects an inverted valid_to', async () => {
     expect(
-      (
-        await hippo(
-          'policy',
-          'new',
-          'Inv',
-          '--text',
-          'x',
-          '--from',
-          '2026-06-01',
-          '--to',
-          '2026-01-01',
-        )
-      ).status,
+      (await hippo('policy', 'new', 'Inv', '--text', 'x', '--from', '2026-06-01', '--to', '2026-01-01')).status,
     ).toBe(1);
   });
 
   it('process new -> supersede -> list version chain', async () => {
     const id = idOf(await ok('process', 'new', 'Deploy', '--step', 'a'));
-    expect(
-      await ok('process', 'supersede', id, '--step', 'a', '--step', 'b', '--change', 'added b'),
-    ).toMatch(/v2/);
+    expect(await ok('process', 'supersede', id, '--step', 'a', '--step', 'b', '--change', 'added b')).toMatch(/v2/);
     expect(await ok('process', 'list', '--status', 'active')).toContain('v2');
     expect(await ok('process', 'list', '--status', 'superseded')).toContain('Deploy');
   });
 
   it('brief new -> supersede version chain, listed by repo', async () => {
     const id = idOf(await ok('brief', 'new', 'r', '--summary', 'v1 body'));
-    expect(
-      await ok('brief', 'supersede', id, '--summary', 'v2 body', '--change', 'updated'),
-    ).toMatch(/v2/);
+    expect(await ok('brief', 'supersede', id, '--summary', 'v2 body', '--change', 'updated')).toMatch(/v2/);
     expect(await ok('brief', 'list', '--status', 'active', '--repo', 'r')).toContain('v2');
   });
 
   it('brief refresh writes a v1 brief; --dry-run prints the digest without writing', async () => {
     // Receipt path-tag matching is covered in the store test; this checks the CLI write and dry-run paths.
-    expect(await ok('brief', 'refresh', 'demo-repo', '--dry-run')).toContain(
-      '# Project Brief: demo-repo',
-    );
+    expect(await ok('brief', 'refresh', 'demo-repo', '--dry-run')).toContain('# Project Brief: demo-repo');
     expect(await ok('brief', 'list')).toContain('No project briefs.');
     expect(await ok('brief', 'refresh', 'demo-repo')).toMatch(/Project brief #\d+ recorded \(v1\)/);
     expect(await ok('brief', 'list')).toContain('repo="demo-repo"');
@@ -272,9 +237,7 @@ describe('typed-object CLI rules one noun has', () => {
 
   it('skill new -> supersede version chain + export renders the active version only', async () => {
     const id = idOf(await ok('skill', 'new', 'Lint', '--instructions', 'eslint v1'));
-    expect(
-      await ok('skill', 'supersede', id, '--instructions', 'eslint v2', '--change', 'updated'),
-    ).toMatch(/v2/);
+    expect(await ok('skill', 'supersede', id, '--instructions', 'eslint v2', '--change', 'updated')).toMatch(/v2/);
     const md = await ok('skill', 'export');
     expect(md).toContain('## Lint');
     expect(md).toContain('eslint v2');

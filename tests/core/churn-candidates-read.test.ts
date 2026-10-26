@@ -39,23 +39,13 @@ function build(label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'defa
   };
 }
 
-function put(
-  root: string,
-  label: string,
-  extra: Partial<MemoryEntry> = {},
-  tenantId = 'default',
-): string {
+function put(root: string, label: string, extra: Partial<MemoryEntry> = {}, tenantId = 'default'): string {
   const entry = build(label, extra, tenantId);
   writeEntry(root, entry);
   return entry.id;
 }
 
-function setColumn(
-  root: string,
-  column: 'superseded_by' | 'created',
-  value: string,
-  id: string,
-): void {
+function setColumn(root: string, column: 'superseded_by' | 'created', value: string, id: string): void {
   const db = openHippoDb(root);
   try {
     db.prepare(`UPDATE memories SET ${column} = ? WHERE id = ?`).run(value, id);

@@ -69,9 +69,7 @@ function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
     / (half_life_days * ${rewardFactorSql(evalSwitches().strength)}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
   // SAFETY: one TEXT `id` column.
   return withDb((db) =>
-    (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map(
-      (r) => r.id,
-    ),
+    (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map((r) => r.id),
   );
 }
 
@@ -85,20 +83,13 @@ function plainKeyCaps(now: Date): number[] {
   const iso = now.toISOString();
   // SAFETY: one INTEGER `n` column.
   const n = withDb(
-    (db) =>
-      (
-        db.prepare(sql).get(...params, iso, DECAY_KEY_HALF_LIVES, iso, DECAY_KEY_HALF_LIVES) as {
-          n: number;
-        }
-      ).n,
+    (db) => (db.prepare(sql).get(...params, iso, DECAY_KEY_HALF_LIVES, iso, DECAY_KEY_HALF_LIVES) as { n: number }).n,
   );
   return [n - 1, n].filter((cap) => cap >= 1);
 }
 
 function readOnce(cap: number, now: Date, tenant = 'default') {
-  const { result, statements } = recordStatements(() =>
-    loadContextCandidates(home, tenant, { cap, now }),
-  );
+  const { result, statements } = recordStatements(() => loadContextCandidates(home, tenant, { cap, now }));
   return {
     ids: result.map((e) => e.id),
     subset: statements.some((s) => SUBSET.test(s)),
@@ -188,16 +179,12 @@ describe('loadContextCandidates past the cap', () => {
     const marks = (sql ?? '').match(/\?/g)?.length ?? 0;
     const plan = withDb((db) =>
       // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
-      (
-        db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array<string>(marks).fill('x')) as Array<{
-          detail: string;
-        }>
-      ).map((r) => r.detail),
+      (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array<string>(marks).fill('x')) as Array<{ detail: string }>).map(
+        (r) => r.detail,
+      ),
     );
     expect(
-      plan.filter((line) =>
-        line.includes(`USING INDEX ${DECAY_KEY_INDEX} (tenant_id=? AND pinned=?`),
-      ),
+      plan.filter((line) => line.includes(`USING INDEX ${DECAY_KEY_INDEX} (tenant_id=? AND pinned=?`)),
     ).toHaveLength(2);
     expect(plan.some((line) => line.includes('AND <expr>>?)'))).toBe(true);
     expect(plan.filter((line) => /SCAN memories/.test(line))).toEqual([]);

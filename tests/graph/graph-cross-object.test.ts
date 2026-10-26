@@ -15,12 +15,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-import {
-  saveCustomerNote,
-  saveDecision,
-  savePolicy,
-  saveProjectBrief,
-} from '../../src/entry/testing.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 
 oneRequestPerTest();
 
@@ -101,12 +96,9 @@ describe('cross-object references (Pass 3 name-match)', () => {
   });
 
   it('MAX_NAME_LEN: a long prose decision is a source but never a target', async () => {
-    const longText =
-      'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
+    const longText = 'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
     expect(longText.length).toBeGreaterThan(80);
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
-      decisionText: longText,
-    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longText });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: `${longText} - refined further`,
     });
@@ -137,10 +129,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(async () => {
       for (const n of names) {
-        await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
-          policyName: n,
-          policyText: 'x',
-        });
+        await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: n, policyText: 'x' });
       }
     });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {

@@ -76,11 +76,7 @@ describe('Objects, the incident kind', () => {
       auditRow(12, T4, 'incident_resolve', '2', { incident_id: 2 }),
       auditRow(13, T4, 'incident_close', '1', { incident_id: 1 }),
     ]);
-    expect(added(side)[0].metadata).toEqual({
-      incident_id: 1,
-      has_context: true,
-      linked_memory_count: 0,
-    });
+    expect(added(side)[0].metadata).toEqual({ incident_id: 1, has_context: true, linked_memory_count: 0 });
   });
 
   it('reads the rows by status, newest first and under, at and over the cap, inside the tenant, and ignores a filter', async () => {
@@ -152,16 +148,8 @@ describe('Objects, the incident kind', () => {
       ...opened(18, 9, selfCited),
       ...opened(20, 10, theirs),
     ]);
-    expect(added(side)[14].metadata).toEqual({
-      incident_id: 7,
-      has_context: false,
-      linked_memory_count: 0,
-    });
-    expect(added(side)[16].metadata).toEqual({
-      incident_id: 8,
-      has_context: true,
-      linked_memory_count: 3,
-    });
+    expect(added(side)[14].metadata).toEqual({ incident_id: 7, has_context: false, linked_memory_count: 0 });
+    expect(added(side)[16].metadata).toEqual({ incident_id: 8, has_context: true, linked_memory_count: 3 });
   });
 
   it('refuses an open that links an id that is no memory of the tenant, naming the first one in the order given, and keeps no mirror, row, audit row or id', async () => {
@@ -229,9 +217,7 @@ describe('Objects, the incident kind', () => {
       { value: incidentOf(4, openings[3]) },
       { value: [3, 2] },
     ]);
-    expect(added(side).slice(SEED_AUDIT_ROWS)).toEqual([
-      auditRow(14, T5, 'incident_resolve', '3', { incident_id: 3 }),
-    ]);
+    expect(added(side).slice(SEED_AUDIT_ROWS)).toEqual([auditRow(14, T5, 'incident_resolve', '3', { incident_id: 3 })]);
   });
 
   it('close retires an open and a resolved row with one close row each; a closed, a missing and a foreign row are refused and stay as they were', async () => {

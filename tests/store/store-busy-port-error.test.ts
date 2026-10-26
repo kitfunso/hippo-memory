@@ -1,19 +1,10 @@
 // A held lock leaves the SQLite adapter as the port's StoreBusyError, with the driver's error as its cause and its text
 // kept, wherever it escapes: a served store call, a request scope, a hook scope and a batch.
 import { describe, expect, it } from 'vitest';
-import {
-  closeHippoDb,
-  isSqliteBusy,
-  openHippoDb,
-  runWithRequestStores,
-} from '../../src/db/index.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, runWithRequestStores } from '../../src/db/index.js';
 import { isStoreBusy, StoreBusyError } from '../../src/base/ports/store.js';
 import { portError } from '../../src/store/sqlite/port-errors.js';
-import {
-  runSqliteBatch,
-  runSqliteHookRequest,
-  runSqliteRequest,
-} from '../../src/store/sqlite/request-scope.js';
+import { runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from '../../src/store/sqlite/request-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -66,9 +57,7 @@ describe('a busy hippo.db in the port terms', () => {
     const store = sqliteStore(root);
     const err = await whileHeld(() =>
       rejection(
-        runWithRequestStores(() => store.sessions.save('default', 'snapshot', SNAPSHOT, null), {
-          busyWaitMs: 50,
-        }),
+        runWithRequestStores(() => store.sessions.save('default', 'snapshot', SNAPSHOT, null), { busyWaitMs: 50 }),
       ),
     );
     expect(err).toBeInstanceOf(StoreBusyError);

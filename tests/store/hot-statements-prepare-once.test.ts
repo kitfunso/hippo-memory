@@ -8,9 +8,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement.
-const { DatabaseSync } = require('node:sqlite') as {
-  DatabaseSync: { prototype: { prepare(sql: string): object } };
-};
+const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: { prepare(sql: string): object } } };
 
 let db: DatabaseSyncLike;
 beforeEach(() => {

@@ -22,9 +22,7 @@ export function sendKeyTo(handle: ServerHandle, key: string): KeyedServer {
   globalThis.fetch = (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     if (!url.startsWith(handle.url)) return realFetch(input, init);
-    const headers = new Headers(
-      init?.headers ?? (input instanceof Request ? input.headers : undefined),
-    );
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     if (!headers.has('authorization')) headers.set('authorization', `Bearer ${key}`);
     return realFetch(input, { ...init, headers });
   };

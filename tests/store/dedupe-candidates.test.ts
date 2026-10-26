@@ -12,27 +12,17 @@ const BASE = Date.parse('2026-05-01T00:00:00.000Z');
 
 function row(content: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const at = new Date(BASE + minute * 60_000).toISOString();
-  return {
-    ...createMemory(content, { tenantId: 'default' }),
-    created: at,
-    validFrom: at,
-    lastRetrieved: at,
-    ...extra,
-  };
+  return { ...createMemory(content, { tenantId: 'default' }), created: at, validFrom: at, lastRetrieved: at, ...extra };
 }
 
 describe('the spacing the candidates read takes out', () => {
   it('is every code point JavaScript reads as \\s, so each copy apart from spacing is found', async () => {
     const root = makeStore('dedupe-spaces').root;
     const spaces: string[] = [];
-    for (let cp = 0; cp <= 0xffff; cp++)
-      if (/\s/.test(String.fromCharCode(cp))) spaces.push(String.fromCharCode(cp));
+    for (let cp = 0; cp <= 0xffff; cp++) if (/\s/.test(String.fromCharCode(cp))) spaces.push(String.fromCharCode(cp));
     writeEntriesTogether(
       root,
-      spaces.flatMap((space, i) => [
-        row(`copy${i} a${space}b`, 2 * i),
-        row(`copy${i} a b`, 2 * i + 1),
-      ]),
+      spaces.flatMap((space, i) => [row(`copy${i} a${space}b`, 2 * i), row(`copy${i} a b`, 2 * i + 1)]),
     );
     const { pairs } = await deduplicateStore(sqliteStore(root), { dryRun: true });
     expect(pairs).toHaveLength(spaces.length);
@@ -68,16 +58,9 @@ describe('deduplicateStore over the duplicate candidates', () => {
 
   it('finds the pairs, in the order, that a read of every row finds', async () => {
     const candidates = await deduplicateStore(store(), { dryRun: true });
-    const everyRow = await deduplicateStore(store(), {
-      dryRun: true,
-      pages: [loadEveryTenantEntries(root)],
-    });
+    const everyRow = await deduplicateStore(store(), { dryRun: true, pages: [loadEveryTenantEntries(root)] });
     expect(candidates).toEqual(everyRow);
-    expect(candidates.pairs.map((p) => p.removedContent.includes('acme'))).toEqual([
-      true,
-      false,
-      false,
-    ]);
+    expect(candidates.pairs.map((p) => p.removedContent.includes('acme'))).toEqual([true, false, false]);
   });
 
   it('reads the same rows when the store holds five times more rows without a copy', async () => {
@@ -93,9 +76,7 @@ describe('deduplicateStore over the duplicate candidates', () => {
   });
 
   it('deletes the copies in one transaction with a forget row for each', async () => {
-    const { result, statements } = await recordStatementsAsync(() =>
-      deduplicateStore(store(), { actor: 'cli' }),
-    );
+    const { result, statements } = await recordStatementsAsync(() => deduplicateStore(store(), { actor: 'cli' }));
     expect(result.removed).toBe(3);
     expect(countMatching(statements, /^BEGIN IMMEDIATE/)).toBe(1);
     expect(countMatching(statements, /INSERT INTO audit_log/)).toBe(3);

@@ -15,11 +15,7 @@ const GITHUB_TOKEN = `ghp_${'a'.repeat(36)}`;
 describe('maskHomePaths', () => {
   it.each([
     ['Windows', 'open C:\\Users\\alice\\repo\\app.ts now', 'open [home]\\repo\\app.ts now'],
-    [
-      'Windows, forward slashes',
-      'open C:/Users/alice/repo/app.ts now',
-      'open [home]/repo/app.ts now',
-    ],
+    ['Windows, forward slashes', 'open C:/Users/alice/repo/app.ts now', 'open [home]/repo/app.ts now'],
     ['macOS', 'open /Users/alice/code/app.ts now', 'open [home]/code/app.ts now'],
     ['Linux', 'open /home/alice/src/app.ts now', 'open [home]/src/app.ts now'],
     ['Linux root', 'edit /root/.bashrc now', 'edit [home]/.bashrc now'],
@@ -30,16 +26,8 @@ describe('maskHomePaths', () => {
       'open C:\\Users\\Alice Smith\\Documents\\notes.md now',
       'open [home]\\Documents\\notes.md now',
     ],
-    [
-      'Windows, a quoted user folder with a space',
-      'cd "C:\\Users\\Alice Smith" now',
-      'cd "[home]" now',
-    ],
-    [
-      'Git Bash mount, a user folder with a space',
-      'open /c/Users/Alice Smith/repo now',
-      'open [home]/repo now',
-    ],
+    ['Windows, a quoted user folder with a space', 'cd "C:\\Users\\Alice Smith" now', 'cd "[home]" now'],
+    ['Git Bash mount, a user folder with a space', 'open /c/Users/Alice Smith/repo now', 'open [home]/repo now'],
     [
       'two quoted Windows paths in one JSON line',
       '{"cwd":"C:\\\\Users\\\\alice","file":"C:\\\\Users\\\\bob\\\\x.ts"}',
@@ -52,27 +40,15 @@ describe('maskHomePaths', () => {
     ],
     ['a URL-encoded backslash path', 'cwd c%3A%5CUsers%5Calice%5Cdev now', 'cwd [home]%5Cdev now'],
     ['a UNC home share', 'open \\\\fileserver\\home$\\alice\\proj now', 'open [home]\\proj now'],
-    [
-      'a UNC roaming profiles share',
-      'open \\\\corp-fs01\\profiles$\\kit.sofun\\Desktop',
-      'open [home]\\Desktop',
-    ],
+    ['a UNC roaming profiles share', 'open \\\\corp-fs01\\profiles$\\kit.sofun\\Desktop', 'open [home]\\Desktop'],
     [
       'Windows, a spaced user folder in backticks',
       'my home folder is `C:\\Users\\Kit Sofun`',
       'my home folder is `[home]`',
     ],
     ['Windows, a spaced user folder in brackets', '(C:\\Users\\Kit Sofun)', '([home])'],
-    [
-      'Windows, a spaced user folder before a full stop',
-      'open C:\\Users\\Kit Sofun.',
-      'open [home].',
-    ],
-    [
-      'Windows, a spaced user folder at the end of the text',
-      'open C:\\Users\\Kit Sofun',
-      'open [home]',
-    ],
+    ['Windows, a spaced user folder before a full stop', 'open C:\\Users\\Kit Sofun.', 'open [home].'],
+    ['Windows, a spaced user folder at the end of the text', 'open C:\\Users\\Kit Sofun', 'open [home]'],
     [
       'Windows, a spaced user folder at the end of a line',
       'open C:\\Users\\Kit Sofun\nthen build',
@@ -114,9 +90,7 @@ describe('maskHomePaths', () => {
 describe('scrubForSharing', () => {
   it('masks a bearer header, a JWT and an email', () => {
     const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlMTIz';
-    const out = scrubForSharing(
-      `Authorization: Bearer abcdefghijklmnop1234 then ${jwt} and mail alice@example.com`,
-    );
+    const out = scrubForSharing(`Authorization: Bearer abcdefghijklmnop1234 then ${jwt} and mail alice@example.com`);
     expect(out).toBe('Authorization: [REDACTED] then [REDACTED] and mail [email]');
   });
 
@@ -124,9 +98,7 @@ describe('scrubForSharing', () => {
     expect(scrubForSharing(`read C:\\Users\\alice\\keys\\${GITHUB_TOKEN}.txt`)).toBe(
       'read [home]\\keys\\[REDACTED].txt',
     );
-    expect(scrubForSharing(`read /home/alice/.config/${GITHUB_TOKEN}`)).toBe(
-      'read [home]/.config/[REDACTED]',
-    );
+    expect(scrubForSharing(`read /home/alice/.config/${GITHUB_TOKEN}`)).toBe('read [home]/.config/[REDACTED]');
   });
 
   it('returns clean text unchanged', () => {
@@ -139,21 +111,13 @@ describe('scrubForSharing', () => {
   const AWS_SECRET = runtimeJoin('wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY');
   it.each([
     ['a prefixed password', `DB_PASSWORD=${PASSWORD}`, 'DB_[REDACTED]'],
-    [
-      'a prefixed token',
-      `set MY_API_TOKEN=${runtimeJoin('abc123', 'def456ghi789')}`,
-      'set MY_API_[REDACTED]',
-    ],
+    ['a prefixed token', `set MY_API_TOKEN=${runtimeJoin('abc123', 'def456ghi789')}`, 'set MY_API_[REDACTED]'],
     [
       'a prefixed secret after a colon',
       `CLIENT_SECRET: ${runtimeJoin('4f9a8b7c6d', '5e4f3a2b1c')}`,
       'CLIENT_[REDACTED]',
     ],
-    [
-      'a name that runs on past the keyword',
-      `AWS_SECRET_ACCESS_KEY=${AWS_SECRET}`,
-      'AWS_SECRET_[REDACTED]',
-    ],
+    ['a name that runs on past the keyword', `AWS_SECRET_ACCESS_KEY=${AWS_SECRET}`, 'AWS_SECRET_[REDACTED]'],
     [
       'a database URL password',
       `DATABASE_URL=postgres://admin:${runtimeJoin('S3cret', 'Pw9')}@localhost:5432/app`,
@@ -174,11 +138,7 @@ describe('scrubForSharing', () => {
       `https://user:${runtimeJoin('correct', 'horse')}@internal-host/repo.git`,
       'https://[REDACTED]@internal-host/repo.git',
     ],
-    [
-      'a URL password before a path',
-      `https://user:${runtimeJoin('p4ss', 'w0rd')}@host/x`,
-      'https://[REDACTED]@host/x',
-    ],
+    ['a URL password before a path', `https://user:${runtimeJoin('p4ss', 'w0rd')}@host/x`, 'https://[REDACTED]@host/x'],
   ])('redacts %s', (_name, text, scrubbed) => {
     expect(scrubForSharing(text)).toBe(scrubbed);
   });
@@ -195,9 +155,7 @@ describe('scrubForSharing', () => {
   });
 
   it('reads no URL password from an @ in the query, so only the email is masked', () => {
-    expect(scrubForSharing('http://localhost:8080?next=a@b.co')).toBe(
-      'http://localhost:8080?next=[email]',
-    );
+    expect(scrubForSharing('http://localhost:8080?next=a@b.co')).toBe('http://localhost:8080?next=[email]');
   });
 });
 
@@ -272,10 +230,7 @@ describe('scrubForSharing on hostile input', () => {
   it.each([
     ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
     ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
-    [
-      'long names that end in a keyword',
-      (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size),
-    ] as const,
+    ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
   ])(
     'scrubs a 1 MiB run of %s before the watchdog fires',
     (_name, build) => {

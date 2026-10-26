@@ -5,10 +5,7 @@ import { rmSync } from 'node:fs';
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
@@ -33,20 +30,12 @@ oneRequestPerTest();
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const AT = '2026-02-15T00:00:00.000Z';
 const REFUSED = 'the summary nobody wants';
-const TOPIC = {
-  layer: Layer.Semantic,
-  dagLevel: DAG_LEVEL.topic,
-  tags: ['dag-summary', 'topic:billing'],
-};
+const TOPIC = { layer: Layer.Semantic, dagLevel: DAG_LEVEL.topic, tags: ['dag-summary', 'topic:billing'] };
 
 let fixture: TwoTenantFixture;
 const rows: Record<string, MemoryEntry> = {};
 
-function seedRow(
-  name: string,
-  content: string,
-  over: Parameters<typeof createMemory>[1] = {},
-): MemoryEntry {
+function seedRow(name: string, content: string, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
   const row = { ...createMemory(content, { tenantId: TENANT_A, ...over }), originProject: 'proj' };
   writeEntry(fixture.dir, row, { actor: 'cli' });
   rows[name] = row;
@@ -55,16 +44,8 @@ function seedRow(
 
 function seedSummaries(): void {
   const topic = seedRow('topic', 'alice runs billing and payroll', TOPIC);
-  seedRow('fact1', 'alice runs billing', {
-    dagLevel: DAG_LEVEL.extracted,
-    dagParentId: topic.id,
-    tags: ['extracted'],
-  });
-  seedRow('fact2', 'alice runs payroll', {
-    dagLevel: DAG_LEVEL.extracted,
-    dagParentId: topic.id,
-    tags: ['extracted'],
-  });
+  seedRow('fact1', 'alice runs billing', { dagLevel: DAG_LEVEL.extracted, dagParentId: topic.id, tags: ['extracted'] });
+  seedRow('fact2', 'alice runs payroll', { dagLevel: DAG_LEVEL.extracted, dagParentId: topic.id, tags: ['extracted'] });
   const refusing = seedRow('refusing', 'bob owns the release train', TOPIC);
   seedRow('fact3', 'bob owns releases', {
     dagLevel: DAG_LEVEL.extracted,
@@ -91,9 +72,9 @@ function seedTables(): void {
   const db = openHippoDb(fixture.dir);
   try {
     const ids = ['topic', 'refusing', 'fresh'].map((name) => rows[name]!.id);
-    db.prepare(
-      'UPDATE memories SET summary_dirty = 1 WHERE id IN (SELECT value FROM json_each(?))',
-    ).run(JSON.stringify(ids));
+    db.prepare('UPDATE memories SET summary_dirty = 1 WHERE id IN (SELECT value FROM json_each(?))').run(
+      JSON.stringify(ids),
+    );
     insertRejectedValue(db, {
       tenantId: TENANT_A,
       digest: rejectionDigest(REFUSED),
@@ -118,10 +99,7 @@ async function seed(): Promise<void> {
   seedSummaries();
   seedRow('twin1', 'the release train leaves at noon on thursday');
   seedRow('twin2', 'the release  train leaves at noon on thursday');
-  seedRow('trace', 'deploy trace: ran the canary', {
-    layer: Layer.Trace,
-    sourceSessionId: 'traced',
-  });
+  seedRow('trace', 'deploy trace: ran the canary', { layer: Layer.Trace, sourceSessionId: 'traced' });
   seedRow('kept', 'the nightly build runs at two');
   seedRow('edited', 'the deploy window is friday');
   seedRow('gone', 'the old wiki lives on confluence');
@@ -132,11 +110,7 @@ async function seed(): Promise<void> {
     [TENANT_A, 'traced'],
     [TENANT_B, 'elsewhere'],
   ] as const) {
-    await appendSessionEvent(fixture.dir, tenantId, {
-      sessionId,
-      eventType: 'session_complete',
-      content: 'success',
-    });
+    await appendSessionEvent(fixture.dir, tenantId, { sessionId, eventType: 'session_complete', content: 'success' });
   }
   seedTables();
 }
@@ -167,26 +141,13 @@ const read = (names: string[]) => (_g: StoreGroups['consolidation'], s: HippoSto
   s.entriesByIds(named(...names), TENANT_A);
 
 function rebuilt(name: string, text: string): SummarySettle {
-  const audit = {
-    dag_level: DAG_LEVEL.topic,
-    source: 'E3-rebuild',
-    zero_children: false,
-    descendant_count: 2,
-  };
+  const audit = { dag_level: DAG_LEVEL.topic, source: 'E3-rebuild', zero_children: false, descendant_count: 2 };
   return {
     id: id(name),
     tenantId: TENANT_A,
     actor: 'sleep',
     fields: { content: { text, rebuiltAt: AT }, descendantCount: 2, earliestAt: AT, latestAt: AT },
-    audit: [
-      {
-        tenantId: TENANT_A,
-        actor: 'sleep',
-        op: 'summary_rebuilt',
-        targetId: id(name),
-        metadata: audit,
-      },
-    ],
+    audit: [{ tenantId: TENANT_A, actor: 'sleep', op: 'summary_rebuilt', targetId: id(name), metadata: audit }],
   };
 }
 
@@ -210,11 +171,7 @@ describe('Consolidation', () => {
       fts: null,
       sessions: [untraced('done')],
     });
-    expect(valueAt(sqlite.outcomes, 2)).toMatchObject({
-      from: 30,
-      outcome: null,
-      sessions: [untraced('elsewhere')],
-    });
+    expect(valueAt(sqlite.outcomes, 2)).toMatchObject({ from: 30, outcome: null, sessions: [untraced('elsewhere')] });
     expect(sqlite.audit.filter((row) => row.op === 'half_life_migrate').length).toBeGreaterThan(0);
   });
 
@@ -222,12 +179,7 @@ describe('Consolidation', () => {
     const sqlite = await conforms([
       (g) => g.entryIdsPage({ limit: 1000 }),
       (g) => g.entryIdsPage({ limit: 2 }),
-      (g) =>
-        g.rejected(TENANT_A, [
-          rejectionDigest(REFUSED),
-          rejectionDigest('nothing'),
-          rejectionDigest(REFUSED),
-        ]),
+      (g) => g.rejected(TENANT_A, [rejectionDigest(REFUSED), rejectionDigest('nothing'), rejectionDigest(REFUSED)]),
       (g) => g.rejected(TENANT_B, [rejectionDigest(REFUSED)]),
       (g) => g.particleIds(),
       (g) => g.saveParticles([particle(id('kept'), 0.75)]),
@@ -236,35 +188,23 @@ describe('Consolidation', () => {
       (g) => g.unprofiledTopicSummaries({ limit: 10 }),
       (g) => g.dirtyGraphTenants(),
       (g) => g.markGraphDrained(TENANT_A, 10),
-      (g) =>
-        g.auditEachRow([
-          { tenantId: TENANT_A, actor: 'test', op: 'mv_rescue', targetId: id('kept') },
-        ]),
+      (g) => g.auditEachRow([{ tenantId: TENANT_A, actor: 'test', op: 'mv_rescue', targetId: id('kept') }]),
     ]);
     expect(valueAt<{ ids: string[] }>(sqlite.outcomes, 1).ids).toHaveLength(2);
     expect(valueAt<unknown[]>(sqlite.outcomes, 2)).toHaveLength(1);
     expect(valueAt<string[]>(sqlite.outcomes, 4)).toEqual(named('kept', 'edited'));
-    expect(valueAt<{ rows: MemoryEntry[] }>(sqlite.outcomes, 7).rows.map((e) => e.id)).toEqual(
-      named('twin1', 'twin2'),
-    );
+    expect(valueAt<{ rows: MemoryEntry[] }>(sqlite.outcomes, 7).rows.map((e) => e.id)).toEqual(named('twin1', 'twin2'));
   });
 
   it('settles dirty summaries once each, keeping tombstoned content out with a refusal row', async () => {
-    const clean = {
-      tenantId: TENANT_A,
-      actor: 'buildDag',
-      op: 'summary_marked_clean' as const,
-      targetId: id('fresh'),
-    };
+    const clean = { tenantId: TENANT_A, actor: 'buildDag', op: 'summary_marked_clean' as const, targetId: id('fresh') };
     const sqlite = await conforms([
       (g) => g.dirtySummaries(2),
       (g) => g.settleSummary(rebuilt('topic', 'alice runs billing and payroll for acme')),
       (g) => g.settleSummary(rebuilt('topic', 'a second rebuild that lost the race')),
       (g) => g.settleSummary(rebuilt('refusing', REFUSED)),
-      (g) =>
-        g.settleSummary({ id: id('fresh'), tenantId: TENANT_B, actor: 'buildDag', audit: [clean] }),
-      (g) =>
-        g.settleSummary({ id: id('fresh'), tenantId: TENANT_A, actor: 'buildDag', audit: [clean] }),
+      (g) => g.settleSummary({ id: id('fresh'), tenantId: TENANT_B, actor: 'buildDag', audit: [clean] }),
+      (g) => g.settleSummary({ id: id('fresh'), tenantId: TENANT_A, actor: 'buildDag', audit: [clean] }),
       (g) => g.dirtySummaries(10),
       read(['topic', 'refusing', 'fresh']),
     ]);
@@ -298,22 +238,10 @@ describe('Consolidation', () => {
       ],
       snapshot: new Map([[id('edited'), rows.edited!]]),
     };
-    const conflict = {
-      memory_a_id: id('twin1'),
-      memory_b_id: id('twin2'),
-      reason: 'contradiction',
-      score: 0.9,
-    };
+    const conflict = { memory_a_id: id('twin1'), memory_b_id: id('twin2'), reason: 'contradiction', score: 0.9 };
     const sqlite = await conforms([
-      (g) =>
-        g.commit({ flush, expireBefore: '2020-01-01T00:00:00.000Z', dryRun: false, holdMs: 0 }),
-      (g) =>
-        g.commit({
-          flush: null,
-          expireBefore: '2030-01-01T00:00:00.000Z',
-          dryRun: true,
-          holdMs: 0,
-        }),
+      (g) => g.commit({ flush, expireBefore: '2020-01-01T00:00:00.000Z', dryRun: false, holdMs: 0 }),
+      (g) => g.commit({ flush: null, expireBefore: '2030-01-01T00:00:00.000Z', dryRun: true, holdMs: 0 }),
       (g) => g.recordSleep({ conflicts: [conflict], at: AT, decayed: 1, merged: 0, removed: 1 }),
       (g) => g.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' }),
       (_g, s) => s.conflicts.list({ tenantId: TENANT_A, status: 'open', limit: 10 }),

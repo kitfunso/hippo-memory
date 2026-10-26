@@ -50,9 +50,6 @@ describe.skipIf(process.platform === 'win32')('store files are owner-only on cre
     } finally {
       process.umask(previous);
     }
-    expect([mode(root), mode(join(root, 'logs'))].map((m) => m.toString(8))).toEqual([
-      '700',
-      '700',
-    ]);
+    expect([mode(root), mode(join(root, 'logs'))].map((m) => m.toString(8))).toEqual(['700', '700']);
   });
 });

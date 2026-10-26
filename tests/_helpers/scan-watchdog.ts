@@ -12,11 +12,7 @@ export const WATCHDOG_MS = 15_000;
  * code. A regex that backtracks super-linearly on `text` is cut off at `deadlineMs` and fails here, instead of
  * hanging the run; linear work finishes in a small fraction of any sensible deadline.
  */
-export function scanWithinWatchdog<T>(
-  scan: (text: string) => T,
-  text: string,
-  deadlineMs: number,
-): T {
+export function scanWithinWatchdog<T>(scan: (text: string) => T, text: string, deadlineMs: number): T {
   try {
     return runInNewContext('scan(text)', { scan, text }, { timeout: deadlineMs });
   } catch (err) {

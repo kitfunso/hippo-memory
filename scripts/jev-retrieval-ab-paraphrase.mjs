@@ -56,9 +56,7 @@ const srcOf = new Map(lane3.rows.map((r) => [r.id, r.source]));
 console.error(`corpus ${entries.length} entries, ${scored.size} scored by Jev`);
 
 const cases = queries.filter((q) => byId.has(q.id) && q.query?.trim());
-console.error(
-  `usable cases: ${cases.length} (dropped ${queries.length - cases.length} with no matching entry)`,
-);
+console.error(`usable cases: ${cases.length} (dropped ${queries.length - cases.length} with no matching entry)`);
 
 const docFreq = new Map();
 for (const e of entries) for (const t of toks(e.content)) docFreq.set(t, (docFreq.get(t) ?? 0) + 1);
@@ -78,11 +76,7 @@ function sharedSpan(query, content) {
   const distinctive = (w) => !STOP.has(w) && (docFreq.get(w) ?? 0) <= entries.length * 0.01;
   for (let i = 0; i + 2 < qw.length; i++) {
     const g = qw.slice(i, i + 3);
-    if (
-      g.filter((w) => !STOP.has(w)).length >= 2 &&
-      g.some(distinctive) &&
-      tw.includes(g.join(' '))
-    ) {
+    if (g.filter((w) => !STOP.has(w)).length >= 2 && g.some(distinctive) && tw.includes(g.join(' '))) {
       return g.join(' ');
     }
   }
@@ -132,18 +126,11 @@ const adds = [...tagSet].filter((id) => !byId.get(id)?.tags.includes('error'));
 const addSet = new Set(adds);
 const jevEntries = entries.map((e) =>
   addSet.has(e.id)
-    ? {
-        ...e,
-        tags: [...e.tags, 'error'],
-        emotional_valence: 'negative',
-        half_life_days: e.half_life_days * 2,
-      }
+    ? { ...e, tags: [...e.tags, 'error'], emotional_valence: 'negative', half_life_days: e.half_life_days * 2 }
     : e,
 );
 const alreadyTagged = tagSet.size - adds.length;
-console.error(
-  `  of those, ${alreadyTagged} already carry the tag (unchanged); Jev ADDS it to ${adds.length} rows`,
-);
+console.error(`  of those, ${alreadyTagged} already carry the tag (unchanged); Jev ADDS it to ${adds.length} rows`);
 
 if (process.argv.includes('--dry')) {
   console.error('--dry: plumbing checked, no ranks computed, no peek taken.');
@@ -236,9 +223,7 @@ function report(rows, label) {
       `CEILING GATE TRIPPED: baseline ${PRIMARY} ${f(table[PRIMARY].base)} > ${CEILING_R5}. INSTRUMENT FAILURE, no verdict.`,
     );
   } else {
-    console.log(
-      `VERDICT: ${pass ? 'SHIP' : 'DO NOT SHIP'}  (rule: ${PRIMARY} CI excludes 0 upward AND no R@1 loss)`,
-    );
+    console.log(`VERDICT: ${pass ? 'SHIP' : 'DO NOT SHIP'}  (rule: ${PRIMARY} CI excludes 0 upward AND no R@1 loss)`);
   }
   return {
     n: rows.length,
@@ -254,18 +239,14 @@ const LANE = OPCUT ? 'Lane 7 (operational token-budget cut)' : 'Lane 6 (rank cut
 const primary = report(out, `${LANE} — PRIMARY, all paraphrase queries`);
 const clean = out.filter((o) => !o.flagged);
 const sensitivity =
-  clean.length < out.length
-    ? report(clean, `${LANE} — SENSITIVITY, leak-flagged pairs excluded`)
-    : null;
+  clean.length < out.length ? report(clean, `${LANE} — SENSITIVITY, leak-flagged pairs excluded`) : null;
 if (sensitivity && sensitivity.verdict !== primary.verdict) {
   console.log(
     `\nPRIMARY AND SENSITIVITY DISAGREE. Declared rule: the excluded-pairs number is the verdict -> ${sensitivity.verdict}`,
   );
 }
 
-console.log(
-  '\nper-source breakdown, families with n>=10 only (diagnostic, all under the 300-anchor floor)\n',
-);
+console.log('\nper-source breakdown, families with n>=10 only (diagnostic, all under the 300-anchor floor)\n');
 const fams = {};
 for (const o of out) {
   const k = (o.source ?? 'null').replace(/^(shared|claude-memory):.*/, '$1');
@@ -295,12 +276,7 @@ writeFileSync(
       queries_merged: queries.length,
       tagged: K,
       base_rate: baseRate,
-      leakage: {
-        containment_median: q(0.5),
-        containment_p75: q(0.75),
-        flagged,
-        rare_doc_max: RARE_DOC_MAX,
-      },
+      leakage: { containment_median: q(0.5), containment_p75: q(0.75), flagged, rare_doc_max: RARE_DOC_MAX },
       primary,
       sensitivity,
       ranks: out,

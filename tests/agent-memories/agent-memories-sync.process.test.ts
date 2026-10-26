@@ -5,11 +5,7 @@ import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { consolidate } from '../../src/index.js';
-import {
-  importAtSessionEnd,
-  importForStore,
-  importProjectMemories,
-} from '../../src/api/agent-memories.js';
+import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
@@ -112,10 +108,9 @@ describe('agent memory sync', () => {
 
   it('an edit past character 1500 supersedes the row, though the stored text is the same', async () => {
     const dir = projectNotes(w);
-    const long =
-      'The deploy checklist says to run the schema check, then the smoke test, then tell the desk. '
-        .repeat(20)
-        .trim();
+    const long = 'The deploy checklist says to run the schema check, then the smoke test, then tell the desk. '
+      .repeat(20)
+      .trim();
     note(dir, 'checklist.md', long);
     await sync();
     const [old] = liveRows(w.local);
@@ -137,9 +132,7 @@ describe('agent memory sync', () => {
     unlinkSync(file);
     expect(claude(await sync()).setAside).toBe(1);
     expect(liveRows(w.local)).toEqual([]);
-    expect(
-      withDb(w.local, (db) => db.prepare('SELECT 1 FROM memories WHERE id = ?').get(row.id)),
-    ).toBeUndefined();
+    expect(withDb(w.local, (db) => db.prepare('SELECT 1 FROM memories WHERE id = ?').get(row.id))).toBeUndefined();
     expect(existsSync(join(w.local, 'episodic', `${row.id}.md`))).toBe(false);
     const dormant = dormantRows(w.local);
     expect(dormant).toMatchObject([{ id: row.id, content: DEPLOY, reason: 'source-deleted' }]);
@@ -168,12 +161,7 @@ describe('agent memory sync', () => {
     const [row] = liveRows(w.local);
     withDb(w.local, (db) => {
       db.exec('BEGIN IMMEDIATE');
-      insertDormantRow(db, {
-        entry: row,
-        strength: 0.01,
-        reason: 'decay',
-        dormantAt: new Date().toISOString(),
-      });
+      insertDormantRow(db, { entry: row, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
       deleteEntryRowInTx(db, row, 'test');
       db.exec('COMMIT');
     });
@@ -181,9 +169,7 @@ describe('agent memory sync', () => {
     expect(liveRows(w.local)).toEqual([]);
 
     expect(claude(await sync())).toMatchObject({ restored: 1, imported: 0 });
-    expect(liveRows(w.local)).toMatchObject([
-      { id: row.id, content: DEPLOY, tags: ['claude-code-memory'] },
-    ]);
+    expect(liveRows(w.local)).toMatchObject([{ id: row.id, content: DEPLOY, tags: ['claude-code-memory'] }]);
     expect(dormantRows(w.local)).toEqual([]);
     expect(auditCount(w.local, 'agent_memory_restore')).toBe(1);
     expect(auditCount(w.local, 'dormant_restore')).toBe(0);
@@ -206,10 +192,7 @@ describe('agent memory sync', () => {
     });
     const staging = liveRows(w.local).find((e) => e.content === STAGING);
     expect(readEntry(w.local, edited.id)?.supersededBy).toBe(staging?.id);
-    expect(readEntry(w.local, foreign.id)).toMatchObject({
-      source: 'claude-memory:billing.md',
-      supersededBy: null,
-    });
+    expect(readEntry(w.local, foreign.id)).toMatchObject({ source: 'claude-memory:billing.md', supersededBy: null });
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
   });
 
@@ -218,11 +201,7 @@ describe('agent memory sync', () => {
     note(projectNotes(w), 'staging.md', STAGING);
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
 
-    const winner = await stageSupersedeWinner(
-      ctxFor(w.local),
-      edited.id,
-      'The staging database lives in ap-south.',
-    );
+    const winner = await stageSupersedeWinner(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.');
     const report = await importForStore(w.local, {
       run: TEST_RUN,
       configAt: loadConfig,
@@ -271,10 +250,7 @@ describe('agent memory sync', () => {
     async () => {
       note(projectNotes(w), 'deploy.md', DEPLOY);
       await sync();
-      const upper: Machine = {
-        ...w.machine,
-        env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() },
-      };
+      const upper: Machine = { ...w.machine, env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() } };
 
       const again = await importProjectMemories(w.local.toUpperCase(), {
         run: TEST_RUN,
@@ -296,9 +272,7 @@ describe('agent memory sync', () => {
     expect(claude(await sync())).toMatchObject({ imported: 1, secret: 1 });
     expect(claude(await sync())).toMatchObject({ imported: 0, secret: 1 });
     expect(liveTexts(w.local)).toEqual([DEPLOY]);
-    expect(loadAllEntries(w.local, 'default').some((e) => e.content.includes(FAKE_KEY))).toBe(
-      false,
-    );
+    expect(loadAllEntries(w.local, 'default').some((e) => e.content.includes(FAKE_KEY))).toBe(false);
   });
 
   it('the sync never writes to stdout or stderr, even when it skips, sets aside and warns', async () => {
@@ -309,11 +283,7 @@ describe('agent memory sync', () => {
     note(dir, 'key.md', `The staging deploy user signs in with ${FAKE_KEY} on the build box.`);
     note(dir, 'deploy.md', DEPLOY);
     mkdirSync(join(w.home, '.codex', 'memories'), { recursive: true });
-    writeFileSync(
-      join(w.home, '.codex', 'memories', 'memory_summary.md'),
-      'not a Codex summary',
-      'utf8',
-    );
+    writeFileSync(join(w.home, '.codex', 'memories', 'memory_summary.md'), 'not a Codex summary', 'utf8');
 
     const spies = [
       vi.spyOn(process.stdout, 'write').mockImplementation(() => true),
@@ -336,9 +306,7 @@ describe('agent memory sync', () => {
   it('imported rows are never merged or sent to extraction by sleep', async () => {
     const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';
     const dir = projectNotes(w);
-    [BASE, `${BASE} again today`, `${BASE} once more`].forEach((text, i) =>
-      note(dir, `crash-${i}.md`, text),
-    );
+    [BASE, `${BASE} again today`, `${BASE} once more`].forEach((text, i) => note(dir, `crash-${i}.md`, text));
     await sync();
     const before = liveRows(w.local)
       .map((e) => e.id)
@@ -352,9 +320,7 @@ describe('agent memory sync', () => {
         .map((e) => e.id)
         .sort(),
     ).toEqual(before);
-    expect(loadAllEntries(w.local, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual(
-      [],
-    );
+    expect(loadAllEntries(w.local, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
   it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', async () => {
@@ -363,11 +329,7 @@ describe('agent memory sync', () => {
     mkdirSync(cwd);
     note(projectNotes(w, cwd), 'deploy.md', DEPLOY);
     const QUEUE = 'The session folder note says the queue drains at midnight.';
-    const transcript = join(
-      dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)),
-      '..',
-      's1.jsonl',
-    );
+    const transcript = join(dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)), '..', 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
     expect(

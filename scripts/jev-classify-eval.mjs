@@ -95,19 +95,13 @@ const isErr = (r) => {
   }
 };
 const coarse = (s) =>
-  (s ?? '').startsWith('shared:')
-    ? 'shared'
-    : (s ?? '').startsWith('claude-memory:')
-      ? 'claude-memory'
-      : s || 'null';
+  (s ?? '').startsWith('shared:') ? 'shared' : (s ?? '').startsWith('claude-memory:') ? 'claude-memory' : s || 'null';
 
 const family = arg('family', null);
 const excludeFile = arg('exclude', null);
 const spent = new Set(
   excludeFile
-    ? JSON.parse(
-        await import('node:fs/promises').then((m) => m.readFile(excludeFile, 'utf8')),
-      ).rows.map((x) => x.id)
+    ? JSON.parse(await import('node:fs/promises').then((m) => m.readFile(excludeFile, 'utf8'))).rows.map((x) => x.id)
     : [],
 );
 const eligible = all.filter((r) => (!family || coarse(r.source) === family) && !spent.has(r.id));
@@ -157,8 +151,7 @@ const priorOf = (s) => {
   return v ? v[0] / (v[0] + v[1]) : 0.5;
 };
 
-const KW =
-  /\b(error|fail|failed|failing|wrong|broke|broken|gotcha|bug|crash|never|cannot|do not)\b/i;
+const KW = /\b(error|fail|failed|failing|wrong|broke|broken|gotcha|bug|crash|never|cannot|do not)\b/i;
 const SCORERS = {
   'Jev isError': (x) => x.j.p,
   'keyword regex': (x) => (KW.test(x.r.content) ? 1 : 0),
@@ -245,9 +238,7 @@ console.log(`\nPrimary verdict — Jev vs best content-only baseline (${best})\n
 console.log(
   `  delta ${d.point >= 0 ? '+' : ''}${fmt(d.point)}  CI [${fmt(d.lo)}, ${fmt(d.hi)}]  ${passAuc ? 'PASS' : 'FAIL'} (rule: >0.075 and CI excludes 0)`,
 );
-console.log(
-  `  MCC gate: Jev ${fmt(jevHard.mcc)} vs keyword ${fmt(kwHard.mcc)}  ${passMcc ? 'PASS' : 'FAIL'}`,
-);
+console.log(`  MCC gate: Jev ${fmt(jevHard.mcc)} vs keyword ${fmt(kwHard.mcc)}  ${passMcc ? 'PASS' : 'FAIL'}`);
 console.log(`\n  OVERALL: ${passAuc && passMcc ? 'SHIP' : 'DO NOT SHIP'}`);
 
 console.log('\nDeclared confound check — within-source AUC (must survive)\n');
@@ -270,11 +261,7 @@ console.log(
 
 mkdirSync(join(process.cwd(), 'results'), { recursive: true });
 const tag = family ? `lane4-${family}-holdout` : 'lane3-all';
-const outPath = join(
-  process.cwd(),
-  'results',
-  `jev-classify-${tag}-${new Date().toISOString().slice(0, 10)}.json`,
-);
+const outPath = join(process.cwd(), 'results', `jev-classify-${tag}-${new Date().toISOString().slice(0, 10)}.json`);
 writeFileSync(
   outPath,
   JSON.stringify(
@@ -295,12 +282,7 @@ writeFileSync(
       within_source: within,
       kinds,
       elapsed_s: elapsed,
-      rows: scored.map((x) => ({
-        id: x.r.id,
-        source: x.r.source,
-        label_error: isErr(x.r),
-        jev: x.j,
-      })),
+      rows: scored.map((x) => ({ id: x.r.id, source: x.r.source, label_error: isErr(x.r), jev: x.j })),
     },
     null,
     2,

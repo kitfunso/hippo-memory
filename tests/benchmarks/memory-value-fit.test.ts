@@ -18,11 +18,7 @@ import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import { CONFIG } from '../../benchmarks/memory-value/config.mjs';
-import {
-  evaluateAll,
-  buildScorers,
-  evaluateStore,
-} from '../../benchmarks/memory-value/evaluate.mjs';
+import { evaluateAll, buildScorers, evaluateStore } from '../../benchmarks/memory-value/evaluate.mjs';
 import { featuresPathFor, readJsonl, writeJsonl } from '../../benchmarks/memory-value/common.mjs';
 import { mulberry32 } from '../../scripts/lib/prng.mjs';
 import {
@@ -41,13 +37,7 @@ import {
   initVectorForRestart,
 } from '../../benchmarks/memory-value/fit.mjs';
 
-import {
-  benchmarkStores,
-  clearAblationEnv,
-  QUESTIONS,
-  cleanupScratch,
-  runPipeline,
-} from './memory-value-fixtures.js';
+import { benchmarkStores, clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest(benchmarkStores);
@@ -280,11 +270,7 @@ describe('computeFit (real fixture)', () => {
     const trainIds = QUESTIONS.map((q) => q.question_id);
     const cachedRowsById = cacheTrainRows(trainIds);
 
-    const recencyObjective = computeTrainObjective(
-      toWeights(recencyVector()),
-      cachedRowsById,
-      trainIds,
-    );
+    const recencyObjective = computeTrainObjective(toWeights(recencyVector()), cachedRowsById, trainIds);
     const { winner } = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
     if (recencyObjective === null) throw new Error('every train id was skipped');
     expect(winner.trainObjective).toBeGreaterThanOrEqual(recencyObjective);
@@ -315,9 +301,7 @@ describe('computeFit (real fixture)', () => {
     expect(fitted.N).toBe(rows.length);
     expect(fitted.goldCount).toBe(1);
     // The fitted run adds exactly the 'weighted' scorer to the unfitted set.
-    expect(Object.keys(fitted.perScorer).sort()).toEqual(
-      [...Object.keys(unfitted.perScorer), 'weighted'].sort(),
-    );
+    expect(Object.keys(fitted.perScorer).sort()).toEqual([...Object.keys(unfitted.perScorer), 'weighted'].sort());
     for (const [name, byBudget] of Object.entries(fitted.perScorer)) {
       const { retention, keepN } = byBudget[0.3];
       expect(Number.isFinite(retention), name).toBe(true);
@@ -359,11 +343,7 @@ describe('runIntegrityGate (real fixture)', () => {
       evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
     };
 
-    const gateResult = gate({
-      splitRegistered,
-      registeredResults,
-      expectedFitDims: good.varyingFeatures,
-    });
+    const gateResult = gate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
     expect(gateResult.cachedRowsById?.size).toBe(1);
     expect(gateResult.recencyCrossCheck).toEqual(expect.any(Number));
@@ -388,9 +368,9 @@ describe('runIntegrityGate (real fixture)', () => {
     };
     const bogusExpectedFitDims = [...good.varyingFeatures, 'not_a_real_dim'];
 
-    expect(() =>
-      gate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims }),
-    ).toThrow(/varying-features set must equal FIT_DIMS/);
+    expect(() => gate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims })).toThrow(
+      /varying-features set must equal FIT_DIMS/,
+    );
   });
 
   it('(6) fails loudly, naming assertion (c), on a tampered features.jsonl value', async () => {
@@ -451,10 +431,7 @@ describe('runIntegrityGate (real fixture)', () => {
     // realistic "malformed committed JSON" shape, not just an absent key.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
-      evaluate: {
-        summary: { heldout: heldoutSummary, train: {} },
-        varyingFeatures: good.varyingFeatures,
-      },
+      evaluate: { summary: { heldout: heldoutSummary, train: {} }, varyingFeatures: good.varyingFeatures },
     };
 
     let caught: unknown;
@@ -511,10 +488,7 @@ describe('computeFit (degenerate-input guards)', () => {
     // wrapper maps that to -Infinity for every candidate ES ever evaluates.
     const zeroFeatures = Object.fromEntries(CONFIG.FEATURES.map((f: string) => [f, 0]));
     const cachedRowsById = new Map([
-      [
-        'synthetic_q',
-        [{ memory_id: 'm0', sessionIndex: 0, turnIdx: 0, gold: 0, features: zeroFeatures }],
-      ],
+      ['synthetic_q', [{ memory_id: 'm0', sessionIndex: 0, turnIdx: 0, gold: 0, features: zeroFeatures }]],
     ]);
     expect(() => computeFit(['synthetic_q'], cachedRowsById, { restarts: 1, maxGens: 2 })).toThrow(
       /non-finite train objective/,
@@ -529,9 +503,9 @@ describe('computeFit (degenerate-input guards)', () => {
     for (const q of QUESTIONS) await runPipeline(q);
     const trainIds = QUESTIONS.map((q) => q.question_id);
     const cachedRowsById = cacheTrainRows(trainIds);
-    expect(() =>
-      computeFit(trainIds, cachedRowsById, { restarts: 1, maxGens: 2, box: [0, 0] }),
-    ).toThrow(/near-zero L2 norm/);
+    expect(() => computeFit(trainIds, cachedRowsById, { restarts: 1, maxGens: 2, box: [0, 0] })).toThrow(
+      /near-zero L2 norm/,
+    );
   });
 
   it('(vi) throws a named error when opts.restarts < 1', () => {
@@ -547,9 +521,7 @@ describe('computeFit (degenerate-input guards)', () => {
 
 describe('initVectorForRestart / recencyVector', () => {
   it('initVectorForRestart throws a named error when dims is missing "age_days" (restart 0)', () => {
-    expect(() => initVectorForRestart(0, ['strength', 'content_length'], () => 0.5)).toThrow(
-      /missing "age_days"/,
-    );
+    expect(() => initVectorForRestart(0, ['strength', 'content_length'], () => 0.5)).toThrow(/missing "age_days"/);
   });
 
   it('recencyVector throws a named error directly when dims is missing "age_days"', () => {
@@ -571,15 +543,13 @@ describe('verifyFrozenWeights', () => {
   });
 
   it('throws a named error on an unknown dim (a weights file with a non-FIT_DIMS key)', () => {
-    expect(() =>
-      verifyFrozenWeights({ ...goodWeights, schema_fit: 0.4 }, digest, goodMeta),
-    ).toThrow(/unknown dim "schema_fit"/);
+    expect(() => verifyFrozenWeights({ ...goodWeights, schema_fit: 0.4 }, digest, goodMeta)).toThrow(
+      /unknown dim "schema_fit"/,
+    );
   });
 
   it('throws a named error on a non-finite weight value', () => {
-    expect(() => verifyFrozenWeights({ age_days: Number.NaN }, digest, goodMeta)).toThrow(
-      /not a finite number/,
-    );
+    expect(() => verifyFrozenWeights({ age_days: Number.NaN }, digest, goodMeta)).toThrow(/not a finite number/);
   });
 
   it('throws a named error when the meta sidecar has no frozen digest (pre-binding freeze)', () => {
@@ -587,8 +557,6 @@ describe('verifyFrozenWeights', () => {
   });
 
   it('throws a named error when the weights file digest does not match the frozen digest', () => {
-    expect(() => verifyFrozenWeights(goodWeights, 'tampered', goodMeta)).toThrow(
-      /changed after freeze/,
-    );
+    expect(() => verifyFrozenWeights(goodWeights, 'tampered', goodMeta)).toThrow(/changed after freeze/);
   });
 });

@@ -61,24 +61,17 @@ describe('GET /v1/memories honours mode and strengthens', () => {
   });
 
   it('mode=hybrid keeps the recency fallback for a query that matches nothing', async () => {
-    expect((await recallIds('q=zzzznothingmatches&mode=hybrid')).sort()).toEqual(
-      [weakId, strongId].sort(),
-    );
+    expect((await recallIds('q=zzzznothingmatches&mode=hybrid')).sort()).toEqual([weakId, strongId].sort());
   });
 
-  it.each(['bm25', 'hybrid'])(
-    'mode=%s and api.recall never return a superseded row',
-    async (mode) => {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
-      const { newId } = await supersede(ctx, weakId, 'alpha epsilon zeta');
-      const ids = await recallIds(`q=alpha&mode=${mode}`);
-      expect(ids).toContain(newId);
-      expect(ids).not.toContain(weakId);
-      expect((await retrieve(ctx, { query: 'alpha' })).results.map((r) => r.id)).not.toContain(
-        weakId,
-      );
-    },
-  );
+  it.each(['bm25', 'hybrid'])('mode=%s and api.recall never return a superseded row', async (mode) => {
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
+    const { newId } = await supersede(ctx, weakId, 'alpha epsilon zeta');
+    const ids = await recallIds(`q=alpha&mode=${mode}`);
+    expect(ids).toContain(newId);
+    expect(ids).not.toContain(weakId);
+    expect((await retrieve(ctx, { query: 'alpha' })).results.map((r) => r.id)).not.toContain(weakId);
+  });
 
   it('strengthens every returned row and leaves last_retrieval_ids alone', async () => {
     await recallIds('q=alpha');

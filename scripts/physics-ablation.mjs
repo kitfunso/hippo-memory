@@ -112,9 +112,7 @@ function pairedBootstrapCI(diffs, iters = 5000, alpha = 0.05) {
 
 function sessionToContent(questionDate, sessionId, turns) {
   const header = `[Date: ${questionDate || 'unknown'}]\n[Session: ${sessionId}]\n\n`;
-  const body = turns
-    .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
-    .join('\n');
+  const body = turns.map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n');
   return header + body;
 }
 
@@ -372,8 +370,7 @@ function decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio) {
 }
 
 function buildResults(report) {
-  const { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, typeRows, verdict, verdictReason } =
-    report;
+  const { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, typeRows, verdict, verdictReason } = report;
   return {
     metadata: {
       ...metadata,
@@ -420,19 +417,7 @@ function buildResults(report) {
 }
 
 function renderReadme(report, results) {
-  const {
-    cl,
-    ph,
-    metadata,
-    ciMrr,
-    ciR5,
-    ciNdcg5,
-    ciLat,
-    latRatio,
-    typeRows,
-    verdict,
-    verdictReason,
-  } = report;
+  const { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, latRatio, typeRows, verdict, verdictReason } = report;
   return `# Physics Search Ablation
 
 **Hippo version:** 0.31.0
@@ -486,19 +471,7 @@ function writeReport(summary, metadata) {
   const { typeRows, ciMrr, ciR5, ciNdcg5, ciLat } = comparePasses(cl, ph);
   const latRatio = ph.meanLatencyMs / Math.max(cl.meanLatencyMs, 1e-9);
   const { verdict, verdictReason } = decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio);
-  const report = {
-    cl,
-    ph,
-    metadata,
-    ciMrr,
-    ciR5,
-    ciNdcg5,
-    ciLat,
-    latRatio,
-    typeRows,
-    verdict,
-    verdictReason,
-  };
+  const report = { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, latRatio, typeRows, verdict, verdictReason };
 
   const results = buildResults(report);
 
@@ -543,9 +516,7 @@ function loadStratifiedQuestions() {
   }
   // Trim back to NUM_QUESTIONS
   questions.length = Math.min(NUM_QUESTIONS, questions.length);
-  console.error(
-    `  ${questions.length} questions stratified across ${types.length} types (of ${all.length} total)`,
-  );
+  console.error(`  ${questions.length} questions stratified across ${types.length} types (of ${all.length} total)`);
   const typeCounts = {};
   for (const q of questions) typeCounts[q.question_type] = (typeCounts[q.question_type] || 0) + 1;
   console.error(`  type mix: ${JSON.stringify(typeCounts)}`);
@@ -578,9 +549,7 @@ function buildEvalCases(questions, sessionToMemId) {
   const cases = [];
   let dropped = 0;
   for (const q of questions) {
-    const expectedIds = (q.answer_session_ids || [])
-      .map((sid) => sessionToMemId.get(sid))
-      .filter(Boolean);
+    const expectedIds = (q.answer_session_ids || []).map((sid) => sessionToMemId.get(sid)).filter(Boolean);
     if (expectedIds.length === 0) {
       dropped++;
       continue;
@@ -595,9 +564,7 @@ function buildEvalCases(questions, sessionToMemId) {
   console.error(`Eval cases: ${cases.length} (${dropped} dropped: no matching session in store)`);
 
   if (cases.length < 50) {
-    console.error(
-      `WARNING: only ${cases.length} cases — below the N>=50 target. Consider --num-questions 75.`,
-    );
+    console.error(`WARNING: only ${cases.length} cases — below the N>=50 target. Consider --num-questions 75.`);
   }
   return cases;
 }

@@ -33,10 +33,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, fact);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('LeBron basketball points', entries, {
-      now: evalNow(),
-      budget: 10000,
-    });
+    const results = rankBm25('LeBron basketball points', entries, { now: evalNow(), budget: 10000 });
 
     expect(results.length).toBeGreaterThanOrEqual(1);
 
@@ -65,10 +62,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, mem2);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('Python TypeScript programming', entries, {
-      now: evalNow(),
-      budget: 10000,
-    });
+    const results = rankBm25('Python TypeScript programming', entries, { now: evalNow(), budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(mem1.id);
@@ -101,14 +95,11 @@ describe('extraction-aware search preference', () => {
   });
 
   it('deduplicates source when extracted fact is present', () => {
-    const raw = createMemory(
-      'The FRED API returned stale CPI data during the March refresh cycle',
-      {
-        layer: Layer.Episodic,
-        tags: ['error', 'data-pipeline'],
-        source: 'cli',
-      },
-    );
+    const raw = createMemory('The FRED API returned stale CPI data during the March refresh cycle', {
+      layer: Layer.Episodic,
+      tags: ['error', 'data-pipeline'],
+      source: 'cli',
+    });
     writeEntry(hippoDir, raw);
 
     const fact = createMemory('FRED API can return stale CPI data during refresh', {
@@ -120,10 +111,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, fact);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('FRED CPI data stale refresh', entries, {
-      now: evalNow(),
-      budget: 10000,
-    });
+    const results = rankBm25('FRED CPI data stale refresh', entries, { now: evalNow(), budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(fact.id);

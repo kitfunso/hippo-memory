@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import {
-  verifyGitHubSignature,
-  computeIdempotencyKey,
-} from '../../src/surface/connectors/github/signature.js';
+import { verifyGitHubSignature, computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
 
 const SECRET = 'shhh';
 const PREVIOUS = 'old-secret';
@@ -17,45 +14,32 @@ describe('verifyGitHubSignature', () => {
   it('accepts a valid signature with the current secret', () => {
     const body = '{"hello":"world"}';
     const sig = sign(body);
-    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(
-      true,
-    );
+    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(true);
   });
 
   it('rejects when the secret is wrong', () => {
     const body = '{"hello":"world"}';
     const sig = sign(body, 'wrong');
-    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(
-      false,
-    );
+    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });
 
   it('rejects a malformed sha256= prefix', () => {
     const body = '{}';
     const mac = createHmac('sha256', SECRET).update(body).digest('hex');
-    expect(
-      verifyGitHubSignature({ rawBody: body, signature: `sha1=${mac}`, webhookSecret: SECRET }),
-    ).toBe(false);
+    expect(verifyGitHubSignature({ rawBody: body, signature: `sha1=${mac}`, webhookSecret: SECRET })).toBe(false);
   });
 
   it('rejects on length mismatch (truncated signature)', () => {
     const body = '{}';
     const sig = sign(body).slice(0, 20); // truncated
-    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(
-      false,
-    );
+    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });
 
   it('accepts under previous-secret rotation', () => {
     const body = '{"rotation":true}';
     const sig = sign(body, PREVIOUS);
     expect(
-      verifyGitHubSignature({
-        rawBody: body,
-        signature: sig,
-        webhookSecret: SECRET,
-        previousSecret: PREVIOUS,
-      }),
+      verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET, previousSecret: PREVIOUS }),
     ).toBe(true);
   });
 
@@ -63,17 +47,13 @@ describe('verifyGitHubSignature', () => {
     const body = '{}';
     // Same length as a valid signature ('sha256=' + 64 hex chars) but with non-hex chars.
     const sig = `sha256=${'z'.repeat(64)}`;
-    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(
-      false,
-    );
+    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });
 
   it('rejects whitespace-padded signatures', () => {
     const body = '{}';
     const sig = ` ${sign(body)} `;
-    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(
-      false,
-    );
+    expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });
 });
 

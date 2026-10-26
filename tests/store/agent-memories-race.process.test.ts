@@ -89,14 +89,7 @@ async function race(roots: readonly string[]): Promise<WorkerOut[]> {
   const barrier = join(w.dir, 'barrier');
   const done = await Promise.all(
     roots.map((root, i) =>
-      runWorker([
-        distUrl('api/agent-memories.js'),
-        root,
-        w.home,
-        barrier,
-        String(i),
-        String(roots.length),
-      ]),
+      runWorker([distUrl('api/agent-memories.js'), root, w.home, barrier, String(i), String(roots.length)]),
     ),
   );
   for (const d of done) expect(d.code, d.stderr).toBe(0);
@@ -112,11 +105,7 @@ async function race(roots: readonly string[]): Promise<WorkerOut[]> {
 describe('agent memory sync: concurrent first imports', () => {
   it('four processes importing the same 40 notes into one fresh store give exactly one row per note', async () => {
     for (let i = 0; i < NOTES; i++) {
-      note(
-        projectNotes(w),
-        `n${i}.md`,
-        `Race note ${i}: build ${i + 100} needs the schema check first.`,
-      );
+      note(projectNotes(w), `n${i}.md`, `Race note ${i}: build ${i + 100} needs the schema check first.`);
     }
 
     const outs = await race(Array.from({ length: WORKERS }, () => w.local));
@@ -128,10 +117,7 @@ describe('agent memory sync: concurrent first imports', () => {
   it("four projects' sleeps racing on the user pass give one global row per Codex bullet", async () => {
     codexSummary(
       w,
-      ...Array.from(
-        { length: NOTES },
-        (_, i) => `- Preference ${i}: run check ${i + 100} before merging.`,
-      ),
+      ...Array.from({ length: NOTES }, (_, i) => `- Preference ${i}: run check ${i + 100} before merging.`),
     );
     const roots = Array.from({ length: WORKERS }, (_, i) => {
       const root = join(w.dir, `p${i}`, '.hippo');

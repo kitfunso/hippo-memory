@@ -7,11 +7,7 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  writeEntriesTogether,
-  readEntry,
-  batchWriteAndDeleteInFolder,
-} from '../_helpers/root-forms.js';
+import { writeEntriesTogether, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -32,9 +28,7 @@ afterEach(() => {
 });
 
 function seedRows(n: number, label = 'seed'): MemoryEntry[] {
-  const rows = Array.from({ length: n }, (_, i) =>
-    createMemory(`${label} row ${i} sigma${i} about the deploy`),
-  );
+  const rows = Array.from({ length: n }, (_, i) => createMemory(`${label} row ${i} sigma${i} about the deploy`));
   writeEntriesTogether(root, rows);
   return rows;
 }
@@ -65,9 +59,7 @@ function dormantRows(id: string): number {
   const db = new DatabaseSync(getHippoDbPath(root));
   try {
     // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
-    return (
-      db.prepare('SELECT COUNT(*) AS n FROM dormant_memories WHERE id = ?').get(id) as { n: number }
-    ).n;
+    return (db.prepare('SELECT COUNT(*) AS n FROM dormant_memories WHERE id = ?').get(id) as { n: number }).n;
   } finally {
     db.close();
   }
@@ -82,17 +74,10 @@ const edited = (e: MemoryEntry): MemoryEntry => ({ ...e, content: `${e.content},
 describe('batchWriteAndDelete full-text upkeep', () => {
   it('clears every replaced full-text row with at most one delete', () => {
     const rows = seedRows(60);
-    const inserts = Array.from({ length: 10 }, (_, i) =>
-      createMemory(`new batch row ${i} omega${i}`),
-    );
+    const inserts = Array.from({ length: 10 }, (_, i) => createMemory(`new batch row ${i} omega${i}`));
     const moves = rows
       .slice(50, 60)
-      .map((entry) => ({
-        entry,
-        strength: 0.01,
-        reason: 'decay' as const,
-        dormantAt: new Date().toISOString(),
-      }));
+      .map((entry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() }));
 
     const { statements } = recordStatements(() =>
       batchWriteAndDeleteInFolder(
@@ -111,9 +96,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
   it('a write whose text and tags match the stored row touches no full-text row', () => {
     const [row] = seedRows(1);
 
-    const { statements } = recordStatements(() =>
-      batchWriteAndDeleteInFolder(root, [{ ...row!, strength: 0.5 }], []),
-    );
+    const { statements } = recordStatements(() => batchWriteAndDeleteInFolder(root, [{ ...row!, strength: 0.5 }], []));
 
     expect(countMatching(statements, FTS_WRITE)).toBe(0);
   });
@@ -136,16 +119,9 @@ describe('batchWriteAndDelete full-text upkeep', () => {
 
   it('a memory queued for a dormant move twice moves once', () => {
     const [row] = seedRows(1);
-    const move = {
-      entry: row!,
-      strength: 0.01,
-      reason: 'decay' as const,
-      dormantAt: new Date().toISOString(),
-    };
+    const move = { entry: row!, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
 
-    expect(batchWriteAndDeleteInFolder(root, [], [], { dormant: [move, { ...move }] })).toEqual([
-      row!.id,
-    ]);
+    expect(batchWriteAndDeleteInFolder(root, [], [], { dormant: [move, { ...move }] })).toEqual([row!.id]);
 
     expect(readEntry(root, row!.id)).toBeNull();
     expect(dormantRows(row!.id)).toBe(1);

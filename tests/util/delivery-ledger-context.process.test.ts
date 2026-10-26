@@ -45,17 +45,10 @@ function seedFacts(target: Project): void {
 }
 
 // In process unless `spawned`: C1 pins `hippo context` once in a real child, the rest read rows and bytes only.
-async function run(
-  target: Project,
-  args: string[],
-  sessionId: string | null = 'ctx-1',
-  spawned = false,
-) {
+async function run(target: Project, args: string[], sessionId: string | null = 'ctx-1', spawned = false) {
   const env: NodeJS.ProcessEnv = { HIPPO_FAKE_NOW: FAKE_NOW };
   if (sessionId !== null) env.CLAUDE_CODE_SESSION_ID = sessionId;
-  return spawned
-    ? hippo(target, ['context', ...args], { env })
-    : hippoIn(target, ['context', ...args], { env });
+  return spawned ? hippo(target, ['context', ...args], { env }) : hippoIn(target, ['context', ...args], { env });
 }
 
 interface TraceRow {
@@ -64,10 +57,9 @@ interface TraceRow {
 }
 
 function contextTraces(target: Project): TraceRow[] {
-  return tableRows(
-    target,
-    `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`,
-  ).map((r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }));
+  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`).map(
+    (r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }),
+  );
 }
 
 function traceResultIds(target: Project, traceId: number): string[] {
@@ -92,19 +84,16 @@ describe('what one hippo context call records', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('rollback plan');
     const [e] = eventsN(p, 'ctx-1', 1);
-    expect([
-      e.event_type,
-      e.surface,
-      e.runtime,
-      e.session_state,
-      e.turn_seq,
-      e.block_state,
-      e.ledger_version,
-    ]).toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', DELIVERY_LEDGER_VERSION]);
-    expect([e.emitted_hash, e.injected_tokens]).toEqual([
-      blockHash(r.stdout),
-      estimateTokens(r.stdout),
+    expect([e.event_type, e.surface, e.runtime, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+      'context',
+      'context',
+      'unknown',
+      'env',
+      1,
+      'sent',
+      DELIVERY_LEDGER_VERSION,
     ]);
+    expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     const [trace] = contextTraces(p);
     expect([e.recall_trace_id, e.query_hash]).toEqual([trace.id, trace.query_hash]);
     expect(e.query_hash).toBe(blockHash(QUERY.join(' ')));
@@ -119,11 +108,7 @@ describe('what one hippo context call records', () => {
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
-    expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual([
-      'sent',
-      trace.id,
-      blockHash('*'),
-    ]);
+    expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual(['sent', trace.id, blockHash('*')]);
     // The pin and the three facts, all inside the default budget.
     expect(e.candidates).toHaveLength(4);
     expect(new Set(e.candidates.map((c) => c.pool))).toEqual(new Set(['strength']));
@@ -151,11 +136,7 @@ describe('what one hippo context call records', () => {
     const r = await run(p, QUERY);
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'ctx-1', 1);
-    expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual([
-      'empty',
-      null,
-      blockHash(QUERY.join(' ')),
-    ]);
+    expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual(['empty', null, blockHash(QUERY.join(' '))]);
     expect(contextTraces(p)).toEqual([]);
   });
 
@@ -182,12 +163,7 @@ describe('what one hippo context call records', () => {
   it('no session id leaves an unnumbered missing row', async () => {
     expect((await run(p, QUERY, null)).status).toBe(0);
     const [e] = eventsN(p, null, 1);
-    expect([e.event_type, e.session_state, e.turn_seq, e.block_state]).toEqual([
-      'context',
-      'missing',
-      null,
-      'sent',
-    ]);
+    expect([e.event_type, e.session_state, e.turn_seq, e.block_state]).toEqual(['context', 'missing', null, 'sent']);
   });
 
   it('a zero budget and a holdout session each record disabled and print nothing', async () => {
@@ -195,10 +171,10 @@ describe('what one hippo context call records', () => {
     writeConfig(p, { holdout: true });
     const held = await run(p, QUERY, 'ctx-held');
     expect([zero.stdout, held.stdout]).toEqual(['', '']);
-    expect([
-      eventsN(p, 'ctx-zero', 1)[0].block_state,
-      eventsN(p, 'ctx-held', 1)[0].block_state,
-    ]).toEqual(['disabled', 'disabled']);
+    expect([eventsN(p, 'ctx-zero', 1)[0].block_state, eventsN(p, 'ctx-held', 1)[0].block_state]).toEqual([
+      'disabled',
+      'disabled',
+    ]);
   });
 
   it('a hook payload with a prompt still leaves a context row with no prompt facts', async () => {
@@ -220,12 +196,7 @@ describe('what one hippo context call records', () => {
   it('the per-prompt hook writes no trace, so its row links none', async () => {
     expect((await hippoIn(p, PROMPT_HOOK, { input: promptPayload('ctx-hook') })).status).toBe(0);
     const [e] = eventsN(p, 'ctx-hook', 1);
-    expect([e.event_type, e.surface, e.recall_trace_id, e.query_hash]).toEqual([
-      'prompt-submit',
-      'hook',
-      null,
-      null,
-    ]);
+    expect([e.event_type, e.surface, e.recall_trace_id, e.query_hash]).toEqual(['prompt-submit', 'hook', null, null]);
     expect(contextTraces(p)).toEqual([]);
   });
 });
@@ -295,10 +266,7 @@ describe('the ledger changes nothing a context call prints', () => {
     }
     expect(printed[0]).toBe('');
     const traces = (target: Project) =>
-      tableRows(
-        target,
-        `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`,
-      );
+      tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
     expect(traces(off)).toHaveLength(2);
     expect(traces(p)).toEqual(traces(off));
     expect(retrievalCounts(p)).toEqual(retrievalCounts(off));

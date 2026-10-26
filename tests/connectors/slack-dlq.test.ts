@@ -14,11 +14,7 @@ describe('slack DLQ', () => {
   });
 
   it('captures raw payload + error and lists oldest-first', async () => {
-    await parkInDlq(slackDlq, sqliteStore(root), {
-      tenantId: 'default',
-      rawPayload: '{"a":1}',
-      error: 'parse fail',
-    });
+    await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"a":1}', error: 'parse fail' });
     await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: '{"b":2}',
@@ -31,11 +27,7 @@ describe('slack DLQ', () => {
   });
 
   it('markSlackDlqRetried sets retried_at', async () => {
-    await parkInDlq(slackDlq, sqliteStore(root), {
-      tenantId: 'default',
-      rawPayload: '{}',
-      error: 'boom',
-    });
+    await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'boom' });
     const [item] = await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' });
     await sqliteStore(root).connectorEvents.markDeadLetterRetried('slack', 'default', item.id);
     const [after] = await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' });
@@ -43,16 +35,8 @@ describe('slack DLQ', () => {
   });
 
   it('listDlq scopes by tenantId', async () => {
-    await parkInDlq(slackDlq, sqliteStore(root), {
-      tenantId: 'default',
-      rawPayload: '{}',
-      error: 'a',
-    });
-    await parkInDlq(slackDlq, sqliteStore(root), {
-      tenantId: 'acme',
-      rawPayload: '{}',
-      error: 'b',
-    });
+    await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'a' });
+    await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'acme', rawPayload: '{}', error: 'b' });
     expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
     expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'acme' })).toHaveLength(1);
   });

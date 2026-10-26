@@ -12,8 +12,7 @@ import { loadLatestHandoff, loadAllEntries, saveSessionHandoff } from '../_helpe
 import { initTestStore } from '../_helpers/store-template.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
-const REPLY =
-  'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
+const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
 const OTHER_REPLY = 'Split the queue worker in `queue.ts` so slow jobs no longer block quick ones.';
 const CODEX_REPLY = 'Retry now waits two seconds between attempts because the queue drains slowly.';
 const ROLLOUT = 'rollout-2026-09-29T10-00-00-0199aaaa';
@@ -44,8 +43,7 @@ beforeEach(async () => {
     'PATH',
   ]);
   env = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (!drop.has(key.toUpperCase())) env[key] = value;
+  for (const [key, value] of Object.entries(process.env)) if (!drop.has(key.toUpperCase())) env[key] = value;
   // A model CLI on PATH could answer a capture step; the digest must stand without one.
   env.PATH = (process.env.PATH ?? '')
     .split(path.delimiter)
@@ -77,11 +75,7 @@ function claudeTranscript(
   const cwd = opts.cwd ?? repo;
   const file = path.join(tmp, `${name}.jsonl`);
   const records = [
-    {
-      type: 'user',
-      cwd,
-      message: { role: 'user', content: opts.prompt ?? 'large uploads keep timing out overnight' },
-    },
+    { type: 'user', cwd, message: { role: 'user', content: opts.prompt ?? 'large uploads keep timing out overnight' } },
     {
       type: 'assistant',
       cwd,
@@ -100,16 +94,9 @@ function claudeTranscript(
     {
       type: 'user',
       cwd,
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: 'e1', content: 'ok' }],
-      },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'e1', content: 'ok' }] },
     },
-    {
-      type: 'assistant',
-      cwd,
-      message: { role: 'assistant', content: [{ type: 'text', text: opts.reply ?? REPLY }] },
-    },
+    { type: 'assistant', cwd, message: { role: 'assistant', content: [{ type: 'text', text: opts.reply ?? REPLY }] } },
   ];
   fs.writeFileSync(file, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
   return file;
@@ -125,17 +112,12 @@ const workerArgs = (sessionId: string, transcript: string): string[] => [
   log,
 ];
 
-async function claudeWorker(
-  sessionId: string,
-  transcript: string,
-  spawned = false,
-): Promise<string> {
+async function claudeWorker(sessionId: string, transcript: string, spawned = false): Promise<string> {
   expect((await hippo(workerArgs(sessionId, transcript), undefined, repo, spawned)).status).toBe(0);
   return fs.readFileSync(log, 'utf8');
 }
 
-const digests = () =>
-  loadAllEntries(path.join(repo, '.hippo'), 'default').filter(isSessionDigestRow);
+const digests = () => loadAllEntries(path.join(repo, '.hippo'), 'default').filter(isSessionDigestRow);
 
 // The slowest case runs about 2 s solo, so the 30 s process-project timeout leaves a 15x margin for a busy suite.
 
@@ -156,20 +138,17 @@ describe('the Claude Code session-end worker', () => {
     const transcript = claudeTranscript('s1');
     const run = () =>
       new Promise<number | null>((resolve) => {
-        spawn(process.execPath, [HIPPO_JS, ...workerArgs('S1', transcript)], {
-          cwd: repo,
-          env,
-          stdio: 'ignore',
-        }).on('exit', resolve);
+        spawn(process.execPath, [HIPPO_JS, ...workerArgs('S1', transcript)], { cwd: repo, env, stdio: 'ignore' }).on(
+          'exit',
+          resolve,
+        );
       });
     expect(await Promise.all([run(), run()])).toEqual([0, 0]);
     expect(digests()).toHaveLength(1);
   });
 
   it('skips a missing transcript and a session that ran outside the repo', async () => {
-    expect(await claudeWorker('S1', path.join(tmp, 'gone.jsonl'))).toContain(
-      'digest: skip: no transcript to read',
-    );
+    expect(await claudeWorker('S1', path.join(tmp, 'gone.jsonl'))).toContain('digest: skip: no transcript to read');
     expect(await claudeWorker('S1', claudeTranscript('away', { cwd: tmp }))).toContain(
       'digest: skip: the session ran outside this repo',
     );
@@ -179,9 +158,7 @@ describe('the Claude Code session-end worker', () => {
   it('a rejected digest stays rejected on the next run', async () => {
     const transcript = claudeTranscript('s1');
     await claudeWorker('S1', transcript);
-    expect(
-      (await hippo(['reject', sessionDigestId('default', 'S1'), '--reason', 'not useful'])).status,
-    ).toBe(0);
+    expect((await hippo(['reject', sessionDigestId('default', 'S1'), '--reason', 'not useful'])).status).toBe(0);
     const text = await claudeWorker('S1', transcript);
     expect(text).toContain('digest: skip: it matches a rejected value');
     expect(text).not.toContain('upload timeout');
@@ -198,28 +175,14 @@ function codexRollout(cwd: string): string[] {
   const patch = (header: string) => `*** Begin Patch\n${header}\n+x\n*** End Patch`;
   const records = [
     { type: 'session_meta', payload: { id: '0199aaaa', cwd } },
-    item({
-      type: 'message',
-      role: 'user',
-      content: [{ type: 'input_text', text: 'make the retry wait longer' }],
-    }),
-    item({
-      type: 'custom_tool_call',
-      call_id: 'c1',
-      name: 'apply_patch',
-      input: patch('*** Add File: src/retry.ts'),
-    }),
+    item({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'make the retry wait longer' }] }),
+    item({ type: 'custom_tool_call', call_id: 'c1', name: 'apply_patch', input: patch('*** Add File: src/retry.ts') }),
     item({
       type: 'custom_tool_call_output',
       call_id: 'c1',
       output: 'Success. Updated the following files:\nA src/retry.ts\n',
     }),
-    item({
-      type: 'custom_tool_call',
-      call_id: 'c2',
-      name: 'apply_patch',
-      input: patch('*** Add File: src/broken.ts'),
-    }),
+    item({ type: 'custom_tool_call', call_id: 'c2', name: 'apply_patch', input: patch('*** Add File: src/broken.ts') }),
     item({ type: 'custom_tool_call_output', call_id: 'c2', output: 'error: patch did not apply' }),
     item({
       type: 'message',
@@ -234,10 +197,7 @@ function codexRollout(cwd: string): string[] {
       content: [{ type: 'output_text', text: 'Checking the queue settings once more.' }],
     }),
   ];
-  fs.writeFileSync(
-    path.join(dir, `${ROLLOUT}.jsonl`),
-    records.map((r) => JSON.stringify(r)).join('\n') + '\n',
-  );
+  fs.writeFileSync(path.join(dir, `${ROLLOUT}.jsonl`), records.map((r) => JSON.stringify(r)).join('\n') + '\n');
   return [
     '__codex-session-end-worker',
     '--codex-home',
@@ -254,9 +214,7 @@ function codexRollout(cwd: string): string[] {
 describe('the Codex session-end worker', () => {
   it('keys the digest on the rollout name, uses the final answer and lists only patches that landed', async () => {
     expect((await hippo(codexRollout(repo))).status).toBe(0);
-    expect(fs.readFileSync(log, 'utf8')).toContain(
-      `digest: wrote 1 sentence(s), 1 file(s) for ${ROLLOUT}`,
-    );
+    expect(fs.readFileSync(log, 'utf8')).toContain(`digest: wrote 1 sentence(s), 1 file(s) for ${ROLLOUT}`);
     expect(digests().map((d) => [d.id, d.sourceSessionId, d.content])).toEqual([
       [sessionDigestId('default', ROLLOUT), ROLLOUT, `${CODEX_REPLY}\nChanged: src/retry.ts`],
     ]);
@@ -269,23 +227,14 @@ describe('a folder with only the global store', () => {
     fs.mkdirSync(path.join(folder, '.git'), { recursive: true });
     const globalRoot = path.join(tmp, 'global');
     initTestStore(globalRoot);
-    const transcript = claudeTranscript('g1', {
-      cwd: folder,
-      prompt: `${RULE}; uploads keep timing out overnight.`,
-    });
+    const transcript = claudeTranscript('g1', { cwd: folder, prompt: `${RULE}; uploads keep timing out overnight.` });
     expect((await hippo(workerArgs('G1', transcript), undefined, folder)).status).toBe(0);
-    expect(fs.readFileSync(log, 'utf8')).toContain(
-      'digest: skip: this folder has no store of its own',
-    );
+    expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
     expect((await hippo(codexRollout(folder), undefined, folder)).status).toBe(0);
-    expect(fs.readFileSync(log, 'utf8')).toContain(
-      'digest: skip: this folder has no store of its own',
-    );
+    expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
 
     const global = loadAllEntries(globalRoot, 'default');
-    expect(global.some((e) => e.content.includes(RULE) && e.originProject === 'billing')).toBe(
-      true,
-    );
+    expect(global.some((e) => e.content.includes(RULE) && e.originProject === 'billing')).toBe(true);
     expect(loadLatestHandoff(globalRoot, 'default', 'G1')).not.toBeNull();
     expect(global.filter(isSessionDigestRow)).toEqual([]);
     expect(digests()).toEqual([]);
@@ -295,10 +244,7 @@ describe('a folder with only the global store', () => {
 
 describe('context prints the handoff or the digest, never both', () => {
   const context = async (format: 'additional-context' | 'json'): Promise<string> => {
-    const result = await hippo(
-      ['context', '--pinned-only', '--include-recent', '5', '--format', format],
-      '',
-    );
+    const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], '');
     expect(result.status).toBe(0);
     return result.stdout;
   };
@@ -315,9 +261,7 @@ describe('context prints the handoff or the digest, never both', () => {
     expect(text).not.toContain('Changed:');
     const json = JSON.parse(await context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
-    expect(json.memories.map((m: { id: string }) => m.id)).not.toContain(
-      sessionDigestId('default', 'S1'),
-    );
+    expect(json.memories.map((m: { id: string }) => m.id)).not.toContain(sessionDigestId('default', 'S1'));
   });
 
   it("shows an earlier session's digest under a later session's handoff", async () => {
@@ -333,24 +277,13 @@ describe('context prints the handoff or the digest, never both', () => {
     const seen = [];
     for (const budget of [40, 60, 80, 100, 150, 200, 1500]) {
       const result = await hippo(
-        [
-          'context',
-          '--pinned-only',
-          '--include-recent',
-          '5',
-          '--format',
-          'json',
-          '--budget',
-          String(budget),
-        ],
+        ['context', '--pinned-only', '--include-recent', '5', '--format', 'json', '--budget', String(budget)],
         '',
       );
       expect(result.status).toBe(0);
       // Nothing fits the smallest budgets, and then context prints nothing at all.
       const json = result.stdout.trim() ? JSON.parse(result.stdout) : { memories: [] };
-      const digest = json.memories.some(
-        (m: { id: string }) => m.id === sessionDigestId('default', 'S1'),
-      );
+      const digest = json.memories.some((m: { id: string }) => m.id === sessionDigestId('default', 'S1'));
       seen.push({ budget, handoff: json.sessionHandoff?.sessionId === 'S1', digest });
     }
     expect(seen.filter((s) => s.handoff && s.digest)).toEqual([]);

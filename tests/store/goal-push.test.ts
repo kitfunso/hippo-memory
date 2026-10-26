@@ -82,18 +82,12 @@ describe('pushGoal + activeGoalsOf', () => {
         goalName: 'child',
         parentGoalId: parent.id,
       }),
-    ).rejects.toThrow(
-      new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`),
-    );
+    ).rejects.toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 
   it('refuses a parent goal sitting in another session and writes no new row', async () => {
-    const parent = await pushGoal(root, {
-      sessionId: 's2',
-      tenantId: 'default',
-      goalName: 'parent',
-    });
+    const parent = await pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'parent' });
     await expect(
       pushGoal(root, {
         sessionId: 's1',
@@ -101,9 +95,7 @@ describe('pushGoal + activeGoalsOf', () => {
         goalName: 'child',
         parentGoalId: parent.id,
       }),
-    ).rejects.toThrow(
-      new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`),
-    );
+    ).rejects.toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 });

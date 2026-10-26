@@ -39,10 +39,7 @@ describe('hippo watch (built CLI, no server)', () => {
 
   /** A command that fails the same way in every shell, and one that succeeds. */
   function scripts(s: Store): void {
-    writeFileSync(
-      join(s.cwd, 'fail.js'),
-      `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`,
-    );
+    writeFileSync(join(s.cwd, 'fail.js'), `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`);
     writeFileSync(join(s.cwd, 'ok.js'), "process.stdout.write('done\\n');\n");
   }
 
@@ -92,11 +89,7 @@ describe('hippo watch (built CLI, no server)', () => {
   it('a command that succeeds stores nothing', async () => {
     const s = new Store({ spawned: true });
     scripts(s);
-    expect(await s.run('watch', 'node', 'ok.js')).toEqual({
-      status: 0,
-      stdout: 'done\n',
-      stderr: '',
-    });
+    expect(await s.run('watch', 'node', 'ok.js')).toEqual({ status: 0, stdout: 'done\n', stderr: '' });
     expect([s.rows(), s.audit(), s.counters()['total_remembered']]).toEqual([[], [], '0']);
   });
 
@@ -161,17 +154,12 @@ describe('hippo audit --fix (built CLI, no server)', () => {
     expect(first.status).toBe(0);
     expect(first.stdout).toMatch(/^Audited 5 memories: 1 clean, 4 issues\n/);
     for (const line of issues(ids)) expect(first.stdout).toContain(line);
-    expect(first.stdout).toMatch(
-      /Removed 2 error-severity memories\.\n2 warnings remain \(review manually\)\.\n$/,
-    );
+    expect(first.stdout).toMatch(/Removed 2 error-severity memories\.\n2 warnings remain \(review manually\)\.\n$/);
     expect(second.stdout).toMatch(/^Audited 3 memories: 1 clean, 2 issues\n/);
     expect(second.stdout).not.toContain('[ERR]');
     expect(second.stdout).toMatch(/No error-severity issues\. Warnings require manual review\.\n$/);
     expect(contents(s)).toEqual([CLEAN, 'to fix the retry loop', 'pinned ok']);
-    expect(s.audit()).toEqual([
-      `default cli forget ${ids.short}`,
-      `default cli forget ${ids.noise}`,
-    ]);
+    expect(s.audit()).toEqual([`default cli forget ${ids.short}`, `default cli forget ${ids.noise}`]);
     expect(s.auditMeta()).toEqual([
       { reason: 'audit --fix: too short (< 10 chars)' },
       { reason: 'audit --fix: release/commit noise, not a useful memory' },
@@ -243,24 +231,14 @@ function seedForSleep(s: Store): void {
     { originProject: 'web' },
   );
   s.seedAged('mem_sleep_short', '2026-01-22T00:00:00.000Z', 'too small');
-  s.seedAged(
-    'mem_sleep_noise',
-    '2026-01-23T00:00:00.000Z',
-    'Merge branch feature/billing into main',
-  );
+  s.seedAged('mem_sleep_noise', '2026-01-23T00:00:00.000Z', 'Merge branch feature/billing into main');
   s.seedAged('mem_sleep_pinned', '2026-01-24T00:00:00.000Z', 'pinned ok', { pinned: true });
   s.seedAged('mem_sleep_warn', '2026-01-25T00:00:00.000Z', 'to fix the retry loop');
   s.settle();
 }
 
 describe('hippo sleep (built CLI, no server)', () => {
-  const SLEPT = {
-    consolidationCount: 0,
-    dedupCount: 0,
-    noShare: true,
-    partial: false,
-    triggeredByTenant: 'default',
-  };
+  const SLEPT = { consolidationCount: 0, dedupCount: 0, noShare: true, partial: false, triggeredByTenant: 'default' };
 
   it('removes audit errors on a store with two project names, and a second sleep finds none', async () => {
     const s = new Store({ spawned: true });
@@ -304,18 +282,12 @@ describe('hippo sleep (built CLI, no server)', () => {
     );
     expect(s.rows()).toHaveLength(6);
     expect(s.audit()).toEqual(['__host__ cli consolidate']);
-    expect(s.auditMeta()).toEqual([
-      { ...SLEPT, auditDeletedCount: 2, ambientTotal: 0, dryRun: true },
-    ]);
+    expect(s.auditMeta()).toEqual([{ ...SLEPT, auditDeletedCount: 2, ambientTotal: 0, dryRun: true }]);
   });
 
   it('a folder with no store', async () => {
     const s = new Store({ init: false });
-    expect(await s.run('sleep', '--no-learn', '--no-share')).toEqual({
-      status: 1,
-      stdout: '',
-      stderr: NO_STORE,
-    });
+    expect(await s.run('sleep', '--no-learn', '--no-share')).toEqual({ status: 1, stdout: '', stderr: NO_STORE });
     expect(s.storeMade()).toBe(false);
   });
 });
@@ -326,17 +298,9 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     (text: string, status = 200): typeof fetch =>
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const refine = (
-    s: Store,
-    fetcher: typeof fetch,
-    opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {},
-  ) =>
+  const refine = (s: Store, fetcher: typeof fetch, opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {}) =>
     s.call(() =>
-      refineStore(s.root, {
-        llm: anthropicLlm({ apiKey: 'no-key', fetcher }),
-        tenantId: 'default',
-        ...opts,
-      }),
+      refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
     );
 
   /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */
@@ -357,9 +321,7 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     const s = new Store();
     const { merged, refined } = seedForRefine(s);
     const first = await refine(s, answering('Failed charges are retried three times.'));
-    const all = await refine(s, answering('Each charge is retried, then a receipt is sent.'), {
-      all: true,
-    });
+    const all = await refine(s, answering('Each charge is retried, then a receipt is sent.'), { all: true });
     expect(first.result).toEqual({
       scanned: 2,
       refined: 1,
@@ -382,10 +344,7 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
       ['Each charge is retried, then a receipt is sent.', ['llm-refined', 'billing']],
       [CLEAN, []],
     ]);
-    expect(s.audit()).toEqual([
-      `default cli remember ${merged}`,
-      `default cli remember ${refined}`,
-    ]);
+    expect(s.audit()).toEqual([`default cli remember ${merged}`, `default cli remember ${refined}`]);
   });
 
   it('a failed model call leaves the row as it was', async () => {
@@ -410,9 +369,7 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
   it('dryRun writes nothing', async () => {
     const s = new Store();
     const { merged, refined, seeded } = seedForRefine(s);
-    const r = await refine(s, answering('Failed charges are retried three times.'), {
-      dryRun: true,
-    });
+    const r = await refine(s, answering('Failed charges are retried three times.'), { dryRun: true });
     expect(r.result).toMatchObject({
       refined: 1,
       details: [
@@ -427,11 +384,8 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
 
 describe('hippo decide --supersedes (built CLI, no server)', () => {
   const decisions = (s: Store): string[] =>
-    query(s.root, 'SELECT id, memory_id, status, superseded_by FROM decisions ORDER BY id').map(
-      (d) =>
-        [d['id'], d['memory_id'], d['status'], d['superseded_by']]
-          .filter((p) => p != null)
-          .join(' '),
+    query(s.root, 'SELECT id, memory_id, status, superseded_by FROM decisions ORDER BY id').map((d) =>
+      [d['id'], d['memory_id'], d['status'], d['superseded_by']].filter((p) => p != null).join(' '),
     );
   const recorded = (n: number, memory: string, supersedes?: string): string =>
     `Decision recorded: #${n}\n  memory: ${memory}\n${supersedes ? `  supersedes memory: ${supersedes}\n` : ''}`;
@@ -440,12 +394,7 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
 
   it('weakens the memory of an earlier decision, and again on a second supersede', async () => {
     const s = new Store({ spawned: true });
-    const first = await s.run(
-      'decide',
-      'use postgres for the ledger',
-      '--context',
-      'it handles the join load',
-    );
+    const first = await s.run('decide', 'use postgres for the ledger', '--context', 'it handles the join load');
     const oldId = s.lastId();
     const second = await s.run('decide', 'use sqlite for the ledger', '--supersedes', oldId);
     const third = await s.run('decide', 'use duckdb for the ledger', '--supersedes', oldId);
@@ -463,24 +412,10 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
         half_life_days: 91,
         tags: [...DECISION_TAGS, 'superseded'],
       },
-      {
-        content: 'use sqlite for the ledger',
-        confidence: 'verified',
-        half_life_days: 365,
-        tags: DECISION_TAGS,
-      },
-      {
-        content: 'use duckdb for the ledger',
-        confidence: 'verified',
-        half_life_days: 365,
-        tags: DECISION_TAGS,
-      },
+      { content: 'use sqlite for the ledger', confidence: 'verified', half_life_days: 365, tags: DECISION_TAGS },
+      { content: 'use duckdb for the ledger', confidence: 'verified', half_life_days: 365, tags: DECISION_TAGS },
     ]);
-    expect(decisions(s)).toEqual([
-      `1 ${oldId} superseded 2`,
-      `2 ${sqlite} active`,
-      `3 ${duckdb} active`,
-    ]);
+    expect(decisions(s)).toEqual([`1 ${oldId} superseded 2`, `2 ${sqlite} active`, `3 ${duckdb} active`]);
     expect(s.audit()).toEqual([
       'default cli decision_create 1',
       `default cli remember ${oldId}`,
@@ -498,33 +433,12 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     const s = new Store();
     const oldId = s.seed(CLEAN, { tags: ['billing'] });
     s.settle();
-    const r = await s.run(
-      'decide',
-      'the billing service retries a failed charge five times',
-      '--supersedes',
-      oldId,
-    );
+    const r = await s.run('decide', 'the billing service retries a failed charge five times', '--supersedes', oldId);
     const newId = s.lastId();
-    expect(r).toEqual({
-      status: 0,
-      stdout: recorded(1, newId, `${oldId} ${WEAKENED_ONLY}`),
-      stderr: '',
-    });
+    expect(r).toEqual({ status: 0, stdout: recorded(1, newId, `${oldId} ${WEAKENED_ONLY}`), stderr: '' });
     expect(s.rows()).toMatchObject([
-      {
-        id: oldId,
-        confidence: 'stale',
-        half_life_days: 182,
-        tags: ['billing', 'superseded'],
-        source: 'cli',
-      },
-      {
-        id: newId,
-        layer: 'semantic',
-        source: 'decision',
-        confidence: 'verified',
-        tags: DECISION_TAGS,
-      },
+      { id: oldId, confidence: 'stale', half_life_days: 182, tags: ['billing', 'superseded'], source: 'cli' },
+      { id: newId, layer: 'semantic', source: 'decision', confidence: 'verified', tags: DECISION_TAGS },
     ]);
     expect(decisions(s)).toEqual([`1 ${newId} active`]);
     expect(s.audit()).toEqual([
@@ -536,9 +450,7 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
 
   it('an unknown memory id, and --supersedes with no id', async () => {
     const s = new Store();
-    expect(
-      await s.run('decide', 'use sqlite for the ledger', '--supersedes', 'mem_does_not_exist'),
-    ).toEqual({
+    expect(await s.run('decide', 'use sqlite for the ledger', '--supersedes', 'mem_does_not_exist')).toEqual({
       status: 1,
       stdout: '',
       stderr: 'Memory mem_does_not_exist not found.\n',
@@ -546,8 +458,7 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     expect(await s.run('decide', 'use sqlite for the ledger', '--supersedes')).toEqual({
       status: 1,
       stdout: '',
-      stderr:
-        '--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.\n',
+      stderr: '--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.\n',
     });
     expect([s.rows(), decisions(s), s.audit()]).toEqual([[], [], []]);
   });
@@ -562,24 +473,14 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
       );
     }
     s.settle();
-    const r = await s.run(
-      'decide',
-      'the billing service retries a failed charge five times',
-      '--supersedes',
-      oldId,
-    );
+    const r = await s.run('decide', 'the billing service retries a failed charge five times', '--supersedes', oldId);
     const newId = s.lastId();
     expect(r).toEqual({
       status: 0,
       stdout: recorded(1, newId, `${oldId} ${WEAKENED_ONLY}`),
       stderr: `  warning: decision recorded and superseded, but failed to weaken the prior memory ${oldId}: refused\n`,
     });
-    expect(s.rows()[0]).toMatchObject({
-      id: oldId,
-      confidence: 'verified',
-      half_life_days: 365,
-      tags: ['billing'],
-    });
+    expect(s.rows()[0]).toMatchObject({ id: oldId, confidence: 'verified', half_life_days: 365, tags: ['billing'] });
     expect(decisions(s)).toEqual([`1 ${newId} active`]);
     expect(s.audit()).toEqual(['default cli decision_create 1', `default cli remember ${newId}`]);
   });
@@ -589,11 +490,7 @@ describe('hippo projects (built CLI, no server)', () => {
   it('lists two project names, and previews a merge and a repair', async () => {
     const s = new Store({ spawned: true });
     s.seed(CLEAN);
-    s.seed(
-      'the checkout page caches the cart total for sixty seconds',
-      {},
-      { originProject: 'web' },
-    );
+    s.seed('the checkout page caches the cart total for sixty seconds', {}, { originProject: 'web' });
     s.settle();
     const store = '<tmp>/acme/billing/ledger/app/.hippo';
     expect(await s.run('projects')).toEqual({
@@ -614,21 +511,16 @@ describe('hippo projects (built CLI, no server)', () => {
     });
     const merge = await s.run('projects', 'merge', 'web', 'app');
     expect(merge.stdout).toMatch(/^Dry run: would merge web into app:\n/);
-    expect(merge.stdout).toContain(
-      '\n  1 memory re-tagged, plus 0 dormant and 0 compaction records\n',
-    );
+    expect(merge.stdout).toContain('\n  1 memory re-tagged, plus 0 dormant and 0 compaction records\n');
     const repair = await s.run('projects', 'repair');
-    expect(repair.stdout).toMatch(
-      new RegExp(`^Dry run: would repair ${store.replaceAll('.', '\\.')}:\n`),
-    );
+    expect(repair.stdout).toMatch(new RegExp(`^Dry run: would repair ${store.replaceAll('.', '\\.')}:\n`));
     for (const preview of [merge, repair]) {
       expect(preview.stdout).toMatch(/\nNothing written\. Add --apply to run it\.\n$/);
     }
     expect(await s.run('projects', 'rename')).toEqual({
       status: 1,
       stdout: '',
-      stderr:
-        'Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]\n',
+      stderr: 'Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]\n',
     });
     expect(s.rows().map((r) => r['origin_project'])).toEqual(['app', 'web']);
     expect(s.audit()).toEqual([]);
@@ -674,12 +566,7 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
       content: [{ type: 'text', text: 'done' }],
       usage: { input_tokens: 10, output_tokens: 2 },
     };
-    return JSON.stringify({
-      type: 'assistant',
-      isSidechain: false,
-      timestamp: iso(NOON + n * 10_000),
-      message,
-    });
+    return JSON.stringify({ type: 'assistant', isSidechain: false, timestamp: iso(NOON + n * 10_000), message });
   }
 
   /** Each inject and reread ledger row of one store as `surface event items tokens`, all under SESSION. */
@@ -693,9 +580,7 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
   }
 
   /** Ends a session of three model calls, and answers the run, the worker's re-read log lines and both stores' ledgers. */
-  async function endSession(
-    s: Store,
-  ): Promise<{ ran: Ran; rereadLog: string[]; local: string[]; global: string[] }> {
+  async function endSession(s: Store): Promise<{ ran: Ran; rereadLog: string[]; local: string[]; global: string[] }> {
     const transcript = join(s.base, `${SESSION}.jsonl`);
     writeFileSync(transcript, `${[1, 2, 3].map(callLine).join('\n')}\n`);
     const log = join(s.base, 'session-end.log');
@@ -717,8 +602,7 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     return { ran, rereadLog, local: ledger(s.root), global: ledger(s.home) };
   }
 
-  const rereadLine = (tokens: number): string =>
-    `re-read ${tokens} tokens over 3 model calls for session ${SESSION}`;
+  const rereadLine = (tokens: number): string => `re-read ${tokens} tokens over 3 model calls for session ${SESSION}`;
 
   // The process pin for session end: two spawned runs over a project store and the global store.
   it('books the project store and the global store, and a second pass leaves the same rows', async () => {

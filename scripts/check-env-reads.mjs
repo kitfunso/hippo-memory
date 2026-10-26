@@ -17,10 +17,7 @@ export const ENV_READERS = [
   [/^(?:cli\.ts$|surface\/cli\/)/, 'the CLI composition root'],
   [/^surface\/server\//, 'the HTTP server composition root'],
   [/^surface\/mcp\//, 'the stdio MCP composition root'],
-  [
-    /^(?:domain\/hooks|surface\/hooks-install)\//,
-    'the hook entry points and installers the CLI root runs',
-  ],
+  [/^(?:domain\/hooks|surface\/hooks-install)\//, 'the hook entry points and installers the CLI root runs'],
   [/^domain\/rerankers\//, 'adapters: their own endpoint, key, model and timeout'],
   [
     /^surface\/connectors\/[^/]+\/webhook\.ts$/,
@@ -84,12 +81,8 @@ export function findEnvImports(srcDir, readers = ENV_READERS) {
   const root = resolve(srcDir);
   return listSourceFiles(root)
     .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
-    .filter(
-      ([file]) => file !== 'base/util/env.ts' && !readers.some(([pattern]) => pattern.test(file)),
-    )
-    .flatMap(([file, p]) =>
-      envImportLines(file, readFileSync(p, 'utf8')).map((line) => ({ file, line })),
-    )
+    .filter(([file]) => file !== 'base/util/env.ts' && !readers.some(([pattern]) => pattern.test(file)))
+    .flatMap(([file, p]) => envImportLines(file, readFileSync(p, 'utf8')).map((line) => ({ file, line })))
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
 

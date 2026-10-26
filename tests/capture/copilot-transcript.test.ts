@@ -6,11 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { collectSessionTurns } from '../../src/surface/capture/transcript.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { copilotTranscriptFor, copilotTurn } from '../../src/surface/capture/copilot-transcript.js';
-import {
-  copilotEventsJsonl,
-  copilotEventsTail,
-  writeCopilotSessionLog,
-} from '../_helpers/copilot-hooks.js';
+import { copilotEventsJsonl, copilotEventsTail, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -56,29 +52,18 @@ describe('a Copilot events.jsonl tail with no first line', () => {
   });
 
   it('reads the whole log the same way', () => {
-    expect(collectSessionTurns(copilotEventsJsonl())).toEqual(
-      collectSessionTurns(copilotEventsTail()),
-    );
+    expect(collectSessionTurns(copilotEventsJsonl())).toEqual(collectSessionTurns(copilotEventsTail()));
   });
 });
 
 describe('copilotTurn', () => {
   it('skips a sub-agent line by agentId or by the deprecated parentToolCallId', () => {
-    expect(
-      copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: 'explore-1' }),
-    ).toBeNull();
-    expect(
-      copilotTurn({
-        type: 'assistant.message',
-        data: { content: 'x', parentToolCallId: 'call_2' },
-      }),
-    ).toBeNull();
-    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: '' })).toEqual(
-      {
-        role: 'assistant',
-        text: 'x',
-      },
-    );
+    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: 'explore-1' })).toBeNull();
+    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x', parentToolCallId: 'call_2' } })).toBeNull();
+    expect(copilotTurn({ type: 'assistant.message', data: { content: 'x' }, agentId: '' })).toEqual({
+      role: 'assistant',
+      text: 'x',
+    });
   });
 
   it('skips a user message a skill, another agent or autopilot wrote', () => {
@@ -89,12 +74,10 @@ describe('copilotTurn', () => {
     ]) {
       expect(copilotTurn({ type: 'user.message', data })).toBeNull();
     }
-    expect(copilotTurn({ type: 'user.message', data: { content: ' x ', source: 'user' } })).toEqual(
-      {
-        role: 'user',
-        text: 'x',
-      },
-    );
+    expect(copilotTurn({ type: 'user.message', data: { content: ' x ', source: 'user' } })).toEqual({
+      role: 'user',
+      text: 'x',
+    });
   });
 
   it('gives nothing for other event types, blank content or a missing data object', () => {
@@ -107,18 +90,13 @@ describe('copilotTurn', () => {
 
 describe('copilotTranscriptFor', () => {
   it('finds <COPILOT_HOME>/session-state/<id>/events.jsonl', () => {
-    const file = writeCopilotSessionLog(
-      path.join(dir, '.copilot'),
-      'copilot-sess-1',
-      copilotEventsJsonl(),
-    );
+    const file = writeCopilotSessionLog(path.join(dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
     expect(copilotTranscriptFor('copilot-sess-1')).toBe(file);
   });
 
   it('gives null for a missing log or an id that could leave session-state', () => {
     writeCopilotSessionLog(path.join(dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
     expect(copilotTranscriptFor('other-session')).toBeNull();
-    for (const id of ['..', '../copilot-sess-1', 'a/b', 'a\\b', ''])
-      expect(copilotTranscriptFor(id)).toBeNull();
+    for (const id of ['..', '../copilot-sess-1', 'a/b', 'a\\b', '']) expect(copilotTranscriptFor(id)).toBeNull();
   });
 });

@@ -22,11 +22,7 @@ import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import {
-  ASSIGNED_SECRET_LINES,
-  ORDINARY_CONFIG_LINES,
-  runtimeJoin,
-} from '../_helpers/secret-shapes.js';
+import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
@@ -41,13 +37,7 @@ const NPM = 'npm_' + 'A1'.repeat(18);
 const HF = 'hf_' + 'Ab'.repeat(17);
 const GLPAT = 'glpat-' + 'A1_-'.repeat(5);
 const YA29 = 'ya29.' + 'a0Af'.repeat(10);
-const SLACK_HOOK =
-  'https://hooks.slack.com/services/T' +
-  'A'.repeat(8) +
-  '/B' +
-  'B'.repeat(8) +
-  '/' +
-  'C'.repeat(24);
+const SLACK_HOOK = 'https://hooks.slack.com/services/T' + 'A'.repeat(8) + '/B' + 'B'.repeat(8) + '/' + 'C'.repeat(24);
 const PROVIDER_TOKENS = [HIPPO_KEY, NPM, HF, GLPAT, YA29, SLACK_HOOK];
 
 describe('detectSecret patterns', () => {
@@ -61,9 +51,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
     expect(flagged('the prod API key is sk-abcdefghij0123456789xyz')).toBe(true);
     // The shape from the 2026-06-30 incident (synthetic value - never a real key).
-    expect(flagged('project-i prod API key for the personal account: sk_vendor_1a2b3c4d')).toBe(
-      true,
-    );
+    expect(flagged('project-i prod API key for the personal account: sk_vendor_1a2b3c4d')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
 
@@ -83,9 +71,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('prefer parameterized queries; never concatenate SQL')).toBe(false);
     expect(flagged('password rotation policy: every 90 days, no reuse')).toBe(false);
     expect(flagged('sk-hyphenated-words-in-prose read fine in plain writing')).toBe(false);
-    expect(
-      flagged('npm_config_cache and hf_hub_download are names; the hk_ prefix marks hippo keys'),
-    ).toBe(false);
+    expect(flagged('npm_config_cache and hf_hub_download are names; the hk_ prefix marks hippo keys')).toBe(false);
   });
 
   it('does not flag code snippets or prose in assignment position', () => {
@@ -93,9 +79,7 @@ describe('detectSecret patterns', () => {
     // ordinary code-lesson memories would silently vanish from ambient
     // context everywhere. The value must now LOOK like a credential
     // (token charset + at least one digit).
-    expect(flagged('lesson: token = estimateTokens(entry.content) counts words not chars')).toBe(
-      false,
-    );
+    expect(flagged('lesson: token = estimateTokens(entry.content) counts words not chars')).toBe(false);
     expect(flagged('the secret: incremental-rollout worked well for the beta')).toBe(false);
     // Credential-shaped values still flag.
     expect(flagged('password: MyDogsName2024x')).toBe(true);
@@ -103,10 +87,7 @@ describe('detectSecret patterns', () => {
   });
 
   it.each([
-    [
-      'a prefixed password',
-      runtimeJoin('run DB_PASSWORD=', 'Hunter2Hunter2', ' before the migration'),
-    ],
+    ['a prefixed password', runtimeJoin('run DB_PASSWORD=', 'Hunter2Hunter2', ' before the migration')],
     ['a prefixed token', runtimeJoin('set MY_API_TOKEN=', 'abc123def456ghi789')],
     ['a prefixed secret after a colon', runtimeJoin('CLIENT_SECRET: ', '4f9a8b7c6d5e4f3a2b1c')],
     [
@@ -117,10 +98,7 @@ describe('detectSecret patterns', () => {
       'a lower-case prefixed name',
       runtimeJoin('aws_secret_access_key=', 'wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY'),
     ],
-    [
-      'a URL password',
-      runtimeJoin('DATABASE_URL=postgres://admin:', 'S3cretPw9', '@localhost:5432/app'),
-    ],
+    ['a URL password', runtimeJoin('DATABASE_URL=postgres://admin:', 'S3cretPw9', '@localhost:5432/app')],
     ['a passwd name', runtimeJoin('export SMTP_PASSWD=', 'Tr0ub4dor3x99')],
     ['a private key name', runtimeJoin('PRIVATE_KEY=', '9f8e7d6c5b4a3210ffee')],
     ['an access key name', runtimeJoin('S3_ACCESS_KEY=', 'AKQ7Z2X9W4V1U8T3')],
@@ -131,20 +109,14 @@ describe('detectSecret patterns', () => {
   it.each([
     ['a name that only starts with a keyword', 'tokenizer: bert-base-uncased-v2 for the eval'],
     ['a counter named after tokens', 'set max_tokens=4096 for the long runs'],
-    [
-      'a URL template with no real password',
-      'connection strings look like postgres://user:password@host:5432/db',
-    ],
+    ['a URL template with no real password', 'connection strings look like postgres://user:password@host:5432/db'],
     ['an ssh remote with a user and no password', 'clone ssh://git@github.com:22/acme/repo2.git'],
   ])('does not flag %s', (_name, content) => {
     expect(flagged(content)).toBe(false);
   });
 
   it.each(ASSIGNED_SECRET_LINES)('flags the assigned secret in %s', (content) => {
-    expect(detectSecret({ content, tags: [] })).toEqual({
-      flagged: true,
-      reason: 'pattern:secret-assignment',
-    });
+    expect(detectSecret({ content, tags: [] })).toEqual({ flagged: true, reason: 'pattern:secret-assignment' });
   });
 
   it.each(ORDINARY_CONFIG_LINES)('does not flag the ordinary config %s', (content) => {
@@ -169,8 +141,7 @@ describe('redactSecretsStrict', () => {
   const SLACK = runtimeJoin('xoxb-', '1234567890abcdef');
   const STRIPE = runtimeJoin('sk_live_', 'A1b2C3d4E5f6G7h8');
   const GOOGLE = 'AIza' + 'A'.repeat(35);
-  const PEM =
-    '-----BEGIN RSA PRIVATE KEY-----\n' + 'A'.repeat(64) + '\n-----END RSA PRIVATE KEY-----';
+  const PEM = '-----BEGIN RSA PRIVATE KEY-----\n' + 'A'.repeat(64) + '\n-----END RSA PRIVATE KEY-----';
   const SK_NO_KEYWORD = 'sk-' + 'A'.repeat(24);
   const SK_X_NO_KEYWORD = runtimeJoin('sk_', 'vendor_deadbeef123456');
   const ASSIGNMENT = runtimeJoin('api_key=', '9f8e7d6c5b4a3210', 'ffff');
@@ -202,12 +173,8 @@ describe('redactSecretsStrict', () => {
   });
 
   it('redactSecretsStrict removes a Basic auth credential, as a header or quoted in JSON', () => {
-    expect(redactSecretsStrict(`Authorization: Basic ${BASIC_CREDENTIAL}`)).not.toContain(
-      BASIC_CREDENTIAL,
-    );
-    expect(redactSecretsStrict(`{"authorization": "Basic ${BASIC_CREDENTIAL}"}`)).not.toContain(
-      BASIC_CREDENTIAL,
-    );
+    expect(redactSecretsStrict(`Authorization: Basic ${BASIC_CREDENTIAL}`)).not.toContain(BASIC_CREDENTIAL);
+    expect(redactSecretsStrict(`{"authorization": "Basic ${BASIC_CREDENTIAL}"}`)).not.toContain(BASIC_CREDENTIAL);
   });
 
   it('ordinary prose survives', () => {
@@ -231,9 +198,7 @@ describe('redactSecretsStrict', () => {
   it.each(['eyJ-', 'token='])(
     'redactSecretsStrict scrubs a crafted 1 MiB run of %s before the watchdog fires',
     (unit) => {
-      expect(() =>
-        scanWithinWatchdog(redactSecretsStrict, fillTo(unit, ONE_MIB), WATCHDOG_MS),
-      ).not.toThrow();
+      expect(() => scanWithinWatchdog(redactSecretsStrict, fillTo(unit, ONE_MIB), WATCHDOG_MS)).not.toThrow();
     },
   );
 });
@@ -260,11 +225,7 @@ describe('producer + sync vetoes (real stores)', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
     await expect(
-      shareMemory(...sharingStores(projA), row.id, {
-        embed: TEST_RUN,
-        tenantId: 'default',
-        force: true,
-      }),
+      shareMemory(...sharingStores(projA), row.id, { embed: TEST_RUN, tenantId: 'default', force: true }),
     ).rejects.toThrow(/secret/i);
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
@@ -273,11 +234,7 @@ describe('producer + sync vetoes (real stores)', () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
-    const shared = await autoShare(...sharingStores(projA), {
-      embed: TEST_RUN,
-      tenantId: ALL_TENANTS,
-      minScore: 0.6,
-    });
+    const shared = await autoShare(...sharingStores(projA), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
@@ -339,15 +296,10 @@ describe('producer + sync vetoes (real stores)', () => {
 
   it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', async () => {
     writeEntry(globalStore, { ...createMemory(CLEAN_ROW), originProject: '' });
-    writeEntry(globalStore, {
-      ...createMemory('project b routing table quirk'),
-      originProject: 'proj-b',
-    });
+    writeEntry(globalStore, { ...createMemory('project b routing table quirk'), originProject: 'proj-b' });
     writeEntry(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
 
-    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), {
-      embed: TEST_RUN,
-    });
+    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), { embed: TEST_RUN });
     expect(count).toBe(1);
     const local = loadAllEntries(projA, 'default');
     expect(local.map((e) => e.content)).toEqual([CLEAN_ROW]);
@@ -362,10 +314,7 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {
-    writeEntry(globalStore, {
-      ...createMemory(SECRET_ROW, { pinned: true }),
-      originProject: 'proj-b',
-    });
+    writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), originProject: 'proj-b' });
     writeEntry(globalStore, {
       ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }),
       originProject: '',
@@ -375,17 +324,10 @@ describe('producer + sync vetoes (real stores)', () => {
     const base = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(base.entries).toHaveLength(0);
 
-    const cross = await contextGet(ctx, {
-      pinnedOnly: true,
-      currentProject: 'proj-a',
-      crossProject: true,
-    });
+    const cross = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a', crossProject: true });
     expect(cross.entries).toHaveLength(0);
 
-    fs.writeFileSync(
-      path.join(projA, 'config.json'),
-      JSON.stringify({ contextProjectIsolation: false }),
-    );
+    fs.writeFileSync(path.join(projA, 'config.json'), JSON.stringify({ contextProjectIsolation: false }));
     const legacyMode = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(legacyMode.entries).toHaveLength(0);
 

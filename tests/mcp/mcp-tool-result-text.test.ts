@@ -2,11 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
@@ -36,10 +32,7 @@ function text(res: McpResponse | null): string {
 
 async function call(name: string, args: Wire = {}): Promise<string> {
   return text(
-    await handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      ctx,
-    ),
+    await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx),
   );
 }
 
@@ -59,11 +52,7 @@ function masked(s: string): string {
 
 beforeEach(() => {
   ({ base: home, root } = makeStore('mcp-tool-text'));
-  writeFileSync(
-    join(root, 'config.json'),
-    JSON.stringify({ autoSleep: { enabled: false } }),
-    'utf8',
-  );
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: false } }), 'utf8');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
@@ -91,32 +80,20 @@ afterEach(() => {
 
 describe('MCP tool reply text', () => {
   it('hippo_remember refuses empty text and reports the half-life and tags of what it stores', async () => {
-    expect(masked(await call('hippo_remember', { text: '' }))).toMatchInlineSnapshot(
-      `"No text provided."`,
-    );
+    expect(masked(await call('hippo_remember', { text: '' }))).toMatchInlineSnapshot(`"No text provided."`);
     expect(
       masked(
-        await call('hippo_remember', {
-          text: 'the staging lock table blocks deploys',
-          error: true,
-          tag: 'deploy',
-        }),
+        await call('hippo_remember', { text: 'the staging lock table blocks deploys', error: true, tag: 'deploy' }),
       ),
     ).toMatchInlineSnapshot(`"Remembered [<id>] (half-life: 730d, tags: error, deploy)"`);
     expect(
-      masked(
-        await call('hippo_remember', { text: 'release notes are folded from changelog fragments' }),
-      ),
+      masked(await call('hippo_remember', { text: 'release notes are folded from changelog fragments' })),
     ).toMatchInlineSnapshot(`"Remembered [<id>] (half-life: 365d, tags: none)"`);
   });
 
   describe('on a store holding two remembered rows', () => {
     beforeEach(async () => {
-      await call('hippo_remember', {
-        text: 'the staging lock table blocks deploys',
-        error: true,
-        tag: 'deploy',
-      });
+      await call('hippo_remember', { text: 'the staging lock table blocks deploys', error: true, tag: 'deploy' });
       await call('hippo_remember', { text: 'release notes are folded from changelog fragments' });
     });
 
@@ -127,8 +104,7 @@ describe('MCP tool reply text', () => {
     });
 
     it('hippo_recall lists the matching row, and hippo_outcome then applies to it', async () => {
-      expect(await call('hippo_recall', { query: 'staging lock deploys', budget: 4000 }))
-        .toMatchInlineSnapshot(`
+      expect(await call('hippo_recall', { query: 'staging lock deploys', budget: 4000 })).toMatchInlineSnapshot(`
         "Found 1 memories:
 
         [verified] tags: error, deploy (strength=1.00)
@@ -141,8 +117,7 @@ describe('MCP tool reply text', () => {
     });
 
     it('hippo_recall reports the cutoff when nothing matches', async () => {
-      expect(await call('hippo_recall', { query: 'nothing matches zebra quartz' }))
-        .toMatchInlineSnapshot(`
+      expect(await call('hippo_recall', { query: 'nothing matches zebra quartz' })).toMatchInlineSnapshot(`
         "## Cutoff
         Showing 0 of 2 candidates; 2 not shown (rank, budget or limit).
 
@@ -181,9 +156,9 @@ describe('MCP tool reply text', () => {
     });
 
     it('hippo_recall throws on a scorer_window that is not a number', async () => {
-      expect(
-        await settle('hippo_recall', { query: 'x', scorer_window: 'abc' }),
-      ).toMatchInlineSnapshot(`"throws: scorerWindow must be a positive integer; got NaN"`);
+      expect(await settle('hippo_recall', { query: 'x', scorer_window: 'abc' })).toMatchInlineSnapshot(
+        `"throws: scorerWindow must be a positive integer; got NaN"`,
+      );
     });
   });
 
@@ -209,9 +184,7 @@ describe('MCP tool reply text', () => {
     expect(await call('hippo_predict_baserate', { class_tag: '  ' })).toMatchInlineSnapshot(
       `"No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort")."`,
     );
-    expect(
-      await call('hippo_predict_baserate', { class_tag: 'migration-effort' }),
-    ).toMatchInlineSnapshot(
+    expect(await call('hippo_predict_baserate', { class_tag: 'migration-effort' })).toMatchInlineSnapshot(
       `"No closed predictions in class "migration-effort" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute."`,
     );
   });
@@ -224,9 +197,9 @@ describe('MCP tool reply text', () => {
     expect(await call('hippo_resolve', { conflict_id: 1 })).toMatchInlineSnapshot(
       `"isError: Invalid arguments for hippo_resolve: keep is required"`,
     );
-    expect(
-      await settle('hippo_resolve', { conflict_id: 999, keep: 'mem_missing' }),
-    ).toMatchInlineSnapshot(`"Could not resolve. Check the conflict ID and --keep value."`);
+    expect(await settle('hippo_resolve', { conflict_id: 999, keep: 'mem_missing' })).toMatchInlineSnapshot(
+      `"Could not resolve. Check the conflict ID and --keep value."`,
+    );
   });
 
   it('hippo_share needs an id, and throws for a missing memory', async () => {
@@ -246,8 +219,6 @@ describe('MCP tool reply text', () => {
     expect(await call('hippo_learn', { days: 1 })).toMatch(
       /^(No git history found\.|No fix\/revert\/bug commits found in the specified period\.|Git learn: \d+ new, \d+ duplicates skipped.* \(scanned 1 days\))$/,
     );
-    expect(await call('hippo_missing')).toMatchInlineSnapshot(
-      `"error: Unknown tool: hippo_missing"`,
-    );
+    expect(await call('hippo_missing')).toMatchInlineSnapshot(`"error: Unknown tool: hippo_missing"`);
   });
 });

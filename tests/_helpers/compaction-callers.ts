@@ -2,12 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
-import {
-  closeHippoDb,
-  openHippoDb,
-  runWithRequestStores,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -44,8 +39,7 @@ export const ITEMS = [
   'The release script must run from the repo root because it reads the env file by a relative path.',
   'Integration tests need the local Postgres container started before the suite or every case times out.',
 ];
-export const LESSON =
-  'Bash: npm run build failed: src/a.ts(12,3): error TS2304: Cannot find name foo';
+export const LESSON = 'Bash: npm run build failed: src/a.ts(12,3): error TS2304: Cannot find name foo';
 
 let dir: string;
 export let root: string;
@@ -83,9 +77,9 @@ interface RecordRow {
 }
 
 export function recordRow(db: DatabaseSyncLike, id: string): RecordRow | undefined {
-  return db
-    .prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`)
-    .get(id) as RecordRow | undefined;
+  return db.prepare(`SELECT origin_project, status, snapshot_saved FROM compactions WHERE id = ?`).get(id) as
+    | RecordRow
+    | undefined;
 }
 
 export function seed(content: string, origin: string, tags: string[] = []): void {
@@ -133,9 +127,7 @@ export function holdout(): void {
 export function failOn(table: string, when: 'INSERT' | 'UPDATE', message: string): () => void {
   const name = `fail_${table}_${when.toLowerCase()}`;
   withDb((db) =>
-    db.exec(
-      `CREATE TRIGGER ${name} BEFORE ${when} ON ${table} BEGIN SELECT RAISE(ABORT, '${message}'); END`,
-    ),
+    db.exec(`CREATE TRIGGER ${name} BEFORE ${when} ON ${table} BEGIN SELECT RAISE(ABORT, '${message}'); END`),
   );
   return () => withDb((db) => db.exec(`DROP TRIGGER ${name}`));
 }
@@ -152,24 +144,11 @@ export async function whileLocked<T>(fn: () => T): Promise<T> {
   }
 }
 
-export function count(
-  db: DatabaseSyncLike,
-  table: string,
-  where = '1',
-  ...params: string[]
-): number {
-  return (
-    db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`).get(...params) as { n: number }
-  ).n;
+export function count(db: DatabaseSyncLike, table: string, where = '1', ...params: string[]): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`).get(...params) as { n: number }).n;
 }
 
-export const WRITTEN_TABLES = [
-  'compactions',
-  'task_snapshots',
-  'session_handoffs',
-  'failure_log',
-  'memories',
-] as const;
+export const WRITTEN_TABLES = ['compactions', 'task_snapshots', 'session_handoffs', 'failure_log', 'memories'] as const;
 
 export function rowCounts(): Record<string, number> {
   return withDb((db) => Object.fromEntries(WRITTEN_TABLES.map((t) => [t, count(db, t)])));
@@ -184,9 +163,9 @@ interface SnapshotRow {
 }
 
 export function snapshotRow(db: DatabaseSyncLike, id: number): SnapshotRow | undefined {
-  return db
-    .prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`)
-    .get(id) as SnapshotRow | undefined;
+  return db.prepare(`SELECT id, status, owner_subject, origin_project FROM task_snapshots WHERE id = ?`).get(id) as
+    | SnapshotRow
+    | undefined;
 }
 
 interface FailureRow {
@@ -217,9 +196,7 @@ interface HandoffRow {
 export function handoffRows(db: DatabaseSyncLike): HandoffRow[] {
   // SAFETY: the SELECT names exactly HandoffRow's four columns.
   return db
-    .prepare(
-      `SELECT session_id, task_id, owner_subject, origin_project FROM session_handoffs ORDER BY id`,
-    )
+    .prepare(`SELECT session_id, task_id, owner_subject, origin_project FROM session_handoffs ORDER BY id`)
     .all() as HandoffRow[];
 }
 
@@ -240,13 +217,7 @@ export function failure(over: Partial<CallerFailureRequest> = {}): CallerFailure
 export const preCompact = (ctx: Context, workingState: typeof STATE | null = STATE) =>
   preCompactForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', workingState });
 export const postCompact = (ctx: Context, requestId = 'cmp-1') =>
-  saveCompactionItemsForCaller(ctx, {
-    sessionId: 'sA',
-    project: PROJECT,
-    trigger: 'auto',
-    items: ITEMS,
-    requestId,
-  });
+  saveCompactionItemsForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ITEMS, requestId });
 export const sessionEnd = (ctx: Context) =>
   sessionEndHandoffForCaller(ctx, {
     sessionId: 'sA',

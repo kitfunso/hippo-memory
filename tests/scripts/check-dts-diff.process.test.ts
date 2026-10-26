@@ -34,25 +34,13 @@ describe('check-dts-diff', () => {
   });
 
   it('--check passes when dist matches the committed report', () => {
-    const r = run(
-      '--check',
-      '--dist',
-      join(FIXTURES, 'v1'),
-      '--report',
-      join(FIXTURES, 'v1.api.txt'),
-    );
+    const r = run('--check', '--dist', join(FIXTURES, 'v1'), '--report', join(FIXTURES, 'v1.api.txt'));
     expect(r.status).toBe(0);
     expect(r.out).toContain('matches');
   });
 
   it('--check fails with a diff of removed and added names', () => {
-    const r = run(
-      '--check',
-      '--dist',
-      join(FIXTURES, 'v2'),
-      '--report',
-      join(FIXTURES, 'v1.api.txt'),
-    );
+    const r = run('--check', '--dist', join(FIXTURES, 'v2'), '--report', join(FIXTURES, 'v1.api.txt'));
     expect(r.status).toBe(1);
     expect(r.out).toContain('- index.d.ts: Alias type');
     expect(r.out).toContain('+ index.d.ts: Renamed type');

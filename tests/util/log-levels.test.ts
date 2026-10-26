@@ -110,10 +110,7 @@ describe('damaged column warnings', () => {
     const { log, warnDamagedColumn } = await freshLog();
     vi.stubEnv('HIPPO_LOG', 'warn');
     for (let row = 0; row < 2_000; row++) {
-      warnDamagedColumn(
-        { table: 'memories', id: `m${row}`, column: 'tags_json' },
-        'not valid JSON',
-      );
+      warnDamagedColumn({ table: 'memories', id: `m${row}`, column: 'tags_json' }, 'not valid JSON');
     }
     log.warnThenDebug('a-new-failure-class', 'a failure of another class');
     expect(lines()).toEqual([
@@ -141,21 +138,19 @@ describe('warnThenSample', () => {
 
 describe('log fields', () => {
   it('appends the request id and other fields as key=value, skipping undefined', () => {
-    expect(
-      formatLogLine('warn', 'boom', { requestId: 'abc-123', status: 503, extra: undefined }),
-    ).toBe('[hippo] warn: boom requestId=abc-123 status=503');
-  });
-
-  it('flattens newlines so one event stays on one line', () => {
-    expect(formatLogLine('error', 'a\nb', { requestId: 'x\r\ny' })).toBe(
-      '[hippo] error: a b requestId="x y"',
+    expect(formatLogLine('warn', 'boom', { requestId: 'abc-123', status: 503, extra: undefined })).toBe(
+      '[hippo] warn: boom requestId=abc-123 status=503',
     );
   });
 
+  it('flattens newlines so one event stays on one line', () => {
+    expect(formatLogLine('error', 'a\nb', { requestId: 'x\r\ny' })).toBe('[hippo] error: a b requestId="x y"');
+  });
+
   it('quotes a value with a space, quote or =, so a reader can tell where it ends', () => {
-    expect(
-      formatLogLine('warn', 'm', { a: 'plain', b: 'two words', c: 'say "hi"', d: 'k=v' }),
-    ).toBe('[hippo] warn: m a=plain b="two words" c="say \\"hi\\"" d="k=v"');
+    expect(formatLogLine('warn', 'm', { a: 'plain', b: 'two words', c: 'say "hi"', d: 'k=v' })).toBe(
+      '[hippo] warn: m a=plain b="two words" c="say \\"hi\\"" d="k=v"',
+    );
   });
 
   it('HIPPO_LOG_FORMAT=json writes the same fields as one JSON object per line', () => {
@@ -172,9 +167,7 @@ describe('errorFields cause chain', () => {
   it('lists each cause as class: message, five deep at most', () => {
     let err = new Error('e0');
     for (let i = 1; i <= 7; i++) err = new Error(`e${i}`, { cause: err });
-    expect(errorFields(err).cause).toBe(
-      'Error: e6 <- Error: e5 <- Error: e4 <- Error: e3 <- Error: e2',
-    );
+    expect(errorFields(err).cause).toBe('Error: e6 <- Error: e5 <- Error: e4 <- Error: e3 <- Error: e2');
   });
 
   it('has no cause field for an error without one, names a non-Error cause, and stops at a cycle', () => {

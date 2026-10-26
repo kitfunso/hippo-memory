@@ -42,9 +42,7 @@ function warnings(): string[] {
 }
 
 function summaries(): string[] {
-  return errorSpy.mock.calls
-    .map((c) => String(c[0]))
-    .filter((m) => m.includes('more embedding errors'));
+  return errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('more embedding errors'));
 }
 
 async function write(content: string): Promise<void> {
@@ -66,9 +64,7 @@ describe('embedMemory provider failure', () => {
   });
 
   it('warns once per process, names the provider, hides the key, and still stores every write', async () => {
-    const fetchMock = vi.fn(
-      async () => new Response(`Incorrect API key provided: ${KEY}`, { status: 401 }),
-    );
+    const fetchMock = vi.fn(async () => new Response(`Incorrect API key provided: ${KEY}`, { status: 401 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await write('first memory written with a bad key');
@@ -91,11 +87,7 @@ describe('embedMemory provider failure', () => {
     // A fresh module, since the test above already spent this process's one warning.
     vi.resetModules();
     const fresh = await import('../../src/domain/search/embed-memories.js');
-    fs.writeFileSync(
-      path.join(root, 'config.json'),
-      JSON.stringify({ embeddings: { provider: 'opneai' } }),
-      'utf8',
-    );
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
     const entry = createMemory('a memory under a typo in the provider name', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
@@ -105,9 +97,7 @@ describe('embedMemory provider failure', () => {
     await expect(fresh.embedMemoryInto(localIndex(root), entry)).resolves.toBe('failed');
 
     expect(warnings()).toHaveLength(1);
-    expect(warnings()[0]).toContain(
-      "[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'",
-    );
+    expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");
   });
 
   it('warns again for a different failure after the first one', async () => {
@@ -121,11 +111,7 @@ describe('embedMemory provider failure', () => {
 
     fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
     await fresh.embedMemoryInto(localIndex(root), entry);
-    fs.writeFileSync(
-      config,
-      JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
-      'utf8',
-    );
+    fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('bad key', { status: 401 })),
@@ -147,9 +133,7 @@ describe('embedMemory provider failure', () => {
         'fetch',
         vi.fn(async () => new Response('bad key', { status: 401 })),
       );
-      const entry = createMemory('a memory that keeps failing', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      });
+      const entry = createMemory('a memory that keeps failing', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(root, entry);
       await fresh.embedMemoryInto(localIndex(root), entry);
       await fresh.embedMemoryInto(localIndex(root), entry);

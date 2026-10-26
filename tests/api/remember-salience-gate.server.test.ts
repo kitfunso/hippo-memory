@@ -14,8 +14,7 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 const TEXT = 'the billing service retries a failed charge three times';
 const roots: string[] = [];
 afterAll(() => {
-  for (const root of roots)
-    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const root of roots) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function store(salience: boolean): FullContext {
@@ -34,9 +33,7 @@ describe('api.remember with salienceGate', () => {
     const routed = await remember(ctx, { content: TEXT, tags: [], salienceGate: true });
     const direct = await rememberLocally(ctx, { content: TEXT, tags: [] });
     expect(direct.status).toBe('skipped');
-    expect(routed).toEqual({
-      skipped: { reason: expect.stringContaining('duplicate'), score: 0.1 },
-    });
+    expect(routed).toEqual({ skipped: { reason: expect.stringContaining('duplicate'), score: 0.1 } });
     if (direct.status === 'skipped') {
       expect(routed).toEqual({ skipped: { reason: direct.reason, score: direct.score } });
     }
@@ -63,11 +60,7 @@ describe('POST /v1/memories gate and force', () => {
     ctx = store(true);
     const db = openHippoDb(ctx.hippoRoot);
     try {
-      key = createApiKey(db, {
-        tenantId: 'default',
-        role: 'member',
-        ownerSubject: 'oid-a',
-      }).plaintext;
+      key = createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-a' }).plaintext;
     } finally {
       closeHippoDb(db);
     }
@@ -77,11 +70,7 @@ describe('POST /v1/memories gate and force', () => {
     await handle.stop();
   });
 
-  const call = (
-    method: string,
-    path: string,
-    body?: Record<string, JsonValue>,
-  ): Promise<Response> =>
+  const call = (method: string, path: string, body?: Record<string, JsonValue>): Promise<Response> =>
     fetch(`${handle.url}${path}`, {
       method,
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -100,13 +89,9 @@ describe('POST /v1/memories gate and force', () => {
   });
 
   it('skips a short low-salience text unless force is true', async () => {
-    expect(await (await call('POST', '/v1/memories', { content: 'yes' })).json()).toHaveProperty(
-      'skipped',
-    );
+    expect(await (await call('POST', '/v1/memories', { content: 'yes' })).json()).toHaveProperty('skipped');
     expect(rowCount(ctx)).toBe(0);
-    expect(
-      await (await call('POST', '/v1/memories', { content: 'yes', force: true })).json(),
-    ).toHaveProperty('id');
+    expect(await (await call('POST', '/v1/memories', { content: 'yes', force: true })).json()).toHaveProperty('id');
     expect(rowCount(ctx)).toBe(1);
   });
 

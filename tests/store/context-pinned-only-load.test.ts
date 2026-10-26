@@ -71,11 +71,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2020-01-01T00:00:00.000Z',
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(oldPin.id);
   });
@@ -89,11 +85,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       ),
     );
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 3,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
 
     const newest = rows.slice(-3).map((r) => r.id);
     for (const id of newest) expect(ids(result)).toContain(id);
@@ -112,11 +104,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-01-01T00:00:00.000Z',
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(buried.id);
   });
@@ -131,26 +119,16 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-07-01T00:00:00.000Z',
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).not.toContain(superseded.id);
   });
 
   it('pulls pins from the global store as well as the local one', async () => {
-    const globalPin = seed(globalRoot, 'a global pin that must still reach the prompt', {
-      pinned: true,
-    });
+    const globalPin = seed(globalRoot, 'a global pin that must still reach the prompt', { pinned: true });
     seed(local, 'a local row so both stores have something in them');
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(globalPin.id);
   });
@@ -196,11 +174,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       return rows;
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     const returned = ids(result);
     expect(returned.length).toBe(5);
@@ -216,11 +190,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       created: '2026-06-01T00:00:00.000Z',
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(ids(result)).toContain(junkPin.id);
   });
@@ -243,11 +213,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       }
     });
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     const returned = ids(result);
     expect(returned).toContain(partial[1].id);
@@ -290,22 +256,14 @@ describe('pinned-only context loads a slice, not the corpus', () => {
       }),
     );
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 2,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 2, currentProject: PROJECT });
 
     expect(ids(result)).toContain(globals[2].id);
     expect(ids(result)).toContain(globals[1].id);
   });
 
   it('returns nothing for two empty stores', async () => {
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-    });
+    const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     expect(result.entries).toEqual([]);
     expect(result.tokens).toBe(0);
@@ -370,18 +328,14 @@ describe('loadAmbientCandidates', () => {
     });
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 5, () => true);
-    const sorted = [...got].sort(
-      (a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id),
-    );
+    const sorted = [...got].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
 
     expect(got.map((e) => e.id)).toEqual(sorted.map((e) => e.id));
   });
 
   it('asks for nothing recent when the caller wants no backfill', () => {
     writeEntry(local, {
-      ...createMemory('an unpinned row nobody asked for', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      ...createMemory('an unpinned row nobody asked for', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       created: '2026-08-08T00:00:00.000Z',
     });
     const pin = {
@@ -423,9 +377,7 @@ describe('loadAmbientCandidates', () => {
 
   it("finds the caller's older rows behind a full window of other projects without reading the corpus", async () => {
     const mine = Array.from({ length: 5 }, (_, i) => ({
-      ...createMemory(`an older row of the caller ${i}`, {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      ...createMemory(`an older row of the caller ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       originProject: PROJECT,
       created: new Date(Date.UTC(2026, 5, 1, i)).toISOString(),
     }));
@@ -433,9 +385,7 @@ describe('loadAmbientCandidates', () => {
       for (const entry of mine) writeEntry(local, entry);
       for (let i = 0; i < 100; i++) {
         writeEntry(local, {
-          ...createMemory(`a newer row of another project ${i}`, {
-            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          }),
+          ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
           originProject: 'proj-b',
           created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
         });

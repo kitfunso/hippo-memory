@@ -84,14 +84,7 @@ describe('auth CLI role surfacing', () => {
         db.prepare(`
           INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
-          'hk_legacy0000000000000000',
-          'fakehash',
-          'default',
-          'legacy',
-          new Date().toISOString(),
-          'superadmin',
-        );
+        `).run('hk_legacy0000000000000000', 'fakehash', 'default', 'legacy', new Date().toISOString(), 'superadmin');
 
         const items = listApiKeys(t.ctx.hippoRoot, { tenantId: ALL_TENANTS, active: true });
         const legacy = items.find((i) => i.keyId === 'hk_legacy0000000000000000');

@@ -33,12 +33,8 @@ function rootKeyedNames() {
 function findCalls(names) {
   const counts = {};
   for (const file of tsFiles('src/api')) {
-    const imports = readFacts(readFileSync(file, 'utf8'), file, ['imports']).imports.filter(
-      (i) => i.kind === 'import',
-    );
-    const n = imports
-      .flatMap((i) => i.specifiers)
-      .filter((s) => !s.typeOnly && names.has(s.name)).length;
+    const imports = readFacts(readFileSync(file, 'utf8'), file, ['imports']).imports.filter((i) => i.kind === 'import');
+    const n = imports.flatMap((i) => i.specifiers).filter((s) => !s.typeOnly && names.has(s.name)).length;
     if (n > 0) counts[file] = n;
   }
   return counts;
@@ -53,9 +49,7 @@ if (process.argv.includes('--list')) {
 if (current.length > 0) {
   console.error('src/api imports root-keyed store functions (first parameter hippoRoot):');
   for (const [file, n] of current) console.error(`  ${file}: ${n}`);
-  console.error(
-    'Reach storage through ctx.store, or add a group method to the store port instead.',
-  );
+  console.error('Reach storage through ctx.store, or add a group method to the store port instead.');
   process.exit(1);
 }
 console.log('API root-call gate OK: src/api imports no root-keyed store function.');

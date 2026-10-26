@@ -48,9 +48,7 @@ describe('package entry re-exports strengthBucket', () => {
       'console.log(JSON.stringify({ url, type: typeof m.strengthBucket, one: m.strengthBucket?.(1) }));',
     ].join('\n');
     const out = importBuiltEntry<{ url: string; type: string; one: number }>(script);
-    expect(realpathSync(fileURLToPath(out.url))).toBe(
-      realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')),
-    );
+    expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
     // The published d.ts text is what consumers compile against, so text is the contract.
@@ -97,17 +95,12 @@ describe('package entry re-exports sleep', () => {
     // The published d.ts text is what consumers compile against, so text is the contract.
     expect(rootDts()).toMatch(/\bsleep,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
-    expect(dts).toMatch(
-      /^export type \{ SleepOptions, SleepResult \} from '\.\.\/api\/sleep\/sleep\.js';$/m,
-    );
+    expect(dts).toMatch(/^export type \{ SleepOptions, SleepResult \} from '\.\.\/api\/sleep\/sleep\.js';$/m);
     // The published signature takes a Context whose store sets the sleep groups, so the compiler checks them.
     expect(dts).toMatch(
       /^export declare function sleep\(ctx: SleepContext, opts\?: SleepOptions\): Promise<SleepResult>;$/m,
     );
-    const sleepDts = readFileSync(
-      resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'),
-      'utf-8',
-    );
+    const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
     expect(sleepDts).not.toMatch(/__phases|SleepPhases/);
   });
@@ -157,9 +150,7 @@ describe('hippo-memory/testing', () => {
       'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset|ForTests$/.test(n)) }));',
     ].join('\n');
     const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
-    expect(realpathSync(fileURLToPath(out.url))).toBe(
-      realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')),
-    );
+    expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
     expect(out.names).toEqual([...EVAL_KIT].sort());
     expect(out.onServer).toBe(false);
     expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
@@ -169,13 +160,10 @@ describe('hippo-memory/testing', () => {
 /** The module of each runtime re-export in `source`: a bare `export *` or an `export { ... }` naming at least one value. */
 function runtimeReexports(source: string): string[] {
   const modules: string[] = [];
-  for (const m of source.matchAll(
-    /^export\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{([^}]*)\})\s+from\s+'([^']+)'/gm,
-  )) {
+  for (const m of source.matchAll(/^export\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{([^}]*)\})\s+from\s+'([^']+)'/gm)) {
     const [, typeOnly, , names, module] = m;
     const hasValue =
-      names === undefined ||
-      names.split(',').some((n) => n.trim() !== '' && !n.trim().startsWith('type '));
+      names === undefined || names.split(',').some((n) => n.trim() !== '' && !n.trim().startsWith('type '));
     if (!typeOnly && hasValue) modules.push(module);
   }
   return modules;
@@ -204,9 +192,7 @@ describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = rootReexports();
     // src/index.ts and its barrels, not this test, set the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(
-      expect.arrayContaining(['./base/records/card.js', './base/memory/entry.js']),
-    );
+    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/entry.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 
@@ -239,11 +225,8 @@ describe('published runtime exports', () => {
       'console.log(JSON.stringify(names));',
     ].join('\n');
     const names = importBuiltEntry<Record<string, string[]>>(script);
-    expect(
-      Object.fromEntries(
-        Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)]),
-      ),
-    ).toMatchInlineSnapshot(`
+    expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)])))
+      .toMatchInlineSnapshot(`
         {
           ".": "CARD_LEASE_MS CARD_TRANSITIONS
         Layer

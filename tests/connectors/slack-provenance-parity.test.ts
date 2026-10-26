@@ -117,9 +117,7 @@ describe('Slack connector — provenance coverage parity', () => {
       message: reply,
       eventId: 'EvReply',
     });
-    const replyRow = loadAllEntries(root, 'default').find((e) =>
-      e.tags.includes('thread:1700000000.000001'),
-    );
+    const replyRow = loadAllEntries(root, 'default').find((e) => e.tags.includes('thread:1700000000.000001'));
     expect(replyRow?.owner).toMatch(/^user:U/);
     expect(buildProvenanceCoverage(await rawProvenanceAt(root)).gaps).toHaveLength(0);
   });

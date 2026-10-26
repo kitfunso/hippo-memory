@@ -40,27 +40,17 @@ describe('check-row-casts', { timeout: 30_000 }, () => {
     const lib = join(dir, 'lib.d.ts');
     writeFileSync(file, `${SQLITE}\n${body}`, 'utf8');
     writeFileSync(lib, MINIMAL_LIB, 'utf8');
-    const program = ts.createProgram([lib, file], {
-      target: ts.ScriptTarget.ES2022,
-      noEmit: true,
-      noLib: true,
-    });
-    return findRowCasts(program, src).map(({ line, noted, problem }) => ({
-      line: line - 3,
-      noted,
-      problem,
-    }));
+    const program = ts.createProgram([lib, file], { target: ts.ScriptTarget.ES2022, noEmit: true, noLib: true });
+    return findRowCasts(program, src).map(({ line, noted, problem }) => ({ line: line - 3, noted, problem }));
   }
 
   it('passes an inline row whose every key the SELECT names', () => {
-    const body =
-      "const r = db.prepare('SELECT id, COUNT(*) AS n FROM t').get() as { id: string; n: number };";
+    const body = "const r = db.prepare('SELECT id, COUNT(*) AS n FROM t').get() as { id: string; n: number };";
     expect(castsIn(body)).toEqual([{ line: 1, noted: false, problem: undefined }]);
   });
 
   it('names the keys a SELECT leaves out', () => {
-    const body =
-      "const r = db.prepare('SELECT id FROM t').all() as Array<{ id: string; n: number }>;";
+    const body = "const r = db.prepare('SELECT id FROM t').all() as Array<{ id: string; n: number }>;";
     expect(castsIn(body)[0]?.problem).toBe('the SQL does not name n');
   });
 
@@ -119,9 +109,12 @@ describe('check-row-casts', { timeout: 30_000 }, () => {
   });
 
   it('reads the names a SELECT, RETURNING clause or PRAGMA answers', () => {
-    expect(
-      selectNames('SELECT m.id, m.kind AS k, COUNT(*) AS n, (SELECT 1 FROM x) AS s FROM t'),
-    ).toEqual(['id', 'k', 'n', 's']);
+    expect(selectNames('SELECT m.id, m.kind AS k, COUNT(*) AS n, (SELECT 1 FROM x) AS s FROM t')).toEqual([
+      'id',
+      'k',
+      'n',
+      's',
+    ]);
     expect(selectNames('UPDATE t SET a = 1 RETURNING id, a')).toEqual(['id', 'a']);
     expect(selectNames('SELECT t.* FROM t')).toEqual(['*']);
     expect(selectNames('SELECT \0, id FROM t')).toEqual(['id']);

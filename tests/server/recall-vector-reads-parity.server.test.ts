@@ -31,11 +31,7 @@ import {
   sendRecall,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
-import {
-  hashedVector,
-  startHashedEmbeddings,
-  type HashedEmbeddings,
-} from '../_helpers/hashed-embedding-server.js';
+import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -54,9 +50,7 @@ const VECTOR_ONLY = 'mem_v_redeploy';
 // A shared store refuses an MCP recall that names no project; the seeded rows are user-global, so any project reaches them.
 const PROJECT = 'golden';
 
-type PartsRead = {
-  readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>>;
-};
+type PartsRead = { readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>> };
 
 interface SeedRow {
   readonly entry: MemoryEntry;
@@ -69,12 +63,8 @@ const seedRow = (
   day: number,
   vector: readonly number[],
   extra: Partial<MemoryEntry> = {},
-): SeedRow => ({
-  entry: seeded(content, id, `2026-01-${String(day).padStart(2, '0')}T00:00:00.000Z`, extra),
-  vector,
-});
-const ownRow = (id: string, content: string, day: number): SeedRow =>
-  seedRow(id, content, day, hashedVector(content));
+): SeedRow => ({ entry: seeded(content, id, `2026-01-${String(day).padStart(2, '0')}T00:00:00.000Z`, extra), vector });
+const ownRow = (id: string, content: string, day: number): SeedRow => seedRow(id, content, day, hashedVector(content));
 
 // No 'deploy' token in the mem_v_ rows, so only the vector arm can bring them in.
 const ADMITTED: readonly SeedRow[] = [
@@ -123,9 +113,7 @@ function seedVectorStore(root: string): void {
     root,
     rows.map((r) => r.entry),
   );
-  const index = Object.fromEntries(
-    rows.map((r): [string, number[]] => [r.entry.id, [...r.vector]]),
-  );
+  const index = Object.fromEntries(rows.map((r): [string, number[]] => [r.entry.id, [...r.vector]]));
   const vectors: [string, readonly number[]][] = [...Object.entries(index), [ORPHAN, NEAR]];
   withDb(root, (db) => {
     upsertVectors(db, vectors, IDENTITY);
@@ -161,15 +149,12 @@ interface Pass {
 const http = (mode: string): Call => ({ via: 'http', args: { q: QUERY, mode, limit: '20' } });
 const MCP: Call = { via: 'mcp', args: { query: QUERY } };
 
-const send = (url: string, call: Call): Promise<Reply> =>
-  sendRecall(url, call.via, call.args, PROJECT);
+const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
 /** The ids the replies list, and for an MCP recall, whose text names no id, the rows it strengthened. */
 function shownIds(pass: Pass): string[] {
   // SAFETY: a GET /v1/memories reply is a serialised RecallResult; an MCP reply has no results field.
-  const http = pass.replies.flatMap(
-    (r) => (r.body as { results?: { id: string }[] }).results?.map((x) => x.id) ?? [],
-  );
+  const http = pass.replies.flatMap((r) => (r.body as { results?: { id: string }[] }).results?.map((x) => x.id) ?? []);
   // SAFETY: rowsOf selects `id` from memories for each retrieved row.
   const retrieved = (pass.rows.retrieved as { id: string }[]).map((r) => r.id);
   return [...http, ...retrieved];
@@ -202,12 +187,10 @@ async function runPass(
     const port = backing === 'port' ? portOnlySide(s.root) : undefined;
     const store = port?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();
-    const stderr = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: string | Uint8Array) => {
-        lines.push(String(chunk));
-        return true;
-      });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    });
     // A once-only or sampled warning reaches stderr at warn once per process, so each pass keeps the ones it asked for.
     const once = vi.spyOn(hippoLog, 'once').mockImplementation((_key, _level, message) => {
       lines.push(`${message}\n`);
@@ -229,10 +212,7 @@ async function runPass(
       sampled.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    return normalize(
-      { replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: port?.calls ?? [] },
-      s,
-    );
+    return normalize({ replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: port?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -266,42 +246,39 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe.skipIf(needsHippoDb('parity'))(
-  'recall through the vector reads of a port-only store',
-  () => {
-    it.each([
-      ['GET /v1/memories mode=hybrid', [http('hybrid')], false, 'nearestEntries'],
-      ['GET /v1/memories mode=physics', [http('physics')], true, 'stored:particles'],
-      ['MCP hippo_recall, hybrid', [MCP], false, 'nearestEntries'],
-      ['MCP hippo_recall, physics', [MCP], true, 'stored:particles'],
-    ] as const)(
-      '%s: same ids in the same order, same rows written, same provider calls',
-      async (_name, calls, physics, read) => {
-        const onHippoDb = await runPass(calls, physics, 'workers');
-        const onPort = await runPass(calls, physics, 'port');
-        const inProcess = await runPass(calls, physics, 'in process');
-        expect([onHippoDb.replies, onHippoDb.rows, onHippoDb.requests]).toEqual([
-          inProcess.replies,
-          inProcess.rows,
-          inProcess.requests,
-        ]);
-        expect(onHippoDb.log).not.toContain('fell back to BM25');
-        expect(onPort.replies).toEqual(onHippoDb.replies);
-        expect(onPort.rows).toEqual(onHippoDb.rows);
-        expect(onPort.requests).toBe(onHippoDb.requests);
-        expect(onPort.calls).toContain(read);
-        // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
-        const shown = shownIds(onHippoDb);
-        expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
-        // Hybrid embeds the query once; physics embeds it, then its classic pool (the seeded rows with no usable particle)
-        // goes through hybrid, which embeds it again.
-        expect(onHippoDb.requests).toBe(physics ? 2 : 1);
-        expect(shown).toContain(VECTOR_ONLY);
-        expect(shown.filter((id) => HIDDEN_IDS.includes(id))).toEqual([]);
-      },
-    );
-  },
-);
+describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a port-only store', () => {
+  it.each([
+    ['GET /v1/memories mode=hybrid', [http('hybrid')], false, 'nearestEntries'],
+    ['GET /v1/memories mode=physics', [http('physics')], true, 'stored:particles'],
+    ['MCP hippo_recall, hybrid', [MCP], false, 'nearestEntries'],
+    ['MCP hippo_recall, physics', [MCP], true, 'stored:particles'],
+  ] as const)(
+    '%s: same ids in the same order, same rows written, same provider calls',
+    async (_name, calls, physics, read) => {
+      const onHippoDb = await runPass(calls, physics, 'workers');
+      const onPort = await runPass(calls, physics, 'port');
+      const inProcess = await runPass(calls, physics, 'in process');
+      expect([onHippoDb.replies, onHippoDb.rows, onHippoDb.requests]).toEqual([
+        inProcess.replies,
+        inProcess.rows,
+        inProcess.requests,
+      ]);
+      expect(onHippoDb.log).not.toContain('fell back to BM25');
+      expect(onPort.replies).toEqual(onHippoDb.replies);
+      expect(onPort.rows).toEqual(onHippoDb.rows);
+      expect(onPort.requests).toBe(onHippoDb.requests);
+      expect(onPort.calls).toContain(read);
+      // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
+      const shown = shownIds(onHippoDb);
+      expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
+      // Hybrid embeds the query once; physics embeds it, then its classic pool (the seeded rows with no usable particle)
+      // goes through hybrid, which embeds it again.
+      expect(onHippoDb.requests).toBe(physics ? 2 : 1);
+      expect(shown).toContain(VECTOR_ONLY);
+      expect(shown.filter((id) => HIDDEN_IDS.includes(id))).toEqual([]);
+    },
+  );
+});
 
 describe.skipIf(needsHippoDb('parity'))(
   'when the vector arm cannot run, hippo.db and a port-only store fall back to BM25 alike',
@@ -309,9 +286,7 @@ describe.skipIf(needsHippoDb('parity'))(
     const emptyIndex = (root: string): void =>
       withDb(root, (db) => db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;'));
     const staleModel = (root: string): void =>
-      withDb(root, (db) =>
-        setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity('openai:old-model')),
-      );
+      withDb(root, (db) => setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity('openai:old-model')));
 
     // Physics embeds the query before it reads the index, so an empty index still costs it one call; hybrid spends none.
     it.each([
@@ -347,18 +322,16 @@ describe('the vector reads of sqliteStore', () => {
     sqlite = sqliteStore(root).vectors;
   });
 
-  const ids = async (
-    reads: VectorReads,
-    q: readonly number[],
-    spec: VectorCandidateSpec,
-  ): Promise<string[]> => (await reads.nearestEntries(q, spec)).map((e) => e.id);
+  const ids = async (reads: VectorReads, q: readonly number[], spec: VectorCandidateSpec): Promise<string[]> =>
+    (await reads.nearestEntries(q, spec)).map((e) => e.id);
 
   it('a tie at the cut goes to the smaller id', async () => {
     const spec = { tenantId: 'default', includeSuperseded: false, limit: 1 };
     expect(await ids(sqlite, TIE, spec)).toEqual(['mem_v_tie_a']);
-    expect(
-      await ids(sqlite, NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 2 }),
-    ).toEqual(['mem_o_00', 'mem_o_01']);
+    expect(await ids(sqlite, NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 2 })).toEqual([
+      'mem_o_00',
+      'mem_o_01',
+    ]);
   });
 
   it('2,000 stored vectors rank the same read as Float32 views and as number[] copies', async () => {
@@ -366,9 +339,7 @@ describe('the vector reads of sqliteStore', () => {
     const PLANTED = 'mem_n_1234';
     writeFileSync(
       join(root, 'config.json'),
-      JSON.stringify({
-        embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url },
-      }),
+      JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }),
     );
     // Every row has the same three-token text and day, so BM25 and strength tie and the vectors alone order the result.
     const rows = Array.from({ length: 2000 }, (_, i) => {
@@ -396,24 +367,14 @@ describe('the vector reads of sqliteStore', () => {
     // A store may answer number[] vectors where it holds no Float32 bytes.
     const copied: PartsRead = {
       vectors: async (ids) =>
-        new Map(
-          [...(await views.vectors.stored('vectors', ids))].map(([id, v]) => [id, Array.from(v)]),
-        ),
+        new Map([...(await views.vectors.stored('vectors', ids))].map(([id, v]) => [id, Array.from(v)])),
       particles: (ids) => views.vectors.stored('particles', ids),
     };
-    const copies: HippoStore = {
-      ...views,
-      vectors: { ...views.vectors, stored: (part, ids) => copied[part](ids) },
-    };
+    const copies: HippoStore = { ...views, vectors: { ...views.vectors, stored: (part, ids) => copied[part](ids) } };
     const ranked = async (store: HippoStore): Promise<[string, number, number][]> =>
-      (
-        await hybridSearch(QUERY, entries, {
-          hippoRoot: root,
-          store,
-          budget: 1_000_000,
-          now: new Date(FAKE_NOW),
-        })
-      ).map((r) => [r.entry.id, r.score, r.cosine]);
+      (await hybridSearch(QUERY, entries, { hippoRoot: root, store, budget: 1_000_000, now: new Date(FAKE_NOW) })).map(
+        (r) => [r.entry.id, r.score, r.cosine],
+      );
 
     const viaViews = await ranked(views);
     expect(viaViews).toEqual(await ranked(copies));
@@ -421,24 +382,12 @@ describe('the vector reads of sqliteStore', () => {
     expect(viaViews[0]![0]).toBe(PLANTED);
     expect(viaViews[0]![2]).toBeGreaterThan(0.999);
     expect(
-      (
-        await resolveVectorArm(
-          QUERY,
-          entries,
-          folderVectorSource({ hippoRoot: root, store: views }),
-          {},
-        )
-      ).embeddingIndex[PLANTED],
+      (await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: views }), {}))
+        .embeddingIndex[PLANTED],
     ).toBeInstanceOf(Float32Array);
     expect(
-      (
-        await resolveVectorArm(
-          QUERY,
-          entries,
-          folderVectorSource({ hippoRoot: root, store: copies }),
-          {},
-        )
-      ).embeddingIndex[PLANTED],
+      (await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: copies }), {}))
+        .embeddingIndex[PLANTED],
     ).toBeInstanceOf(Array);
   });
 

@@ -69,9 +69,7 @@ const srcOf = new Map(lane3.rows.map((r) => [r.id, r.source]));
 console.error(`corpus ${entries.length} entries, ${scored.size} scored by Jev`);
 
 const cases = queries.filter((q) => byId.has(q.id) && q.query?.trim());
-console.error(
-  `usable cases: ${cases.length} (dropped ${queries.length - cases.length} with no matching entry)`,
-);
+console.error(`usable cases: ${cases.length} (dropped ${queries.length - cases.length} with no matching entry)`);
 
 const docFreq = new Map();
 for (const e of entries) for (const t of toks(e.content)) docFreq.set(t, (docFreq.get(t) ?? 0) + 1);
@@ -84,11 +82,7 @@ function sharedSpan(query, content) {
   const distinctive = (w) => !STOP.has(w) && (docFreq.get(w) ?? 0) <= entries.length * 0.01;
   for (let i = 0; i + 2 < qw.length; i++) {
     const g = qw.slice(i, i + 3);
-    if (
-      g.filter((w) => !STOP.has(w)).length >= 2 &&
-      g.some(distinctive) &&
-      tw.includes(g.join(' '))
-    ) {
+    if (g.filter((w) => !STOP.has(w)).length >= 2 && g.some(distinctive) && tw.includes(g.join(' '))) {
       return g.join(' ');
     }
   }
@@ -116,9 +110,7 @@ console.error(
 const labelled = lane3.rows.filter((r) => byId.has(r.id));
 const baseRate = labelled.filter((r) => r.label_error).length / labelled.length;
 const K = Math.round(baseRate * labelled.length);
-console.error(
-  `promoting top ${K} of ${labelled.length} labelled rows (store base rate ${f(baseRate)})`,
-);
+console.error(`promoting top ${K} of ${labelled.length} labelled rows (store base rate ${f(baseRate)})`);
 
 const rawSet = new Set(
   [...labelled]
@@ -146,12 +138,7 @@ function promote(idSet) {
   const addSet = new Set(adds);
   const mutated = entries.map((e) =>
     addSet.has(e.id)
-      ? {
-          ...e,
-          tags: [...e.tags, 'error'],
-          emotional_valence: 'negative',
-          half_life_days: e.half_life_days * 2,
-        }
+      ? { ...e, tags: [...e.tags, 'error'], emotional_valence: 'negative', half_life_days: e.half_life_days * 2 }
       : e,
   );
   return { entries: mutated, adds: adds.length, already: idSet.size - adds.length };
@@ -176,12 +163,7 @@ const corpusLen = buildCorpus(lenNorm.entries.map((e) => `${e.content} ${e.tags.
 async function ranksFor(arm, corpus) {
   const out = [];
   for (const c of cases) {
-    const res = await hybridSearch(c.query, arm, {
-      hippoRoot,
-      preparedCorpus: corpus,
-      mmr: true,
-      now: NOW,
-    });
+    const res = await hybridSearch(c.query, arm, { hippoRoot, preparedCorpus: corpus, mmr: true, now: NOW });
     const i = res.findIndex((r) => r.entry.id === c.id);
     out.push({ rank: i < 0 ? Infinity : i + 1, returned: res.length });
   }
@@ -240,9 +222,7 @@ function report(rows, aKey, bKey, label, seed) {
       B = rows.map((r) => r[bKey]);
     const a = fn(A),
       b = fn(B);
-    const ds = idx.map(
-      (row) => fn(row.map((k) => rows[k][aKey])) - fn(row.map((k) => rows[k][bKey])),
-    );
+    const ds = idx.map((row) => fn(row.map((k) => rows[k][aKey])) - fn(row.map((k) => rows[k][bKey])));
     ds.sort((x, y) => x - y);
     const ci = (alpha) => ({
       lo: ds[Math.floor(ds.length * (alpha / 2))],
@@ -260,20 +240,12 @@ function report(rows, aKey, bKey, label, seed) {
 }
 
 const lenVsBase = report(rows, 'lennorm', 'base', 'CONTRAST A - lennorm vs base', 100010);
-const lenVsRawp = report(
-  rows,
-  'lennorm',
-  'rawp',
-  'CONTRAST B - lennorm vs raw-p (did normalising help)',
-  100010,
-);
+const lenVsRawp = report(rows, 'lennorm', 'rawp', 'CONTRAST B - lennorm vs raw-p (did normalising help)', 100010);
 
 const medRetBase = med(rows.map((r) => r.retBase));
 const medRetRawp = med(rows.map((r) => r.retRawp));
 const medRetLen = med(rows.map((r) => r.retLennorm));
-console.log(
-  `\nmedian returned-set size: base ${medRetBase}, raw-p ${medRetRawp}, lennorm ${medRetLen}`,
-);
+console.log(`\nmedian returned-set size: base ${medRetBase}, raw-p ${medRetRawp}, lennorm ${medRetLen}`);
 
 const recallCI = lenVsBase[PRIMARY].ci9833;
 const tie = recallCI.lo <= 0 && recallCI.hi >= 0;
@@ -282,10 +254,7 @@ const pass = recallCI.lo > 0 && !r1Loss;
 console.log(
   `\nVERDICT: ${pass ? 'SHIP' : 'DO NOT SHIP'}  (rule: lennorm vs base ${PRIMARY} CI excludes 0 upward at 98.33% AND no R@1 loss)`,
 );
-if (tie)
-  console.log(
-    'TIE: primary 98.33% CI spans zero against base, no detectable difference at the declared alpha.',
-  );
+if (tie) console.log('TIE: primary 98.33% CI spans zero against base, no detectable difference at the declared alpha.');
 if (r1Loss) console.log('R@1 LOSS CONFIRMED against base at 98.33%.');
 
 mkdirSync('results', { recursive: true });
@@ -302,19 +271,10 @@ writeFileSync(
       K,
       promotion: {
         raw_p: { adds: rawP.adds, already_tagged: rawP.already, median_tokens: medTok(rawSet) },
-        lennorm: {
-          adds: lenNorm.adds,
-          already_tagged: lenNorm.already,
-          median_tokens: medTok(lenSet),
-        },
+        lennorm: { adds: lenNorm.adds, already_tagged: lenNorm.already, median_tokens: medTok(lenSet) },
         overlap,
       },
-      leakage: {
-        containment_median: q(0.5),
-        containment_p75: q(0.75),
-        flagged,
-        rare_doc_max: RARE_DOC_MAX,
-      },
+      leakage: { containment_median: q(0.5), containment_p75: q(0.75), flagged, rare_doc_max: RARE_DOC_MAX },
       median_returned: { base: medRetBase, raw_p: medRetRawp, lennorm: medRetLen },
       contrasts: { lennorm_vs_base: lenVsBase, lennorm_vs_rawp: lenVsRawp },
       tie,

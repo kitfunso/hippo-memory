@@ -58,20 +58,14 @@ const at = (id: string | number | null, seq: string | number | null) => ({
   event_id: Number(id),
   turn_seq: seq === null ? null : Number(seq),
 });
-const ok = (
-  v: Verdict,
-  session: string,
-  memory: string | null,
-  w: Oracle,
-  store: string = p.hippoRoot,
-): void => expectVerdict(v, { store, session, memory, ...w });
+const ok = (v: Verdict, session: string, memory: string | null, w: Oracle, store: string = p.hippoRoot): void =>
+  expectVerdict(v, { store, session, memory, ...w });
 const turnOf = (prompt: string, stdout: string, extra: Partial<TurnSpec> = {}): TurnSpec => ({
   prompt,
   stdout,
   ...extra,
 });
-const doc = (session: string, specs: TurnSpec[]): string =>
-  writeHostTranscript(p, specs, { name: session });
+const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(p, specs, { name: session });
 const label = (session: string, application: string, signal: string, memory = pinId()) => ({
   session_id: session,
   memory_id: memory,
@@ -86,16 +80,9 @@ describe('negative controls', () => {
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     fire(p, 'n1', PROMPT, { args: TIGHT });
     const [e] = events('n1');
-    expect(cand('n1', big.id).map((c) => [c.outcome, c.stage, c.reason])).toEqual([
-      ['rejected', 'budget', 'budget'],
-    ]);
+    expect(cand('n1', big.id).map((c) => [c.outcome, c.stage, c.reason])).toEqual([['rejected', 'budget', 'budget']]);
     const v = read('n1', big.id, { labels: [label('n1', 'observed', 'resolved-check', big.id)] });
-    ok(v, 'n1', big.id, {
-      class: 'rejected',
-      reason: 'budget',
-      turn: at(e.id, 1),
-      stage: 'budget',
-    });
+    ok(v, 'n1', big.id, { class: 'rejected', reason: 'budget', turn: at(e.id, 1), stage: 'budget' });
     expect(v.notes.includes('label-conflict')).toBe(true);
   });
 
@@ -107,16 +94,11 @@ describe('negative controls', () => {
     const [eb] = events('n2b');
     expect([eb.block_state, stages('n2b', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
     const labels = [label('n2a', 'observed', 'failed-check')];
-    expect(
-      read('n2a', pinId(), { transcript: doc('n2a', [turnOf(P1, a.stdout)]), labels }).class,
-    ).toBe('applied-but-wrong');
+    expect(read('n2a', pinId(), { transcript: doc('n2a', [turnOf(P1, a.stdout)]), labels }).class).toBe(
+      'applied-but-wrong',
+    );
     const v = read('n2b', pinId(), { transcript: doc('n2b', [turnOf(P1, b.stdout)]), labels });
-    ok(v, 'n2b', pinId(), {
-      class: 'application-unknown',
-      reason: null,
-      turn: at(eb.id, 1),
-      stage: 'final',
-    });
+    ok(v, 'n2b', pinId(), { class: 'application-unknown', reason: null, turn: at(eb.id, 1), stage: 'final' });
     expect(v.label).toBeNull();
   });
 
@@ -126,18 +108,12 @@ describe('negative controls', () => {
     const sent = additionalContextOf(r.stdout);
     const changed = `${sent.slice(0, -1)}${sent.endsWith('x') ? 'y' : 'x'}`;
     const [e] = events('n3');
-    expect([e.block_state, cand('n3', pinId()).map((c) => [c.outcome, c.stage, c.reason])]).toEqual(
-      ['sent', [['emitted', 'final', null]]],
-    );
-    const v = read('n3', pinId(), {
-      transcript: doc('n3', [turnOf(P1, r.stdout, { attach: changed })]),
-    });
-    ok(v, 'n3', pinId(), {
-      class: 'delivery-unconfirmed',
-      reason: 'no-attachment',
-      turn: at(e.id, 1),
-      stage: 'final',
-    });
+    expect([e.block_state, cand('n3', pinId()).map((c) => [c.outcome, c.stage, c.reason])]).toEqual([
+      'sent',
+      [['emitted', 'final', null]],
+    ]);
+    const v = read('n3', pinId(), { transcript: doc('n3', [turnOf(P1, r.stdout, { attach: changed })]) });
+    ok(v, 'n3', pinId(), { class: 'delivery-unconfirmed', reason: 'no-attachment', turn: at(e.id, 1), stage: 'final' });
   });
 
   it('with the ledger off and one fired transcript prompt, a present memory is indeterminate no-event-row', () => {
@@ -146,16 +122,11 @@ describe('negative controls', () => {
     const r = fire(p, 'n4', P1);
     expect(rows('SELECT COUNT(*) AS c FROM delivery_events')[0].c).toBe(0);
     const v = read('n4', pinId(), { transcript: doc('n4', [turnOf(P1, r.stdout)]) });
-    ok(v, 'n4', pinId(), {
-      class: 'indeterminate',
-      reason: 'no-event-row',
-      turn: null,
-      stage: null,
-    });
-    expect([
-      v.notes.filter((n) => n.startsWith('gap:')),
-      v.turns.filter((t) => t.event_id === null).length,
-    ]).toEqual([['gap:0'], 1]);
+    ok(v, 'n4', pinId(), { class: 'indeterminate', reason: 'no-event-row', turn: null, stage: null });
+    expect([v.notes.filter((n) => n.startsWith('gap:')), v.turns.filter((t) => t.event_id === null).length]).toEqual([
+      ['gap:0'],
+      1,
+    ]);
   });
 
   it('a label with an inferred application is ignored and reported', () => {
@@ -167,12 +138,7 @@ describe('negative controls', () => {
       transcript: doc('n5', [turnOf(P1, r.stdout)]),
       labels: [label('n5', 'inferred', 'resolved-check')],
     });
-    ok(v, 'n5', pinId(), {
-      class: 'application-unknown',
-      reason: null,
-      turn: at(e.id, 1),
-      stage: 'final',
-    });
+    ok(v, 'n5', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
     expect([v.label, v.notes.includes('label-error:application')]).toEqual([null, true]);
   });
 
@@ -209,12 +175,7 @@ describe('negative controls', () => {
     fire(p, 'n7', P1);
     const copyProj = path.join(p.dir, 'copy', 'proj');
     copyTree(p.proj, copyProj);
-    const copy: Project = {
-      ...p,
-      proj: copyProj,
-      cwd: copyProj,
-      hippoRoot: path.join(copyProj, '.hippo'),
-    };
+    const copy: Project = { ...p, proj: copyProj, cwd: copyProj, hippoRoot: path.join(copyProj, '.hippo') };
     const r2 = hippo(copy, PROMPT_HOOK, {
       input: JSON.stringify({ session_id: 'n7', prompt: P2, hook_event_name: 'UserPromptSubmit' }),
     });
@@ -234,12 +195,7 @@ describe('negative controls', () => {
       v,
       'n7',
       pinId(),
-      {
-        class: 'delivery-unconfirmed',
-        reason: 'no-original',
-        turn: at(evs[1].id, 2),
-        stage: 'final',
-      },
+      { class: 'delivery-unconfirmed', reason: 'no-original', turn: at(evs[1].id, 2), stage: 'final' },
       copy.hippoRoot,
     );
     expect(v.notes.includes(`foreign-store:${evs[0].id}`)).toBe(true);
@@ -248,43 +204,24 @@ describe('negative controls', () => {
   it("another tenant's row under the same session id is never read", () => {
     p = project();
     for (let i = 0; i < 3; i++) {
-      seed(
-        p.hippoRoot,
-        `office note ${i}: the coffee machine schedule changes for team lunch on friday`,
-        {
-          created: `2026-06-0${i + 1}T00:00:00.000Z`,
-        },
-      );
+      seed(p.hippoRoot, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
+        created: `2026-06-0${i + 1}T00:00:00.000Z`,
+      });
     }
-    const target = seed(
-      p.hippoRoot,
-      'a lesson from another repo: the staging cluster needs a manual warmup',
-      {
-        originProject: 'some-other-project',
-        created: '2026-07-01T00:00:00.000Z',
-      },
-    );
+    const target = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
+      originProject: 'some-other-project',
+      created: '2026-07-01T00:00:00.000Z',
+    });
     fire(p, 'n8', P1);
     fire(p, 'n8', P2, { args: [...PROMPT_HOOK, '--budget', '0'], env: { HIPPO_TENANT: 'other' } });
     const mine = rows(
       `SELECT id, rejected_unlisted FROM delivery_events WHERE session_id = 'n8' AND tenant_id = 'default'`,
     );
-    const theirs = rows(
-      `SELECT id, block_state FROM delivery_events WHERE session_id = 'n8' AND tenant_id = 'other'`,
-    );
-    expect([mine.length, mine[0].rejected_unlisted, theirs.map((e) => e.block_state)]).toEqual([
-      1,
-      0,
-      ['disabled'],
-    ]);
+    const theirs = rows(`SELECT id, block_state FROM delivery_events WHERE session_id = 'n8' AND tenant_id = 'other'`);
+    expect([mine.length, mine[0].rejected_unlisted, theirs.map((e) => e.block_state)]).toEqual([1, 0, ['disabled']]);
     expect(cand('n8', target.id)).toEqual([]);
     const v = read('n8', target.id);
-    ok(v, 'n8', target.id, {
-      class: 'not-retrieved',
-      reason: 'not-loaded',
-      turn: at(mine[0].id, 1),
-      stage: null,
-    });
+    ok(v, 'n8', target.id, { class: 'not-retrieved', reason: 'not-loaded', turn: at(mine[0].id, 1), stage: null });
     expect(v.turns.map((t) => t.event_id)).toEqual([mine[0].id]);
   });
 
@@ -310,16 +247,8 @@ describe('negative controls', () => {
       ['rejected', 'budget', 'budget'],
     ]);
     const v = read('n9', big.id);
-    ok(v, 'n9', big.id, {
-      class: 'rejected',
-      reason: 'budget',
-      turn: at(evs[1].id, 1),
-      stage: 'budget',
-    });
-    expect([v.turns.length, v.notes]).toEqual([
-      1,
-      [`subagent:${evs[0].id}`, `subagent-outcome:${evs[0].id}:emitted`],
-    ]);
+    ok(v, 'n9', big.id, { class: 'rejected', reason: 'budget', turn: at(evs[1].id, 1), stage: 'budget' });
+    expect([v.turns.length, v.notes]).toEqual([1, [`subagent:${evs[0].id}`, `subagent-outcome:${evs[0].id}:emitted`]]);
   });
 
   it('command, shell and notification lines with no attachments, plus one real turn, leave no gaps', () => {
@@ -328,16 +257,8 @@ describe('negative controls', () => {
     const [e] = events('n10');
     expect([e.block_state, stages('n10', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
     const v = read('n10', pinId(), { transcript: doc('n10', [turnOf(P1, r.stdout)]) });
-    ok(v, 'n10', pinId(), {
-      class: 'application-unknown',
-      reason: null,
-      turn: at(e.id, 1),
-      stage: 'final',
-    });
-    expect([
-      v.notes.filter((n) => n.startsWith('gap:')),
-      v.turns.filter((t) => t.event_id === null),
-    ]).toEqual([[], []]);
+    ok(v, 'n10', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    expect([v.notes.filter((n) => n.startsWith('gap:')), v.turns.filter((t) => t.event_id === null)]).toEqual([[], []]);
   });
 
   it('a lost row, a compaction and a quiet reused turn with other text is never confirmed', () => {
@@ -352,18 +273,13 @@ describe('negative controls', () => {
       turnOf('a different line the user typed', r3.stdout, { compactBefore: true, fired: false }),
     ]);
     const v = read('n11', pinId(), { transcript: t });
-    ok(v, 'n11', pinId(), {
-      class: 'application-unknown',
-      reason: null,
-      turn: at(e1.id, 1),
-      stage: 'final',
-    });
-    expect([
-      v.turns[1].event_id,
-      v.turns[1].paired_by,
-      v.turns[1].delivery,
-      v.turns[1].why,
-    ]).toEqual([e3.id, null, 'unconfirmed', 'compacted-since-send']);
+    ok(v, 'n11', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
+    expect([v.turns[1].event_id, v.turns[1].paired_by, v.turns[1].delivery, v.turns[1].why]).toEqual([
+      e3.id,
+      null,
+      'unconfirmed',
+      'compacted-since-send',
+    ]);
     expect(v.notes.includes('gap:1')).toBe(true);
     expect(stages('n11', pinId())).toEqual([
       ['emitted', 'final'],
@@ -381,10 +297,7 @@ describe('negative controls', () => {
     );
     expect(prompts.map((e) => e.block_state)).toEqual(['sent', 'sent']);
     expect(prompts[0].emitted_hash).toBe(prompts[1].emitted_hash);
-    const t = doc('n12', [
-      turnOf(P1, r1.stdout, { attach: null }),
-      turnOf(P2, r2.stdout, { queued: true }),
-    ]);
+    const t = doc('n12', [turnOf(P1, r1.stdout, { attach: null }), turnOf(P2, r2.stdout, { queued: true })]);
     const v = read('n12', pinId(), { transcript: t });
     const second = prompts.find((e) => Number(e.turn_seq) === 2);
     ok(v, 'n12', pinId(), {
@@ -393,11 +306,11 @@ describe('negative controls', () => {
       turn: at(second?.id ?? null, 2),
       stage: 'final',
     });
-    expect([
-      v.turns[0].delivery,
-      v.turns[0].why,
-      v.turns[1].paired_by,
-      v.turns[1].delivery,
-    ]).toEqual(['unconfirmed', 'no-attachment', 'prompt', 'confirmed']);
+    expect([v.turns[0].delivery, v.turns[0].why, v.turns[1].paired_by, v.turns[1].delivery]).toEqual([
+      'unconfirmed',
+      'no-attachment',
+      'prompt',
+      'confirmed',
+    ]);
   });
 });

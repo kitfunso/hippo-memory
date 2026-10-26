@@ -5,11 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/base/memory/agent-memory-tools.js';
-import {
-  COMPACTION_MEMORY_TAG,
-  COMPACTION_SOURCE_PREFIX,
-  type MemoryEntry,
-} from '../../src/base/memory/entry.js';
+import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { KEEP_PAIRS, canAutoDelete } from '../../src/base/memory/keep-rules.js';
 import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -60,12 +56,9 @@ function newRoot(configJson?: string): string {
 const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' });
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY_MS);
-const keptRow = (content: string): MemoryEntry =>
-  createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
+const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () =>
-  vi.fn<typeof fetch>(
-    async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }),
-  );
+  vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -73,48 +66,27 @@ afterEach(() => {
   for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
-const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string; kept: boolean }> =
-  [
-    { label: 'tag and prefix', tags: [TAG], source: KEPT_SOURCE, kept: true },
-    {
-      label: 'tag among other tags',
-      tags: ['infra', TAG, 'prod'],
-      source: KEPT_SOURCE,
-      kept: true,
-    },
-    { label: 'bare prefix as the source', tags: [TAG], source: PREFIX, kept: true },
-    { label: 'tag on a merged row', tags: [TAG], source: 'consolidation', kept: false },
-    { label: 'prefix without the tag', tags: [], source: KEPT_SOURCE, kept: false },
-    { label: 'prefix with another tag', tags: ['infra'], source: KEPT_SOURCE, kept: false },
-    { label: 'tag with a longer name', tags: [`${TAG}-old`], source: KEPT_SOURCE, kept: false },
-    { label: 'tag ending a longer name', tags: [`not-${TAG}`], source: KEPT_SOURCE, kept: false },
-    { label: 'tag in another case', tags: [TAG.toUpperCase()], source: KEPT_SOURCE, kept: false },
-    {
-      label: 'tag after a quote inside another tag',
-      tags: [`x"${TAG}`],
-      source: KEPT_SOURCE,
-      kept: false,
-    },
-    {
-      label: 'prefix with a capital first letter',
-      tags: [TAG],
-      source: `${PREFIX[0].toUpperCase()}${PREFIX.slice(1)}session-one`,
-      kept: false,
-    },
-    {
-      label: 'prefix in upper case',
-      tags: [TAG],
-      source: `${PREFIX.toUpperCase()}session-one`,
-      kept: false,
-    },
-    { label: 'prefix not at the start', tags: [TAG], source: `x-${KEPT_SOURCE}`, kept: false },
-    {
-      label: 'prefix without its colon',
-      tags: [TAG],
-      source: `${PREFIX.slice(0, -1)}-session-one`,
-      kept: false,
-    },
-  ];
+const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string; kept: boolean }> = [
+  { label: 'tag and prefix', tags: [TAG], source: KEPT_SOURCE, kept: true },
+  { label: 'tag among other tags', tags: ['infra', TAG, 'prod'], source: KEPT_SOURCE, kept: true },
+  { label: 'bare prefix as the source', tags: [TAG], source: PREFIX, kept: true },
+  { label: 'tag on a merged row', tags: [TAG], source: 'consolidation', kept: false },
+  { label: 'prefix without the tag', tags: [], source: KEPT_SOURCE, kept: false },
+  { label: 'prefix with another tag', tags: ['infra'], source: KEPT_SOURCE, kept: false },
+  { label: 'tag with a longer name', tags: [`${TAG}-old`], source: KEPT_SOURCE, kept: false },
+  { label: 'tag ending a longer name', tags: [`not-${TAG}`], source: KEPT_SOURCE, kept: false },
+  { label: 'tag in another case', tags: [TAG.toUpperCase()], source: KEPT_SOURCE, kept: false },
+  { label: 'tag after a quote inside another tag', tags: [`x"${TAG}`], source: KEPT_SOURCE, kept: false },
+  {
+    label: 'prefix with a capital first letter',
+    tags: [TAG],
+    source: `${PREFIX[0].toUpperCase()}${PREFIX.slice(1)}session-one`,
+    kept: false,
+  },
+  { label: 'prefix in upper case', tags: [TAG], source: `${PREFIX.toUpperCase()}session-one`, kept: false },
+  { label: 'prefix not at the start', tags: [TAG], source: `x-${KEPT_SOURCE}`, kept: false },
+  { label: 'prefix without its colon', tags: [TAG], source: `${PREFIX.slice(0, -1)}-session-one`, kept: false },
+];
 
 interface TableRow {
   id: string;
@@ -138,12 +110,7 @@ async function seedTable(root: string): Promise<TableRow[]> {
             ...RAW_FIELDS,
           });
           writeEntry(root, entry);
-          rows.push({
-            id: entry.id,
-            pinned,
-            kind,
-            deletable: !pinned && kind !== 'raw' && !c.kept,
-          });
+          rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
         }
       }
     }
@@ -156,9 +123,7 @@ function sqlDeletableIds(root: string): string[] {
   try {
     // SAFETY: rows' shape matches the single id column named in the SELECT.
     return (
-      db
-        .prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`)
-        .all(...AUTO_DELETABLE.params) as {
+      db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`).all(...AUTO_DELETABLE.params) as {
         id: string;
       }[]
     )
@@ -171,9 +136,7 @@ function sqlDeletableIds(root: string): string[] {
 
 describe('the keep pairs', () => {
   it('are exactly one per agent-memory tool, so a compaction row is not among them', () => {
-    expect(KEEP_PAIRS).toEqual(
-      AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) })),
-    );
+    expect(KEEP_PAIRS).toEqual(AGENT_MEMORY_TOOLS.map((t) => ({ tag: t.tag, sourcePrefix: toolSourcePrefix(t.id) })));
   });
 
   it('each kept tag, and the compaction tag, is a no-merge tag', () => {
@@ -197,9 +160,7 @@ describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x so
 
     expect(table).toHaveLength(KEEP_CASES.length * 4);
     for (const row of table) {
-      expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(
-        row.deletable,
-      );
+      expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(row.deletable);
     }
   });
 
@@ -225,17 +186,12 @@ describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x so
 
   it('a tag that holds the quoted keep tag inside its own text is stored so, and still does not count', () => {
     const root = newRoot();
-    const tricky = createMemory7('tag with a quote inside it', {
-      tags: [`x"${TAG}`],
-      source: KEPT_SOURCE,
-    });
+    const tricky = createMemory7('tag with a quote inside it', { tags: [`x"${TAG}`], source: KEPT_SOURCE });
     writeEntry(root, tricky);
     const db = openHippoDb(root);
     try {
       // SAFETY: row's shape matches the single tags_json column named in the SELECT.
-      const stored = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(tricky.id) as {
-        tags_json: string;
-      };
+      const stored = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(tricky.id) as { tags_json: string };
       expect(stored.tags_json).toContain(`"${TAG}"`);
     } finally {
       closeHippoDb(db);
@@ -265,10 +221,7 @@ describe('the store refuses an automatic removal of a kept row', () => {
   it('deleteEntry with automatic refuses it, and an explicit delete still works', () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
-    const merged = createMemory7('the release train leaves on fridays', {
-      tags: [TAG],
-      source: 'consolidation',
-    });
+    const merged = createMemory7('the release train leaves on fridays', { tags: [TAG], source: 'consolidation' });
     writeEntry(root, kept);
     writeEntry(root, merged);
 
@@ -291,9 +244,7 @@ describe('the store refuses an automatic removal of a kept row', () => {
       dormantAt: new Date().toISOString(),
     };
 
-    expect(batchWriteAndDeleteInFolder(root, [], [kept.id, plain.id], { dormant: [move] })).toEqual(
-      [plain.id],
-    );
+    expect(batchWriteAndDeleteInFolder(root, [], [kept.id, plain.id], { dormant: [move] })).toEqual([plain.id]);
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
   });
@@ -303,28 +254,22 @@ describe('sleep with decay forced', () => {
   it.each([
     ['dormant on', {}],
     ['dormant off', { dormant: { enabled: false } }],
-  ])(
-    '%s: the kept row stays active, the merged-source row and the plain row go',
-    async (name, config) => {
-      const root = newRoot(JSON.stringify({ replay: { count: 0 }, ...config }));
-      const kept = keptRow('the release train leaves on thursdays');
-      const merged = createMemory7('the release train leaves on fridays', {
-        tags: [TAG],
-        source: 'consolidation',
-      });
-      const plain = createMemory7('the staging cluster restarts on sundays');
-      writeEntriesTogether(root, [kept, merged, plain]);
+  ])('%s: the kept row stays active, the merged-source row and the plain row go', async (name, config) => {
+    const root = newRoot(JSON.stringify({ replay: { count: 0 }, ...config }));
+    const kept = keptRow('the release train leaves on thursdays');
+    const merged = createMemory7('the release train leaves on fridays', { tags: [TAG], source: 'consolidation' });
+    const plain = createMemory7('the staging cluster restarts on sundays');
+    writeEntriesTogether(root, [kept, merged, plain]);
 
-      await consolidate(root, { now: sixtyDaysOn() });
+    await consolidate(root, { now: sixtyDaysOn() });
 
-      expect(readEntry(root, kept.id)).not.toBeNull();
-      expect(readEntry(root, merged.id)).toBeNull();
-      expect(readEntry(root, plain.id)).toBeNull();
-      expect((await dormantList(ctxFor(root))).map((m) => m.id).sort()).toEqual(
-        name === 'dormant on' ? [merged.id, plain.id].sort() : [],
-      );
-    },
-  );
+    expect(readEntry(root, kept.id)).not.toBeNull();
+    expect(readEntry(root, merged.id)).toBeNull();
+    expect(readEntry(root, plain.id)).toBeNull();
+    expect((await dormantList(ctxFor(root))).map((m) => m.id).sort()).toEqual(
+      name === 'dormant on' ? [merged.id, plain.id].sort() : [],
+    );
+  });
 
   it('with the learned memory-value rescue on, the kept row still stays active and never goes dormant', async () => {
     const root = newRoot(JSON.stringify({ replay: { count: 0 }, memoryValue: { enabled: true } }));
@@ -332,9 +277,7 @@ describe('sleep with decay forced', () => {
     writeEntry(root, kept);
     writeEntriesTogether(
       root,
-      Array.from({ length: 12 }, (_, i) =>
-        createMemory7(`faded observation number ${i} about module ${i} internals`),
-      ),
+      Array.from({ length: 12 }, (_, i) => createMemory7(`faded observation number ${i} about module ${i} internals`)),
     );
 
     await consolidate(root, { now: sixtyDaysOn() });
@@ -357,10 +300,7 @@ describe('sleep with decay forced', () => {
 
 describe('a memory saved from a compaction fades like any other', () => {
   const compactionRow = (content: string): MemoryEntry =>
-    createMemory7(content, {
-      tags: [COMPACTION_MEMORY_TAG],
-      source: `${COMPACTION_SOURCE_PREFIX}session-one`,
-    });
+    createMemory7(content, { tags: [COMPACTION_MEMORY_TAG], source: `${COMPACTION_SOURCE_PREFIX}session-one` });
 
   it('is auto-deletable in both the function and the SQL', () => {
     const root = newRoot();
@@ -389,22 +329,19 @@ describe('dedupe and audit leave a kept row alone', () => {
   it.each([
     ['kept', KEPT_SOURCE, true],
     ['merged-source', 'consolidation', false],
-  ])(
-    'dedupe removes a weaker duplicate only when it is not kept (%s)',
-    async (_label, source, survives) => {
-      const root = newRoot();
-      const text = 'the build cache lives in /var/cache/hippo on the CI runners';
-      const keeper = createMemory7(text);
-      const copy = { ...createMemory7(text, { tags: [TAG], source }), strength: 0.5 };
-      writeEntry(root, keeper);
-      writeEntry(root, copy);
+  ])('dedupe removes a weaker duplicate only when it is not kept (%s)', async (_label, source, survives) => {
+    const root = newRoot();
+    const text = 'the build cache lives in /var/cache/hippo on the CI runners';
+    const keeper = createMemory7(text);
+    const copy = { ...createMemory7(text, { tags: [TAG], source }), strength: 0.5 };
+    writeEntry(root, keeper);
+    writeEntry(root, copy);
 
-      await deduplicateStore(sqliteStore(root));
+    await deduplicateStore(sqliteStore(root));
 
-      expect(readEntry(root, keeper.id)).not.toBeNull();
-      expect(readEntry(root, copy.id) !== null).toBe(survives);
-    },
-  );
+    expect(readEntry(root, keeper.id)).not.toBeNull();
+    expect(readEntry(root, copy.id) !== null).toBe(survives);
+  });
 
   it('the quality audit only warns about a short kept row, and sleep keeps it', async () => {
     const root = newRoot();
@@ -412,10 +349,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     const merged = createMemory7('nope', { tags: [TAG], source: 'consolidation' });
     writeEntry(root, kept);
 
-    expect(auditMemory(kept)).toMatchObject({
-      severity: 'warning',
-      reason: expect.stringContaining('keep rule'),
-    });
+    expect(auditMemory(kept)).toMatchObject({ severity: 'warning', reason: expect.stringContaining('keep rule') });
     expect(auditMemory(merged)?.severity).toBe('error');
 
     const result = await sleepWholeStore(ctxFor(root), { noShare: true });
@@ -440,11 +374,7 @@ describe('forget and supersede still work on a kept row', () => {
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const result = await supersede(
-      ctxFor(root),
-      kept.id,
-      'the release train leaves on tuesdays now',
-    );
+    const result = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(readEntry(root, kept.id)?.supersededBy).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
@@ -455,11 +385,7 @@ describe('forget and supersede still work on a kept row', () => {
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const { newId } = await supersede(
-      ctxFor(root),
-      kept.id,
-      'the release train leaves on tuesdays now',
-    );
+    const { newId } = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(canAutoDelete(readEntry(root, kept.id)!)).toBe(true);
     expect(canAutoDelete(readEntry(root, newId)!)).toBe(false);
@@ -514,9 +440,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
     );
     writeEntry(
       root,
-      createMemory7('The feature flag is disabled for production users', {
-        tags: ['feature-flag', 'prod'],
-      }),
+      createMemory7('The feature flag is disabled for production users', { tags: ['feature-flag', 'prod'] }),
     );
 
     await consolidate(root, { now: FIXED_NOW });

@@ -13,14 +13,8 @@ import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 // The removed keyless switches stay in this list, so a leftover one in the test run's env cannot change a case.
-const MODE_KEYS = [
-  'HIPPO_ALLOW_KEYLESS_LOCAL',
-  'HIPPO_KEYLESS_LOCAL_ROLE',
-  'HIPPO_REQUIRE_AUTH',
-  'HIPPO_API_KEY',
-];
-const KEY_RULE =
-  'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ';
+const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH', 'HIPPO_API_KEY'];
+const KEY_RULE = 'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ';
 
 interface Served {
   readonly stdout: string;
@@ -72,9 +66,7 @@ function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Serve
       if (stdout.includes('press Ctrl+C to stop')) resolve({ stdout, stop });
     });
     child.once('exit', (code) => {
-      reject(
-        new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`),
-      );
+      reject(new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`));
     });
   });
 }
@@ -100,17 +92,12 @@ afterEach(async () => {
 describe('hippo serve says its key rule at start', () => {
   it.each([
     ['no variable set', {}],
-    [
-      'the removed HIPPO_ALLOW_KEYLESS_LOCAL=1, which nothing reads',
-      { HIPPO_ALLOW_KEYLESS_LOCAL: '1' },
-    ],
+    ['the removed HIPPO_ALLOW_KEYLESS_LOCAL=1, which nothing reads', { HIPPO_ALLOW_KEYLESS_LOCAL: '1' }],
     ['the removed HIPPO_REQUIRE_AUTH=1, which nothing reads', { HIPPO_REQUIRE_AUTH: '1' }],
   ])('with %s', async (_name, env) => {
     const { stdout } = await startServe(env);
     const line = stdout.split(/\r?\n/).find((l) => l.startsWith(KEY_RULE));
-    expect(line).toMatch(
-      /server\.key \(readable by this user only\); mint others with `hippo auth create`$/,
-    );
+    expect(line).toMatch(/server\.key \(readable by this user only\); mint others with `hippo auth create`$/);
   });
 });
 
@@ -128,10 +115,7 @@ describe('a routed CLI write', () => {
     // The host CLI opens the store itself, so a key can be minted while the server runs.
     // SAFETY: `hippo auth create --json` prints one JSON object whose `plaintext` is the key.
     const minted = JSON.parse(
-      hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], {
-        cwd: workspace,
-        env: childEnv(),
-      }),
+      hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() }),
     ) as { plaintext: string };
     const keyed = hippoRun(['remember', 'env-key-canary'], {
       cwd: workspace,

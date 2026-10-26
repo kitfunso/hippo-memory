@@ -26,9 +26,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { SleepResult } from '../../src/api/index.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-function makeMemory(
-  overrides: Partial<MemoryEntry> & { id: string; content: string },
-): MemoryEntry {
+function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
   return {
     id: overrides.id,
     content: overrides.content,
@@ -75,8 +73,7 @@ function printContextMarkdown(
   total: number,
   framing: string,
 ): void {
-  for (const line of contextBlockLines(items, total, framing, { now: evalNow() }))
-    console.log(line);
+  for (const line of contextBlockLines(items, total, framing, { now: evalNow() })) console.log(line);
 }
 
 function renderSleepResult(result: SleepResult): void {
@@ -172,11 +169,7 @@ describe('printContextMarkdown snapshots', () => {
       tags: ['aged'],
     });
     const out = captureStdout(() =>
-      printContextMarkdown(
-        [{ entry: agedObserved, score: 0.5, tokens: 10, isGlobal: false }],
-        10,
-        'observe',
-      ),
+      printContextMarkdown([{ entry: agedObserved, score: 0.5, tokens: 10, isGlobal: false }], 10, 'observe'),
     );
     expect(out).toMatchSnapshot();
   });

@@ -29,11 +29,7 @@ import {
 } from '../../src/api/recall/finish.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-function entry(
-  queryHash: number,
-  topMemoryId: string | null,
-  anchoredOn?: string,
-): RecallHistoryEntry {
+function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: string): RecallHistoryEntry {
   const e: RecallHistoryEntry = { queryHash, topMemoryId, ts: '2026-05-27T00:00:00Z' };
   if (anchoredOn !== undefined) e.anchoredOn = anchoredOn;
   return e;
@@ -129,9 +125,7 @@ describe('buildSessionKey', () => {
     // tenantId 'api_key:hk_x' could collide with another tenant 'api' + session 'key:hk_x'
     // if delimiter were ':'. NUL ensures uniqueness.
     expect(buildSessionKey('api_key:hk_x', 'sess1')).toBe('api_key:hk_x\x00sess1');
-    expect(buildSessionKey('api_key:hk_x', 'sess1')).not.toBe(
-      buildSessionKey('api_key', 'hk_x:sess1'),
-    );
+    expect(buildSessionKey('api_key:hk_x', 'sess1')).not.toBe(buildSessionKey('api_key', 'hk_x:sess1'));
   });
 });
 
@@ -199,11 +193,7 @@ describe('detectAnchoring — tie precedence + cooldown', () => {
     // queryHash 100 + top mem_a → R1 fires (query 100 in window).
     // R2 also fires (distinct queries returning mem_a = {100, 200, 300} = 3).
     // Spec: R2 wins.
-    const hist: RecallHistorySnapshot = [
-      entry(100, 'mem_a'),
-      entry(200, 'mem_a'),
-      entry(300, 'mem_a'),
-    ];
+    const hist: RecallHistorySnapshot = [entry(100, 'mem_a'), entry(200, 'mem_a'), entry(300, 'mem_a')];
     const hint = detectAnchoring(hist, 100, 'mem_a');
     expect(hint).not.toBeNull();
     expect(hint!.reason).toBe('memory_dominance');

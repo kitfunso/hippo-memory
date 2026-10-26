@@ -98,66 +98,59 @@ describe('server hardening', () => {
   });
 
   // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
-  it.skipIf(needsHippoDb('db'))(
-    'SSE heartbeat closes stream with reason=auth_revoked when key revoked',
-    async () => {
-      vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
-      vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way
-      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  it.skipIf(needsHippoDb('db'))('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
+    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way
+    handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
-      // Mint a key, open stream with it, then revoke and wait for the
-      // heartbeat to detect.
-      const db = openHippoDb(root);
-      let keyId: string;
-      let plaintext: string;
+    // Mint a key, open stream with it, then revoke and wait for the
+    // heartbeat to detect.
+    const db = openHippoDb(root);
+    let keyId: string;
+    let plaintext: string;
+    try {
+      const created = createApiKey(db, { tenantId: 'default', label: 'sse-revoke' });
+      keyId = created.keyId;
+      plaintext = created.plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const ac = new AbortController();
+    try {
+      const res = await fetch(`${handle.url}/mcp/stream`, {
+        headers: { accept: 'text/event-stream', authorization: `Bearer ${plaintext}` },
+        signal: ac.signal,
+      });
+      expect(res.status).toBe(200);
+      const reader = res.body!.getReader();
+
+      // Read initial ping to confirm stream live.
+      const first = await reader.read();
+      expect(first.done).toBe(false);
+
+      // Now revoke the key. Next heartbeat should close the stream.
+      const db2 = openHippoDb(root);
       try {
-        const created = createApiKey(db, { tenantId: 'default', label: 'sse-revoke' });
-        keyId = created.keyId;
-        plaintext = created.plaintext;
+        revokeApiKey(db2, keyId);
       } finally {
-        closeHippoDb(db);
+        closeHippoDb(db2);
       }
 
-      const ac = new AbortController();
+      const afterRevoke: string[] = [];
+      const closedReason = await closedReasonOf(reader, new TextDecoder().decode(first.value), afterRevoke);
       try {
-        const res = await fetch(`${handle.url}/mcp/stream`, {
-          headers: { accept: 'text/event-stream', authorization: `Bearer ${plaintext}` },
-          signal: ac.signal,
-        });
-        expect(res.status).toBe(200);
-        const reader = res.body!.getReader();
-
-        // Read initial ping to confirm stream live.
-        const first = await reader.read();
-        expect(first.done).toBe(false);
-
-        // Now revoke the key. Next heartbeat should close the stream.
-        const db2 = openHippoDb(root);
-        try {
-          revokeApiKey(db2, keyId);
-        } finally {
-          closeHippoDb(db2);
-        }
-
-        const afterRevoke: string[] = [];
-        const closedReason = await closedReasonOf(
-          reader,
-          new TextDecoder().decode(first.value),
-          afterRevoke,
-        );
-        try {
-          reader.cancel().catch(() => {});
-        } catch {
-          /* no-op */
-        }
-        expect(closedReason).toBe('auth_revoked');
-        // The revoked key's next server-sent message is the close frame, never another ping.
-        expect(afterRevoke.join('')).not.toContain(': ping');
-      } finally {
-        ac.abort();
+        reader.cancel().catch(() => {});
+      } catch {
+        /* no-op */
       }
-    },
-  );
+      expect(closedReason).toBe('auth_revoked');
+      // The revoked key's next server-sent message is the close frame, never another ping.
+      expect(afterRevoke.join('')).not.toContain(': ping');
+    } finally {
+      ac.abort();
+    }
+  });
 
   // ---- Fix 5.4: graceful shutdown awaits stop() ------------------------
   //
@@ -230,14 +223,11 @@ describe('server hardening', () => {
     it('query string on public route does not change routing (still HMAC-verified)', async () => {
       // Adding ?bypass=1 must not affect routing — pathname is matched,
       // search is ignored. A request without a valid signature still 401s.
-      const res = await fetch(
-        `http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{}',
-        },
-      );
+      const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
       // No x-slack-signature header → HMAC verify fails → 401.
       expect(res.status).toBe(401);
     });

@@ -85,9 +85,7 @@ describe('hippo recall --why exposes envelope', () => {
       'slack://team/channel/1700.123',
       '--global',
     );
-    const parsed = JSON.parse(
-      await hippo('recall', 'envelope-json-marker rollback-uniq43', '--why', '--json'),
-    );
+    const parsed = JSON.parse(await hippo('recall', 'envelope-json-marker rollback-uniq43', '--why', '--json'));
     // Both stores together hold only the one memory this test remembered.
     expect(parsed.results).toHaveLength(1);
     const first = parsed.results[0];

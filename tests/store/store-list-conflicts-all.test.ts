@@ -10,11 +10,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  replaceDetectedConflicts,
-  listMemoryConflicts,
-  writeEntry,
-} from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -43,9 +39,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
     ]);
 
     // Resolve one by re-running with only the other.
-    replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 },
-    ]);
+    replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
 
     const openOnly = await listMemoryConflicts(tmpDir, 'open');
     expect(openOnly).toHaveLength(1);
@@ -65,9 +59,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
       { memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 },
       { memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 },
     ]);
-    replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 },
-    ]);
+    replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
 
     const all = await listMemoryConflicts(tmpDir, '*');
     expect(all).toHaveLength(2);
@@ -81,9 +73,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
-    replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 },
-    ]);
+    replaceDetectedConflicts(tmpDir, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 }]);
     replaceDetectedConflicts(tmpDir, []);
 
     // listMemoryConflicts(tmpDir) === listMemoryConflicts(tmpDir, 'open')
@@ -97,9 +87,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
-    replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 },
-    ]);
+    replaceDetectedConflicts(tmpDir, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 }]);
 
     const resolved = await listMemoryConflicts(tmpDir, 'resolved');
     expect(resolved).toHaveLength(0);

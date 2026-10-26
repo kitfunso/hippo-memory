@@ -1,24 +1,13 @@
 // The order recall gives scored candidates must come from the candidates alone: never from the order they arrived in, and a higher score never moves one down.
 import { describe, it, expect } from 'vitest';
-import {
-  comparePhysicsResultsBy,
-  compareScoredResults,
-  type ScoredEntryLike,
-} from '../../src/base/rank/compare.js';
+import { comparePhysicsResultsBy, compareScoredResults, type ScoredEntryLike } from '../../src/base/rank/compare.js';
 import { arr, both, forAll, int, map, pick, type Gen } from '../_helpers/property.js';
 
 // Few distinct values, so most draws tie on score and many tie on every key before the id; the last three have no difference to subtract.
 const SCORES = [0, 0.5, 0.5, 1, 1, -1, 1e-9, 0.3, 0.1 + 0.2, Infinity, -Infinity, Number.NaN];
 const CONTENTS = ['a', 'a', 'b', 'A', ''];
 const LAYERS = [null, null, 'semantic', 'episodic', 'buffer', 'unlisted', ''];
-const TAGS: readonly (readonly string[] | null)[] = [
-  null,
-  [],
-  ['x'],
-  ['x', 'y'],
-  ['y', 'x'],
-  ['x', 'x', 'y'],
-];
+const TAGS: readonly (readonly string[] | null)[] = [null, [], ['x'], ['x', 'y'], ['y', 'x'], ['x', 'x', 'y']];
 const SOURCES = [null, null, 'cli', 'slack'];
 
 type Draft = Omit<ScoredEntryLike['entry'], 'id'>;
@@ -39,10 +28,7 @@ const DRAFT: Gen<Draft> = map(
 const ARRIVALS: Gen<{ scored: ScoredEntryLike; turn: number }[]> = map(
   arr(both(both(pick(SCORES), DRAFT), int(0, 99)), 0, 12),
   (drawn) =>
-    drawn.map(([[score, draft], turn], index) => ({
-      scored: { score, entry: { ...draft, id: `m${index}` } },
-      turn,
-    })),
+    drawn.map(([[score, draft], turn], index) => ({ scored: { score, entry: { ...draft, id: `m${index}` } }, turn })),
 );
 
 interface Row {
@@ -68,12 +54,8 @@ describe('ranking properties', () => {
 
   it('the physics comparator ranks any arrival order the same, by id or by a content tie key', async () => {
     await forAll(0x9415, 500, both(ARRIVALS, pick([true, false])), ([arrivals, byContent]) => {
-      const compare = comparePhysicsResultsBy<Row>(
-        (row) => row.score,
-        byContent ? (row) => row.content : undefined,
-      );
-      const order = (rows: readonly Row[]): string[] =>
-        [...rows].sort(compare).map((row) => row.memoryId);
+      const compare = comparePhysicsResultsBy<Row>((row) => row.score, byContent ? (row) => row.content : undefined);
+      const order = (rows: readonly Row[]): string[] => [...rows].sort(compare).map((row) => row.memoryId);
       const first = arrivals.map(({ scored }) => ({
         memoryId: scored.entry.id,
         score: scored.score,
@@ -90,9 +72,7 @@ describe('ranking properties', () => {
       if (before.length === 0) return;
       const chosen = before[slot % before.length]!;
       const after = before.map((c) => (c === chosen ? { ...c, score: c.score + by } : c));
-      expect(ranked(after).indexOf(chosen.entry.id)).toBeLessThanOrEqual(
-        ranked(before).indexOf(chosen.entry.id),
-      );
+      expect(ranked(after).indexOf(chosen.entry.id)).toBeLessThanOrEqual(ranked(before).indexOf(chosen.entry.id));
     });
   });
 });

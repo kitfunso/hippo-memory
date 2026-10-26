@@ -19,14 +19,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
-const HOOK_ARGS = [
-  'context',
-  '--pinned-only',
-  '--include-recent',
-  '5',
-  '--format',
-  'additional-context',
-];
+const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const PROMPT = 'how should the postgres migration rollback plan work';
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';
@@ -61,41 +54,25 @@ const seeded: MemoryEntry[] = [];
 const store = (dir: string): string => path.join(dir, '.hippo');
 
 function seed(content: string, extra: Partial<MemoryEntry> = {}, dir = proj): MemoryEntry {
-  const entry = {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    ...extra,
-  };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
   writeEntry(store(dir), entry);
   seeded.push(entry);
   return entry;
 }
 
-function configure(
-  ledger: boolean,
-  pinnedInject: Partial<HippoConfig['pinnedInject']> = {},
-  dir = proj,
-): void {
+function configure(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject']> = {}, dir = proj): void {
   fs.writeFileSync(
     path.join(store(dir), 'config.json'),
     JSON.stringify({
       deliveryLedger: { enabled: ledger },
-      pinnedInject: {
-        promptRecall: false,
-        promptRecallThreshold: 0.1,
-        promptRecallMinShared: 1,
-        ...pinnedInject,
-      },
+      pinnedInject: { promptRecall: false, promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...pinnedInject },
     }),
   );
 }
 
 /** A copy of the project with the ledger switched; same folder name, since the project name gates which memories load. */
 function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject']> = {}): string {
-  const dir = path.join(
-    tmp,
-    `clone-${ledger ? 'on' : 'off'}-${fs.readdirSync(tmp).length}`,
-    'proj',
-  );
+  const dir = path.join(tmp, `clone-${ledger ? 'on' : 'off'}-${fs.readdirSync(tmp).length}`, 'proj');
   copyTree(proj, dir);
   configure(ledger, pinnedInject, dir);
   return dir;
@@ -111,12 +88,7 @@ async function run(
   const env = { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env };
   const input = payload === null ? '' : JSON.stringify(payload);
   if (!opts.spawned) return runCliAs(args, { cwd: dir, env, input });
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd: dir,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: dir, env, input, encoding: 'utf8' });
 }
 
 function claude(sessionId: string, prompt = PROMPT): Payload {
@@ -149,10 +121,8 @@ function eventCount(dir: string): number {
   }
 }
 
-const ledgerLines = (stderr: string): string[] =>
-  stderr.split('\n').filter((l) => l.includes('delivery ledger'));
-const additionalContext = (stdout: string): string =>
-  JSON.parse(stdout).hookSpecificOutput.additionalContext;
+const ledgerLines = (stderr: string): string[] => stderr.split('\n').filter((l) => l.includes('delivery ledger'));
+const additionalContext = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
 const rejected = (e: DeliveryEventRow) => e.candidates.filter((c) => c.outcome === 'rejected');
 
 beforeEach(() => {
@@ -167,25 +137,19 @@ beforeEach(() => {
 describe('what one hook call records', () => {
   it('a pin over budget is rejected for budget, and injected tokens price the exact additionalContext', async () => {
     const small = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    const big = seed(
-      `PINNED: ${'the deploy checklist covers every service and region '.repeat(30)}`,
-      { pinned: true },
-    );
-    const r = await run(proj, claude('f1'), {
-      args: [...HOOK_ARGS, '--budget', '200'],
-      spawned: true,
-    });
+    const big = seed(`PINNED: ${'the deploy checklist covers every service and region '.repeat(30)}`, { pinned: true });
+    const r = await run(proj, claude('f1'), { args: [...HOOK_ARGS, '--budget', '200'], spawned: true });
     expect(r.status).toBe(0);
     const sent = additionalContext(r.stdout);
     const [e] = eventsN(proj, 'f1', 1);
-    expect([
-      e.block_state,
-      e.runtime,
-      e.event_type,
-      e.surface,
-      e.session_state,
-      e.turn_seq,
-    ]).toEqual(['sent', 'claude-code', 'prompt-submit', 'hook', 'payload', 1]);
+    expect([e.block_state, e.runtime, e.event_type, e.surface, e.session_state, e.turn_seq]).toEqual([
+      'sent',
+      'claude-code',
+      'prompt-submit',
+      'hook',
+      'payload',
+      1,
+    ]);
     expect(e.injected_tokens).toBe(estimateTokens(sent));
     expect(e.emitted_hash).toBe(blockHash(sent));
     expect(e.prompt_hash).toBe(blockHash(PROMPT));
@@ -211,9 +175,7 @@ describe('what one hook call records', () => {
     });
     const rows = rejected(e);
     expect(rows).toHaveLength(16);
-    expect(
-      rows.every((c) => c.reason === 'gate-below-threshold' && c.score !== null && c.score > 0),
-    ).toBe(true);
+    expect(rows.every((c) => c.reason === 'gate-below-threshold' && c.score !== null && c.score > 0)).toBe(true);
     expect(e.rejected_count - e.rejected_unlisted).toBe(16);
     expect(e.rejected_unlisted).toBeGreaterThanOrEqual(4);
   });
@@ -223,12 +185,7 @@ describe('what one hook call records', () => {
     expect((await run(proj, claude('f3', 'first question about deploys'))).stdout).not.toBe('');
     expect((await run(proj, claude('f3', 'second question about the test suite'))).stdout).toBe('');
     const [first, second] = eventsN(proj, 'f3', 2);
-    expect([first.turn_seq, first.block_state, second.turn_seq, second.block_state]).toEqual([
-      1,
-      'sent',
-      2,
-      'reused',
-    ]);
+    expect([first.turn_seq, first.block_state, second.turn_seq, second.block_state]).toEqual([1, 'sent', 2, 'reused']);
     expect(second.static_hash).toBe(first.static_hash);
     expect([second.injected_tokens, second.emitted_hash]).toEqual([0, null]);
     expect(second.candidates.find((c) => c.memory_id === pin.id)?.outcome).toBe('reused');
@@ -238,23 +195,14 @@ describe('what one hook call records', () => {
     configure(true, { promptRecall: true });
     const pin = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     const relevant = seed('the postgres migration script needs a rollback plan before deploy');
-    expect(
-      (await run(proj, claude('f3b', 'how should the postgres migration rollback work'))).status,
-    ).toBe(0);
+    expect((await run(proj, claude('f3b', 'how should the postgres migration rollback work'))).status).toBe(0);
     const r = await run(proj, claude('f3b', 'does the postgres migration rollback need a review'));
     expect(r.status).toBe(0);
     const recallSent = additionalContext(r.stdout);
     const [first, second] = eventsN(proj, 'f3b', 2);
-    expect([first.block_state, second.block_state, second.turn_seq]).toEqual([
-      'sent',
-      'reused-recall-sent',
-      2,
-    ]);
+    expect([first.block_state, second.block_state, second.turn_seq]).toEqual(['sent', 'reused-recall-sent', 2]);
     expect(second.static_hash).toBe(first.static_hash);
-    expect([second.recall_hash, second.emitted_hash]).toEqual([
-      blockHash(recallSent),
-      blockHash(recallSent),
-    ]);
+    expect([second.recall_hash, second.emitted_hash]).toEqual([blockHash(recallSent), blockHash(recallSent)]);
     expect(second.candidates.find((c) => c.memory_id === pin.id)?.outcome).toBe('reused');
     expect(second.candidates.find((c) => c.memory_id === relevant.id)).toMatchObject({
       outcome: 'emitted',
@@ -272,21 +220,13 @@ describe('what one hook call records', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect((await run(proj, claude('f3c', 'second question about the test suite'))).stdout).toBe(
-      '',
-    );
+    expect((await run(proj, claude('f3c', 'second question about the test suite'))).stdout).toBe('');
     const [first, second] = eventsN(proj, 'f3c', 2);
-    expect([second.turn_seq, second.block_state, second.static_hash]).toEqual([
-      2,
-      'reused',
-      first.static_hash,
-    ]);
+    expect([second.turn_seq, second.block_state, second.static_hash]).toEqual([2, 'reused', first.static_hash]);
     const check = openHippoDb(store(proj));
     try {
       // SAFETY: a single COUNT(*) aggregate aliased `c`.
-      const skips = check
-        .prepare(`SELECT COUNT(*) AS c FROM token_ledger WHERE event = 'skip'`)
-        .get() as { c: number };
+      const skips = check.prepare(`SELECT COUNT(*) AS c FROM token_ledger WHERE event = 'skip'`).get() as { c: number };
       expect(skips.c).toBe(0);
     } finally {
       closeHippoDb(check);
@@ -333,9 +273,7 @@ describe('what one hook call records', () => {
     await run(proj, { ...claude('f4b', 'first question about deploys'), turn_id: '' });
     await run(proj, { ...claude('f4b', 'second question about the test suite'), turn_id: '' });
     await run(proj, { ...claude('f4b', 'third question about the release'), turn_id: '   ' });
-    expect(
-      eventsN(proj, 'f4b', 3).map((e) => [e.host_turn_id, e.turn_seq, e.duplicate_of, e.runtime]),
-    ).toEqual([
+    expect(eventsN(proj, 'f4b', 3).map((e) => [e.host_turn_id, e.turn_seq, e.duplicate_of, e.runtime])).toEqual([
       [null, 1, null, 'claude-code'],
       [null, 2, null, 'claude-code'],
       [null, 3, null, 'claude-code'],
@@ -390,11 +328,7 @@ describe('what one hook call records', () => {
     );
     await run(proj, { ...claude('parent'), agent_id: 'agent-1' });
     const [missing] = eventsN(proj, null, 1);
-    expect([missing.session_state, missing.turn_seq, missing.duplicate_of]).toEqual([
-      'missing',
-      null,
-      null,
-    ]);
+    expect([missing.session_state, missing.turn_seq, missing.duplicate_of]).toEqual(['missing', null, null]);
     const [env] = eventsN(proj, 'from-env', 1);
     expect([env.session_state, env.turn_seq]).toEqual(['env', 1]);
     const [sub] = eventsN(proj, 'parent', 1);
@@ -428,10 +362,7 @@ describe('what one hook call records', () => {
       closeHippoDb(db);
     }
     expect(rows).toHaveLength(1);
-    expect([rows[0].write_store, rows[0].store_hash]).toEqual([
-      'global',
-      blockHash(realpathOrResolve(globalRoot)),
-    ]);
+    expect([rows[0].write_store, rows[0].store_hash]).toEqual(['global', blockHash(realpathOrResolve(globalRoot))]);
   });
 
   it.each([
@@ -444,24 +375,15 @@ describe('what one hook call records', () => {
       const r = await run(proj, claude(`bytes-${format}`), { args });
       expect(r.stdout.endsWith('\n')).toBe(true);
       const [e] = eventsN(proj, `bytes-${format}`, 1);
-      expect([e.emitted_hash, e.injected_tokens]).toEqual([
-        blockHash(r.stdout),
-        estimateTokens(r.stdout),
-      ]);
+      expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     },
   );
 
   it('records disabled for a zero budget, with the session and prompt hash, and when pinned injection is off', async () => {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
-    expect(
-      (await run(proj, claude('zero'), { args: [...HOOK_ARGS, '--budget', '0'] })).stdout,
-    ).toBe('');
+    expect((await run(proj, claude('zero'), { args: [...HOOK_ARGS, '--budget', '0'] })).stdout).toBe('');
     const [zero] = eventsN(proj, 'zero', 1);
-    expect([zero.block_state, zero.prompt_hash, zero.turn_seq]).toEqual([
-      'disabled',
-      blockHash(PROMPT),
-      1,
-    ]);
+    expect([zero.block_state, zero.prompt_hash, zero.turn_seq]).toEqual(['disabled', blockHash(PROMPT), 1]);
     configure(true, { enabled: false });
     expect((await run(proj, claude('off'))).stdout).toBe('');
     expect(eventsN(proj, 'off', 1)[0].block_state).toBe('disabled');
@@ -472,9 +394,7 @@ describe('the ledger never changes the hook', () => {
   function fixture(): void {
     seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     seed('PINNED: the deploy script lives in the ops folder for every release', { pinned: true });
-    seed('the postgres migration script needs a rollback plan before deploy', {
-      created: '2026-05-01T00:00:00.000Z',
-    });
+    seed('the postgres migration script needs a rollback plan before deploy', { created: '2026-05-01T00:00:00.000Z' });
     for (let i = 0; i < 4; i++) {
       seed(`office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
         created: `2026-06-0${i + 1}T00:00:00.000Z`,
@@ -495,9 +415,7 @@ describe('the ledger never changes the hook', () => {
     const on = await run(dir, claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     expect(off.stdout).not.toBe('');
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
-    expect(ledgerLines(on.stderr)).toEqual([
-      expect.stringMatching(/^\[hippo\] error: delivery ledger write failed: /),
-    ]);
+    expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] error: delivery ledger write failed: /)]);
     expect(eventCount(dir)).toBe(0);
   });
 
@@ -531,21 +449,15 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
 };
 `,
     );
-    const r = spawnSync(
-      process.execPath,
-      ['--import', pathToFileURL(preload).href, HIPPO_JS, ...HOOK_ARGS],
-      {
-        cwd: proj,
-        env: { ...BASE_ENV, HIPPO_HOME: path.join(proj, 'global') },
-        input: JSON.stringify(claude('f8')),
-        encoding: 'utf8',
-      },
-    );
+    const r = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...HOOK_ARGS], {
+      cwd: proj,
+      env: { ...BASE_ENV, HIPPO_HOME: path.join(proj, 'global') },
+      input: JSON.stringify(claude('f8')),
+      encoding: 'utf8',
+    });
     expect(r.status).toBe(0);
     expect(r.stdout).not.toBe('');
-    expect(fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '').not.toContain(
-      'INSERT INTO delivery_',
-    );
+    expect(fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '').not.toContain('INSERT INTO delivery_');
     expect(eventCount(proj)).toBe(0);
   });
 
@@ -627,27 +539,16 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
         ...db.prepare('SELECT * FROM delivery_events').all(),
         ...db.prepare('SELECT * FROM delivery_candidates').all(),
       ] as Array<{ [column: string]: string | number | null }>;
-      cells = rows
-        .flatMap((r) => Object.values(r))
-        .filter((v): v is string => typeof v === 'string');
+      cells = rows.flatMap((r) => Object.values(r)).filter((v): v is string => typeof v === 'string');
     } finally {
       closeHippoDb(db);
     }
     // The scan covers each run's session and turn, the 2 pins, and the one note that shares the prompt's words.
     expect(cells).toEqual(
-      expect.arrayContaining([
-        'f10',
-        'f10-codex',
-        'turn-9',
-        ...seeded.slice(0, 3).map((m) => m.id),
-      ]),
+      expect.arrayContaining(['f10', 'f10-codex', 'turn-9', ...seeded.slice(0, 3).map((m) => m.id)]),
     );
     const odd = cells.filter(
-      (v) =>
-        !/^[0-9a-f]{16}$/.test(v) &&
-        !/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) &&
-        !ids.has(v) &&
-        !allowed.has(v),
+      (v) => !/^[0-9a-f]{16}$/.test(v) && !/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) && !ids.has(v) && !allowed.has(v),
     );
     expect(odd).toEqual([]);
     const words = [PROMPT, ...seeded.map((m) => m.content)].flatMap((t) => {
@@ -677,13 +578,8 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     );
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [row] = eventsN(proj, 'f10-fail', 1);
-    expect([row.event_type, row.tool_use_id, row.failure_id]).toEqual([
-      'tool-failure',
-      toolUseId.slice(0, 128),
-      1,
-    ]);
+    expect([row.event_type, row.tool_use_id, row.failure_id]).toEqual(['tool-failure', toolUseId.slice(0, 128), 1]);
     const text = JSON.stringify(row);
-    for (const word of ['ZQXERROR', 'reconciliation', 'zqxcommand', '--reconcile'])
-      expect(text).not.toContain(word);
+    for (const word of ['ZQXERROR', 'reconciliation', 'zqxcommand', '--reconcile']) expect(text).not.toContain(word);
   });
 });

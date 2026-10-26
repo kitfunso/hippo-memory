@@ -45,8 +45,7 @@ interface TrapDefinition {
 
 // SAFETY: trap-definitions.json is this repo's own fixture file, hand-
 // authored to match the TrapDefinition shape declared above.
-const trapDefs: TrapDefinition[] = JSON.parse(fs.readFileSync(TRAP_DEFS_PATH, 'utf8'))
-  .traps as TrapDefinition[];
+const trapDefs: TrapDefinition[] = JSON.parse(fs.readFileSync(TRAP_DEFS_PATH, 'utf8')).traps as TrapDefinition[];
 
 // ---------------------------------------------------------------------------
 // Setup: seed the store with the exact memories that prevent each trap
@@ -57,12 +56,7 @@ const entriesByLabel: Record<string, MemoryEntry> = {};
 
 /** Seed memories that map to the trap prevention IDs */
 function seedTrapMemories(hippoRoot: string): void {
-  const memories: Array<{
-    label: string;
-    id: string;
-    content: string;
-    opts: Parameters<typeof createMemory>[1];
-  }> = [
+  const memories: Array<{ label: string; id: string; content: string; opts: Parameters<typeof createMemory>[1] }> = [
     {
       label: 'never_overwrite',
       id: 'bm_never_overwrite',
@@ -71,11 +65,7 @@ function seedTrapMemories(hippoRoot: string): void {
 2. Keep the original intact
 3. Let Keith decide when to promote/replace
 Violating this destroys live PnL history and cannot be undone from git blame alone.`,
-      opts: {
-        tags: ['production', 'rule', 'deploy', 'overwrite'],
-        emotionalValence: 'critical',
-        pinned: true,
-      },
+      opts: { tags: ['production', 'rule', 'deploy', 'overwrite'], emotionalValence: 'critical', pinned: true },
     },
     {
       label: 'eia_path_change',
@@ -83,10 +73,7 @@ Violating this destroys live PnL history and cannot be undone from git blame alo
       content: `EIA API path changed silently. /petroleum/sum/wkly became /petroleum/sum/sndw.
 This broke 9 of 10 EIA series silently because exceptions were swallowed with bare except: pass.
 Always log failed API calls, don't just pass. Bare except is a data-pipeline anti-pattern.`,
-      opts: {
-        tags: ['data-pipeline', 'eia', 'api', 'error', 'exception'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['data-pipeline', 'eia', 'api', 'error', 'exception'], emotionalValence: 'negative' },
     },
     {
       label: 'no_emoji_python',
@@ -94,10 +81,7 @@ Always log failed API calls, don't just pass. Bare except is a data-pipeline ant
       content: `No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.
 Example crash: print("✅ Success!"). Use plain ASCII instead: print("OK") or print("[OK]").
 Affects all Windows Python scripts including pipeline status scripts.`,
-      opts: {
-        tags: ['platform', 'windows', 'encoding', 'emoji', 'print', 'crash'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['platform', 'windows', 'encoding', 'emoji', 'print', 'crash'], emotionalValence: 'negative' },
     },
     {
       label: 'powershell_semicolons',
@@ -106,10 +90,7 @@ Affects all Windows Python scripts including pipeline status scripts.`,
 Correct: npm run build; npx wrangler deploy
 Wrong:   npm run build && npx wrangler deploy
 The && operator is bash syntax and causes silent failure in PowerShell. Use ; instead.`,
-      opts: {
-        tags: ['platform', 'powershell', 'windows', 'shell', 'operator'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['platform', 'powershell', 'windows', 'shell', 'operator'], emotionalValence: 'negative' },
     },
     {
       label: 'walk_forward_overestimates',
@@ -118,10 +99,7 @@ The && operator is bash syntax and causes silent failure in PowerShell. Use ; in
 (Exp 7) showed walk-forward OOS Sharpe overestimates by +0.59 on average (mean WF=1.15 vs CPCV=0.56).
 Use CPCV-deflated Sharpe for risk management and honest reporting. Never report raw walk-forward
 Sharpe as the final OOS number without this caveat.`,
-      opts: {
-        tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward', 'oos'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward', 'oos'], emotionalValence: 'negative' },
     },
     {
       label: 'constants_must_sync',
@@ -151,10 +129,7 @@ and "robust framework" signal AI-generated copy that needs human editing.`,
 reported "14/14 OK" while 5+ sources were silently stale (WB date format change, DBnomics
 stuck at 2023, IndexMundi SSL expired, EIA path change). Don't trust exit code alone.
 Always verify actual file modification times and spot-check data values.`,
-      opts: {
-        tags: ['data-pipeline', 'staleness', 'monitoring', 'exit-code', 'cache'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['data-pipeline', 'staleness', 'monitoring', 'exit-code', 'cache'], emotionalValence: 'negative' },
     },
     {
       label: 'data_mining_honesty',
@@ -164,10 +139,7 @@ results as "OOS" is data mining. The reported Sharpe (1.74) is inflated; honest 
 (theory-only features) give ~0.87. Fix: select features based on economic theory only,
 OR select on early data, freeze selection, then test on later data. Never iterate based
 on backtest results.`,
-      opts: {
-        tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'oos'],
-        emotionalValence: 'negative',
-      },
+      opts: { tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'oos'], emotionalValence: 'negative' },
     },
     {
       label: 'subagent_fabrication',
@@ -177,10 +149,7 @@ on backtest results.`,
 and PRODUCTION_MANIFEST were both falsified. Always run:
   python production/{commodity}_production_std.py
 and compare actual output to claimed metrics before accepting any model upgrade.`,
-      opts: {
-        tags: ['sub-agent', 'verification', 'metrics', 'fabrication', 'manifest'],
-        emotionalValence: 'critical',
-      },
+      opts: { tags: ['sub-agent', 'verification', 'metrics', 'fabrication', 'manifest'], emotionalValence: 'critical' },
     },
   ];
 

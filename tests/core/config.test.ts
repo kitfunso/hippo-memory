@@ -5,12 +5,7 @@ import * as os from 'node:os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { type HippoConfig } from '../../src/base/config/config.js';
-import {
-  configReader,
-  loadConfig,
-  isSharedStore,
-  sharedStoreCheck,
-} from '../../src/host/config-file.js';
+import { configReader, loadConfig, isSharedStore, sharedStoreCheck } from '../../src/host/config-file.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/base/util/log.js';
 
@@ -31,10 +26,7 @@ describe('config.pinnedInject', () => {
   it('accepts partial override', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-'));
     try {
-      fs.writeFileSync(
-        path.join(tmp, 'config.json'),
-        JSON.stringify({ pinnedInject: { budget: 200 } }),
-      );
+      fs.writeFileSync(path.join(tmp, 'config.json'), JSON.stringify({ pinnedInject: { budget: 200 } }));
       const cfg = loadConfig(tmp);
       expect(cfg.pinnedInject.enabled).toBe(true); // default retained
       expect(cfg.pinnedInject.budget).toBe(200);
@@ -150,9 +142,7 @@ describe('loadConfig characterization', () => {
 
   it('keeps deliveryLedger off unless a real boolean sits inside an object', () => {
     expect(load(null).cfg.deliveryLedger).toEqual({ enabled: false });
-    expect(
-      load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger,
-    ).toEqual({
+    expect(load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger).toEqual({
       enabled: false,
     });
     for (const body of [
@@ -168,9 +158,7 @@ describe('loadConfig characterization', () => {
   });
 
   it('throws with the file path and the parse error on unparsable JSON, and names a non-object', () => {
-    expect(() => load('{not json')).toThrow(
-      /config\.json could not be loaded: .*(JSON|property name)/,
-    );
+    expect(() => load('{not json')).toThrow(/config\.json could not be loaded: .*(JSON|property name)/);
     for (const json of ['null', '[]', '"tea"']) {
       expect(() => load(json), json).toThrow(/config\.json must hold a JSON object/);
     }
@@ -238,10 +226,7 @@ describe('config.sharedStore', () => {
   }
 
   it('stays true under a second spelling of the same folder', () => {
-    const other =
-      process.platform === 'win32'
-        ? `${tmp.toUpperCase()}${path.sep}`
-        : `${tmp}${path.sep}.${path.sep}`;
+    const other = process.platform === 'win32' ? `${tmp.toUpperCase()}${path.sep}` : `${tmp}${path.sep}.${path.sep}`;
     expect(stickyThrough(tmp, other)).toBe(true);
   });
 
@@ -330,10 +315,7 @@ describe('config.json is parsed once per file version, per reader', () => {
     expect(server(tmp).pinnedInject.budget).toBe(200);
     const other = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-cache-other-'));
     try {
-      fs.writeFileSync(
-        path.join(other, 'config.json'),
-        JSON.stringify({ pinnedInject: { budget: 9 } }),
-      );
+      fs.writeFileSync(path.join(other, 'config.json'), JSON.stringify({ pinnedInject: { budget: 9 } }));
       expect(configReader()(other).pinnedInject.budget).toBe(9);
       expect(cli(tmp).pinnedInject.budget).toBe(300);
     } finally {

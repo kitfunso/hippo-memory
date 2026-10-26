@@ -30,9 +30,7 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 
-async function post(
-  body: JsonValue,
-): Promise<{ status: number; json: { ids?: string[]; error?: string } }> {
+async function post(body: JsonValue): Promise<{ status: number; json: { ids?: string[]; error?: string } }> {
   const res = await fetch(`${handle.url}/v1/vectors/nearest`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -45,16 +43,8 @@ describe('POST /v1/vectors/nearest', () => {
   it.each([
     ['no vector', { spec: SPEC }, 'vector must be an array of 1 to 4096 numbers'],
     ['an empty vector', { vector: [], spec: SPEC }, 'vector must be an array of 1 to 4096 numbers'],
-    [
-      'a vector past 4096',
-      { vector: Array(4097).fill(0), spec: SPEC },
-      'vector must be an array of 1 to 4096 numbers',
-    ],
-    [
-      'a vector with a string',
-      { vector: [1, '0'], spec: SPEC },
-      'vector must hold finite numbers only',
-    ],
+    ['a vector past 4096', { vector: Array(4097).fill(0), spec: SPEC }, 'vector must be an array of 1 to 4096 numbers'],
+    ['a vector with a string', { vector: [1, '0'], spec: SPEC }, 'vector must hold finite numbers only'],
     ['no spec', { vector: [1, 0, 0] }, 'spec must be an object'],
     [
       'no includeSuperseded',
@@ -85,16 +75,11 @@ describe('POST /v1/vectors/nearest', () => {
     expect(await post(body)).toEqual({ status: 400, json: { error } });
   });
 
-  it.skipIf(needsHippoDb('team'))(
-    "answers the caller's tenant's nearest ids, and 403 for another tenant",
-    async () => {
-      expect(await post({ vector: [1, 0, 0], spec: { ...SPEC, limit: 2 } })).toEqual({
-        status: 200,
-        json: { ids: ['nearest', 'near'] },
-      });
-      expect((await post({ vector: [1, 0, 0], spec: { ...SPEC, tenantId: 'other' } })).status).toBe(
-        403,
-      );
-    },
-  );
+  it.skipIf(needsHippoDb('team'))("answers the caller's tenant's nearest ids, and 403 for another tenant", async () => {
+    expect(await post({ vector: [1, 0, 0], spec: { ...SPEC, limit: 2 } })).toEqual({
+      status: 200,
+      json: { ids: ['nearest', 'near'] },
+    });
+    expect((await post({ vector: [1, 0, 0], spec: { ...SPEC, tenantId: 'other' } })).status).toBe(403);
+  });
 });

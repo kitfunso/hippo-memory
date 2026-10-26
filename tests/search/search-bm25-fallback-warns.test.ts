@@ -29,9 +29,7 @@ function useModel(model: string): void {
 }
 
 function fallbackLines(): string[] {
-  return stderrSpy.mock.calls
-    .map((c) => String(c[0]))
-    .filter((l) => l.includes('fell back to BM25'));
+  return stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('fell back to BM25'));
 }
 
 beforeEach(() => {

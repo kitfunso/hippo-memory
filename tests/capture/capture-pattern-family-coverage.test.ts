@@ -84,12 +84,7 @@ describe('every pattern family still extracts', () => {
     // clause-bounding. It must not also admit chat noise: this gate is shared
     // with the recent-context floor and `hippo audit`, so widening it acts
     // RETROACTIVELY over rows a user already holds.
-    for (const junk of [
-      'TODO fix this thing',
-      'LGTM ship it',
-      'FYI all done here',
-      'IIRC that was fine',
-    ]) {
+    for (const junk of ['TODO fix this thing', 'LGTM ship it', 'FYI all done here', 'IIRC that was fine']) {
       expect(isContentWorthStoring(junk), `${junk} must stay rejected`).toBe(false);
     }
     for (const real of [

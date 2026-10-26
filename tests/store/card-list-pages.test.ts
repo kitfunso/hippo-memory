@@ -4,11 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { keysetPages } from '../../src/api/pages.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  countMatching,
-  peakRowsRead,
-  recordStatementsAsync,
-} from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 const TENANT = 'default';
@@ -64,9 +60,7 @@ describe('card list pages', () => {
     const root = makeStore('card-pages-status').root;
     const whole = seed(root, 50);
     const sqlite = sqliteStore(root).cards;
-    const ready = (await sqlite.list(TENANT, { status: 'ready', limit: 1000 })).cards.map(
-      (c) => c.id,
-    );
+    const ready = (await sqlite.list(TENANT, { status: 'ready', limit: 1000 })).cards.map((c) => c.id);
     expect((await walk(root, 4, 'ready')).result).toEqual(ready);
     expect(ready).toEqual(whole.filter((id) => Number(id.slice(5)) % 2 === 0));
   });
@@ -75,9 +69,7 @@ describe('card list pages', () => {
     const root = makeStore('card-pages-one').root;
     seed(root, 1200);
     const cards = sqliteStore(root).cards;
-    const { result, statements, reads } = await recordStatementsAsync(() =>
-      cards.list(TENANT, { limit: 100 }),
-    );
+    const { result, statements, reads } = await recordStatementsAsync(() => cards.list(TENANT, { limit: 100 }));
     expect(result.cards).toHaveLength(100);
     expect(result.next).toEqual({ key: result.cards[99]!.updatedAt, id: result.cards[99]!.id });
     expect(countMatching(statements, PAGE_READ)).toBe(1);

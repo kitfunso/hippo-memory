@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  listRegisteredWorkspaces,
-  registerWorkspace,
-  workspaceRegistryPath,
-} from '../../src/surface/cli/scheduler.js';
+import { listRegisteredWorkspaces, registerWorkspace, workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
 
 let globalRoot: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
@@ -30,15 +26,11 @@ describe('corrupt workspace registry', () => {
 
     expect(listRegisteredWorkspaces(globalRoot)).toEqual([]);
 
-    const asides = fs
-      .readdirSync(globalRoot)
-      .filter((f) => f.startsWith('workspaces.json.corrupt-'));
+    const asides = fs.readdirSync(globalRoot).filter((f) => f.startsWith('workspaces.json.corrupt-'));
     expect(asides).toHaveLength(1);
     expect(fs.readFileSync(path.join(globalRoot, asides[0]), 'utf8')).toBe(corrupt);
     expect(fs.existsSync(registryFile)).toBe(false);
-    const warning = stderrSpy.mock.calls
-      .map((c) => String(c[0]))
-      .find((l) => l.includes('workspace registry'));
+    const warning = stderrSpy.mock.calls.map((c) => String(c[0])).find((l) => l.includes('workspace registry'));
     expect(warning).toMatch(
       /^\[hippo\] warn: workspace registry .* is corrupt .*moved it to .*workspaces\.json\.corrupt-/,
     );
@@ -53,13 +45,9 @@ describe('corrupt workspace registry', () => {
       JSON.stringify({ version: 1, workspaces: ['/repo/a', 7, null, {}] }),
     );
 
-    expect(listRegisteredWorkspaces(globalRoot)).toEqual([
-      path.resolve('/repo/a').replace(/\\/g, '/'),
-    ]);
+    expect(listRegisteredWorkspaces(globalRoot)).toEqual([path.resolve('/repo/a').replace(/\\/g, '/')]);
 
-    const warnings = stderrSpy.mock.calls
-      .map((c) => String(c[0]))
-      .filter((l) => l.includes('are not paths'));
+    const warnings = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('are not paths'));
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('3 entries');
   });

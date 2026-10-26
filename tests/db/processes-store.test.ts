@@ -67,9 +67,9 @@ describe('processes store (first-class object)', () => {
       // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
       // mirror write; the row may not exist only if that write failed, which
       // the content assertion below checks before any further access.
-      const memRow = db
-        .prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`)
-        .get(proc.memoryId!) as { content: string; tags_json: string; source: string } | undefined;
+      const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`).get(proc.memoryId!) as
+        | { content: string; tags_json: string; source: string }
+        | undefined;
       expect(memRow?.content).toContain('Release');
       expect(memRow!.content).toContain('1. run tests');
       expect(memRow!.content).toContain('Description: the npm release ritual');
@@ -81,9 +81,7 @@ describe('processes store (first-class object)', () => {
       // SAFETY: metadata_json for a process_create audit row is always a JSON
       // object with these fields (see src/domain/objects/processes.ts saveProcess audit write).
       const rows = db
-        .prepare(
-          `SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`,
-        )
+        .prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json for a process_create audit row always includes
@@ -112,9 +110,7 @@ describe('processes store (first-class object)', () => {
     try {
       // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
       // mirror write, so the row exists with a content column.
-      const memRow = db
-        .prepare(`SELECT content FROM memories WHERE id = ?`)
-        .get(proc.memoryId!) as { content: string };
+      const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(proc.memoryId!) as { content: string };
       expect(memRow.content).toBe('Empty');
     } finally {
       closeHippoDb(db);
@@ -139,10 +135,7 @@ describe('processes store (first-class object)', () => {
       steps: ['b', 'b2'],
       supersedesProcessId: b.id,
     });
-    await closeObject(objectsAt(home), PROCESS, 'default', c.id, {
-      actor: CLI_ACTOR,
-      now: evalNow(),
-    });
+    await closeObject(objectsAt(home), PROCESS, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
 
     const active = await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);
@@ -150,16 +143,12 @@ describe('processes store (first-class object)', () => {
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
 
-    expect(
-      (await listObjects(objectsAt(home), PROCESS, 'default', { status: 'superseded' })).map(
-        (x) => x.id,
-      ),
-    ).toEqual([b.id]);
-    expect(
-      (await listObjects(objectsAt(home), PROCESS, 'default', { status: 'closed' })).map(
-        (x) => x.id,
-      ),
-    ).toEqual([c.id]);
+    expect((await listObjects(objectsAt(home), PROCESS, 'default', { status: 'superseded' })).map((x) => x.id)).toEqual(
+      [b.id],
+    );
+    expect((await listObjects(objectsAt(home), PROCESS, 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
+      c.id,
+    ]);
     // a (active), b (superseded), c (closed), b-v2 (active) = 4 total rows.
     expect((await listObjects(objectsAt(home), PROCESS, 'default', {})).length).toBe(4);
   });
@@ -169,9 +158,7 @@ describe('processes store (first-class object)', () => {
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
     expect(() => validateProcessSteps(['ok', '   '])).toThrow(/must not be blank/);
     expect(() => validateProcessSteps(Array(MAX_PROCESS_STEPS + 1).fill('x'))).toThrow(/step cap/);
-    expect(() => validateProcessSteps(['y'.repeat(MAX_PROCESS_STEP_LEN + 1)])).toThrow(
-      /must be at most/,
-    );
+    expect(() => validateProcessSteps(['y'.repeat(MAX_PROCESS_STEP_LEN + 1)])).toThrow(/must be at most/);
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
@@ -180,9 +167,7 @@ describe('processes store (first-class object)', () => {
       steps: ['  lead/trail  '],
     });
     expect(proc.steps).toEqual(['lead/trail']);
-    expect((await objectById(objectsAt(home), PROCESS, 'default', proc.id))!.steps).toEqual([
-      'lead/trail',
-    ]);
+    expect((await objectById(objectsAt(home), PROCESS, 'default', proc.id))!.steps).toEqual(['lead/trail']);
     // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
     await expect(
@@ -220,12 +205,8 @@ describe('processes store (first-class object)', () => {
     } finally {
       stderr.mockRestore();
     }
-    expect(logged).toMatch(
-      new RegExp(`processes\\.steps is not valid JSON.* id=${proc.id} column=steps`),
-    );
-    expect(logged).toMatch(
-      new RegExp(`processes\\.steps is wrong shape.* id=${other.id} column=steps`),
-    );
+    expect(logged).toMatch(new RegExp(`processes\\.steps is not valid JSON.* id=${proc.id} column=steps`));
+    expect(logged).toMatch(new RegExp(`processes\\.steps is wrong shape.* id=${other.id} column=steps`));
     expect(logged).not.toContain('private-');
   });
 });

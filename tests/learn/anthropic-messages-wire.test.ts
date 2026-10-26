@@ -1,17 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  MockInstance,
-} from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { extractFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
@@ -75,8 +65,7 @@ async function startWire(mode: Mode, okText: string): Promise<Wire> {
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
       const headers: Record<string, string> = {};
-      for (const [k, v] of Object.entries(req.headers))
-        if (!SKIPPED_HEADERS.has(k)) headers[k] = String(v);
+      for (const [k, v] of Object.entries(req.headers)) if (!SKIPPED_HEADERS.has(k)) headers[k] = String(v);
       requests.push({
         method: req.method ?? '',
         path: req.url ?? '',
@@ -126,11 +115,7 @@ interface CallerSpec {
 
 const TIMEOUT_MESSAGE = /aborted due to timeout/;
 const NOT_JSON = /reply is not JSON/;
-const FACT: ExtractedFact = {
-  content: 'Alice likes tea',
-  tags: ['speaker:Alice'],
-  valence: 'positive',
-};
+const FACT: ExtractedFact = { content: 'Alice likes tea', tags: ['speaker:Alice'], valence: 'positive' };
 const DAG_TEXT = 'Alice likes tea and drinks it every morning before work.';
 const REFINE_TEXT = 'People prefer tea in the morning.';
 
@@ -151,17 +136,9 @@ const callers: CallerSpec[] = [
       ok: { result: [FACT], messages: [], requests: 1 },
       http400: { result: [], messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
       http500: { result: [], messages: ['HTTP 500: {"error":"down"}'], requests: 3 },
-      badjson: {
-        result: [],
-        messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)],
-        requests: 1,
-      },
+      badjson: { result: [], messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)], requests: 1 },
       empty: { result: [], messages: ['the reply held no text'], requests: 1 },
-      hang: {
-        result: [],
-        messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)],
-        requests: 1,
-      },
+      hang: { result: [], messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },
       refused: { result: [], messages: ['request failed: fetch failed'], requests: 0 },
     },
   },
@@ -180,17 +157,9 @@ const callers: CallerSpec[] = [
       ok: { result: DAG_TEXT, messages: [], requests: 1 },
       http400: { result: null, messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
       http500: { result: null, messages: ['HTTP 500: {"error":"down"}'], requests: 3 },
-      badjson: {
-        result: null,
-        messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)],
-        requests: 1,
-      },
+      badjson: { result: null, messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)], requests: 1 },
       empty: { result: null, messages: ['the reply held no text'], requests: 1 },
-      hang: {
-        result: null,
-        messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)],
-        requests: 1,
-      },
+      hang: { result: null, messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },
       refused: { result: null, messages: ['request failed: fetch failed'], requests: 0 },
     },
   },
@@ -200,8 +169,7 @@ const callers: CallerSpec[] = [
     maxTokens: 800,
     bodySha256: 'bd388f1ab60a8c682988da6afbd3085737acf6b0de52bedb56e008719dc2daa2',
     contentLength: '851',
-    run: (fetcher) =>
-      refineOne('merged tea notes', [], { llm: anthropicLlm({ apiKey: KEY, fetcher }) }),
+    run: (fetcher) => refineOne('merged tea notes', [], { llm: anthropicLlm({ apiKey: KEY, fetcher }) }),
     expected: {
       ok: { result: REFINE_TEXT, messages: [], requests: 1 },
       http400: {
@@ -216,28 +184,16 @@ const callers: CallerSpec[] = [
       },
       badjson: {
         result: null,
-        messages: [
-          new RegExp(`^\\[hippo\\] warn: refine: unreadable response: ${NOT_JSON.source}`),
-        ],
+        messages: [new RegExp(`^\\[hippo\\] warn: refine: unreadable response: ${NOT_JSON.source}`)],
         requests: 1,
       },
-      empty: {
-        result: null,
-        messages: ['[hippo] warn: refine: response held no text'],
-        requests: 1,
-      },
+      empty: { result: null, messages: ['[hippo] warn: refine: response held no text'], requests: 1 },
       hang: {
         result: null,
-        messages: [
-          new RegExp(`^\\[hippo\\] warn: refine: request failed: .*${TIMEOUT_MESSAGE.source}`),
-        ],
+        messages: [new RegExp(`^\\[hippo\\] warn: refine: request failed: .*${TIMEOUT_MESSAGE.source}`)],
         requests: 1,
       },
-      refused: {
-        result: null,
-        messages: ['[hippo] warn: refine: request failed: fetch failed'],
-        requests: 0,
-      },
+      refused: { result: null, messages: ['[hippo] warn: refine: request failed: fetch failed'], requests: 0 },
     },
   },
 ];
@@ -276,9 +232,7 @@ describe.each(callers)('$name over a real local server', (spec) => {
 
     const want = spec.expected[mode];
     expect(result).toEqual(want.result);
-    expect(seen).toEqual(
-      want.messages.map((m) => (m instanceof RegExp ? expect.stringMatching(m) : m)),
-    );
+    expect(seen).toEqual(want.messages.map((m) => (m instanceof RegExp ? expect.stringMatching(m) : m)));
     expect(wire.requests).toHaveLength(want.requests);
     expect(wire.calledUrls).toHaveLength(Math.max(want.requests, 1));
     for (const url of wire.calledUrls) expect(url).toBe(ANTHROPIC_URL);
@@ -292,8 +246,7 @@ describe.each(callers)('$name over a real local server', (spec) => {
         'content-length': spec.contentLength,
       });
       expect(crypto.createHash('sha256').update(req.body).digest('hex')).toBe(spec.bodySha256);
-      const parsed: { model: string; max_tokens: number; messages: Array<{ role: string }> } =
-        JSON.parse(req.body);
+      const parsed: { model: string; max_tokens: number; messages: Array<{ role: string }> } = JSON.parse(req.body);
       expect(Object.keys(parsed)).toEqual(['model', 'max_tokens', 'messages']);
       expect(parsed.model).toBe('claude-sonnet-4-6');
       expect(parsed.max_tokens).toBe(spec.maxTokens);

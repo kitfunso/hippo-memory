@@ -3,13 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../../src/base/session/capture-contract.js';
-import {
-  importSpool,
-  spool,
-  spoolCounts,
-  type SpoolFs,
-  type SpoolImporter,
-} from '../../src/infra/compaction-spool.js';
+import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../../src/infra/compaction-spool.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 
 let root: string;
@@ -34,8 +28,7 @@ const stamp = (ms: number): string => String(ms).padStart(13, '0');
 const realFs: SpoolFs = fs;
 const withFs = (over: Partial<SpoolFs>): SpoolFs => ({ ...realFs, ...over });
 const fsError = (code: string): Error => Object.assign(new Error(`${code}: simulated`), { code });
-const leftToAnother = (): string[] =>
-  logs.filter((l) => l.startsWith('spool left to another replayer'));
+const leftToAnother = (): string[] => logs.filter((l) => l.startsWith('spool left to another replayer'));
 const payload = (sessionId: string): PostCompactPayload => ({
   sessionId,
   trigger: 'auto',
@@ -82,14 +75,7 @@ function collector(): Collector {
 }
 
 const replay = (importOne: SpoolImporter, fsx?: SpoolFs): Promise<number> =>
-  importSpool({
-    hippoRoot: root,
-    tenantId: 'default',
-    log,
-    deadline: Number.POSITIVE_INFINITY,
-    importOne,
-    fsx,
-  });
+  importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: Number.POSITIVE_INFINITY, importOne, fsx });
 
 describe('spool names and order', () => {
   it('imports oldest first across sessions and legacy names', async () => {
@@ -106,20 +92,8 @@ describe('spool names and order', () => {
   it('two spools for one session in one millisecond both land', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_760_000_000_000);
     const at = new Date(1_760_000_000_000);
-    spool({
-      hippoRoot: root,
-      tenantId: 'default',
-      payload: payload('s1'),
-      text: { summary: 'first', items: [] },
-      at,
-    });
-    spool({
-      hippoRoot: root,
-      tenantId: 'default',
-      payload: payload('s1'),
-      text: { summary: 'second', items: [] },
-      at,
-    });
+    spool({ hippoRoot: root, tenantId: 'default', payload: payload('s1'), text: { summary: 'first', items: [] }, at });
+    spool({ hippoRoot: root, tenantId: 'default', payload: payload('s1'), text: { summary: 'second', items: [] }, at });
     vi.restoreAllMocks();
     expect(fs.readdirSync(spoolDir())).toHaveLength(2);
     const summaries: string[] = [];
@@ -150,10 +124,7 @@ describe('one replayer at a time', () => {
 
   it('takes over a lock older than 10 minutes', async () => {
     put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(
-      lockFile(),
-      JSON.stringify({ pid: 4242, at: Date.now() - 11 * MINUTE, token: 'dead' }),
-    );
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() - 11 * MINUTE, token: 'dead' }));
     const { seen, importer } = collector();
     expect(await replay(importer)).toBe(1);
     expect(seen).toEqual(['s1']);
@@ -162,10 +133,7 @@ describe('one replayer at a time', () => {
 
   it('a lock dated 20 minutes ahead is taken over', async () => {
     put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(
-      lockFile(),
-      JSON.stringify({ pid: 4242, at: Date.now() + 20 * MINUTE, token: 'future' }),
-    );
+    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() + 20 * MINUTE, token: 'future' }));
     const { seen, importer } = collector();
     expect(await replay(importer)).toBe(1);
     expect(seen).toEqual(['s1']);
@@ -206,18 +174,10 @@ describe('one replayer at a time', () => {
     put(stale, 's1');
     put(live, 's2');
     expect(
-      await importSpool({
-        hippoRoot: root,
-        tenantId: 'default',
-        log,
-        deadline: 0,
-        importOne: collector().importer,
-      }),
+      await importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
     ).toBe(0);
     expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a1.json`, live]);
-    expect(logs).toContain(
-      `spool file ${stale} was claimed by a replayer that never finished, put back (try 1 of 3)`,
-    );
+    expect(logs).toContain(`spool file ${stale} was claimed by a replayer that never finished, put back (try 1 of 3)`);
   });
 
   it('recovery leaves a claim fresh by name whose mtime is an hour old', async () => {
@@ -225,13 +185,7 @@ describe('one replayer at a time', () => {
     const old = new Date(Date.now() - 60 * MINUTE);
     fs.utimesSync(put(live, 's1'), old, old);
     expect(
-      await importSpool({
-        hippoRoot: root,
-        tenantId: 'default',
-        log,
-        deadline: 0,
-        importOne: collector().importer,
-      }),
+      await importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
     ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([live]);
     expect(logs).toEqual([]);
@@ -272,10 +226,7 @@ describe('one replayer at a time', () => {
     await replay(async (spooled, recorded) => {
       seen.push(spooled.payload.sessionId);
       recorded();
-      fs.writeFileSync(
-        lockFile(),
-        JSON.stringify({ pid: 4242, at: Date.now(), token: 'successor' }),
-      );
+      fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'successor' }));
       return null;
     });
     expect(seen).toEqual(['s1']);
@@ -358,11 +309,7 @@ describe('spool counts', () => {
         return fs.statSync(file);
       },
     });
-    expect(spoolCounts(root, new Date(), 10 * MINUTE, faulty)).toEqual({
-      waiting: 1,
-      stale: 0,
-      bad: 0,
-    });
+    expect(spoolCounts(root, new Date(), 10 * MINUTE, faulty)).toEqual({ waiting: 1, stale: 0, bad: 0 });
   });
 });
 
@@ -409,13 +356,7 @@ describe('failures are counted and set aside', () => {
     const stale = `${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`;
     const body = fs.readFileSync(put(stale, 's1'), 'utf8');
     expect(
-      await importSpool({
-        hippoRoot: root,
-        tenantId: 'default',
-        log,
-        deadline: 0,
-        importOne: collector().importer,
-      }),
+      await importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
     ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.interrupted.bad`]);
     expect(fs.readFileSync(path.join(spoolDir(), `${A}.interrupted.bad`), 'utf8')).toBe(body);
@@ -428,13 +369,7 @@ describe('failures are counted and set aside', () => {
     put(`${A}.failed.bad`, 's1');
     put(`${A}.a2.claim-${stamp(Date.now() - 11 * MINUTE)}`, 's1');
     expect(
-      await importSpool({
-        hippoRoot: root,
-        tenantId: 'default',
-        log,
-        deadline: 0,
-        importOne: collector().importer,
-      }),
+      await importSpool({ hippoRoot: root, tenantId: 'default', log, deadline: 0, importOne: collector().importer }),
     ).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.failed.bad`]);
     expect(logs).toEqual([]);
@@ -457,9 +392,7 @@ describe('failures are counted and set aside', () => {
     expect(await claimFails('EPERM')).toEqual([
       `spool file ${A}.a0.json is locked by another program, left for the next run`,
     ]);
-    expect(await claimFails('EIO')).toEqual([
-      `spool problem: spool file ${A}.a0.json not claimed: EIO: simulated`,
-    ]);
+    expect(await claimFails('EIO')).toEqual([`spool problem: spool file ${A}.a0.json not claimed: EIO: simulated`]);
   });
 
   it('EPERM on the .bad write releases the claim and the rest of the spool still imports', async () => {
@@ -539,9 +472,7 @@ describe('temp files a spool left', () => {
     age(torn);
     expect(await replay(collector().importer)).toBe(0);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.unreadable.bad`]);
-    expect(fs.readFileSync(path.join(spoolDir(), `${A}.unreadable.bad`), 'utf8')).toBe(
-      '{"sessionId": "s1", "summ',
-    );
+    expect(fs.readFileSync(path.join(spoolDir(), `${A}.unreadable.bad`), 'utf8')).toBe('{"sessionId": "s1", "summ');
     expect(logs).toEqual([`spool file ${A}.a0.json.tmp was never finished, set aside as .bad`]);
   });
 

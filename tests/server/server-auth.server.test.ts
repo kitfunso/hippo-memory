@@ -33,30 +33,27 @@ describe('server auth middleware', () => {
     await handle.stop();
   });
 
-  it.skipIf(needsHippoDb('db'))(
-    'the local key: 200 and audit shows actor=localhost:cli',
-    async () => {
-      const localKey = readLocalKey(home)!;
-      const res = await fetch(`${handle.url}/v1/memories`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${localKey}` },
-        body: JSON.stringify({ content: 'auth-canary-loopback-noauth' }),
-      });
-      expect(res.status).toBe(200);
-      const body = await jsonAs<RememberResult>(res);
-      expect(body.id).toMatch(/^mem_/);
+  it.skipIf(needsHippoDb('db'))('the local key: 200 and audit shows actor=localhost:cli', async () => {
+    const localKey = readLocalKey(home)!;
+    const res = await fetch(`${handle.url}/v1/memories`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${localKey}` },
+      body: JSON.stringify({ content: 'auth-canary-loopback-noauth' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await jsonAs<RememberResult>(res);
+    expect(body.id).toMatch(/^mem_/);
 
-      const db = openHippoDb(home);
-      try {
-        const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
-        expect(events).toHaveLength(1);
-        expect(events[0]!.actor).toBe('localhost:cli');
-        expect(events[0]!.targetId).toBe(body.id);
-      } finally {
-        closeHippoDb(db);
-      }
-    },
-  );
+    const db = openHippoDb(home);
+    try {
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      expect(events).toHaveLength(1);
+      expect(events[0]!.actor).toBe('localhost:cli');
+      expect(events[0]!.targetId).toBe(body.id);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
 
   // RFC 6750 schemes are case-insensitive, so a lower-case and a mixed-case one both authenticate.
   it.skipIf(needsHippoDb('db')).each(['bearer', 'BeArEr'])(
@@ -220,14 +217,10 @@ describe('server auth middleware for a non-loopback peer', () => {
       } finally {
         closeHippoDb(db);
       }
-      const res = await rememberAs('auth-canary-remote-bearer', {
-        authorization: `Bearer ${created.plaintext}`,
-      });
+      const res = await rememberAs('auth-canary-remote-bearer', { authorization: `Bearer ${created.plaintext}` });
       expect(res.status).toBe(200);
       const body = await jsonAs<RememberResult>(res);
-      expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(
-        `api_key:${created.keyId}`,
-      );
+      expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(`api_key:${created.keyId}`);
     },
   );
 });

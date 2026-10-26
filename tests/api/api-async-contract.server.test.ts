@@ -33,12 +33,7 @@ import { testInfra } from '../_helpers/infra.js';
 const ACME = 'acme';
 const SEEDED_AT = '2026-02-01T00:00:00.000Z';
 const HOST: Actor = { subject: 'cli', role: 'admin', hostAdmin: true };
-const CAROL: Actor = {
-  subject: 'sso:carol',
-  role: 'member',
-  viaAuthResolver: true,
-  owner: 'carol',
-};
+const CAROL: Actor = { subject: 'sso:carol', role: 'member', viaAuthResolver: true, owner: 'carol' };
 
 const roots: string[] = [];
 const stores: HippoStore[] = [];
@@ -48,33 +43,15 @@ function seededRoot(): string {
   roots.push(root);
   writeEntry(
     root,
-    seeded(
-      'the deploy pipeline uses a blue green rollout',
-      'mem_plain',
-      SEEDED_AT,
-      {},
-      { tenantId: ACME },
-    ),
+    seeded('the deploy pipeline uses a blue green rollout', 'mem_plain', SEEDED_AT, {}, { tenantId: ACME }),
   );
   writeEntry(
     root,
-    seeded(
-      'the billing service freezes deploys on fridays',
-      'mem_second',
-      SEEDED_AT,
-      {},
-      { tenantId: ACME },
-    ),
+    seeded('the billing service freezes deploys on fridays', 'mem_second', SEEDED_AT, {}, { tenantId: ACME }),
   );
   writeEntry(
     root,
-    seeded(
-      'raw chat line about the staging cluster move',
-      'mem_raw',
-      SEEDED_AT,
-      {},
-      { tenantId: ACME, kind: 'raw' },
-    ),
+    seeded('raw chat line about the staging cluster move', 'mem_raw', SEEDED_AT, {}, { tenantId: ACME, kind: 'raw' }),
   );
   return root;
 }
@@ -91,8 +68,7 @@ type Case = (ctx: FullContext) => Promise<() => PromiseLike<object>>;
 
 const CASES = {
   authCreate: async (ctx) => () => authCreate(ctx, {}),
-  authCreateSelf: async (ctx) => () =>
-    authCreateSelf({ ...ctx, actor: CAROL }, { ttlDays: 1, perSubject: 5 }),
+  authCreateSelf: async (ctx) => () => authCreateSelf({ ...ctx, actor: CAROL }, { ttlDays: 1, perSubject: 5 }),
   authListRows: async (ctx) => () => authListRows(ctx, { active: true }),
   authRevoke: async (ctx) => {
     const { keyId } = await authCreate(ctx, {});
@@ -101,8 +77,7 @@ const CASES = {
   forget: async (ctx) => () => forget(ctx, 'mem_plain'),
   outcome: async (ctx) => () => outcome(ctx, ['mem_plain'], true),
   outcomeForLastRecall: async (ctx) => () => outcomeForLastRecall(ctx, true),
-  supersede: async (ctx) => () =>
-    supersede(ctx, 'mem_second', 'the billing service freezes deploys on mondays'),
+  supersede: async (ctx) => () => supersede(ctx, 'mem_second', 'the billing service freezes deploys on mondays'),
   rawArchive: async (ctx) => () => rawArchive(ctx, 'mem_raw', 'user asked'),
   remember: async (ctx) => () => remember(ctx, { content: 'the api gateway retries three times' }),
   // importVault takes no store and rememberLocally gets the folder's own: both write through its sqliteStore.
@@ -148,24 +123,21 @@ describe('every api write function answers through a Promise', () => {
   });
 
   describe.each(STORE_KINDS)('on %s', (_kind, open) => {
-    it.each(Object.entries(CASES))(
-      '%s returns a thenable that resolves to its result',
-      async (fn, ready) => {
-        const root = seededRoot();
-        const store = open(root);
-        stores.push(store);
-        const call = await ready({
-          hippoRoot: root,
-          tenantId: ACME,
-          actor: HOST,
-          store,
-          config: loadConfig(root),
-          infra: testInfra(),
-        });
-        const reply = call();
-        expect(reply).toBeInstanceOf(Promise);
-        await expect(reply).resolves.toEqual(new Map(Object.entries(REPLIES)).get(fn));
-      },
-    );
+    it.each(Object.entries(CASES))('%s returns a thenable that resolves to its result', async (fn, ready) => {
+      const root = seededRoot();
+      const store = open(root);
+      stores.push(store);
+      const call = await ready({
+        hippoRoot: root,
+        tenantId: ACME,
+        actor: HOST,
+        store,
+        config: loadConfig(root),
+        infra: testInfra(),
+      });
+      const reply = call();
+      expect(reply).toBeInstanceOf(Promise);
+      await expect(reply).resolves.toEqual(new Map(Object.entries(REPLIES)).get(fn));
+    });
   });
 });

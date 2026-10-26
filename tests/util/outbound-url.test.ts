@@ -12,32 +12,18 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 describe('parseOutboundUrl', () => {
-  it.each([
-    'https://api.example.com/v1',
-    'http://localhost:8080',
-    'http://127.0.0.1:9',
-    'http://[::1]:1234/v1',
-  ])('accepts %s', (url) => {
-    expect(parseOutboundUrl(url, 'SETTING').href).toBe(new URL(url).href);
-  });
+  it.each(['https://api.example.com/v1', 'http://localhost:8080', 'http://127.0.0.1:9', 'http://[::1]:1234/v1'])(
+    'accepts %s',
+    (url) => {
+      expect(parseOutboundUrl(url, 'SETTING').href).toBe(new URL(url).href);
+    },
+  );
 
   it.each([
-    [
-      'plain http to another host',
-      'http://api.example.com/v1',
-      'SETTING must use https unless it is on this machine',
-    ],
+    ['plain http to another host', 'http://api.example.com/v1', 'SETTING must use https unless it is on this machine'],
     ['a scheme that is not http', 'ftp://localhost/v1', 'SETTING must be an http or https URL'],
-    [
-      'a user and password',
-      'https://user:pw@api.example.com/v1',
-      'SETTING must not embed credentials; set KEY',
-    ],
-    [
-      'a user alone',
-      'https://user@api.example.com/v1',
-      'SETTING must not embed credentials; set KEY',
-    ],
+    ['a user and password', 'https://user:pw@api.example.com/v1', 'SETTING must not embed credentials; set KEY'],
+    ['a user alone', 'https://user@api.example.com/v1', 'SETTING must not embed credentials; set KEY'],
     ['an unparseable value', 'not a url', 'SETTING is not a valid URL'],
   ])('refuses %s', (_label, url, message) => {
     expect(() => parseOutboundUrl(url, 'SETTING', 'KEY')).toThrow(message);
@@ -92,17 +78,16 @@ describe('HIPPO_LLM_RERANKER_URL', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    'http://reranker.example.com',
-    'https://user:pw@reranker.example.com',
-    'ftp://localhost',
-  ])('never sends the key to %s and keeps the input order', async (url) => {
-    vi.stubEnv('HIPPO_LLM_RERANKER_URL', url);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+  it.each(['http://reranker.example.com', 'https://user:pw@reranker.example.com', 'ftp://localhost'])(
+    'never sends the key to %s and keeps the input order',
+    async (url) => {
+      vi.stubEnv('HIPPO_LLM_RERANKER_URL', url);
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const out = await createLlmReranker(processHttp)('q', head);
+      const out = await createLlmReranker(processHttp)('q', head);
 
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
-  });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
+    },
+  );
 });

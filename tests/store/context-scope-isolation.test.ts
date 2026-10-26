@@ -54,10 +54,7 @@ beforeEach(() => {
   initTestStore(globalStore);
   vi.stubEnv('HIPPO_HOME', globalStore);
 
-  writeEntry(
-    projA,
-    createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
-  );
+  writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
   writeEntry(globalStore, {
     ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
     originProject: '',
@@ -129,14 +126,8 @@ describe('contextGet origin partition (project A session)', () => {
   });
 
   it('contextProjectIsolation: false restores legacy behavior wholesale', async () => {
-    fs.writeFileSync(
-      path.join(projA, 'config.json'),
-      JSON.stringify({ contextProjectIsolation: false }),
-    );
-    const result = await contextGet(
-      { ...ctx, config: loadConfig(projA) },
-      { ...base, pinnedOnly: true },
-    );
+    fs.writeFileSync(path.join(projA, 'config.json'), JSON.stringify({ contextProjectIsolation: false }));
+    const result = await contextGet({ ...ctx, config: loadConfig(projA) }, { ...base, pinnedOnly: true });
     const got = contents(result.entries);
     expect(got).toContain(BRAVO);
     expect(got).toContain(LEGACY);
@@ -172,10 +163,7 @@ describe('contextGet origin partition (project A session)', () => {
     writeEntry(projA, {
       ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }),
     }); // excluded (private scope)
-    writeEntry(globalStore, {
-      ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      originProject: '',
-    }); // admitted (user-global)
+    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: '' }); // admitted (user-global)
     const result = await contextGet(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
     expect(contents(result.entries)).toContain(DUP);
   });

@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  extractPathTags,
-  pathOverlapScore,
-  pathBoostMultiplier,
-} from '../../src/domain/search/path-context.js';
+import { extractPathTags, pathOverlapScore, pathBoostMultiplier } from '../../src/domain/search/path-context.js';
 
 describe('extractPathTags', () => {
   it('extracts meaningful segments from Unix path', () => {
@@ -106,10 +102,7 @@ describe('pathBoostMultiplier', () => {
   // memory-count normalization); see
   // docs/plans/2026-07-18-s5-path-overlap-tuning.md T3
   it('DEFECT PIN: a single generic path tag no longer scores the full 1.3x boost from a deeper cwd', () => {
-    const boost = pathBoostMultiplier(
-      ['path:skf-user'],
-      ['path:skf-user', 'path:proj-nova', 'path:lib'],
-    );
+    const boost = pathBoostMultiplier(['path:skf-user'], ['path:skf-user', 'path:proj-nova', 'path:lib']);
     expect(boost).toBeCloseTo(1.1, 10);
   });
 
@@ -134,15 +127,8 @@ describe('pathBoostMultiplier', () => {
   it('same-project depth gradient: root memory softens from deeper own-project cwds', () => {
     const mem = ['path:skf-user', 'path:proj'];
     expect(pathBoostMultiplier(mem, ['path:skf-user', 'path:proj'])).toBe(1.3);
-    expect(pathBoostMultiplier(mem, ['path:skf-user', 'path:proj', 'path:lib'])).toBeCloseTo(
-      1.2,
-      10,
-    );
-    expect(
-      pathBoostMultiplier(mem, ['path:skf-user', 'path:proj', 'path:lib', 'path:core']),
-    ).toBeCloseTo(1.15, 10);
-    expect(
-      pathBoostMultiplier(mem, ['path:proj', 'path:lib', 'path:core', 'path:deep']),
-    ).toBeCloseTo(1.075, 10);
+    expect(pathBoostMultiplier(mem, ['path:skf-user', 'path:proj', 'path:lib'])).toBeCloseTo(1.2, 10);
+    expect(pathBoostMultiplier(mem, ['path:skf-user', 'path:proj', 'path:lib', 'path:core'])).toBeCloseTo(1.15, 10);
+    expect(pathBoostMultiplier(mem, ['path:proj', 'path:lib', 'path:core', 'path:deep'])).toBeCloseTo(1.075, 10);
   });
 });

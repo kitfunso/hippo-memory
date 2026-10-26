@@ -5,11 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import {
-  layerDir,
-  writeMarkdownMirror,
-  writeMarkdownMirrors,
-} from '../../src/store/sqlite/mirrors.js';
+import { layerDir, writeMarkdownMirror, writeMarkdownMirrors } from '../../src/store/sqlite/mirrors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -46,9 +42,7 @@ function expectMirrored(entries: readonly MemoryEntry[]): void {
   for (const entry of entries) {
     expect(fs.existsSync(path.join(layerDir(root, entry.layer), `${entry.id}.md`))).toBe(true);
   }
-  expect(fs.existsSync(path.join(layerDir(root, Layer.Semantic), `${entries[0].id}.md`))).toBe(
-    false,
-  );
+  expect(fs.existsSync(path.join(layerDir(root, Layer.Semantic), `${entries[0].id}.md`))).toBe(false);
 }
 
 describe('writeMarkdownMirrors', () => {
@@ -65,10 +59,7 @@ describe('writeMarkdownMirrors', () => {
   });
 
   it('lists only a folder the batch writes into that 64 entries of other layers would probe', () => {
-    const entries = [
-      ...batch(64),
-      createMemory('mirror batch semantic row', { layer: Layer.Semantic }),
-    ];
+    const entries = [...batch(64), createMemory('mirror batch semantic row', { layer: Layer.Semantic })];
     expect(listedDuring(() => writeMarkdownMirrors(root, entries))).toEqual([Layer.Semantic]);
     expectMirrored(entries);
   });

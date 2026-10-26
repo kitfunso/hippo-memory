@@ -61,14 +61,7 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
   it.each(['0', '2.5'])(
     'recall --reranker-top-k %s exits 1, since a slice would quietly drop candidates',
     async (value) => {
-      const res = await hippoRun(
-        'recall',
-        'some query',
-        '--reranker',
-        'clef-flash',
-        '--reranker-top-k',
-        value,
-      );
+      const res = await hippoRun('recall', 'some query', '--reranker', 'clef-flash', '--reranker-top-k', value);
       expect(res.status).toBe(1);
       expect(res.stderr).toContain('Must be a positive integer');
     },
@@ -118,16 +111,13 @@ describe('dedup --threshold: the no-undo data-loss pin', () => {
     }
   }
 
-  it.each([[[]], [['banana']]])(
-    '--threshold %j exits 1 and deletes nothing',
-    async (value: string[]) => {
-      expect(memoryCount()).toBe(2);
-      const res = await hippoRun('dedup', '--threshold', ...value);
-      expect(res.status).toBe(1);
-      expect(res.stderr).toContain('--threshold requires a numeric value');
-      expect(memoryCount()).toBe(2);
-    },
-  );
+  it.each([[[]], [['banana']]])('--threshold %j exits 1 and deletes nothing', async (value: string[]) => {
+    expect(memoryCount()).toBe(2);
+    const res = await hippoRun('dedup', '--threshold', ...value);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--threshold requires a numeric value');
+    expect(memoryCount()).toBe(2);
+  });
 });
 
 describe('serve --port: the silent-wrong-port pin', () => {
@@ -144,14 +134,8 @@ describe('valued numeric flags: the guard must not regress a legitimate call', (
   it.each([
     { args: ['recall', 'some query', '--hops', '1'], out: 'No memories found for: some query' },
     { args: ['predict', 'list', '--limit', '5'], out: 'No predictions.' },
-    {
-      args: ['recall', 'some query', '--local-bump', '-1'],
-      out: 'No memories found for: some query',
-    },
-    {
-      args: ['share', '--auto', '--min-score', '0.6', '--dry-run'],
-      out: 'No memories meet the sharing threshold.',
-    },
+    { args: ['recall', 'some query', '--local-bump', '-1'], out: 'No memories found for: some query' },
+    { args: ['share', '--auto', '--min-score', '0.6', '--dry-run'], out: 'No memories meet the sharing threshold.' },
     { args: ['recall', 'some query', '--limit', '1e3'], out: 'No memories found for: some query' },
   ])('$args.0 $args.2 $args.3 runs normally', async ({ args, out }) => {
     const res = await hippoRun(...args);

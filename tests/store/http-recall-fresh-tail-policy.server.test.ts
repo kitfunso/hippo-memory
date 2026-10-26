@@ -93,9 +93,7 @@ describe('GET /v1/memories fresh-tail policy', () => {
         }),
       );
     }
-    const res = await fetch(
-      `${handle.url}/v1/memories?q=event&fresh_tail_count=3&fresh_tail_session_id=sess-A`,
-    );
+    const res = await fetch(`${handle.url}/v1/memories?q=event&fresh_tail_count=3&fresh_tail_session_id=sess-A`);
     expect(res.status).toBe(200);
   });
 

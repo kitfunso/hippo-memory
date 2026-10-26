@@ -21,8 +21,7 @@ import { readEntry } from '../_helpers/root-forms.js';
 
 const MEMBER: Actor = { subject: 'member', role: 'admin' };
 let root: string;
-const ctx = (tenantId = 'default', actor = adminActor('cli')): FullContext =>
-  apiCtx(root, tenantId, actor);
+const ctx = (tenantId = 'default', actor = adminActor('cli')): FullContext => apiCtx(root, tenantId, actor);
 
 beforeEach(() => {
   root = makeRoot('api-surface-doors', { config: { embeddings: { enabled: false } } });
@@ -52,12 +51,8 @@ describe('rejections through the api', () => {
 
 describe('host-admin reads', () => {
   it('refuses every tenant peer list and the unscoped graph view to a member', async () => {
-    await expect(sharePeers(ctx('default', MEMBER), { allTenants: true })).rejects.toThrow(
-      ForbiddenError,
-    );
-    await expect(graphViewOnHost(ctx('default', MEMBER), { limit: 10 })).rejects.toThrow(
-      ForbiddenError,
-    );
+    await expect(sharePeers(ctx('default', MEMBER), { allTenants: true })).rejects.toThrow(ForbiddenError);
+    await expect(graphViewOnHost(ctx('default', MEMBER), { limit: 10 })).rejects.toThrow(ForbiddenError);
     expect(await sharePeers(ctx('default', MEMBER))).toEqual([]);
   });
 });
@@ -73,11 +68,7 @@ describe('traceRecord', () => {
       source: 'cli',
     });
     const row = readEntry(root, id, 'default');
-    expect(row).toMatchObject({
-      layer: Layer.Trace,
-      traceOutcome: 'success',
-      sourceSessionId: 'sess-1',
-    });
+    expect(row).toMatchObject({ layer: Layer.Trace, traceOutcome: 'success', sourceSessionId: 'sess-1' });
     expect(row?.content).toContain('ship the build');
   });
 });

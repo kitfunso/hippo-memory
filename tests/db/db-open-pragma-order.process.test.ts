@@ -92,10 +92,7 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
     const goFile = join(root, 'go');
     const stopFile = join(root, 'stop');
 
-    const started = [
-      spawnChurner(dbPath, goFile, stopFile),
-      spawnChurner(dbPath, goFile, stopFile),
-    ];
+    const started = [spawnChurner(dbPath, goFile, stopFile), spawnChurner(dbPath, goFile, stopFile)];
     await Promise.all(started.map((c) => c.ready));
 
     writeFileSync(goFile, '');

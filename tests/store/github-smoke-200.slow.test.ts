@@ -229,9 +229,7 @@ function rawCount(root: string): number {
   try {
     // SAFETY: the db driver's .get() returns `unknown`; `SELECT COUNT(*) AS c` always
     // yields exactly one row with a numeric (or bigint) `c` column.
-    const row = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE kind = ?`).get('raw') as {
-      c: number | bigint;
-    };
+    const row = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE kind = ?`).get('raw') as { c: number | bigint };
     return Number(row.c);
   } finally {
     closeHippoDb(db);
@@ -285,10 +283,7 @@ describe('GitHub connector — 200-event smoke test', () => {
 
     let archivedTotal = 0;
     for (const d of toDelete) {
-      const idempotencyKey = computeIdempotencyKey(
-        `${d.event.eventName}.deleted`,
-        `delete:${d.artifactRef}`,
-      );
+      const idempotencyKey = computeIdempotencyKey(`${d.event.eventName}.deleted`, `delete:${d.artifactRef}`);
       const res = await handleCommentDeleted(ctx, {
         artifactRef: d.artifactRef,
         idempotencyKey,
@@ -402,9 +397,11 @@ describe('GitHub connector — 200-event smoke test', () => {
     // Seed a routing table so we land in the multi-tenant branch.
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('99999', 'tenant-known', new Date().toISOString());
+      db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        '99999',
+        'tenant-known',
+        new Date().toISOString(),
+      );
       const resolved = await resolveTenant(
         sqliteStore(root),
         { connector: 'github', installationId: 'unknown-99' },
@@ -433,9 +430,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // makes a denied-only match behave like a no-match query (fallback rows
     // possible); assert the intent (the canary payload never surfaces), not
     // the distinguishable-empty shape.
-    expect(
-      canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234')),
-    ).toBe(false);
+    expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
     const canaryScoped = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
       filter: { scope: 'acme:private:demo' },

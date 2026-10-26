@@ -80,12 +80,8 @@ async function seed(dir: string): Promise<Seeded> {
   const summary = a('summary of the release process', { dagLevel: 2 });
   // The children go in first, so the summary starts clean.
   const child = a('release notes are drafted on mondays', { dagParentId: summary.id });
-  const rawChild = a('raw standup transcript about releases', {
-    kind: 'raw',
-    dagParentId: summary.id,
-  });
-  for (const entry of [...Object.values(rows), child, rawChild, summary])
-    writeEntry(dir, entry, { actor: 'cli' });
+  const rawChild = a('raw standup transcript about releases', { kind: 'raw', dagParentId: summary.id });
+  for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
   const ctx: FullContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   return { ...rows, summary, child, rawChild };
@@ -131,12 +127,7 @@ const fresh = (content: string, extra: Parameters<typeof createMemory>[1] = {}):
 });
 type Reader = Omit<ScopeReader, 'ownScope'>;
 const ADMIN: Reader = { role: 'admin' };
-const target = (
-  id: string,
-  ownScope: string | null = null,
-  tenantId = TENANT_A,
-  reader: Reader = ADMIN,
-) => ({
+const target = (id: string, ownScope: string | null = null, tenantId = TENANT_A, reader: Reader = ADMIN) => ({
   tenantId,
   actor: ACTOR,
   ownScope,
@@ -148,12 +139,7 @@ const outcomeOn =
   (g) =>
     g.applyOutcome({ tenantId: TENANT_A, actor: ACTOR, ownScope, ...reader, ids, good });
 const supersede =
-  (
-    oldId: string,
-    successor: MemoryEntry,
-    ownScope: string | null = null,
-    reader: Reader = ADMIN,
-  ): Call =>
+  (oldId: string, successor: MemoryEntry, ownScope: string | null = null, reader: Reader = ADMIN): Call =>
   async (g) => {
     await g.supersede({ tenantId: TENANT_A, actor: ACTOR, ownScope, ...reader, oldId, successor });
   };
@@ -215,9 +201,9 @@ describe('EntryWrites.writeEntry', () => {
       };
     const side = await conforms([write(first), write(second), readBack(TENANT_A, summary.id)]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summaryDirty])).toEqual(
-      [[summary.id, true]],
-    );
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.summaryDirty])).toEqual([
+      [summary.id, true],
+    ]);
     expect(added(side)).toEqual([remembered(first), dirtied(summary), remembered(second)]);
   });
 
@@ -258,12 +244,8 @@ describe('EntryWrites.writeEntry', () => {
       },
       readBack(TENANT_B, noteB.id),
     ]);
-    expect(side.outcomes[0]).toMatchObject({
-      value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }],
-    });
-    expect(side.outcomes[1]).toEqual({
-      error: `ConflictError: Memory ${noteB.id} belongs to another tenant`,
-    });
+    expect(side.outcomes[0]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[1]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
     expect(side.outcomes[2]).toEqual(side.outcomes[0]);
     expect(added(side)).toEqual([]);
   });
@@ -271,17 +253,9 @@ describe('EntryWrites.writeEntry', () => {
   it('refuses a supersede whose successor carries an id another tenant holds, changing neither row', async () => {
     const { note, noteB } = seeded;
     const taken = { ...fresh('acme successor for a globex id'), id: noteB.id };
-    const side = await conforms([
-      supersede(note.id, taken),
-      readBack(TENANT_B, noteB.id),
-      readBack(TENANT_A, note.id),
-    ]);
-    expect(side.outcomes[0]).toEqual({
-      error: `ConflictError: Memory ${noteB.id} belongs to another tenant`,
-    });
-    expect(side.outcomes[1]).toMatchObject({
-      value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }],
-    });
+    const side = await conforms([supersede(note.id, taken), readBack(TENANT_B, noteB.id), readBack(TENANT_A, note.id)]);
+    expect(side.outcomes[0]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
+    expect(side.outcomes[1]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
     expect(side.outcomes[2]).toMatchObject({ value: [{ id: note.id, supersededBy: null }] });
     expect(added(side)).toEqual([]);
   });
@@ -296,16 +270,11 @@ describe('EntryWrites.applyOutcome', () => {
       outcomeOn([personal.id], false, ALICE),
       readBack(TENANT_A, note.id, personal.id),
     ]);
-    expect(side.outcomes.slice(0, 2)).toEqual([
-      { value: [note.id, note.id] },
-      { value: [personal.id] },
-    ]);
+    expect(side.outcomes.slice(0, 2)).toEqual([{ value: [note.id, note.id] }, { value: [personal.id] }]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
     const rows = (side.outcomes[2] as { value: Row[] }).value;
     const [n, p] = [rows.find((r) => r.id === note.id), rows.find((r) => r.id === personal.id)];
-    expect([n?.outcomePositive, n?.outcomeScore, p?.outcomeNegative, p?.outcomeScore]).toEqual([
-      2, 1, 1, -1,
-    ]);
+    expect([n?.outcomePositive, n?.outcomeScore, p?.outcomeNegative, p?.outcomeScore]).toEqual([2, 1, 1, -1]);
     const outcomeRow = (id: string, good: boolean) => ({
       tenantId: TENANT_A,
       actor: ACTOR,
@@ -318,14 +287,7 @@ describe('EntryWrites.applyOutcome', () => {
       outcomeRow(note.id, true),
       outcomeRow(personal.id, false),
     ]);
-    expect(added(side).map((r) => r.op)).toEqual([
-      'remember',
-      'outcome',
-      'remember',
-      'outcome',
-      'remember',
-      'outcome',
-    ]);
+    expect(added(side).map((r) => r.op)).toEqual(['remember', 'outcome', 'remember', 'outcome', 'remember', 'outcome']);
   });
 
   it('drops the churn-stale tag on a good outcome only, and marks the summary of a child it rewrites', async () => {
@@ -358,11 +320,7 @@ describe('EntryWrites.setPinned', () => {
 
   it('pins then unpins with a remember and a pin row each, marking the summary of a child once', async () => {
     const { child, summary } = seeded;
-    const side = await conforms([
-      pin(child.id, true),
-      pin(child.id, false),
-      readBack(TENANT_A, child.id),
-    ]);
+    const side = await conforms([pin(child.id, true), pin(child.id, false), readBack(TENANT_A, child.id)]);
     // SAFETY: every call here resolves to Row[].
     expect(side.outcomes.map((o) => (o as { value: Row[] }).value.map((r) => r.pinned))).toEqual([
       [true],
@@ -410,28 +368,19 @@ describe('EntryWrites.supersede', () => {
       { error: `ConflictError: Memory ${child.id} already superseded by another writer` },
     ]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual(
-      [[child.id, next.id]],
-    );
+    expect((side.outcomes[2] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual([
+      [child.id, next.id],
+    ]);
     expect(added(side)).toEqual([
       dirtied(summary),
       remembered(next),
-      {
-        tenantId: TENANT_A,
-        actor: ACTOR,
-        op: 'supersede',
-        targetId: child.id,
-        metadata: { newId: next.id },
-      },
+      { tenantId: TENANT_A, actor: ACTOR, op: 'supersede', targetId: child.id, metadata: { newId: next.id } },
     ]);
   });
 
   it('answers a row out of reach as not found and writes nothing', async () => {
     const { personal, noteB } = seeded;
-    const [b, p] = [
-      fresh('globex ships on mondays'),
-      fresh('alice keeps her notes in the red folder'),
-    ];
+    const [b, p] = [fresh('globex ships on mondays'), fresh('alice keeps her notes in the red folder')];
     const side = await conforms([
       supersede(noteB.id, b),
       supersede(personal.id, p),
@@ -443,8 +392,7 @@ describe('EntryWrites.supersede', () => {
       { error: `NotFoundError: memory not found: ${personal.id}` },
     ]);
     // SAFETY: the last two calls read rows back, so each resolved to Row[].
-    const chains = (i: number) =>
-      (side.outcomes[i] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy]);
+    const chains = (i: number) => (side.outcomes[i] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy]);
     expect([chains(2), chains(3)]).toEqual([[[personal.id, null]], [[noteB.id, null]]]);
     expect(added(side)).toEqual([]);
   });
@@ -452,17 +400,10 @@ describe('EntryWrites.supersede', () => {
   it('rolls back a tombstoned successor whole, keeping only the refusal row', async () => {
     const { note } = seeded;
     const banned = fresh(BANNED);
-    const side = await conforms([
-      supersede(note.id, banned),
-      readBack(TENANT_A, note.id, banned.id),
-    ]);
-    expect(side.outcomes[0]).toMatchObject({
-      error: expect.stringMatching(/^RejectedValueError: /),
-    });
+    const side = await conforms([supersede(note.id, banned), readBack(TENANT_A, note.id, banned.id)]);
+    expect(side.outcomes[0]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: /) });
     // SAFETY: the second call reads rows back, so it resolved to Row[].
-    expect((side.outcomes[1] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual(
-      [[note.id, null]],
-    );
+    expect((side.outcomes[1] as { value: Row[] }).value.map((r) => [r.id, r.supersededBy])).toEqual([[note.id, null]]);
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['reject_refusal', banned.id]]);
   });
 });
@@ -560,11 +501,7 @@ describe('a restricted scope by id', () => {
   const OPS = 'slack:private:Cops';
   // Bob owns the rows, so only the grant decides reach here; write rights get their own block below.
   const secret = fresh('the ops rota sits in the locked channel', { scope: OPS, owner: BOB });
-  const secretRaw = fresh('raw ops channel message about the rota', {
-    scope: OPS,
-    kind: 'raw',
-    owner: BOB,
-  });
+  const secretRaw = fresh('raw ops channel message about the rota', { scope: OPS, kind: 'raw', owner: BOB });
   const successor = fresh('the ops rota moved to the wiki', { scope: OPS });
   const seedOps: Call = async (g) => {
     for (const entry of [secret, secretRaw]) await g.writeEntry({ entry, actor: ACTOR });
@@ -573,8 +510,7 @@ describe('a restricted scope by id', () => {
   /** Every write by id on the restricted rows: outcome, pin, supersede, archive and forget, in that order. */
   const writesAs = (reader: Reader): Call[] => [
     outcomeOn([secret.id], true, null, reader),
-    async (g) =>
-      project([await g.setPinned({ ...target(secret.id, null, TENANT_A, reader), pinned: true })]),
+    async (g) => project([await g.setPinned({ ...target(secret.id, null, TENANT_A, reader), pinned: true })]),
     supersede(secret.id, successor, null, reader),
     (g) => g.archiveRaw({ ...target(secretRaw.id, null, TENANT_A, reader), reason: 'r' }),
     (g) => g.forget(target(secret.id, null, TENANT_A, reader)),
@@ -614,15 +550,13 @@ describe('write rights on a team row', () => {
   const unowned = fresh('the release train leaves on thursdays');
   const unownedRaw = fresh('raw thread about the release train', { kind: 'raw' });
   const seedTeam: Call = async (g) => {
-    for (const entry of [owned, ownedRaw, unowned, unownedRaw])
-      await g.writeEntry({ entry, actor: ACTOR });
+    for (const entry of [owned, ownedRaw, unowned, unownedRaw]) await g.writeEntry({ entry, actor: ACTOR });
   };
   const team = readBack(TENANT_A, owned.id, ownedRaw.id, unowned.id, unownedRaw.id);
   const bobKey: Reader = { role: 'member', owner: BOB };
   /** Pin, archive, supersede and forget, in that order, on `row` and its raw twin. */
   const changesAs = (reader: Reader, row: MemoryEntry, raw: MemoryEntry): Call[] => [
-    async (g) =>
-      project([await g.setPinned({ ...target(row.id, null, TENANT_A, reader), pinned: true })]),
+    async (g) => project([await g.setPinned({ ...target(row.id, null, TENANT_A, reader), pinned: true })]),
     (g) => g.archiveRaw({ ...target(raw.id, null, TENANT_A, reader), reason: 'r' }),
     supersede(row.id, fresh(`${row.content}, revised`), null, reader),
     (g) => g.forget(target(row.id, null, TENANT_A, reader)),
@@ -631,9 +565,7 @@ describe('write rights on a team row', () => {
     const why = row.owner
       ? 'was written by someone else: change it with the key that wrote it or an admin key'
       : 'records no writer: change it with an admin key';
-    return [row.id, raw.id, row.id, row.id].map((id) => ({
-      error: `ForbiddenError: memory ${id} ${why}`,
-    }));
+    return [row.id, raw.id, row.id, row.id].map((id) => ({ error: `ForbiddenError: memory ${id} ${why}` }));
   };
 
   it("refuses a member key on another person's row and on a row with no owner, naming the key that can", async () => {
@@ -660,11 +592,7 @@ describe('write rights on a team row', () => {
     ['an admin key', ADMIN, owned, ownedRaw],
     ['an admin key, on a row with no owner', ADMIN, unowned, unownedRaw],
   ])('lets %s pin, archive, supersede and forget', async (_who, reader, row, raw) => {
-    const side = await conforms([
-      seedTeam,
-      ...changesAs(reader, row, raw),
-      readBack(TENANT_A, row.id, raw.id),
-    ]);
+    const side = await conforms([seedTeam, ...changesAs(reader, row, raw), readBack(TENANT_A, row.id, raw.id)]);
     expect(side.outcomes.slice(1, 5).filter((o) => 'error' in o)).toEqual([]);
     expect(side.outcomes[5]).toEqual({ value: [] });
     expect(

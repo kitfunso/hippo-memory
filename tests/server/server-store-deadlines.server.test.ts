@@ -4,12 +4,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import {
-  closeHippoDb,
-  getHippoDbPath,
-  openHippoDb,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/ports/store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
@@ -95,9 +90,7 @@ function watched(inner: SqliteExecutor) {
 
 /** A worker-backed store whose threads wait on a lock for as long as the test holds it. */
 function patientStore(root: string, opts: ExecutorOptions = {}) {
-  const { executor, sent } = watched(
-    createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS, ...opts }),
-  );
+  const { executor, sent } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS, ...opts }));
   return { sent, store: workerSqliteStore(root, executor) };
 }
 
@@ -142,10 +135,8 @@ function columnOf(root: string, sql: string): string[] {
   }
 }
 
-const claims = (root: string): string[] =>
-  columnOf(root, 'SELECT claim_text AS value FROM predictions ORDER BY id');
-const auditOps = (root: string): string[] =>
-  columnOf(root, 'SELECT op AS value FROM audit_log ORDER BY id');
+const claims = (root: string): string[] => columnOf(root, 'SELECT claim_text AS value FROM predictions ORDER BY id');
+const auditOps = (root: string): string[] => columnOf(root, 'SELECT op AS value FROM audit_log ORDER BY id');
 
 const JSON_TYPE = { 'content-type': 'application/json' };
 const post = (server: ServerHandle, path: string, body: JsonValue): Promise<Response> =>
@@ -153,8 +144,7 @@ const post = (server: ServerHandle, path: string, body: JsonValue): Promise<Resp
 const get = (server: ServerHandle, path: string): Promise<Response> =>
   fetch(`${server.url}${path}`, { headers: JSON_TYPE });
 const claim = (text: string) => ({ claim: text, classTag: 'release', estimate: 3, unit: 'days' });
-const save = (server: ServerHandle, text: string): Promise<Response> =>
-  post(server, '/v1/predictions', claim(text));
+const save = (server: ServerHandle, text: string): Promise<Response> => post(server, '/v1/predictions', claim(text));
 
 interface Counts {
   readonly store_queue_refusals: number;
@@ -233,15 +223,11 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
       expect(next.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
       expect(next.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
       expect([messages, new Int32Array(flag)[0]]).toEqual([['in-transaction'], 0]);
-      expect(
-        next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get(),
-      ).toEqual({ n: 0 });
+      expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
       next.exec(
         "INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')",
       );
-      expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({
-        n: 1,
-      });
+      expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
     },
     120_000,
   );
@@ -338,16 +324,13 @@ describe("a read still running at its request's deadline", () => {
     expect((await get(server, '/v1/predictions')).status).toBe(200);
     // The stopped thread exits once its statement has met the freed lock; each look is a round trip, never a pause.
     let after = await counts(server);
-    while (after.store_workers_replaced === before.store_workers_replaced)
-      after = await counts(server);
+    while (after.store_workers_replaced === before.store_workers_replaced) after = await counts(server);
     expect([after.store_workers_replaced, after.store_jobs_expired]).toEqual([
       before.store_workers_replaced + 1,
       before.store_jobs_expired + 1,
     ]);
     expect(
-      (await Promise.all([get(server, '/v1/predictions'), get(server, '/v1/predictions')])).map(
-        (res) => res.status,
-      ),
+      (await Promise.all([get(server, '/v1/predictions'), get(server, '/v1/predictions')])).map((res) => res.status),
     ).toEqual([200, 200]);
   });
 });
@@ -495,19 +478,13 @@ describe('the handler deadline', () => {
             return {};
           },
         },
-        {
-          path: '/v1/quick',
-          handler: async () => ({ aborted: currentSignal()?.aborted === true }),
-        },
+        { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
       ];
       const server = await start(root, { routes });
       vi.spyOn(log, 'error').mockImplementation(() => {});
 
       deadline(SHORT_DEADLINE_MS);
-      await expectDeadlineReply(
-        await post(server, '/v1/slow', {}),
-        'did not finish by its deadline',
-      );
+      await expectDeadlineReply(await post(server, '/v1/slow', {}), 'did not finish by its deadline');
       release();
       expect(await afterGate).toBe(true);
       const quick = await post(server, '/v1/quick', {});
@@ -600,11 +577,7 @@ describe('the handler deadline', () => {
       return { tenantId: 'default', subject: 'user-1', role: 'member' };
     };
     // The in-process store, since the workers refuse a call that arrives past its request's deadline and the read would fail.
-    const server = await start(root, {
-      store: sqliteStore(root),
-      authResolver,
-      authResolverTimeoutMs: LONG_WAIT_MS,
-    });
+    const server = await start(root, { store: sqliteStore(root), authResolver, authResolverTimeoutMs: LONG_WAIT_MS });
     vi.spyOn(log, 'error').mockImplementation(() => {});
     const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
     const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
@@ -620,9 +593,7 @@ describe('the handler deadline', () => {
     // Two round trips give the late handler the turns it needs to end.
     expect((await get(server, '/v1/predictions')).status).toBe(200);
     await counts(server);
-    expect(
-      [...infos.mock.calls, ...warns.mock.calls].filter(([message]) => message.includes(LATE)),
-    ).toEqual([]);
+    expect([...infos.mock.calls, ...warns.mock.calls].filter(([message]) => message.includes(LATE))).toEqual([]);
   });
 
   it('is off at HIPPO_REQUEST_DEADLINE_MS=0: a write held far past the short deadline still lands', async () => {
@@ -687,8 +658,6 @@ describe('a request that finishes inside its deadline and under the queue cap', 
 
     expect(withDeadline).toEqual(inProcess);
     expect(withoutDeadline).toEqual(inProcess);
-    expect(withDeadline.map((reply) => reply.status)).toEqual([
-      201, 400, 200, 200, 404, 200, 400, 200,
-    ]);
+    expect(withDeadline.map((reply) => reply.status)).toEqual([201, 400, 200, 200, 404, 200, 400, 200]);
   });
 });

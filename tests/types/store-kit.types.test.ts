@@ -31,8 +31,7 @@ describe('hippo-memory/store-kit entry types', () => {
 
   it('hasGroup narrows an optional group; hasGroup and requireGroup take the store first and a group name second', () => {
     typeOnly(() => {
-      if (hasGroup(store, 'lastRecall'))
-        expectTypeOf(store.lastRecall).toEqualTypeOf<StoreGroups['lastRecall']>();
+      if (hasGroup(store, 'lastRecall')) expectTypeOf(store.lastRecall).toEqualTypeOf<StoreGroups['lastRecall']>();
       expectTypeOf(hasGroup(store, 'base')).toEqualTypeOf<boolean>();
       expectTypeOf(hasGroup(store, 'sessions' satisfies StoreGroup)).toEqualTypeOf<boolean>();
     });
@@ -75,9 +74,7 @@ describe('hippo-memory/store-kit entry types', () => {
   });
 
   it('entryAfterOutcome takes the entry, a boolean and the root ratio, and returns an entry', () => {
-    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<
-      [MemoryEntry, boolean, LossAversion?]
-    >();
+    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, LossAversion?]>();
     expectTypeOf(entryAfterOutcome).returns.toEqualTypeOf<MemoryEntry>();
     expectTypeOf<InstanceType<typeof RejectedValueError>>().toMatchTypeOf<Error>();
   });

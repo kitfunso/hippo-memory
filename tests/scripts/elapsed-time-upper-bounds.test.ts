@@ -11,10 +11,7 @@ const SELF = 'scripts/elapsed-time-upper-bounds.test.ts';
 const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint)?\(\))`;
 // A clock read minus a start time held in a variable; minus a constant is a moment in the past, not a duration.
 const CLOCK_DIFF = new RegExp(String.raw`${CLOCK}\s*-\s*[a-z_$][\w$.]*(?!\s*[*(/\w$.])`);
-const ASSIGNED = new RegExp(
-  String.raw`(?<![\w$.])([A-Za-z_$][\w$]*)\s*=[^=;\n]*?${CLOCK_DIFF.source}`,
-  'g',
-);
+const ASSIGNED = new RegExp(String.raw`(?<![\w$.])([A-Za-z_$][\w$]*)\s*=[^=;\n]*?${CLOCK_DIFF.source}`, 'g');
 // Any `name = value` on one line, for the names a ratio or product of timings is kept in.
 const ASSIGNMENT = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*=(?![=>])([^;\n]*)/g;
 // In a file that measures a duration, a name that says ratio or growth holds a ratio of timings.
@@ -24,8 +21,7 @@ const TIMING_RATIO_NAME =
   /(?<![\w$])[\w$]*(?:[Ff]astest|[Ss]lowest|[Tt]iming|[Tt]imed|[Ee]lapsed|[Dd]uration)[\w$]*(?:[Rr]atio|[Gg]rowth)\b/;
 // Names a helper or a spawned process gives a duration it measured itself: elapsed, ms, or any name ending in Ms or _ms; _MS constants are limits, not measurements.
 const REPORTED = /(?<![\w$])(?:elapsed|ms|[\w$]*(?:Ms|_ms))\b/;
-const MATCHER =
-  /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGreaterThan|toBeGreaterThanOrEqual)\(/;
+const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGreaterThan|toBeGreaterThanOrEqual)\(/;
 
 // By file and exact line, so an edited line is read again; the value says why a slow runner cannot fail it.
 const ALLOWED = new Map([
@@ -63,14 +59,10 @@ function elapsedUpperBounds(file: string, text: string): string[] {
     (measuresTime && RATIO_NAME.test(code)) ||
     TIMING_RATIO_NAME.test(code) ||
     durations.some((name) =>
-      new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(
-        code,
-      ),
+      new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(code),
     );
   // A ratio or product of timings is a timing too, whatever it is called; repeat until no new name joins.
-  const products = [...text.matchAll(ASSIGNMENT)].filter(
-    (m) => /[*/]/.test(m[2]) || TIMING_RATIO_NAME.test(m[2]),
-  );
+  const products = [...text.matchAll(ASSIGNMENT)].filter((m) => /[*/]/.test(m[2]) || TIMING_RATIO_NAME.test(m[2]));
   for (let grew = true; grew;) {
     grew = false;
     for (const [, name, value] of products) {
@@ -120,18 +112,14 @@ function boundedInline(subject: string, timed: (code: string) => boolean): boole
 
 const files = readdirSync(TESTS, { recursive: true, encoding: 'utf8' })
   .map((file) => file.split('\\').join('/'))
-  .filter(
-    (file) => /\.(?:ts|mjs|cjs)$/.test(file) && !file.startsWith('fixtures/') && file !== SELF,
-  );
+  .filter((file) => /\.(?:ts|mjs|cjs)$/.test(file) && !file.startsWith('fixtures/') && file !== SELF);
 // The dashboard package has its own test run that the root suite never sees.
 const uiFiles = readdirSync(UI_SRC, { recursive: true, encoding: 'utf8' })
   .map((file) => file.split('\\').join('/'))
   .filter((file) => /\.test\.tsx?$/.test(file));
 const found = [
   ...files.flatMap((file) => elapsedUpperBounds(file, readFileSync(join(TESTS, file), 'utf8'))),
-  ...uiFiles.flatMap((file) =>
-    elapsedUpperBounds(`ui/src/${file}`, readFileSync(join(UI_SRC, file), 'utf8')),
-  ),
+  ...uiFiles.flatMap((file) => elapsedUpperBounds(`ui/src/${file}`, readFileSync(join(UI_SRC, file), 'utf8'))),
 ];
 
 describe('elapsed-time upper bounds in tests', () => {

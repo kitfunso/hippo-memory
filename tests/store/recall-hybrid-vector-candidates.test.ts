@@ -39,12 +39,7 @@ interface Seeded {
   idByLabel: Map<string, string>;
 }
 
-function add(
-  s: Seeded,
-  label: string,
-  content: string,
-  opts: Partial<CreateMemoryOptions> = {},
-): void {
+function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): void {
   const entry = createMemory(content, { baseHalfLifeDays: 7, tenantId: TENANT, ...opts });
   writeEntry(s.home, entry);
   s.labelById.set(entry.id, label);
@@ -84,25 +79,18 @@ function withEmbeddings(s: Seeded): void {
     else index[id] = label.startsWith('N') ? [0, 0, 1] : [0.6, 0.8, 0];
   }
   saveEmbeddingIndex(s.home, index);
-  saveStoredEmbeddingModel(
-    handlesOf(s.home).on,
-    resolveEmbeddingProvider(loadConfig(s.home).embeddings).id,
-  );
+  saveStoredEmbeddingModel(handlesOf(s.home).on, resolveEmbeddingProvider(loadConfig(s.home).embeddings).id);
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init: { body: string }) => {
       // SAFETY: body is the OpenAI embeddings request this provider just serialised.
       const body = JSON.parse(init.body) as { input: string[] };
-      return new Response(
-        JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
     }),
   );
 }
 
-const labels = (s: Seeded, ids: readonly string[]): string[] =>
-  ids.map((id) => s.labelById.get(id) ?? id);
+const labels = (s: Seeded, ids: readonly string[]): string[] => ids.map((id) => s.labelById.get(id) ?? id);
 
 describe('hybrid recall candidates with stored vectors', () => {
   const dirs: string[] = [];

@@ -117,10 +117,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
       decisionText: 'We adopt FocusPol across every service now',
     });
     await extractGraph(sqliteStore(home), T);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, {
-      entity: 'FocusPol',
-      limit: 2,
-    });
+    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'FocusPol', limit: 2 });
     expect(m.nodes.some((n) => n.name === 'FocusPol')).toBe(true); // found despite limit 2
     expect(m.edges.length).toBeGreaterThanOrEqual(1); // its references edge is present
     const ids = new Set(m.nodes.map((n) => n.id));
@@ -146,9 +143,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
     // PolA --references--> PolB connects two NEIGHBORS (neither is the focus decision);
     // it would be missing if only focus-touching edges were loaded.
-    const interNeighbor = m.edges.some(
-      (e) => nameById.get(e.from) === 'PolA' && nameById.get(e.to) === 'PolB',
-    );
+    const interNeighbor = m.edges.some((e) => nameById.get(e.from) === 'PolA' && nameById.get(e.to) === 'PolB');
     expect(interNeighbor).toBe(true);
   });
 
@@ -167,10 +162,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('18. focus truncation is reported when the neighbour scan hits the cap', async () => {
     for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) {
-      await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
-        policyName: p,
-        policyText: 'x',
-      });
+      await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
     }
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Adopt PolA and PolB and PolC and PolD now',
@@ -209,11 +201,7 @@ describe('graph-view: layout + renderers (pure)', () => {
 
   it('8. layout handles 0 and 1 node without NaN', () => {
     expect(layoutGraph({ nodes: [], edges: [], truncated: false }).size).toBe(0);
-    const one = layoutGraph({
-      nodes: [{ id: 9, type: 'system', name: 'x' }],
-      edges: [],
-      truncated: false,
-    });
+    const one = layoutGraph({ nodes: [{ id: 9, type: 'system', name: 'x' }], edges: [], truncated: false });
     expect(one.size).toBe(1);
     const p = one.get(9)!;
     expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
@@ -247,15 +235,7 @@ describe('graph-view: layout + renderers (pure)', () => {
     // SAFETY: renderGraphCanvas (src/surface/cli/graph-page.ts) is the function under
     // test; its output is always this JSON Canvas node/edge shape.
     const canvas = JSON.parse(renderGraphCanvas(model)) as {
-      nodes: {
-        id: string;
-        type: string;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        text: string;
-      }[];
+      nodes: { id: string; type: string; x: number; y: number; width: number; height: number; text: string }[];
       edges: { id: string; fromNode: string; toNode: string; label: string }[];
     };
     expect(canvas.nodes).toHaveLength(model.nodes.length);
@@ -323,9 +303,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
 
   it('19. accepts a valid entity name longer than 256 chars', async () => {
     const longName = 'Adopt ' + 'X'.repeat(300); // ~306 chars, within MAX_ENTITY_NAME_LEN (512)
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
-      decisionText: longName,
-    });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longName });
     await extractGraph(sqliteStore(home), T);
     const res = await fetch(`${handle.url}/v1/graph?entity=${encodeURIComponent(longName)}`);
     expect(res.status).toBe(200); // not a 400 length rejection

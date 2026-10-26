@@ -12,9 +12,7 @@ const SIZES = [10, 200] as const;
 
 function seeded(n: number, tenantId = 'default') {
   const root = makeStore('set-based-writes').root;
-  const rows = Array.from({ length: n }, (_, i) =>
-    createMemory(`row ${i} of the set write`, { tenantId }),
-  );
+  const rows = Array.from({ length: n }, (_, i) => createMemory(`row ${i} of the set write`, { tenantId }));
   writeEntriesTogether(root, rows);
   return { root, rows };
 }
@@ -30,31 +28,25 @@ function onDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 
 function column(root: string, name: 'half_life_days' | 'origin_project'): Map<string, unknown> {
   // SAFETY: the SELECT names id and one column, read back as `value`.
-  const rows = onDb(root, (db) =>
-    db.prepare(`SELECT id, ${name} AS value FROM memories`).all(),
-  ) as Array<{
+  const rows = onDb(root, (db) => db.prepare(`SELECT id, ${name} AS value FROM memories`).all()) as Array<{
     id: string;
     value: unknown;
   }>;
   return new Map(rows.map((r) => [r.id, r.value]));
 }
 
-const updates = (statements: readonly string[]) =>
-  statements.filter((sql) => /^\s*(WITH|UPDATE)\b/.test(sql));
+const updates = (statements: readonly string[]) => statements.filter((sql) => /^\s*(WITH|UPDATE)\b/.test(sql));
 
 describe('setHalfLives', () => {
-  it.each(SIZES)(
-    'writes %i rows in one statement, the last value of a repeated id winning',
-    (n) => {
-      const { root, rows } = seeded(n);
-      const moves = rows.map((r, i) => ({ id: r.id, halfLifeDays: 1.5 + i / 7 }));
-      moves.push({ id: rows[0].id, halfLifeDays: 42.25 });
-      const { statements } = recordStatements(() => onDb(root, (db) => setHalfLives(db, moves)));
-      expect(updates(statements)).toHaveLength(1);
-      const want = new Map(moves.map((m) => [m.id, m.halfLifeDays]));
-      expect(column(root, 'half_life_days')).toEqual(want);
-    },
-  );
+  it.each(SIZES)('writes %i rows in one statement, the last value of a repeated id winning', (n) => {
+    const { root, rows } = seeded(n);
+    const moves = rows.map((r, i) => ({ id: r.id, halfLifeDays: 1.5 + i / 7 }));
+    moves.push({ id: rows[0].id, halfLifeDays: 42.25 });
+    const { statements } = recordStatements(() => onDb(root, (db) => setHalfLives(db, moves)));
+    expect(updates(statements)).toHaveLength(1);
+    const want = new Map(moves.map((m) => [m.id, m.halfLifeDays]));
+    expect(column(root, 'half_life_days')).toEqual(want);
+  });
 
   it('writes nothing for no rows', () => {
     const { root } = seeded(1);
@@ -73,13 +65,9 @@ describe('stampOriginProjects', () => {
     const before = column(root, 'origin_project');
     const stamps = rows.map((r, i) => ({ id: r.id, origin: i % 2 === 0 ? 'alpha' : '' }));
     stamps.push({ id: rows[0].id, origin: 'beta' }, { id: foreign.id, origin: 'alpha' });
-    const { statements } = recordStatements(() =>
-      onDb(root, (db) => stampOriginProjects(db, 'default', stamps)),
-    );
+    const { statements } = recordStatements(() => onDb(root, (db) => stampOriginProjects(db, 'default', stamps)));
     expect(updates(statements)).toHaveLength(1);
-    const want = new Map<string, unknown>(
-      stamps.filter((s) => s.id !== foreign.id).map((s) => [s.id, s.origin]),
-    );
+    const want = new Map<string, unknown>(stamps.filter((s) => s.id !== foreign.id).map((s) => [s.id, s.origin]));
     want.set(foreign.id, before.get(foreign.id));
     expect(column(root, 'origin_project')).toEqual(want);
   });

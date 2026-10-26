@@ -43,9 +43,7 @@ afterEach(undoAll);
 
 function claims(root: string): string[] {
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
-  const rows = onDb(root, (db) =>
-    db.prepare('SELECT claim_text FROM predictions ORDER BY id').all(),
-  ) as Array<{
+  const rows = onDb(root, (db) => db.prepare('SELECT claim_text FROM predictions ORDER BY id').all()) as Array<{
     claim_text: string;
   }>;
   return rows.map((row) => row.claim_text);
@@ -87,10 +85,7 @@ interface Caller {
   readonly other: string;
 }
 
-type Step = readonly [
-  label: string,
-  send: (server: ServerHandle, keys: Caller) => Promise<Response>,
-];
+type Step = readonly [label: string, send: (server: ServerHandle, keys: Caller) => Promise<Response>];
 
 const STEPS: readonly Step[] = [
   [
@@ -99,42 +94,21 @@ const STEPS: readonly Step[] = [
       post(
         s,
         '/v1/predictions',
-        {
-          claim: 'ships in three days',
-          classTag: 'release',
-          estimate: 3,
-          unit: 'days',
-          targetDate: '2026-12-01',
-        },
+        { claim: 'ships in three days', classTag: 'release', estimate: 3, unit: 'days', targetDate: '2026-12-01' },
         k.main,
       ),
   ],
   [
     'create a second',
-    (s, k) =>
-      post(
-        s,
-        '/v1/predictions',
-        { claim: 'migration takes two', classTag: 'release', estimate: 2 },
-        k.main,
-      ),
+    (s, k) => post(s, '/v1/predictions', { claim: 'migration takes two', classTag: 'release', estimate: 2 }, k.main),
   ],
   [
     'create for the other tenant',
-    (s, k) =>
-      post(
-        s,
-        '/v1/predictions',
-        { claim: 'their claim', classTag: 'release', estimate: 1 },
-        k.other,
-      ),
+    (s, k) => post(s, '/v1/predictions', { claim: 'their claim', classTag: 'release', estimate: 1 }, k.other),
   ],
   ['create without a claim', (s, k) => post(s, '/v1/predictions', { classTag: 'release' }, k.main)],
   ['create with a broken body', (s, k) => postText(s, '/v1/predictions', '{', k.main)],
-  [
-    'create with an unknown key',
-    (s) => post(s, '/v1/predictions', claim('never saved'), 'hk_unknown'),
-  ],
+  ['create with an unknown key', (s) => post(s, '/v1/predictions', claim('never saved'), 'hk_unknown')],
   ['list', (s, k) => get(s, '/v1/predictions', k.main)],
   ['list open in a class', (s, k) => get(s, '/v1/predictions?class=release&status=open', k.main)],
   ['list one per page', (s, k) => get(s, '/v1/predictions?limit=1', k.main)],
@@ -147,38 +121,17 @@ const STEPS: readonly Step[] = [
   ['get with an unknown key', (s) => get(s, '/v1/predictions/1', 'hk_unknown')],
   [
     'close',
-    (s, k) =>
-      post(
-        s,
-        '/v1/predictions/1/close',
-        { state: 'closed', actual: 5, note: 'two days late' },
-        k.main,
-      ),
+    (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5, note: 'two days late' }, k.main),
   ],
-  [
-    'close it again',
-    (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5 }, k.main),
-  ],
+  ['close it again', (s, k) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 5 }, k.main)],
   [
     "close the other tenant's row",
     (s, k) => post(s, '/v1/predictions/3/close', { state: 'closed', actual: 1 }, k.main),
   ],
-  [
-    'close a missing row',
-    (s, k) => post(s, '/v1/predictions/99/close', { state: 'closed', actual: 1 }, k.main),
-  ],
-  [
-    'close to an open state',
-    (s, k) => post(s, '/v1/predictions/2/close', { state: 'open' }, k.main),
-  ],
-  [
-    'close with an unknown key',
-    (s) => post(s, '/v1/predictions/2/close', { state: 'closed' }, 'hk_unknown'),
-  ],
-  [
-    'list closed in a class',
-    (s, k) => get(s, '/v1/predictions?class=release&status=closed', k.main),
-  ],
+  ['close a missing row', (s, k) => post(s, '/v1/predictions/99/close', { state: 'closed', actual: 1 }, k.main)],
+  ['close to an open state', (s, k) => post(s, '/v1/predictions/2/close', { state: 'open' }, k.main)],
+  ['close with an unknown key', (s) => post(s, '/v1/predictions/2/close', { state: 'closed' }, 'hk_unknown')],
+  ['list closed in a class', (s, k) => get(s, '/v1/predictions?class=release&status=closed', k.main)],
   ['stats', (s, k) => get(s, '/v1/predictions/stats?class=release', k.main)],
   ['stats of an empty class', (s, k) => get(s, '/v1/predictions/stats?class=nothing-here', k.main)],
   ['stats without a class', (s, k) => get(s, '/v1/predictions/stats', k.main)],
@@ -193,13 +146,7 @@ async function runSteps(root: string, store?: HippoStore) {
   const server = await start(root, store);
   const replies = [];
   for (const [label, send] of STEPS) {
-    replies.push(
-      await seen(
-        label,
-        await send(server, { main: main.plaintext, other: other.plaintext }),
-        keyIds,
-      ),
-    );
+    replies.push(await seen(label, await send(server, { main: main.plaintext, other: other.plaintext }), keyIds));
   }
   return { replies, audit: auditRows(root, keyIds) };
 }
@@ -214,9 +161,7 @@ describe('worker-backed predictions against the in-process store', () => {
 
       expect(onWorkers.replies).toEqual(inProcess.replies);
       expect(onWorkers.audit).toEqual(inProcess.audit);
-      const statusOf = Object.fromEntries(
-        onWorkers.replies.map((reply) => [reply.label, reply.status]),
-      );
+      const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
       expect(statusOf).toMatchObject({
         create: 201,
         'create without a claim': 400,
@@ -234,37 +179,29 @@ describe('worker-backed predictions against the in-process store', () => {
     },
   );
 
-  it.skipIf(needsHippoDb('lock'))(
-    'answers a write behind a held lock with the same 503 and Retry-After',
-    async () => {
-      const busyReplies = async (root: string, store?: HippoStore) => {
-        const server = await start(root, store);
-        expect((await post(server, '/v1/predictions', claim('saved before the lock'))).status).toBe(
-          201,
-        );
-        const lock = holdWriteLock(root);
-        const replies = [
-          await seen('create', await post(server, '/v1/predictions', claim('refused'))),
-          await seen(
-            'close',
-            await post(server, '/v1/predictions/1/close', { state: 'closed', actual: 4 }),
-          ),
-          await seen('list', await get(server, '/v1/predictions')),
-        ];
-        lock.release();
-        return replies;
-      };
-      const inProcessRoot = newRoot();
-      const inProcess = await busyReplies(inProcessRoot, sqliteStore(inProcessRoot));
-      const workerRoot = newRoot();
-      const onWorkers = await busyReplies(workerRoot);
+  it.skipIf(needsHippoDb('lock'))('answers a write behind a held lock with the same 503 and Retry-After', async () => {
+    const busyReplies = async (root: string, store?: HippoStore) => {
+      const server = await start(root, store);
+      expect((await post(server, '/v1/predictions', claim('saved before the lock'))).status).toBe(201);
+      const lock = holdWriteLock(root);
+      const replies = [
+        await seen('create', await post(server, '/v1/predictions', claim('refused'))),
+        await seen('close', await post(server, '/v1/predictions/1/close', { state: 'closed', actual: 4 })),
+        await seen('list', await get(server, '/v1/predictions')),
+      ];
+      lock.release();
+      return replies;
+    };
+    const inProcessRoot = newRoot();
+    const inProcess = await busyReplies(inProcessRoot, sqliteStore(inProcessRoot));
+    const workerRoot = newRoot();
+    const onWorkers = await busyReplies(workerRoot);
 
-      expect(onWorkers).toEqual(inProcess);
-      expect(onWorkers.map((reply) => reply.status)).toEqual([503, 503, 200]);
-      expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
-      expect(claims(workerRoot)).toEqual(['saved before the lock']);
-    },
-  );
+    expect(onWorkers).toEqual(inProcess);
+    expect(onWorkers.map((reply) => reply.status)).toEqual([503, 503, 200]);
+    expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
+    expect(claims(workerRoot)).toEqual(['saved before the lock']);
+  });
 });
 
 describe('a store worker that dies', () => {
@@ -312,41 +249,32 @@ describe('a reader thread', () => {
 
 describe("the server-thread block of a `loop: 'off'` route", () => {
   const ROUTES: ReadonlyArray<readonly [string, (server: ServerHandle) => Promise<Response>]> = [
-    [
-      'POST /v1/predictions',
-      (s) => post(s, '/v1/predictions', claim('opened on the server thread')),
-    ],
+    ['POST /v1/predictions', (s) => post(s, '/v1/predictions', claim('opened on the server thread'))],
     ['GET /v1/predictions', (s) => get(s, '/v1/predictions')],
     ['GET /v1/predictions/stats', (s) => get(s, '/v1/predictions/stats?class=release')],
     ['GET /v1/predictions/:id', (s) => get(s, '/v1/predictions/1')],
-    [
-      'POST /v1/predictions/:id/close',
-      (s) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 2 }),
-    ],
+    ['POST /v1/predictions/:id/close', (s) => post(s, '/v1/predictions/1/close', { state: 'closed', actual: 2 })],
   ];
 
-  it.each(ROUTES)(
-    '%s fails when its handler opens hippo.db on the server thread',
-    async (_route, send) => {
-      const root = newRoot();
-      const info = vi.spyOn(log, 'info');
-      // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
-      const store = Object.assign(workerSqliteStore(root), {
-        objects: sqliteObjects(handlesOf(root)),
-      });
-      const server = await start(root, store);
+  it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, send) => {
+    const root = newRoot();
+    const info = vi.spyOn(log, 'info');
+    // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
+    const store = Object.assign(workerSqliteStore(root), {
+      objects: sqliteObjects(handlesOf(root)),
+    });
+    const server = await start(root, store);
 
-      const res = await send(server);
+    const res = await send(server);
 
-      expect(res.status).toBe(501);
-      expect(
-        info.mock.calls
-          .map((call) => String(call[0]))
-          .filter((line) => line.includes('opened on the server thread by a route')),
-      ).toHaveLength(1);
-      expect(claims(root)).toEqual([]);
-    },
-  );
+    expect(res.status).toBe(501);
+    expect(
+      info.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('opened on the server thread by a route')),
+    ).toHaveLength(1);
+    expect(claims(root)).toEqual([]);
+  });
 
   it.skipIf(needsHippoDb('lock'))(
     'lets an authResolver that reads hippo.db answer for a worker-backed route',
@@ -358,9 +286,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
         port: 0,
         authResolver: (token) => {
           closeHippoDb(openHippoDb(root));
-          return token === 'idp-token'
-            ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' }
-            : null;
+          return token === 'idp-token' ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' } : null;
         },
       });
       cleanups.push(() => server.stop());
@@ -417,9 +343,7 @@ describe('stopping a server with store workers', () => {
     await store.close();
 
     expect(executor.liveThreads()).toBe(0);
-    await expect(store.objects.listObjects('default', 'prediction', { limit: 1 })).rejects.toThrow(
-      /store is closed/,
-    );
+    await expect(store.objects.listObjects('default', 'prediction', { limit: 1 })).rejects.toThrow(/store is closed/);
   });
 });
 
@@ -433,9 +357,7 @@ describe('an audit write failure counted on a worker thread', () => {
       `CREATE TRIGGER remember_audit_broken BEFORE INSERT ON audit_log WHEN NEW.op = 'remember' BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
     );
 
-    expect(
-      (await post(server, '/v1/predictions', claim('kept without its audit row'))).status,
-    ).toBe(201);
+    expect((await post(server, '/v1/predictions', claim('kept without its audit row'))).status).toBe(201);
 
     expect(await auditFailures(server)).toBe(before + 1);
     expect(claims(root)).toEqual(['kept without its audit row']);

@@ -64,11 +64,7 @@ describe('rejections.apply', () => {
       { digest: applied.digest, reason: 'wrong', rejectedBy: 'tester', sourceMemoryId: entry.id },
     ]);
     expect(auditRows('default', 'reject_value')).toMatchObject([
-      {
-        actor: 'tester',
-        targetId: entry.id,
-        metadata: { digest: applied.digest, removedIds: [entry.id], count: 1 },
-      },
+      { actor: 'tester', targetId: entry.id, metadata: { digest: applied.digest, removedIds: [entry.id], count: 1 } },
     ]);
   });
 
@@ -76,9 +72,9 @@ describe('rejections.apply', () => {
     const own = createMemory('my own reminder', { tags: [], scope: ELSEWHERE });
     writeEntry(root, own);
 
-    await expect(
-      rejections().apply(rejection('default', { memoryId: 'mem_absent' })),
-    ).rejects.toThrow('memory not found: mem_absent');
+    await expect(rejections().apply(rejection('default', { memoryId: 'mem_absent' }))).rejects.toThrow(
+      'memory not found: mem_absent',
+    );
     await expect(rejections().apply(rejection('default', { memoryId: own.id }))).rejects.toThrow(
       "Personal memories can't be rejected",
     );
@@ -96,11 +92,7 @@ describe('rejections.apply', () => {
     expect(applied.removedIds).toEqual([]);
     expect(readEntry(root, entry.id)).not.toBeNull();
     expect(
-      (
-        await rejections().apply(
-          rejection('default', { value: entry.content, ownScope: ELSEWHERE }),
-        )
-      ).removedIds,
+      (await rejections().apply(rejection('default', { value: entry.content, ownScope: ELSEWHERE }))).removedIds,
     ).toEqual([entry.id]);
   });
 });
@@ -109,9 +101,7 @@ describe('rejections.lift', () => {
   it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', async () => {
     const entry = createMemory('lifted later', { tags: [] });
     writeEntry(root, entry);
-    const { digest } = await rejections().apply(
-      rejection('default', { memoryId: entry.id, reason: 'stale' }),
-    );
+    const { digest } = await rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale' }));
 
     expect(await rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
       status: 'ok',
@@ -126,17 +116,14 @@ describe('rejections.lift', () => {
   });
 
   it('deletes nothing and writes no audit row when the prefix matches two rejected values', async () => {
-    const digests = [
-      await rejectText('default', 'first value'),
-      await rejectText('default', 'second value'),
-    ];
+    const digests = [await rejectText('default', 'first value'), await rejectText('default', 'second value')];
 
     const outcome = await rejections().lift('default', '', 'lifter');
 
     expect(outcome.status).toBe('ambiguous');
-    expect(
-      outcome.status === 'ambiguous' ? outcome.candidates.map((c) => c.digest).sort() : [],
-    ).toEqual([...digests].sort());
+    expect(outcome.status === 'ambiguous' ? outcome.candidates.map((c) => c.digest).sort() : []).toEqual(
+      [...digests].sort(),
+    );
     expect(await rejections().list('default')).toHaveLength(2);
     expect(auditRows('default', 'unreject_value')).toEqual([]);
   });

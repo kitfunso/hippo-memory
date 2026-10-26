@@ -14,8 +14,7 @@ const tmp = () => {
   return dir;
 };
 const lines = (...l: string[]) => l.join('\n');
-const sha12 = (text: string) =>
-  createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12);
+const sha12 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12);
 const ctxOf = (home: string, env: Record<string, string> = {}): AdapterContext => ({
   home,
   env,
@@ -30,8 +29,7 @@ function writeSummary(codexHome: string, content: string | Buffer): string {
   fs.writeFileSync(file, content);
   return file;
 }
-const userList = (home: string, env: Record<string, string> = {}) =>
-  codexAdapter.list(ctxOf(home, env), 'user');
+const userList = (home: string, env: Record<string, string> = {}) => codexAdapter.list(ctxOf(home, env), 'user');
 
 const FIXTURE = lines(
   'v1',
@@ -94,21 +92,14 @@ describe('codexAdapter home', () => {
     expect(userList(home)).toMatchObject({ containers: [], warnings: [] });
     fs.mkdirSync(path.join(home, '.codex', 'memories'), { recursive: true });
     expect(userList(home)).toMatchObject({ containers: [], warnings: [] });
-    expect(userList(home, { CODEX_HOME: path.join(home, 'absent') })).toMatchObject({
-      containers: [],
-      warnings: [],
-    });
+    expect(userList(home, { CODEX_HOME: path.join(home, 'absent') })).toMatchObject({ containers: [], warnings: [] });
   });
 
   it('lists nothing in the project scope', () => {
     const home = tmp();
     writeSummary(path.join(home, '.codex'), FIXTURE);
     const listing = codexAdapter.list({ ...ctxOf(home), projectRoot: home }, 'project');
-    expect(listing).toMatchObject({
-      containers: [],
-      warnings: [],
-      home: path.join(home, '.codex'),
-    });
+    expect(listing).toMatchObject({ containers: [], warnings: [], home: path.join(home, '.codex') });
   });
 });
 
@@ -133,27 +124,17 @@ describe('codexAdapter items', () => {
       ['user-profile', stored('User Profile', 'Works on a trading desk.')],
       ['user-profile', stored('User Profile', 'Prefers short answers.')],
       ['user-preferences', stored('User preferences', 'Use metric units')],
-      [
-        'user-preferences',
-        stored('User preferences', 'No emojis\n  - not even in commit messages'),
-      ],
+      ['user-preferences', stored('User preferences', 'No emojis\n  - not even in commit messages')],
       ['general-tips', stored('General Tips', 'Run the tests before a commit')],
     ] as const;
     expect(container.items).toEqual(
-      expected.map(([slug, text]) => ({
-        key: `${slug}/${sha12(text)}`,
-        text,
-        updatedAt: mtime.getTime(),
-      })),
+      expected.map(([slug, text]) => ({ key: `${slug}/${sha12(text)}`, text, updatedAt: mtime.getTime() })),
     );
   });
 
   it("skips What's in Memory and any other heading", () => {
     const home = tmp();
-    writeSummary(
-      path.join(home, '.codex'),
-      lines(FIXTURE, '## Scratch', '- not a kept section', ''),
-    );
+    writeSummary(path.join(home, '.codex'), lines(FIXTURE, '## Scratch', '- not a kept section', ''));
     const texts = userList(home).containers[0].items.map((i) => i.text);
     expect(texts.join('\n')).not.toContain('topic: kw');
     expect(texts.join('\n')).not.toContain('not a kept section');
@@ -164,23 +145,10 @@ describe('codexAdapter items', () => {
     const home = tmp();
     writeSummary(
       path.join(home, '.codex'),
-      lines(
-        'v1',
-        '',
-        '## user profile',
-        '',
-        'Works alone.',
-        '',
-        '## GENERAL TIPS',
-        '- Be brief',
-        '',
-      ),
+      lines('v1', '', '## user profile', '', 'Works alone.', '', '## GENERAL TIPS', '- Be brief', ''),
     );
     const container = userList(home).containers[0];
-    expect(container.items.map((i) => i.text)).toEqual([
-      'user profile: Works alone.',
-      'GENERAL TIPS: Be brief',
-    ]);
+    expect(container.items.map((i) => i.text)).toEqual(['user profile: Works alone.', 'GENERAL TIPS: Be brief']);
     expect(container.items.map((i) => i.key)).toEqual([
       `user-profile/${sha12('user profile: Works alone.')}`,
       `general-tips/${sha12('GENERAL TIPS: Be brief')}`,
@@ -189,10 +157,7 @@ describe('codexAdapter items', () => {
 
   it('accepts blank lines before v1', () => {
     const home = tmp();
-    writeSummary(
-      path.join(home, '.codex'),
-      lines('', '  ', 'v1', '', '## User Profile', '', 'Works alone.', ''),
-    );
+    writeSummary(path.join(home, '.codex'), lines('', '  ', 'v1', '', '## User Profile', '', 'Works alone.', ''));
     expect(userList(home).containers[0]).toMatchObject({ readable: true });
   });
 
@@ -200,18 +165,7 @@ describe('codexAdapter items', () => {
     const home = tmp();
     writeSummary(
       path.join(home, '.codex'),
-      lines(
-        'v1',
-        '',
-        '## User Profile',
-        '',
-        'Works alone.',
-        '',
-        '## User preferences',
-        '- Be brief',
-        '- Be brief',
-        '',
-      ),
+      lines('v1', '', '## User Profile', '', 'Works alone.', '', '## User preferences', '- Be brief', '- Be brief', ''),
     );
     const keys = userList(home).containers[0].items.map((i) => i.key);
     const base = `user-preferences/${sha12('User preferences: Be brief')}`;
@@ -223,8 +177,7 @@ describe('codexAdapter items', () => {
     const other = tmp();
     writeSummary(path.join(home, '.codex'), FIXTURE);
     writeSummary(path.join(other, '.codex'), FIXTURE.replace(/\n/g, '\r\n'));
-    const strip = (h: string) =>
-      userList(h).containers[0].items.map(({ key, text }) => ({ key, text }));
+    const strip = (h: string) => userList(h).containers[0].items.map(({ key, text }) => ({ key, text }));
     expect(strip(other)).toEqual(strip(home));
     expect(strip(other)).toHaveLength(5);
   });
@@ -236,12 +189,7 @@ describe('codexAdapter broken shapes', () => {
     const file = writeSummary(path.join(home, '.codex'), content);
     const listing = userList(home);
     expect(listing.containers).toHaveLength(1);
-    expect(listing.containers[0]).toMatchObject({
-      path: file,
-      readable: false,
-      items: [],
-      textKeyed: true,
-    });
+    expect(listing.containers[0]).toMatchObject({ path: file, readable: false, items: [], textKeyed: true });
     expect(listing.containers[0].warnings).toHaveLength(1);
     expect(listing.warnings).toEqual([]);
     return listing.containers[0];

@@ -59,15 +59,7 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, unscoped);
 
     // Recall with matching scope
-    const out = await runHippo([
-      'recall',
-      'real DB tests',
-      '--scope',
-      'plan-eng-review',
-      '--json',
-      '--limit',
-      '5',
-    ]);
+    const out = await runHippo(['recall', 'real DB tests', '--scope', 'plan-eng-review', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
 
@@ -94,15 +86,7 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, unscoped);
 
     // Recall with mismatching scope: scoped memory gets 0.5x, unscoped gets 1.0x
-    const out = await runHippo([
-      'recall',
-      'real DB tests',
-      '--scope',
-      'qa',
-      '--json',
-      '--limit',
-      '5',
-    ]);
+    const out = await runHippo(['recall', 'real DB tests', '--scope', 'qa', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
 

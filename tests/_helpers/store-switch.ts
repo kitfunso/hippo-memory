@@ -13,16 +13,12 @@ const NEEDS_HIPPO_DB = {
   },
   team: {
     group: 'folder',
-    reason:
-      'a port-only store serves a team: each caller names its project and no global store is in reach',
+    reason: 'a port-only store serves a team: each caller names its project and no global store is in reach',
   },
   addon: { group: 'folder', reason: 'an add-on route with no storeReady runs only on hippo.db' },
   lock: { group: 'folder', reason: "tests hippo.db's write lock, worker threads or folder setup" },
   parity: { group: 'folder', reason: 'compares hippo.db with a port-only store itself' },
-  sleep: {
-    group: 'sleep',
-    reason: 'sleep and auto-sleep need the consolidation group a port-only store leaves out',
-  },
+  sleep: { group: 'sleep', reason: 'sleep and auto-sleep need the consolidation group a port-only store leaves out' },
 } as const;
 
 /** True on the port-only run, for `it.skipIf` / `describe.skipIf`; the key names the group and the reason. */

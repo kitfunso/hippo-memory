@@ -55,12 +55,7 @@ afterEach(async () => {
 });
 
 async function start(extra: Partial<ServeOptions> = {}): Promise<void> {
-  const handle = await serve({
-    hippoRoot: root,
-    port: 0,
-    rateLimits: { perAddress: 'off' },
-    ...extra,
-  });
+  const handle = await serve({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' }, ...extra });
   url = handle.url;
   stop = handle.stop;
 }
@@ -107,19 +102,11 @@ async function recall(token: string, address?: string): Promise<Reply> {
   if (address) headers.set('x-forwarded-for', address);
   const res = await fetch(`${url}/v1/memories?q=x`, { headers });
   const body: unknown = await res.json();
-  return {
-    status: res.status,
-    retryAfter: res.headers.get('retry-after'),
-    refusal: res.ok ? null : body,
-  };
+  return { status: res.status, retryAfter: res.headers.get('retry-after'), refusal: res.ok ? null : body };
 }
 
 const OK: Reply = { status: 200, retryAfter: null, refusal: null };
-const UNAUTHORISED: Reply = {
-  status: 401,
-  retryAfter: null,
-  refusal: { error: 'invalid api key' },
-};
+const UNAUTHORISED: Reply = { status: 401, retryAfter: null, refusal: { error: 'invalid api key' } };
 /** The `n`th well-formed wrong secret for `key`'s id. */
 const wrongSecret = (key: string, n: number): string =>
   `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
@@ -141,11 +128,7 @@ describe('key derivation bounds', () => {
     const refused: Reply[] = [];
     for (let i = 0; i < 20; i++) refused.push(await guess());
     expect(refused).toEqual(
-      Array(20).fill({
-        status: 429,
-        retryAfter: '12',
-        refusal: { error: 'too many key checks from this address' },
-      }),
+      Array(20).fill({ status: 429, retryAfter: '12', refusal: { error: 'too many key checks from this address' } }),
     );
     expect(scryptRuns() - before).toBe(5);
 
@@ -161,9 +144,7 @@ describe('key derivation bounds', () => {
     const target = mint();
     const colleague = mint();
     // Eight scrypt runs for the address: the flood's five tries take five, and its refusals must not take the other three.
-    await start({
-      rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.05, burst: 8 } },
-    });
+    await start({ rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.05, burst: 8 } } });
     const office = '203.0.113.90';
     for (let sent = 0; sent < 30; sent++) await recall(wrongSecret(target, sent), office);
     expect(await recall(colleague, office)).toEqual(OK);
@@ -188,10 +169,7 @@ describe('key derivation bounds', () => {
     expect(replies.filter((r) => r.status !== 200)).toEqual(
       Array(3).fill({ status: 429, retryAfter: '1', refusal: { error: 'rate limit exceeded' } }),
     );
-    expect({ derived: scryptRuns() - before, mostAtOnce: pool.peak }).toEqual({
-      derived: 10,
-      mostAtOnce: 2,
-    });
+    expect({ derived: scryptRuns() - before, mostAtOnce: pool.peak }).toEqual({ derived: 10, mostAtOnce: 2 });
   });
 
   it('holds a flood on one key id from many addresses to one derivation and two waiting, so another key still gets a slot', async () => {
@@ -204,9 +182,7 @@ describe('key derivation bounds', () => {
     await start({ store: arrivingTogether(10, () => flooded()) });
     const before = scryptRuns();
     // One address per wrong secret, so no address bucket refuses any of them.
-    const flood = Array.from({ length: 10 }, (_, n) =>
-      recall(wrongSecret(target, n), `203.0.113.${100 + n}`),
-    );
+    const flood = Array.from({ length: 10 }, (_, n) => recall(wrongSecret(target, n), `203.0.113.${100 + n}`));
     await queued;
     // Unbounded per key id, the flood would hold both slots and all eight waits here, and this first use would get 429.
     expect(await recall(colleague, '203.0.113.200')).toEqual(OK);
@@ -220,12 +196,9 @@ describe('key derivation bounds', () => {
 
   it('charges the failed-auth bucket for an unknown key id as for a wrong secret, so key-id probing ends in 429', async () => {
     const key = mint();
-    await start({
-      rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.001, burst: 3 } },
-    });
+    await start({ rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.001, burst: 3 } } });
     const before = scryptRuns();
-    const unknownId = (n: number): string =>
-      `hk_${'abcdefghij'.charAt(n).repeat(24)}.${'b'.repeat(32)}`;
+    const unknownId = (n: number): string => `hk_${'abcdefghij'.charAt(n).repeat(24)}.${'b'.repeat(32)}`;
     const probes: number[] = [];
     for (let n = 0; n < 6; n++) probes.push((await recall(unknownId(n), '203.0.113.150')).status);
     expect(probes).toEqual([401, 401, 401, 429, 429, 429]);
@@ -237,14 +210,9 @@ describe('key derivation bounds', () => {
     const keys = Array.from({ length: 4 }, () => mint());
     await start({ store: arrivingTogether(keys.length) });
     const before = scryptRuns();
-    const replies = await Promise.all(
-      keys.map((key, n) => recall(key, n < 3 ? '203.0.113.160' : '203.0.113.161')),
-    );
+    const replies = await Promise.all(keys.map((key, n) => recall(key, n < 3 ? '203.0.113.160' : '203.0.113.161')));
     expect(replies.map((r) => r.status)).toEqual([200, 200, 429, 200]);
-    expect(replies[2]).toMatchObject({
-      retryAfter: '1',
-      refusal: { error: 'rate limit exceeded' },
-    });
+    expect(replies[2]).toMatchObject({ retryAfter: '1', refusal: { error: 'rate limit exceeded' } });
     expect(scryptRuns() - before).toBe(3);
   });
 
@@ -255,9 +223,6 @@ describe('key derivation bounds', () => {
     watchPool();
     expect(await recall(key)).toEqual(OK);
     // A derivation on the event loop would count as a run yet hand no result back from the pool.
-    expect({ derived: scryptRuns() - before, fromThePool: pool.delivered }).toEqual({
-      derived: 1,
-      fromThePool: 1,
-    });
+    expect({ derived: scryptRuns() - before, fromThePool: pool.delivered }).toEqual({ derived: 1, fromThePool: 1 });
   });
 });

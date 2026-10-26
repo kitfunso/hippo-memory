@@ -87,9 +87,7 @@ function trace(ts: string): number {
 /** `n` traces stamped `ts`, each with two results, in two statements so 10,000 seed in well under a second. */
 function traces(n: number, ts: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const { top } = db.prepare(`SELECT COALESCE(MAX(id), 0) AS top FROM recall_traces`).get() as {
-    top: number;
-  };
+  const { top } = db.prepare(`SELECT COALESCE(MAX(id), 0) AS top FROM recall_traces`).get() as { top: number };
   db.prepare(
     `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) ` +
       `INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count) ` +
@@ -108,8 +106,7 @@ function ids(sql: string): number[] {
 }
 
 const traceIds = (): number[] => ids(`SELECT id FROM recall_traces ORDER BY id`);
-const resultTraceIds = (): number[] =>
-  ids(`SELECT DISTINCT trace_id AS id FROM recall_trace_results ORDER BY id`);
+const resultTraceIds = (): number[] => ids(`SELECT DISTINCT trace_id AS id FROM recall_trace_results ORDER BY id`);
 
 function count(table: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -119,12 +116,7 @@ function count(table: string): number {
 /** An old trace with an outcome, an old trace that is the last recall's, and an old one with neither. */
 function oldSet() {
   const outcome = trace(daysAgo(120));
-  recordTraceOutcome(db, {
-    traceId: outcome,
-    tenantId: 'default',
-    outcome: 'positive',
-    memoryIds: ['m1'],
-  });
+  recordTraceOutcome(db, { traceId: outcome, tenantId: 'default', outcome: 'positive', memoryIds: ['m1'] });
   const last = trace(daysAgo(120));
   setMeta(db, 'last_trace_id', String(last));
   return { outcome, last, expired: trace(daysAgo(91)) };
@@ -145,22 +137,9 @@ describe('the recall trace prune', () => {
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const { outcome, last, expired } = oldSet();
     writeDeliveryEventOnHandle(db, event());
-    recordTraceOutcome(db, {
-      traceId: last,
-      tenantId: 'default',
-      outcome: 'negative',
-      memoryIds: ['m2'],
-    });
-    recordTraceOutcome(db, {
-      traceId: expired,
-      tenantId: 'default',
-      outcome: 'negative',
-      memoryIds: ['m2'],
-    });
-    expect(ids(`SELECT trace_id AS id FROM recall_trace_outcomes ORDER BY id`)).toEqual([
-      outcome,
-      last,
-    ]);
+    recordTraceOutcome(db, { traceId: last, tenantId: 'default', outcome: 'negative', memoryIds: ['m2'] });
+    recordTraceOutcome(db, { traceId: expired, tenantId: 'default', outcome: 'negative', memoryIds: ['m2'] });
+    expect(ids(`SELECT trace_id AS id FROM recall_trace_outcomes ORDER BY id`)).toEqual([outcome, last]);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][0])).toContain(`trace ${expired} missing or tenant mismatch`);
   });
@@ -179,12 +158,7 @@ describe('the recall trace prune', () => {
       const plan = (db.prepare(`EXPLAIN QUERY PLAN ${prune}`).all() as Array<{ detail: string }>)
         .map((r) => r.detail)
         .join(' | ');
-      return {
-        statements: log.statements,
-        rowsRead: log.rowsRead,
-        plan,
-        left: count('recall_traces'),
-      };
+      return { statements: log.statements, rowsRead: log.rowsRead, plan, left: count('recall_traces') };
     });
     expect(runs.map((r) => r.left)).toEqual([1002, 10_002]);
     expect(runs[1].statements).toEqual(runs[0].statements);
@@ -224,9 +198,7 @@ describe('the delivery event prune', () => {
     expect(countMatching(log.statements, /^\s*DELETE FROM delivery_events/)).toBe(1);
     // The five oldest go with 995 of the next; five of the 200-day events are left, and the fresh one.
     expect(count('delivery_events')).toBe(6);
-    expect(ids(`SELECT COUNT(*) AS id FROM delivery_events WHERE ts < '${daysAgo(250)}'`)).toEqual([
-      0,
-    ]);
+    expect(ids(`SELECT COUNT(*) AS id FROM delivery_events WHERE ts < '${daysAgo(250)}'`)).toEqual([0]);
     writeDeliveryEventOnHandle(db, event());
     expect(count('delivery_events')).toBe(2);
   });

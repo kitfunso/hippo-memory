@@ -15,9 +15,7 @@ export async function refineOne(
   // The label keeps "refine" out of the path, since tests filter stderr on that word.
   const root = makeRoot('consolidated');
   const entry = {
-    ...createMemory(`[Consolidated from ${sources.length} related memories]\n\n${merged}`, {
-      layer: Layer.Semantic,
-    }),
+    ...createMemory(`[Consolidated from ${sources.length} related memories]\n\n${merged}`, { layer: Layer.Semantic }),
     parents: sources.map((s) => s.id),
   };
   for (const source of sources) writeEntry(root, source);

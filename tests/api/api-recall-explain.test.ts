@@ -59,11 +59,7 @@ describe('api.recall explain', () => {
     await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = await retrieve(ctx, {
-      query: 'auth',
-      window: { limit: 10 },
-      boost: { sessionId },
-    });
+    const result = await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
 
     for (const item of result.results) {
       expect(item.rerankPipeline).toBeUndefined();

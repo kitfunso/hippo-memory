@@ -11,12 +11,7 @@ const CONFLICT_OVERLAP_THRESHOLD = 0.5;
 const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
-export type DetectedConflict = {
-  memory_a_id: string;
-  memory_b_id: string;
-  reason: string;
-  score: number;
-};
+export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
 
 /** For each i, the j > i (ascending) whose textOverlap with i reaches the merge threshold. */
 export function pairwiseMergePartners(contents: readonly string[]): number[][] {
@@ -46,11 +41,7 @@ export function pairwiseDetectConflicts(
     for (let j = i + 1; j < survivors.length; j++) {
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].supersededBy || survivors[j].supersededBy) continue;
-      if (
-        [survivors[i], survivors[j]].some(
-          (e) => e.tags.includes('extracted') || e.tags.includes('session-digest'),
-        )
-      ) {
+      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) {
         continue;
       }
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
@@ -66,10 +57,7 @@ export function pairwiseDetectConflicts(
   return detected;
 }
 
-function describeConflict(
-  a: MemoryEntry,
-  b: MemoryEntry,
-): { reason: string; score: number } | null {
+function describeConflict(a: MemoryEntry, b: MemoryEntry): { reason: string; score: number } | null {
   const aDistinct = distinctiveTokens(a.content);
   const bDistinct = distinctiveTokens(b.content);
   const overlapScore = jaccardSets(aDistinct, bDistinct);

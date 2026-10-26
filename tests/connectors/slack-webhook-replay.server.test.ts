@@ -36,11 +36,7 @@ async function post(ts: string): Promise<Reply> {
   const signature = `v0=${createHmac('sha256', SECRET).update(`v0:${ts}:${BODY}`).digest('hex')}`;
   const res = await fetch(`${handle.url}/v1/connectors/slack/events`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-slack-request-timestamp': ts,
-      'x-slack-signature': signature,
-    },
+    headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': signature },
     body: BODY,
   });
   return { status: res.status, body: await res.json() };

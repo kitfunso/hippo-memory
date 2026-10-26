@@ -64,10 +64,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
   });
 
   it('a good outcome on an untagged memory is a no-op for tags', async () => {
-    const mem = createMemory('plain content', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['other'],
-    });
+    const mem = createMemory('plain content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['other'] });
     writeEntry(hippoRoot, mem);
 
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
@@ -126,10 +123,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   it('ranks a churn-stale entry below an identical untagged one in physicsSearch', async () => {
     const hippoRoot = makeRoot('churn-physics');
     try {
-      const plain = createMemory('flywheel torque limits', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: [],
-      });
+      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const stale = createMemory('flywheel torque limits', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         tags: [CHURN_STALE_TAG],
@@ -166,10 +160,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   it('keeps the penalty when a churn-stale hit is alone in the physics pool (pool normalisation)', async () => {
     const hippoRoot = makeRoot('churn-pool');
     try {
-      const plain = createMemory('flywheel torque limits', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: [],
-      });
+      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const stale = createMemory('flywheel torque limits', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         tags: [CHURN_STALE_TAG],
@@ -279,18 +270,12 @@ describe('config.churnStaleness', () => {
   });
 
   it('honors an explicit true', () => {
-    fs.writeFileSync(
-      path.join(hippoRoot, 'config.json'),
-      JSON.stringify({ churnStaleness: { enabled: true } }),
-    );
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: { enabled: true } }));
     expect(loadConfig(hippoRoot).churnStaleness.enabled).toBe(true);
   });
 
   it('falls back to false and warns on a non-object churnStaleness', () => {
-    fs.writeFileSync(
-      path.join(hippoRoot, 'config.json'),
-      JSON.stringify({ churnStaleness: 'yes' }),
-    );
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: 'yes' }));
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(loadConfig(hippoRoot).churnStaleness.enabled).toBe(false);
@@ -301,16 +286,11 @@ describe('config.churnStaleness', () => {
   });
 
   it('falls back to false and warns on a non-boolean enabled', () => {
-    fs.writeFileSync(
-      path.join(hippoRoot, 'config.json'),
-      JSON.stringify({ churnStaleness: { enabled: 'yes' } }),
-    );
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ churnStaleness: { enabled: 'yes' } }));
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(loadConfig(hippoRoot).churnStaleness.enabled).toBe(false);
-      expect(stderr.mock.calls.some(([e]) => String(e).includes('"churnStaleness.enabled"'))).toBe(
-        true,
-      );
+      expect(stderr.mock.calls.some(([e]) => String(e).includes('"churnStaleness.enabled"'))).toBe(true);
     } finally {
       stderr.mockRestore();
     }

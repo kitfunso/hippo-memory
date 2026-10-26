@@ -12,9 +12,7 @@ import { cliStore } from '../../src/surface/cli/api-context.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-const ASKED_AT_MS = [
-  0, 50, 150, 350, 750, 1550, 2550, 3550, 4550, 5550, 6550, 7550, 8550, 9550, 10_000,
-];
+const ASKED_AT_MS = [0, 50, 150, 350, 750, 1550, 2550, 3550, 4550, 5550, 6550, 7550, 8550, 9550, 10_000];
 
 const provider: EmbeddingProvider = {
   kind: 'local',

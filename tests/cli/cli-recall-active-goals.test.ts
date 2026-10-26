@@ -60,14 +60,8 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
-    await remember(ctx, {
-      content: 'marker tagged A: auth migration step',
-      tags: ['auth-rewrite'],
-    });
-    await remember(ctx, {
-      content: 'marker tagged B: auth migration step',
-      tags: ['auth-rewrite'],
-    });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     const { results } = await recallCli('auth migration');
     const top = results.slice(0, 3).map((r) => r.content);
@@ -79,20 +73,10 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
-    await remember(ctx, {
-      content: 'marker tagged A: auth migration step',
-      tags: ['auth-rewrite'],
-    });
-    await remember(ctx, {
-      content: 'marker tagged B: auth migration step',
-      tags: ['auth-rewrite'],
-    });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
-    await pushGoal(env.hippoRoot, {
-      sessionId: 's-cli-1',
-      tenantId: 'default',
-      goalName: 'auth-rewrite',
-    });
+    await pushGoal(env.hippoRoot, { sessionId: 's-cli-1', tenantId: 'default', goalName: 'auth-rewrite' });
 
     const { results } = await recallCli('auth migration', { HIPPO_SESSION_ID: 's-cli-1' });
     const top = results.slice(0, 2).map((r) => r.content);
@@ -105,14 +89,8 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
-    await remember(ctx, {
-      content: 'marker tagged A: auth migration step',
-      tags: ['auth-rewrite'],
-    });
-    await remember(ctx, {
-      content: 'marker tagged B: auth migration step',
-      tags: ['auth-rewrite'],
-    });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     const { results } = await recallCli('auth migration', {}, ['--goal', 'auth-rewrite']);
     const top = results.slice(0, 2).map((r) => r.content);
@@ -157,14 +135,8 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
-    await remember(ctx, {
-      content: 'marker tagged A: auth migration step',
-      tags: ['auth-rewrite'],
-    });
-    await remember(ctx, {
-      content: 'marker tagged B: auth migration step',
-      tags: ['auth-rewrite'],
-    });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     // Push then complete — leaves the (tenant, session) with zero active goals.
     const g = await pushGoal(env.hippoRoot, {
@@ -175,9 +147,9 @@ describe('cli recall + active goal stack', () => {
     await completeGoal(env.hippoRoot, g.id, { outcomeScore: 1.0 });
 
     const baseline = (await recallCli('auth migration')).results.map((r) => r.content);
-    const withEmpty = (
-      await recallCli('auth migration', { HIPPO_SESSION_ID: 's-empty' })
-    ).results.map((r) => r.content);
+    const withEmpty = (await recallCli('auth migration', { HIPPO_SESSION_ID: 's-empty' })).results.map(
+      (r) => r.content,
+    );
 
     // Same ordering: empty active-goal list must not perturb ranking.
     expect(withEmpty).toEqual(baseline);

@@ -69,8 +69,7 @@ describe('openStore makes the mirror folders once per store', () => {
       syncBuiltinESMExports();
       try {
         for (let i = 0; i < opens; i++) closeHippoDb(openStore(root));
-        return spy.mock.calls.filter(([dir]) => mirrorFolders.includes(path.basename(String(dir))))
-          .length;
+        return spy.mock.calls.filter(([dir]) => mirrorFolders.includes(path.basename(String(dir)))).length;
       } finally {
         spy.mockRestore();
         syncBuiltinESMExports();
@@ -85,8 +84,6 @@ describe('openStore makes the mirror folders once per store', () => {
       fs.rmSync(root, { recursive: true, force: true });
       expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
     });
-    expect(mirrorFolders.filter((folder) => fs.existsSync(path.join(root, folder)))).toEqual(
-      mirrorFolders,
-    );
+    expect(mirrorFolders.filter((folder) => fs.existsSync(path.join(root, folder)))).toEqual(mirrorFolders);
   });
 });

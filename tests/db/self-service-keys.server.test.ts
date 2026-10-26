@@ -5,11 +5,7 @@ import type { IncomingMessage } from 'node:http';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  createApiKey,
-  validateApiKey,
-  type CreateApiKeyResult,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import {
@@ -23,12 +19,7 @@ import {
   type AuthRevokeResult,
 } from '../../src/api/index.js';
 import { ForbiddenError } from '../../src/base/errors/api-errors.js';
-import {
-  serve,
-  type AuthResolver,
-  type ResolvedBearer,
-  type ServerHandle,
-} from '../../src/server.js';
+import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -131,12 +122,7 @@ async function listKeys(token: string): Promise<string[]> {
 }
 
 /** Sends the headers, runs `between`, then sends the body; resolves with the status code once the server answers. */
-function postInTwoParts(
-  path: string,
-  token: string,
-  body: string,
-  between: () => Promise<void>,
-): Promise<number> {
+function postInTwoParts(path: string, token: string, body: string, between: () => Promise<void>): Promise<number> {
   return new Promise((resolve, reject) => {
     let data = '';
     const socket = connect(handle!.port, '127.0.0.1', () => {
@@ -211,9 +197,7 @@ describe('authCreateSelf', () => {
   it('gives a signed-in admin a member key too', async () => {
     const minted = await selfMint('tok.boss');
     expect(minted.role).toBe('member');
-    expect(keyRows()).toEqual([
-      expect.objectContaining({ role: 'member', owner_subject: 'boss@corp.example' }),
-    ]);
+    expect(keyRows()).toEqual([expect.objectContaining({ role: 'member', owner_subject: 'boss@corp.example' })]);
     expect(withDb((db) => validateApiKey(db, minted.plaintext)).role).toBe('member');
   });
 
@@ -233,10 +217,7 @@ describe('authCreateSelf', () => {
     const second = await selfMint(ALICE, 'two', cap);
     await selfMint('tok.bob', 'bob', cap);
     const third = await selfMint(ALICE, 'three', cap);
-    expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([
-      second.keyId,
-      third.keyId,
-    ]);
+    expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([second.keyId, third.keyId]);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
     const audit = auditRows();
     expect(audit.filter((r) => r.op === 'auth_revoke')).toEqual([
@@ -254,40 +235,25 @@ describe('authCreateSelf', () => {
   });
 
   it('writes one auth_revoke per replaced key when a lower cap replaces several', async () => {
-    const early = [
-      await selfMint(ALICE, 'a'),
-      await selfMint(ALICE, 'b'),
-      await selfMint(ALICE, 'c'),
-    ];
+    const early = [await selfMint(ALICE, 'a'), await selfMint(ALICE, 'b'), await selfMint(ALICE, 'c')];
     const latest = await selfMint(ALICE, 'd', { perSubject: 1 });
     expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([latest.keyId]);
     const audit = auditRows();
     expect(audit.filter((r) => r.op === 'auth_revoke')).toEqual(
-      early.map((k) =>
-        expect.objectContaining({ targetId: k.keyId, metadata: { replacedBy: latest.keyId } }),
-      ),
+      early.map((k) => expect.objectContaining({ targetId: k.keyId, metadata: { replacedBy: latest.keyId } })),
     );
-    expect(audit.filter((r) => r.op === 'auth_create' && r.targetId === latest.keyId)).toHaveLength(
-      1,
-    );
+    expect(audit.filter((r) => r.op === 'auth_create' && r.targetId === latest.keyId)).toHaveLength(1);
   });
 
   it.each([
     ['a mint under the cap', 3],
     ['a mint that replaces a key', 1],
-  ])(
-    'leaves no new key and revokes nothing when the audit write fails: %s',
-    async (_name, perSubject) => {
-      const kept = await selfMint(ALICE, 'kept', { perSubject });
-      breakAuditLog();
-      await expect(selfMint(ALICE, 'second', { perSubject })).rejects.toThrow(
-        /audit table unwritable/,
-      );
-      expect(keyRows()).toEqual([
-        expect.objectContaining({ key_id: kept.keyId, revoked_at: null }),
-      ]);
-    },
-  );
+  ])('leaves no new key and revokes nothing when the audit write fails: %s', async (_name, perSubject) => {
+    const kept = await selfMint(ALICE, 'kept', { perSubject });
+    breakAuditLog();
+    await expect(selfMint(ALICE, 'second', { perSubject })).rejects.toThrow(/audit table unwritable/);
+    expect(keyRows()).toEqual([expect.objectContaining({ key_id: kept.keyId, revoked_at: null })]);
+  });
 
   it.each([
     ['ttlDays', 0],
@@ -314,16 +280,12 @@ describe('authCreateSelf', () => {
     vi.setSystemTime(new Date('2026-10-07T12:00:00Z'));
     const latest = await selfMint(ALICE, 'c', cap);
     expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([]);
-    const unexpired = liveOwned('alice@corp.example').filter(
-      (r) => Date.parse(r.expires_at!) > Date.now(),
-    );
+    const unexpired = liveOwned('alice@corp.example').filter((r) => Date.parse(r.expires_at!) > Date.now());
     expect(unexpired.map((r) => r.key_id)).toEqual([latest.keyId]);
   });
 
   it('accepts a fractional day count, the 3650-day ceiling and a cap of one', async () => {
-    await expect(selfMint(ALICE, 'half-day', { ttlDays: 0.5 })).resolves.toMatchObject({
-      role: 'member',
-    });
+    await expect(selfMint(ALICE, 'half-day', { ttlDays: 0.5 })).resolves.toMatchObject({ role: 'member' });
     const longest = await selfMint(ALICE, 'ceiling', { ttlDays: 3650, perSubject: 1 });
     expect(Date.parse(longest.expiresAt)).toBeGreaterThan(Date.now() + 3649 * DAY_MS);
   });
@@ -335,9 +297,7 @@ describe('authCreate audit rows', () => {
     ['the local admin', adminActor('cli')],
   ])('leaves no key behind when a mint by %s cannot write its audit row', async (_name, actor) => {
     breakAuditLog();
-    await expect(authCreate(apiCtx(home, TENANT, actor), { label: 'x' })).rejects.toThrow(
-      /audit table unwritable/,
-    );
+    await expect(authCreate(apiCtx(home, TENANT, actor), { label: 'x' })).rejects.toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([]);
   });
 });
@@ -401,16 +361,11 @@ describe('POST /v1/auth/keys checks auth before its body and again before the mi
       checks++;
       return active ? PEOPLE.get('tok.boss')! : null;
     });
-    const status = await postInTwoParts(
-      '/v1/auth/keys',
-      'tok.boss',
-      '{"label":"handed-out"}',
-      async () => {
-        await handlerAwaitsBody();
-        expect(checks).toBe(1);
-        active = false;
-      },
-    );
+    const status = await postInTwoParts('/v1/auth/keys', 'tok.boss', '{"label":"handed-out"}', async () => {
+      await handlerAwaitsBody();
+      expect(checks).toBe(1);
+      active = false;
+    });
     expect(status).toBe(401);
     expect(keyRows()).toEqual([]);
   });

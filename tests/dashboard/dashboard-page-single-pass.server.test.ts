@@ -5,13 +5,7 @@ import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queri
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
-import {
-  dashboardOf,
-  isoAgo,
-  makeStore,
-  NOW,
-  type TmpStore,
-} from '../_helpers/dashboard-fixture.js';
+import { dashboardOf, isoAgo, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
 
 const QUERY: MemoryQuery = {
   offset: 0,
@@ -49,9 +43,7 @@ describe('dashboard memory page', () => {
     const { reads, clock } = dashboardOf(store.hippoRoot, () => NOW);
     try {
       const stamp = await clock.at('default');
-      const { result, statements } = await recordStatementsAsync(() =>
-        buildMemoryPage(reads, stamp, 'p:alpha', QUERY),
-      );
+      const { result, statements } = await recordStatementsAsync(() => buildMemoryPage(reads, stamp, 'p:alpha', QUERY));
       expect(result?.total).toBe(ROWS);
       expect(result?.rows).toHaveLength(10);
       expect(countMatching(statements, /WITH open_pairs/)).toBe(1);

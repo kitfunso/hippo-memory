@@ -153,21 +153,11 @@ describe('loadFreshActiveTaskSnapshot', () => {
       });
 
       // Exactly at the bound — cross-session (age check path), still injects.
-      backdateSnapshot(
-        tmpDir,
-        saved.id,
-        new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS).toISOString(),
-      );
-      expect(
-        loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' }),
-      ).not.toBeNull();
+      backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS).toISOString());
+      expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).not.toBeNull();
 
       // 1ms past the bound — does not.
-      backdateSnapshot(
-        tmpDir,
-        saved.id,
-        new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS - 1).toISOString(),
-      );
+      backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS - 1).toISOString());
       expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).toBeNull();
     } finally {
       vi.useRealTimers();
@@ -206,9 +196,7 @@ describe('closeTaskSnapshotsForSession', () => {
     try {
       // SAFETY: the SELECT list above names exactly `status, updated_at`,
       // both NOT NULL columns on task_snapshots — the asserted shape matches.
-      const row = db
-        .prepare(`SELECT status, updated_at FROM task_snapshots WHERE id = ?`)
-        .get(saved.id) as {
+      const row = db.prepare(`SELECT status, updated_at FROM task_snapshots WHERE id = ?`).get(saved.id) as {
         status: string;
         updated_at: string;
       };

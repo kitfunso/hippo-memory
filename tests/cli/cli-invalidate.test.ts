@@ -17,10 +17,7 @@ oneRequestPerTest();
 
 const savedCwd = process.cwd();
 
-async function runCli(
-  args: string[],
-  opts: { ok?: boolean } = {},
-): Promise<{ stdout: string; stderr: string }> {
+async function runCli(args: string[], opts: { ok?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
   const res = await runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
   if (res.status === 0) return { stdout: res.stdout, stderr: '' };
   if (opts.ok === false) return { stdout: res.stdout, stderr: res.stderr };

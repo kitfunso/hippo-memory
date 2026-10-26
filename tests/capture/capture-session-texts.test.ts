@@ -15,10 +15,7 @@ import { collectSessionTurns, sessionTail } from '../../src/surface/capture/tran
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deriveOriginProject } from '../../src/host/project-identity.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compaction-hooks.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -62,10 +59,7 @@ const ctxFor = (hippoRoot: string, tenantId = 'default'): CaptureContext => ({
   tenantId,
   actor: { subject: ACTOR, role: 'member' },
 });
-const req = (
-  texts: readonly string[],
-  over: Partial<SessionCaptureRequest> = {},
-): SessionCaptureRequest => ({
+const req = (texts: readonly string[], over: Partial<SessionCaptureRequest> = {}): SessionCaptureRequest => ({
   sessionId: 'sess-1',
   project: CALLER,
   texts,
@@ -105,11 +99,7 @@ describe('captureSessionTexts', () => {
   it('writes capture rows under the caller tenant, project and session, audited as the caller', async () => {
     expect(ITEMS).toHaveLength(3);
     expect(deriveOriginProject(repo)).toBe('server-repo');
-    expect(await captureSessionTexts(ctxFor(root, 't1'), req(TEXTS))).toEqual({
-      captured: 3,
-      skipped: 0,
-      rejected: 0,
-    });
+    expect(await captureSessionTexts(ctxFor(root, 't1'), req(TEXTS))).toEqual({ captured: 3, skipped: 0, rejected: 0 });
     const rows = loadAllEntries(root, 't1');
     expect(rows.map((r) => r.content).sort()).toEqual([...ITEMS].sort());
     for (const r of rows) {
@@ -152,9 +142,7 @@ describe('captureSessionTexts', () => {
 
   it('throws on an empty project name and writes nothing', async () => {
     const blank = req(TEXTS, { project: { name: '', legacyName: 'web' } });
-    await expect(captureSessionTexts(ctxFor(root), blank)).rejects.toThrow(
-      'project name must not be blank',
-    );
+    await expect(captureSessionTexts(ctxFor(root), blank)).rejects.toThrow('project name must not be blank');
     expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
@@ -164,14 +152,9 @@ describe('captureSessionTexts', () => {
     ['a padded name', { name: ' api', legacyName: 'api' }],
     ['a name with a colon', { name: 'a:b', legacyName: 'api' }],
     ['an upper-case alias', { name: 'api', legacyName: 'api', aliases: ['Old-Api'] }],
-    [
-      'eleven aliases',
-      { name: 'api', legacyName: 'api', aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) },
-    ],
+    ['eleven aliases', { name: 'api', legacyName: 'api', aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) }],
   ])('throws on %s and writes nothing', async (_name, project) => {
-    await expect(captureSessionTexts(ctxFor(root), req(TEXTS, { project }))).rejects.toThrow(
-      BadRequestError,
-    );
+    await expect(captureSessionTexts(ctxFor(root), req(TEXTS, { project }))).rejects.toThrow(BadRequestError);
     expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
@@ -186,9 +169,7 @@ describe('captureSessionTexts', () => {
     ['a whitespace session id', { sessionId: ' \t ' }],
     ['a whitespace project name', { project: { name: '   ', legacyName: 'web' } }],
   ])('throws on %s and writes nothing', async (_name, over) => {
-    await expect(captureSessionTexts(ctxFor(root), req(TEXTS, over))).rejects.toThrow(
-      BadRequestError,
-    );
+    await expect(captureSessionTexts(ctxFor(root), req(TEXTS, over))).rejects.toThrow(BadRequestError);
     expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
@@ -209,16 +190,8 @@ describe('captureSessionTexts', () => {
 
   it('captures nothing new the second time, and only the missing items after a partial run', async () => {
     expect((await captureSessionTexts(ctxFor(root), req(TEXTS.slice(0, 1)))).captured).toBe(1);
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({
-      captured: 2,
-      skipped: 1,
-      rejected: 0,
-    });
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({
-      captured: 0,
-      skipped: 3,
-      rejected: 0,
-    });
+    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 2, skipped: 1, rejected: 0 });
+    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 0, skipped: 3, rejected: 0 });
     expect(contents(root)).toEqual([...ITEMS].sort());
   });
 
@@ -226,11 +199,7 @@ describe('captureSessionTexts', () => {
     writeEntry(root, { ...createMemory(ITEMS[0]!), originProject: 'other' });
     writeEntry(root, { ...createMemory(ITEMS[1]!), originProject: '' });
     writeEntry(root, { ...createMemory(ITEMS[2]!), originProject: 'web' });
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({
-      captured: 1,
-      skipped: 2,
-      rejected: 0,
-    });
+    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 1, skipped: 2, rejected: 0 });
     expect(
       loadAllEntries(root, 'default')
         .filter((r) => r.originProject === 'acme-web')
@@ -243,29 +212,14 @@ describe('captureSessionTexts', () => {
       ITEMS[0]!,
       'The search service reindexes nightly at two.',
     ]);
-    writeEntry(root, {
-      ...createMemory(merged),
-      source: 'consolidation',
-      originProject: 'acme-web',
-    });
-    writeEntry(root, {
-      ...createMemory(ITEMS[1]!, { tenantId: 'someone-else' }),
-      originProject: 'acme-web',
-    });
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({
-      captured: 2,
-      skipped: 1,
-      rejected: 0,
-    });
+    writeEntry(root, { ...createMemory(merged), source: 'consolidation', originProject: 'acme-web' });
+    writeEntry(root, { ...createMemory(ITEMS[1]!, { tenantId: 'someone-else' }), originProject: 'acme-web' });
+    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 2, skipped: 1, rejected: 0 });
   });
 
   it('counts a tombstoned value as rejected and audits the refusal as the caller', async () => {
     reject(ITEMS[1]!);
-    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({
-      captured: 2,
-      skipped: 0,
-      rejected: 1,
-    });
+    expect(await captureSessionTexts(ctxFor(root), req(TEXTS))).toEqual({ captured: 2, skipped: 0, rejected: 1 });
     expect(auditActors('reject_refusal')).toEqual([ACTOR]);
   });
 
@@ -287,10 +241,7 @@ describe('captureSessionTexts caps', () => {
   it.each([
     ['31 texts', Array.from({ length: 31 }, () => TEXTS[0]!)],
     ['a 33 KiB text', ['a'.repeat(33 * 1024)]],
-    [
-      '257 KiB in all',
-      [...Array.from({ length: 8 }, () => 'a'.repeat(32 * 1024)), 'a'.repeat(1024)],
-    ],
+    ['257 KiB in all', [...Array.from({ length: 8 }, () => 'a'.repeat(32 * 1024)), 'a'.repeat(1024)]],
   ])('rejects %s as a bad request and writes nothing', async (_name, texts) => {
     await expect(captureSessionTexts(ctxFor(root), req(texts))).rejects.toThrow(BadRequestError);
     expect(loadEveryTenantEntries(root)).toEqual([]);
@@ -299,16 +250,11 @@ describe('captureSessionTexts caps', () => {
   it('writes the newest 50 of 60 items and counts the rest as skipped', async () => {
     const text = Array.from(
       { length: 60 },
-      (_, i) =>
-        `Never deploy the worker pool number ${i + 100} on a Friday because the on-call team is small.`,
+      (_, i) => `Never deploy the worker pool number ${i + 100} on a Friday because the on-call team is small.`,
     ).join('\n\n');
     const items = extractFromTexts([text]).map((i) => i.content);
     expect(items).toHaveLength(60);
-    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({
-      captured: 50,
-      skipped: 10,
-      rejected: 0,
-    });
+    expect(await captureSessionTexts(ctxFor(root), req([text]))).toEqual({ captured: 50, skipped: 10, rejected: 0 });
     expect(contents(root)).toEqual(items.slice(-50).sort());
   });
 });
@@ -321,23 +267,13 @@ describe('captureSessionTexts against the CLI', () => {
       const transcript = path.join(s.dir, 't.jsonl');
       const lines = TEXTS.flatMap((text) => [
         { type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } },
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'OK, noted.' }] },
-        },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'OK, noted.' }] } },
       ]);
       fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
-      const cli = await runHippo(
-        ['capture', '--last-session', '--transcript', transcript],
-        s.proj,
-        s.env,
-        '',
-      );
+      const cli = await runHippo(['capture', '--last-session', '--transcript', transcript], s.proj, s.env, '');
       expect(cli.status, cli.stderr).toBe(0);
 
-      const { users, assistants } = sessionTail(
-        collectSessionTurns(fs.readFileSync(transcript, 'utf8')),
-      );
+      const { users, assistants } = sessionTail(collectSessionTurns(fs.readFileSync(transcript, 'utf8')));
       await captureSessionTexts(
         ctxFor(root),
         req([...users, ...assistants], { project: { name: 'proj', legacyName: 'proj' } }),

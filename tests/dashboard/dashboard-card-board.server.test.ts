@@ -73,9 +73,7 @@ function startFor(hippoRoot: string, tenantId: string): Promise<ServerHandle> {
 function rawHttp10Get(port: number, path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1', () => {
-      socket.write(
-        `GET ${path} HTTP/1.0\r\nCookie: ${sessionCookie(port, DASHBOARD_TOKEN)}\r\n\r\n`,
-      );
+      socket.write(`GET ${path} HTTP/1.0\r\nCookie: ${sessionCookie(port, DASHBOARD_TOKEN)}\r\n\r\n`);
     });
     let data = '';
     socket.on('data', (chunk) => {
@@ -133,9 +131,7 @@ describe('dashboard entry', () => {
       dashboardRequest(port, '/api/memory/mem_x/wrong', host, 'POST', { ...json, ...headers });
     expect((await wrong({ Origin: 'http://evil.example' })).status).toBe(403);
     expect((await wrong({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
-    expect(
-      (await wrong({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status,
-    ).toBe(404);
+    expect((await wrong({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
     expect((await wrong({})).status).toBe(404);
   });
 
@@ -195,11 +191,7 @@ describe('card routes', () => {
     mkdirSync(cwd, { recursive: true });
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
-    const cliEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      HIPPO_HOME: globalDir,
-      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-    };
+    const cliEnv: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: globalDir, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     delete cliEnv.HIPPO_TENANT;
     await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env: cliEnv });
     hippoRoot = join(cwd, '.hippo');
@@ -208,12 +200,7 @@ describe('card routes', () => {
     vi.stubEnv('HIPPO_HOME', globalDir);
     tenant = resolveTenantId({});
 
-    const p = await createCard(hippoRoot, tenant, {
-      title: 'P',
-      repo: 'r',
-      contract: 'c',
-      budget: 5,
-    });
+    const p = await createCard(hippoRoot, tenant, { title: 'P', repo: 'r', contract: 'c', budget: 5 });
     P = p.id;
     const c = await createCard(hippoRoot, tenant, { title: 'C', dependsOn: [P] });
     C = c.id;
@@ -221,12 +208,7 @@ describe('card routes', () => {
     expect(await claimCard(hippoRoot, tenant, P, 'r1')).not.toBeNull();
     expect(await addCardComment(hippoRoot, tenant, P, 'a', 'note')).not.toBeNull();
     expect(
-      saveSessionHandoff(hippoRoot, tenant, {
-        version: 1,
-        sessionId: 's1',
-        summary: 's',
-        cardId: P,
-      }),
+      saveSessionHandoff(hippoRoot, tenant, { version: 1, sessionId: 's1', summary: 's', cardId: P }),
     ).not.toBeNull();
 
     expect(await blockCard(hippoRoot, tenant, P, 'waiting')).not.toBeNull();
@@ -258,10 +240,7 @@ describe('card routes', () => {
   const host = () => `127.0.0.1:${port}`;
 
   // A dashboard serves the one tenant its CLI root resolved, so each tenant here gets its own server.
-  async function onTenant(
-    tenantId: string,
-    use: (at: number, atHost: string) => Promise<void>,
-  ): Promise<void> {
+  async function onTenant(tenantId: string, use: (at: number, atHost: string) => Promise<void>): Promise<void> {
     const other = await startFor(hippoRoot, tenantId);
     try {
       await use(other.port, `127.0.0.1:${other.port}`);
@@ -348,18 +327,14 @@ describe('card routes', () => {
     } finally {
       closeHippoDb(db);
     }
-    const ids = (body: string): string[] =>
-      JSON.parse(body).cards.map((card: { id: string }) => card.id);
+    const ids = (body: string): string[] => JSON.parse(body).cards.map((card: { id: string }) => card.id);
     await onTenant('tenant_many', async (at, atHost) => {
       const first = await dashboardRequest(at, '/api/cards', atHost);
       const cursor = JSON.parse(first.body).next_cursor;
       expect(ids(first.body)).toHaveLength(1000);
       const second = await dashboardRequest(at, `/api/cards?cursor=${cursor}`, atHost);
       expect(Object.keys(JSON.parse(second.body))).toEqual(['cards']);
-      const expected = Array.from(
-        { length: 1001 },
-        (_, i) => `card_bulk_${String(1001 - i).padStart(4, '0')}`,
-      );
+      const expected = Array.from({ length: 1001 }, (_, i) => `card_bulk_${String(1001 - i).padStart(4, '0')}`);
       expect([...ids(first.body), ...ids(second.body)]).toEqual(expected);
       expect((await dashboardRequest(at, '/api/cards?cursor=not-ours', atHost)).status).toBe(400);
     });
@@ -377,13 +352,8 @@ describe('card routes', () => {
     await onTenant('sess_x', async (at, atHost) => {
       const broken = await dashboardRequest(at, '/api/cards', atHost);
       expect(broken.status).toBe(500);
-      expect(JSON.parse(broken.body)).toEqual({
-        error: 'internal server error',
-        requestId: expect.any(String),
-      });
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/GET \/api\/cards failed.* stack=\S*Error.* at /),
-      );
+      expect(JSON.parse(broken.body)).toEqual({ error: 'internal server error', requestId: expect.any(String) });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/GET \/api\/cards failed.* stack=\S*Error.* at /));
       expect((await dashboardRequest(at, '/api/cards', atHost)).status).toBe(500);
     });
     const after = await dashboardRequest(port, '/api/cards', host());

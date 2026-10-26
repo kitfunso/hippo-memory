@@ -26,14 +26,14 @@ describe('schema v17 — slack ingestion tables', () => {
       const eventIdCol = cols.find((c) => c.name === 'event_id');
       expect(eventIdCol?.pk).toBe(1);
       // Re-insert same event_id must throw (PK uniqueness).
-      db.prepare(
-        `INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
-      ).run('E1', '2026-04-29T00:00:00Z', 'm1');
+      db.prepare(`INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`).run(
+        'E1',
+        '2026-04-29T00:00:00Z',
+        'm1',
+      );
       expect(() =>
         db
-          .prepare(
-            `INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
-          )
+          .prepare(`INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`)
           .run('E1', '2026-04-29T00:00:01Z', 'm2'),
       ).toThrow();
     } finally {
@@ -44,15 +44,16 @@ describe('schema v17 — slack ingestion tables', () => {
   it('creates slack_cursors keyed on (tenant_id, channel_id)', () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?, ?, ?, ?)`,
-      ).run('default', 'C1', '1700000000.000000', '2026-04-29T00:00:00Z');
+      db.prepare(`INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?, ?, ?, ?)`).run(
+        'default',
+        'C1',
+        '1700000000.000000',
+        '2026-04-29T00:00:00Z',
+      );
       // Same composite key collides; INSERT OR REPLACE supported.
       expect(() =>
         db
-          .prepare(
-            `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?, ?, ?, ?)`,
-          )
+          .prepare(`INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?, ?, ?, ?)`)
           .run('default', 'C1', '1700000001.000000', '2026-04-29T00:00:01Z'),
       ).toThrow();
     } finally {
@@ -63,9 +64,12 @@ describe('schema v17 — slack ingestion tables', () => {
   it('creates slack_dlq with autoincrementing id and received_at', () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_dlq (tenant_id, raw_payload, error, received_at) VALUES (?, ?, ?, ?)`,
-      ).run('default', '{}', 'parse error', '2026-04-29T00:00:00Z');
+      db.prepare(`INSERT INTO slack_dlq (tenant_id, raw_payload, error, received_at) VALUES (?, ?, ?, ?)`).run(
+        'default',
+        '{}',
+        'parse error',
+        '2026-04-29T00:00:00Z',
+      );
       // SAFETY: literal SELECT of the id column for the row this test just
       // inserted; slack_dlq.id is an INTEGER PRIMARY KEY.
       const row = db.prepare(`SELECT id FROM slack_dlq LIMIT 1`).get() as { id: number };
@@ -78,9 +82,11 @@ describe('schema v17 — slack ingestion tables', () => {
   it('creates slack_workspaces with team_id PK', () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(
-        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
-      ).run('T_ACME', 'acme', '2026-04-29T00:00:00Z');
+      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'T_ACME',
+        'acme',
+        '2026-04-29T00:00:00Z',
+      );
       expect(() =>
         db
           .prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`)

@@ -111,12 +111,8 @@ lines.push('');
 lines.push(`Generated: ${new Date().toISOString()}`);
 lines.push(`Config: ${TICKS} ticks per profile, ${PARTICLES} starting particles, seed ${SEED}`);
 lines.push('');
-lines.push(
-  '| Profile | Status | Ticks | First E | Final E | Max \\|E\\| | Max \\|v\\| | Final N | Wall (s) |',
-);
-lines.push(
-  '|---------|--------|-------|---------|---------|----------|----------|---------|----------|',
-);
+lines.push('| Profile | Status | Ticks | First E | Final E | Max \\|E\\| | Max \\|v\\| | Final N | Wall (s) |');
+lines.push('|---------|--------|-------|---------|---------|----------|----------|---------|----------|');
 for (const s of summary) {
   if (s.status === 'FAILED') {
     lines.push(`| ${s.profile} | FAILED | — | — | — | — | — | — | — |`);

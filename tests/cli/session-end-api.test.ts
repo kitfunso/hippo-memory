@@ -77,11 +77,7 @@ function withoutOwnStore(globalRoot: string | null): Context {
   const ctx = cliApiContext(root, TENANT);
   const reach = { ...ctx.reach!, hasLocal: false, global: undefined };
   if (globalRoot === null) return { ...ctx, reach };
-  const global = {
-    root: globalRoot,
-    store: sqliteStore(globalRoot),
-    config: loadConfig(globalRoot),
-  };
+  const global = { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
   return { ...ctx, reach: { ...reach, global } };
 }
 
@@ -92,12 +88,7 @@ function withAutoSleep(threshold: number): Context {
 
 describe('sessionEndWork', () => {
   it('runs the steps in order and closes the session snapshot', async () => {
-    saveActiveTaskSnapshot(root, TENANT, {
-      task: 't',
-      summary: 's',
-      nextStep: 'n',
-      sessionId: 's1',
-    });
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}/s1.jsonl` }));
     expect(steps).toEqual(['sleep', 'scan', 'capture:own:t1,t2,t3:-', 'digest:3:s1']);
     expect(loadActiveTaskSnapshot(root, TENANT)).toBeNull();
@@ -105,16 +96,8 @@ describe('sessionEndWork', () => {
   });
 
   it('a turn close captures only the turns after the cursor, moves it, and leaves the snapshot open', async () => {
-    saveActiveTaskSnapshot(root, TENANT, {
-      task: 't',
-      summary: 's',
-      nextStep: 'n',
-      sessionId: 's1',
-    });
-    await sessionEndWork(
-      withAutoSleep(1000),
-      work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl` }),
-    );
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
+    await sessionEndWork(withAutoSleep(1000), work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl` }));
     expect(steps).toEqual(['scan', 'capture:own:t2,t3:-', 'cursor:3', 'digest:3:s1']);
     expect(loadActiveTaskSnapshot(root, TENANT)?.sessionId).toBe('s1');
     expect(lines).toContain('skip snapshot close: turn mode');
@@ -138,10 +121,7 @@ describe('sessionEndWork', () => {
         steps.push('cursor');
       },
     };
-    await sessionEndWork(
-      withAutoSleep(1000),
-      work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl`, cursor }),
-    );
+    await sessionEndWork(withAutoSleep(1000), work({ mode: 'turn', transcriptPath: `${root}/s1.jsonl`, cursor }));
     expect(steps).toEqual(['scan', 'digest:3:s1']);
     expect(lines).toContain('skip capture: no new turns since the last reply');
   });
@@ -149,22 +129,9 @@ describe('sessionEndWork', () => {
   it('a folder with no store of its own skips sleep, imports its notes and captures into the global store', async () => {
     const globalRoot = makeRoot('session-end-api-global');
     try {
-      saveActiveTaskSnapshot(globalRoot, TENANT, {
-        task: 't',
-        summary: 's',
-        nextStep: 'n',
-        sessionId: 's1',
-      });
-      await sessionEndWork(
-        withoutOwnStore(globalRoot),
-        work({ transcriptPath: `${root}/s1.jsonl` }),
-      );
-      expect(steps).toEqual([
-        'import',
-        'scan',
-        `capture:global:t1,t2,t3:${PROJECT}`,
-        'digest:3:s1',
-      ]);
+      saveActiveTaskSnapshot(globalRoot, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
+      await sessionEndWork(withoutOwnStore(globalRoot), work({ transcriptPath: `${root}/s1.jsonl` }));
+      expect(steps).toEqual(['import', 'scan', `capture:global:t1,t2,t3:${PROJECT}`, 'digest:3:s1']);
       expect(lines).toContain('skip sleep: this folder has no store of its own');
       expect(loadActiveTaskSnapshot(globalRoot, TENANT)).toBeNull();
     } finally {
@@ -182,29 +149,19 @@ describe('sessionEndWork', () => {
     await sessionEndWork(cliApiContext(root, TENANT), work());
     expect(lines).toContain('skip capture: no transcript for this session');
     steps = [];
-    await sessionEndWork(
-      cliApiContext(root, TENANT),
-      work({ sessionId: null, transcriptPath: `${root}/abc.jsonl` }),
-    );
+    await sessionEndWork(cliApiContext(root, TENANT), work({ sessionId: null, transcriptPath: `${root}/abc.jsonl` }));
     expect(steps).toContain('digest:3:abc');
   });
 
   // The process belongs to the host, which owns the exit listener; a worker running many sessions gains none here.
   it('adds no exit listener, and logs the re-read lines after sleep', async () => {
-    saveActiveTaskSnapshot(root, TENANT, {
-      task: 't',
-      summary: 's',
-      nextStep: 'n',
-      sessionId: 's1',
-    });
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     const before = process.listenerCount('exit');
     const transcriptPath = `${root}-missing.jsonl`;
     await sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath }));
     await sessionEndWork(withoutOwnStore(null), work({ transcriptPath }));
     expect(process.listenerCount('exit')).toBe(before);
-    const reread = lines.filter((l) =>
-      l.startsWith('skip re-read count: cannot read the transcript'),
-    );
+    const reread = lines.filter((l) => l.startsWith('skip re-read count: cannot read the transcript'));
     expect(reread).toHaveLength(2);
     const closed = lines.findIndex((l) => l.includes('closed 1 active snapshot(s) for session s1'));
     expect(closed).toBeGreaterThan(lines.indexOf(reread[0]!));
@@ -216,10 +173,7 @@ describe('sessionEndWork', () => {
       throw new Error('sleep failed');
     };
     await expect(
-      sessionEndWork(
-        cliApiContext(root, TENANT),
-        work({ transcriptPath: `${root}-missing.jsonl`, sleep }),
-      ),
+      sessionEndWork(cliApiContext(root, TENANT), work({ transcriptPath: `${root}-missing.jsonl`, sleep })),
     ).rejects.toThrow('sleep failed');
     expect(process.listenerCount('exit')).toBe(before);
     expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(true);

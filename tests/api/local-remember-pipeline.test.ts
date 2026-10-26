@@ -15,18 +15,10 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
-import {
-  startHashedEmbeddings,
-  type HashedEmbeddings,
-} from '../_helpers/hashed-embedding-server.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import {
-  loadAllEntries,
-  readEntry,
-  writeEntry,
-  loadEmbeddingIndex,
-} from '../_helpers/root-forms.js';
+import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -38,8 +30,7 @@ const SALIENCE_ON = { salience: { enabled: true } };
 
 const roots: string[] = [];
 afterAll(() => {
-  for (const root of roots)
-    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const root of roots) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -56,10 +47,7 @@ const counted = async (ctx: FullContext): Promise<number> =>
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {
-  writeEntry(
-    ctx.hippoRoot,
-    createMemory(content, { tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-  );
+  writeEntry(ctx.hippoRoot, createMemory(content, { tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 }
 
 /** A store whose last four rows are errors, so a fifth that overlaps them is a repeated error. */
@@ -68,10 +56,7 @@ function storeOfRepeatedErrors(): FullContext {
   for (let n = 1; n <= 4; n++) seed(ctx, `connection timeout on database shard ${n}`, ['error']);
   return ctx;
 }
-const FIFTH_ERROR: LocalRememberInput = {
-  content: 'connection timeout on database shard 5',
-  tags: ['error'],
-};
+const FIFTH_ERROR: LocalRememberInput = { content: 'connection timeout on database shard 5', tags: ['error'] };
 
 function storedRow(outcome: LocalRememberOutcome): MemoryEntry {
   if (outcome.status !== 'stored') throw new Error(`expected a stored row, got ${outcome.status}`);
@@ -128,34 +113,18 @@ describe('rememberLocally', () => {
 
   it('scores schema fit on fitTags when given, else on the stored tags', async () => {
     const ctx = store();
-    for (const n of [1, 2, 3])
-      seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
+    for (const n of [1, 2, 3]) seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
     const stored = ['billing', 'path:acme', 'scope:eng'];
-    const typedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, [
-      'billing',
-    ]);
-    const storedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(
-      ctx.tenantId,
-      TEXT,
-      stored,
-    );
+    const typedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
+    const storedFit = await sqliteStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
     expect(
-      storedRow(
-        await rememberLocally(ctx, {
-          content: TEXT,
-          tags: stored,
-          fitTags: ['billing'],
-          force: true,
-        }),
-      ).schemaFit,
+      storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true }))
+        .schemaFit,
     ).toBe(typedFit);
     const other = store();
-    for (const n of [1, 2, 3])
-      seed(other, `the billing service sends invoice batch ${n}`, ['billing']);
-    expect(storedRow(await rememberLocally(other, { content: TEXT, tags: stored })).schemaFit).toBe(
-      storedFit,
-    );
+    for (const n of [1, 2, 3]) seed(other, `the billing service sends invoice batch ${n}`, ['billing']);
+    expect(storedRow(await rememberLocally(other, { content: TEXT, tags: stored })).schemaFit).toBe(storedFit);
   });
 
   it('with the gate off, stores a repeat of the same text', async () => {
@@ -169,19 +138,13 @@ describe('rememberLocally', () => {
     const ctx = store(SALIENCE_ON);
     const first = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
     const outcome = await rememberLocally(ctx, { content: TEXT, tags: [] });
-    expect(outcome).toEqual({
-      status: 'skipped',
-      reason: `duplicate (same text as ${first.id})`,
-      score: 0.1,
-    });
+    expect(outcome).toEqual({ status: 'skipped', reason: `duplicate (same text as ${first.id})`, score: 0.1 });
     expect(rows(ctx).map((row) => row.id)).toEqual([first.id]);
     expect(await counted(ctx)).toBe(1);
   });
 
   it('starts a repeated error weak: the verdict strength, half the half-life once, and the verdict answered', async () => {
-    const forced = storedRow(
-      await rememberLocally(storeOfRepeatedErrors(), { ...FIFTH_ERROR, force: true }),
-    );
+    const forced = storedRow(await rememberLocally(storeOfRepeatedErrors(), { ...FIFTH_ERROR, force: true }));
     const ctx = storeOfRepeatedErrors();
     const outcome = await rememberLocally(ctx, FIFTH_ERROR);
     const entry = storedRow(outcome);
@@ -209,17 +172,13 @@ describe('rememberLocally', () => {
     expect(storedRow(outcome).pinned).toBe(bypass.pinned === true);
     expect(await counted(ctx)).toBe(2);
     const weak = storeOfRepeatedErrors();
-    expect(
-      storedRow(await rememberLocally(weak, { ...FIFTH_ERROR, ...bypass })).strength,
-    ).toBeCloseTo(1, 3);
+    expect(storedRow(await rememberLocally(weak, { ...FIFTH_ERROR, ...bypass })).strength).toBeCloseTo(1, 3);
   });
 
   it('a rejected value throws what remember throws, with nothing stored or counted, weak verdict or not', async () => {
     const ctx = store();
     await reject(ctx, { value: TEXT, reason: 'wrong' });
-    await expect(rememberLocally(ctx, { content: TEXT, tags: [] })).rejects.toThrow(
-      RejectedValueError,
-    );
+    await expect(rememberLocally(ctx, { content: TEXT, tags: [] })).rejects.toThrow(RejectedValueError);
     expect(rows(ctx)).toHaveLength(0);
     expect(await counted(ctx)).toBe(0);
     const weak = storeOfRepeatedErrors();
@@ -247,13 +206,10 @@ describe('rememberLocally starts the embedding', () => {
       embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
     });
     const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
-    await vi.waitFor(
-      () => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]),
-      {
-        timeout: 20_000,
-        interval: 50,
-      },
-    );
+    await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), {
+      timeout: 20_000,
+      interval: 50,
+    });
     const asked = embeddings.requests();
     expect((await rememberLocally(ctx, { content: TEXT, tags: [] })).status).toBe('skipped');
     expect(embeddings.requests()).toBe(asked);
@@ -290,13 +246,9 @@ describe('extractRememberedFacts', () => {
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(
-      withModel(ctx, answering(JSON.stringify(FACTS))),
-      entry,
-      {
-        requested: false,
-      },
-    );
+    const outcome = await extractRememberedFacts(withModel(ctx, answering(JSON.stringify(FACTS))), entry, {
+      requested: false,
+    });
     expect(outcome).toEqual({ status: 'off' });
     expect(extracted(ctx, entry)).toHaveLength(0);
   });
@@ -307,21 +259,15 @@ describe('extractRememberedFacts', () => {
   ])('answers no_key when %s and there is no key', async (_label, config, requested) => {
     const ctx = store(config);
     const entry = await stored(ctx);
-    expect(await extractRememberedFacts(withModel(ctx), entry, { requested })).toEqual({
-      status: 'no_key',
-    });
+    expect(await extractRememberedFacts(withModel(ctx), entry, { requested })).toEqual({ status: 'no_key' });
   });
 
   it('stores the facts the model gives beside the row and counts them', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const outcome = await extractRememberedFacts(
-      withModel(ctx, answering(JSON.stringify(FACTS))),
-      entry,
-      {
-        requested: true,
-      },
-    );
+    const outcome = await extractRememberedFacts(withModel(ctx, answering(JSON.stringify(FACTS))), entry, {
+      requested: true,
+    });
     expect(outcome).toEqual({ status: 'ran', facts: 2, failures: [] });
     // Both facts share the run's instant, so the read order between them is the id's, not the model's.
     expect(
@@ -335,18 +281,11 @@ describe('extractRememberedFacts', () => {
   it('names a failed model call and a thrown one in the result, and stores nothing', async () => {
     const ctx = store();
     const entry = await stored(ctx);
-    const refused = await extractRememberedFacts(withModel(ctx, answering('ignored', 500)), entry, {
-      requested: true,
-    });
+    const refused = await extractRememberedFacts(withModel(ctx, answering('ignored', 500)), entry, { requested: true });
     expect(refused).toMatchObject({ status: 'ran', facts: 0 });
     expect(refused).toHaveProperty('failures.length', 1);
-    const unparseable = await extractRememberedFacts(withModel(ctx, answering('not json')), entry, {
-      requested: true,
-    });
-    expect(unparseable).toHaveProperty(
-      'failures.0',
-      expect.stringMatching(/^unparseable response: /),
-    );
+    const unparseable = await extractRememberedFacts(withModel(ctx, answering('not json')), entry, { requested: true });
+    expect(unparseable).toHaveProperty('failures.0', expect.stringMatching(/^unparseable response: /));
     expect(extracted(ctx, entry)).toHaveLength(0);
   });
 });

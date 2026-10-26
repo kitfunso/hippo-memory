@@ -38,8 +38,6 @@ describe('prepared statement reuse', () => {
     prepare.mockClear();
     updateMemoryRows(db, entries);
     updateMemoryRows(db, entries);
-    expect(
-      prepare.mock.calls.filter(([sql]) => String(sql).includes('UPDATE memories SET')),
-    ).toHaveLength(0);
+    expect(prepare.mock.calls.filter(([sql]) => String(sql).includes('UPDATE memories SET'))).toHaveLength(0);
   });
 });

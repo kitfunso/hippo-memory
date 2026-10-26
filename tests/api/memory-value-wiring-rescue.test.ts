@@ -6,10 +6,7 @@ import { resolveConfidence } from '../../src/entry/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { rescueSet, validateWeights } from '../../src/domain/consolidate/memory-value.js';
-import {
-  MEMORY_VALUE_WEIGHTS,
-  SOURCE_ARTIFACT_SHA256,
-} from '../../src/domain/consolidate/memory-value-weights.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { loadEveryTenantEntries, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
@@ -62,9 +59,7 @@ describe('(e) rescue semantics', () => {
     expect(detailLines(result)).toContain(
       '  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)',
     );
-    expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(
-      new Set([built[0]!.id, built[2]!.id]),
-    );
+    expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
     expect(loadEveryTenantEntries(dir).map((e) => e.id)).toContain(refused);
   });
 
@@ -80,9 +75,7 @@ describe('(e) rescue semantics', () => {
     // we only assert on the top 2 (a safe subset of the top 3 regardless of
     // exactly which entry takes rank 3).
     const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const built = lens.map((len) =>
-      condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }),
-    );
+    const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }));
     for (const e of built) writeEntry(dir, e);
 
     const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
@@ -132,9 +125,7 @@ describe('(e) rescue semantics', () => {
     expect(result.merged).toBeGreaterThanOrEqual(2);
 
     const after = loadEveryTenantEntries(dir);
-    const semanticSummary = after.find(
-      (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'),
-    );
+    const semanticSummary = after.find((e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'));
     expect(semanticSummary?.layer, 'expected a new merged semantic summary').toBe(Layer.Semantic);
 
     // Both rescued twins survive (demoted half-life, not deleted).
@@ -164,13 +155,10 @@ describe('(e) rescue semantics', () => {
       tenantId: 'tc',
     });
     const fillers = Array.from({ length: 8 }, (_, i) =>
-      condemnedEntry(
-        `completely unrelated filler content block number ${i} ${'z'.repeat(100 + i * 10)}`,
-        {
-          layer: Layer.Semantic,
-          tenantId: 'tc',
-        },
-      ),
+      condemnedEntry(`completely unrelated filler content block number ${i} ${'z'.repeat(100 + i * 10)}`, {
+        layer: Layer.Semantic,
+        tenantId: 'tc',
+      }),
     );
     for (const e of [a, b, ...fillers]) writeEntry(dir, e);
 
@@ -185,9 +173,7 @@ describe('(e) rescue semantics', () => {
 
     const conflicts = await listMemoryConflicts(dir, 'open', 'tc');
     const found = conflicts.find(
-      (c) =>
-        (c.memoryAId === a.id && c.memoryBId === b.id) ||
-        (c.memoryAId === b.id && c.memoryBId === a.id),
+      (c) => (c.memoryAId === a.id && c.memoryBId === b.id) || (c.memoryAId === b.id && c.memoryBId === a.id),
     );
     expect(found!.reason).toMatch(/enabled\/disabled/);
   });
@@ -201,9 +187,7 @@ describe('(e) rescue semantics', () => {
     // MIN_RESCUE_GROUP = 10, this tenant's non-pinned candidate set (1) is
     // below the floor -> keepN 0 -> no rescue, flag-on behaves exactly like
     // flag-off for this tenant.
-    const lonely = condemnedEntry('a lonely condemned memory with no tenant-mates', {
-      tenantId: 'tf',
-    });
+    const lonely = condemnedEntry('a lonely condemned memory with no tenant-mates', { tenantId: 'tf' });
     writeEntry(dir, lonely);
 
     const result = await consolidate(dir, { now: NOW });
@@ -253,9 +237,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
   it('validateWeights throws on a missing dim', () => {
     const missingDim = { ...MEMORY_VALUE_WEIGHTS };
     delete missingDim.content_length;
-    expect(() => validateWeights(missingDim, SOURCE_ARTIFACT_SHA256)).toThrow(
-      /not a finite number/,
-    );
+    expect(() => validateWeights(missingDim, SOURCE_ARTIFACT_SHA256)).toThrow(/not a finite number/);
   });
 
   it('validateWeights throws when the digest is missing', () => {
@@ -274,10 +256,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
     expect(() =>
-      rescueSet(all, new Set([condemned.id]), NOW, {
-        weights: badWeights,
-        digest: SOURCE_ARTIFACT_SHA256,
-      }),
+      rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 }),
     ).toThrow(/not a finite number/);
     // Sanity: the real frozen constant is valid — the throw above is
     // specific to the corrupted override, not a false-positive on the

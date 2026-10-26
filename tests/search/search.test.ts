@@ -35,9 +35,7 @@ describe('BM25 search', () => {
     const results = rankBm25('FRED cache TIPS', entries, { now: evalNow(), budget: 10000 });
 
     expect(results[0]!.entry.id).toBe(fredCache!.id);
-    expect(results.map((r) => r.entry.id)).toEqual(
-      expect.arrayContaining([tipsModel!.id, cacheCheck!.id]),
-    );
+    expect(results.map((r) => r.entry.id)).toEqual(expect.arrayContaining([tipsModel!.id, cacheCheck!.id]));
   });
 
   it('returns empty results for a query with no matching tokens', () => {
@@ -124,10 +122,7 @@ describe('decision recall boost', () => {
       tags: ['database'],
     });
 
-    const results = rankBm25('PostgreSQL database', [decision, normal], {
-      now: evalNow(),
-      budget: 4000,
-    });
+    const results = rankBm25('PostgreSQL database', [decision, normal], { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBe(2);
     expect(results[0].entry.tags).toContain('decision');
@@ -143,10 +138,7 @@ describe('decision recall boost', () => {
     });
 
     // Query only on content terms, not on tag terms
-    const results = rankBm25('cache refresh', [withDecision, without], {
-      now: evalNow(),
-      budget: 4000,
-    });
+    const results = rankBm25('cache refresh', [withDecision, without], { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBe(2);
     const decisionResult = results.find((r) => r.entry.tags.includes('decision'))!;

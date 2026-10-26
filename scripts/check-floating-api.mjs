@@ -43,9 +43,7 @@ export function findFloatingApiCalls(program, rootDir) {
   const root = resolve(rootDir).replace(/\\/g, '/');
   const checker = program.getTypeChecker();
   const isApiWrite = (call) => {
-    const callee = ts.isPropertyAccessExpression(call.expression)
-      ? call.expression.name
-      : call.expression;
+    const callee = ts.isPropertyAccessExpression(call.expression) ? call.expression.name : call.expression;
     let symbol = checker.getSymbolAtLocation(callee);
     if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
     const file = symbol?.declarations?.[0]?.getSourceFile().fileName.replace(/\\/g, '/');
@@ -75,18 +73,13 @@ export function findFloatingApiCalls(program, rootDir) {
       ) {
         hit(node, 'dropped');
       }
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === 'expect'
-      ) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'expect') {
         const [cb] = node.arguments;
         const isSync =
           cb &&
           (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb)) &&
           !(cb.modifiers ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
-        if (isSync && ts.isCallExpression(cb.body) && isApiWrite(chainRoot(cb.body)))
-          hit(node, 'sync expect');
+        if (isSync && ts.isCallExpression(cb.body) && isApiWrite(chainRoot(cb.body))) hit(node, 'sync expect');
       }
       ts.forEachChild(node, visit);
     };

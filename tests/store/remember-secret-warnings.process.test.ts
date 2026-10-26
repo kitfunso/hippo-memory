@@ -78,12 +78,7 @@ describe('HTTP POST /v1/memories', () => {
 describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'hippo_remember', arguments: { text: TYPED } },
-      },
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
       {
         hippoRoot: root,
         tenantId: 'default',
@@ -106,21 +101,10 @@ describe('CLI hippo remember', () => {
   it('prints the warning to stderr', () => {
     if (!fs.existsSync(cli)) throw new Error('build first');
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-warn-cli-'));
-    const env = {
-      ...process.env,
-      HIPPO_HOME: path.join(home, 'global'),
-      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-    };
+    const env = { ...process.env, HIPPO_HOME: path.join(home, 'global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
     try {
-      spawnSync(process.execPath, [cli, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-        env,
-        cwd: home,
-      });
-      const run = spawnSync(process.execPath, [cli, 'remember', TYPED], {
-        env,
-        cwd: home,
-        encoding: 'utf8',
-      });
+      spawnSync(process.execPath, [cli, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { env, cwd: home });
+      const run = spawnSync(process.execPath, [cli, 'remember', TYPED], { env, cwd: home, encoding: 'utf8' });
       expect(run.status).toBe(0);
       expect(run.stdout).toContain('Remembered [');
       expect(run.stderr).toContain('Warning:');

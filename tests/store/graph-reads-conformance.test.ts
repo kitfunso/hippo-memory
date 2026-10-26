@@ -62,13 +62,8 @@ const walk =
   (tenantId: string, query: GraphWalkQuery): Call =>
   (group) =>
     group.graphRows(tenantId, query);
-const without = <T>(items: readonly T[], ...gone: readonly T[]): T[] =>
-  items.filter((item) => !gone.includes(item));
-const ids = (
-  entities: readonly number[],
-  relations: readonly Edge[],
-  truncated = false,
-): RowIds => ({
+const without = <T>(items: readonly T[], ...gone: readonly T[]): T[] => items.filter((item) => !gone.includes(item));
+const ids = (entities: readonly number[], relations: readonly Edge[], truncated = false): RowIds => ({
   entities,
   relations,
   truncated,
@@ -115,18 +110,7 @@ beforeAll(async () => {
   g = await seedGraphRows(fixture.dir);
   const { e } = g;
   newest = {
-    entities: [
-      e.anchored,
-      e.shared,
-      e.lone,
-      e.twinOpen,
-      e.twinHeld,
-      e.mine,
-      e.secret,
-      e.spoke2,
-      e.spoke1,
-      e.hub,
-    ],
+    entities: [e.anchored, e.shared, e.lone, e.twinOpen, e.twinHeld, e.mine, e.secret, e.spoke2, e.spoke1, e.hub],
     relations: [
       [e.shared, e.hub],
       [e.secret, e.mine],
@@ -150,11 +134,7 @@ afterAll(() => {
 describe('GraphReads.graphRows over the whole graph', () => {
   it('reads nothing for a tenant with no graph, and every field of the rows of the tenants that hold one', async () => {
     const { e, memories } = g;
-    const [nobody, solo, newestOfA] = await answers([
-      rows({}, 'nobody'),
-      rows({}, SOLO_TENANT),
-      rows({ limit: 1 }),
-    ]);
+    const [nobody, solo, newestOfA] = await answers([rows({}, 'nobody'), rows({}, SOLO_TENANT), rows({ limit: 1 })]);
     expect(nobody).toEqual(EMPTY);
     expect(solo).toEqual({
       entities: [
@@ -203,29 +183,26 @@ describe('GraphReads.graphRows over the whole graph', () => {
 
   it("lists a tenant newest first, the larger id first inside a shared timestamp, and never another tenant's rows", async () => {
     const { e } = g;
-    expect(await readIds([rows(), rows({}, TENANT_B), rows({ reader: MEMBER }, TENANT_B)])).toEqual(
-      [
-        ids(newest.entities, newest.relations),
-        ids([e.otherB, e.sharedB], [[e.sharedB, e.otherB]]),
-        ids([e.otherB, e.sharedB], [[e.sharedB, e.otherB]]),
-      ],
-    );
+    expect(await readIds([rows(), rows({}, TENANT_B), rows({ reader: MEMBER }, TENANT_B)])).toEqual([
+      ids(newest.entities, newest.relations),
+      ids([e.otherB, e.sharedB], [[e.sharedB, e.otherB]]),
+      ids([e.otherB, e.sharedB], [[e.sharedB, e.otherB]]),
+    ]);
   });
 
   it('keeps the newest rows at, under and over the cap, capping entities and relations each on their own', async () => {
     const { e } = g;
-    const [atCap, overCap, relationsAtCap, three, one, soloAtCap, bOne, bTwo, bThree] =
-      await readIds([
-        rows({ limit: 10 }),
-        rows({ limit: 11 }),
-        rows({ limit: 6 }),
-        rows({ limit: 3 }),
-        rows({ limit: 1 }),
-        rows({ limit: 1 }, SOLO_TENANT),
-        rows({ limit: 1 }, TENANT_B),
-        rows({ limit: 2 }, TENANT_B),
-        rows({ limit: 3 }, TENANT_B),
-      ]);
+    const [atCap, overCap, relationsAtCap, three, one, soloAtCap, bOne, bTwo, bThree] = await readIds([
+      rows({ limit: 10 }),
+      rows({ limit: 11 }),
+      rows({ limit: 6 }),
+      rows({ limit: 3 }),
+      rows({ limit: 1 }),
+      rows({ limit: 1 }, SOLO_TENANT),
+      rows({ limit: 1 }, TENANT_B),
+      rows({ limit: 2 }, TENANT_B),
+      rows({ limit: 3 }, TENANT_B),
+    ]);
     expect(atCap).toEqual(ids(newest.entities, newest.relations, true));
     expect(overCap).toEqual(ids(newest.entities, newest.relations, false));
     expect(relationsAtCap).toEqual(ids(newest.entities.slice(0, 6), newest.relations, true));
@@ -250,16 +227,11 @@ describe('GraphReads.graphRows over the whole graph', () => {
       rows({ reader: MEMBER, limit: 10 }),
       rows({ reader: MEMBER, limit: 2 }),
     ]);
-    const memberSees = ids(
-      without(newest.entities, e.twinHeld, e.mine, e.secret),
-      without(newest.relations, heldEdge),
-    );
+    const memberSees = ids(without(newest.entities, e.twinHeld, e.mine, e.secret), without(newest.relations, heldEdge));
     expect(member).toEqual(memberSees);
     expect(admin).toEqual(ids(without(newest.entities, e.mine), newest.relations));
     expect(granted).toEqual(admin);
-    expect(alice).toEqual(
-      ids(without(newest.entities, e.twinHeld, e.secret), without(newest.relations, heldEdge)),
-    );
+    expect(alice).toEqual(ids(without(newest.entities, e.twinHeld, e.secret), without(newest.relations, heldEdge)));
     expect(memberAtCap).toEqual({ ...memberSees, truncated: true });
     // The hidden relation is not replaced by the next newest one.
     expect(memberTwo).toEqual(ids([e.anchored, e.shared], [[e.shared, e.hub]], true));
@@ -282,11 +254,7 @@ describe('GraphReads.graphRows from a name', () => {
   it('walks one hop from the named entity, lists what it holds by id and returns the relations among them newest first', async () => {
     const { e } = g;
     expect(
-      await readIds([
-        rows({ entity: 'Hub' }),
-        rows({ entity: 'Lone' }),
-        rows({ entity: 'Only' }, SOLO_TENANT),
-      ]),
+      await readIds([rows({ entity: 'Hub' }), rows({ entity: 'Lone' }), rows({ entity: 'Only' }, SOLO_TENANT)]),
     ).toEqual([ids(aroundHub.entities, aroundHub.relations), ids([e.lone], []), ids([e.solo], [])]);
   });
 
@@ -315,9 +283,7 @@ describe('GraphReads.graphRows from a name', () => {
 
   it('stops joining once it holds limit ids, taking the newest relations first, and says truncated at every cap it meets', async () => {
     const { e } = g;
-    const byLimit = await readIds(
-      [1, 2, 3, 4, 5, 6, 7].map((limit) => rows({ entity: 'Hub', limit })),
-    );
+    const byLimit = await readIds([1, 2, 3, 4, 5, 6, 7].map((limit) => rows({ entity: 'Hub', limit })));
     const [sharedHub, hubSecret, , hubSpoke2] = aroundHub.relations;
     expect(byLimit).toEqual([
       ids([e.hub], [], true),
@@ -333,34 +299,19 @@ describe('GraphReads.graphRows from a name', () => {
 
   it('answers empty and not truncated when no start entity shows, though a relation the reader may read touches it', async () => {
     const { e } = g;
-    const [
-      secret,
-      secretAtCap,
-      mine,
-      aliceSecret,
-      adminMine,
-      twinFirst,
-      twinBoth,
-      twinUnder,
-      twinUnread,
-    ] = await readIds([
-      rows({ entity: 'Secret', reader: MEMBER }),
-      rows({ entity: 'Secret', reader: MEMBER, limit: 1 }),
-      rows({ entity: 'Mine', reader: MEMBER }),
-      rows({ entity: 'Secret', reader: ALICE }),
-      rows({ entity: 'Mine', reader: ADMIN }),
-      rows({ entity: 'Twin', reader: MEMBER, limit: 1 }),
-      rows({ entity: 'Twin', reader: MEMBER, limit: 2 }),
-      rows({ entity: 'Twin', reader: MEMBER, limit: 3 }),
-      rows({ entity: 'Twin' }),
-    ]);
-    expect([secret, secretAtCap, mine, aliceSecret, adminMine]).toEqual([
-      EMPTY,
-      EMPTY,
-      EMPTY,
-      EMPTY,
-      EMPTY,
-    ]);
+    const [secret, secretAtCap, mine, aliceSecret, adminMine, twinFirst, twinBoth, twinUnder, twinUnread] =
+      await readIds([
+        rows({ entity: 'Secret', reader: MEMBER }),
+        rows({ entity: 'Secret', reader: MEMBER, limit: 1 }),
+        rows({ entity: 'Mine', reader: MEMBER }),
+        rows({ entity: 'Secret', reader: ALICE }),
+        rows({ entity: 'Mine', reader: ADMIN }),
+        rows({ entity: 'Twin', reader: MEMBER, limit: 1 }),
+        rows({ entity: 'Twin', reader: MEMBER, limit: 2 }),
+        rows({ entity: 'Twin', reader: MEMBER, limit: 3 }),
+        rows({ entity: 'Twin' }),
+      ]);
+    expect([secret, secretAtCap, mine, aliceSecret, adminMine]).toEqual([EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
     // The cap picks the start entities before any is hidden: the one Twin a member may read sits past a cap of one.
     expect(twinFirst).toEqual(EMPTY);
     expect(twinBoth).toEqual(ids([e.twinOpen], [], true));
@@ -370,15 +321,14 @@ describe('GraphReads.graphRows from a name', () => {
 
   it('hides the rows a walk reached that the reader may not read, keeps a relation to a hidden end, and judges truncated before hiding', async () => {
     const { e } = g;
-    const [memberHub, memberHubAtCap, unreadSecret, grantedSecret, adminSecret, aliceMine] =
-      await readIds([
-        rows({ entity: 'Hub', reader: MEMBER }),
-        rows({ entity: 'Hub', reader: MEMBER, limit: 5 }),
-        rows({ entity: 'Secret' }),
-        rows({ entity: 'Secret', reader: GRANTED }),
-        rows({ entity: 'Secret', reader: ADMIN }),
-        rows({ entity: 'Mine', reader: ALICE }),
-      ]);
+    const [memberHub, memberHubAtCap, unreadSecret, grantedSecret, adminSecret, aliceMine] = await readIds([
+      rows({ entity: 'Hub', reader: MEMBER }),
+      rows({ entity: 'Hub', reader: MEMBER, limit: 5 }),
+      rows({ entity: 'Secret' }),
+      rows({ entity: 'Secret', reader: GRANTED }),
+      rows({ entity: 'Secret', reader: ADMIN }),
+      rows({ entity: 'Mine', reader: ALICE }),
+    ]);
     const secretEdges: Edge[] = [
       [e.secret, e.mine],
       [e.hub, e.secret],
@@ -403,9 +353,7 @@ describe('GraphReads.graphRows from a name', () => {
       rows({ limit: 3 }, BULK_TENANT),
     ]);
     // The older relation joins first because its start entity sits in the first 400, so the one id left goes to TailA.
-    expect(oneTail).toEqual(
-      ids([...many.slice(0, 400), e.tailA, ...many.slice(400)], [[first, e.tailA]], true),
-    );
+    expect(oneTail).toEqual(ids([...many.slice(0, 400), e.tailA, ...many.slice(400)], [[first, e.tailA]], true));
     expect(bothTails).toEqual(
       ids(
         [...many.slice(0, 400), e.tailA, e.tailB, ...many.slice(400)],
@@ -440,16 +388,7 @@ describe('GraphReads walk reads', () => {
       walk(TENANT_A, { by: 'memory', ids: [] }),
       walk(BULK_TENANT, { by: 'memory', ids: ['mem_gbulk'] }),
     ]);
-    expect(both).toEqual([
-      e.hub,
-      e.spoke1,
-      e.spoke2,
-      e.secret,
-      e.twinHeld,
-      e.twinOpen,
-      e.lone,
-      e.shared,
-    ]);
+    expect(both).toEqual([e.hub, e.spoke1, e.spoke2, e.secret, e.twinHeld, e.twinOpen, e.lone, e.shared]);
     expect(team).toEqual([e.hub, e.spoke1, e.spoke2, e.twinOpen, e.lone, e.shared]);
     expect([otherTenant, none]).toEqual([[], []]);
     expect(bulk).toEqual([e.tailA, e.tailB, ...many]);
@@ -518,10 +457,7 @@ describe('GraphReads.graphDelta', () => {
       entityType: 'policy' as const,
       sourceObject: { type: 'policy' as const, id: anchored!.sourceObjectId! },
     };
-    const fresh = {
-      entityType: 'decision' as const,
-      sourceObject: { type: 'decision' as const, id: 9999 },
-    };
+    const fresh = { entityType: 'decision' as const, sourceObject: { type: 'decision' as const, id: 9999 } };
     const kept = { ...key, name: anchored!.name, memoryId: anchored!.memoryId };
     const moved = { ...kept, memoryId: memories.team };
     const added = { ...fresh, name: 'New', memoryId: 'mem_gb' };
@@ -533,32 +469,14 @@ describe('GraphReads.graphDelta', () => {
       sourceObject: fresh.sourceObject,
     };
     const [same, update, inB, nobody] = await answers<GraphOp[]>([
-      (r) =>
-        r.graphDelta(TENANT_A, {
-          entities: [kept, { ...kept, name: 'Later twin' }, added],
-          relations: [edge],
-        }),
+      (r) => r.graphDelta(TENANT_A, { entities: [kept, { ...kept, name: 'Later twin' }, added], relations: [edge] }),
       (r) => r.graphDelta(TENANT_A, { entities: [moved], relations: [] }),
       (r) => r.graphDelta(TENANT_B, { entities: [], relations: [] }),
       (r) => r.graphDelta('nobody', { entities: [added], relations: [] }),
     ]);
-    const loose = [
-      e.hub,
-      e.spoke1,
-      e.spoke2,
-      e.secret,
-      e.mine,
-      e.twinHeld,
-      e.twinOpen,
-      e.lone,
-      e.shared,
-    ];
+    const loose = [e.hub, e.spoke1, e.spoke2, e.secret, e.mine, e.twinHeld, e.twinOpen, e.lone, e.shared];
     const deletes = loose.map((id) => ({ op: 'deleteEntity', id }));
-    expect(same).toEqual([
-      ...deletes,
-      { op: 'insertEntity', entity: added },
-      { op: 'insertRelation', relation: edge },
-    ]);
+    expect(same).toEqual([...deletes, { op: 'insertEntity', entity: added }, { op: 'insertRelation', relation: edge }]);
     expect(update).toEqual([...deletes, { op: 'updateEntity', id: e.anchored, entity: moved }]);
     expect(inB).toEqual([
       { op: 'deleteEntity', id: e.sharedB },

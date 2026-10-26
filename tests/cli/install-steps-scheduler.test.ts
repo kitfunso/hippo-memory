@@ -58,9 +58,7 @@ describe('setupDailySchedule', () => {
         ['crontab', ['-']],
       ]);
       expect(calls[1]!.opts.input).toContain(`# hippo:${DAILY_TASK_NAME}`);
-      expect(calls.every(({ opts }) => opts.shell === undefined && opts.stdio === 'pipe')).toBe(
-        true,
-      );
+      expect(calls.every(({ opts }) => opts.shell === undefined && opts.stdio === 'pipe')).toBe(true);
     },
   );
 });
@@ -111,9 +109,7 @@ describe('setupDailySchedule on a user with no crontab yet', () => {
   it('installs the entry alone when crontab -l says "no crontab for <user>"', () => {
     const calls = install(exitedWith(1, 'no crontab for skf\n'));
     expect(calls.map(({ args }) => args)).toEqual([['-l'], ['-']]);
-    expect(calls[1]!.opts.input).toBe(
-      `15 6 * * * cd "/srv/hippo-home" && hippo daily-runner ${MARKER}\n`,
-    );
+    expect(calls[1]!.opts.input).toBe(`15 6 * * * cd "/srv/hippo-home" && hippo daily-runner ${MARKER}\n`);
     expect(said.join('\n')).toContain('via crontab');
     expect(said.join('\n')).not.toContain(MANUAL);
   });
@@ -121,9 +117,7 @@ describe('setupDailySchedule on a user with no crontab yet', () => {
   it('appends to a crontab that exists, and leaves one that already holds the entry alone', () => {
     const appended = install('MAILTO=me\n');
     expect(appended[1]!.opts.input).toMatch(/^MAILTO=me\n15 6 \* \* \* /);
-    expect(install(`15 6 * * * hippo daily-runner ${MARKER}\n`).map(({ args }) => args)).toEqual([
-      ['-l'],
-    ]);
+    expect(install(`15 6 * * * hippo daily-runner ${MARKER}\n`).map(({ args }) => args)).toEqual([['-l']]);
   });
 
   it('keeps the manual path and logs why, with the error fields, for any other failure', () => {

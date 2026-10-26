@@ -13,13 +13,7 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { isJsonNumber } from '../../src/base/util/json.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  CLEARED_ENV,
-  FAKE_NOW,
-  pinUpdatedAt,
-  seeded,
-  TENANT,
-} from '../_helpers/recall-golden-seed.js';
+import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import type { AppendAuditOptions, AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -29,14 +23,8 @@ oneRequestPerTest();
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),
   seeded('deploy freeze on fridays for billing', 'mem_o_b', '2026-01-10T00:00:00.000Z'),
-  seeded(
-    'deploy token rotates weekly; deploy keys live in vault',
-    'mem_o_c',
-    '2026-01-20T00:00:00.000Z',
-  ),
-  seeded('deploy target is the eu west cluster', 'mem_o_d', '2026-01-05T00:00:00.000Z', {
-    strength: 0.4,
-  }),
+  seeded('deploy token rotates weekly; deploy keys live in vault', 'mem_o_c', '2026-01-20T00:00:00.000Z'),
+  seeded('deploy target is the eu west cluster', 'mem_o_d', '2026-01-05T00:00:00.000Z', { strength: 0.4 }),
   seeded('rollback plan for a failed deploy', 'mem_o_e', '2026-01-30T00:00:00.000Z'),
   seeded('lunch menu on thursdays', 'mem_o_f', '2026-01-29T00:00:00.000Z'),
 ];
@@ -45,11 +33,7 @@ const ROWS = [
 const CLAIM = 'the deploy will take 3 days';
 
 // A hint row of the caller's own, so the test sees where each path puts it among the recall's rows.
-const CALLER_ROW: AppendAuditOptions = {
-  tenantId: TENANT,
-  actor: 'order-test',
-  op: 'recall_availability_detected',
-};
+const CALLER_ROW: AppendAuditOptions = { tenantId: TENANT, actor: 'order-test', op: 'recall_availability_detected' };
 
 interface Written {
   readonly audit: readonly (readonly [string, number | null])[];
@@ -215,11 +199,7 @@ describe('retrieve paths: order and writes', () => {
       { query: CLAIM },
       {
         ...cliCore(),
-        show: (ranking) => ({
-          results: ranking.results.slice(0, 2),
-          audit: [CALLER_ROW],
-          tokens: 7,
-        }),
+        show: (ranking) => ({ results: ranking.results.slice(0, 2), audit: [CALLER_ROW], tokens: 7 }),
         lastRecall: caller.store.lastRecall,
       },
     );

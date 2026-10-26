@@ -140,15 +140,12 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
-  it.each([null, '../escape', 'a b'])(
-    'runs unlocked, writing nothing, for the session id %s',
-    async (id) => {
-      const { runs, work } = recorder();
-      await runSessionWorker(id, 'full', work);
-      expect(runs).toEqual(['full']);
-      expect(fs.readdirSync(sessions)).toEqual([]);
-    },
-  );
+  it.each([null, '../escape', 'a b'])('runs unlocked, writing nothing, for the session id %s', async (id) => {
+    const { runs, work } = recorder();
+    await runSessionWorker(id, 'full', work);
+    expect(runs).toEqual(['full']);
+    expect(fs.readdirSync(sessions)).toEqual([]);
+  });
 
   it('refuses to run unlocked when the request cannot be queued', async () => {
     fs.rmSync(sessions, { recursive: true });
@@ -176,9 +173,7 @@ describe('runSessionWorker', () => {
       await runSessionWorker(ID, 'turn', work);
       await runSessionWorker(ID, 'turn', work);
       expect(runs).toEqual(['turn', 'turn']);
-      const lines = write.mock.calls
-        .map((c) => String(c[0]))
-        .filter((m) => m.includes('cannot be created or cleared'));
+      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be created or cleared'));
       expect(lines).toHaveLength(1);
       expect(lines[0]).toContain(`${ID}.lock`);
     } finally {

@@ -25,9 +25,7 @@ describe('check-test-env', () => {
   });
 
   it('flags Object.assign onto process.env and a replaced env object', () => {
-    expect(
-      lines("Object.assign(process.env, { A: '1' });\nprocess.env = { ...process.env };"),
-    ).toEqual([1, 2]);
+    expect(lines("Object.assign(process.env, { A: '1' });\nprocess.env = { ...process.env };")).toEqual([1, 2]);
   });
 
   it('passes reads, an env object built for a child and vi.stubEnv', () => {

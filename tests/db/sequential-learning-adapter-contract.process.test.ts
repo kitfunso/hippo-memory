@@ -33,11 +33,7 @@ describe('sequential-learning adapter contract', () => {
   });
 
   it('accepts an adapter with both pushGoal and completeGoal', () => {
-    const paired = {
-      ...baseAdapter,
-      pushGoal: async () => 'g_1234567890abcdef',
-      completeGoal: async () => {},
-    };
+    const paired = { ...baseAdapter, pushGoal: async () => 'g_1234567890abcdef', completeGoal: async () => {} };
     expect(createAdapter(paired)).toBe(paired);
   });
 
@@ -93,9 +89,7 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
 
       const recalled = await hippoAdapter.recall('handling errors in data pipeline');
       expect(Array.isArray(recalled)).toBe(true);
-      expect(recalled.map((r) => r.content)).toEqual([
-        'Never use bare except: pass. It swallows all errors silently.',
-      ]);
+      expect(recalled.map((r) => r.content)).toEqual(['Never use bare except: pass. It swallows all errors silently.']);
 
       // Query the temp store directly. The adapter exposes _storeDir.
       const storeDir = storeDirOf(hippoAdapter);

@@ -18,15 +18,11 @@ function withFixture(
 ) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-fragments-'));
   try {
-    writeFileSync(
-      join(root, 'package.json'),
-      JSON.stringify({ name: 'fixture', version: '2.0.0' }),
-    );
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '2.0.0' }));
     writeFileSync(join(root, 'CHANGELOG.md'), changelog);
     mkdirSync(join(root, 'changelog.d'));
     writeFileSync(join(root, 'changelog.d', 'README.md'), '# changelog.d\n');
-    for (const [name, text] of Object.entries(fragments))
-      writeFileSync(join(root, 'changelog.d', name), text);
+    for (const [name, text] of Object.entries(fragments)) writeFileSync(join(root, 'changelog.d', name), text);
     body({
       run: (...args) => {
         const r = spawnSync(process.execPath, [SCRIPT, ...args], { cwd: root, encoding: 'utf-8' });

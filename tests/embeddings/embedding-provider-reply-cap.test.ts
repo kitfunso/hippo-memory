@@ -56,9 +56,7 @@ describe('embedding provider reply cap', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-cap-'));
     fs.writeFileSync(
       path.join(root, 'config.json'),
-      JSON.stringify({
-        embeddings: { provider: 'openai', model: 'm', apiBaseUrl: `http://127.0.0.1:${port}` },
-      }),
+      JSON.stringify({ embeddings: { provider: 'openai', model: 'm', apiBaseUrl: `http://127.0.0.1:${port}` } }),
     );
   });
 
@@ -85,11 +83,7 @@ describe('embedding provider reply cap', () => {
   it('still parses a normal-size reply for a multi-input request', async () => {
     handler = (_req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          data: [{ embedding: [3, 4] }, { embedding: [0, 2] }, { embedding: [1, 0] }],
-        }),
-      );
+      res.end(JSON.stringify({ data: [{ embedding: [3, 4] }, { embedding: [0, 2] }, { embedding: [1, 0] }] }));
     };
     const out = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b', 'c']);
     expect(out).toEqual([

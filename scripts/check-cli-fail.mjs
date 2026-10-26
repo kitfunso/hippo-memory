@@ -41,9 +41,7 @@ export function failPairLines(text) {
   const lines = [];
   const visit = (n) => {
     const list =
-      ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n)
-        ? n.statements
-        : [];
+      ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n) ? n.statements : [];
     list.forEach((stmt, i) => {
       if (isCall(stmt, 'printError') && list[i + 1] && isThrowExit1(list[i + 1])) {
         lines.push(sourceFile.getLineAndCharacterOfPosition(stmt.getStart(sourceFile)).line + 1);
@@ -76,13 +74,8 @@ export function findFailPairs(srcDir) {
     listSourceFiles(root)
       .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
       // exit.ts holds the one allowed pair: the body of fail().
-      .filter(
-        ([file]) =>
-          (file === 'cli.ts' || file.startsWith('surface/cli/')) && file !== 'surface/cli/exit.ts',
-      )
-      .flatMap(([file, p]) =>
-        failPairLines(readFileSync(p, 'utf8')).map((line) => ({ file, line })),
-      )
+      .filter(([file]) => (file === 'cli.ts' || file.startsWith('surface/cli/')) && file !== 'surface/cli/exit.ts')
+      .flatMap(([file, p]) => failPairLines(readFileSync(p, 'utf8')).map((line) => ({ file, line })))
       .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
   );
 }
@@ -92,13 +85,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const srcDir = process.argv[2] ?? 'src';
   const hits = findFailPairs(srcDir);
   if (hits.length > 0) {
-    console.error(
-      `\n${hits.length} printError + throw new CliExit(1) pair(s) in the CLI under ${srcDir}/:`,
-    );
+    console.error(`\n${hits.length} printError + throw new CliExit(1) pair(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}`);
-    console.error(
-      '\nFix: call fail(...) from src/surface/cli/exit.ts, which prints the message and exits 1.\n',
-    );
+    console.error('\nFix: call fail(...) from src/surface/cli/exit.ts, which prints the message and exits 1.\n');
     process.exit(1);
   }
   console.log('Every CLI error exit goes through fail(). OK.');

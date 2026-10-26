@@ -31,10 +31,7 @@ function transcriptJsonl(entries: unknown[]): string {
 
 // Setup only, so in process; every case under test spawns, since each one is about a real stdin pipe.
 async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
-  const result = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], {
-    cwd,
-    env,
-  });
+  const result = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env });
   expect(result.status).toBe(0);
 }
 
@@ -103,11 +100,7 @@ function spawnBounded(
     // the stuck command instead of a generic "test timed out".
     const guard = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(
-        new Error(
-          `hippo ${args.join(' ')} did not exit within ${KILL_GUARD_MS}ms (killed by test guard)`,
-        ),
-      );
+      reject(new Error(`hippo ${args.join(' ')} did not exit within ${KILL_GUARD_MS}ms (killed by test guard)`));
     }, KILL_GUARD_MS);
 
     let dribble: NodeJS.Timeout | undefined;
@@ -149,16 +142,10 @@ function seedPreCompactPayload(dir: string, sessionId: string) {
   fs.writeFileSync(
     transcriptPath,
     transcriptJsonl([
-      {
-        type: 'user',
-        message: { role: 'user', content: `Investigate the ${sessionId} regression.` },
-      },
+      { type: 'user', message: { role: 'user', content: `Investigate the ${sessionId} regression.` } },
       {
         type: 'assistant',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'text', text: `Fixed the ${sessionId} regression.` }],
-        },
+        message: { role: 'assistant', content: [{ type: 'text', text: `Fixed the ${sessionId} regression.` }] },
       },
     ]),
   );
@@ -215,9 +202,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
     it('session-end', async () => {
       const logFile = path.join(dir, 'session-end.log');
-      const result = await spawnBounded(['session-end', '--log-file', logFile], dir, fastEnv(), {
-        mode: 'idle',
-      });
+      const result = await spawnBounded(['session-end', '--log-file', logFile], dir, fastEnv(), { mode: 'idle' });
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
       // Let the detached worker finish before afterEach removes dir.
@@ -229,9 +214,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     });
 
     it('capture --last-session', async () => {
-      const result = await spawnBounded(['capture', '--last-session'], dir, fastEnv(), {
-        mode: 'idle',
-      });
+      const result = await spawnBounded(['capture', '--last-session'], dir, fastEnv(), { mode: 'idle' });
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
     });
@@ -239,11 +222,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
   it('case 2: payload written then ended writes the task_snapshots row', async () => {
     const { payloadText } = seedPreCompactPayload(dir, 'sess-case2');
-    const result = await spawnBounded(['pre-compact'], dir, env, {
-      mode: 'write',
-      text: payloadText,
-      end: true,
-    });
+    const result = await spawnBounded(['pre-compact'], dir, env, { mode: 'write', text: payloadText, end: true });
     expect(result.status).toBe(0);
     expectRowFor(dir, 'sess-case2');
   });
@@ -273,12 +252,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
   });
 
   it('case 5: garbage HIPPO_STDIN_WAIT_MS falls back to the 1000ms default, never zero wait', async () => {
-    const result = await spawnBounded(
-      ['context'],
-      dir,
-      { ...env, HIPPO_STDIN_WAIT_MS: 'abc' },
-      { mode: 'idle' },
-    );
+    const result = await spawnBounded(['context'], dir, { ...env, HIPPO_STDIN_WAIT_MS: 'abc' }, { mode: 'idle' });
     expect(result.status).toBe(0);
     expect(result.signal).toBeNull();
     expect(result.elapsedMs).toBeGreaterThanOrEqual(900);
@@ -298,10 +272,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       sessionATranscript,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: SESSION_A_TASK } },
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: SESSION_A_NEXT_STEP }] },
-        },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: SESSION_A_NEXT_STEP }] } },
       ]),
     );
     const seedPayload = JSON.stringify({
@@ -330,17 +301,14 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
           type: 'user',
           message: {
             role: 'user',
-            content:
-              'we decided to use RabbitMQ for the decoy session, this must never leak into session A.',
+            content: 'we decided to use RabbitMQ for the decoy session, this must never leak into session A.',
           },
         },
         {
           type: 'assistant',
           message: {
             role: 'assistant',
-            content: [
-              { type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' },
-            ],
+            content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }],
           },
         },
       ]),
@@ -409,18 +377,13 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       transcriptJsonl([
         {
           type: 'user',
-          message: {
-            role: 'user',
-            content: 'DECOY SESSION: this belongs to another project entirely.',
-          },
+          message: { role: 'user', content: 'DECOY SESSION: this belongs to another project entirely.' },
         },
         {
           type: 'assistant',
           message: {
             role: 'assistant',
-            content: [
-              { type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' },
-            ],
+            content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }],
           },
         },
       ]),
@@ -434,9 +397,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
     // Positive control: stdin closed, not idle, must still find the decoy,
     // proving the scan is reachable here and step d is a real discriminator.
-    let result = await spawnBounded(['capture', '--last-session', '--dry-run'], dir, env, {
-      mode: 'ignore',
-    });
+    let result = await spawnBounded(['capture', '--last-session', '--dry-run'], dir, env, { mode: 'ignore' });
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain(NO_TRANSCRIPT);
 
@@ -453,11 +414,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
 
   it('a timed-out compact-resume prints nothing, since the session check cannot read a session it never got', async () => {
     const { payloadText } = seedPreCompactPayload(dir, 'sess-case9');
-    let result = await spawnBounded(['pre-compact'], dir, env, {
-      mode: 'write',
-      text: payloadText,
-      end: true,
-    });
+    let result = await spawnBounded(['pre-compact'], dir, env, { mode: 'write', text: payloadText, end: true });
     expect(result.status).toBe(0);
     expectRowFor(dir, 'sess-case9');
 
@@ -466,12 +423,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('## Restored after compaction');
 
-    result = await spawnBounded(
-      ['compact-resume'],
-      dir,
-      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
-      { mode: 'idle' },
-    );
+    result = await spawnBounded(['compact-resume'], dir, { ...env, HIPPO_STDIN_WAIT_MS: '200' }, { mode: 'idle' });
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('## Restored after compaction');
     expect(result.stdout.trim()).toBe('');

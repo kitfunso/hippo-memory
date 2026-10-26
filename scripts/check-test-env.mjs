@@ -24,8 +24,7 @@ import {
 
 const isProcessEnv = (e) => e.getText() === 'process.env';
 const isEnvMember = (e) =>
-  (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) &&
-  isProcessEnv(e.expression);
+  (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) && isProcessEnv(e.expression);
 
 function visit(node, fn) {
   fn(node);
@@ -56,10 +55,7 @@ export function envWrites(text) {
       n.arguments.length > 0 &&
       isProcessEnv(n.arguments[0]);
     if (assigns || deletes || assignsInto) {
-      hits.push({
-        line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1,
-        write: n.getText().slice(0, 60),
-      });
+      hits.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, write: n.getText().slice(0, 60) });
     }
   });
   return hits;
@@ -77,8 +73,7 @@ const callsUnstub = (n) => {
   });
   return found;
 };
-const bodyOf = (call) =>
-  call.arguments.find((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a));
+const bodyOf = (call) => call.arguments.find((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a));
 
 /**
  * Returns one entry per vi.stubEnv made once, in beforeAll, a describe body or module scope, that an afterEach
@@ -103,14 +98,8 @@ export function onceStubs(text) {
           scopes.push(bodyOf(p));
           once ??= true;
         }
-      } else if ((ts.isFunctionDeclaration(p) || ts.isMethodDeclaration(p)) && once === null)
-        return;
-      else if (
-        ts.isVariableDeclaration(p) &&
-        p.initializer &&
-        ts.isFunctionLike(p.initializer) &&
-        once === null
-      ) {
+      } else if ((ts.isFunctionDeclaration(p) || ts.isMethodDeclaration(p)) && once === null) return;
+      else if (ts.isVariableDeclaration(p) && p.initializer && ts.isFunctionLike(p.initializer) && once === null) {
         return;
       }
     }
@@ -126,10 +115,7 @@ export function onceStubs(text) {
       );
     });
     if (eachUnstub) {
-      hits.push({
-        line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1,
-        write: n.getText().slice(0, 60),
-      });
+      hits.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, write: n.getText().slice(0, 60) });
     }
   });
   return hits;
@@ -150,8 +136,7 @@ export function earlyUnstubs(text) {
       ts.isFunctionLike(n.parent) &&
       ts.isCallExpression(n.parent.parent) &&
       ['afterEach', 'afterAll'].includes(callName(n.parent.parent));
-    if (!ts.isBlock(n) || !(hook || (ts.isTryStatement(n.parent) && n.parent.finallyBlock === n)))
-      return;
+    if (!ts.isBlock(n) || !(hook || (ts.isTryStatement(n.parent) && n.parent.finallyBlock === n))) return;
     const i = n.statements.findIndex((st) => st.getText().startsWith('vi.unstubAllEnvs()'));
     if (i < 0) return;
     const later = n.statements
@@ -208,9 +193,7 @@ function startsVia(helpers, starts) {
   for (let known = -1; known !== starters.size;) {
     known = starters.size;
     if (known === 0) break;
-    const names = new RegExp(
-      `(?:_helpers|\\.)/(?:${[...starters].map(escapeRegExp).join('|')})\\.`,
-    );
+    const names = new RegExp(`(?:_helpers|\\.)/(?:${[...starters].map(escapeRegExp).join('|')})\\.`);
     importsStarter = (source) => names.test(source);
     for (const h of helpers) if (importsStarter(h.source)) starters.add(h.name);
   }
@@ -239,10 +222,7 @@ export function misnamedTests(dir) {
   const helpers = existsSync(helperDir)
     ? readdirSync(helperDir, { withFileTypes: true })
         .filter((e) => e.isFile())
-        .map((e) => ({
-          name: e.name.replace(/\.\w+$/, ''),
-          source: readFileSync(join(helperDir, e.name), 'utf8'),
-        }))
+        .map((e) => ({ name: e.name.replace(/\.\w+$/, ''), source: readFileSync(join(helperDir, e.name), 'utf8') }))
     : [];
   const startsChild = startsVia(helpers, STARTS_A_CHILD);
   const startsServer = startsVia(helpers, STARTS_A_SERVER);
@@ -255,8 +235,7 @@ export function misnamedTests(dir) {
     const source = readFileSync(path, 'utf8');
     const has = projectOfName(file);
     // A test that spawns inside src never names child_process, so the import graph decides when it lifts its own budget.
-    const waitsOnChild =
-      startsChild(source) || (RAISES_OWN_TIMEOUT.test(source) && reachesChildProcess(path));
+    const waitsOnChild = startsChild(source) || (RAISES_OWN_TIMEOUT.test(source) && reachesChildProcess(path));
     const started =
       waitsOnChild || (has === 'process' && reachesChildProcess(path))
         ? 'process'
@@ -265,8 +244,7 @@ export function misnamedTests(dir) {
           : 'unit';
     // A slow test starts nothing, so its name is the only mark; a unit test that asks for a long budget of its own earns it.
     const want =
-      started === 'unit' &&
-      (has === 'slow' || longestOwnTimeoutMs(source) > UNIT_OWN_TIMEOUT_CEILING_MS)
+      started === 'unit' && (has === 'slow' || longestOwnTimeoutMs(source) > UNIT_OWN_TIMEOUT_CEILING_MS)
         ? 'slow'
         : started;
     if (want !== has) hits.push({ file, has, want });
@@ -289,9 +267,7 @@ const SENSITIVE = /KEY|TOKEN|SECRET|PASSWORD|ENDPOINT|ACCOUNT_ID|_URL$|_CERT$|_C
 export function unscrubbedEnvReads(envSource, scrubbedNames = ENV_SCRUBBED_IN_TESTS) {
   const scrubbed = new Set(scrubbedNames);
   const read = new Set([...envSource.matchAll(READER)].map((m) => m[1]));
-  return [...read]
-    .filter((n) => SENSITIVE.test(n) && !SET_BY_VITEST.has(n) && !scrubbed.has(n))
-    .sort();
+  return [...read].filter((n) => SENSITIVE.test(n) && !SET_BY_VITEST.has(n) && !scrubbed.has(n)).sort();
 }
 
 const RENAME = {
@@ -321,12 +297,8 @@ function report(dir, hits, misnamed, unscrubbed) {
     );
   }
   if (unscrubbed.length > 0) {
-    console.error(
-      `\nsrc/base/util/env.ts reads these but ENV_SCRUBBED_IN_TESTS lacks them: ${unscrubbed.join(', ')}`,
-    );
-    console.error(
-      'Add each name to ENV_SCRUBBED_IN_TESTS there, so vitest.config.ts blanks it for every test.\n',
-    );
+    console.error(`\nsrc/base/util/env.ts reads these but ENV_SCRUBBED_IN_TESTS lacks them: ${unscrubbed.join(', ')}`);
+    console.error('Add each name to ENV_SCRUBBED_IN_TESTS there, so vitest.config.ts blanks it for every test.\n');
   }
 }
 
@@ -339,7 +311,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const unscrubbed = existsSync(envFile) ? unscrubbedEnvReads(readFileSync(envFile, 'utf8')) : [];
   report(dir, hits, misnamed, unscrubbed);
   if (hits.length > 0 || misnamed.length > 0 || unscrubbed.length > 0) process.exit(1);
-  console.log(
-    `No test in ${dir}/ writes process.env by hand, and each test's name matches what it starts. OK.`,
-  );
+  console.log(`No test in ${dir}/ writes process.env by hand, and each test's name matches what it starts. OK.`);
 }

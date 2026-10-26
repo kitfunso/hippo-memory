@@ -110,31 +110,20 @@ describe('saveCompactionItemsForCaller', () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     withDb((db) => {
       expect(count(db, 'compactions')).toBe(1);
-      expect(
-        count(db, 'compactions', `status = 'done' AND items_written = 2 AND request_id = 'cmp-1'`),
-      ).toBe(1);
+      expect(count(db, 'compactions', `status = 'done' AND items_written = 2 AND request_id = 'cmp-1'`)).toBe(1);
     });
   });
 
   it('cuts an item back to its cap after the scrub, so one a mask runs past the cap still becomes a row', async () => {
-    const item =
-      `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(
-        0,
-        COMPACTION_ITEM_MAX_CHARS,
-      );
+    const item = `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(
+      0,
+      COMPACTION_ITEM_MAX_CHARS,
+    );
     expect(item).toHaveLength(COMPACTION_ITEM_MAX_CHARS);
-    const req = {
-      sessionId: 'sA',
-      project: PROJECT,
-      trigger: 'auto',
-      items: [item],
-      requestId: 'cmp-1',
-    };
+    const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: [item], requestId: 'cmp-1' };
     expect(await saveCompactionItemsForCaller(owned('alice'), req)).toEqual({ written: 1 });
     const stored = item.replace('a@b.co', '[email]').slice(0, COMPACTION_ITEM_MAX_CHARS);
-    withDb((db) =>
-      expect(writtenRows(db, 'compaction:sA').map((r) => r.content)).toEqual([stored]),
-    );
+    withDb((db) => expect(writtenRows(db, 'compaction:sA').map((r) => r.content)).toEqual([stored]));
   });
 
   it('refuses an item past its cap before the scrub, naming the field, before it binds the session', async () => {
@@ -164,9 +153,7 @@ describe('saveCompactionItemsForCaller', () => {
     await postCompact(owned('alice'));
     withDb((db) => {
       expect(count(db, 'compactions')).toBe(1);
-      expect(
-        count(db, 'compactions', `request_id = 'cmp-1' AND status = 'done' AND snapshot_saved = 1`),
-      ).toBe(1);
+      expect(count(db, 'compactions', `request_id = 'cmp-1' AND status = 'done' AND snapshot_saved = 1`)).toBe(1);
     });
   });
 });
@@ -193,17 +180,11 @@ describe('captureFailureForCaller', () => {
 
   it('repeat check is per project', async () => {
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
-    expect(
-      (await captureFailureForCaller(owned('alice'), failure({ requestId: 'fail-2' }))).outcome,
-    ).toBe('duplicate');
+    expect((await captureFailureForCaller(owned('alice'), failure({ requestId: 'fail-2' }))).outcome).toBe('duplicate');
     const web = { name: 'acme/web', legacyName: 'web' };
     expect(
-      (
-        await captureFailureForCaller(
-          owned('bob'),
-          failure({ sessionId: 'sB', project: web, requestId: 'fail-3' }),
-        )
-      ).outcome,
+      (await captureFailureForCaller(owned('bob'), failure({ sessionId: 'sB', project: web, requestId: 'fail-3' })))
+        .outcome,
     ).toBe('stored');
   });
 
@@ -255,14 +236,10 @@ describe('captureFailureForCaller', () => {
   it('scrubs a sent text again and cuts it to 200 after the scrub, so a mask that runs longer still stores', async () => {
     const text = `Bash: mail to a@b.co failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200);
     expect(text).toHaveLength(200);
-    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe(
-      'stored',
-    );
+    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe('stored');
     withDb((db) => {
       const [row] = writtenRows(db, 'tool-failure');
-      expect(row?.content).toBe(
-        `Bash: mail to [email] failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200),
-      );
+      expect(row?.content).toBe(`Bash: mail to [email] failed. ${'Retry the deploy. '.repeat(10)}`.slice(0, 200));
       expect(failureRows(db)[0]?.sig_hash).toBe(failureHash(row?.content ?? ''));
     });
   });
@@ -272,14 +249,8 @@ describe('captureFailureForCaller', () => {
     const filler = 'Retry the deploy. '.repeat(10).slice(0, 169);
     const text = `Bash: mail to a@b.co failed. ${filler}\u{1F600}`;
     expect(text).toHaveLength(200);
-    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe(
-      'stored',
-    );
-    withDb((db) =>
-      expect(writtenRows(db, 'tool-failure')[0]?.content).toBe(
-        `Bash: mail to [email] failed. ${filler}`,
-      ),
-    );
+    expect((await captureFailureForCaller(owned('alice'), failure({ text }))).outcome).toBe('stored');
+    withDb((db) => expect(writtenRows(db, 'tool-failure')[0]?.content).toBe(`Bash: mail to [email] failed. ${filler}`));
   });
 
   it('log error never masks a store error', async () => {
@@ -289,20 +260,11 @@ describe('captureFailureForCaller', () => {
   });
 
   it('logs a routine skip with its rule and stores no lesson', async () => {
-    const req = failure({
-      tool: 'Grep',
-      text: 'Grep: no matches found',
-      skip: 'skipped-routine',
-      rule: 'search-tool',
-    });
-    expect(await captureFailureForCaller(owned('alice'), req)).toEqual({
-      outcome: 'skipped-routine',
-    });
+    const req = failure({ tool: 'Grep', text: 'Grep: no matches found', skip: 'skipped-routine', rule: 'search-tool' });
+    expect(await captureFailureForCaller(owned('alice'), req)).toEqual({ outcome: 'skipped-routine' });
     withDb((db) => {
       expect(count(db, 'memories')).toBe(0);
-      expect(
-        count(db, 'failure_log', `outcome = 'skipped-routine' AND skip_rule = 'search-tool'`),
-      ).toBe(1);
+      expect(count(db, 'failure_log', `outcome = 'skipped-routine' AND skip_rule = 'search-tool'`)).toBe(1);
     });
   });
 
@@ -316,10 +278,7 @@ describe('captureFailureForCaller', () => {
   ])('refuses %s, naming the field, before it binds the session', async (_what, req, field) => {
     const err = await caught(() => captureFailureForCaller(owned('alice'), req));
     expect(err).toBeInstanceOf(BadRequestError);
-    expect(err).toMatchObject({
-      status: 400,
-      message: expect.stringMatching(new RegExp(`^${field}:`)),
-    });
+    expect(err).toMatchObject({ status: 400, message: expect.stringMatching(new RegExp(`^${field}:`)) });
     withDb((db) => expect(count(db, 'session_owners')).toBe(0));
   });
 });

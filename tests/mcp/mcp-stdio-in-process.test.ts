@@ -5,13 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'v
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  captureWrites,
-  fire,
-  recordListeners,
-  stubExit,
-  type Listener,
-} from '../_helpers/process-stubs.js';
+import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
@@ -69,20 +63,13 @@ describe('startStdioLoop, in process', () => {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
-        params: {
-          name: 'hippo_remember',
-          arguments: { text: 'the staging queue drains at midnight' },
-        },
+        params: { name: 'hippo_remember', arguments: { text: 'the staging queue drains at midnight' } },
       }),
     );
     await vi.waitFor(() => expect(replies().map((r) => r.id)).toContain(3), { timeout: 15_000 });
 
     const byId = new Map(replies().map((r) => [r.id, r]));
-    expect(byId.get(null)).toEqual({
-      jsonrpc: '2.0',
-      id: null,
-      error: { code: -32700, message: 'Parse error' },
-    });
+    expect(byId.get(null)).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
     expect(byId.get(1)?.error?.code).toBe(-32600);
     expect(byId.get(2)?.result?.tools?.map((t) => t.name)).toContain('hippo_remember');
     expect(byId.get(3)?.error).toBeUndefined();
@@ -91,9 +78,9 @@ describe('startStdioLoop, in process', () => {
     const db = openHippoDb(join(dir, 'global'));
     try {
       expect((db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n).toBe(1);
-      expect(
-        (db.prepare('SELECT content FROM memories').get() as { content: string }).content,
-      ).toBe('the staging queue drains at midnight');
+      expect((db.prepare('SELECT content FROM memories').get() as { content: string }).content).toBe(
+        'the staging queue drains at midnight',
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -104,8 +91,7 @@ describe('startStdioLoop, in process', () => {
 
   it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
     startStdioLoop(cliStdioHost());
-    const list = (id: number): string =>
-      JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
+    const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
     const dribble = (text: string, size: number): void => {
       const bytes = Buffer.from(text);
       for (let i = 0; i < bytes.length; i += size) fire(stdin, 'data', bytes.subarray(i, i + size));

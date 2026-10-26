@@ -30,12 +30,7 @@ describe('four-bucket cost accounting', () => {
   };
 
   it('prices each bucket at its own rate', () => {
-    const prices = {
-      inputPerMTok: 3,
-      cacheWritePerMTok: 3.75,
-      cacheReadPerMTok: 0.3,
-      outputPerMTok: 15,
-    };
+    const prices = { inputPerMTok: 3, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3, outputPerMTok: 15 };
     expect(priceUsage(usage, prices)).toBeCloseTo(3 + 7.5 + 3 + 7.5, 10);
   });
 
@@ -46,22 +41,12 @@ describe('four-bucket cost accounting', () => {
 
   it('adds usages bucket by bucket', () => {
     expect(addUsage(usage, usage).cacheReadTokens).toBe(20_000_000);
-    expect(addUsage()).toEqual({
-      inputTokens: 0,
-      cacheWriteTokens: 0,
-      cacheReadTokens: 0,
-      outputTokens: 0,
-    });
+    expect(addUsage()).toEqual({ inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 });
   });
 
   it('shows why raw tokens overstate savings when input is mostly cache reads', () => {
     // Cutting 10% of the cached history saves far less than 10% of the input bill.
-    const before = {
-      inputTokens: 5_000,
-      cacheWriteTokens: 5_000,
-      cacheReadTokens: 900_000,
-      outputTokens: 0,
-    };
+    const before = { inputTokens: 5_000, cacheWriteTokens: 5_000, cacheReadTokens: 900_000, outputTokens: 0 };
     const after = { ...before, cacheReadTokens: 810_000 };
     const rawCut =
       1 -
@@ -238,11 +223,7 @@ describe('two-level bootstrap', () => {
     const flat: Repository<Pair>[] = [[[{ c: 1, t: 1 }]], [[{ c: 1, t: 1 }]], [[{ c: 1, t: 1 }]]];
     expect(twoLevelBootstrap(flat, ratio, { ...small, nullValue: 1 }).p).toBe(1);
     expect(twoLevelBootstrap(flat, ratio, small).p).toBe(0);
-    const saving: Repository<Pair>[] = [
-      [[{ c: 1, t: 0.5 }]],
-      [[{ c: 1, t: 0.6 }]],
-      [[{ c: 1, t: 0.4 }]],
-    ];
+    const saving: Repository<Pair>[] = [[[{ c: 1, t: 0.5 }]], [[{ c: 1, t: 0.6 }]], [[{ c: 1, t: 0.4 }]]];
     const r = twoLevelBootstrap(saving, ratio, { ...small, nullValue: 1 });
     expect(r.p).toBe(0);
     expect(r.high).toBeLessThan(1);
@@ -291,9 +272,7 @@ describe('two-level bootstrap', () => {
     twoLevelBootstrap(
       repos,
       (units) => {
-        seen.add(
-          `${units.filter((u) => u === 'A').length},${units.filter((u) => u === 'B').length}`,
-        );
+        seen.add(`${units.filter((u) => u === 'A').length},${units.filter((u) => u === 'B').length}`);
         return 0;
       },
       { iterations: 500 },
@@ -362,9 +341,7 @@ describe('two-level bootstrap', () => {
 describe('holmAdjust', () => {
   const expectClose = (got: number[], want: number[]): void => {
     expect(got).toHaveLength(want.length);
-    want.forEach((w, i) =>
-      Number.isNaN(w) ? expect(got[i]).toBeNaN() : expect(got[i]).toBeCloseTo(w, 12),
-    );
+    want.forEach((w, i) => (Number.isNaN(w) ? expect(got[i]).toBeNaN() : expect(got[i]).toBeCloseTo(w, 12)));
   };
 
   it('matches the Holm step-down by hand', () => {
@@ -397,92 +374,36 @@ describe('verdict', () => {
     dropped: 0,
     nullValue,
   });
-  const lowerSpec: VerdictSpec = {
-    helpful: 'lower',
-    tieBand: [-0.15, 0.15],
-    minimumEffectAt: -0.15,
-  };
-  const higherSpec: VerdictSpec = {
-    helpful: 'higher',
-    tieBand: [-0.05, 0.05],
-    minimumEffectAt: 0.1,
-  };
-  const ratioSpec: VerdictSpec = {
-    helpful: 'lower',
-    tieBand: [0.95, 1 / 0.95],
-    minimumEffectAt: 0.95,
-  };
+  const lowerSpec: VerdictSpec = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
+  const higherSpec: VerdictSpec = { helpful: 'higher', tieBand: [-0.05, 0.05], minimumEffectAt: 0.1 };
+  const ratioSpec: VerdictSpec = { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 };
 
   it('calls a loss, and never reports a minimum for it', () => {
-    expect(verdict(est(0.2, 0.1, 0.3), 0.01, lowerSpec)).toEqual({
-      verdict: 'loss',
-      reachesMinimum: false,
-    });
-    expect(verdict(est(-0.2, -0.3, -0.1), 0.01, higherSpec)).toEqual({
-      verdict: 'loss',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(0.2, 0.1, 0.3), 0.01, lowerSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
+    expect(verdict(est(-0.2, -0.3, -0.1), 0.01, higherSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
   });
 
   it('calls a win and checks the minimum inclusively', () => {
-    expect(verdict(est(-0.2, -0.3, -0.1), 0.01, lowerSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(-0.15, -0.3, -0.01), 0.01, lowerSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(-0.14, -0.3, -0.01), 0.01, lowerSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: false,
-    });
-    expect(verdict(est(0.2, 0.1, 0.3), 0.01, higherSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(0.1, 0.02, 0.2), 0.01, higherSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(0.07, 0.02, 0.12), 0.01, higherSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(-0.2, -0.3, -0.1), 0.01, lowerSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(-0.15, -0.3, -0.01), 0.01, lowerSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(-0.14, -0.3, -0.01), 0.01, lowerSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
+    expect(verdict(est(0.2, 0.1, 0.3), 0.01, higherSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.1, 0.02, 0.2), 0.01, higherSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.07, 0.02, 0.12), 0.01, higherSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
   });
 
   it("reads ratios against the estimate's nullValue of 1", () => {
-    expect(verdict(est(0.9, 0.85, 0.94, 1), 0.01, ratioSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(0.95, 0.9, 0.99, 1), 0.01, ratioSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: true,
-    });
-    expect(verdict(est(0.97, 0.96, 0.99, 1), 0.01, ratioSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: false,
-    });
-    expect(verdict(est(1.2, 1.1, 1.3, 1), 0.01, ratioSpec)).toEqual({
-      verdict: 'loss',
-      reachesMinimum: false,
-    });
-    expect(verdict(est(1, 0.97, 1.03, 1), 0.5, ratioSpec)).toEqual({
-      verdict: 'tie',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(0.9, 0.85, 0.94, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.95, 0.9, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(verdict(est(0.97, 0.96, 0.99, 1), 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
+    expect(verdict(est(1.2, 1.1, 1.3, 1), 0.01, ratioSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });
+    expect(verdict(est(1, 0.97, 1.03, 1), 0.5, ratioSpec)).toEqual({ verdict: 'tie', reachesMinimum: false });
   });
 
   it('takes the null from the bootstrap run that built the estimate', () => {
     type Pair = { c: number; t: number };
-    const ratio = (u: readonly Pair[]): number =>
-      u.reduce((s, x) => s + x.t, 0) / u.reduce((s, x) => s + x.c, 0);
-    const saving: Repository<Pair>[] = [
-      [[{ c: 1, t: 0.5 }]],
-      [[{ c: 1, t: 0.6 }]],
-      [[{ c: 1, t: 0.4 }]],
-    ];
+    const ratio = (u: readonly Pair[]): number => u.reduce((s, x) => s + x.t, 0) / u.reduce((s, x) => s + x.c, 0);
+    const saving: Repository<Pair>[] = [[[{ c: 1, t: 0.5 }]], [[{ c: 1, t: 0.6 }]], [[{ c: 1, t: 0.4 }]]];
     const atOne = twoLevelBootstrap(saving, ratio, { iterations: 300, nullValue: 1 });
     expect(atOne.nullValue).toBe(1);
     expect(verdict(atOne, 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
@@ -500,35 +421,24 @@ describe('verdict', () => {
   });
 
   it('calls a tie when the interval sits inside the band, edges included', () => {
-    expect(verdict(est(0.02, -0.1, 0.1), 0.5, lowerSpec)).toEqual({
-      verdict: 'tie',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(0.02, -0.1, 0.1), 0.5, lowerSpec)).toEqual({ verdict: 'tie', reachesMinimum: false });
     expect(verdict(est(0, -0.15, 0.15), 0.5, lowerSpec).verdict).toBe('tie');
   });
 
   it('calls everything else inconclusive', () => {
-    expect(verdict(est(0, -0.3, 0.3), 0.5, lowerSpec)).toEqual({
-      verdict: 'inconclusive',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(0, -0.3, 0.3), 0.5, lowerSpec)).toEqual({ verdict: 'inconclusive', reachesMinimum: false });
     expect(verdict(est(0, -0.3, 0.3), 0.01, lowerSpec).verdict).toBe('inconclusive');
   });
 
   it('lets a significant p beat the tie band, and an inflated p fall back to tie', () => {
-    expect(verdict(est(-0.05, -0.1, -0.01), 0.01, lowerSpec)).toEqual({
-      verdict: 'win',
-      reachesMinimum: false,
-    });
+    expect(verdict(est(-0.05, -0.1, -0.01), 0.01, lowerSpec)).toEqual({ verdict: 'win', reachesMinimum: false });
     expect(verdict(est(0.05, 0.01, 0.1), 0.01, lowerSpec).verdict).toBe('loss');
     expect(verdict(est(-0.05, -0.1, -0.01), 0.06, lowerSpec).verdict).toBe('tie');
     expect(verdict(est(-0.05, -0.1, -0.01), 0.05, lowerSpec).verdict).toBe('tie');
   });
 
   it('honours a custom alpha', () => {
-    expect(verdict(est(-0.2, -0.3, -0.1), 0.04, { ...lowerSpec, alpha: 0.01 }).verdict).toBe(
-      'inconclusive',
-    );
+    expect(verdict(est(-0.2, -0.3, -0.1), 0.04, { ...lowerSpec, alpha: 0.01 }).verdict).toBe('inconclusive');
   });
 
   it('never calls a win or loss for an estimate on the null', () => {
@@ -545,10 +455,7 @@ describe('verdict', () => {
 });
 
 describe('combineCodings', () => {
-  const r = (v: VerdictResult['verdict'], reachesMinimum = false): VerdictResult => ({
-    verdict: v,
-    reachesMinimum,
-  });
+  const r = (v: VerdictResult['verdict'], reachesMinimum = false): VerdictResult => ({ verdict: v, reachesMinimum });
 
   it('needs a win under both codings', () => {
     expect(combineCodings(r('win', true), r('win', true))).toEqual(r('win', true));
@@ -593,21 +500,9 @@ describe('harmGate', () => {
   });
 
   it('passes only when both checks pass, and fails a NaN bound', () => {
-    expect(harmGate(upper(1.05), lower(0.01))).toEqual({
-      pass: true,
-      costOk: true,
-      resolveOk: true,
-    });
-    expect(harmGate(upper(1.2), lower(0.01))).toEqual({
-      pass: false,
-      costOk: false,
-      resolveOk: true,
-    });
+    expect(harmGate(upper(1.05), lower(0.01))).toEqual({ pass: true, costOk: true, resolveOk: true });
+    expect(harmGate(upper(1.2), lower(0.01))).toEqual({ pass: false, costOk: false, resolveOk: true });
     expect(harmGate(upper(Number.NaN), lower(0.01)).pass).toBe(false);
-    expect(harmGate(upper(1), lower(Number.NaN))).toEqual({
-      pass: false,
-      costOk: true,
-      resolveOk: false,
-    });
+    expect(harmGate(upper(1), lower(Number.NaN))).toEqual({ pass: false, costOk: true, resolveOk: false });
   });
 });

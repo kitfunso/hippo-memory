@@ -6,13 +6,7 @@ describe('messageToRememberOpts', () => {
     const opts = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: {
-        type: 'message',
-        channel: 'C1',
-        user: 'U1',
-        text: 'incident at 3pm',
-        ts: '1700000000.000100',
-      },
+      message: { type: 'message', channel: 'C1', user: 'U1', text: 'incident at 3pm', ts: '1700000000.000100' },
     });
     expect(opts).not.toBeNull();
     expect(opts!.kind).toBe('raw');
@@ -35,13 +29,7 @@ describe('messageToRememberOpts', () => {
     const opts = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C2', is_private: true },
-      message: {
-        type: 'message',
-        channel: 'C2',
-        user: 'U1',
-        text: 'secret',
-        ts: '1700000000.000100',
-      },
+      message: { type: 'message', channel: 'C2', user: 'U1', text: 'secret', ts: '1700000000.000100' },
     });
     expect(opts!.scope).toBe('slack:private:C2');
   });
@@ -50,13 +38,7 @@ describe('messageToRememberOpts', () => {
     const opts = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: {
-        type: 'message',
-        channel: 'C1',
-        user: 'U999',
-        text: 'hello',
-        ts: '1700000000.000100',
-      },
+      message: { type: 'message', channel: 'C1', user: 'U999', text: 'hello', ts: '1700000000.000100' },
     });
     expect(opts!.owner).toBe('user:U999');
   });

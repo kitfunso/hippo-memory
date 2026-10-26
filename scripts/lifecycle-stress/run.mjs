@@ -42,12 +42,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/entry/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  loadEmbeddingIndex,
-} from '../../dist/entry/testing.js';
+import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
@@ -86,9 +81,7 @@ const BUDGET = parseInt(flag('--budget', '1500'), 10);
 
 for (const cp of CHECKPOINTS) {
   if (!(cp in CHECKPOINT_COUNTS)) {
-    console.error(
-      `Unknown checkpoint "${cp}". Known: ${Object.keys(CHECKPOINT_COUNTS).join(', ')}`,
-    );
+    console.error(`Unknown checkpoint "${cp}". Known: ${Object.keys(CHECKPOINT_COUNTS).join(', ')}`);
     process.exit(2);
   }
 }
@@ -138,10 +131,7 @@ async function buildStore(memories) {
   // originals back over the budget cut, diluting the compression measurement.
   // config.json merges with defaults (config.ts loadConfig), so this sets only
   // replay.count; decayBasis and the rest keep their defaults.
-  fs.writeFileSync(
-    path.join(root, 'config.json'),
-    JSON.stringify({ replay: { count: 0 } }, null, 2),
-  );
+  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }, null, 2));
   const createdOrder = [];
   // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
   await withSharedStoreHandles(() => {
@@ -209,8 +199,7 @@ function scoreAssembled(assembled, labels) {
       if (firstStaleRank < 0 && stale.some((t) => c.includes(t))) firstStaleRank = i;
     }
     const present = firstCurrentRank >= 0;
-    const outranked =
-      firstStaleRank >= 0 && (firstCurrentRank < 0 || firstStaleRank < firstCurrentRank);
+    const outranked = firstStaleRank >= 0 && (firstCurrentRank < 0 || firstStaleRank < firstCurrentRank);
     if (present && !outranked) answered++;
   }
   return { answered, tokens };
@@ -262,9 +251,7 @@ function strengthSortedAssemble(entries, B) {
   // real tiers (1.0 vs 0.3) while the deterministic content key breaks within-tier
   // ties, making the strength-sorted columns byte-identical across runs.
   const sKey = (e) => Math.round((e.strength || 0) * 1000);
-  const sorted = [...entries].sort(
-    (a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''),
-  );
+  const sorted = [...entries].sort((a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''));
   const ctx = [];
   let used = 0;
   for (const e of sorted) {
@@ -355,10 +342,7 @@ async function runCell(seed, checkpoint) {
   const entriesA = loadAllEntries(A.root);
 
   const naive = scoreAssembled(naiveAssemble(entriesA, A.createdOrder, BUDGET), labels);
-  const recency = scoreAssembled(
-    await recencyWindowAssemble(entriesA, A.createdOrder, BUDGET, labels, A.root),
-    labels,
-  );
+  const recency = scoreAssembled(await recencyWindowAssemble(entriesA, A.createdOrder, BUDGET, labels, A.root), labels);
   const noLife = scoreAssembled(await unionPerFact(entriesA, BUDGET, labels, A.root), labels);
 
   // Store B: consolidated (hippo-full). Fresh build so A stays untouched.
@@ -450,9 +434,7 @@ function aggregate(cells) {
     const sorted = [...rows].sort((a, b) => a.seed - b.seed);
     const dFullVsNoLife = sorted.map((r) => r.qa['hippo-full'] - r.qa['hippo-no-lifecycle']);
     const dFullVsNaive = sorted.map((r) => r.qa['hippo-full'] - r.qa['naive-append']);
-    const dFullVsNoLifeSS = sorted.map(
-      (r) => r.qa['hippo-full-strength'] - r.qa['hippo-no-lifecycle-strength'],
-    );
+    const dFullVsNoLifeSS = sorted.map((r) => r.qa['hippo-full-strength'] - r.qa['hippo-no-lifecycle-strength']);
     perCheckpoint[cp] = {
       seeds: rows.length,
       meanMerged: mean(rows.map((r) => r.merged)),
@@ -479,9 +461,7 @@ function printMarkdown(agg, meta) {
     `Budget B: ${meta.budget} tokens | facts: ${meta.facts} | dupes/fact: ${meta.dupes} | seeds: ${meta.seeds} | checkpoints: ${meta.checkpoints.join(', ')}`,
   );
   lines.push('');
-  lines.push(
-    'HONEST-NULL eval: measures whatever the numbers are; no tuning toward a positive result.',
-  );
+  lines.push('HONEST-NULL eval: measures whatever the numbers are; no tuning toward a positive result.');
   lines.push('');
   for (const cp of meta.checkpoints) {
     const a = agg[cp];
@@ -522,15 +502,11 @@ function printMarkdown(agg, meta) {
 
 async function main() {
   if (!isEmbeddingAvailable()) {
-    console.error(
-      'NO_EMBEDDINGS - local embedding model unavailable; cannot run the physics path.',
-    );
+    console.error('NO_EMBEDDINGS - local embedding model unavailable; cannot run the physics path.');
     process.exit(2);
   }
   if (process.env.ANTHROPIC_API_KEY) {
-    console.error(
-      'ANTHROPIC_API_KEY is set; this harness must run hermetically. Unset it and re-run.',
-    );
+    console.error('ANTHROPIC_API_KEY is set; this harness must run hermetically. Unset it and re-run.');
     process.exit(2);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -562,12 +538,7 @@ async function main() {
 
   const agg = aggregate(cells);
   const results = {
-    meta: {
-      ...meta,
-      generatedAt: new Date().toISOString(),
-      checkpointCounts: CHECKPOINT_COUNTS,
-      honestNull: true,
-    },
+    meta: { ...meta, generatedAt: new Date().toISOString(), checkpointCounts: CHECKPOINT_COUNTS, honestNull: true },
     perCheckpoint: agg,
     cells,
   };

@@ -26,11 +26,7 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { injectStream } from '../../scripts/lifecycle-stress/inject.mjs';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeStore } from '../_helpers/make-root.js';
-import {
-  writeEntriesTogether,
-  loadAllEntries,
-  loadEmbeddingIndex,
-} from '../_helpers/root-forms.js';
+import { writeEntriesTogether, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
@@ -84,21 +80,14 @@ describe('lifecycle-stress injector', () => {
   });
 
   it('emits exactly scaleMemories memories with answer tokens in the first 120 chars', () => {
-    const { memories, labels } = injectStream({
-      seed: 3,
-      scaleMemories: 100,
-      numFacts: 6,
-      dupesPerFact: 3,
-    });
+    const { memories, labels } = injectStream({ seed: 3, scaleMemories: 100, numFacts: 6, dupesPerFact: 3 });
     expect(memories.length).toBe(100);
     expect(labels.length).toBe(6);
     // every fact member carries its answer token in the first 120 chars of line 1
     for (const lab of labels) {
       // Fact membership is identified by the answer token in content (eval tags are
       // not written to the store, to avoid an embedded oracle signal).
-      const members = memories.filter((m: { content: string }) =>
-        m.content.includes(lab.answerToken),
-      );
+      const members = memories.filter((m: { content: string }) => m.content.includes(lab.answerToken));
       expect(members.length).toBe(3);
       for (const m of members) {
         const firstLine120 = (m.content.split('\n')[0] || '').slice(0, 120);
@@ -129,11 +118,7 @@ describe('lifecycle-stress value-based metric', () => {
 
   it('credits a consolidated summary that carries the token (score by value, not id)', () => {
     const assembled = [
-      {
-        entry: {
-          content: '[Consolidated from 3 related memories]\n- T0 is ANS1111\n- T0 equals ANS1111',
-        },
-      },
+      { entry: { content: '[Consolidated from 3 related memories]\n- T0 is ANS1111\n- T0 equals ANS1111' } },
     ];
     // fact0 present via the summary; fact1 absent
     expect(scoreAssembled(assembled, labels).answered).toBe(1);
@@ -171,12 +156,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
 
   it('merges near-duplicate clusters and the summary carries each answer token', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    const { memories, labels } = injectStream({
-      seed: 42,
-      scaleMemories: 40,
-      numFacts: 4,
-      dupesPerFact: 3,
-    });
+    const { memories, labels } = injectStream({ seed: 42, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     writeEntriesTogether(
       root,
       memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
@@ -202,12 +182,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
 
   it('answers each queried fact via physicsSearch after consolidate (token present)', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    const { memories, labels } = injectStream({
-      seed: 11,
-      scaleMemories: 40,
-      numFacts: 4,
-      dupesPerFact: 3,
-    });
+    const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     writeEntriesTogether(
       root,
       memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
@@ -227,9 +202,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
         minResults: 1,
       });
       const present = res.some((r) => (r.entry.content || '').includes(lab.answerToken));
-      expect(present, `fact ${lab.factKey} token ${lab.answerToken} must be retrievable`).toBe(
-        true,
-      );
+      expect(present, `fact ${lab.factKey} token ${lab.answerToken} must be retrievable`).toBe(true);
     }
   });
 
@@ -239,12 +212,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     const { labels } = injectStream({ seed: 99, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     // Noise-only: facts are injected first, so the distractors are everything after
     // the fact members (numFacts*dupesPerFact = 2*2 = 4). No tag filter needed.
-    const noise = injectStream({
-      seed: 99,
-      scaleMemories: 40,
-      numFacts: 2,
-      dupesPerFact: 2,
-    }).memories.slice(2 * 2);
+    const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories.slice(2 * 2);
     expect(noise).toHaveLength(40 - 2 * 2);
     writeEntriesTogether(
       root,

@@ -9,9 +9,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
-const FETCH_UNAUTHORISED = resolve(__dirname, '..', '_helpers', 'fetch-unauthorised.cjs')
-  .split(sep)
-  .join('/');
+const FETCH_UNAUTHORISED = resolve(__dirname, '..', '_helpers', 'fetch-unauthorised.cjs').split(sep).join('/');
 const FAILING_COMMAND = ['--', 'node', '-e', 'process.exit(3)'];
 const SPAWN_TIMEOUT_MS = 60_000;
 // Each exit code once through the real entry, the preload a child reads from NODE_OPTIONS, and serve, which arms process handlers.
@@ -156,8 +154,7 @@ async function run(c: Case) {
     : await runCliAs(c.args, opts);
   codes.add(r.status);
   // The usage text grows with every verb; `hippo help` prints it, so only its presence is pinned here.
-  const stdout =
-    usage.length > 0 ? r.stdout.replace(usage, '<the text of hippo help>\n') : r.stdout;
+  const stdout = usage.length > 0 ? r.stdout.replace(usage, '<the text of hippo help>\n') : r.stdout;
   return { stdout: masked(stdout), stderr: masked(r.stderr), status: r.status };
 }
 

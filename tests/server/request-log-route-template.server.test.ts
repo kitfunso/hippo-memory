@@ -8,11 +8,7 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   vi.stubEnv('HIPPO_LOG', 'info');
-  handle = await serveKeyed({
-    hippoRoot: makeRoot('log-route-template'),
-    host: '127.0.0.1',
-    port: 0,
-  });
+  handle = await serveKeyed({ hippoRoot: makeRoot('log-route-template'), host: '127.0.0.1', port: 0 });
 });
 
 afterEach(async () => {

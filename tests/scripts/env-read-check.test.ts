@@ -35,9 +35,7 @@ describe('check-env-reads', () => {
     file('env.ts', 'export const x = process.env.A;\n');
     file('sub/b.ts', 'import { x } from "../env.js";\nexport const y = process.env.B ?? x;\n');
     file('c.ts', 'export const z = 1;\n');
-    expect(findEnvReads(dir, { 'env.ts': 'accessor module' })).toEqual([
-      { file: 'sub/b.ts', line: 2 },
-    ]);
+    expect(findEnvReads(dir, { 'env.ts': 'accessor module' })).toEqual([{ file: 'sub/b.ts', line: 2 }]);
   });
 
   it('flags a util/env import outside the roots and adapters, typed, dynamic or tenant-only', () => {
@@ -46,10 +44,7 @@ describe('check-env-reads', () => {
     file('domain/rerankers/a.ts', "import { envX } from '../../base/util/env.js';\n");
     file('base/memory/flag.ts', "import { envX } from '../util/env.js';\n");
     file('base/memory/typed.ts', "export {};\nimport type { EnvShape } from '../util/env.js';\n");
-    file(
-      'api/lazy.ts',
-      "export async function f() {\n  return import('../base/util/env.js');\n}\n",
-    );
+    file('api/lazy.ts', "export async function f() {\n  return import('../base/util/env.js');\n}\n");
     file('store/tenant-only.ts', "import { envTenant } from '../base/util/env.js';\n");
     file('surface/server/tenant.ts', "import { envTenant } from '../../base/util/env.js';\n");
     file('base/memory/other-env.ts', "import { x } from './env.js';\n");

@@ -29,8 +29,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const hippo = (...args: string[]): Promise<InProcessResult> =>
-  runInProcess(() => runCli(['node', 'hippo', ...args]));
+const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function ok(...args: string[]): Promise<string> {
   const r = await hippo(...args);
@@ -46,24 +45,14 @@ const grab = (text: string, re: RegExp): string => {
 
 describe('hippo decide', () => {
   it('records, supersedes by memory id, closes and lists a decision', async () => {
-    const first = await ok(
-      'decide',
-      'use sqlite for the local store',
-      '--context',
-      'no server to run',
-    );
+    const first = await ok('decide', 'use sqlite for the local store', '--context', 'no server to run');
     const firstId = grab(first, /Decision recorded: #(\d+)/);
     const firstMem = grab(first, /memory: (\S+)/);
     expect(await ok('decide', 'get', firstId)).toMatch(
       /status: active[\s\S]*text: use sqlite[\s\S]*context: no server to run/,
     );
 
-    const second = await ok(
-      'decide',
-      'use postgres for the shared store',
-      '--supersedes',
-      firstMem,
-    );
+    const second = await ok('decide', 'use postgres for the shared store', '--supersedes', firstMem);
     const secondId = grab(second, /Decision recorded: #(\d+)/);
     expect(second).toContain(`supersedes memory: ${firstMem} (decision #${firstId} superseded)`);
     expect(await ok('decide', 'get', firstId)).toContain(`superseded_by: #${secondId}`);
@@ -79,21 +68,13 @@ describe('hippo decide', () => {
   });
 
   it('refuses a valueless --supersedes, an unknown memory, an unknown id and a bad status', async () => {
-    expect((await hippo('decide', 'pick one', '--supersedes')).stderr).toContain(
-      '--supersedes requires a memory id',
-    );
+    expect((await hippo('decide', 'pick one', '--supersedes')).stderr).toContain('--supersedes requires a memory id');
     const unknownMem = await hippo('decide', 'pick one', '--supersedes', 'mem_nope');
-    expect([unknownMem.status, unknownMem.stderr]).toEqual([
-      1,
-      expect.stringContaining('Memory mem_nope not found.'),
-    ]);
+    expect([unknownMem.status, unknownMem.stderr]).toEqual([1, expect.stringContaining('Memory mem_nope not found.')]);
     expect((await hippo('decide', 'get', '999')).stderr).toContain('Decision 999 not found.');
     expect((await hippo('decide', 'get', 'abc')).stderr).toContain('Invalid decision id');
     const status = await hippo('decide', 'list', '--status', 'pending');
-    expect([status.status, status.stderr]).toEqual([
-      1,
-      expect.stringContaining('Invalid --status: "pending"'),
-    ]);
+    expect([status.status, status.stderr]).toEqual([1, expect.stringContaining('Invalid --status: "pending"')]);
     expect(await ok('decide', 'list')).toContain('No decisions.');
   });
 });
@@ -121,17 +102,7 @@ describe('hippo predict', () => {
     );
 
     expect(
-      await ok(
-        'predict',
-        'close',
-        id,
-        '--state',
-        'closed',
-        '--actual',
-        '8',
-        '--note',
-        'schema review slipped',
-      ),
+      await ok('predict', 'close', id, '--state', 'closed', '--actual', '8', '--note', 'schema review slipped'),
     ).toContain(`Prediction ${id} closed: state=closed actual=8`);
     expect(await ok('predict', 'show', id)).toMatch(
       /state: closed[\s\S]*estimate: 5 days[\s\S]*actual: 8[\s\S]*note: schema review slipped/,
@@ -169,45 +140,26 @@ describe('hippo predict', () => {
   ])(
     'refuses the partly numeric id in `%s %s %s` that the lenient parser used to read as a number',
     async (verb, sub, id) => {
-      const r = await hippo(
-        verb,
-        sub,
-        id,
-        ...(sub === 'close' && verb === 'predict' ? ['--state', 'closed'] : []),
-      );
-      expect([r.status, r.stderr]).toEqual([
-        1,
-        expect.stringContaining('expected a positive integer'),
-      ]);
+      const r = await hippo(verb, sub, id, ...(sub === 'close' && verb === 'predict' ? ['--state', 'closed'] : []));
+      expect([r.status, r.stderr]).toEqual([1, expect.stringContaining('expected a positive integer')]);
     },
   );
 
   it('refuses a missing class, bad numbers, a bad state and a closed filter without a class', async () => {
     expect((await hippo('predict', 'a claim')).stderr).toContain('--class is required');
-    expect(
-      (await hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon')).stderr,
-    ).toContain('Invalid --estimate: "soon"');
-    expect((await hippo('predict', 'close', '1', '--state', 'open')).stderr).toContain(
-      'Invalid --state: "open"',
+    expect((await hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon')).stderr).toContain(
+      'Invalid --estimate: "soon"',
     );
-    expect(
-      (await hippo('predict', 'close', '1', '--state', 'closed', '--actual', 'x')).stderr,
-    ).toContain('Invalid --actual: "x"');
-    expect((await hippo('predict', 'close', 'zero', '--state', 'closed')).stderr).toContain(
-      'Invalid prediction id',
+    expect((await hippo('predict', 'close', '1', '--state', 'open')).stderr).toContain('Invalid --state: "open"');
+    expect((await hippo('predict', 'close', '1', '--state', 'closed', '--actual', 'x')).stderr).toContain(
+      'Invalid --actual: "x"',
     );
-    expect((await hippo('predict', 'list', '--status', 'closed')).stderr).toContain(
-      'requires --class',
-    );
-    expect((await hippo('predict', 'list', '--status', 'later')).stderr).toContain(
-      'Invalid --status: "later"',
-    );
+    expect((await hippo('predict', 'close', 'zero', '--state', 'closed')).stderr).toContain('Invalid prediction id');
+    expect((await hippo('predict', 'list', '--status', 'closed')).stderr).toContain('requires --class');
+    expect((await hippo('predict', 'list', '--status', 'later')).stderr).toContain('Invalid --status: "later"');
     expect((await hippo('predict', 'list', '--limit', '0')).stderr).toContain('Invalid --limit');
     expect((await hippo('predict', 'show', '42')).stderr).toContain('Prediction 42 not found.');
     const usage = await hippo('predict');
-    expect([usage.status, usage.stderr]).toEqual([
-      1,
-      expect.stringContaining('Usage: hippo predict'),
-    ]);
+    expect([usage.status, usage.stderr]).toEqual([1, expect.stringContaining('Usage: hippo predict')]);
   });
 });

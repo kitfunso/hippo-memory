@@ -146,9 +146,7 @@ describe('isGitHubPullRequestReviewCommentEvent', () => {
   } satisfies GitHubPullRequestReviewCommentEvent;
 
   it('accepts a valid pull_request_review_comment payload', () => {
-    expect(isGitHubPullRequestReviewCommentEvent(fixture, 'pull_request_review_comment')).toBe(
-      true,
-    );
+    expect(isGitHubPullRequestReviewCommentEvent(fixture, 'pull_request_review_comment')).toBe(true);
   });
 
   it('rejects a malformed shape (comment missing user)', () => {

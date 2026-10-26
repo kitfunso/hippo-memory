@@ -29,9 +29,7 @@ import { copyTree } from '../_helpers/copy-tree.js';
 
 let p: Project;
 
-const { mk, rows, events, logs, lessons, lessonWith, list, read, doc } = toolFailureScratch(
-  () => p,
-);
+const { mk, rows, events, logs, lessons, lessonWith, list, read, doc } = toolFailureScratch(() => p);
 
 describe('store paths through a link', () => {
   it('TF9a a project reached through a junction and directly writes one store hash, and both paths read every row', async (ctx) => {
@@ -46,9 +44,7 @@ describe('store paths through a link', () => {
         ['tool-failure', 1, V],
         ['tool-failure', 2, V],
       ]);
-      expect(ev.map((e) => e.store_hash)).toEqual(
-        Array(2).fill(blockHash(realpathOrResolve(p.hippoRoot))),
-      );
+      expect(ev.map((e) => e.store_hash)).toEqual(Array(2).fill(blockHash(realpathOrResolve(p.hippoRoot))));
       for (const store of [p.hippoRoot, path.join(L, '.hippo')]) {
         const listing = list('tf9a', { store });
         expect(listing.entries.map((e) => e.event_id)).toEqual(ev.map((e) => e.id));
@@ -73,9 +69,7 @@ describe('store paths through a link', () => {
     try {
       await fail(p, 'tf9b', {}, { cwd: proj2 });
       const ev = events('tf9b', p.globalRoot);
-      expect(ev.map((e) => [e.event_type, e.turn_seq, e.ledger_version])).toEqual([
-        ['tool-failure', 1, V],
-      ]);
+      expect(ev.map((e) => [e.event_type, e.turn_seq, e.ledger_version])).toEqual([['tool-failure', 1, V]]);
       const want = blockHash(realpathOrResolve(p.globalRoot));
       expect(ev[0].store_hash).toBe(want);
       const lesson = String(lessons(p.globalRoot)[0].id);
@@ -111,17 +105,13 @@ describe('store paths through a link', () => {
       }
       const ev = events('tf10', p.globalRoot);
       const v4 = blockHash(realpathOrResolve(G));
-      expect(ev.map((e) => [e.turn_seq, e.ledger_version, e.store_hash])).toEqual(
-        [1, 2, 3].map((n) => [n, V, v4]),
-      );
+      expect(ev.map((e) => [e.turn_seq, e.ledger_version, e.store_hash])).toEqual([1, 2, 3].map((n) => [n, V, v4]));
       const onLink = { store: G, global: G };
       expect(list('tf10', onLink).entries.map((e) => e.event_id)).toEqual(ev.map((e) => e.id));
       // Raw SQL: the test is about the reader's version rule, and no binary writes a version 3 row any more.
       const db = new DatabaseSync(path.join(p.globalRoot, 'hippo.db'));
       try {
-        const set = db.prepare(
-          'UPDATE delivery_events SET ledger_version = 3, store_hash = ? WHERE id = ?',
-        );
+        const set = db.prepare('UPDATE delivery_events SET ledger_version = 3, store_hash = ? WHERE id = ?');
         set.run(blockHash(path.resolve(G)), num(ev[0].id));
         set.run(blockHash(path.resolve(G)), num(ev[1].id));
         set.run(v4, num(ev[2].id));
@@ -161,22 +151,14 @@ describe('controls', () => {
   it('N-TF1 a routine failure between two prompts leaves a delivered and a never-loaded class read unchanged, turns included', async () => {
     p = mk();
     for (let i = 0; i < 3; i++) {
-      seed(
-        p.hippoRoot,
-        `office note ${i}: the coffee machine schedule changes for team lunch on friday`,
-        {
-          created: `2026-06-0${i + 1}T00:00:00.000Z`,
-        },
-      );
+      seed(p.hippoRoot, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
+        created: `2026-06-0${i + 1}T00:00:00.000Z`,
+      });
     }
-    const away = seed(
-      p.hippoRoot,
-      'a lesson from another repo: the staging cluster needs a manual warmup',
-      {
-        originProject: 'some-other-project',
-        created: '2026-07-01T00:00:00.000Z',
-      },
-    );
+    const away = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
+      originProject: 'some-other-project',
+      created: '2026-07-01T00:00:00.000Z',
+    });
     const pin = String(rows('SELECT id FROM memories WHERE pinned = 1')[0].id);
     const turns = async (session: string, withFailure: boolean): Promise<TurnSpec[]> => {
       const a = await fireIn(p, session, P1);
@@ -261,19 +243,14 @@ describe('controls', () => {
   it("N-TF4 another tenant's failure under the same session id is not listed", async () => {
     p = mk();
     await fail(p, 'ntf4', { tool_use_id: 'toolu_mine' });
-    await fail(
-      p,
-      'ntf4',
-      { tool_use_id: 'toolu_theirs', error: ERR_BETA },
-      { env: { HIPPO_TENANT: 'other' } },
-    );
+    await fail(p, 'ntf4', { tool_use_id: 'toolu_theirs', error: ERR_BETA }, { env: { HIPPO_TENANT: 'other' } });
     expect(events('ntf4').map((e) => e.tool_use_id)).toEqual(['toolu_mine']);
     const theirs = events('ntf4', p.hippoRoot, 'other');
     expect(theirs.map((e) => [e.tenant_id, e.tool_use_id])).toEqual([['other', 'toolu_theirs']]);
     expect(list('ntf4').entries.map((e) => e.tool_use_id)).toEqual(['toolu_mine']);
-    expect(
-      list('ntf4', { tenant: 'other' }).entries.map((e) => [e.event_id, e.tool_use_id]),
-    ).toEqual([[theirs[0].id, 'toolu_theirs']]);
+    expect(list('ntf4', { tenant: 'other' }).entries.map((e) => [e.event_id, e.tool_use_id])).toEqual([
+      [theirs[0].id, 'toolu_theirs'],
+    ]);
   });
 
   it('N-TF5 a copied store lists nothing and notes the foreign row', async () => {
@@ -285,10 +262,7 @@ describe('controls', () => {
     const copy = path.join(copyProj, '.hippo');
     expect(events('ntf5', copy).map((e) => e.id)).toEqual([row.id]);
     expect(list('ntf5').entries).toHaveLength(1);
-    expect(list('ntf5', { store: copy })).toEqual({
-      entries: [],
-      notes: [`foreign-store:${row.id}`],
-    });
+    expect(list('ntf5', { store: copy })).toEqual({ entries: [], notes: [`foreign-store:${row.id}`] });
   });
 });
 
@@ -319,16 +293,10 @@ describe('invariance and the command line', () => {
     );
     const memories = loadAllEntries(at.hippoRoot, 'default')
       .filter((m) => m.source === 'tool-failure')
-      .map((m) => ({
-        content: m.content,
-        tags: m.tags,
-        source: m.source,
-        confidence: m.confidence,
-      }));
+      .map((m) => ({ content: m.content, tags: m.tags, source: m.source, confidence: m.confidence }));
     return { runs, log, memories };
   }
-  const count = (at: Project): number =>
-    num(rowsAt(at.hippoRoot, 'SELECT COUNT(*) AS c FROM delivery_events')[0].c);
+  const count = (at: Project): number => num(rowsAt(at.hippoRoot, 'SELECT COUNT(*) AS c FROM delivery_events')[0].c);
 
   it.each(Object.entries(CALLS))(
     'I4 %s: capture-error with the ledger off and on gives the same output, log row and memory',
@@ -347,8 +315,7 @@ describe('invariance and the command line', () => {
   it('TF-CLI the script prints the listing and refuses --memory, --key or a missing session', async () => {
     p = mk();
     await fail(p, 'cli', { tool_use_id: 'toolu_cli' });
-    const run = (...args: string[]) =>
-      spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
+    const run = (...args: string[]) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
     const ok = run('--store', p.hippoRoot, '--session', 'cli', '--tool-failures', '--no-global');
     expect(ok.status, ok.stderr).toBe(0);
     expect(JSON.parse(ok.stdout)).toEqual(JSON.parse(JSON.stringify(list('cli'))));

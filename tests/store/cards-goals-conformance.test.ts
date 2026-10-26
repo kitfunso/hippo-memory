@@ -24,22 +24,14 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 oneRequestPerTest();
 
 const START = Date.parse('2026-03-01T12:00:00.000Z');
-const MEMORIES = {
-  boosted: 'mem_goal_boosted',
-  decayed: 'mem_goal_decayed',
-  untouched: 'mem_goal_untouched',
-};
+const MEMORIES = { boosted: 'mem_goal_boosted', decayed: 'mem_goal_decayed', untouched: 'mem_goal_untouched' };
 
 let fixture: TwoTenantFixture;
 
 beforeAll(() => {
   fixture = seedTwoTenants();
   for (const [name, id] of Object.entries(MEMORIES)) {
-    writeEntry(fixture.dir, {
-      ...createMemory(`the ${name} note`, { tenantId: TENANT_A }),
-      id,
-      strength: 0.5,
-    });
+    writeEntry(fixture.dir, { ...createMemory(`the ${name} note`, { tenantId: TENANT_A }), id, strength: 0.5 });
   }
 });
 
@@ -65,10 +57,7 @@ function named<T>(store: HippoStore, value: T): T {
   return value === undefined ? value : JSON.parse(namedText(store, JSON.stringify(value)));
 }
 
-async function namedCall<G extends 'cards' | 'goals'>(
-  call: GroupCall<G, unknown>,
-  ...args: Parameters<typeof call>
-) {
+async function namedCall<G extends 'cards' | 'goals'>(call: GroupCall<G, unknown>, ...args: Parameters<typeof call>) {
   try {
     return named(args[1], await call(...args));
   } catch (err) {
@@ -78,10 +67,7 @@ async function namedCall<G extends 'cards' | 'goals'>(
 }
 
 /** Each call one second after the one before, its answer or error with every id named by place. */
-async function conforms<G extends 'cards' | 'goals'>(
-  group: G,
-  calls: readonly GroupCall<G, unknown>[],
-) {
+async function conforms<G extends 'cards' | 'goals'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
     return namedCall(call, methods, store);
@@ -103,25 +89,14 @@ describe('Cards', () => {
   const sortedDeps = (detail: { deps: { parents: string[]; children: string[] } } | null) =>
     detail && {
       ...detail,
-      deps: {
-        parents: [...detail.deps.parents].sort(),
-        children: [...detail.deps.children].sort(),
-      },
+      deps: { parents: [...detail.deps.parents].sort(), children: [...detail.deps.children].sort() },
     };
 
   it('creates, claims, beats, blocks, reviews and completes, promoting children whose parents are all done', async () => {
     const outcomes = await conforms('cards', [
-      create(TENANT_A, () => ({
-        title: 'parent one',
-        repo: 'hippo',
-        contract: 'tests pass',
-        budget: 3,
-      })),
+      create(TENANT_A, () => ({ title: 'parent one', repo: 'hippo', contract: 'tests pass', budget: 3 })),
       create(TENANT_A, () => ({ title: 'parent two' })),
-      create(TENANT_A, (s) => ({
-        title: 'child',
-        dependsOn: [idOf(s, 0), idOf(s, 1), idOf(s, 0)],
-      })),
+      create(TENANT_A, (s) => ({ title: 'child', dependsOn: [idOf(s, 0), idOf(s, 1), idOf(s, 0)] })),
       create(TENANT_B, () => ({ title: 'tenant b' })),
       (g) => g.create(TENANT_A, { title: '  ' }),
       (g) => g.create(TENANT_A, { title: 'bad budget', budget: 0 }),
@@ -158,17 +133,11 @@ describe('Cards', () => {
     ]);
     expect(outcomes[2]).toMatchObject({ value: { status: 'backlog' satisfies CardStatus } });
     expect(outcomes.slice(4, 7).every((o) => 'error' in o)).toBe(true);
-    expect(outcomes[10]).toMatchObject({
-      value: { runId: 1, status: 'running', assigneeRuntime: 'claude' },
-    });
+    expect(outcomes[10]).toMatchObject({ value: { runId: 1, status: 'running', assigneeRuntime: 'claude' } });
     expect(outcomes.slice(11, 13)).toEqual([{ value: null }, { value: null }]);
     expect(outcomes[23]).toMatchObject({ value: { runId: 2 } });
-    expect(outcomes[26]).toMatchObject({
-      value: { card: { status: 'done' }, promotedChildren: [] },
-    });
-    expect(outcomes[29]).toMatchObject({
-      value: { card: { status: 'done' }, promotedChildren: ['#2'] },
-    });
+    expect(outcomes[26]).toMatchObject({ value: { card: { status: 'done' }, promotedChildren: [] } });
+    expect(outcomes[29]).toMatchObject({ value: { card: { status: 'done' }, promotedChildren: ['#2'] } });
     expect(outcomes[30]).toHaveProperty('error');
   });
 
@@ -177,17 +146,13 @@ describe('Cards', () => {
       (status?: CardStatus): GroupCall<'cards', unknown> =>
       async (g) => {
         const seen: { cards: string[]; next: boolean }[] = [];
-        for await (const page of keysetPages((after) =>
-          g.list(TENANT_A, { status, limit: 2, after }),
-        )) {
+        for await (const page of keysetPages((after) => g.list(TENANT_A, { status, limit: 2, after }))) {
           seen.push({ cards: page.cards.map((c) => c.title), next: page.next !== null });
         }
         return seen;
       };
     const outcomes = await conforms('cards', [
-      ...['one', 'two', 'three', 'four', 'five'].map((title) =>
-        create(TENANT_A, () => ({ title })),
-      ),
+      ...['one', 'two', 'three', 'four', 'five'].map((title) => create(TENANT_A, () => ({ title }))),
       create(TENANT_B, () => ({ title: 'tenant b' })),
       (g, s) => g.claim(TENANT_A, idOf(s, 1), 'claude'),
       pages(),
@@ -246,18 +211,13 @@ describe('Cards', () => {
     expect(outcomes[9]).toEqual({ value: ['#0'] });
     expect(outcomes[11]).toMatchObject({ value: { status: 'ready', assigneeRuntime: null } });
     expect(outcomes[12]).toMatchObject({ value: { status: 'running' } });
-    expect(outcomes[14]).toMatchObject({
-      value: { card: { status: 'shelved' }, handoff: { summary: 'over to you' } },
-    });
+    expect(outcomes[14]).toMatchObject({ value: { card: { status: 'shelved' }, handoff: { summary: 'over to you' } } });
   });
 });
 
 describe('Goals', () => {
   const push =
-    (
-      tenantId: string,
-      goal: (store: HippoStore) => Omit<PushGoalOptions, 'tenantId'>,
-    ): GroupCall<'goals', unknown> =>
+    (tenantId: string, goal: (store: HippoStore) => Omit<PushGoalOptions, 'tenantId'>): GroupCall<'goals', unknown> =>
     async (g, s) => {
       const pushed = await g.push(tenantId, goal(s));
       keep(s, pushed.id, pushed.retrievalPolicyId);
@@ -280,9 +240,7 @@ describe('Goals', () => {
         audit: [],
       });
   const statuses = (o: Outcome<unknown> | undefined) =>
-    o && 'value' in o && Array.isArray(o.value)
-      ? o.value.map((goal: { status: string }) => goal.status)
-      : o;
+    o && 'value' in o && Array.isArray(o.value) ? o.value.map((goal: { status: string }) => goal.status) : o;
 
   it('caps the active stack at three, refuses a parent from another session, and passes an outcome to recalled rows', async () => {
     const outcomes = await conforms('goals', [
@@ -292,12 +250,7 @@ describe('Goals', () => {
         successCondition: 'tests pass',
         policy: { policyType: 'error-prioritized', weightRecency: 0.5 },
       })),
-      push(TENANT_A, (s) => ({
-        sessionId: 's1',
-        goalName: 'port',
-        level: 1,
-        parentGoalId: idOf(s, 0),
-      })),
+      push(TENANT_A, (s) => ({ sessionId: 's1', goalName: 'port', level: 1, parentGoalId: idOf(s, 0) })),
       push(TENANT_A, () => ({ sessionId: 's1', goalName: 'test', level: 1 })),
       push(TENANT_A, () => ({ sessionId: 's1', goalName: 'docs', level: 2 })),
       (g, s) => g.push(TENANT_A, { sessionId: 's2', goalName: 'stray', parentGoalId: idOf(s, 2) }),
@@ -319,14 +272,10 @@ describe('Goals', () => {
       (g) => g.complete(TENANT_A, 'g_nope', {}),
       (g, s) => g.complete(TENANT_B, idOf(s, 3), {}),
       (_g, s) =>
-        s
-          .entriesByIds(Object.values(MEMORIES), TENANT_A)
-          .then((rows) => rows.map((r) => [r.id, r.strength]).sort()),
+        s.entriesByIds(Object.values(MEMORIES), TENANT_A).then((rows) => rows.map((r) => [r.id, r.strength]).sort()),
       (g) => g.sessionGoals(TENANT_A, 's1'),
       (_g, s) =>
-        s
-          .activeGoals({ tenantId: TENANT_A, sessionId: 's1' })
-          .then((a) => ({ ...a, policies: [...a.policies] })),
+        s.activeGoals({ tenantId: TENANT_A, sessionId: 's1' }).then((a) => ({ ...a, policies: [...a.policies] })),
     ]);
     expect(outcomes.slice(4, 6).every((o) => 'error' in o)).toBe(true);
     expect(statuses(outcomes[7])).toEqual(['suspended', 'active', 'active', 'active']);
@@ -352,8 +301,7 @@ describe('Goals', () => {
       recalled(0, MEMORIES.boosted),
       (g, s) => g.complete(TENANT_B, idOf(s, 0), { outcomeScore: 0.9 }),
       (g) => g.sessionGoals(TENANT_A, 's1'),
-      (_g, s) =>
-        s.entriesByIds([MEMORIES.boosted], TENANT_A).then((rows) => rows.map((r) => r.strength)),
+      (_g, s) => s.entriesByIds([MEMORIES.boosted], TENANT_A).then((rows) => rows.map((r) => r.strength)),
       (g, s) => g.suspend(TENANT_A, idOf(s, 0)),
       (g, s) => g.resume(TENANT_A, idOf(s, 1)),
       (g, s) => g.complete(TENANT_A, idOf(s, 0), {}),

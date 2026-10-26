@@ -15,8 +15,7 @@ const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
     ({ route }) =>
-      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) ||
-      route.hippoDbOnly !== undefined,
+      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.hippoDbOnly !== undefined,
   ).map(({ key }) => requestLine(key));
 }
 
@@ -52,14 +51,7 @@ export function newKey(): TestKey {
   return {
     keyId,
     plaintext,
-    record: {
-      keyHash,
-      tenantId: 'default',
-      revokedAt: null,
-      role: 'member',
-      scopes: [],
-      expiresAt: null,
-    },
+    record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null },
   };
 }
 

@@ -34,12 +34,8 @@ interface EntityOwner {
   readonly source_object_id: number;
 }
 
-const refused = (status: number, error: string): Reply => ({
-  status,
-  text: JSON.stringify({ error }),
-});
-const idsIn = (reply: Reply): string =>
-  [...reply.text.matchAll(/\{"id":(\d+),/g)].map((m) => m[1]).join(',');
+const refused = (status: number, error: string): Reply => ({ status, text: JSON.stringify({ error }) });
+const idsIn = (reply: Reply): string => [...reply.text.matchAll(/\{"id":(\d+),/g)].map((m) => m[1]).join(',');
 const fieldIn = (reply: Reply, key: string): string | undefined =>
   new RegExp(`"${key}":"([^"]+)"`).exec(reply.text)?.[1];
 
@@ -76,11 +72,7 @@ class ObjectApi {
   async send(method: string, path: string, body?: Body, keyed = true): Promise<Reply> {
     const headers = new Headers({ 'content-type': 'application/json' });
     if (keyed) headers.set('authorization', `Bearer ${this.token}`);
-    const res = await fetch(`${this.handle.url}${path}`, {
-      method,
-      headers,
-      body: body && JSON.stringify(body),
-    });
+    const res = await fetch(`${this.handle.url}${path}`, { method, headers, body: body && JSON.stringify(body) });
     return { status: res.status, text: await res.text() };
   }
 
@@ -94,10 +86,7 @@ class ObjectApi {
         .all() as AuditRow[];
       return rows.map((r) => {
         const actor = r.actor === `api_key:${this.keyId}` ? 'key' : r.actor;
-        return `${r.op} ${actor} ${r.target_id} ${r.metadata_json}`.replace(
-          /\b[a-z]{3}_[0-9a-f]{12}\b/g,
-          '<mem>',
-        );
+        return `${r.op} ${actor} ${r.target_id} ${r.metadata_json}`.replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>');
       });
     } finally {
       closeHippoDb(db);
@@ -144,8 +133,7 @@ const TYPES: readonly TypeRow[] = [
     create: { text: '  Use Postgres  ', context: 'cheaper to run' },
     stored: '"decisionText":"Use Postgres"',
     nextBody: { text: 'Use SQLite' },
-    nextAgain:
-      "decision 1 is not active (status='superseded'); only active decisions can be superseded.",
+    nextAgain: "decision 1 is not active (status='superseded'); only active decisions can be superseded.",
     nextMissing: 'decision 9999 to supersede not found for tenant default',
     closeAgain: "decision 2 is not active (status='closed'); only active decisions can be closed.",
     audit: [
@@ -166,8 +154,7 @@ const TYPES: readonly TypeRow[] = [
     nextBody: { resolutionText: 'rolled back' },
     nextAgain: "incident 1 is not open (status='resolved'); only open incidents can be resolved.",
     nextMissing: 'incident 9999 not found for tenant default',
-    closeAgain:
-      "incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
+    closeAgain: "incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
     audit: [
       'incident_open key 1 {"incident_id":1,"has_context":false,"linked_memory_count":0}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -182,8 +169,7 @@ const TYPES: readonly TypeRow[] = [
     create: { processName: '  Release  ', steps: ['run the tests'] },
     stored: '"processName":"Release"',
     nextBody: { steps: ['sign the build'] },
-    nextAgain:
-      "process 1 is not active (status='superseded'); only active processes can be superseded.",
+    nextAgain: "process 1 is not active (status='superseded'); only active processes can be superseded.",
     nextMissing: 'process 9999 not found',
     closeAgain: "process 2 is not active (status='closed'); only active processes can be closed.",
     audit: [
@@ -202,8 +188,7 @@ const TYPES: readonly TypeRow[] = [
     create: { policyName: '  Retention  ', policyText: 'Delete logs after 90 days' },
     stored: '"policyName":"Retention"',
     nextBody: { policyText: 'Delete logs after 30 days' },
-    nextAgain:
-      "policy 1 is not active (status='superseded'); only active policies can be superseded.",
+    nextAgain: "policy 1 is not active (status='superseded'); only active policies can be superseded.",
     nextMissing: 'policy 9999 not found',
     closeAgain: "policy 2 is not active (status='closed'); only active policies can be closed.",
     audit: [
@@ -282,17 +267,13 @@ describe('typed objects over HTTP, one fresh store per case', () => {
       expect(made.status).toBe(201);
       expect(made.text).toContain(row.stored);
       await api.send('POST', `${row.path}/1/${row.next}`, row.nextBody);
-      expect(await api.send('POST', `${row.path}/1/${row.next}`, row.nextBody)).toEqual(
-        refused(409, row.nextAgain),
-      );
+      expect(await api.send('POST', `${row.path}/1/${row.next}`, row.nextBody)).toEqual(refused(409, row.nextAgain));
       expect(await api.send('POST', `${row.path}/9999/${row.next}`, row.nextBody)).toEqual(
         refused(404, row.nextMissing),
       );
       const last = row.next === 'supersede' ? 2 : 1;
       await api.send('POST', `${row.path}/${last}/close`);
-      expect(await api.send('POST', `${row.path}/${last}/close`)).toEqual(
-        refused(409, row.closeAgain),
-      );
+      expect(await api.send('POST', `${row.path}/${last}/close`)).toEqual(refused(409, row.closeAgain));
       expect(api.auditLines()).toEqual(row.audit);
     } finally {
       await api.stop();
@@ -300,11 +281,7 @@ describe('typed objects over HTTP, one fresh store per case', () => {
   });
 
   const MIRRORLESS: readonly (readonly [SourceObjectType, string, Body])[] = [
-    [
-      'policy',
-      '/v1/policies',
-      { policyName: 'Retention', policyText: 'Delete logs after 90 days' },
-    ],
+    ['policy', '/v1/policies', { policyName: 'Retention', policyText: 'Delete logs after 90 days' }],
     ['customer', '/v1/customer-notes', { customer: 'Acme Ltd', note: 'Prefers email' }],
     ['project', '/v1/project-briefs', { repo: 'acme/web', summary: 'Storefront app' }],
   ];
@@ -397,10 +374,7 @@ describe('typed objects over HTTP, one shared store', () => {
   );
 
   it('a policy made with no validFrom starts at the instant it was created', async () => {
-    const made = await api.send('POST', '/v1/policies', {
-      policyName: 'Access',
-      policyText: 'Two reviewers',
-    });
+    const made = await api.send('POST', '/v1/policies', { policyName: 'Access', policyText: 'Two reviewers' });
     expect(fieldIn(made, 'validFrom')).toBe(fieldIn(made, 'createdAt'));
     expect(fieldIn(made, 'createdAt')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
@@ -523,21 +497,16 @@ describe('typed-object CLI verbs', () => {
   });
 
   it.each(NOUNS)('hippo $noun $read: how each id form is read', async (row) => {
-    for (const raw of ['0', '-1'])
-      expect(await hippo(row.noun, row.read, raw)).toBe(row.refuses(raw));
+    for (const raw of ['0', '-1']) expect(await hippo(row.noun, row.read, raw)).toBe(row.refuses(raw));
     // Documents current behaviour: predict and decide read these as 1 and act on row 1; every other noun refuses them.
-    for (const raw of ['1.5', '1abc'])
-      expect(await hippo(row.noun, row.read, raw)).toBe(row.loose(raw));
+    for (const raw of ['1.5', '1abc']) expect(await hippo(row.noun, row.read, raw)).toBe(row.loose(raw));
   });
 
-  it.each(NOUNS.filter((row) => row.noun !== 'predict'))(
-    'hippo $noun list refuses --limit=0',
-    async (row) => {
-      expect(await hippo(row.noun, 'list', '--limit=0')).toBe(
-        'exit 1: Invalid --limit: "0". Must be a positive integer.',
-      );
-    },
-  );
+  it.each(NOUNS.filter((row) => row.noun !== 'predict'))('hippo $noun list refuses --limit=0', async (row) => {
+    expect(await hippo(row.noun, 'list', '--limit=0')).toBe(
+      'exit 1: Invalid --limit: "0". Must be a positive integer.',
+    );
+  });
 
   it.each(NOUNS.filter((row) => row.revise))(
     'hippo $noun supersede: what a second supersede of one row prints',

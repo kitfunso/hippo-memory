@@ -9,11 +9,7 @@ import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import {
-  carryingCalls,
-  lastSentState,
-  recordTokenUse,
-} from '../../src/store/sqlite/token-ledger.js';
+import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import { shouldSkipUnchanged } from '../../src/base/session/skip-unchanged.js';
 import { readApiCalls } from '../../src/infra/transcript-calls.js';
 import type { TokenEvent, TokenSummary, TokenSurface } from '../../src/base/ports/store/ledger.js';
@@ -23,12 +19,7 @@ import { estimateTokens } from '../../src/base/util/token-text.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  recordRereads,
-  writeEntry,
-  appendSessionEvent,
-  saveActiveTaskSnapshot,
-} from '../_helpers/root-forms.js';
+import { recordRereads, writeEntry, appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 const SESSION = 'sess-reread';
@@ -64,16 +55,7 @@ function book(
   sessionId = SESSION,
   tenantId = 'default',
 ): void {
-  recordTokenUse(db, {
-    tenantId,
-    sessionId,
-    surface,
-    event,
-    items: 1,
-    tokens,
-    hash: 'h1',
-    now: iso(at),
-  });
+  recordTokenUse(db, { tenantId, sessionId, surface, event, items: 1, tokens, hash: 'h1', now: iso(at) });
 }
 
 function ledgerRows(root: string, where: string): LedgerRow[] {
@@ -99,11 +81,7 @@ function rereadStamps(root: string): Array<[string, string]> {
 }
 
 /** One transcript line of a model call; a call that spans several lines repeats its message id. */
-function callLine(
-  id: string,
-  at: number,
-  opts: { model?: string; sidechain?: boolean; usage?: boolean } = {},
-): string {
+function callLine(id: string, at: number, opts: { model?: string; sidechain?: boolean; usage?: boolean } = {}): string {
   return JSON.stringify({
     type: 'assistant',
     isSidechain: opts.sidechain ?? false,
@@ -148,18 +126,12 @@ function scratch(root: string) {
     'PATH',
   ]);
   const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (!drop.has(key.toUpperCase())) env[key] = value;
+  for (const [key, value] of Object.entries(process.env)) if (!drop.has(key.toUpperCase())) env[key] = value;
   env.PATH = (process.env.PATH ?? '')
     .split(delimiter)
     .filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir))
     .join(delimiter);
-  Object.assign(env, {
-    HIPPO_HOME: join(root, 'global'),
-    HOME: home,
-    USERPROFILE: home,
-    APPDATA: home,
-  });
+  Object.assign(env, { HIPPO_HOME: join(root, 'global'), HOME: home, USERPROFILE: home, APPDATA: home });
   return { env, proj, globalRoot: join(root, 'global') };
 }
 
@@ -186,11 +158,7 @@ describe('model calls in a transcript', () => {
     writeFileSync(
       file,
       [
-        JSON.stringify({
-          type: 'user',
-          timestamp: iso(minute(0)),
-          message: { role: 'user', content: 'hi' },
-        }),
+        JSON.stringify({ type: 'user', timestamp: iso(minute(0)), message: { role: 'user', content: 'hi' } }),
         callLine('m1', minute(1)),
         callLine('m1', minute(1.1)),
         callLine('side', minute(2), { sidechain: true }),
@@ -275,13 +243,7 @@ describe('recordRereads', () => {
       expect(recordRereads(root, 'default', SESSION, calls)).toBe(430);
     }
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
-      {
-        tenant_id: 'default',
-        session_id: SESSION,
-        surface: 'compact_resume',
-        items: 1,
-        tokens: 50,
-      },
+      { tenant_id: 'default', session_id: SESSION, surface: 'compact_resume', items: 1, tokens: 50 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 3, tokens: 300 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook_recall', items: 2, tokens: 80 },
     ]);
@@ -292,9 +254,7 @@ describe('recordRereads', () => {
     ]);
     withDb(root, (db) => {
       expect(lastSentState(db, 'default', SESSION, 'hook')).toEqual(before);
-      expect(shouldSkipUnchanged(lastSentState(db, 'default', SESSION, 'hook'), 'h1', 0)).toBe(
-        true,
-      );
+      expect(shouldSkipUnchanged(lastSentState(db, 'default', SESSION, 'hook'), 'h1', 0)).toBe(true);
     });
   });
 
@@ -364,15 +324,7 @@ describe('__session-end-worker counts re-reads', async () => {
   async function worker(transcript: string, spawned = false): Promise<string> {
     const log = join(root, 'session-end.log');
     const result = await hippo(
-      [
-        '__session-end-worker',
-        '--log-file',
-        log,
-        '--transcript',
-        transcript,
-        '--session-id',
-        SESSION,
-      ],
+      ['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION],
       proj,
       env,
       undefined,
@@ -387,10 +339,7 @@ describe('__session-end-worker counts re-reads', async () => {
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', sent, 100));
     withDb(globalRoot, (db) => book(db, 'hook_recall', 'inject', sent, 30));
     const transcript = join(root, `${SESSION}.jsonl`);
-    writeFileSync(
-      transcript,
-      [1, 2, 3].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n',
-    );
+    writeFileSync(transcript, [1, 2, 3].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n');
 
     for (let pass = 0; pass < 2; pass++) {
       expect(await worker(transcript, pass === 0)).toContain(
@@ -410,21 +359,10 @@ describe('__session-end-worker counts re-reads', async () => {
     const sent = minute(0);
     withDb(globalRoot, (db) => book(db, 'hook', 'inject', sent, 100));
     const transcript = join(root, `${SESSION}.jsonl`);
-    writeFileSync(
-      transcript,
-      [1, 2].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n',
-    );
+    writeFileSync(transcript, [1, 2].map((n) => callLine(`m${n}`, sent + n * 10_000)).join('\n') + '\n');
     const log = join(root, 'session-end.log');
     const result = await hippo(
-      [
-        '__session-end-worker',
-        '--log-file',
-        log,
-        '--transcript',
-        transcript,
-        '--session-id',
-        SESSION,
-      ],
+      ['__session-end-worker', '--log-file', log, '--transcript', transcript, '--session-id', SESSION],
       proj,
       env,
     );
@@ -438,16 +376,10 @@ describe('__session-end-worker counts re-reads', async () => {
     const sent = minute(0) - 2 * DAY_MS;
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', sent, 100));
     const transcript = join(root, `${SESSION}.jsonl`);
-    const calls = [
-      callLine('m1', sent + 60_000),
-      callLine('m2', sent + 120_000),
-      callLine('m3', Date.now() - 60_000),
-    ];
+    const calls = [callLine('m1', sent + 60_000), callLine('m2', sent + 120_000), callLine('m3', Date.now() - 60_000)];
     writeFileSync(transcript, calls.join('\n') + '\n');
     for (let pass = 0; pass < 2; pass++) {
-      expect(await worker(transcript)).toContain(
-        `re-read 200 tokens over 3 model calls for session ${SESSION}`,
-      );
+      expect(await worker(transcript)).toContain(`re-read 200 tokens over 3 model calls for session ${SESSION}`);
     }
     const tokens = async (days: string): Promise<TokenSummary> =>
       JSON.parse((await hippo(['tokens', '--days', days, '--json'], proj, env)).stdout);
@@ -467,9 +399,7 @@ describe('__session-end-worker counts re-reads', async () => {
 
   it('logs one line and books nothing when the transcript cannot be read', async () => {
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', Date.now() - 60_000, 100));
-    const lines = (await worker(join(root, 'missing.jsonl')))
-      .split('\n')
-      .filter((line) => line.includes('re-read'));
+    const lines = (await worker(join(root, 'missing.jsonl'))).split('\n').filter((line) => line.includes('re-read'));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('skip re-read count: cannot read the transcript');
     expect(ledgerRows(join(proj, '.hippo'), `event = 'reread'`)).toEqual([]);
@@ -639,8 +569,7 @@ describe('compact-resume books the block it prints', () => {
     const store = join(proj, '.hippo');
     initTestStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
-    for (const suffix of ['-wal', '-shm'])
-      rmSync(join(store, `hippo.db${suffix}`), { force: true });
+    for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
     const result = await hippo(['compact-resume'], proj, env, payload);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
@@ -651,8 +580,7 @@ describe('compact-resume books the block it prints', () => {
     const store = join(proj, '.hippo');
     initTestStore(store);
     writeFileSync(join(store, 'hippo.db'), 'not a sqlite file', 'utf8');
-    for (const suffix of ['-wal', '-shm'])
-      rmSync(join(store, `hippo.db${suffix}`), { force: true });
+    for (const suffix of ['-wal', '-shm']) rmSync(join(store, `hippo.db${suffix}`), { force: true });
     const loud = await hippo(['compact-resume'], proj, env, payload);
     expect(loud.stderr).toContain('[hippo] warn: hippo compact-resume: skipped:');
     const quiet = await hippo(['compact-resume'], proj, { ...env, HIPPO_LOG: 'error' }, payload);
@@ -666,16 +594,8 @@ describe("a sub-agent's hooks", () => {
   let env: NodeJS.ProcessEnv;
   let proj: string;
   let store: string;
-  const HOOK = [
-    'context',
-    '--pinned-only',
-    '--include-recent',
-    '5',
-    '--format',
-    'additional-context',
-  ];
-  const main = (fields: Record<string, string> = {}): string =>
-    JSON.stringify({ session_id: SESSION, ...fields });
+  const HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
+  const main = (fields: Record<string, string> = {}): string => JSON.stringify({ session_id: SESSION, ...fields });
   // Inside a sub-agent the payload keeps the parent's session_id and adds agent_id (and agent_type).
   const sub = (fields: Record<string, string> = {}): string =>
     main({ agent_id: 'agent-1', agent_type: 'Explore', ...fields });
@@ -704,18 +624,10 @@ describe("a sub-agent's hooks", () => {
       }),
     );
     const parentEnv = { ...env, CLAUDE_CODE_SESSION_ID: SESSION };
-    expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout).toContain(
-      'NEVER force-push',
-    );
-    expect((await hippo(HOOK, proj, parentEnv, sub({ prompt: 'hi' }))).stdout).toContain(
-      'NEVER force-push',
-    );
-    expect(
-      ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id IS NULL`),
-    ).toHaveLength(1);
-    expect(
-      ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id = '${SESSION}'`),
-    ).toHaveLength(1);
+    expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout).toContain('NEVER force-push');
+    expect((await hippo(HOOK, proj, parentEnv, sub({ prompt: 'hi' }))).stdout).toContain('NEVER force-push');
+    expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id IS NULL`)).toHaveLength(1);
+    expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id = '${SESSION}'`)).toHaveLength(1);
     expect(ledgerRows(store, `event = 'skip'`)).toEqual([]);
     // Control: the parent's own repeat still skips.
     expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout.trim()).toBe('');
@@ -736,13 +648,10 @@ describe("a sub-agent's hooks", () => {
       source: 'pre-compact',
       sessionId: SESSION,
     });
-    withDb(store, (db) =>
-      db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY_MS)),
-    );
+    withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY_MS)));
     expect((await hippo(HOOK, proj, env, sub({ prompt: 'hi' }))).stdout).toContain('parent task');
     // Control: another session's hook still gets the pin but no longer sees the stale snapshot.
-    const other = (await hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' })))
-      .stdout;
+    const other = (await hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' }))).stdout;
     expect(other).toContain('NEVER force-push');
     expect(other).not.toContain('parent task');
   });
@@ -760,21 +669,14 @@ describe("a sub-agent's hooks", () => {
     expect(result.stdout).toBe('');
     expect(ledgerRows(store, `surface = 'compact_resume'`)).toEqual([]);
     // Control: the parent's own compaction restores it.
-    expect(
-      (await hippo(['compact-resume'], proj, env, main({ source: 'compact' }))).stdout,
-    ).toContain('parent task');
+    expect((await hippo(['compact-resume'], proj, env, main({ source: 'compact' }))).stdout).toContain('parent task');
   });
 
   it("leaves the parent's inject-only-on-change state alone when a sub-agent compacts", async () => {
     withDb(store, (db) => book(db, 'hook', 'inject', Date.now() - 60_000, 100));
-    expect(
-      (await hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' }))).status,
-    ).toBe(0);
+    expect((await hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' }))).status).toBe(0);
     expect((await hippo(['compact-resume'], proj, env, sub({ source: 'compact' }))).status).toBe(0);
-    expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toEqual({
-      hash: 'h1',
-      skipsSince: 0,
-    });
+    expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toEqual({ hash: 'h1', skipsSince: 0 });
     // Control: the parent's own compaction resets it.
     await hippo(['compact-resume'], proj, env, main({ source: 'compact' }));
     expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toBeNull();
@@ -811,12 +713,7 @@ describe('re-read reports', () => {
       hookSessions: 2,
       rereadSessions: 1,
     });
-    expect(
-      json.surfaces.map((s: { surface: string; tokensReread: number }) => [
-        s.surface,
-        s.tokensReread,
-      ]),
-    ).toEqual([
+    expect(json.surfaces.map((s: { surface: string; tokensReread: number }) => [s.surface, s.tokensReread])).toEqual([
       ['hook', 200],
       ['compact_resume', 50],
       ['recall', 0],
@@ -827,9 +724,7 @@ describe('re-read reports', () => {
     expect(text).toMatch(/surface\s+sent\s+tokens\s+skipped\s+saved\s+re-read\n/);
     expect(text).toMatch(/compact_resume\s+1\s+50\s+0\s+0\s+50\n/);
     // s2 sent through the CLI only, so its re-reads can never be counted and it stays out of the coverage.
-    expect(text).toContain(
-      'Re-read by later model calls until compaction: 250 tokens, counted for 1 of 2 sessions.',
-    );
+    expect(text).toContain('Re-read by later model calls until compaction: 250 tokens, counted for 1 of 2 sessions.');
     expect(text).toContain(
       'Re-reads are counted for hook and compact-resume blocks when a session ends; other surfaces, and open or crashed sessions, show sent only.',
     );

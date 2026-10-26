@@ -18,8 +18,7 @@ export function replaceDetectedConflicts(
 ): void {
   onHandle(
     hippoRoot,
-    (db) =>
-      conflictsSql.replaceDetectedConflicts(db, storeFilesOf(hippoRoot), detected, detectedAt),
+    (db) => conflictsSql.replaceDetectedConflicts(db, storeFilesOf(hippoRoot), detected, detectedAt),
     openStore,
   );
 }

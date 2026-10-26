@@ -13,13 +13,7 @@ import { stripComments } from './lib/source-text.mjs';
 
 const BASELINE = '.caught-error-logs-baseline.json';
 const LOGGERS = new Set(['log', 'logger']);
-const LISTENER_METHODS = new Set([
-  'on',
-  'once',
-  'addListener',
-  'prependListener',
-  'addEventListener',
-]);
+const LISTENER_METHODS = new Set(['on', 'once', 'addListener', 'prependListener', 'addEventListener']);
 
 const isLogCall = (n) =>
   ts.isCallExpression(n) &&
@@ -32,26 +26,18 @@ const isErrorFieldsCall = (n) =>
 
 // errorClassFields keeps the class and errno but not the text or stack, for a line that must not carry caller data.
 const isErrorClassFieldsCall = (n) =>
-  ts.isCallExpression(n) &&
-  ts.isIdentifier(n.expression) &&
-  n.expression.text === 'errorClassFields';
+  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorClassFields';
 
 /** True for `errorFields(x).errorClass`, `errorFields(x)['errorClass']` and `const { errorClass } = errorFields(x)`. */
 function readsOneField(call) {
   const p = call.parent;
-  if (
-    (ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) &&
-    p.expression === call
-  )
-    return true;
+  if ((ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === call) return true;
   return ts.isVariableDeclaration(p) && p.initializer === call && ts.isObjectBindingPattern(p.name);
 }
 
 // expectedErrorText (src/base/util/log.ts) names an error the caller classified as expected.
 const isExpectedErrorTextCall = (n) =>
-  ts.isCallExpression(n) &&
-  ts.isIdentifier(n.expression) &&
-  n.expression.text === 'expectedErrorText';
+  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'expectedErrorText';
 
 /** True when some node under `call` passes `match`. */
 function contains(call, match) {
@@ -69,8 +55,7 @@ const carriesErrorFields = (call) =>
   contains(call, (n) => (isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n));
 
 /** True for a `debug` line carrying expectedErrorText(...): an expected error earns that one line with no stack. */
-const isExpectedDebugLine = (call) =>
-  call.expression.name.text === 'debug' && contains(call, isExpectedErrorTextCall);
+const isExpectedDebugLine = (call) => call.expression.name.text === 'debug' && contains(call, isExpectedErrorTextCall);
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
 
@@ -79,12 +64,7 @@ function namedFunctions(sf) {
   const byName = new Map();
   const visit = (n) => {
     if (ts.isFunctionDeclaration(n) && n.name && n.body) byName.set(n.name.text, n.body);
-    if (
-      ts.isVariableDeclaration(n) &&
-      ts.isIdentifier(n.name) &&
-      n.initializer &&
-      isFunction(n.initializer)
-    ) {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && isFunction(n.initializer)) {
       byName.set(n.name.text, n.initializer.body);
     }
     ts.forEachChild(n, visit);
@@ -96,19 +76,9 @@ function namedFunctions(sf) {
 /** The listener of `x.on('error', fn)`, `x.once('error', fn)` or `addEventListener('error', fn)`, inline or by name. */
 function errorListenerBodies(node, functions) {
   const callee = node.expression;
-  const method = ts.isPropertyAccessExpression(callee)
-    ? callee.name.text
-    : ts.isIdentifier(callee)
-      ? callee.text
-      : '';
+  const method = ts.isPropertyAccessExpression(callee) ? callee.name.text : ts.isIdentifier(callee) ? callee.text : '';
   const [event, listener] = node.arguments;
-  if (
-    !LISTENER_METHODS.has(method) ||
-    !event ||
-    !ts.isStringLiteralLike(event) ||
-    event.text !== 'error'
-  )
-    return [];
+  if (!LISTENER_METHODS.has(method) || !event || !ts.isStringLiteralLike(event) || event.text !== 'error') return [];
   if (listener && isFunction(listener)) return [listener.body];
   const named = listener && ts.isIdentifier(listener) ? functions.get(listener.text) : undefined;
   return named ? [named] : [];
@@ -120,9 +90,7 @@ const ERROR_PARAM = /^(?:err|error|e|[a-z]\w*(?:Err|Error))$/;
 function errorParamBody(node) {
   const fn = ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || isFunction(node);
   if (!fn || !node.body) return [];
-  return node.parameters.some((p) => ts.isIdentifier(p.name) && ERROR_PARAM.test(p.name.text))
-    ? [node.body]
-    : [];
+  return node.parameters.some((p) => ts.isIdentifier(p.name) && ERROR_PARAM.test(p.name.text)) ? [node.body] : [];
 }
 
 /** The bodies a node hands to the failure path: a catch block, a `.catch(...)` callback, an 'error' listener or a
@@ -144,13 +112,7 @@ function failureBodies(node, functions) {
  * @returns {number[]}
  */
 export function unfieldedLogLines(text) {
-  const sf = ts.createSourceFile(
-    'x.ts',
-    stripComments(text),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const hits = new Map();
   const functions = namedFunctions(sf);
   const collect = (node) => {
@@ -174,13 +136,7 @@ export function unfieldedLogLines(text) {
  */
 export function partialPickLines(text) {
   if (!text.includes('errorFields')) return [];
-  const sf = ts.createSourceFile(
-    'x.ts',
-    stripComments(text),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const lines = [];
   const visit = (node) => {
     if (isErrorFieldsCall(node) && readsOneField(node)) {
@@ -205,9 +161,7 @@ const usesErrorText = (root, name) =>
         ts.isIdentifier(n.expression) &&
         (n.expression.text === 'errorMessage' || n.expression.text === 'String') &&
         n.arguments.some((a) => isNamed(a, name))) ||
-      (ts.isPropertyAccessExpression(n) &&
-        n.name.text === 'message' &&
-        isNamed(n.expression, name)) ||
+      (ts.isPropertyAccessExpression(n) && n.name.text === 'message' && isNamed(n.expression, name)) ||
       (ts.isTemplateSpan(n) && isNamed(n.expression, name)),
   );
 
@@ -218,19 +172,11 @@ const usesErrorText = (root, name) =>
  * @returns {number[]}
  */
 export function resultOnlyCatchLines(text) {
-  const sf = ts.createSourceFile(
-    'x.ts',
-    stripComments(text),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sf = ts.createSourceFile('x.ts', stripComments(text), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const lines = [];
   const visit = (node) => {
     const name =
-      ts.isCatchClause(node) &&
-      node.variableDeclaration &&
-      ts.isIdentifier(node.variableDeclaration.name)
+      ts.isCatchClause(node) && node.variableDeclaration && ts.isIdentifier(node.variableDeclaration.name)
         ? node.variableDeclaration.name.text
         : null;
     if (name !== null) {
@@ -243,8 +189,7 @@ export function resultOnlyCatchLines(text) {
           n.arguments.some((a) => usesErrorText(a, name)),
       );
       const logsFields = contains(node.block, (n) => isLogCall(n) && carriesErrorFields(n));
-      if (pushesError && !logsFields)
-        lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
+      if (pushesError && !logsFields) lines.push(sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
     }
     ts.forEachChild(node, visit);
   };
@@ -287,9 +232,7 @@ export function findPartialPicks(srcDir) {
   return listSourceFiles(root)
     .sort()
     .flatMap((p) =>
-      partialPickLines(readFileSync(p, 'utf8')).map(
-        (line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`,
-      ),
+      partialPickLines(readFileSync(p, 'utf8')).map((line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`),
     );
 }
 
@@ -303,9 +246,7 @@ export function findResultOnlyCatches(srcDir) {
   return listSourceFiles(root)
     .sort()
     .flatMap((p) =>
-      resultOnlyCatchLines(readFileSync(p, 'utf8')).map(
-        (line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`,
-      ),
+      resultOnlyCatchLines(readFileSync(p, 'utf8')).map((line) => `${relative(root, p).replace(/\\/g, '/')}:${line}`),
     );
 }
 
@@ -321,18 +262,13 @@ function readBaseline() {
 
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const counts = Object.fromEntries(
-    Object.entries(countUnfieldedLogs('src')).map(([f, n]) => [`src/${f}`, n]),
-  );
+  const counts = Object.fromEntries(Object.entries(countUnfieldedLogs('src')).map(([f, n]) => [`src/${f}`, n]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const base = readBaseline();
   const picks = findPartialPicks('src');
   if (picks.length > 0) {
-    for (const where of picks)
-      console.error(`src/${where}: reads one field of errorFields(...) and drops the rest`);
-    console.error(
-      'Fix: hand errorFields(err) on whole, or use errorClassFields(err) where the text must stay out.',
-    );
+    for (const where of picks) console.error(`src/${where}: reads one field of errorFields(...) and drops the rest`);
+    console.error('Fix: hand errorFields(err) on whole, or use errorClassFields(err) where the text must stay out.');
     process.exit(1);
   }
   const resultOnly = findResultOnlyCatches('src');
@@ -340,9 +276,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const where of resultOnly) {
       console.error(`src/${where}: the caught error goes only into a result array, not a log`);
     }
-    console.error(
-      'Fix: log it with errorFields(err) in the same catch, then keep the result line.',
-    );
+    console.error('Fix: log it with errorFields(err) in the same catch, then keep the result line.');
     process.exit(1);
   }
   const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));
@@ -355,9 +289,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`Wrote ${BASELINE}: ${total} calls over ${Object.keys(counts).length} files.`);
   } else if (risen.length > 0) {
     for (const [f, n] of risen) {
-      console.error(
-        `${f}: ${n} log calls in a failure path without errorFields(err) (baseline ${base[f] ?? 0})`,
-      );
+      console.error(`${f}: ${n} log calls in a failure path without errorFields(err) (baseline ${base[f] ?? 0})`);
     }
     console.error(
       'Fix: pass errorFields(err) from src/base/util/log.ts as the fields argument, or spread it into the existing fields.',

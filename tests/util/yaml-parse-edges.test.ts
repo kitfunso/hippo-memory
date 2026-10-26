@@ -10,12 +10,7 @@ describe('parseFrontmatter scalars', () => {
   });
 
   it('reads a bare word as a string and null, true and false as their values', () => {
-    expect(parse(['a: hello', 'b: null', 'c: true', 'd: false'])).toEqual({
-      a: 'hello',
-      b: null,
-      c: true,
-      d: false,
-    });
+    expect(parse(['a: hello', 'b: null', 'c: true', 'd: false'])).toEqual({ a: 'hello', b: null, c: true, d: false });
   });
 
   it('keeps only the text after the first colon as the value', () => {
@@ -33,18 +28,13 @@ describe('parseFrontmatter lists', () => {
   });
 
   it('stops a block list at the first line that is not an item', () => {
-    expect(parse(['tags:', '  - one', '  - two', 'next: 1'])).toEqual({
-      tags: ['one', 'two'],
-      next: 1,
-    });
+    expect(parse(['tags:', '  - one', '  - two', 'next: 1'])).toEqual({ tags: ['one', 'two'], next: 1 });
   });
 });
 
 describe('dumpFrontmatter', () => {
   it('writes the fences and one line per key, in insertion order', () => {
-    expect(dumpFrontmatter({ b: 1, a: ['x', 'y z'], c: null })).toBe(
-      '---\nb: 1\na: [x, y z]\nc: null\n---',
-    );
+    expect(dumpFrontmatter({ b: 1, a: ['x', 'y z'], c: null })).toBe('---\nb: 1\na: [x, y z]\nc: null\n---');
   });
 
   it('quotes an empty list item', () => {

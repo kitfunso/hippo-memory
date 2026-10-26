@@ -35,12 +35,7 @@ async function recallOver(url: string, via: Surface, args: Args): Promise<Recall
     // SAFETY: every branch call is valid, so /v1/memories answers with a serialised RecallResult.
     return (await res.json()) as RecallResult;
   }
-  const rpc = {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: 'hippo_recall', arguments: args },
-  };
+  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
   const res = await fetch(`${url}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -48,10 +43,7 @@ async function recallOver(url: string, via: Surface, args: Args): Promise<Recall
   });
   expect(res.status).toBe(200);
   // SAFETY: /mcp answers tools/call with a JSON-RPC reply whose result is { content: [{ text }] }, or with an error.
-  const reply = (await res.json()) as {
-    result?: { content?: { text: string }[] };
-    error?: unknown;
-  };
+  const reply = (await res.json()) as { result?: { content?: { text: string }[] }; error?: unknown };
   expect(reply.error).toBeUndefined();
   return reply.result!.content![0]!.text;
 }
@@ -61,8 +53,7 @@ function predictionId(root: string): string {
   const db = openHippoDb(root);
   try {
     // SAFETY: the SELECT projects exactly one column, memory_id, and the seed saves one prediction.
-    return (db.prepare('SELECT memory_id FROM predictions').get() as { memory_id: string })
-      .memory_id;
+    return (db.prepare('SELECT memory_id FROM predictions').get() as { memory_id: string }).memory_id;
   } finally {
     closeHippoDb(db);
   }
@@ -107,14 +98,7 @@ async function runBranch(via: Surface, branch: Branch): Promise<Ran> {
   }
 }
 
-const FILLS = [
-  'mem_p_fill0',
-  'mem_p_fill1',
-  'mem_p_fill2',
-  'mem_p_fill3',
-  'mem_p_fill4',
-  'mem_p_fill5',
-];
+const FILLS = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
 /** MCP's engine order over the local store plus the port-branch rows; the goal row sinks to the end with no session. */
 const ENGINE = [
   'mem_p_plain',
@@ -169,14 +153,8 @@ const WANT = new Map<string, Record<Surface, Want>>(
         ledger: 'http_recall 10 -',
         check: (reply) => {
           const c = body(reply).continuity!;
-          expect(c.activeSnapshot).toMatchObject({
-            task: 'ship the eu cluster',
-            next_step: 'run the canary',
-          });
-          expect(c.sessionHandoff).toMatchObject({
-            summary: 'handoff after the canary',
-            nextAction: 'promote it',
-          });
+          expect(c.activeSnapshot).toMatchObject({ task: 'ship the eu cluster', next_step: 'run the canary' });
+          expect(c.sessionHandoff).toMatchObject({ summary: 'handoff after the canary', nextAction: 'promote it' });
           expect(c.recentSessionEvents.map((e) => e.content)).toEqual(['canary passed']);
           expect(body(reply).continuityTokens).toBeGreaterThan(0);
         },
@@ -238,14 +216,7 @@ const WANT = new Map<string, Record<Surface, Want>>(
     },
     'forward claim': {
       http: {
-        ids: [
-          'mem_p_pinned',
-          'mem_p_plain',
-          'mem_x_raw',
-          'mem_x_child1',
-          'mem_x_child2',
-          ...FILLS.slice(0, 5),
-        ],
+        ids: ['mem_p_pinned', 'mem_p_plain', 'mem_x_raw', 'mem_x_child1', 'mem_x_child2', ...FILLS.slice(0, 5)],
         audit: [SKIPPED, recallRow(10), HINT],
         trace: 'api 10 -',
         ledger: 'http_recall 10 -',
@@ -290,29 +261,12 @@ const WANT = new Map<string, Record<Surface, Want>>(
       },
     },
     'scope team-alpha': {
-      http: {
-        ids: ['mem_p_scoped'],
-        audit: [SKIPPED, recallRow(1)],
-        trace: 'api 1 -',
-        ledger: 'http_recall 1 -',
-      },
-      mcp: {
-        ids: ['mem_p_scoped'],
-        audit: [recallRow(1), SKIPPED],
-        trace: 'mcp 1 -',
-        ledger: 'mcp_recall 0 -',
-      },
+      http: { ids: ['mem_p_scoped'], audit: [SKIPPED, recallRow(1)], trace: 'api 1 -', ledger: 'http_recall 1 -' },
+      mcp: { ids: ['mem_p_scoped'], audit: [recallRow(1), SKIPPED], trace: 'mcp 1 -', ledger: 'mcp_recall 0 -' },
     },
     'no terms': {
       http: {
-        ids: [
-          'mem_x_child1',
-          'mem_x_child2',
-          'mem_p_pinned',
-          'mem_x_cafe',
-          'mem_x_summary',
-          ...FILLS.slice(0, 5),
-        ],
+        ids: ['mem_x_child1', 'mem_x_child2', 'mem_p_pinned', 'mem_x_cafe', 'mem_x_summary', ...FILLS.slice(0, 5)],
         audit: [SKIPPED, recallRow(10)],
         trace: 'api 10 -',
         ledger: 'http_recall 10 -',
@@ -330,30 +284,13 @@ const WANT = new Map<string, Record<Surface, Want>>(
       },
     },
     'LIKE path': {
-      http: {
-        ids: ['mem_x_cafe'],
-        audit: [SKIPPED, recallRow(1)],
-        trace: 'api 1 -',
-        ledger: 'http_recall 1 -',
-      },
-      mcp: {
-        ids: ['mem_x_cafe'],
-        audit: [recallRow(1), SKIPPED],
-        trace: 'mcp 1 -',
-        ledger: 'mcp_recall 0 -',
-      },
+      http: { ids: ['mem_x_cafe'], audit: [SKIPPED, recallRow(1)], trace: 'api 1 -', ledger: 'http_recall 1 -' },
+      mcp: { ids: ['mem_x_cafe'], audit: [recallRow(1), SKIPPED], trace: 'mcp 1 -', ledger: 'mcp_recall 0 -' },
     },
   } satisfies Record<string, Record<Surface, Want>>),
 );
 
-const NO_WRITES: RecallWrites = {
-  recalled: '0',
-  traces: [],
-  ranked: [],
-  ledger: [],
-  bumped: {},
-  goalLog: [],
-};
+const NO_WRITES: RecallWrites = { recalled: '0', traces: [], ranked: [], ledger: [], bumped: {}, goalLog: [] };
 const SCENARIOS = RECALL_BRANCHES.flatMap((b) =>
   (['http', 'mcp'] as const).map((via) => [`${via}: ${b.name}`, via, b] as const),
 );
@@ -401,9 +338,7 @@ describe('recall branch replies and rows', () => {
       bumped: bumpedFor(want.ids),
       goalLog: want.goalLog ?? [],
     });
-    expect(got.mirror).toEqual(
-      via === 'http' ? expect.objectContaining({ total_recalled: counted }) : null,
-    );
+    expect(got.mirror).toEqual(via === 'http' ? expect.objectContaining({ total_recalled: counted }) : null);
     expect(got.global).toEqual({ writes: NO_WRITES, audit: [] });
   });
 });

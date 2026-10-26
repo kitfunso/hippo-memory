@@ -28,26 +28,16 @@ it('renders the graph page byte-identical to the pinned fixture', () => {
   expect(html).toBe(readFileSync(FIXTURE, 'utf8'));
 });
 
-const hashOf = (text: string): string =>
-  `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
+const hashOf = (text: string): string => `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
 
 it('carries a policy that runs only its own script and style block, which the page fits, so it still renders', () => {
   const html = renderGraphHtml(MODEL);
-  const policy =
-    /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html)?.[1] ?? '';
-  const directives = new Map(
-    policy.split('; ').map((d) => [d.split(' ')[0]!, d.split(' ').slice(1)]),
-  );
+  const policy = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html)?.[1] ?? '';
+  const directives = new Map(policy.split('; ').map((d) => [d.split(' ')[0]!, d.split(' ').slice(1)]));
   // A data block never runs, so only the scripts a browser executes need the policy's leave.
-  const scripts = [...html.matchAll(/<script(\b[^>]*)>([\s\S]*?)<\/script>/g)].filter(
-    (m) => !/type=/.test(m[1]!),
-  );
+  const scripts = [...html.matchAll(/<script(\b[^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !/type=/.test(m[1]!));
   const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)];
-  expect([directives.get('default-src'), scripts.length, styles.length]).toEqual([
-    ["'none'"],
-    1,
-    1,
-  ]);
+  expect([directives.get('default-src'), scripts.length, styles.length]).toEqual([["'none'"], 1, 1]);
   expect(directives.get('script-src')).toEqual([hashOf(scripts[0]![2]!)]);
   expect(directives.get('style-src')).toEqual([hashOf(styles[0]![1]!)]);
   expect(html).not.toMatch(/\sstyle=|\son\w+=/);

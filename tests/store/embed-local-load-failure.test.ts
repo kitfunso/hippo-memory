@@ -20,11 +20,7 @@ afterEach(() => {
 });
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
-function localProvider(opts: {
-  available?: boolean;
-  loadError?: string;
-  vector?: number[];
-}): EmbeddingProvider {
+function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
   return {
     kind: 'local',
     model: 'load-test-model',
@@ -46,9 +42,7 @@ beforeEach(() => {
   emptyCache = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-model-cache-'));
   writeEntry(
     root,
-    createMemory('the deploy runbook lives in the ops wiki', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    }),
+    createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
   );
   stderr = [];
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
@@ -72,9 +66,9 @@ describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
     // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
     vi.stubEnv('HIPPO_MODEL_CACHE', emptyCache);
-    await expect(
-      resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage'),
-    ).rejects.toThrow(/did not load: \S/);
+    await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(
+      /did not load: \S/,
+    );
   });
 });
 
@@ -90,19 +84,13 @@ describe('hippo embed exit code', () => {
   });
 
   it('is 0 when every memory is embedded', async () => {
-    await handleEmbed(
-      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
-      localProvider({}),
-    );
+    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({}));
     expect(process.exitCode).toBeUndefined();
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
   });
 
   it('is 1 when a memory is left unembedded', async () => {
-    await handleEmbed(
-      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
-      localProvider({ vector: [] }),
-    );
+    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({ vector: [] }));
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('1 memories are still not embedded');
   });

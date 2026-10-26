@@ -7,11 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoRoot } from '../../src/host/project-identity.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
-import {
-  loadActiveTaskSnapshot,
-  loadLatestHandoff,
-  saveActiveTaskSnapshot,
-} from '../_helpers/root-forms.js';
+import { loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
@@ -31,12 +27,7 @@ function withScratchEnv() {
   return { dir, env };
 }
 
-function runHippo(
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-  input?: string,
-): SpawnSyncReturns<string> {
+function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
   return hippoRun(args, { cwd, env, input });
 }
 
@@ -86,10 +77,7 @@ function closeStepLogged(logFile: string): boolean {
 }
 
 const waitForCloseStep = (logFile: string): Promise<void> =>
-  waitFor(() => closeStepLogged(logFile), {
-    ...WORKER_WAIT,
-    what: 'the worker close step in the log',
-  });
+  waitFor(() => closeStepLogged(logFile), { ...WORKER_WAIT, what: 'the worker close step in the log' });
 
 describe('6. session-end wiring: --session-id argv + worker close', () => {
   let dir: string;
@@ -115,19 +103,14 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     });
 
     const logFile = path.join(dir, 'session-end.log');
-    const payload = JSON.stringify({
-      session_id: 'sess-end-close-me',
-      hook_event_name: 'SessionEnd',
-    });
+    const payload = JSON.stringify({ session_id: 'sess-end-close-me', hook_event_name: 'SessionEnd' });
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
     // The parent returns immediately; wait on the detached worker's own close
     // line (see closeStepLogged), then read the row once.
     await waitForCloseStep(logFile);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'closed 1 active snapshot(s) for session sess-end-close-me',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-end-close-me');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
@@ -142,14 +125,11 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     });
 
     const logFile = path.join(dir, 'session-end-bom.log');
-    const payload =
-      '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
     await waitForCloseStep(logFile);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'closed 1 active snapshot(s) for session sess-bom',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-bom');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
@@ -172,9 +152,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     // Wait until the worker reports its close step, so the survival check
     // proves it ran and closed nothing rather than that we did not wait long enough.
     await waitForCloseStep(logFile);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'closed 0 active snapshot(s) for session sess-b-ending',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 0 active snapshot(s) for session sess-b-ending');
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.status).toBe('active');
@@ -196,14 +174,10 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitFor(
-      () =>
-        fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('skip: no session_id'),
-      {
-        ...WORKER_WAIT,
-        what: 'the worker skip line in the log',
-      },
-    );
+    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('skip: no session_id'), {
+      ...WORKER_WAIT,
+      what: 'the worker skip line in the log',
+    });
 
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
@@ -241,16 +215,10 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     fs.writeFileSync(
       transcriptPath,
       [
-        {
-          type: 'user',
-          message: { role: 'user', content: 'add rate limiting to the webhook endpoint' },
-        },
+        { type: 'user', message: { role: 'user', content: 'add rate limiting to the webhook endpoint' } },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Limiter added; the test is next.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Limiter added; the test is next.' }] },
         },
       ]
         .map((e) => JSON.stringify(e))
@@ -305,10 +273,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     fs.mkdirSync(other, { recursive: true });
     fs.writeFileSync(
       path.join(other, 'newest.jsonl'),
-      JSON.stringify({
-        type: 'user',
-        message: { role: 'user', content: "let's go with PostgreSQL" },
-      }) + '\n',
+      JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n',
     );
 
     const logFile = path.join(dir, 'session-end-missing-transcript.log');

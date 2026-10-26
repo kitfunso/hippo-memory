@@ -87,8 +87,7 @@ describe('hippo supersede', () => {
       writeEntry(hippoRoot, entry);
       return entry.id;
     };
-    const successor = (id: string) =>
-      readEntry(hippoRoot, readEntry(hippoRoot, id)!.supersededBy!)!;
+    const successor = (id: string) => readEntry(hippoRoot, readEntry(hippoRoot, id)!.supersededBy!)!;
 
     const kept = seed('the billing service retries a failed charge three times');
     await hippo('supersede', kept, 'the billing service retries a failed charge five times');

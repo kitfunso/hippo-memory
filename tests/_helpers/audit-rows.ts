@@ -29,10 +29,6 @@ export function auditRowsOn(db: DatabaseSyncLike, tenantId: TenantId = ALL_TENAN
     // SAFETY: appendAuditEvent writes op only from AuditOp.
     op: r.op as AuditOp,
     targetId: r.target_id,
-    metadata:
-      parseStoredObject(
-        { table: 'audit_log', id: r.id, column: 'metadata_json' },
-        r.metadata_json,
-      ) ?? {},
+    metadata: parseStoredObject({ table: 'audit_log', id: r.id, column: 'metadata_json' }, r.metadata_json) ?? {},
   }));
 }

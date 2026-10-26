@@ -21,9 +21,7 @@ describe('guarded rollback', () => {
   it('surfaces the original error, not the rollback complaint, when a transaction is already discarded', () => {
     withProbeDb((db) => {
       // SAFETY: PRAGMA page_count always returns one row shaped { page_count }; read at runtime, never hardcode.
-      const { page_count: pageCount } = db.prepare('PRAGMA page_count').get() as {
-        page_count: number;
-      };
+      const { page_count: pageCount } = db.prepare('PRAGMA page_count').get() as { page_count: number };
       db.exec(`PRAGMA max_page_count = ${pageCount + 2}`);
 
       let thrown: unknown;
@@ -107,11 +105,7 @@ describe('guarded rollback', () => {
       );
 
       const flagged = findErrorPathBareRollbacks(dir).map((f) => f.slice(dir.length + 1));
-      expect(flagged.sort()).toEqual([
-        'after-a-statement.ts:3',
-        'first.ts:2',
-        'nested-finally.ts:3',
-      ]);
+      expect(flagged.sort()).toEqual(['after-a-statement.ts:3', 'first.ts:2', 'nested-finally.ts:3']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -136,9 +130,7 @@ const addProbe = (db: DatabaseSyncLike, v: string): void => {
 
 // SAFETY: the SELECT names exactly the one column read.
 const probes = (db: DatabaseSyncLike): string[] =>
-  (db.prepare('SELECT v FROM scope_probe ORDER BY v').all() as Array<{ v: string }>).map(
-    (row) => row.v,
-  );
+  (db.prepare('SELECT v FROM scope_probe ORDER BY v').all() as Array<{ v: string }>).map((row) => row.v);
 
 describe('withWriteScopeOr', () => {
   it('undoes its writes and returns the value when the callback rolls back on an idle handle', () => {

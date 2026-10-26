@@ -86,9 +86,9 @@ describe('storeLesson for a caller', () => {
 
   it('counts a user-global lesson as a repeat in every project', async () => {
     seed(LESSON, '', ['error', 'auto-captured']);
-    expect(
-      await sqliteStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web']),
-    ).toEqual([LESSON]);
+    expect(await sqliteStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual([
+      LESSON,
+    ]);
     expect(await storeLesson(failureTarget(root, TENANT), LESSON, other)).toBe('duplicate');
   });
 });
@@ -98,11 +98,7 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
     // The group's body runs to its end inside the call, so the row reads below see its write before the await.
     const marking = withDb((db) => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
-      const b = startCompaction(db, TENANT, {
-        ...META,
-        sessionId: 's3',
-        originProject: 'acme/app',
-      });
+      const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
       markSnapshotSaved(db, TENANT, a);
       const marked = sqliteCompactionHooks(handlesOf(root)).markSnapshotSaved(TENANT, b);
       expect([recordRow(db, a)?.snapshot_saved, recordRow(db, b)?.snapshot_saved]).toEqual([1, 1]);
@@ -122,16 +118,9 @@ describe('preCompactForCaller', () => {
     );
     expect(await preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     const mine = loadActiveTaskSnapshot(root, TENANT, ALICE);
-    expect(mine).toMatchObject({
-      ...snapshotFields(STATE),
-      source: 'pre-compact',
-      sessionId: 'sA',
-    });
+    expect(mine).toMatchObject({ ...snapshotFields(STATE), source: 'pre-compact', sessionId: 'sA' });
     withDb((db) =>
-      expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({
-        owner_subject: 'alice',
-        origin_project: 'acme/app',
-      }),
+      expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }),
     );
     // The save superseded only Alice's rows: Bob's own row is still his active one.
     expect(loadActiveTaskSnapshot(root, TENANT, BOB)?.id).toBe(bobs.id);
@@ -199,9 +188,7 @@ describe('preCompactForCaller', () => {
 
   it('a busy store at startCompaction still returns the instruction', async () => {
     await bindSessionOwner(owned('alice'), 'sA');
-    expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({
-      stdout: PRE_COMPACT_INSTRUCTION,
-    });
+    expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 
@@ -244,18 +231,8 @@ describe('compactResumeForCaller', () => {
   });
 
   it("renders the owner's snapshot and books one compact_resume row", async () => {
-    const mine = saveActiveTaskSnapshot(
-      root,
-      TENANT,
-      { ...snapshotFields(STATE), sessionId: 'sA' },
-      ALICE,
-    );
-    saveActiveTaskSnapshot(
-      root,
-      TENANT,
-      { task: 'Bob task', summary: 'b', nextStep: 'b', sessionId: 'sB' },
-      BOB,
-    );
+    const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
+    saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', nextStep: 'b', sessionId: 'sB' }, BOB);
     const { stdout } = await resume(owned('alice'));
     expect(stdout).toBe(compactResumeText(mine, []));
     expect(stdout).not.toContain('Bob task');

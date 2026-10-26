@@ -22,9 +22,7 @@ describe('runCapture reading stdin', () => {
     const target = captureTarget(root);
     // The stdin read is the first readFileSync runCapture makes, so the one failure lands on it.
     const read = vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
-      throw Object.assign(new Error('EAGAIN: resource temporarily unavailable, read'), {
-        code: 'EAGAIN',
-      });
+      throw Object.assign(new Error('EAGAIN: resource temporarily unavailable, read'), { code: 'EAGAIN' });
     });
     syncBuiltinESMExports();
     const errs = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -32,9 +30,7 @@ describe('runCapture reading stdin', () => {
 
     await runCapture(target, { tenantId: 'default', source: 'stdin', dryRun: true, global: false });
 
-    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain(
-      'reading stdin failed: EAGAIN',
-    );
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reading stdin failed: EAGAIN');
     expect(read).toHaveBeenCalledWith(0, 'utf8');
     expect(errs).toHaveBeenCalledWith('No input on stdin. Pipe text in or use --file <path>.');
     expect(process.exitCode).toBe(1);

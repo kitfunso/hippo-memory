@@ -82,10 +82,7 @@ async function withLockHeld<T>(root: string, fn: (release: () => void) => Promis
 }
 
 /** Runs a routed write with the lock held until the server has refused one try busy, so the client's retry lands it. */
-async function landedOnRetry<T>(
-  root: string,
-  write: () => Promise<T>,
-): Promise<{ result: T; statuses: number[] }> {
+async function landedOnRetry<T>(root: string, write: () => Promise<T>): Promise<{ result: T; statuses: number[] }> {
   const realFetch = globalThis.fetch;
   const statuses: number[] = [];
   const spy = vi.spyOn(globalThis, 'fetch');
@@ -138,9 +135,7 @@ describe('routed writes under a busy store', () => {
       );
       expect(statuses).toEqual([503, 200]);
       expect(result.id).toMatch(/^mem_[0-9a-f]+$/);
-      expect(
-        count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary'),
-      ).toBe(1);
+      expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
       expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, result.id)).toBe(1);
     },
   );
@@ -148,14 +143,9 @@ describe('routed writes under a busy store', () => {
   it.skipIf(needsHippoDb('lock'))(
     'forget: a lock held across the first tries ends in one removal counted once',
     async () => {
-      const { id } = await client.postRemember(url, undefined, {
-        content: 'forget-busy-canary',
-        force: true,
-      });
+      const { id } = await client.postRemember(url, undefined, { content: 'forget-busy-canary', force: true });
       const before = await forgottenTotal(home);
-      await expect(
-        landedOnRetry(home, () => client.postForget(url, adminKey, id)),
-      ).resolves.toEqual({
+      await expect(landedOnRetry(home, () => client.postForget(url, adminKey, id))).resolves.toEqual({
         result: { ok: true, id },
         statuses: [503, 200],
       });
@@ -172,9 +162,7 @@ describe('routed writes under a busy store', () => {
         kind: 'raw',
         force: true,
       });
-      await expect(
-        landedOnRetry(home, () => client.postArchiveRaw(url, adminKey, id, 'test')),
-      ).resolves.toMatchObject({
+      await expect(landedOnRetry(home, () => client.postArchiveRaw(url, adminKey, id, 'test'))).resolves.toMatchObject({
         result: { ok: true },
         statuses: [503, 200],
       });
@@ -186,21 +174,10 @@ describe('routed writes under a busy store', () => {
   it.skipIf(needsHippoDb('lock'))(
     'promote: a held global lock ends in exactly one global copy and one promote audit row',
     async () => {
-      const { id } = await client.postRemember(url, undefined, {
-        content: 'promote-busy-canary',
-        force: true,
-      });
-      const { result, statuses } = await landedOnRetry(globalHome, () =>
-        client.postPromote(url, undefined, id),
-      );
+      const { id } = await client.postRemember(url, undefined, { content: 'promote-busy-canary', force: true });
+      const { result, statuses } = await landedOnRetry(globalHome, () => client.postPromote(url, undefined, id));
       expect(statuses).toEqual([503, 200]);
-      expect(
-        count(
-          globalHome,
-          `SELECT COUNT(*) AS n FROM memories WHERE content = ?`,
-          'promote-busy-canary',
-        ),
-      ).toBe(1);
+      expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
       expect(
         count(
           globalHome,
@@ -216,12 +193,9 @@ describe('routed writes under a busy store', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, async () => {
-        await runWithRequestStores(
-          () => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'),
-          {
-            busyWaitMs: 50,
-          },
-        );
+        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), {
+          busyWaitMs: 50,
+        });
       });
       expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(
         /warn: removed m1, but the store was busy.* errorClass=Error/,
@@ -241,12 +215,9 @@ describe('routed writes under a busy store', () => {
         const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         try {
           await withLockHeld(home, async () => {
-            await runWithRequestStores(
-              () => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'),
-              {
-                busyWaitMs: 50,
-              },
-            );
+            await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
+              busyWaitMs: 50,
+            });
           });
         } finally {
           stderr.mockRestore();
@@ -265,10 +236,7 @@ describe('routed writes under a busy store', () => {
   it.skipIf(needsHippoDb('lock'))(
     'promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate',
     async () => {
-      const { id } = await client.postRemember(url, undefined, {
-        content: 'promote-audit-busy-canary',
-        force: true,
-      });
+      const { id } = await client.postRemember(url, undefined, { content: 'promote-audit-busy-canary', force: true });
       const globalDb = openHippoDb(globalHome);
       try {
         globalDb.exec(
@@ -279,11 +247,7 @@ describe('routed writes under a busy store', () => {
       }
       await expect(copyToGlobal(home, id)).rejects.toThrow(/forced promote audit failure/);
       expect(
-        count(
-          globalHome,
-          `SELECT COUNT(*) AS n FROM memories WHERE content = ?`,
-          'promote-audit-busy-canary',
-        ),
+        count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary'),
       ).toBe(0);
     },
   );

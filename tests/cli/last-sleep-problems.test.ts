@@ -3,14 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { handleLastSleep, sleepProblems } from '../../src/surface/cli/last-sleep.js';
-import {
-  initProject,
-  oneLine,
-  removeScratch,
-  runHippo,
-  scratch,
-  type Scratch,
-} from '../_helpers/compaction-hooks.js';
+import { initProject, oneLine, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 let s: Scratch;
@@ -113,9 +106,7 @@ describe('handleLastSleep output', () => {
     const streams = capture();
     handleLastSleep({ hippoRoot: s.hippoRoot, flags: { path: logFile } });
     expect(streams.stdout).toEqual([]);
-    expect(streams.errors).toContain(
-      'Hippo: the last sleep failed (store locked). Run hippo doctor for details.',
-    );
+    expect(streams.errors).toContain('Hippo: the last sleep failed (store locked). Run hippo doctor for details.');
     expect(fs.existsSync(logFile)).toBe(false);
   });
 
@@ -126,9 +117,7 @@ describe('handleLastSleep output', () => {
     const streams = capture();
     handleLastSleep({ hippoRoot: s.hippoRoot, flags: { path: logFile } }, 'terminal');
     expect(streams.stdout).toEqual([]);
-    expect(streams.errors.at(-1)).toBe(
-      'Hippo: the last sleep failed (store locked). Run hippo doctor for details.',
-    );
+    expect(streams.errors.at(-1)).toBe('Hippo: the last sleep failed (store locked). Run hippo doctor for details.');
   });
 });
 
@@ -155,10 +144,7 @@ describe('hippo last-sleep', () => {
   it('prints one systemMessage line when the spool holds a .bad file', async () => {
     await initProject(s);
     fs.mkdirSync(path.join(s.hippoRoot, 'compactions-spool'));
-    fs.writeFileSync(
-      path.join(s.hippoRoot, 'compactions-spool', '0000000001000-aaaaaaaa.unreadable.bad'),
-      '{',
-    );
+    fs.writeFileSync(path.join(s.hippoRoot, 'compactions-spool', '0000000001000-aaaaaaaa.unreadable.bad'), '{');
     writeLog(CLEAN);
     const r = await runHippo(['last-sleep', '--path', logFile], s.proj, s.env);
     expect(r.status, r.stderr).toBe(0);

@@ -29,8 +29,7 @@ let root: string;
 let stderr: MockInstance<typeof process.stderr.write>;
 
 const logged = (): string[] => stderr.mock.calls.map((call) => String(call[0]));
-const errno = (code: string): NodeJS.ErrnoException =>
-  Object.assign(new Error(`${code}: forced`), { code });
+const errno = (code: string): NodeJS.ErrnoException => Object.assign(new Error(`${code}: forced`), { code });
 
 beforeEach(() => {
   root = makeRoot('silent', { init: false });
@@ -66,11 +65,7 @@ function failStat(code: string, target: string): void {
 describe('http retry', () => {
   it('logs each retry at debug with method, host and path, never the query', async () => {
     vi.stubEnv('HIPPO_LOG', 'debug');
-    const replies = [
-      new Response('', { status: 503 }),
-      new Response('', { status: 429 }),
-      new Response('ok'),
-    ];
+    const replies = [new Response('', { status: 503 }), new Response('', { status: 429 }), new Response('ok')];
     const fetchFn = vi.fn(async () => replies.shift()!);
     const res = await fetchWithRetry(
       'https://api.example.test/v1/items?key=SECRET',
@@ -100,9 +95,7 @@ describe('heartbeatVerdict', () => {
     // SAFETY: a bare object stands in for the request and the options; only the code path under test reads them.
     const req = { headers: {} } as IncomingMessage;
     // SAFETY: see above.
-    const verdict = await heartbeatVerdict(req, { hippoRoot: root } as Parameters<
-      typeof heartbeatVerdict
-    >[1]);
+    const verdict = await heartbeatVerdict(req, { hippoRoot: root } as Parameters<typeof heartbeatVerdict>[1]);
     expect(verdict).toBe('unavailable');
     expect(logged().some((l) => l.includes('error: heartbeat auth check failed'))).toBe(true);
   });
@@ -129,9 +122,7 @@ describe('embedding provider', () => {
     );
     const provider = resolveEmbeddingProvider(loadConfig(root).embeddings, {});
     await expect(provider.embed(['x'], 'passage')).rejects.toThrow(/HTTP 400/);
-    expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(
-      true,
-    );
+    expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(true);
   });
 });
 
@@ -164,13 +155,8 @@ describe('capture log append', () => {
     fs.writeFileSync(blank, ' ');
     const real = fs.appendFileSync;
     // SAFETY: the stand-in fails every append but the banner and forwards that one to the real appendFileSync.
-    const stand = ((
-      p: fs.PathOrFileDescriptor,
-      data: string | Uint8Array,
-      ...rest: [fs.WriteFileOptions?]
-    ) => {
-      if (String(p) === logFile && !String(data).includes('capturing session'))
-        throw errno('ENOSPC');
+    const stand = ((p: fs.PathOrFileDescriptor, data: string | Uint8Array, ...rest: [fs.WriteFileOptions?]) => {
+      if (String(p) === logFile && !String(data).includes('capturing session')) throw errno('ENOSPC');
       return real(p, data, ...rest);
     }) as typeof fs.appendFileSync;
     vi.spyOn(fs, 'appendFileSync').mockImplementation(stand);
@@ -239,16 +225,8 @@ describe('dormant snapshot', () => {
     const db = openHippoDb(root);
     try {
       const entry = createMemory('the retired cron host was called nightly-02');
-      insertDormantRow(db, {
-        entry,
-        strength: 0.01,
-        reason: 'decay',
-        dormantAt: new Date().toISOString(),
-      });
-      db.prepare('UPDATE dormant_memories SET content = ? WHERE id = ?').run(
-        'edited by hand',
-        entry.id,
-      );
+      insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
+      db.prepare('UPDATE dormant_memories SET content = ? WHERE id = ?').run('edited by hand', entry.id);
       expect(listDormantSnapshots(db, entry.tenantId)).toEqual([]);
       const line = logged().find((l) => l.includes('dormant_memories.entry_json'));
       expect(line).toContain('wrong shape');

@@ -44,11 +44,7 @@ async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
   return sqlite.outcomes;
 }
 
-const snap = (
-  task: string,
-  session: string | null,
-  over: Partial<SnapshotInput> = {},
-): SnapshotInput => ({
+const snap = (task: string, session: string | null, over: Partial<SnapshotInput> = {}): SnapshotInput => ({
   task,
   summary: `${task} summary`,
   nextStep: `${task} next`,
@@ -68,13 +64,7 @@ describe('Sessions snapshots', () => {
     const outcomes = await conforms([
       (g) => g.save(TENANT_A, 'snapshot', snap('plain', 's3'), null),
       (g) => g.save(TENANT_A, 'snapshot', snap('one', 's1'), ALICE),
-      (g) =>
-        g.save(
-          TENANT_A,
-          'snapshot',
-          snap('two', 's1', { source: 'hook', scope: 'team:ops' }),
-          ALICE,
-        ),
+      (g) => g.save(TENANT_A, 'snapshot', snap('two', 's1', { source: 'hook', scope: 'team:ops' }), ALICE),
       (g) => g.save(TENANT_A, 'snapshot', snap('bob', 's2'), BOB),
       (g) => g.save(TENANT_B, 'snapshot', snap('tenant b', 's1'), ALICE),
       (g) => g.save(TENANT_A, 'snapshot', snap('partial', 's1'), PARTIAL),
@@ -94,9 +84,7 @@ describe('Sessions snapshots', () => {
       (g) => g.clear('nobody', 'snapshot', { status: 'cleared' }),
     ]);
     expect(outcomes[5]).toHaveProperty('error');
-    expect(outcomes[6]).toMatchObject({
-      value: { task: 'two', status: 'active', source: 'hook', scope: 'team:ops' },
-    });
+    expect(outcomes[6]).toMatchObject({ value: { task: 'two', status: 'active', source: 'hook', scope: 'team:ops' } });
     expect(outcomes[9]).toEqual({ value: null });
     expect(outcomes.slice(13, 15)).toEqual([{ value: 1 }, { value: 0 }]);
     expect(outcomes[16]).toEqual({ value: 1 });
@@ -135,9 +123,7 @@ describe('Sessions events', () => {
       (g) => g.read(TENANT_A, 'event', { sessionId: 'none' }),
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
-      'value' in o && Array.isArray(o.value)
-        ? o.value.map((e: { content: string }) => e.content)
-        : o;
+      'value' in o && Array.isArray(o.value) ? o.value.map((e: { content: string }) => e.content) : o;
     expect(outcomes.slice(4).map(contents)).toEqual([
       ['first', 'second'],
       ['first', 'third'],
@@ -161,13 +147,7 @@ describe('Sessions handoffs', () => {
           { handoff: handoff('s1', 'second', { outcome: 'success', taskId: 'ship' }) },
           ALICE,
         ),
-      (g) =>
-        g.save(
-          TENANT_A,
-          'handoff',
-          { handoff: handoff('s2', 'private', { scope: 'team:Private:ops' }) },
-          ALICE,
-        ),
+      (g) => g.save(TENANT_A, 'handoff', { handoff: handoff('s2', 'private', { scope: 'team:Private:ops' }) }, ALICE),
       (g) =>
         g.save(
           TENANT_A,
@@ -190,13 +170,7 @@ describe('Sessions handoffs', () => {
       (g) => g.read(TENANT_A, 'handoff', { sessionId: 's1' }, ALICE),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: null }, ALICE),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: null, scopeFilter: 'default-deny' }, ALICE),
-      (g) =>
-        g.read(
-          TENANT_A,
-          'handoff',
-          { sessionId: null, unfinishedOnly: true, excludeSessionId: 's2' },
-          ALICE,
-        ),
+      (g) => g.read(TENANT_A, 'handoff', { sessionId: null, unfinishedOnly: true, excludeSessionId: 's2' }, ALICE),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: null, unfinishedOnly: true }, ALICE),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: null, maxAgeMs: 8000 }, null),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: null, maxAgeMs: 1000 }, null),
@@ -224,21 +198,9 @@ describe('Sessions, the session-end handoff', () => {
   it('writes from the active snapshot or the transcript, once per change, and rewrites a transcript read in place', async () => {
     const outcomes = await conforms([
       (g) => g.save(TENANT_A, 'snapshot', snap('ship', 's1'), ALICE),
-      (g) =>
-        g.save(TENANT_A, 'event', {
-          sessionId: 's1',
-          eventType: 'session_complete',
-          content: 'success',
-        }),
-      (g) =>
-        g.save(
-          TENANT_A,
-          'handoff',
-          { sessionEnd: { sessionId: 's1', evidence: { gitRef: 'abc' } } },
-          ALICE,
-        ),
-      (g) =>
-        g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's1', evidence: null } }, ALICE),
+      (g) => g.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'session_complete', content: 'success' }),
+      (g) => g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's1', evidence: { gitRef: 'abc' } } }, ALICE),
+      (g) => g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's1', evidence: null } }, ALICE),
       (g) =>
         g.save(
           TENANT_A,
@@ -251,12 +213,7 @@ describe('Sessions, the session-end handoff', () => {
           TENANT_A,
           'handoff',
           {
-            sessionEnd: {
-              sessionId: 's9',
-              evidence: { dirtyTree: true },
-              derived: derived('read two'),
-              inPlace: true,
-            },
+            sessionEnd: { sessionId: 's9', evidence: { dirtyTree: true }, derived: derived('read two'), inPlace: true },
           },
           ALICE,
         ),
@@ -269,21 +226,13 @@ describe('Sessions, the session-end handoff', () => {
         ),
       (g) => g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's9', evidence: null } }, null),
       (g) => g.read(TENANT_A, 'handoff', { sessionId: 's9' }, ALICE),
-      (g) =>
-        g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's1', evidence: null } }, PARTIAL),
+      (g) => g.save(TENANT_A, 'handoff', { sessionEnd: { sessionId: 's1', evidence: null } }, PARTIAL),
       (g) => g.save(TENANT_A, 'snapshot', snap('compacted', 's5', { source: 'pre-compact' }), BOB),
       (g) =>
         g.save(
           TENANT_A,
           'handoff',
-          {
-            sessionEnd: {
-              sessionId: 's5',
-              evidence: null,
-              derived: derived('after compaction'),
-              inPlace: true,
-            },
-          },
+          { sessionEnd: { sessionId: 's5', evidence: null, derived: derived('after compaction'), inPlace: true } },
           BOB,
         ),
       (g) => g.save(TENANT_B, 'handoff', { sessionEnd: { sessionId: 's1', evidence: null } }, null),
@@ -292,9 +241,7 @@ describe('Sessions, the session-end handoff', () => {
     expect(outcomes[3]).toEqual({ value: null });
     expect(outcomes[6]).toEqual({ value: null });
     expect(outcomes[7]).toEqual({ value: null });
-    expect(outcomes[8]).toMatchObject({
-      value: { summary: 'read two', evidence: { derivedFrom: 'transcript' } },
-    });
+    expect(outcomes[8]).toMatchObject({ value: { summary: 'read two', evidence: { derivedFrom: 'transcript' } } });
     expect(outcomes[9]).toHaveProperty('error');
     expect(outcomes[11]).toMatchObject({ value: { summary: 'after compaction' } });
     expect(outcomes[12]).toEqual({ value: null });

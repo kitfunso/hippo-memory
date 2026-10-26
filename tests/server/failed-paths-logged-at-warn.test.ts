@@ -33,22 +33,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const fakeReq = Object.assign(new IncomingMessage(new Socket()), {
-  method: 'POST',
-  url: '/v1/memories?x=1',
-});
+const fakeReq = Object.assign(new IncomingMessage(new Socket()), { method: 'POST', url: '/v1/memories?x=1' });
 
 describe('failed requests at the default threshold', () => {
   it('writes a warn line with the request id for a 401 and a 403', () => {
-    runWithRequestId('req-401', () =>
-      logRequestFailure(fakeReq, new HttpError(401, 'unauthorized'), 401),
-    );
-    runWithRequestId('req-403', () =>
-      logRequestFailure(fakeReq, new HttpError(403, 'forbidden'), 403),
-    );
-    expect(lines.join('')).toMatch(
-      /warn: POST unmatched failed: unauthorized .*requestId=req-401 status=401/,
-    );
+    runWithRequestId('req-401', () => logRequestFailure(fakeReq, new HttpError(401, 'unauthorized'), 401));
+    runWithRequestId('req-403', () => logRequestFailure(fakeReq, new HttpError(403, 'forbidden'), 403));
+    expect(lines.join('')).toMatch(/warn: POST unmatched failed: unauthorized .*requestId=req-401 status=401/);
     expect(lines.join('')).toMatch(/requestId=req-403/);
   });
 
@@ -63,19 +54,14 @@ describe('failed requests at the default threshold', () => {
     lines.length = 0;
     vi.stubEnv('HIPPO_LOG', 'info');
     mcpErrorResponse(2, new HttpError(404, 'missing'), 'req-404', 'tools/call hippo_get');
-    expect(lines.join('')).toMatch(
-      /info: mcp request \(tools\/call hippo_get\) failed.*requestId=req-404/,
-    );
+    expect(lines.join('')).toMatch(/info: mcp request \(tools\/call hippo_get\) failed.*requestId=req-404/);
   });
 });
 
 describe('judge failures', () => {
   it('warns with the status and a body snippet on a non-2xx, never the key', async () => {
     const fetcher: typeof fetch = async () => new Response('bad credentials', { status: 401 });
-    const out = await judgeAll(['a durable fact about the deploy'], {
-      apiKey: 'sk-secret-key',
-      fetcher,
-    });
+    const out = await judgeAll(['a durable fact about the deploy'], { apiKey: 'sk-secret-key', fetcher });
     expect(out).toEqual([null]);
     const text = lines.join('');
     expect(text).toMatch(/warn: judge: non-2xx reply .*status=401 body="bad credentials"/);
@@ -87,9 +73,7 @@ describe('judge failures', () => {
       throw new TypeError('socket hang up');
     };
     await judgeAll(['a durable fact about the deploy'], { apiKey: 'k', fetcher });
-    expect(lines.join('')).toMatch(
-      /warn: judge: request failed: socket hang up.*errorClass=TypeError/,
-    );
+    expect(lines.join('')).toMatch(/warn: judge: request failed: socket hang up.*errorClass=TypeError/);
   });
 });
 
@@ -115,9 +99,7 @@ describe('failures that used to log at debug', () => {
     expect(await embedder.embed('one', 'Xenova/test-model')).toEqual([]);
     expect(await embedder.embed('two', 'Xenova/test-model')).toEqual([]);
     expect(
-      lines
-        .join('')
-        .match(/warn: local embedding with Xenova\/test-model failed: onnx runtime crashed/g),
+      lines.join('').match(/warn: local embedding with Xenova\/test-model failed: onnx runtime crashed/g),
     ).toHaveLength(1);
   });
 });
@@ -131,10 +113,7 @@ describe('generated opencode plugin', () => {
       const exported = /export const (\w+)/.exec(src)?.[1];
       expect(exported).toMatch(/^\w+$/);
       const errors: string[] = [];
-      const make = new Function(
-        'console',
-        `${src.replace('export const', 'const')}; return ${exported};`,
-      );
+      const make = new Function('console', `${src.replace('export const', 'const')}; return ${exported};`);
       const plugin = await make({ error: (m: string) => errors.push(m) })({
         $: () => ({ quiet: () => ({ nothrow: async () => ({ exitCode: 3 }) }) }),
       });

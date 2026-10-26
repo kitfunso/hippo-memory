@@ -2,11 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
-import type {
-  PredictionClose,
-  PredictionListQuery,
-  PredictionSave,
-} from '../../src/base/ports/store.js';
+import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/base/ports/store.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import {
   runOnFixture,
@@ -54,16 +50,8 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 }
 
 /** Built once per call list, so every call is handed the same mirror id. */
-function claim(
-  classTag: string,
-  fields: Partial<SavePredictionOptions> = {},
-  tenantId = TENANT_A,
-): PredictionSave {
-  const opts: SavePredictionOptions = {
-    classTag,
-    claimText: `the ${classTag} work lands on time`,
-    ...fields,
-  };
+function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
+  const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
   return { ...opts, mirror: predictionMirror(tenantId, opts, 30, evalNow()), actor: ACTOR };
 }
 
@@ -165,11 +153,7 @@ afterEach(() => {
 
 describe('Objects, the prediction kind: saveObject and objectById', () => {
   it('saves the open row and its mirror in the tenant named, the predict_create row ahead of the remember row', async () => {
-    const full = claim('sprint', {
-      estimateValue: 3,
-      estimateUnit: 'days',
-      targetDate: '2026-04-01',
-    });
+    const full = claim('sprint', { estimateValue: 3, estimateUnit: 'days', targetDate: '2026-04-01' });
     const bare = claim('launch');
     const side = await conforms([
       at(T1, save(full)),
@@ -205,16 +189,7 @@ describe('Objects, the prediction kind: saveObject and objectById', () => {
       { value: first },
       { value: second },
       { value: [second, first] },
-      {
-        value: [
-          {
-            id: full.mirror.id,
-            tenantId: TENANT_A,
-            content: full.claimText,
-            tags: ['prediction', 'sprint'],
-          },
-        ],
-      },
+      { value: [{ id: full.mirror.id, tenantId: TENANT_A, content: full.claimText, tags: ['prediction', 'sprint'] }] },
       { value: null },
       { value: null },
       { value: [] },
@@ -253,16 +228,7 @@ describe('Objects, the prediction kind: saveObject and objectById', () => {
       { value: openRow(1, mine, T1) },
       { error: `ConflictError: Memory ${mine.mirror.id} belongs to another tenant` },
       { value: [] },
-      {
-        value: [
-          {
-            id: mine.mirror.id,
-            tenantId: TENANT_A,
-            content: mine.claimText,
-            tags: ['prediction', 'sprint'],
-          },
-        ],
-      },
+      { value: [{ id: mine.mirror.id, tenantId: TENANT_A, content: mine.claimText, tags: ['prediction', 'sprint'] }] },
       { value: openRow(2, theirs, T1) },
     ]);
     expect(added(side).map((e) => [e.op, e.tenantId])).toEqual([
@@ -369,11 +335,7 @@ describe('Objects, the prediction kind: closeObject', () => {
       closedAt: T2,
       closureNote: 'two days late',
     };
-    const unknown: Prediction = {
-      ...openRow(2, second, T1),
-      closureState: 'closed-unknown',
-      closedAt: T3,
-    };
+    const unknown: Prediction = { ...openRow(2, second, T1), closureState: 'closed-unknown', closedAt: T3 };
     expect(side.outcomes.slice(2)).toEqual([
       { value: closed },
       { value: unknown },
@@ -381,16 +343,8 @@ describe('Objects, the prediction kind: closeObject', () => {
       { value: unknown },
     ]);
     expect(added(side).slice(4)).toEqual([
-      auditRow(4, T2, 'predict_close', '1', {
-        prediction_id: 1,
-        closure_state: 'closed',
-        has_actual: true,
-      }),
-      auditRow(5, T3, 'predict_close', '2', {
-        prediction_id: 2,
-        closure_state: 'closed-unknown',
-        has_actual: false,
-      }),
+      auditRow(4, T2, 'predict_close', '1', { prediction_id: 1, closure_state: 'closed', has_actual: true }),
+      auditRow(5, T3, 'predict_close', '2', { prediction_id: 2, closure_state: 'closed-unknown', has_actual: false }),
     ]);
   });
 
@@ -418,12 +372,7 @@ describe('Objects, the prediction kind: closeObject', () => {
       at(T3, close(1, { closureState: 'closed-unknown', closureNote: 'retry' })),
       byId(1),
     ]);
-    const closed: Prediction = {
-      ...openRow(1, input, T1),
-      actualValue: 5,
-      closureState: 'closed',
-      closedAt: T2,
-    };
+    const closed: Prediction = { ...openRow(1, input, T1), actualValue: 5, closureState: 'closed', closedAt: T2 };
     expect(side.outcomes.slice(1)).toEqual([
       { value: closed },
       {
@@ -550,14 +499,7 @@ describe('Objects.predictionBaserate', () => {
     expect(added(side).slice(-3)).toEqual([
       auditRow(29, T3, 'predict_baserate', 'sprint', { class_tag: 'sprint', n_closed: 4 }),
       auditRow(30, T3, 'predict_baserate', 'launch', { class_tag: 'launch', n_closed: 1 }),
-      auditRow(
-        31,
-        T3,
-        'predict_baserate',
-        'sprint',
-        { class_tag: 'sprint', n_closed: 1 },
-        TENANT_B,
-      ),
+      auditRow(31, T3, 'predict_baserate', 'sprint', { class_tag: 'sprint', n_closed: 1 }, TENANT_B),
     ]);
   });
 });

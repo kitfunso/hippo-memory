@@ -32,9 +32,7 @@ async function hippoIn(cwd: string, globalDir: string, args: string[]): Promise<
   const saved = process.cwd();
   process.chdir(cwd);
   try {
-    const r = await runInProcess(() =>
-      withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])),
-    );
+    const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
     expect(r.status, r.stderr).toBe(0);
     return r.stdout;
   } finally {
@@ -52,13 +50,10 @@ function runHippo(args: string[]): Promise<string> {
 describe('hippo context --pinned-only', () => {
   it('returns only pinned entries in plain text', async () => {
     initTestStore(hippoDir);
-    const pinned = createMemory(
-      'NEVER skip the pre-commit hook because it caused three incidents',
-      {
-        pinned: true,
-        layer: Layer.Episodic,
-      },
-    );
+    const pinned = createMemory('NEVER skip the pre-commit hook because it caused three incidents', {
+      pinned: true,
+      layer: Layer.Episodic,
+    });
     const unpinned = createMemory('random note not pinned nor critical to this test', {
       pinned: false,
       layer: Layer.Episodic,
@@ -73,9 +68,7 @@ describe('hippo context --pinned-only', () => {
 
   it('emits empty string when no pinned entries', async () => {
     initTestStore(hippoDir);
-    const unpinned = createMemory('only unpinned entries here should produce empty output', {
-      pinned: false,
-    });
+    const unpinned = createMemory('only unpinned entries here should produce empty output', { pinned: false });
     writeEntry(hippoDir, unpinned);
 
     const out = await runHippo(['context', '--pinned-only', '--budget', '500']);
@@ -84,19 +77,10 @@ describe('hippo context --pinned-only', () => {
 
   it('--format additional-context emits Claude Code hookSpecificOutput JSON', async () => {
     initTestStore(hippoDir);
-    const pinned = createMemory('NEVER use --no-verify because it bypasses signing', {
-      pinned: true,
-    });
+    const pinned = createMemory('NEVER use --no-verify because it bypasses signing', { pinned: true });
     writeEntry(hippoDir, pinned);
 
-    const out = await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
+    const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     const parsed = JSON.parse(out);
     expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(parsed.hookSpecificOutput.additionalContext).toBeTypeOf('string');
@@ -105,14 +89,7 @@ describe('hippo context --pinned-only', () => {
 
   it('--format additional-context with no pinned entries emits empty output (no crash)', async () => {
     initTestStore(hippoDir);
-    const out = await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
+    const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     // Empty stdout signals "no injection needed". Claude Code treats empty
     // output as pass-through.
     expect(out.trim()).toBe('');
@@ -121,15 +98,9 @@ describe('hippo context --pinned-only', () => {
   it('--include-recent surfaces fresh unpinned entries alongside pinned-only context', async () => {
     initTestStore(hippoDir);
     const oldPinned = createMemory('PINNED RULE: always verify the hook output', { pinned: true });
-    const oldUnpinned = createMemory('old unpinned note should not appear just because it exists', {
-      pinned: false,
-    });
-    const recentA = createMemory('fresh same-session correction should appear on the next prompt', {
-      pinned: false,
-    });
-    const recentB = createMemory('fresh same-session follow-up should also appear', {
-      pinned: false,
-    });
+    const oldUnpinned = createMemory('old unpinned note should not appear just because it exists', { pinned: false });
+    const recentA = createMemory('fresh same-session correction should appear on the next prompt', { pinned: false });
+    const recentB = createMemory('fresh same-session follow-up should also appear', { pinned: false });
     oldPinned.created = '2026-05-08T10:00:00.000Z';
     oldUnpinned.created = '2026-05-08T10:01:00.000Z';
     recentA.created = '2026-05-08T10:02:00.000Z';
@@ -159,9 +130,7 @@ describe('hippo context --pinned-only', () => {
 
   it('--include-recent works even when no memories are pinned', async () => {
     initTestStore(hippoDir);
-    const recent = createMemory('fresh unpinned lesson must not be invisible until next session', {
-      pinned: false,
-    });
+    const recent = createMemory('fresh unpinned lesson must not be invisible until next session', { pinned: false });
     writeEntry(hippoDir, recent);
 
     const raw = await runHippo([
@@ -175,45 +144,19 @@ describe('hippo context --pinned-only', () => {
       '500',
     ]);
     const parsed = JSON.parse(raw);
-    expect(parsed.hookSpecificOutput.additionalContext).toContain(
-      'fresh unpinned lesson must not be invisible',
-    );
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('fresh unpinned lesson must not be invisible');
   });
 
   it('is read-only — does NOT bump retrieval_count on pinned memories', async () => {
     // Hook fires every turn; if each call inflated retrieval_count the
     // under-rehearsal score for pinned memories would skew over time.
     initTestStore(hippoDir);
-    const pinned = createMemory(
-      'read-only test memory that should not be mutated by a context call',
-      { pinned: true },
-    );
+    const pinned = createMemory('read-only test memory that should not be mutated by a context call', { pinned: true });
     writeEntry(hippoDir, pinned);
 
-    await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
-    await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
-    await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
+    await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
 
     // Reload from disk and verify retrieval_count is still 0
     const { loadAllEntries } = await import('../_helpers/root-forms.js');
@@ -227,35 +170,20 @@ describe('hippo context --pinned-only', () => {
     // End-to-end sanity: Claude Code's UserPromptSubmit response must be a
     // single string containing all rehearsed rules, not an array of blocks.
     initTestStore(hippoDir);
-    const a = createMemory('never commit secrets to git rotate immediately if leaked', {
-      pinned: true,
-    });
-    const b = createMemory('use safe_sync.py not sync_to_supabase.py directly ever', {
-      pinned: true,
-    });
-    const c = createMemory('unpinned note that absolutely must not appear in the output', {
-      pinned: false,
-    });
+    const a = createMemory('never commit secrets to git rotate immediately if leaked', { pinned: true });
+    const b = createMemory('use safe_sync.py not sync_to_supabase.py directly ever', { pinned: true });
+    const c = createMemory('unpinned note that absolutely must not appear in the output', { pinned: false });
     writeEntry(hippoDir, a);
     writeEntry(hippoDir, b);
     writeEntry(hippoDir, c);
 
-    const raw = await runHippo([
-      'context',
-      '--pinned-only',
-      '--format',
-      'additional-context',
-      '--budget',
-      '500',
-    ]);
+    const raw = await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     const parsed = JSON.parse(raw);
     expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(parsed.hookSpecificOutput.additionalContext).toBeTypeOf('string');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('never commit secrets');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('use safe_sync.py');
-    expect(parsed.hookSpecificOutput.additionalContext).not.toContain(
-      'unpinned note that absolutely must not appear',
-    );
+    expect(parsed.hookSpecificOutput.additionalContext).not.toContain('unpinned note that absolutely must not appear');
   });
 
   it('does NOT fail when local .hippo is missing (regression: UserPromptSubmit hook error)', async () => {
@@ -274,12 +202,9 @@ describe('hippo context --pinned-only', () => {
     const globalDir = makeRoot('global');
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fresh-cwd-'));
     try {
-      const pinned = createMemory(
-        'REGRESSION GUARD: no local hippo should still deliver pinned content',
-        {
-          pinned: true,
-        },
-      );
+      const pinned = createMemory('REGRESSION GUARD: no local hippo should still deliver pinned content', {
+        pinned: true,
+      });
       writeEntry(globalDir, pinned);
 
       const out = await hippoIn(freshCwd, globalDir, [
@@ -327,14 +252,9 @@ describe('hippo context --pinned-only', () => {
 
   it('respects config.pinnedInject.enabled=false (empty output)', async () => {
     initTestStore(hippoDir);
-    const pinned = createMemory('pinned rule that should NOT appear when disabled by config', {
-      pinned: true,
-    });
+    const pinned = createMemory('pinned rule that should NOT appear when disabled by config', { pinned: true });
     writeEntry(hippoDir, pinned);
-    fs.writeFileSync(
-      path.join(hippoDir, 'config.json'),
-      JSON.stringify({ pinnedInject: { enabled: false } }),
-    );
+    fs.writeFileSync(path.join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
 
     const out = await runHippo(['context', '--pinned-only', '--format', 'additional-context']);
     expect(out.trim()).toBe('');

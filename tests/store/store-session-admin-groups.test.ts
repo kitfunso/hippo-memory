@@ -27,8 +27,7 @@ function root(): string {
   return made;
 }
 
-const entry = (text: string) =>
-  createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: T });
+const entry = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: T });
 
 describe('sessions group', () => {
   it('keeps a snapshot, events and a handoff, in both forms', async () => {
@@ -39,9 +38,7 @@ describe('sessions group', () => {
     expect((await sync.save(T, 'snapshot', snap, null)).task).toBe('ship');
     expect((await served.loadSnapshot(T, {}, null))?.nextStep).toBe('merge');
     await served.save(T, 'event', { sessionId: 's1', eventType: 'note', content: 'hello' });
-    expect((await served.read(T, 'event', { sessionId: 's1' })).map((e) => e.content)).toEqual([
-      'hello',
-    ]);
+    expect((await served.read(T, 'event', { sessionId: 's1' })).map((e) => e.content)).toEqual(['hello']);
     expect(await sync.read(T, 'event', { sessionId: 's1' })).toHaveLength(1);
     const handoff = await served.save(
       T,
@@ -58,9 +55,9 @@ describe('sessions group', () => {
     const r = root();
     const served = sqliteStore(r).sessions;
     await served.save(T, 'working_memory', { scope: 'task', content: 'note one' });
-    expect(
-      (await served.read(T, 'working_memory', { scope: 'task', limit: 10 })).map((i) => i.content),
-    ).toEqual(['note one']);
+    expect((await served.read(T, 'working_memory', { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
+      'note one',
+    ]);
     expect(await served.clear(T, 'working_memory', { scope: 'task' })).toBe(1);
   });
 });
@@ -107,16 +104,10 @@ describe('conflicts group', () => {
     const b = entry('deploys never run from main');
     writeEntry(r, a);
     writeEntry(r, b);
-    replaceDetectedConflicts(r, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 },
-    ]);
+    replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
     const sync = sqliteStore(r).conflicts;
     const served = sqliteStore(r).conflicts;
-    const query = (tenantId: TenantId): ConflictListQuery => ({
-      tenantId,
-      status: 'open',
-      limit: 10,
-    });
+    const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
     const [open] = (await sync.list(query(T))).rows;
     expect(open?.a).not.toBeNull();
     expect(open?.b).not.toBeNull();
@@ -146,12 +137,7 @@ describe('dormant group', () => {
     const row = entry('the staging host was build-07');
     const db = openHippoDb(r);
     try {
-      insertDormantRow(db, {
-        entry: row,
-        strength: 0.01,
-        reason: 'decay',
-        dormantAt: new Date().toISOString(),
-      });
+      insertDormantRow(db, { entry: row, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
     } finally {
       closeHippoDb(db);
     }
@@ -192,9 +178,7 @@ describe('reports group', () => {
     const b = entry('second note');
     writeEntry(r, a);
     writeEntry(r, b);
-    replaceDetectedConflicts(r, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'x', score: 0.9 },
-    ]);
+    replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'x', score: 0.9 }]);
     const sync = sqliteStore(r).reports;
     const served = sqliteStore(r).reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);
@@ -203,9 +187,7 @@ describe('reports group', () => {
     const first = await served.entriesWhere({ tenantId: T }, { limit: 1 });
     expect(first.entries).toHaveLength(1);
     expect(first.next).not.toBeNull();
-    expect(
-      (await served.entriesWhere({ tenantId: ALL_TENANTS }, { limit: 10 })).entries,
-    ).toHaveLength(2);
+    expect((await served.entriesWhere({ tenantId: ALL_TENANTS }, { limit: 10 })).entries).toHaveLength(2);
     expect(await served.countEntries()).toBe(2);
     expect((await served.tokenUse(T, '2020-01-01T00:00:00.000Z')).totalTokens).toBe(0);
     expect(await served.failures(T, '2020-01-01T00:00:00.000Z')).toMatchObject({

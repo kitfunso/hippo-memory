@@ -1,19 +1,9 @@
 // Schema v53 gives API keys an owner and an expiry; an expired key fails everywhere, cached or not, and the first expiring key raises the binary floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getSchemaVersion,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { raiseMinBinary } from '../../src/db/meta.js';
-import {
-  createApiKey,
-  insertApiKey,
-  readApiKeyRecord,
-  validateApiKey,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, insertApiKey, readApiKeyRecord, validateApiKey } from '../../src/store/sqlite/auth.js';
 import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import {
@@ -52,20 +42,12 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function meta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: the meta table's value column is TEXT; one row by primary key.
-  return (
-    db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined
-  )?.value;
+  return (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined)?.value;
 }
 
 function mint(expiresAt?: string): { keyId: string; plaintext: string } {
   return withDb((db) =>
-    createApiKey(db, {
-      tenantId: 'default',
-      label: 'expiry',
-      role: 'member',
-      ownerSubject: 'alice',
-      expiresAt,
-    }),
+    createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }),
   );
 }
 
@@ -90,16 +72,12 @@ describe('schema v53', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: pragma_table_info rows carry a TEXT `name` column.
-      const cols = (
-        db.prepare(`SELECT name FROM pragma_table_info('api_keys')`).all() as Array<{
-          name: string;
-        }>
-      ).map((c) => c.name);
+      const cols = (db.prepare(`SELECT name FROM pragma_table_info('api_keys')`).all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
       expect(cols).toEqual(expect.arrayContaining(['owner_subject', 'expires_at']));
       // SAFETY: one TEXT `sql` column.
-      const idx = db
-        .prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_api_keys_live_owner'`)
-        .get() as {
+      const idx = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_api_keys_live_owner'`).get() as {
         sql: string;
       };
       expect(idx.sql).toMatch(/\(tenant_id, owner_subject\) WHERE revoked_at IS NULL/);
@@ -121,9 +99,7 @@ describe('schema v53', () => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       expect(meta(db, 'min_compatible_binary')).toBe('1.24.0');
       // SAFETY: the SELECT names exactly these two nullable TEXT columns.
-      const row = db
-        .prepare(`SELECT owner_subject, expires_at FROM api_keys WHERE key_id = ?`)
-        .get(legacy.keyId) as {
+      const row = db.prepare(`SELECT owner_subject, expires_at FROM api_keys WHERE key_id = ?`).get(legacy.keyId) as {
         owner_subject: string | null;
         expires_at: string | null;
       };
@@ -215,11 +191,7 @@ describe('API key expiry', () => {
     const { expiresAt: _dropped, ...rest } = withDb((db) => readApiKeyRecord(db, key.keyId))!;
     // SAFETY: a store written against the port before expiresAt existed returns exactly this shape.
     const record = rest as ApiKeyRecord;
-    const store: HippoStore = {
-      ...sqliteStore(home),
-      kind: 'test',
-      findApiKey: async () => record,
-    };
+    const store: HippoStore = { ...sqliteStore(home), kind: 'test', findApiKey: async () => record };
     expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
   });
 
@@ -271,10 +243,7 @@ describe('key lists', () => {
   it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', async () => {
     const keys = threeKeys();
     const ctx = apiCtx(home, 'default', adminActor('cli'));
-    expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([
-      keys.plain,
-      keys.live,
-    ]);
+    expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
     expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([
       keys.expired,
       keys.plain,
@@ -282,13 +251,8 @@ describe('key lists', () => {
     ]);
     const [first] = await authListRows(ctx, { active: true, limit: 1 });
     expect(first?.key.keyId).toBe(keys.plain);
-    const byId = new Map(
-      (await authListRows(ctx, { active: true })).map((r) => [r.key.keyId, r.key]),
-    );
-    expect(byId.get(keys.live)).toMatchObject({
-      ownerSubject: 'alice',
-      expiresAt: keys.liveExpiry,
-    });
+    const byId = new Map((await authListRows(ctx, { active: true })).map((r) => [r.key.keyId, r.key]));
+    expect(byId.get(keys.live)).toMatchObject({ ownerSubject: 'alice', expiresAt: keys.liveExpiry });
     expect(byId.get(keys.plain)).toMatchObject({ ownerSubject: null, expiresAt: null });
   });
 
@@ -303,12 +267,7 @@ describe('key lists', () => {
     expect(
       (
         await runInProcess(() =>
-          handleAuth({
-            hippoRoot: home,
-            tenantId: 'default',
-            args: ['list'],
-            flags: { all: true },
-          }),
+          handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }),
         )
       ).stdout,
     ).toContain(keys.expired);
@@ -325,19 +284,14 @@ describe('expired keys over MCP and the stream', () => {
   it('refuses an expired key on POST /mcp and GET /mcp/stream', async () => {
     handle = await serve({ hippoRoot: home, port: 0 });
     const key = mint(new Date(Date.now() - 1000).toISOString());
-    const headers = {
-      authorization: `Bearer ${key.plaintext}`,
-      'content-type': 'application/json',
-    };
+    const headers = { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
     const rpc = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers,
       body: '{"jsonrpc":"2.0","method":"tools/list","id":1}',
     });
     expect(rpc.status).toBe(401);
-    const stream = await fetch(`${handle.url}/mcp/stream`, {
-      headers: { ...headers, accept: 'text/event-stream' },
-    });
+    const stream = await fetch(`${handle.url}/mcp/stream`, { headers: { ...headers, accept: 'text/event-stream' } });
     expect(stream.status).toBe(401);
   });
 

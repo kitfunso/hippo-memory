@@ -44,8 +44,6 @@ describe('collectHandoffEvidence git failures', () => {
       .split('\n')
       .filter((l) => l.includes('failed'));
     expect(lines.filter((l) => l.includes('git rev-parse HEAD failed (ENOENT)'))).toHaveLength(1);
-    expect(lines.filter((l) => l.includes('git status --porcelain failed (ENOENT)'))).toHaveLength(
-      1,
-    );
+    expect(lines.filter((l) => l.includes('git status --porcelain failed (ENOENT)'))).toHaveLength(1);
   });
 });

@@ -13,10 +13,7 @@ const row = (extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory('bump build 78 for testflight deploy'),
   ...extra,
 });
-const imported = {
-  tags: ['claude-code-memory'],
-  source: 'agent-memory:claude-code:p-001/note.md#abc',
-};
+const imported = { tags: ['claude-code-memory'], source: 'agent-memory:claude-code:p-001/note.md#abc' };
 
 const CASES: ReadonlyArray<
   readonly [field: keyof RepairProtection, entry: MemoryEntry, backsObject: boolean, label: string]
@@ -32,18 +29,16 @@ describe('repairKeeps', () => {
     '%s keeps its row under the api protection, and lets it go once off',
     (field, entry, backsObject, label) => {
       expect(repairKeeps(entry, backsObject, repairProtection)).toBe(label);
-      expect(
-        repairKeeps(entry, backsObject, { ...repairProtection, [field]: false }),
-      ).toBeUndefined();
+      expect(repairKeeps(entry, backsObject, { ...repairProtection, [field]: false })).toBeUndefined();
       expect(repairKeeps(entry, backsObject, { ...NONE, [field]: true })).toBe(label);
     },
   );
 
   it('keeps a pinned raw object-backed row as pinned first, as the rule reads in order', () => {
     expect(repairKeeps(row({ pinned: true, kind: 'raw' }), true, repairProtection)).toBe('pinned');
-    expect(
-      repairKeeps(row({ pinned: true, kind: 'raw' }), true, { ...repairProtection, pinned: false }),
-    ).toBe('raw receipt');
+    expect(repairKeeps(row({ pinned: true, kind: 'raw' }), true, { ...repairProtection, pinned: false })).toBe(
+      'raw receipt',
+    );
   });
 
   it('lets a plain row go under every protection', () => {
@@ -51,11 +46,6 @@ describe('repairKeeps', () => {
   });
 
   it('the default keeps every row the old api function kept', () => {
-    expect(repairProtection).toEqual({
-      pinned: true,
-      raw: true,
-      trusted: true,
-      objectBacked: true,
-    });
+    expect(repairProtection).toEqual({ pinned: true, raw: true, trusted: true, objectBacked: true });
   });
 });

@@ -61,9 +61,7 @@ describe('adversarial position assignment (uniform across early/mid/late)', () =
   // Late-clustering would optimise for magnitude visibility, which RETRACTION.md forbids.
 
   it('new categories have EXACTLY 6 trap positions', () => {
-    const newPositions = TRAP_PLACEMENTS.filter((p) => NEW_IDS.includes(p.category)).flatMap(
-      (p) => p.positions,
-    );
+    const newPositions = TRAP_PLACEMENTS.filter((p) => NEW_IDS.includes(p.category)).flatMap((p) => p.positions);
     expect(newPositions.length).toBe(6);
   });
 
@@ -75,9 +73,7 @@ describe('adversarial position assignment (uniform across early/mid/late)', () =
   });
 
   it('exactly 2 new positions in each of early (1-22), mid (22-42), late (42-62) regions', () => {
-    const newPositions = TRAP_PLACEMENTS.filter((p) => NEW_IDS.includes(p.category)).flatMap(
-      (p) => p.positions,
-    );
+    const newPositions = TRAP_PLACEMENTS.filter((p) => NEW_IDS.includes(p.category)).flatMap((p) => p.positions);
 
     const earlyCount = newPositions.filter((pos) => pos >= 1 && pos <= 22).length;
     const midCount = newPositions.filter((pos) => pos >= 23 && pos <= 42).length;

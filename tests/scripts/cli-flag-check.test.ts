@@ -36,10 +36,7 @@ describe('check-cli-flags', () => {
 
   it('scans cli.ts and surface/cli/ only, and reports files with their lines', () => {
     file('cli.ts', 'export const ok = 1;\n');
-    file(
-      'surface/cli/a.ts',
-      "import { x } from './x.js';\nexport const y = String(flags['summary'] ?? '');\n",
-    );
+    file('surface/cli/a.ts', "import { x } from './x.js';\nexport const y = String(flags['summary'] ?? '');\n");
     file('surface/cli/sub/b.ts', 'export const z = 1;\n');
     file('base/c.ts', "export const w = String(flags['summary']);\n");
     expect(findHandFlagReads(dir)).toEqual([{ file: 'surface/cli/a.ts', line: 2 }]);

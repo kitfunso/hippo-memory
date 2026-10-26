@@ -83,11 +83,7 @@ describe('GDPR Path A completeness fixes', () => {
     const episodicDir = join(root, 'episodic');
     mkdirSync(episodicDir, { recursive: true });
     const orphanPath = join(episodicDir, 'mem_legacy_canary_1.md');
-    writeFileSync(
-      orphanPath,
-      '# legacy memory\n\noriginal-content-canary-FORGET-ME-quaxle',
-      'utf8',
-    );
+    writeFileSync(orphanPath, '# legacy memory\n\noriginal-content-canary-FORGET-ME-quaxle', 'utf8');
     expect(existsSync(orphanPath)).toBe(true);
 
     // Re-open: reaper runs, file disappears, per-row timestamp set.
@@ -184,18 +180,12 @@ describe('GDPR Path A completeness fixes', () => {
       const { statements } = recordStatements(() => {
         for (let i = 0; i < opens; i++) closeHippoDb(openHippoDb(root));
       });
-      return countMatching(
-        statements,
-        /^SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL/,
-      );
+      return countMatching(statements, /^SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL/);
     };
     const pending = (): number | undefined => {
       const db = openHippoDb(root);
       try {
-        return queryOne<{ c?: number }>(
-          db,
-          `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
-        )?.c;
+        return queryOne<{ c?: number }>(db, `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)?.c;
       } finally {
         closeHippoDb(db);
       }
@@ -345,10 +335,7 @@ describe('GDPR Path A completeness fixes', () => {
       }
 
       // Belt-and-braces: query text appears nowhere in audit_log raw json.
-      const rawAudit = queryAll<{ metadata_json: string }>(
-        db,
-        `SELECT metadata_json FROM audit_log`,
-      );
+      const rawAudit = queryAll<{ metadata_json: string }>(db, `SELECT metadata_json FROM audit_log`);
       for (const r of rawAudit) {
         expect(r.metadata_json).not.toContain(queryText);
       }

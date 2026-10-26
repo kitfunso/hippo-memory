@@ -13,14 +13,7 @@ import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
-import {
-  makeOkFetcher,
-  getRow,
-  forceMarkDirty,
-  rejectValue,
-  makeSummary,
-  makeChild,
-} from '../_helpers/dag-rebuild.js';
+import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -153,9 +146,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       // SAFETY: summaries' shape matches the two columns named in the
       // SELECT above.
       const summaries = db
-        .prepare(
-          `SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`,
-        )
+        .prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`)
         .all() as Array<{ id: string; tenant_id: string }>;
       expect(summaries).toHaveLength(2);
       const tenants = summaries.map((s) => s.tenant_id).sort();
@@ -252,16 +243,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       for (const [index, [raw, expected]] of table.entries()) {
         vi.stubEnv('HIPPO_DAG_REBUILD_CAP', raw);
         // A root's config, so the raw value takes the path the CLI and server give it.
-        const result = await consolidate(hippoRoot, {
-          config: configReader(envRuntimeSettings)(hippoRoot),
-        });
+        const result = await consolidate(hippoRoot, { config: configReader(envRuntimeSettings)(hippoRoot) });
         expect(rebuildSpy).toHaveBeenCalledTimes(index + 1);
         expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
         if (index === 0) {
-          const processed =
-            result.summariesRebuilt +
-            result.summariesZeroChildSkipped +
-            result.summariesRebuildFailed;
+          const processed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
           // The one dirty summary seeded above.
           expect(processed).toBe(1);
         }

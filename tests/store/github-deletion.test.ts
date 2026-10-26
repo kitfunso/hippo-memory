@@ -48,9 +48,7 @@ function archiveRowCount(root: string, memoryId: string): number {
   try {
     // SAFETY: the query always selects a single `SELECT COUNT(*) as c` aggregate,
     // so the driver always returns one row shaped { c: number }.
-    const row = db
-      .prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`)
-      .get(memoryId) as { c: number };
+    const row = db.prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`).get(memoryId) as { c: number };
     return Number(row.c);
   } finally {
     closeHippoDb(db);
@@ -228,10 +226,7 @@ describe('handleCommentDeleted', () => {
     });
 
     // Pre-condition: scoped recall finds it (sanity).
-    const before = await retrieve(ctxFor(root), {
-      query: distinctive,
-      filter: { scope: SCOPE_PRIVATE },
-    });
+    const before = await retrieve(ctxFor(root), { query: distinctive, filter: { scope: SCOPE_PRIVATE } });
     expect(before.results.some((r) => r.content.includes(distinctive))).toBe(true);
 
     // Archive via deletion.
@@ -248,9 +243,7 @@ describe('handleCommentDeleted', () => {
     expect(after.results.some((r) => r.content.includes(distinctive))).toBe(false);
 
     // Also confirm the row is gone from memories entirely.
-    const remaining = loadAllEntries(root, 'default').filter((e) =>
-      e.content.includes(distinctive),
-    );
+    const remaining = loadAllEntries(root, 'default').filter((e) => e.content.includes(distinctive));
     expect(remaining).toHaveLength(0);
   });
 });

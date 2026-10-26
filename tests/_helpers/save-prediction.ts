@@ -17,15 +17,6 @@ export async function savePrediction(
   if (!opts.classTag) throw new BadRequestError('savePrediction: classTag is required');
   if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
 
-  const mirror = predictionMirror(
-    tenantId,
-    opts,
-    loadConfig(hippoRoot).defaultHalfLifeDays,
-    evalNow(),
-  );
-  return await sqliteStore(hippoRoot).objects.saveObject(tenantId, 'prediction', {
-    ...opts,
-    mirror,
-    actor,
-  });
+  const mirror = predictionMirror(tenantId, opts, loadConfig(hippoRoot).defaultHalfLifeDays, evalNow());
+  return await sqliteStore(hippoRoot).objects.saveObject(tenantId, 'prediction', { ...opts, mirror, actor });
 }

@@ -38,13 +38,7 @@ describe('ingestMessage empty-body replay status consistency', () => {
     const opts = {
       teamId: 'T01',
       channel,
-      message: {
-        type: 'message' as const,
-        channel: channel.id,
-        user: 'U01',
-        ts: '1716553200.000200',
-        text: '',
-      },
+      message: { type: 'message' as const, channel: channel.id, user: 'U01', ts: '1716553200.000200', text: '' },
       eventId: 'Ev_empty_002',
     };
     const first = await ingestMessage(ctx(hippoRoot), opts);

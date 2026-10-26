@@ -107,12 +107,7 @@ describe('agent memory sync: the Added list', () => {
     await dormantRestore(ctxFor(w.local), id);
 
     for (let i = 0; i < 2; i++) {
-      expect(claude(await sync())).toMatchObject({
-        setAside: 0,
-        untagged: 0,
-        retagged: 0,
-        imported: 0,
-      });
+      expect(claude(await sync())).toMatchObject({ setAside: 0, untagged: 0, retagged: 0, imported: 0 });
       expect(only()).toMatchObject({ id, content: A });
       expect(only().tags).not.toContain(TAG);
     }
@@ -130,10 +125,7 @@ describe('agent memory sync: the Added list', () => {
     const a2 = only();
 
     expect(a2.id).not.toBe(a1.id);
-    expect([
-      readEntry(w.local, a1.id)?.supersededBy,
-      readEntry(w.local, b.id)?.supersededBy,
-    ]).toEqual([b.id, a2.id]);
+    expect([readEntry(w.local, a1.id)?.supersededBy, readEntry(w.local, b.id)?.supersededBy]).toEqual([b.id, a2.id]);
   });
 
   it('two tagged rows for one key collapse to the newest', async () => {
@@ -159,12 +151,7 @@ describe('agent memory sync: the Added list', () => {
     await dormantRestore(ctxFor(w.local), a);
 
     for (let i = 0; i < 2; i++) {
-      expect(claude(await sync())).toMatchObject({
-        unchanged: 1,
-        setAside: 0,
-        replaced: 0,
-        imported: 0,
-      });
+      expect(claude(await sync())).toMatchObject({ unchanged: 1, setAside: 0, replaced: 0, imported: 0 });
       expect(liveTexts(w.local)).toEqual([B, A].sort());
     }
   });
@@ -192,12 +179,7 @@ describe('agent memory sync: the Added list', () => {
     note(dir, 'big.md', `${A} ${'padding line for the size cap\n'.repeat(10_000)}`);
     note(dir, 'nul.md', `${B}\u0000`);
 
-    expect(claude(await sync())).toMatchObject({
-      unread: 2,
-      setAside: 0,
-      replaced: 0,
-      imported: 0,
-    });
+    expect(claude(await sync())).toMatchObject({ unread: 2, setAside: 0, replaced: 0, imported: 0 });
     expect(
       liveRows(w.local)
         .map((e) => e.id)
@@ -211,8 +193,7 @@ describe('agent memory sync: the Added list', () => {
     mkdirSync(dirname(memory), { recursive: true });
     writeFileSync(memory, `- ${B}\n`, 'utf8');
     await sync();
-    const ids = (): string[] =>
-      [...liveRows(w.local), ...liveRows(w.global)].map((e) => e.id).sort();
+    const ids = (): string[] => [...liveRows(w.local), ...liveRows(w.global)].map((e) => e.id).sort();
     const before = ids();
     expect(before).toHaveLength(2);
     writeFileSync(file, '');
@@ -261,19 +242,11 @@ describe('agent memory sync: the Added list', () => {
       replaced: 0,
     });
     expect(liveRows(w.local)).toEqual([]);
-    expect(dormantRows(w.local).map((d) => d.reason)).toEqual([
-      'source-deleted',
-      'source-deleted',
-      'source-deleted',
-    ]);
+    expect(dormantRows(w.local).map((d) => d.reason)).toEqual(['source-deleted', 'source-deleted', 'source-deleted']);
   });
 
   it('a note holding a Bearer header or a JWT is refused, and an email address is stored masked', async () => {
-    note(
-      dir,
-      'bearer.md',
-      'The staging API takes Authorization: Bearer abcdefghijklmnop123456 on every call.',
-    );
+    note(dir, 'bearer.md', 'The staging API takes Authorization: Bearer abcdefghijklmnop123456 on every call.');
     note(
       dir,
       'jwt.md',
@@ -316,12 +289,7 @@ describe('agent memory sync: the Added list', () => {
         `INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at) VALUES ('default', ?, ?, ?, 'decay', 0.1, ?)`,
       );
       put.run('mem_broken_json', A, '{not json', new Date().toISOString());
-      put.run(
-        'mem_broken_entry',
-        A,
-        JSON.stringify({ source }),
-        new Date(Date.now() + 1000).toISOString(),
-      );
+      put.run('mem_broken_entry', A, JSON.stringify({ source }), new Date(Date.now() + 1000).toISOString());
     });
     note(dir, 'deploy.md', A);
 
@@ -353,11 +321,7 @@ describe('agent memory sync: the Added list', () => {
   });
 
   it('duplicate bullets under one heading get ~2', async () => {
-    const file = codexSummary(
-      w,
-      '- Prefers tabs over spaces in Go files.',
-      '- Prefers tabs over spaces in Go files.',
-    );
+    const file = codexSummary(w, '- Prefers tabs over spaces in Go files.', '- Prefers tabs over spaces in Go files.');
     const text = 'User Profile: Prefers tabs over spaces in Go files.';
     const base = `agent-memory:codex:${expectedContainer(file, 'u')}/user-profile/${sha(text).slice(0, 12)}`;
 

@@ -9,17 +9,8 @@ import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
-import {
-  initProject,
-  removeScratch,
-  runHippo,
-  scratch,
-  type Scratch,
-} from '../_helpers/compaction-hooks.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
+import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -70,13 +61,8 @@ describe('the shared gated write', () => {
   it('writes a worthwhile row on the caller handle, stamped with the store origin, and audits it', () => {
     const entry = entryFor('The billing service uses pnpm, so npm install is never run there.');
     expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('written');
-    expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({
-      content: entry.content,
-      originProject: 'proj',
-    });
-    expect(
-      listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId),
-    ).toContain(entry.id);
+    expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({ content: entry.content, originProject: 'proj' });
+    expect(listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId)).toContain(entry.id);
   });
 
   it('keeps an origin the caller already set', () => {
@@ -105,9 +91,7 @@ describe('the shared gated write', () => {
     const text = 'The old staging password rotation runs every Friday at noon by hand.';
     reject(text);
     const entry = entryFor(text);
-    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry, { actor: 'post-compact' })).toBe(
-      'skipped:rejected',
-    );
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry, { actor: 'post-compact' })).toBe('skipped:rejected');
     expect(readEntry(s.hippoRoot, entry.id)).toBeNull();
     const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
     expect(refusals).toHaveLength(1);
@@ -171,9 +155,7 @@ describe('capture on the shared gated write', () => {
     const rows = loadAllEntries(s.hippoRoot, 'default');
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => r.originProject === 'proj' && r.tags.includes('captured'))).toBe(true);
-    expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic')).sort()).toEqual(
-      rows.map((r) => `${r.id}.md`).sort(),
-    );
+    expect(fs.readdirSync(path.join(s.hippoRoot, 'episodic')).sort()).toEqual(rows.map((r) => `${r.id}.md`).sort());
   });
 
   it('counts a rejected item, still writes the rest, and skips a repeat on the next run', async () => {

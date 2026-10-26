@@ -25,11 +25,7 @@ export function useObjectsServer() {
     } finally {
       closeHippoDb(db);
     }
-    handle = await serve({
-      hippoRoot: home,
-      port: 0,
-      rateLimits: { perCaller: 'off', perAddress: 'off' },
-    });
+    handle = await serve({ hippoRoot: home, port: 0, rateLimits: { perCaller: 'off', perAddress: 'off' } });
   });
 
   afterAll(async () => {
@@ -52,11 +48,7 @@ export async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function post(
-  path: string,
-  body?: Body,
-  key: CreateApiKeyResult = apiKey,
-): Promise<Response> {
+export function post(path: string, body?: Body, key: CreateApiKeyResult = apiKey): Promise<Response> {
   return fetch(`${handle.url}${path}`, {
     method: 'POST',
     headers: authHeaders(key),

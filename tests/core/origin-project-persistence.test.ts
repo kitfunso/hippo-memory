@@ -56,11 +56,7 @@ describe('writeEntry origin stamping (v39)', () => {
 
   it('stamps origins on the batch write path too (consolidate bypasses writeEntry)', () => {
     const storeRoot = makeProjectStore('proj-a');
-    batchWriteAndDeleteInFolder(
-      storeRoot,
-      [createMemory('a consolidated semantic summary row')],
-      [],
-    );
+    batchWriteAndDeleteInFolder(storeRoot, [createMemory('a consolidated semantic summary row')], []);
     const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.originProject).toBe('proj-a');
   });
@@ -80,9 +76,7 @@ describe('writeEntry origin stamping (v39)', () => {
     writeEntry(storeRoot, legacy);
     expect(loadAllEntries(storeRoot, 'default')[0].originProject).toBeNull();
     // The pure helper preserves null too.
-    expect(
-      stampOriginProject(storeFilesOf(storeRoot), { ...legacy, originProject: null }).originProject,
-    ).toBeNull();
+    expect(stampOriginProject(storeFilesOf(storeRoot), { ...legacy, originProject: null }).originProject).toBeNull();
   });
 
   it('stampOriginProject never mutates the input entry', () => {
@@ -105,10 +99,7 @@ describe('markdown mirror round-trip', () => {
   });
 
   it('round-trips an unknown (null) origin, so a rebuild never stamps it user-global', () => {
-    const raw = serializeEntry({
-      ...createMemory('unknown-origin row content here'),
-      originProject: null,
-    });
+    const raw = serializeEntry({ ...createMemory('unknown-origin row content here'), originProject: null });
     expect(raw).toContain('origin_project: null');
     expect(deserializeEntry(raw, evalNow())?.originProject).toBeNull();
   });
@@ -122,10 +113,7 @@ describe('markdown mirror round-trip', () => {
   it('a rebuild keeps an explicit null and stamps only a mirror with no origin field', () => {
     const storeRoot = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
-    const unknown = {
-      ...createMemory('a merged row from rows of unknown origin'),
-      originProject: null,
-    };
+    const unknown = { ...createMemory('a merged row from rows of unknown origin'), originProject: null };
     const legacy = createMemory('a markdown row from before origins existed');
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${unknown.id}.md`), serializeEntry(unknown));
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${legacy.id}.md`), serializeEntry(legacy));
@@ -172,9 +160,7 @@ describe('v39 migration backfill', () => {
     );
     writeEntry(
       storeRoot,
-      createMemory('shared from a home session', {
-        source: `shared:${homeName}:2026-01-01T00:00:00Z`,
-      }),
+      createMemory('shared from a home session', { source: `shared:${homeName}:2026-01-01T00:00:00Z` }),
     );
     regressStoreToV38(storeRoot);
 
@@ -189,10 +175,7 @@ describe('v39 migration backfill', () => {
   it('backfills promoted:<localRoot> rows with the promoting project', () => {
     const storeRoot = makeProjectStore('proj-a');
     const promotedFrom = path.join(tmpRoot, 'Proj-B', '.hippo');
-    writeEntry(
-      storeRoot,
-      createMemory('promoted from project b long ago', { source: `promoted:${promotedFrom}` }),
-    );
+    writeEntry(storeRoot, createMemory('promoted from project b long ago', { source: `promoted:${promotedFrom}` }));
     regressStoreToV38(storeRoot);
 
     closeHippoDb(openHippoDb(storeRoot)); // migrate
@@ -207,18 +190,10 @@ describe('v39 migration backfill', () => {
     const storeRoot = path.join(projectDir, '.hippo');
     fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
     // Legacy markdown has no origin field at all: leave the origin unstamped.
-    const sharedRow = createMemory('markdown row shared from proj b', {
-      source: 'shared:Proj-B:2026-01-01T00:00:00Z',
-    });
+    const sharedRow = createMemory('markdown row shared from proj b', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' });
     const plainRow = createMemory('markdown row written here long ago');
-    fs.writeFileSync(
-      path.join(storeRoot, 'episodic', `${sharedRow.id}.md`),
-      serializeEntry(sharedRow),
-    );
-    fs.writeFileSync(
-      path.join(storeRoot, 'episodic', `${plainRow.id}.md`),
-      serializeEntry(plainRow),
-    );
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${sharedRow.id}.md`), serializeEntry(sharedRow));
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
 
     initTestStore(storeRoot); // bootstrapLegacyStore imports the markdown
     const entries = loadAllEntries(storeRoot, 'default');
@@ -235,9 +210,7 @@ describe('v39 migration backfill', () => {
       // SAFETY: query selects only the "value" text column from meta, so the
       // row (if present) has that shape; absence is handled via optional
       // chaining below.
-      const row = db
-        .prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`)
-        .get() as { value?: string };
+      const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string };
       expect(row?.value).toBe('1.24.0');
     } finally {
       closeHippoDb(db);

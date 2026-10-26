@@ -29,8 +29,7 @@ oneRequestPerTest();
 const REPO = 'acme/demo';
 const TENANT = 'default';
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' });
 
 interface CursorRow {
   issues_hwm: string | null;
@@ -138,11 +137,7 @@ function issueItem(number: number, updatedAt: string, isPr = false): GitHubIssue
   return item;
 }
 
-function issueCommentItem(
-  id: number,
-  issueNumber: number,
-  updatedAt: string,
-): GitHubIssueCommentItem {
+function issueCommentItem(id: number, issueNumber: number, updatedAt: string): GitHubIssueCommentItem {
   return {
     id,
     body: `comment ${id}`,
@@ -152,11 +147,7 @@ function issueCommentItem(
   };
 }
 
-function prReviewCommentItem(
-  id: number,
-  prNumber: number,
-  updatedAt: string,
-): GitHubPrReviewCommentItem {
+function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): GitHubPrReviewCommentItem {
   return {
     id,
     body: `review comment ${id}`,
@@ -189,10 +180,7 @@ describe('backfillRepo', () => {
       ],
       issueComments: [
         {
-          items: [
-            issueCommentItem(101, 1, '2026-05-01T11:00:00Z'),
-            issueCommentItem(102, 2, '2026-05-02T11:00:00Z'),
-          ],
+          items: [issueCommentItem(101, 1, '2026-05-01T11:00:00Z'), issueCommentItem(102, 2, '2026-05-02T11:00:00Z')],
           next: null,
           rateLimit: NO_RATE,
         },
@@ -302,11 +290,7 @@ describe('backfillRepo', () => {
     // Only the 3 non-PR items should have produced memories.
     expect(entries).toHaveLength(3);
     const refs = entries.map((e) => e.artifactRef).sort();
-    expect(refs).toEqual([
-      `github://${REPO}/issue/1`,
-      `github://${REPO}/issue/3`,
-      `github://${REPO}/issue/5`,
-    ]);
+    expect(refs).toEqual([`github://${REPO}/issue/1`, `github://${REPO}/issue/3`, `github://${REPO}/issue/5`]);
   });
 
   it('4. rate-limit pause: sleeps and retries the same URL', async () => {
@@ -428,9 +412,7 @@ describe('backfillRepo', () => {
       token: 't',
     });
 
-    const issuesCall = capture.calls.find(
-      (c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'),
-    );
+    const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
     expect(issuesCall?.url).toContain(`since=${encodeURIComponent('2026-01-01T00:00:00Z')}`);
   });
 

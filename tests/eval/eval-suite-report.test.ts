@@ -7,11 +7,7 @@ import {
   type FeatureResult,
 } from '../../src/domain/eval/eval-suite.js';
 
-const feature = (
-  category: FeatureResult['category'],
-  ndcgAt5: number,
-  mrr = 0.8,
-): FeatureResult => ({
+const feature = (category: FeatureResult['category'], ndcgAt5: number, mrr = 0.8): FeatureResult => ({
   category,
   cases: 4,
   mrr,
@@ -33,29 +29,18 @@ describe('detectRegressions', () => {
   const base = resultToBaseline(result([feature('direct-recall', 0.7), feature('temporal', 0.7)]));
 
   it('passes a drop of exactly the threshold and flags one past it', () => {
-    expect(
-      detectRegressions(base, result([feature('direct-recall', 0.65), feature('temporal', 0.7)]))
-        .verdict,
-    ).toBe('PASS');
-    const report = detectRegressions(
-      base,
-      result([feature('direct-recall', 0.6), feature('temporal', 0.7)]),
+    expect(detectRegressions(base, result([feature('direct-recall', 0.65), feature('temporal', 0.7)])).verdict).toBe(
+      'PASS',
     );
+    const report = detectRegressions(base, result([feature('direct-recall', 0.6), feature('temporal', 0.7)]));
     expect(report.verdict).toBe('REGRESSION');
-    expect(report.regressions.map((r) => [r.category, r.metric])).toEqual([
-      ['direct-recall', 'ndcgAt5'],
-    ]);
+    expect(report.regressions.map((r) => [r.category, r.metric])).toEqual([['direct-recall', 'ndcgAt5']]);
   });
 
   it('lists a gain past the threshold as an improvement and skips a category the baseline lacks', () => {
-    const report = detectRegressions(
-      base,
-      result([feature('temporal', 0.9), feature('multi-hop', 0.1)]),
-    );
+    const report = detectRegressions(base, result([feature('temporal', 0.9), feature('multi-hop', 0.1)]));
     expect(report.verdict).toBe('PASS');
-    expect(report.improvements.map((i) => [i.category, i.metric])).toEqual([
-      ['temporal', 'ndcgAt5'],
-    ]);
+    expect(report.improvements.map((i) => [i.category, i.metric])).toEqual([['temporal', 'ndcgAt5']]);
     expect(report.regressions).toEqual([]);
   });
 });

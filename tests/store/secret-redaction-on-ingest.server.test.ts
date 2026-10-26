@@ -90,11 +90,7 @@ describe('connector webhooks', () => {
     const sig = `v0=${createHmac('sha256', SIGNING).update(`v0:${ts}:${body}`).digest('hex')}`;
     const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-slack-request-timestamp': ts,
-        'x-slack-signature': sig,
-      },
+      headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': sig },
       body,
     });
     expect(res.status).toBe(200);
@@ -110,12 +106,7 @@ describe('connector webhooks', () => {
         body: `I set GH_TOKEN to ${GHP} and the pull still fails`,
         user: { login: 'alice', id: 1 },
       },
-      repository: {
-        full_name: 'acme/repo',
-        private: false,
-        owner: { login: 'acme' },
-        name: 'repo',
-      },
+      repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
       sender: { login: 'alice', id: 1 },
       installation: { id: 99 },
     });
@@ -152,9 +143,7 @@ describe('connector webhooks', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: the SELECT names exactly these four columns.
-      return db
-        .prepare(`SELECT id, raw_payload, signature, error FROM ${table} ORDER BY id`)
-        .all() as Array<{
+      return db.prepare(`SELECT id, raw_payload, signature, error FROM ${table} ORDER BY id`).all() as Array<{
         id: number;
         raw_payload: string;
         signature: string | null;
@@ -193,12 +182,7 @@ describe('connector webhooks', () => {
     expect(
       (
         await replaySlackDlqEntry(
-          {
-            tenantId: 'default',
-            store: sqliteStore(root),
-            config: loadConfig(root),
-            infra: testInfra(),
-          },
+          { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
           row.id,
           {
             signingSecret: SIGNING,
@@ -209,12 +193,7 @@ describe('connector webhooks', () => {
     expect(
       (
         await replaySlackDlqEntry(
-          {
-            tenantId: 'default',
-            store: sqliteStore(root),
-            config: loadConfig(root),
-            infra: testInfra(),
-          },
+          { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
           row.id,
           {
             force: true,
@@ -236,18 +215,8 @@ describe('connector webhooks', () => {
   it('a GitHub event parked for review lands in the dead-letter table redacted', async () => {
     const body = JSON.stringify({
       action: 'deleted',
-      issue: {
-        number: 7,
-        title: 'old',
-        body: `the token ${GHP} was pasted here`,
-        user: { login: 'alice', id: 1 },
-      },
-      repository: {
-        full_name: 'acme/repo',
-        private: false,
-        owner: { login: 'acme' },
-        name: 'repo',
-      },
+      issue: { number: 7, title: 'old', body: `the token ${GHP} was pasted here`, user: { login: 'alice', id: 1 } },
+      repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
       sender: { login: 'alice', id: 1 },
       installation: { id: 99 },
     });
@@ -277,14 +246,7 @@ describe('importers', () => {
     ['chatgpt', () => importChatGPT(write('chatgpt.json', JSON.stringify([line])), opts())],
     ['claude', () => importClaude(write('claude.md', `# Notes\n\n- ${line}\n`), opts())],
     ['cursor', () => importCursor(write('cursorrules', `- ${line}\n`), opts())],
-    [
-      'file',
-      () =>
-        importGenericFile(
-          write('notes.txt', `${line}\n\nAnother plain paragraph about builds\n`),
-          opts(),
-        ),
-    ],
+    ['file', () => importGenericFile(write('notes.txt', `${line}\n\nAnother plain paragraph about builds\n`), opts())],
     ['markdown', () => importMarkdown(write('memory.md', `## Ops\n\n- ${line}\n`), opts())],
   ];
 
@@ -301,11 +263,7 @@ describe('importers', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-vault-'));
     try {
       fs.writeFileSync(path.join(vault, 'ops.md'), `${line}\n`, 'utf8');
-      const result = await importVault(vault, {
-        tenantId: 'default',
-        hippoRoot: root,
-        name: 'notes',
-      });
+      const result = await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' });
       expect(result.imported).toBe(1);
       expect(result.redacted).toBe(1);
       expect(result.entries[0].content).not.toContain(GHP);
@@ -340,9 +298,7 @@ describe('machine-captured lessons', () => {
   });
 
   it('git learn lessons lose a token pasted into a commit subject', () => {
-    const { kept } = partitionLessons([
-      `rotate the leaked deploy credential ${GHP} after the outage review`,
-    ]);
+    const { kept } = partitionLessons([`rotate the leaked deploy credential ${GHP} after the outage review`]);
     expect(kept).toHaveLength(1);
     expect(kept[0]).not.toContain(GHP);
     expect(kept[0]).toContain('[REDACTED]');

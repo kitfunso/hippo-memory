@@ -20,15 +20,9 @@ describe('check-folder-cycles', () => {
   }
 
   it('reports two folders that import each other through different files, which no file cycle shows', () => {
-    file(
-      'search/rank.ts',
-      `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`,
-    );
+    file('search/rank.ts', `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`);
     file('sharing/scope.ts', `export const scopeOf = 1;\n`);
-    file(
-      'sharing/both.ts',
-      `import { rank } from '../search/rank.js';\nexport const both = rank;\n`,
-    );
+    file('sharing/both.ts', `import { rank } from '../search/rank.js';\nexport const both = rank;\n`);
     file('core/x.ts', `export const x = 1;\n`);
     file(
       'cli.ts',
@@ -52,28 +46,16 @@ describe('check-folder-cycles', () => {
       'c/three.ts',
       `import type { Four } from '../d/four.js';\n// import { four } from '../d/four.js';\nexport const lazy = () => import('../d/four.js');\nexport type Three = Four;\n`,
     );
-    file(
-      'd/four.ts',
-      `import { lazy } from '../c/three.js';\nexport type Four = number;\nexport const four = lazy;\n`,
-    );
+    file('d/four.ts', `import { lazy } from '../c/three.js';\nexport type Four = number;\nexport const four = lazy;\n`);
     expect(findFolderCycles(dir).map((c) => c.folders)).toEqual([['a', 'b']]);
   });
 
   it('keys base, domain and surface on their features, so two domain features that import each other fail', () => {
-    file(
-      'domain/search/rank.ts',
-      `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`,
-    );
+    file('domain/search/rank.ts', `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`);
     file('domain/sharing/scope.ts', `export const scopeOf = 1;\n`);
-    file(
-      'domain/sharing/both.ts',
-      `import { rank } from '../search/rank.js';\nexport const both = rank;\n`,
-    );
+    file('domain/sharing/both.ts', `import { rank } from '../search/rank.js';\nexport const both = rank;\n`);
     file('db/open.ts', `import { x } from './sub/x.js';\nexport const open = x;\n`);
-    file(
-      'db/sub/x.ts',
-      `import { open } from '../open.js';\nexport const x = 1;\nexport const again = open;\n`,
-    );
+    file('db/sub/x.ts', `import { open } from '../open.js';\nexport const x = 1;\nexport const again = open;\n`);
     expect(findFolderCycles(dir)).toEqual([
       {
         folders: ['domain/search', 'domain/sharing'],

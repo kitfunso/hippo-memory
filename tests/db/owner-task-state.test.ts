@@ -52,9 +52,7 @@ function handoff(summary: string, sessionId = 's1'): Omit<SessionHandoff, 'updat
 function statusOf(id: number): string {
   // SAFETY: one TEXT column by primary key.
   return withDb(
-    (db) =>
-      (db.prepare(`SELECT status FROM task_snapshots WHERE id = ?`).get(id) as { status: string })
-        .status,
+    (db) => (db.prepare(`SELECT status FROM task_snapshots WHERE id = ?`).get(id) as { status: string }).status,
   );
 }
 
@@ -65,14 +63,8 @@ function handoffRows(
   return withDb(
     (db) =>
       db
-        .prepare(
-          `SELECT summary, owner_subject, origin_project FROM session_handoffs WHERE session_id = ? ORDER BY id`,
-        )
-        .all(sessionId) as Array<{
-        summary: string;
-        owner_subject: string | null;
-        origin_project: string | null;
-      }>,
+        .prepare(`SELECT summary, owner_subject, origin_project FROM session_handoffs WHERE session_id = ? ORDER BY id`)
+        .all(sessionId) as Array<{ summary: string; owner_subject: string | null; origin_project: string | null }>,
   );
 }
 
@@ -93,11 +85,7 @@ describe('task snapshots keyed by owner and project', () => {
     const aq = saveActiveTaskSnapshot(home, T, snap('aq'), { owner: 'alice', project: ['q'] });
     const a2 = saveActiveTaskSnapshot(home, T, snap('a2'), A);
     expect(statusOf(a1.id)).toBe('superseded');
-    expect([statusOf(b1.id), statusOf(aq.id), statusOf(a2.id)]).toEqual([
-      'active',
-      'active',
-      'active',
-    ]);
+    expect([statusOf(b1.id), statusOf(aq.id), statusOf(a2.id)]).toEqual(['active', 'active', 'active']);
   });
 
   it("loadActiveTaskSnapshot returns only the owner's row", () => {
@@ -123,10 +111,7 @@ describe('task snapshots keyed by owner and project', () => {
   });
 
   it('an alias row is superseded by a save under the main name', () => {
-    const old = saveActiveTaskSnapshot(home, T, snap('old'), {
-      owner: 'alice',
-      project: ['old-folder'],
-    });
+    const old = saveActiveTaskSnapshot(home, T, snap('old'), { owner: 'alice', project: ['old-folder'] });
     const renamed: ContinuityKey = { owner: 'alice', project: ['p', 'old-folder'] };
     const now = saveActiveTaskSnapshot(home, T, snap('now'), renamed);
     expect(statusOf(old.id)).toBe('superseded');
@@ -148,9 +133,7 @@ describe('task snapshots keyed by owner and project', () => {
     expect(loadActiveTaskSnapshot(home, T)?.id).toBe(second.id);
     expect(existsSync(mirror())).toBe(true);
     saveSessionHandoff(home, T, handoff('local'));
-    expect(handoffRows('s1')).toEqual([
-      { summary: 'local', owner_subject: null, origin_project: null },
-    ]);
+    expect(handoffRows('s1')).toEqual([{ summary: 'local', owner_subject: null, origin_project: null }]);
   });
 
   it("on a shared store an unkeyed save or clear throws and every owner's snapshot stays active", async () => {
@@ -158,17 +141,11 @@ describe('task snapshots keyed by owner and project', () => {
     home = makeRoot('owner-task-state-shared', { config: { sharedStore: true } });
     const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
     const b = saveActiveTaskSnapshot(home, T, snap('b'), B);
-    expect(() => saveActiveTaskSnapshot(home, T, snap('admin'))).toThrow(
-      /needs their continuity key/,
-    );
+    expect(() => saveActiveTaskSnapshot(home, T, snap('admin'))).toThrow(/needs their continuity key/);
     await expect(clearActiveTaskSnapshot(home, T)).rejects.toThrow(/needs their continuity key/);
     expect([statusOf(a.id), statusOf(b.id)]).toEqual(['active', 'active']);
     // SAFETY: COUNT(*) returns one row with one integer column.
-    expect(
-      withDb(
-        (db) => (db.prepare(`SELECT COUNT(*) AS n FROM task_snapshots`).get() as { n: number }).n,
-      ),
-    ).toBe(2);
+    expect(withDb((db) => (db.prepare(`SELECT COUNT(*) AS n FROM task_snapshots`).get() as { n: number }).n)).toBe(2);
   });
 
   it('owner calls write and delete no mirror', () => {
@@ -184,20 +161,14 @@ describe('task snapshots keyed by owner and project', () => {
 describe('handoffs and failures keyed by owner and project', () => {
   it('saveSessionHandoff stamps owner and project', () => {
     saveSessionHandoff(home, T, handoff('mine'), { owner: 'alice', project: ['p', 'p-legacy'] });
-    expect(handoffRows('s1')).toEqual([
-      { summary: 'mine', owner_subject: 'alice', origin_project: 'p' },
-    ]);
+    expect(handoffRows('s1')).toEqual([{ summary: 'mine', owner_subject: 'alice', origin_project: 'p' }]);
   });
 
   it("loadLatestHandoff unfinishedOnly: B's newer revision never hides A's", () => {
     saveSessionHandoff(home, T, handoff('alice half done'), A);
     saveSessionHandoff(home, T, handoff('bob half done'), B);
-    expect(loadLatestHandoff(home, T, undefined, { unfinishedOnly: true }, A)?.summary).toBe(
-      'alice half done',
-    );
-    expect(loadLatestHandoff(home, T, undefined, { unfinishedOnly: true }, B)?.summary).toBe(
-      'bob half done',
-    );
+    expect(loadLatestHandoff(home, T, undefined, { unfinishedOnly: true }, A)?.summary).toBe('alice half done');
+    expect(loadLatestHandoff(home, T, undefined, { unfinishedOnly: true }, B)?.summary).toBe('bob half done');
   });
 
   it("writeSessionEndHandoff reads only the owner's snapshot and handoff", () => {
@@ -205,12 +176,7 @@ describe('handoffs and failures keyed by owner and project', () => {
     saveActiveTaskSnapshot(home, T, snap('bob task', 'sb'), B);
     // A newer handoff of B's on A's session id would block A's write if it were read.
     saveSessionHandoff(home, T, handoff('bob note', 'sa'), B);
-    const written = writeSessionEndHandoff(home, {
-      tenantId: T,
-      sessionId: 'sa',
-      evidence: null,
-      key: A,
-    });
+    const written = writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sa', evidence: null, key: A });
     expect(written?.taskId).toBe('alice task');
     expect(handoffRows('sa').at(-1)).toEqual({
       summary: 'alice task summary',
@@ -222,23 +188,9 @@ describe('handoffs and failures keyed by owner and project', () => {
   it('derived-path retry writes no second revision', () => {
     const derived = { task: 'derived', summary: 'from the transcript', nextStep: 'carry on' };
     expect(
-      writeSessionEndHandoff(home, {
-        tenantId: T,
-        sessionId: 'sd',
-        evidence: null,
-        derived,
-        key: A,
-      })?.taskId,
+      writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sd', evidence: null, derived, key: A })?.taskId,
     ).toBe('derived');
-    expect(
-      writeSessionEndHandoff(home, {
-        tenantId: T,
-        sessionId: 'sd',
-        evidence: null,
-        derived,
-        key: A,
-      }),
-    ).toBeNull();
+    expect(writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sd', evidence: null, derived, key: A })).toBeNull();
     expect(handoffRows('sd')).toHaveLength(1);
   });
 
@@ -256,9 +208,7 @@ describe('handoffs and failures keyed by owner and project', () => {
     await failureLog.record({ tenantId: T, sessionId: 's1', tool: 'Bash', outcome: 'stored' });
     // SAFETY: the SELECT names exactly these three columns.
     const rows = withDb((db) =>
-      db
-        .prepare(`SELECT owner_subject, origin_project, request_id FROM failure_log ORDER BY id`)
-        .all(),
+      db.prepare(`SELECT owner_subject, origin_project, request_id FROM failure_log ORDER BY id`).all(),
     );
     expect(rows).toEqual([
       { owner_subject: 'alice', origin_project: 'p', request_id: 'req-1' },
@@ -277,13 +227,13 @@ describe('a partial key matches nothing and writes nothing', () => {
       expect(loadFreshActiveTaskSnapshot(home, T, { sessionId: 's1' }, key)).toBeNull();
       expect(loadLatestHandoff(home, T, 's1', {}, key)).toBeNull();
       expect(() => saveActiveTaskSnapshot(home, T, snap('x'), key)).toThrow(/owner and a project/);
-      await expect(
-        closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', key),
-      ).rejects.toThrow(/owner and a project/);
+      await expect(closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', key)).rejects.toThrow(
+        /owner and a project/,
+      );
       expect(() => saveSessionHandoff(home, T, handoff('x'), key)).toThrow(/owner and a project/);
-      expect(() =>
-        writeSessionEndHandoff(home, { tenantId: T, sessionId: 's1', evidence: null, key }),
-      ).toThrow(/owner and a project/);
+      expect(() => writeSessionEndHandoff(home, { tenantId: T, sessionId: 's1', evidence: null, key })).toThrow(
+        /owner and a project/,
+      );
       expect(statusOf(own.id)).toBe('active');
       expect(handoffRows('s1')).toHaveLength(1);
     });

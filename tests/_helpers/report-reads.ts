@@ -11,9 +11,7 @@ export const rawProvenanceAt = (root: string): Promise<RawProvenancePage> =>
   sqliteStore(root).reports.rawProvenance(PAGE);
 
 /** The links a fresh store gives for `rows`, written as they are, and read back through the join. */
-export async function correctionLinksOfRows(
-  rows: readonly MemoryEntry[],
-): Promise<CorrectionLink[]> {
+export async function correctionLinksOfRows(rows: readonly MemoryEntry[]): Promise<CorrectionLink[]> {
   const root = makeRoot('report-links');
   for (const row of rows) writeEntry(root, row);
   return (await sqliteStore(root).reports.correctionLinks(PAGE)).links;

@@ -32,12 +32,7 @@ import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
 import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../../benchmarks/memory-value/evaluate.mjs';
-import {
-  metaPathFor,
-  featuresPathFor,
-  readJson,
-  readJsonl,
-} from '../../benchmarks/memory-value/common.mjs';
+import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../../benchmarks/memory-value/common.mjs';
 
 import { benchmarkStores, clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -95,11 +90,8 @@ describe('cross-ingest determinism', () => {
 
       // SAFETY: evaluateAll returns summary.train as scorer -> budget -> { meanRetention } (evaluate.mjs); the inferred type is {}.
       const trainOf = (r: { evalResult: { summary: unknown } }) =>
-        (
-          r.evalResult.summary as {
-            train: Record<string, Record<number, { meanRetention: number } | undefined>>;
-          }
-        ).train;
+        (r.evalResult.summary as { train: Record<string, Record<number, { meanRetention: number } | undefined>> })
+          .train;
 
       // (1) retention identical for EVERY scorer x budget (not just recency) —
       // this is the property the previous memory_id-primary tie-break broke.
@@ -120,14 +112,11 @@ describe('cross-ingest determinism', () => {
         const rowsA = runA.rowsByQuestion[q.question_id];
         const rowsB = runB.rowsByQuestion[q.question_id];
         expect(rowsB.length).toBe(rowsA.length);
-        const keyOf = (r: { sessionIndex: number; turnIdx: number }) =>
-          `${r.sessionIndex}:${r.turnIdx}`;
+        const keyOf = (r: { sessionIndex: number; turnIdx: number }) => `${r.sessionIndex}:${r.turnIdx}`;
         const byKeyB = new Map(rowsB.map((r) => [keyOf(r), r]));
         for (const rowA of rowsA) {
           const rowB = byKeyB.get(keyOf(rowA));
-          expect(rowB?.gold, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBe(
-            rowA.gold,
-          );
+          expect(rowB?.gold, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBe(rowA.gold);
           expect(rowB!.features).toEqual(rowA.features);
           // memory_id is deliberately NOT compared here (see file header).
         }

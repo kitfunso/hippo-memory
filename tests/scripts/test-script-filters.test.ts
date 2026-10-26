@@ -23,11 +23,8 @@ function filters(command: string): string[] {
 
 describe('package.json test:* scripts', () => {
   // SAFETY: package.json is this repo's own file and always has a scripts table of strings.
-  const scripts = (
-    JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
-      scripts: Record<string, string>;
-    }
-  ).scripts;
+  const scripts = (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> })
+    .scripts;
   const all = testFiles(join(ROOT, 'tests'));
   const withFilters = Object.entries(scripts).filter(
     ([name, cmd]) => name.startsWith('test:') && /vitest run/.test(cmd) && filters(cmd).length > 0,
@@ -39,10 +36,7 @@ describe('package.json test:* scripts', () => {
 
   it.each(withFilters)('%s: every path filter matches a test file', (_name, cmd) => {
     for (const filter of filters(cmd)) {
-      expect(
-        all.filter((f) => f.includes(filter)).length,
-        `${filter} matches no test file`,
-      ).toBeGreaterThan(0);
+      expect(all.filter((f) => f.includes(filter)).length, `${filter} matches no test file`).toBeGreaterThan(0);
     }
   });
 });

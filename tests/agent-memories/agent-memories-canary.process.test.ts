@@ -62,33 +62,21 @@ function plain(file: string, text: string): void {
   writeFileSync(file, text, 'utf8');
 }
 
-const canary = (dir: string, label: string): string =>
-  note(dir, 'canary.md', `CANARY ${label} note.`);
+const canary = (dir: string, label: string): string => note(dir, 'canary.md', `CANARY ${label} note.`);
 
-function claudeTree(
-  config: string,
-  label: string,
-  projects: readonly string[],
-  userDir: string,
-): void {
-  for (const p of projects)
-    canary(join(config, 'projects', claudeFolderName(p), 'memory'), `${label} claude project`);
+function claudeTree(config: string, label: string, projects: readonly string[], userDir: string): void {
+  for (const p of projects) canary(join(config, 'projects', claudeFolderName(p), 'memory'), `${label} claude project`);
   plain(join(config, 'settings.json'), JSON.stringify({ autoMemoryDirectory: userDir }));
   canary(userDir, `${label} claude user`);
 }
 
 function geminiTree(gemini: string, label: string, projects: readonly string[]): void {
-  plain(
-    join(gemini, 'GEMINI.md'),
-    ['## Gemini Added Memories', '', `- CANARY ${label} gemini user.`, ''].join('\n'),
-  );
+  plain(join(gemini, 'GEMINI.md'), ['## Gemini Added Memories', '', `- CANARY ${label} gemini user.`, ''].join('\n'));
   plain(
     join(gemini, 'projects.json'),
     JSON.stringify({ projects: Object.fromEntries(projects.map((p, i) => [p, `slug${i}`])) }),
   );
-  projects.forEach((_, i) =>
-    canary(join(gemini, 'tmp', `slug${i}`, 'memory'), `${label} gemini project`),
-  );
+  projects.forEach((_, i) => canary(join(gemini, 'tmp', `slug${i}`, 'memory'), `${label} gemini project`));
 }
 
 function copilotTree(data: string, label: string, projects: readonly string[]): void {
@@ -99,20 +87,14 @@ function copilotTree(data: string, label: string, projects: readonly string[]): 
   projects.forEach((p, i) => {
     const ws = join(data, 'User', 'workspaceStorage', `ws${i}`);
     plain(join(ws, 'workspace.json'), JSON.stringify({ folder: pathToFileURL(p).href }));
-    canary(
-      join(ws, 'github.copilot-chat', 'memory-tool', 'memories', 'repo'),
-      `${label} copilot project`,
-    );
+    canary(join(ws, 'github.copilot-chat', 'memory-tool', 'memories', 'repo'), `${label} copilot project`);
   });
 }
 
 function qwenTree(base: string, label: string, projects: readonly string[]): void {
   canary(join(base, 'memories'), `${label} qwen user`);
   for (const p of projects) {
-    canary(
-      join(base, 'projects', sanitizeCwd(p, process.platform), 'memory'),
-      `${label} qwen project`,
-    );
+    canary(join(base, 'projects', sanitizeCwd(p, process.platform), 'memory'), `${label} qwen project`);
   }
 }
 
@@ -153,8 +135,7 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   openclawTree(join(env('openclaw-home'), '.openclaw', 'workspace'), 'env home');
   openclawTree(join(env('openclaw-state'), 'workspace'), 'env state');
   openclawTree(env('openclaw-workspace'), 'env workspace');
-  for (const name of ['qwen-home', 'qwen-runtime', 'qwen-base'])
-    qwenTree(env(name), `env ${name}`, projects);
+  for (const name of ['qwen-home', 'qwen-runtime', 'qwen-base']) qwenTree(env(name), `env ${name}`, projects);
   for (const p of projects) canary(join(p, '.qwen', 'memory'), 'env qwen local');
   return {
     HOME: home,
@@ -191,14 +172,7 @@ function controlRun(name: string): Run {
 }
 
 function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
-  const args = [
-    join(w.dir, 'worker.mjs'),
-    distUrl('api/agent-memories.js'),
-    mode,
-    run.local,
-    w.home,
-    storeless,
-  ];
+  const args = [join(w.dir, 'worker.mjs'), distUrl('api/agent-memories.js'), mode, run.local, w.home, storeless];
   const env = { ...process.env, ...decoyEnv, HIPPO_HOME: run.global, ...extraEnv };
   return new Promise((resolve, fail) => {
     const child = spawn(process.execPath, args, { env, windowsHide: true });
@@ -224,10 +198,7 @@ function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise
 
 const everyText = (root: string): string[] =>
   isInitialized(root)
-    ? [
-        ...loadAllEntries(root, 'default').map((e) => e.content),
-        ...dormantRows(root).map((d) => d.content),
-      ]
+    ? [...loadAllEntries(root, 'default').map((e) => e.content), ...dormantRows(root).map((d) => d.content)]
     : [];
 
 beforeEach(() => {
@@ -238,12 +209,7 @@ beforeEach(() => {
   ctrlEnv = controlRun('ctrl-env');
   ctrlHome = controlRun('ctrl-home');
   decoy = join(w.dir, 'decoy');
-  decoyEnv = plantDecoys(decoy, [
-    w.project,
-    storeless,
-    dirname(ctrlEnv.local),
-    dirname(ctrlHome.local),
-  ]);
+  decoyEnv = plantDecoys(decoy, [w.project, storeless, dirname(ctrlEnv.local), dirname(ctrlHome.local)]);
   note(projectNotes(w), 'clean.md', CLEAN_PROJECT);
   note(projectNotes(w, storeless), 'clean.md', CLEAN_STORELESS);
   codexSummary(w, `- ${CLEAN_BULLET}`);
@@ -255,15 +221,9 @@ afterEach(() => {
 
 describe('agent memory sync: real homes are never read', () => {
   it('no canary is imported when the process points every home and tool variable at a decoy tree', async () => {
-    const out = await runWorker(
-      'negative',
-      { local: w.local, global: w.global },
-      { HIPPO_AGENT_MEMORY_TOOLS: 'none' },
-    );
+    const out = await runWorker('negative', { local: w.local, global: w.global }, { HIPPO_AGENT_MEMORY_TOOLS: 'none' });
 
-    expect(
-      [...everyText(w.local), ...everyText(w.global)].filter((t) => t.includes('CANARY')),
-    ).toEqual([]);
+    expect([...everyText(w.local), ...everyText(w.global)].filter((t) => t.includes('CANARY'))).toEqual([]);
     expect(out.warnings.filter((line) => line.includes(decoy))).toEqual([]);
     expect(liveTexts(w.local)).toEqual([CLEAN_PROJECT]);
     expect(liveTexts(w.global)).toEqual([CLEAN_STORELESS, `User Profile: ${CLEAN_BULLET}`].sort());
@@ -273,9 +233,7 @@ describe('agent memory sync: real homes are never read', () => {
     await Promise.all([runWorker('env', ctrlEnv, {}), runWorker('home', ctrlHome, {})]);
 
     for (const run of [ctrlEnv, ctrlHome]) {
-      const rows = [...liveRows(run.local), ...liveRows(run.global)].filter((e) =>
-        e.content.includes('CANARY'),
-      );
+      const rows = [...liveRows(run.local), ...liveRows(run.global)].filter((e) => e.content.includes('CANARY'));
       const tagged = AGENT_MEMORY_TOOLS.map((t) => rows.some((e) => e.tags.includes(t.tag)));
       expect(tagged, run.local).toEqual(AGENT_MEMORY_TOOLS.map(() => true));
       const projectTags = new Set(liveRows(run.local).flatMap((e) => e.tags));

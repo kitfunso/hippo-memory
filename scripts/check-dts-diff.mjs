@@ -79,9 +79,7 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args) {
-    console.error(
-      'usage: node scripts/check-dts-diff.mjs --write|--check [--dist <dir>] [--report <file>]',
-    );
+    console.error('usage: node scripts/check-dts-diff.mjs --write|--check [--dist <dir>] [--report <file>]');
     return 2;
   }
   if (!existsSync(args.dist)) {
@@ -96,9 +94,7 @@ function main() {
     return 0;
   }
   if (!existsSync(args.report)) {
-    console.error(
-      `check-dts-diff: ${args.report} is missing; run node scripts/check-dts-diff.mjs --write`,
-    );
+    console.error(`check-dts-diff: ${args.report} is missing; run node scripts/check-dts-diff.mjs --write`);
     return 1;
   }
   const rows = diffReports(readFileSync(args.report, 'utf8'), now);

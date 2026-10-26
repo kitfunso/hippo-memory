@@ -11,24 +11,14 @@ import {
   loadAllEntries,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import {
-  withScratchEnv,
-  transcriptJsonl,
-  runHippo,
-  spawnHippo,
-  initHippo,
-} from '../_helpers/pre-compact-e2e.js';
+import { withScratchEnv, transcriptJsonl, runHippo, spawnHippo, initHippo } from '../_helpers/pre-compact-e2e.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const FAKE_JWT = [
-  runtimeJoin('eyJ', 'FAKEHEADER'),
-  runtimeJoin('eyJ', 'FAKEPAYLOAD'),
-  'FAKESIG',
-].join('.');
+const FAKE_JWT = [runtimeJoin('eyJ', 'FAKEHEADER'), runtimeJoin('eyJ', 'FAKEPAYLOAD'), 'FAKESIG'].join('.');
 
 describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   let dir: string;
@@ -48,10 +38,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: 'Please set up the new payment webhook handler.' },
-        },
+        { type: 'user', message: { role: 'user', content: 'Please set up the new payment webhook handler.' } },
         {
           type: 'assistant',
           message: {
@@ -61,24 +48,16 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
         },
         {
           type: 'user',
-          message: {
-            role: 'user',
-            content: 'we decided to use PostgreSQL for the new backend service layer.',
-          },
+          message: { role: 'user', content: 'we decided to use PostgreSQL for the new backend service layer.' },
         },
         {
           type: 'assistant',
           message: {
             role: 'assistant',
-            content: [
-              { type: 'text', text: 'Got it, using PostgreSQL. Implementing the schema next.' },
-            ],
+            content: [{ type: 'text', text: 'Got it, using PostgreSQL. Implementing the schema next.' }],
           },
         },
-        {
-          type: 'user',
-          message: { role: 'user', content: "Now let's also add rate limiting to the endpoint." },
-        },
+        { type: 'user', message: { role: 'user', content: "Now let's also add rate limiting to the endpoint." } },
         {
           type: 'assistant',
           message: {
@@ -86,10 +65,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
             content: [
               { type: 'thinking', thinking: 'internal planning, must not leak into next_step' },
               { type: 'tool_use', name: 'Edit', input: {} },
-              {
-                type: 'text',
-                text: 'Next step: add the rate limiter middleware and write tests for it.',
-              },
+              { type: 'text', text: 'Next step: add the rate limiter middleware and write tests for it.' },
             ],
           },
         },
@@ -100,10 +76,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
         {
           type: 'user',
           isMeta: true,
-          message: {
-            role: 'user',
-            content: 'COMPACT SUMMARY META LINE - must not become the task',
-          },
+          message: { role: 'user', content: 'COMPACT SUMMARY META LINE - must not become the task' },
         },
         {
           type: 'assistant',
@@ -147,18 +120,14 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
         { type: 'user', message: { role: 'user', content: 'fix the login bug' } },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Looking into the login bug now.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Looking into the login bug now.' }] },
         },
         {
           type: 'user',
           promptSource: 'system',
           message: {
             role: 'user',
-            content:
-              '<task-notification>Another Claude session finished a task.</task-notification>',
+            content: '<task-notification>Another Claude session finished a task.</task-notification>',
           },
         },
       ]),
@@ -206,19 +175,10 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       path.join(discoveredProjectDir, 'discoverable-transcript.jsonl'),
       transcriptJsonl([
-        {
-          type: 'user',
-          message: {
-            role: 'user',
-            content: 'we decided to use MongoDB for the discoverable session.',
-          },
-        },
+        { type: 'user', message: { role: 'user', content: 'we decided to use MongoDB for the discoverable session.' } },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'DISCOVERABLE SESSION marker text.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'DISCOVERABLE SESSION marker text.' }] },
         },
       ]),
     );
@@ -247,10 +207,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       path.join(decoyProjectDir, 'decoy.jsonl'),
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: 'we decided to use MongoDB, this must never leak.' },
-        },
+        { type: 'user', message: { role: 'user', content: 'we decided to use MongoDB, this must never leak.' } },
       ]),
     );
 
@@ -267,13 +224,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       path.join(decoyProjectDir, 'decoy.jsonl'),
       transcriptJsonl([
-        {
-          type: 'user',
-          message: {
-            role: 'user',
-            content: 'we decided to use MongoDB, this must never leak either.',
-          },
-        },
+        { type: 'user', message: { role: 'user', content: 'we decided to use MongoDB, this must never leak either.' } },
       ]),
     );
 
@@ -294,10 +245,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: 'this file is readable but has the wrong extension.' },
-        },
+        { type: 'user', message: { role: 'user', content: 'this file is readable but has the wrong extension.' } },
       ]),
     );
 
@@ -326,20 +274,14 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptJsonl([
         {
           type: 'user',
-          message: {
-            role: 'user',
-            content: 'we decided to use MongoDB for the decoy session, this must never leak.',
-          },
+          message: { role: 'user', content: 'we decided to use MongoDB for the decoy session, this must never leak.' },
         },
         {
           type: 'assistant',
           message: {
             role: 'assistant',
             content: [
-              {
-                type: 'text',
-                text: 'DECOY SESSION marker — must never be snapshotted under another session id.',
-              },
+              { type: 'text', text: 'DECOY SESSION marker — must never be snapshotted under another session id.' },
             ],
           },
         },
@@ -358,9 +300,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const hippoRoot = getHippoRoot(dir);
     expect(loadActiveTaskSnapshot(hippoRoot, 'default')).toBeNull();
     const entries = loadAllEntries(hippoRoot, 'default');
-    const leaked = entries.find(
-      (e) => e.content.includes('MongoDB') || e.content.toLowerCase().includes('decoy'),
-    );
+    const leaked = entries.find((e) => e.content.includes('MongoDB') || e.content.toLowerCase().includes('decoy'));
     expect(leaked).toBeUndefined();
   });
 
@@ -402,10 +342,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
           type: 'assistant',
           message: { role: 'assistant', content: [{ type: 'text', text }] },
         })),
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: longAssistantText }] },
-        },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: longAssistantText }] } },
       ]),
     );
 
@@ -437,16 +374,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     // untouched — caps are enforced in the pre-compact producer ONLY.
     const uncappedText = 'Q'.repeat(3000);
     const saveResult = await runHippo(
-      [
-        'snapshot',
-        'save',
-        '--task',
-        uncappedText,
-        '--summary',
-        uncappedText,
-        '--next-step',
-        uncappedText,
-      ],
+      ['snapshot', 'save', '--task', uncappedText, '--summary', uncappedText, '--next-step', uncappedText],
       dir,
       env,
     );
@@ -474,13 +402,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: {
-            role: 'user',
-            content: [{ type: 'tool_result', content: 'some tool output' }],
-          },
-        },
+        { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'some tool output' }] } },
         {
           type: 'assistant',
           message: {
@@ -511,11 +433,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   it('corrupted store (hippo.db is not a valid sqlite file) -> exit 0, no crash output', async () => {
     const hippoRoot = getHippoRoot(dir);
     const dbPath = path.join(hippoRoot, 'hippo.db');
-    fs.writeFileSync(
-      dbPath,
-      'not a valid sqlite database file, just garbage bytes 0000000',
-      'utf8',
-    );
+    fs.writeFileSync(dbPath, 'not a valid sqlite database file, just garbage bytes 0000000', 'utf8');
     for (const suffix of ['-wal', '-shm', '-journal']) {
       const sidecar = dbPath + suffix;
       if (fs.existsSync(sidecar)) fs.rmSync(sidecar, { force: true });
@@ -525,10 +443,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: 'we decided to use PostgreSQL after the store broke.' },
-        },
+        { type: 'user', message: { role: 'user', content: 'we decided to use PostgreSQL after the store broke.' } },
         {
           type: 'assistant',
           message: {
@@ -616,10 +531,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       transcriptPath,
       transcriptJsonl([
         { type: 'user', message: { role: 'user', content: 'Keep going with the export.' } },
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: {} }] },
-        },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: {} }] } },
       ]),
     );
     const payload = JSON.stringify({

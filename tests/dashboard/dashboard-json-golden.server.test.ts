@@ -40,11 +40,7 @@ beforeAll(async () => {
   seed(root, 'beta only', { id: 'mem_g_beta', originProject: 'beta' });
   seed(root, 'global note', { id: 'mem_g_global', originProject: '' });
   seed(root, 'unassigned note', { id: 'mem_g_unassigned', originProject: null });
-  seed(root, 'replaced', {
-    id: 'mem_g_superseded',
-    kind: 'superseded',
-    supersededBy: 'mem_g_strong',
-  });
+  seed(root, 'replaced', { id: 'mem_g_superseded', kind: 'superseded', supersededBy: 'mem_g_strong' });
   seed(root, 'archived row', { id: 'mem_g_archived', kind: 'archived' });
   seed(root, 'pending review', { id: 'mem_g_quarantined', scope: quarantineScopeFor(null) });
   seed(root, 'another tenant', { id: 'mem_g_tenant_b', tenantId: 'tenant_b' });
@@ -52,12 +48,7 @@ beforeAll(async () => {
   replaceDetectedConflicts(root, [
     { memory_a_id: 'mem_g_fly', memory_b_id: 'mem_g_render', reason: 'deploy target', score: 0.9 },
   ]);
-  const parent = await createCard(root, 'default', {
-    title: 'parent',
-    repo: 'r',
-    contract: 'c',
-    budget: 3,
-  });
+  const parent = await createCard(root, 'default', { title: 'parent', repo: 'r', contract: 'c', budget: 3 });
   await createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
   dash = await startDashboard(root);
 });
@@ -153,9 +144,7 @@ describe('dashboard JSON bodies', () => {
   });
 
   it('GET the first card by id', async () => {
-    const cardId = /"id":"(card_[A-Za-z0-9]+)"/.exec(
-      (await get(dash.port, '/api/cards')).body,
-    )?.[1];
+    const cardId = /"id":"(card_[A-Za-z0-9]+)"/.exec((await get(dash.port, '/api/cards')).body)?.[1];
     const path = `/api/cards/${cardId}`;
     expect(pinned(path, await get(dash.port, path))).toMatchSnapshot();
   });

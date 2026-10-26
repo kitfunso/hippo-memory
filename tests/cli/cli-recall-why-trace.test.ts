@@ -104,10 +104,7 @@ describe('recall --why rerankTrace', () => {
     // formatter, which always emits `results[].id` and, under `--why`, a
     // `rerankTrace` array of `{stage, scoreBefore, scoreAfter}` steps.
     const parsed = JSON.parse(out) as {
-      results: Array<{
-        id: string;
-        rerankTrace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }>;
-      }>;
+      results: Array<{ id: string; rerankTrace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }> }>;
     };
     const hero = parsed.results.find((r) => r.id === heroId);
     expect(hero?.id, `hero not in results:\n${out}`).toBe(heroId);
@@ -128,9 +125,7 @@ describe('recall --why rerankTrace', () => {
   it('a bare --salience-threshold reads as 1, so only the never-recalled peer is downweighted', async () => {
     const out = await hippo(home, 'recall', 'auth', '--why', '--json', '--salience-threshold');
     // SAFETY: the same `recall --json --why` shape the test above reads.
-    const parsed = JSON.parse(out) as {
-      results: Array<{ id: string; rerankTrace?: Array<{ stage: string }> }>;
-    };
+    const parsed = JSON.parse(out) as { results: Array<{ id: string; rerankTrace?: Array<{ stage: string }> }> };
     const stages = (id: string): string[] =>
       (parsed.results.find((r) => r.id === id)?.rerankTrace ?? []).map((s) => s.stage);
     expect(stages(peerId)).toContain('retrieval-count-downweight');

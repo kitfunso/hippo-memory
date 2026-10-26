@@ -5,12 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHippoRoot } from '../../src/host/project-identity.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
-import {
-  withScratchEnv,
-  transcriptJsonl,
-  runHippo,
-  initHippo,
-} from '../_helpers/pre-compact-e2e.js';
+import { withScratchEnv, transcriptJsonl, runHippo, initHippo } from '../_helpers/pre-compact-e2e.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -38,16 +33,12 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
           type: 'user',
           message: {
             role: 'user',
-            content:
-              'we decided to use the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for the deploy bot.',
+            content: 'we decided to use the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for the deploy bot.',
           },
         },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Recorded that decision.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Recorded that decision.' }] },
         },
       ]),
     );
@@ -96,23 +87,12 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: {
-            role: 'user',
-            content: [{ type: 'tool_result', content: 'tool output only' }],
-          },
-        },
+        { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output only' }] } },
         {
           type: 'assistant',
           message: {
             role: 'assistant',
-            content: [
-              {
-                type: 'text',
-                text: 'Session B assistant progress note. Next step: continue B work.',
-              },
-            ],
+            content: [{ type: 'text', text: 'Session B assistant progress note. Next step: continue B work.' }],
           },
         },
       ]),
@@ -142,16 +122,10 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: `here is the deploy key ${pem} keep it safe.` },
-        },
+        { type: 'user', message: { role: 'user', content: `here is the deploy key ${pem} keep it safe.` } },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Stored. Next step: rotate the key.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Stored. Next step: rotate the key.' }] },
         },
       ]),
     );
@@ -229,24 +203,15 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     // it can never win task derivation itself.
     const giant = {
       type: 'user',
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', content: 'x'.repeat(600 * 1024) }],
-      },
+      message: { role: 'user', content: [{ type: 'tool_result', content: 'x'.repeat(600 * 1024) }] },
     };
     fs.writeFileSync(
       transcriptPath,
       transcriptJsonl([
-        {
-          type: 'user',
-          message: { role: 'user', content: 'Ship the oversized-record survival fix.' },
-        },
+        { type: 'user', message: { role: 'user', content: 'Ship the oversized-record survival fix.' } },
         {
           type: 'assistant',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'Next step: verify the grown-window path.' }],
-          },
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: verify the grown-window path.' }] },
         },
         giant,
       ]),
@@ -298,9 +263,7 @@ describe('uninitialized store gate: neither verb may create a store', () => {
     const transcriptPath = path.join(dir, 'transcript.jsonl');
     fs.writeFileSync(
       transcriptPath,
-      transcriptJsonl([
-        { type: 'user', message: { role: 'user', content: 'we decided to use PostgreSQL.' } },
-      ]),
+      transcriptJsonl([{ type: 'user', message: { role: 'user', content: 'we decided to use PostgreSQL.' } }]),
     );
     const payload = JSON.stringify({
       session_id: 'sess-uninit',

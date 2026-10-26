@@ -32,12 +32,9 @@ export const V = DELIVERY_LEDGER_VERSION;
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 export const P1 = 'first question about deploys';
 export const P2 = 'second question about the test suite';
-export const ERR_ALPHA =
-  'Command failed with exit code 2: the alpha package build cannot find its manifest file';
-export const ERR_BETA =
-  'Command failed with exit code 3: the beta service migration lost its database connection';
-export const RECALL_PROMPT =
-  'why does the alpha package build keep failing, it cannot find the manifest file';
+export const ERR_ALPHA = 'Command failed with exit code 2: the alpha package build cannot find its manifest file';
+export const ERR_BETA = 'Command failed with exit code 3: the beta service migration lost its database connection';
+export const RECALL_PROMPT = 'why does the alpha package build keep failing, it cannot find the manifest file';
 export const ROUTINE = {
   tool_input: { command: 'grep -r zebra src' },
   error: 'Command failed with exit code 1: no output produced',
@@ -100,16 +97,12 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
 };
 `,
   );
-  const r = spawnSync(
-    process.execPath,
-    ['--import', pathToFileURL(preload).href, HIPPO_JS, 'capture-error'],
-    {
-      cwd: at.cwd,
-      env: at.env,
-      input: payload(session, over),
-      encoding: 'utf8',
-    },
-  );
+  const r = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, 'capture-error'], {
+    cwd: at.cwd,
+    env: at.env,
+    input: payload(session, over),
+    encoding: 'utf8',
+  });
   expect([r.status, r.stdout]).toEqual([0, '']);
   return r;
 }
@@ -131,34 +124,25 @@ export function toolFailureScratch(getP: () => Project) {
     return x;
   };
 
-  const rows = (sql: string, root: string = getP().hippoRoot, params: Param[] = []): Row[] =>
-    rowsAt(root, sql, params);
+  const rows = (sql: string, root: string = getP().hippoRoot, params: Param[] = []): Row[] => rowsAt(root, sql, params);
   const EV_COLS =
     'id, event_type, turn_seq, duplicate_of, tool_use_id, failure_id, ledger_version, runtime, session_state, tenant_id, store_hash';
   const events = (session: string, root: string = getP().hippoRoot, tenant = 'default'): Row[] =>
-    rows(
-      `SELECT ${EV_COLS} FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id`,
-      root,
-      [tenant, session],
-    );
+    rows(`SELECT ${EV_COLS} FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id`, root, [
+      tenant,
+      session,
+    ]);
   const logs = (root: string = getP().hippoRoot): Row[] =>
     rows('SELECT id, outcome, tool, sig_hash FROM failure_log ORDER BY id', root);
   const lessons = (root: string = getP().hippoRoot): Row[] =>
-    rows(
-      "SELECT id, content FROM memories WHERE source = 'tool-failure' ORDER BY created, id",
-      root,
-    );
-  const lessonWith = (word: string): string =>
-    String(lessons().find((m) => String(m.content).includes(word))?.id);
+    rows("SELECT id, content FROM memories WHERE source = 'tool-failure' ORDER BY created, id", root);
+  const lessonWith = (word: string): string => String(lessons().find((m) => String(m.content).includes(word))?.id);
 
-  const list = (
-    session: string,
-    extra: { store?: string; global?: string | false; tenant?: string } = {},
-  ) => listingOf({ store: getP().hippoRoot, session, ...extra });
+  const list = (session: string, extra: { store?: string; global?: string | false; tenant?: string } = {}) =>
+    listingOf({ store: getP().hippoRoot, session, ...extra });
   const read = (session: string, memory: string, extra: ReadOptions & { store?: string } = {}) =>
     verdictOf({ store: getP().hippoRoot, session, memory, ...extra });
-  const doc = (session: string, specs: TurnSpec[]): string =>
-    writeHostTranscript(getP(), specs, { name: session });
+  const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(getP(), specs, { name: session });
 
   return { mk, rows, events, logs, lessons, lessonWith, list, read, doc };
 }

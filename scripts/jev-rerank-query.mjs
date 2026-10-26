@@ -107,8 +107,7 @@ async function callJev(state, questions, counter) {
 
 function choiceQuestions9a(n) {
   const criteria = {};
-  for (let i = 1; i <= n; i++)
-    criteria[String(i)] = `Candidate ${i} from the numbered list in the state above.`;
+  for (let i = 1; i <= n; i++) criteria[String(i)] = `Candidate ${i} from the numbered list in the state above.`;
   return {
     pick: {
       type: 'choice',
@@ -164,9 +163,7 @@ async function runPool(items, worker, concurrency) {
 }
 
 async function runGate(gateCases) {
-  console.log(
-    `\n=== AMENDMENT 2 GATE: ${gateCases.length} queries through the Lane 9b batched shape ===\n`,
-  );
+  console.log(`\n=== AMENDMENT 2 GATE: ${gateCases.length} queries through the Lane 9b batched shape ===\n`);
   const counter = { n: 0 };
   const out = [];
   for (const row of gateCases) {
@@ -182,18 +179,7 @@ async function runGate(gateCases) {
     const allEqual = nums.length > 0 && nums.every((v) => v === nums[0]);
     const allHalf = nums.length > 0 && nums.every((v) => v === 0.5);
     const pass = d !== null && nums.length === n && distinct > 5 && !allEqual && !allHalf;
-    out.push({
-      id: row.id,
-      query: row.query,
-      n,
-      present: nums.length,
-      distinct,
-      allEqual,
-      allHalf,
-      ms,
-      raw,
-      pass,
-    });
+    out.push({ id: row.id, query: row.query, n, present: nums.length, distinct, allEqual, allHalf, ms, raw, pass });
     console.log(
       `  ${row.id}  n=${n} present=${nums.length} distinct=${distinct} allEqual=${allEqual} allHalf=${allHalf}  ${ms}ms  ${pass ? 'OK' : 'FAIL'}`,
     );
@@ -224,9 +210,7 @@ if (!gate.pass) {
       2,
     ),
   );
-  console.log(
-    `Wrote ${OUTPUT_PATH}. STOPPING per Amendment 2: full lane not run, no silent fallback.`,
-  );
+  console.log(`Wrote ${OUTPUT_PATH}. STOPPING per Amendment 2: full lane not run, no silent fallback.`);
   process.exit(1);
 }
 
@@ -322,9 +306,7 @@ for (let i = 0; i < rows.length; i++) {
   }
 
   const n = row.candidates.length;
-  const order = row.candidates
-    .map((_, idx) => idx)
-    .sort((a, b) => row.scores9b[b] - row.scores9b[a]);
+  const order = row.candidates.map((_, idx) => idx).sort((a, b) => row.scores9b[b] - row.scores9b[a]);
   const reordered = order.map((idx) => row.candidates[idx]);
   const armList = reordered.concat(row.fullBase.slice(n));
 
@@ -366,9 +348,7 @@ function report(label, validRows, metrics, primaryName, secondaryNames) {
   const n = validRows.length;
   const matrix = buildResampleMatrix(n, BOOTSTRAP_DRAWS);
   console.log(`\n${label}  n=${n}\n`);
-  console.log(
-    'metric          baseline   Jev arm    delta      98.33% CI (verdict)     95% CI (diagnostic)',
-  );
+  console.log('metric          baseline   Jev arm    delta      98.33% CI (verdict)     95% CI (diagnostic)');
   const table = {};
   for (const [name, { base, jev }] of Object.entries(metrics)) {
     const b = base(validRows);
@@ -398,9 +378,7 @@ function report(label, validRows, metrics, primaryName, secondaryNames) {
 
 function safeReport(label, validRows, metrics, primaryName, secondaryNames) {
   if (validRows.length < MIN_VALID_FOR_VERDICT) {
-    console.log(
-      `\n${label}: only ${validRows.length} valid rows (<${MIN_VALID_FOR_VERDICT}). NO VERDICT.`,
-    );
+    console.log(`\n${label}: only ${validRows.length} valid rows (<${MIN_VALID_FOR_VERDICT}). NO VERDICT.`);
     return { n: validRows.length, table: {}, verdict: 'NO VERDICT (insufficient data)' };
   }
   return report(label, validRows, metrics, primaryName, secondaryNames);
@@ -431,10 +409,7 @@ const report9a = safeReport(
           1,
         ),
     },
-    MRR: {
-      base: (rs) => mrr(rs.map((r) => r.baseRank)),
-      jev: (rs) => mrr(rs.map((r) => r.rank9a)),
-    },
+    MRR: { base: (rs) => mrr(rs.map((r) => r.baseRank)), jev: (rs) => mrr(rs.map((r) => r.rank9a)) },
   },
   'R@1',
   ['MRR'],
@@ -481,17 +456,11 @@ const report9b = safeReport(
 const totalSearchMs = rows.reduce((a, r) => a + r.searchMs, 0);
 const calls9b = gate.httpCalls + counter9b.n;
 const lane11 = {
-  baseline_search: {
-    calls: rows.length,
-    total_ms: totalSearchMs,
-    mean_ms: totalSearchMs / rows.length,
-    usd: 0,
-  },
+  baseline_search: { calls: rows.length, total_ms: totalSearchMs, mean_ms: totalSearchMs / rows.length, usd: 0 },
   lane_9a: {
     calls: counter9a.n,
     total_wall_ms: t9aWallMs,
-    mean_ms_per_call:
-      t9aWallMs === 0 ? 0 : results9a.reduce((a, r) => a + (r?.ms ?? 0), 0) / results9a.length,
+    mean_ms_per_call: t9aWallMs === 0 ? 0 : results9a.reduce((a, r) => a + (r?.ms ?? 0), 0) / results9a.length,
     usd: counter9a.n * COST_PER_CALL_USD,
   },
   lane_9b: {
@@ -513,9 +482,7 @@ console.log(
 console.log(
   `lane 9b           ${String(lane11.lane_9b.calls).padStart(5)}   ${String(lane11.lane_9b.total_wall_ms).padStart(13)}   ${lane11.lane_9b.mean_ms_per_call.toFixed(1).padStart(12)}   $${lane11.lane_9b.usd.toFixed(4)}`,
 );
-console.log(
-  '\n(calls counts every HTTP request including 429/529 retries; lane 9b includes the 5 gate calls)',
-);
+console.log('\n(calls counts every HTTP request including 429/529 retries; lane 9b includes the 5 gate calls)');
 
 const designNotes = [
   'Protocol doc lines 1554-1565 (original Lane 9a pre-registration) specify top-20 candidates and a recall@20 ceiling. This run follows the task instructions instead, which raise 9a to depth 40 (Amendment 2 only raised 9b) so both lanes share one candidate set and base rank; ceiling reported is recall@40.',

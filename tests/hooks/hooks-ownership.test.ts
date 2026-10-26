@@ -2,10 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  installJsonHooks,
-  uninstallJsonHooks,
-} from '../../src/surface/hooks-install/json-hooks.js';
+import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -72,24 +69,21 @@ describe('a command hippo wrote itself', () => {
   });
 });
 
-describe.each(['Stop', 'SessionEnd'])(
-  "a user's %s command that mentions hippo without running it",
-  (event) => {
-    it.each(LOOKALIKES)('survives install and uninstall: %s', (command) => {
-      const file = seed({ hooks: { [event]: [group(command)] } });
+describe.each(['Stop', 'SessionEnd'])("a user's %s command that mentions hippo without running it", (event) => {
+  it.each(LOOKALIKES)('survives install and uninstall: %s', (command) => {
+    const file = seed({ hooks: { [event]: [group(command)] } });
 
-      const result = installJsonHooks('claude-code');
+    const result = installJsonHooks('claude-code');
 
-      expect(result.migratedFromStop).toBe(false);
-      expect(result.migratedSplitSessionEnd).toBe(false);
-      expect(read(file).hooks[event][0]).toEqual(group(command));
+    expect(result.migratedFromStop).toBe(false);
+    expect(result.migratedSplitSessionEnd).toBe(false);
+    expect(read(file).hooks[event][0]).toEqual(group(command));
 
-      seed({ hooks: { [event]: [group(command)] } });
-      expect(uninstallJsonHooks('claude-code')).toBe(false);
-      expect(read(file)).toEqual({ hooks: { [event]: [group(command)] } });
-    });
-  },
-);
+    seed({ hooks: { [event]: [group(command)] } });
+    expect(uninstallJsonHooks('claude-code')).toBe(false);
+    expect(read(file)).toEqual({ hooks: { [event]: [group(command)] } });
+  });
+});
 
 describe('a hooks value hippo cannot merge into', () => {
   it.each([
@@ -135,9 +129,7 @@ describe('a hippo handler the user gave a launcher or env prefix, which install 
 
   it('uninstall keeps a launcher-prefixed handler and names it on stderr, while still removing the plain one', () => {
     const prefixed = ['nice hippo sleep', 'pnpm exec hippo session-end --log-file "x"'];
-    const file = seed({
-      hooks: { SessionEnd: [group('hippo session-end --log-file "x"'), ...prefixed.map(group)] },
-    });
+    const file = seed({ hooks: { SessionEnd: [group('hippo session-end --log-file "x"'), ...prefixed.map(group)] } });
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {

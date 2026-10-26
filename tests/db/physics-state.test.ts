@@ -306,11 +306,7 @@ describe('loadPhysicsState with memoryIds filter', () => {
     try {
       for (const id of ['mem_first', 'mem_last']) insertMemoryRow(db, id);
       savePhysicsState(db, [makeParticle('mem_first'), makeParticle('mem_last')]);
-      const ids = [
-        'mem_first',
-        ...Array.from({ length: 40_000 }, (_, i) => `absent_${i}`),
-        'mem_last',
-      ];
+      const ids = ['mem_first', ...Array.from({ length: 40_000 }, (_, i) => `absent_${i}`), 'mem_last'];
       expect([...loadPhysicsState(db, ids).keys()].sort()).toEqual(['mem_first', 'mem_last']);
     } finally {
       closeHippoDb(db);

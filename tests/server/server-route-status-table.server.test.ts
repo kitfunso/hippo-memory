@@ -42,15 +42,7 @@ function isCount(v: Json | undefined): v is number {
 }
 
 function isJsonObject(v: Json | undefined): v is JsonObject {
-  return (
-    v !== null &&
-    v !== undefined &&
-    !Array.isArray(v) &&
-    !isText(v) &&
-    !isCount(v) &&
-    v !== true &&
-    v !== false
-  );
+  return v !== null && v !== undefined && !Array.isArray(v) && !isText(v) && !isCount(v) && v !== true && v !== false;
 }
 
 function parseReply(text: string): Json {
@@ -88,63 +80,23 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['GET', '/v1/graph', [401, 'invalid api key'], [200]],
   ['GET', '/v1/memories', [401, 'invalid api key'], [400, 'q is required']],
   ['GET', '/v1/sessions/sess-1/assemble', [401, 'invalid api key'], [200]],
-  [
-    'GET',
-    '/v1/recall/drill/:m',
-    [401, 'invalid api key'],
-    [404, 'No drillable summary at this id'],
-  ],
+  ['GET', '/v1/recall/drill/:m', [401, 'invalid api key'], [404, 'No drillable summary at this id']],
   ['POST', '/v1/memories/:m/archive', [401, 'invalid api key'], [400, 'reason is required']],
   ['POST', '/v1/memories/:m/supersede', [401, 'invalid api key'], [400, 'content is required']],
-  [
-    'POST',
-    '/v1/memories/:m/promote',
-    [401, 'invalid api key'],
-    [404, 'memory not found: mem_parity_missing'],
-  ],
-  [
-    'DELETE',
-    '/v1/memories/:m',
-    [401, 'invalid api key'],
-    [404, 'memory not found: mem_parity_missing'],
-  ],
+  ['POST', '/v1/memories/:m/promote', [401, 'invalid api key'], [404, 'memory not found: mem_parity_missing']],
+  ['DELETE', '/v1/memories/:m', [401, 'invalid api key'], [404, 'memory not found: mem_parity_missing']],
   ['POST', '/v1/outcome', [401, 'invalid api key'], [400, 'good is required (boolean)']],
   ['GET', '/v1/context', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/vectors/nearest',
-    [401, 'invalid api key'],
-    [400, 'vector must be an array of 1 to 4096 numbers'],
-  ],
+  ['POST', '/v1/vectors/nearest', [401, 'invalid api key'], [400, 'vector must be an array of 1 to 4096 numbers']],
   ['POST', '/v1/sleep', [401, 'invalid api key'], [200]],
   ['POST', '/v1/auth/keys', [401, 'invalid api key'], [200]],
   ['GET', '/v1/auth/keys', [401, 'invalid api key'], [200]],
-  [
-    'DELETE',
-    '/v1/auth/keys/hk_missing',
-    [401, 'invalid api key'],
-    [404, 'Unknown key_id: hk_missing'],
-  ],
+  ['DELETE', '/v1/auth/keys/hk_missing', [401, 'invalid api key'], [404, 'Unknown key_id: hk_missing']],
   ['GET', '/v1/quarantine', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/quarantine/:m/approve',
-    [401, 'invalid api key'],
-    [404, 'not quarantined: mem_parity_missing'],
-  ],
-  [
-    'POST',
-    '/v1/quarantine/:m/reject',
-    [401, 'invalid api key'],
-    [404, 'not quarantined: mem_parity_missing'],
-  ],
+  ['POST', '/v1/quarantine/:m/approve', [401, 'invalid api key'], [404, 'not quarantined: mem_parity_missing']],
+  ['POST', '/v1/quarantine/:m/reject', [401, 'invalid api key'], [404, 'not quarantined: mem_parity_missing']],
   ['GET', '/v1/audit', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/predictions',
-    [401, 'invalid api key'],
-    [400, 'claim is required (non-empty string)'],
-  ],
+  ['POST', '/v1/predictions', [401, 'invalid api key'], [400, 'claim is required (non-empty string)']],
   ['GET', '/v1/predictions', [401, 'invalid api key'], [200]],
   ['GET', '/v1/predictions/stats', [401, 'invalid api key'], [400, 'class param is required']],
   ['GET', '/v1/predictions/:n', [401, 'invalid api key'], [404, 'prediction 999999 not found']],
@@ -156,18 +108,8 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ],
   ['POST', '/v1/decisions', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/decisions', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/decisions/:n/supersede',
-    [401, 'invalid api key'],
-    [400, 'text is required (non-empty string)'],
-  ],
-  [
-    'POST',
-    '/v1/decisions/:n/close',
-    [401, 'invalid api key'],
-    [404, 'decision 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/decisions/:n/supersede', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
+  ['POST', '/v1/decisions/:n/close', [401, 'invalid api key'], [404, 'decision 999999 not found for tenant default']],
   ['GET', '/v1/decisions/:n', [401, 'invalid api key'], [404, 'decision 999999 not found']],
   ['POST', '/v1/incidents', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/incidents', [401, 'invalid api key'], [200]],
@@ -177,19 +119,9 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
     [401, 'invalid api key'],
     [400, 'resolutionText is required (non-empty string)'],
   ],
-  [
-    'POST',
-    '/v1/incidents/:n/close',
-    [401, 'invalid api key'],
-    [404, 'incident 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/incidents/:n/close', [401, 'invalid api key'], [404, 'incident 999999 not found for tenant default']],
   ['GET', '/v1/incidents/:n', [401, 'invalid api key'], [404, 'incident 999999 not found']],
-  [
-    'POST',
-    '/v1/processes',
-    [401, 'invalid api key'],
-    [400, 'processName is required (non-empty string)'],
-  ],
+  ['POST', '/v1/processes', [401, 'invalid api key'], [400, 'processName is required (non-empty string)']],
   ['GET', '/v1/processes', [401, 'invalid api key'], [200]],
   [
     'POST',
@@ -197,116 +129,36 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
     [401, 'invalid api key'],
     [400, 'steps is required (at least one step) for a supersession'],
   ],
-  [
-    'POST',
-    '/v1/processes/:n/close',
-    [401, 'invalid api key'],
-    [404, 'process 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/processes/:n/close', [401, 'invalid api key'], [404, 'process 999999 not found for tenant default']],
   ['GET', '/v1/processes/:n', [401, 'invalid api key'], [404, 'process 999999 not found']],
-  [
-    'POST',
-    '/v1/policies',
-    [401, 'invalid api key'],
-    [400, 'policyName is required (non-empty string)'],
-  ],
+  ['POST', '/v1/policies', [401, 'invalid api key'], [400, 'policyName is required (non-empty string)']],
   ['GET', '/v1/policies', [401, 'invalid api key'], [200]],
-  [
-    'GET',
-    '/v1/policies/asof',
-    [401, 'invalid api key'],
-    [400, 'date is required (ISO-8601 valid-time)'],
-  ],
-  [
-    'POST',
-    '/v1/policies/:n/supersede',
-    [401, 'invalid api key'],
-    [400, 'policyText is required (non-empty string)'],
-  ],
-  [
-    'POST',
-    '/v1/policies/:n/close',
-    [401, 'invalid api key'],
-    [404, 'policy 999999 not found for tenant default'],
-  ],
+  ['GET', '/v1/policies/asof', [401, 'invalid api key'], [400, 'date is required (ISO-8601 valid-time)']],
+  ['POST', '/v1/policies/:n/supersede', [401, 'invalid api key'], [400, 'policyText is required (non-empty string)']],
+  ['POST', '/v1/policies/:n/close', [401, 'invalid api key'], [404, 'policy 999999 not found for tenant default']],
   ['GET', '/v1/policies/:n', [401, 'invalid api key'], [404, 'policy 999999 not found']],
-  [
-    'POST',
-    '/v1/skills',
-    [401, 'invalid api key'],
-    [400, 'skillName is required (non-empty string)'],
-  ],
+  ['POST', '/v1/skills', [401, 'invalid api key'], [400, 'skillName is required (non-empty string)']],
   ['GET', '/v1/skills', [401, 'invalid api key'], [200]],
   ['GET', '/v1/skills/export', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/skills/:n/supersede',
-    [401, 'invalid api key'],
-    [400, 'instructions are required (non-empty string)'],
-  ],
-  [
-    'POST',
-    '/v1/skills/:n/close',
-    [401, 'invalid api key'],
-    [404, 'skill 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/skills/:n/supersede', [401, 'invalid api key'], [400, 'instructions are required (non-empty string)']],
+  ['POST', '/v1/skills/:n/close', [401, 'invalid api key'], [404, 'skill 999999 not found for tenant default']],
   ['GET', '/v1/skills/:n', [401, 'invalid api key'], [404, 'skill 999999 not found']],
-  [
-    'POST',
-    '/v1/project-briefs',
-    [401, 'invalid api key'],
-    [400, 'repo is required (non-empty string)'],
-  ],
+  ['POST', '/v1/project-briefs', [401, 'invalid api key'], [400, 'repo is required (non-empty string)']],
   ['GET', '/v1/project-briefs', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/project-briefs/refresh',
-    [401, 'invalid api key'],
-    [400, 'repo is required (non-empty string)'],
-  ],
+  ['POST', '/v1/project-briefs/refresh', [401, 'invalid api key'], [400, 'repo is required (non-empty string)']],
   [
     'POST',
     '/v1/project-briefs/:n/supersede',
     [401, 'invalid api key'],
     [400, 'summary is required (non-empty string)'],
   ],
-  [
-    'POST',
-    '/v1/project-briefs/:n/close',
-    [401, 'invalid api key'],
-    [404, 'brief 999999 not found for tenant default'],
-  ],
-  [
-    'GET',
-    '/v1/project-briefs/:n',
-    [401, 'invalid api key'],
-    [404, 'project brief 999999 not found'],
-  ],
-  [
-    'POST',
-    '/v1/customer-notes',
-    [401, 'invalid api key'],
-    [400, 'customer is required (non-empty string)'],
-  ],
+  ['POST', '/v1/project-briefs/:n/close', [401, 'invalid api key'], [404, 'brief 999999 not found for tenant default']],
+  ['GET', '/v1/project-briefs/:n', [401, 'invalid api key'], [404, 'project brief 999999 not found']],
+  ['POST', '/v1/customer-notes', [401, 'invalid api key'], [400, 'customer is required (non-empty string)']],
   ['GET', '/v1/customer-notes', [401, 'invalid api key'], [200]],
-  [
-    'POST',
-    '/v1/customer-notes/:n/supersede',
-    [401, 'invalid api key'],
-    [400, 'note is required (non-empty string)'],
-  ],
-  [
-    'POST',
-    '/v1/customer-notes/:n/close',
-    [401, 'invalid api key'],
-    [404, 'note 999999 not found for tenant default'],
-  ],
-  [
-    'GET',
-    '/v1/customer-notes/:n',
-    [401, 'invalid api key'],
-    [404, 'customer note 999999 not found'],
-  ],
+  ['POST', '/v1/customer-notes/:n/supersede', [401, 'invalid api key'], [400, 'note is required (non-empty string)']],
+  ['POST', '/v1/customer-notes/:n/close', [401, 'invalid api key'], [404, 'note 999999 not found for tenant default']],
+  ['GET', '/v1/customer-notes/:n', [401, 'invalid api key'], [404, 'customer note 999999 not found']],
 ];
 
 // [name, method, path, body, status, error]
@@ -325,14 +177,7 @@ const NON_ROUTES: ReadonlyArray<Case> = [
   ['encodedSlash', 'GET', '/v1/memories/a%2Fb', undefined, 400, SLASH],
   ['encodedSlashUnknown', 'GET', '/nope%2f', undefined, 400, SLASH],
   ['malformedPercentWrongMethod', 'GET', '/v1/memories/%E0%A4%A', undefined, 400, 'URI malformed'],
-  [
-    'malformedPercentDeep',
-    'PUT',
-    '/v1/sessions/%E0%A4%A/assemble',
-    undefined,
-    400,
-    'URI malformed',
-  ],
+  ['malformedPercentDeep', 'PUT', '/v1/sessions/%E0%A4%A/assemble', undefined, 400, 'URI malformed'],
   [
     'badId',
     'DELETE',
@@ -409,8 +254,7 @@ describe('HTTP route status table: status and error text per route', () => {
     if (isJsonObject(inner) && isCount(inner.id)) created[kind] = inner.id;
     return reply;
   };
-  const fill = (path: string): string =>
-    path.replace(':m', 'mem_parity_missing').replace(':n', '999999');
+  const fill = (path: string): string => path.replace(':m', 'mem_parity_missing').replace(':n', '999999');
   const post = (path: string, body?: JsonObject): Promise<Reply> =>
     call({ method: 'POST', path, body: body === undefined ? undefined : JSON.stringify(body) });
   const get = (path: string): Promise<Reply> => call({ method: 'GET', path });
@@ -431,9 +275,7 @@ describe('HTTP route status table: status and error text per route', () => {
 
   // A caller on this machine of these routes reaches the global store, the caller's project or sleep.
   const onHippoDbOnly = (path: string): boolean =>
-    path.endsWith('/sleep')
-      ? needsHippoDb('sleep')
-      : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
+    path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   for (const [method, path, , [status, error]] of ROUTES) {
     it.skipIf(onHippoDbOnly(path))(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
@@ -447,20 +289,14 @@ describe('HTTP route status table: status and error text per route', () => {
 
   it.skipIf(needsHippoDb('team'))('memory routes with valid input', async () => {
     const out = {
-      create: await post('/v1/memories', {
-        content: 'parity http create',
-        kind: 'distilled',
-        tags: ['a'],
-      }),
+      create: await post('/v1/memories', { content: 'parity http create', kind: 'distilled', tags: ['a'] }),
       graph: await get('/v1/graph?limit=5'),
       recall: await get('/v1/memories?q=zebra-route&limit=5&include_continuity=1'),
       recallBadMode: await get('/v1/memories?q=x&mode=nope'),
       assemble: await get('/v1/sessions/sess-1/assemble?budget=500'),
       drill: await get(`/v1/recall/drill/${seeded.recall}`),
       archive: await post(`/v1/memories/${seeded.raw}/archive`, { reason: 'parity' }),
-      supersede: await post(`/v1/memories/${seeded.sup}/supersede`, {
-        content: 'parity superseded text',
-      }),
+      supersede: await post(`/v1/memories/${seeded.sup}/supersede`, { content: 'parity superseded text' }),
       promote: await post(`/v1/memories/${seeded.promo}/promote`),
       forget: await call({ method: 'DELETE', path: `/v1/memories/${seeded.del}` }),
       outcome: await post('/v1/outcome', { ids: [seeded.recall], good: true }),
@@ -474,9 +310,7 @@ describe('HTTP route status table: status and error text per route', () => {
     expect(out.recall.cacheControl).toBe('no-store');
     shows(out.recallBadMode, 400, { error: "mode must be 'bm25', 'hybrid', or 'physics'" });
     shows(out.assemble, 200, { sessionId: 'sess-1' });
-    shows(out.drill, 422, {
-      error: 'Id is a leaf row, not a level-2+ summary; nothing to drill into',
-    });
+    shows(out.drill, 422, { error: 'Id is a leaf row, not a level-2+ summary; nothing to drill into' });
     shows(out.archive, 200, { ok: true });
     shows(out.supersede, 200, { oldId: seeded.sup });
     shows(out.promote, 200, { sourceId: seeded.promo });
@@ -489,8 +323,7 @@ describe('HTTP route status table: status and error text per route', () => {
 
   it('auth, quarantine and audit routes with valid input', async () => {
     const mint = await post('/v1/auth/keys', { label: 'parity', role: 'member' });
-    const keyId =
-      isJsonObject(mint.json) && isText(mint.json.keyId) ? mint.json.keyId : 'hk_missing';
+    const keyId = isJsonObject(mint.json) && isText(mint.json.keyId) ? mint.json.keyId : 'hk_missing';
     const out = {
       list: await get('/v1/auth/keys?active=false'),
       listBad: await get('/v1/auth/keys?active=maybe'),
@@ -502,24 +335,14 @@ describe('HTTP route status table: status and error text per route', () => {
       auditBadOp: await get('/v1/audit?op=nope'),
     };
     shows(mint, 200, { tenantId: 'default', role: 'member' });
-    shows(
-      out.list,
-      200,
-      expect.arrayContaining([expect.objectContaining({ keyId, label: 'parity' })]),
-    );
+    shows(out.list, 200, expect.arrayContaining([expect.objectContaining({ keyId, label: 'parity' })]));
     shows(out.listBad, 400, { error: "active must be 'true' or 'false'" });
     shows(out.revoke, 200, { ok: true });
     shows(out.quarantine, 200, { quarantine: [] });
     shows(out.approve, 404, { error: `not quarantined: ${seeded.recall}` });
     shows(out.reject, 404, { error: `not quarantined: ${seeded.recall}` });
-    shows(
-      out.audit,
-      200,
-      expect.arrayContaining([expect.objectContaining({ op: 'auth_revoke', targetId: keyId })]),
-    );
-    shows(out.auditBadOp, 400, {
-      error: expect.stringMatching(/^op must be one of: remember \| /),
-    });
+    shows(out.audit, 200, expect.arrayContaining([expect.objectContaining({ op: 'auth_revoke', targetId: keyId })]));
+    shows(out.auditBadOp, 400, { error: expect.stringMatching(/^op must be one of: remember \| /) });
   });
 
   it('prediction and decision routes with valid input', async () => {
@@ -533,16 +356,11 @@ describe('HTTP route status table: status and error text per route', () => {
       predictions: await get('/v1/predictions?class=ship'),
       stats: await get('/v1/predictions/stats?class=ship'),
       prediction: await get(`/v1/predictions/${created.prediction}`),
-      closePrediction: await post(`/v1/predictions/${created.prediction}/close`, {
-        state: 'closed',
-        actual: 4,
-      }),
+      closePrediction: await post(`/v1/predictions/${created.prediction}/close`, { state: 'closed', actual: 4 }),
       decide: await create('decision', '/v1/decisions', { text: 'use sqlite', context: 'parity' }),
       decisions: await get('/v1/decisions?status=active'),
       decision: await get(`/v1/decisions/${created.decision}`),
-      supersedeDecision: await post(`/v1/decisions/${created.decision}/supersede`, {
-        text: 'use postgres',
-      }),
+      supersedeDecision: await post(`/v1/decisions/${created.decision}/supersede`, { text: 'use postgres' }),
       closeDecision: await post(`/v1/decisions/${created.decision}/close`),
     };
     shows(out.predict, 201, { prediction: { claimText: 'ship by friday' } });
@@ -561,15 +379,10 @@ describe('HTTP route status table: status and error text per route', () => {
 
   it('incident and process routes with valid input', async () => {
     const out = {
-      open: await create('incident', '/v1/incidents', {
-        text: 'db down',
-        linkedMemoryIds: [seeded.recall],
-      }),
+      open: await create('incident', '/v1/incidents', { text: 'db down', linkedMemoryIds: [seeded.recall] }),
       incidents: await get('/v1/incidents?status=open'),
       incident: await get(`/v1/incidents/${created.incident}`),
-      resolve: await post(`/v1/incidents/${created.incident}/resolve`, {
-        resolutionText: 'restarted',
-      }),
+      resolve: await post(`/v1/incidents/${created.incident}/resolve`, { resolutionText: 'restarted' }),
       closeIncident: await post(`/v1/incidents/${created.incident}/close`),
       process: await create('process', '/v1/processes', {
         processName: 'deploy',
@@ -608,9 +421,7 @@ describe('HTTP route status table: status and error text per route', () => {
       policies: await get('/v1/policies?status=active'),
       asof: await get('/v1/policies/asof?date=2026-06-01'),
       policyById: await get(`/v1/policies/${created.policy}`),
-      supersedePolicy: await post(`/v1/policies/${created.policy}/supersede`, {
-        policyText: 'keep 60 days',
-      }),
+      supersedePolicy: await post(`/v1/policies/${created.policy}/supersede`, { policyText: 'keep 60 days' }),
       closePolicy: await post(`/v1/policies/${created.policy}/close`),
       skill: await create('skill', '/v1/skills', {
         skillName: 'triage',
@@ -620,9 +431,7 @@ describe('HTTP route status table: status and error text per route', () => {
       skills: await get('/v1/skills?status=active'),
       exportSkills: await get('/v1/skills/export'),
       skillById: await get(`/v1/skills/${created.skill}`),
-      supersedeSkill: await post(`/v1/skills/${created.skill}/supersede`, {
-        instructions: 'read logs, then metrics',
-      }),
+      supersedeSkill: await post(`/v1/skills/${created.skill}/supersede`, { instructions: 'read logs, then metrics' }),
       closeSkill: await post(`/v1/skills/${created.skill}/close`),
     };
     shows(out.policy, 201, { policy: { policyText: 'keep 30 days' } });
@@ -645,23 +454,16 @@ describe('HTTP route status table: status and error text per route', () => {
 
   it('project brief and customer note routes with valid input', async () => {
     const out = {
-      brief: await create('brief', '/v1/project-briefs', {
-        repo: 'kitfunso/parity',
-        summary: 'parity brief',
-      }),
+      brief: await create('brief', '/v1/project-briefs', { repo: 'kitfunso/parity', summary: 'parity brief' }),
       briefs: await get('/v1/project-briefs?repo=kitfunso/parity'),
       refresh: await post('/v1/project-briefs/refresh', { repo: 'kitfunso/parity', dryRun: true }),
       briefById: await get(`/v1/project-briefs/${created.brief}`),
-      supersedeBrief: await post(`/v1/project-briefs/${created.brief}/supersede`, {
-        summary: 'parity brief v2',
-      }),
+      supersedeBrief: await post(`/v1/project-briefs/${created.brief}/supersede`, { summary: 'parity brief v2' }),
       closeBrief: await post(`/v1/project-briefs/${created.brief}/close`),
       note: await create('note', '/v1/customer-notes', { customer: 'acme', note: 'likes sqlite' }),
       notes: await get('/v1/customer-notes?customer=acme'),
       noteById: await get(`/v1/customer-notes/${created.note}`),
-      supersedeNote: await post(`/v1/customer-notes/${created.note}/supersede`, {
-        note: 'likes postgres',
-      }),
+      supersedeNote: await post(`/v1/customer-notes/${created.note}/supersede`, { note: 'likes postgres' }),
       closeNote: await post(`/v1/customer-notes/${created.note}/close`),
     };
     shows(out.brief, 201, { brief: { summary: 'parity brief' } });

@@ -23,13 +23,7 @@ const LATE = new Date('2026-06-20T12:34:56.789Z');
 
 function row(content: string, daysBefore: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const at = new Date(EARLY.getTime() - daysBefore * 86_400_000).toISOString();
-  return {
-    ...createMemory(content, { tenantId: TENANT }),
-    created: at,
-    validFrom: at,
-    lastRetrieved: at,
-    ...extra,
-  };
+  return { ...createMemory(content, { tenantId: TENANT }), created: at, validFrom: at, lastRetrieved: at, ...extra };
 }
 
 /** The sum the old text gave, with the clock written into the SQL as a literal. */

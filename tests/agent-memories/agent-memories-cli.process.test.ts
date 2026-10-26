@@ -96,11 +96,7 @@ const projectNotes = (b: Box, project = b.project): string =>
 function userNotes(b: Box): string {
   const dir = join(b.home, 'automem');
   mkdirSync(join(b.home, '.claude'), { recursive: true });
-  writeFileSync(
-    join(b.home, '.claude', 'settings.json'),
-    JSON.stringify({ autoMemoryDirectory: dir }),
-    'utf8',
-  );
+  writeFileSync(join(b.home, '.claude', 'settings.json'), JSON.stringify({ autoMemoryDirectory: dir }), 'utf8');
   return dir;
 }
 
@@ -142,9 +138,7 @@ describe('hippo init', () => {
     note(userNotes(b), 'voice.md', USER_NOTE);
 
     await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
-    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule'], {
-      extra: { HIPPO_AGENT_MEMORY_TOOLS: 'none' },
-    });
+    await hippo(b, b.project, ['init', '--no-hooks', '--no-schedule'], { extra: { HIPPO_AGENT_MEMORY_TOOLS: 'none' } });
     expect(imported(join(b.project, '.hippo'))).toEqual([]);
     expect(imported(b.global)).toEqual([]);
   });
@@ -154,9 +148,7 @@ describe('hippo init', () => {
     await hippo(b, b.project, ['init', '--global', '--no-learn']);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    expect(await hippo(b, b.project, ['init', '--global'])).toContain(
-      'Already initialized global store',
-    );
+    expect(await hippo(b, b.project, ['init', '--global'])).toContain('Already initialized global store');
     expect(imported(b.global)).toEqual([USER_NOTE]);
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
   });
@@ -168,11 +160,7 @@ describe('hippo init', () => {
       const repo = join(scan, name);
       mkdirSync(repo);
       execFileSync('git', ['init', '-q'], { cwd: repo, stdio: 'ignore' });
-      note(
-        projectNotes(b, repo),
-        'own.md',
-        `The ${name} service pins its toolchain in the lockfile.`,
-      );
+      note(projectNotes(b, repo), 'own.md', `The ${name} service pins its toolchain in the lockfile.`);
       return repo;
     });
     note(userNotes(b), 'voice.md', USER_NOTE);
@@ -199,9 +187,7 @@ describe('hippo setup', () => {
     );
     expect(imported(b.global)).toEqual([]);
 
-    expect(await hippo(b, b.project, ['setup', '--no-schedule'])).toContain(
-      'Imported 1 agent memory (Claude Code 1).',
-    );
+    expect(await hippo(b, b.project, ['setup', '--no-schedule'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(b.global)).toEqual([USER_NOTE]);
   });
 });
@@ -213,15 +199,11 @@ describe('hippo sleep', () => {
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     const local = join(b.project, '.hippo');
 
-    expect(await hippo(b, b.project, ['sleep', '--dry-run'])).toContain(
-      'import --agents --dry-run',
-    );
+    expect(await hippo(b, b.project, ['sleep', '--dry-run'])).toContain('import --agents --dry-run');
     await hippo(b, b.project, ['sleep', '--no-learn']);
     expect(imported(local)).toEqual([]);
 
-    expect(await hippo(b, b.project, ['sleep'])).toContain(
-      'Imported 1 agent memory (Claude Code 1).',
-    );
+    expect(await hippo(b, b.project, ['sleep'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
 
@@ -233,13 +215,8 @@ describe('hippo sleep', () => {
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);
     note(userNotes(b), 'voice.md', USER_NOTE);
 
-    const skipped =
-      "Shared store: skipped learning from this account's git commits and coding agents' own memories.";
-    for (const args of [
-      ['init', '--no-hooks', '--no-schedule'],
-      ['sleep'],
-      ['sleep', '--dry-run'],
-    ]) {
+    const skipped = "Shared store: skipped learning from this account's git commits and coding agents' own memories.";
+    for (const args of [['init', '--no-hooks', '--no-schedule'], ['sleep'], ['sleep', '--dry-run']]) {
       const out = await hippo(b, b.project, args);
       expect(out.split(skipped), args.join(' ')).toHaveLength(2);
       expect(out).not.toContain('Imported');
@@ -304,17 +281,10 @@ describe('hooks in a folder without a store', () => {
     const transcript = join(session, 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    const payload = JSON.stringify({
-      session_id: 's1',
-      transcript_path: transcript,
-      cwd: sub,
-      trigger: 'auto',
-    });
+    const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: sub, trigger: 'auto' });
     await hippo(b, sub, ['post-compact'], { input: payload });
 
-    const rows = loadAllEntries(b.global, 'default').filter((e) =>
-      e.source?.startsWith('agent-memory:'),
-    );
+    const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
     const origin = deriveOriginProject(b.project);
     expect(origin).not.toBe('');
@@ -336,9 +306,7 @@ describe('hooks in a folder without a store', () => {
 
     await hippo(b, sub, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
 
-    const rows = loadAllEntries(b.global, 'default').filter((e) =>
-      e.source?.startsWith('agent-memory:'),
-    );
+    const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     const origin = deriveOriginProject(b.project);
     const byText = new Map(rows.map((e) => [e.content, e.originProject]));
     expect([...byText.keys()].sort()).toEqual([PROJECT_NOTE, USER_NOTE, transcriptNote].sort());
@@ -351,10 +319,7 @@ describe('hooks in a folder without a store', () => {
   it('a worktree and its main checkout share one global row of the Claude folder they share, and a worktree that gets a store leaves it to the main checkout', async () => {
     const b = box();
     const git = (cwd: string, ...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
-        cwd,
-        stdio: 'ignore',
-      });
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'ignore' });
     };
     git(b.project, 'commit', '-q', '--allow-empty', '-m', 'base');
     const worktree = join(tmp(), 'feature-wt');
@@ -383,9 +348,7 @@ describe('hooks in a folder without a store', () => {
     note(projectNotes(b, plain), 'schema.md', PROJECT_NOTE);
     await hippo(b, plain, ['import', '--agents']);
     const globalRows = (): MemoryEntryRow[] =>
-      (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter(
-        (e) => e.content === PROJECT_NOTE,
-      );
+      (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
     expect(globalRows().map((e) => e.originProject)).toEqual(['']);
 
     await hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);

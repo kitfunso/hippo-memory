@@ -63,55 +63,46 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     };
   }
 
-  it.skipIf(needsHippoDb('db'))(
-    'github unhandled-event DLQ row lands under tenant default',
-    async () => {
-      const res = await ghPost(handle.port, '{}', 'not-an-allowed-event');
-      expect(res.status).toBe(200);
-      expect(
-        await tenantsOf((t) =>
-          sqliteStore(root).connectorEvents.deadLetters('github', t, {
-            limit: 100,
-          }),
-        ),
-      ).toEqual({
-        def: 1,
-        empty: 0,
-      });
-    },
-  );
+  it.skipIf(needsHippoDb('db'))('github unhandled-event DLQ row lands under tenant default', async () => {
+    const res = await ghPost(handle.port, '{}', 'not-an-allowed-event');
+    expect(res.status).toBe(200);
+    expect(
+      await tenantsOf((t) =>
+        sqliteStore(root).connectorEvents.deadLetters('github', t, {
+          limit: 100,
+        }),
+      ),
+    ).toEqual({
+      def: 1,
+      empty: 0,
+    });
+  });
 
-  it.skipIf(needsHippoDb('db'))(
-    'github invalid-JSON DLQ row lands under tenant default',
-    async () => {
-      await ghPost(handle.port, '{broken', 'issues');
-      expect(
-        await tenantsOf((t) =>
-          sqliteStore(root).connectorEvents.deadLetters('github', t, {
-            limit: 100,
-          }),
-        ),
-      ).toEqual({
-        def: 1,
-        empty: 0,
-      });
-    },
-  );
+  it.skipIf(needsHippoDb('db'))('github invalid-JSON DLQ row lands under tenant default', async () => {
+    await ghPost(handle.port, '{broken', 'issues');
+    expect(
+      await tenantsOf((t) =>
+        sqliteStore(root).connectorEvents.deadLetters('github', t, {
+          limit: 100,
+        }),
+      ),
+    ).toEqual({
+      def: 1,
+      empty: 0,
+    });
+  });
 
-  it.skipIf(needsHippoDb('db'))(
-    'slack non-envelope DLQ row lands under tenant default',
-    async () => {
-      await slackPost(handle.port, '{"foo":1}');
-      expect(
-        await tenantsOf((t) =>
-          sqliteStore(root).connectorEvents.deadLetters('slack', t, {
-            limit: 100,
-          }),
-        ),
-      ).toEqual({
-        def: 1,
-        empty: 0,
-      });
-    },
-  );
+  it.skipIf(needsHippoDb('db'))('slack non-envelope DLQ row lands under tenant default', async () => {
+    await slackPost(handle.port, '{"foo":1}');
+    expect(
+      await tenantsOf((t) =>
+        sqliteStore(root).connectorEvents.deadLetters('slack', t, {
+          limit: 100,
+        }),
+      ),
+    ).toEqual({
+      def: 1,
+      empty: 0,
+    });
+  });
 });

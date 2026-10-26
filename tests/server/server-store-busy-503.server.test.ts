@@ -60,8 +60,7 @@ describe('server under a held write lock', () => {
       expect(await busy.json()).toEqual({ error: expect.stringMatching(/store busy/) });
       // The write waits on the store's writer thread, so the request opened no connection on this one.
       expect(countMatching(statements, STORE_OPEN)).toBe(0);
-      const failureLine = (call: unknown[]): boolean =>
-        String(call[0]).startsWith('POST /v1/memories failed');
+      const failureLine = (call: unknown[]): boolean => String(call[0]).startsWith('POST /v1/memories failed');
       expect(warn.mock.calls.filter(failureLine)).toHaveLength(1);
       expect(error.mock.calls.filter(failureLine)).toHaveLength(0);
 
@@ -111,9 +110,7 @@ describe('server under a held write lock', () => {
         cause: { fields: { errcode: 5 } },
       },
     });
-    expect(new Set(statements.filter((sql) => STORE_OPEN.test(sql)))).toEqual(
-      new Set(['PRAGMA busy_timeout = 7']),
-    );
+    expect(new Set(statements.filter((sql) => STORE_OPEN.test(sql)))).toEqual(new Set(['PRAGMA busy_timeout = 7']));
     expect(countMatching(statements, 'BEGIN IMMEDIATE')).toBe(1);
   });
 });

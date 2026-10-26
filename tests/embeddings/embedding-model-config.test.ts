@@ -13,11 +13,7 @@ afterEach(() => {
 });
 
 function writeConfig(hippoRoot: string, model: string): void {
-  fs.writeFileSync(
-    path.join(hippoRoot, 'config.json'),
-    JSON.stringify({ embeddings: { model } }, null, 2),
-    'utf8',
-  );
+  fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { model } }, null, 2), 'utf8');
 }
 
 /**
@@ -124,9 +120,7 @@ describe('embedding model configuration', () => {
       expect(providerId).toBe('voyage:custom/model');
 
       const entryId = 'mem_custom_model';
-      const entry = createMemory('semantic-only match', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      });
+      const entry = createMemory('semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       entry.id = entryId;
 
       // Seed a real, in-sync embedding cache so hybridSearch's "does any
@@ -139,11 +133,7 @@ describe('embedding model configuration', () => {
       expect(stub.requests).toHaveLength(1);
       // ...and the query path embeds with role 'query' (so e5-family/
       // asymmetric models get the right input_type; symmetric models ignore it).
-      expect(stub.requests[0]).toEqual({
-        model: 'custom/model',
-        input: ['query text'],
-        input_type: 'query',
-      });
+      expect(stub.requests[0]).toEqual({ model: 'custom/model', input: ['query text'], input_type: 'query' });
     } finally {
       await stub.close();
     }
@@ -152,8 +142,7 @@ describe('embedding model configuration', () => {
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { embeddingModelRequiresReindex } =
-      await import('../../src/store/sqlite/vector-index.js');
+    const { embeddingModelRequiresReindex } = await import('../../src/store/sqlite/vector-index.js');
     const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
     saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
 
@@ -177,13 +166,8 @@ describe('embedding model configuration', () => {
       saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
       saveStoredEmbeddingModel(handlesOf(tmpDir).on, 'voyage:some-other-model');
 
-      const entry = createMemory('query text semantic-only match', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      });
-      const results = await hybridSearch('query text', [entry], {
-        hippoRoot: tmpDir,
-        budget: 1000,
-      });
+      const entry = createMemory('query text semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
       expect(stub.requests).toHaveLength(0);
       expect(results.map((r) => r.entry.id)).toEqual([entry.id]);

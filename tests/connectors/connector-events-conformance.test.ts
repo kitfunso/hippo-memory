@@ -26,12 +26,7 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
-import type {
-  CursorKey,
-  GitHubStream,
-  SlackWorkspace,
-  TenantRoute,
-} from '../../src/base/ports/store/connectors.js';
+import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   sqliteConnectorEventsSide,
@@ -141,12 +136,12 @@ async function registerRoutes(root: string): Promise<void> {
   await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
-    db.prepare(
-      'INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)',
-    ).run('101', TENANT_A, '2026-01-01T00:00:00.000Z');
-    const repo = db.prepare(
-      'INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)',
+    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
+      '101',
+      TENANT_A,
+      '2026-01-01T00:00:00.000Z',
     );
+    const repo = db.prepare('INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)');
     repo.run('acme/shared', TENANT_B, '2026-01-02T00:00:00.000Z');
     repo.run('acme/shared', TENANT_A, '2026-01-01T00:00:00.000Z');
     repo.run('globex/only', TENANT_B, '2026-01-03T00:00:00.000Z');
@@ -401,10 +396,7 @@ describe('ConnectorEvents.markEventSeen with a deletion', () => {
 
   it('archives every raw row the tenant holds under the ref and no other row, logs the event naming the first, and answers a redelivery duplicate', async () => {
     const { note, commentB } = seeded;
-    const [first, edited] = [
-      fresh('the comment as first posted'),
-      fresh('the comment after its edit'),
-    ];
+    const [first, edited] = [fresh('the comment as first posted'), fresh('the comment after its edit')];
     const side = await conforms([
       writeRaw(first),
       writeRaw(edited),
@@ -422,12 +414,7 @@ describe('ConnectorEvents.markEventSeen with a deletion', () => {
       [{ id: commentB.id, tenantId: TENANT_B, kind: 'raw' }],
     ]);
     expect(newEvents(side)).toEqual([loggedRow(github('key-deleted'), first.id)]);
-    expect(added(side)).toEqual([
-      remembered(first),
-      remembered(edited),
-      archivedRow(first),
-      archivedRow(edited),
-    ]);
+    expect(added(side)).toEqual([remembered(first), remembered(edited), archivedRow(first), archivedRow(edited)]);
   });
 
   it('with no raw row of the tenant under the ref it archives nothing and still logs the event, so a redelivery answers duplicate', async () => {
@@ -620,8 +607,7 @@ describe('ConnectorEvents backfill cursors', () => {
     repo: 'acme/demo',
     stream,
   });
-  const marks = (tenantId: string): Call[] =>
-    STREAMS.map((stream) => (g) => g.cursor(hwm(tenantId, stream)));
+  const marks = (tenantId: string): Call[] => STREAMS.map((stream) => (g) => g.cursor(hwm(tenantId, stream)));
   const seed = (since: string): Call[] =>
     STREAMS.map((stream) => (g) => g.saveCursor(hwm(TENANT_A, stream), since, { keepSaved: true }));
 

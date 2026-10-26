@@ -101,10 +101,7 @@ describe('GET /v1/context', () => {
       initTestStore(projHippo);
       const projHandle = await serveKeyed({ hippoRoot: projHippo, port: 0 });
       try {
-        const ctx: FullContext = apiCtx(projHippo, 'default', {
-          subject: 'localhost:cli',
-          role: 'admin',
-        });
+        const ctx: FullContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });
         await remember(ctx, { content: 'ownrow deploykey local fact' });
         // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
         writeEntry(globalHome, {
@@ -206,55 +203,43 @@ describe('GET /v1/context', () => {
     }
   });
 
-  it.skipIf(needsHippoDb('team'))(
-    'returns activeSnapshot when set for the active session',
-    async () => {
-      saveActiveTaskSnapshot(home, 'default', {
-        task: 'ctx-route-snapshot-test',
-        summary: 'Snapshot for the activeSnapshot return path',
-        nextStep: 'Verify the route surfaces it',
-        source: 'test',
-        sessionId: 'sess-ctx-route',
-        scope: null,
-      });
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-      await remember(ctx, { content: 'snapshot-companion' });
+  it.skipIf(needsHippoDb('team'))('returns activeSnapshot when set for the active session', async () => {
+    saveActiveTaskSnapshot(home, 'default', {
+      task: 'ctx-route-snapshot-test',
+      summary: 'Snapshot for the activeSnapshot return path',
+      nextStep: 'Verify the route surfaces it',
+      source: 'test',
+      sessionId: 'sess-ctx-route',
+      scope: null,
+    });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctx, { content: 'snapshot-companion' });
 
-      const res = await fetch(`${handle.url}/v1/context?budget=1500`);
-      expect(res.status).toBe(200);
-      const body = await jsonAs<{
-        activeSnapshot?: { session_id: string; task: string };
-      }>(res);
-      expect(body.activeSnapshot?.session_id).toBe('sess-ctx-route');
-      expect(body.activeSnapshot?.task).toBe('ctx-route-snapshot-test');
-    },
-  );
+    const res = await fetch(`${handle.url}/v1/context?budget=1500`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{
+      activeSnapshot?: { session_id: string; task: string };
+    }>(res);
+    expect(body.activeSnapshot?.session_id).toBe('sess-ctx-route');
+    expect(body.activeSnapshot?.task).toBe('ctx-route-snapshot-test');
+  });
 
-  it.skipIf(needsHippoDb('team'))(
-    'tenant scoping: default Bearer does not see tenant_b memories',
-    async () => {
-      const ctxA: FullContext = apiCtx(home, 'default', {
-        subject: 'localhost:cli',
-        role: 'admin',
-      });
-      const ctxB: FullContext = apiCtx(home, 'tenant_b', {
-        subject: 'localhost:cli',
-        role: 'admin',
-      });
-      await remember(ctxA, { content: 'belongs-to-default' });
-      await remember(ctxB, { content: 'belongs-to-tenant-B' });
+  it.skipIf(needsHippoDb('team'))('tenant scoping: default Bearer does not see tenant_b memories', async () => {
+    const ctxA: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctxA, { content: 'belongs-to-default' });
+    await remember(ctxB, { content: 'belongs-to-tenant-B' });
 
-      // No Bearer in the request -> ctx.tenantId resolves to 'default'.
-      const res = await fetch(`${handle.url}/v1/context?budget=1500`);
-      expect(res.status).toBe(200);
-      const body = await jsonAs<{
-        entries: Array<{ entry: { content: string } }>;
-      }>(res);
-      const contents = body.entries.map((e) => e.entry.content);
-      expect(contents).toContain('belongs-to-default');
-      expect(contents).not.toContain('belongs-to-tenant-B');
-    },
-  );
+    // No Bearer in the request -> ctx.tenantId resolves to 'default'.
+    const res = await fetch(`${handle.url}/v1/context?budget=1500`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{
+      entries: Array<{ entry: { content: string } }>;
+    }>(res);
+    const contents = body.entries.map((e) => e.entry.content);
+    expect(contents).toContain('belongs-to-default');
+    expect(contents).not.toContain('belongs-to-tenant-B');
+  });
 
   // v1.11.5: DoS cap on q-param + recall-audit-row HTTP test
   it('q exceeding 1024 chars returns 400', async () => {
@@ -273,29 +258,26 @@ describe('GET /v1/context', () => {
     expect(res.status).toBe(200);
   });
 
-  it.skipIf(needsHippoDb('team'))(
-    'q=foo emits exactly one recall audit row (row-count delta)',
-    async () => {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-      await remember(ctx, { content: 'foo bar baz' });
-      await remember(ctx, { content: 'foo qux' });
-      await remember(ctx, { content: 'unrelated content' });
+  it.skipIf(needsHippoDb('team'))('q=foo emits exactly one recall audit row (row-count delta)', async () => {
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    await remember(ctx, { content: 'foo bar baz' });
+    await remember(ctx, { content: 'foo qux' });
+    await remember(ctx, { content: 'unrelated content' });
 
-      // Snapshot audit_log count BEFORE the request.
-      const db1 = openHippoDb(home);
-      const before = listAuditEvents(db1, { tenantId: 'default', op: 'recall' });
-      closeHippoDb(db1);
+    // Snapshot audit_log count BEFORE the request.
+    const db1 = openHippoDb(home);
+    const before = listAuditEvents(db1, { tenantId: 'default', op: 'recall' });
+    closeHippoDb(db1);
 
-      const res = await fetch(`${handle.url}/v1/context?q=foo&budget=1000`);
-      expect(res.status).toBe(200);
+    const res = await fetch(`${handle.url}/v1/context?q=foo&budget=1000`);
+    expect(res.status).toBe(200);
 
-      // Assert EXACTLY one new 'recall' row from THIS request.
-      const db2 = openHippoDb(home);
-      const after = listAuditEvents(db2, { tenantId: 'default', op: 'recall' });
-      closeHippoDb(db2);
-      expect(after.length).toBe(before.length + 1);
-    },
-  );
+    // Assert EXACTLY one new 'recall' row from THIS request.
+    const db2 = openHippoDb(home);
+    const after = listAuditEvents(db2, { tenantId: 'default', op: 'recall' });
+    closeHippoDb(db2);
+    expect(after.length).toBe(before.length + 1);
+  });
 });
 
 // Episode 01M1VQBCH5CFB8RRKNSRE8RP6M, acceptance criterion 4: contextGet now
@@ -309,11 +291,7 @@ describe('GET /v1/context - ambientState field', () => {
   async function startServer(ambientEnabled: boolean): Promise<void> {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ ambient: { enabled: ambientEnabled } }),
-      'utf8',
-    );
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
     vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serveKeyed({ hippoRoot: home, port: 0 });
   }
@@ -352,9 +330,7 @@ describe('GET /v1/context - ambientState field', () => {
 
       const res = await fetch(`${handle.url}/v1/context?budget=1500`);
       expect(res.status).toBe(200);
-      const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(
-        res,
-      );
+      const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(res);
       expect(body.entries).toHaveLength(1);
       // `- **[verified] ambient-off-marker-row** (100%)` and a newline: 47 chars.
       expect(body.tokens).toBe(12);

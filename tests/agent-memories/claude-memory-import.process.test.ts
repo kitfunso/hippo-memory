@@ -39,11 +39,7 @@ const claudeFolder = (dir: string) => claudeName(fs.realpathSync.native(dir));
 function writeLesson(home: string, project: string, file: string, body: string): void {
   const memDir = path.join(home, '.claude', 'projects', claudeFolder(project), 'memory');
   fs.mkdirSync(memDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(memDir, file),
-    `---\nname: ${file}\ntype: feedback\n---\n${body}\n`,
-    'utf8',
-  );
+  fs.writeFileSync(path.join(memDir, file), `---\nname: ${file}\ntype: feedback\n---\n${body}\n`, 'utf8');
 }
 
 function store(dir: string): string {
@@ -55,15 +51,7 @@ function store(dir: string): string {
 function git(cwd: string, ...args: string[]): void {
   execFileSync(
     'git',
-    [
-      '-c',
-      'user.email=test@example.com',
-      '-c',
-      'user.name=Test',
-      '-c',
-      'commit.gpgsign=false',
-      ...args,
-    ],
+    ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args],
     { cwd, stdio: 'ignore' },
   );
 }
@@ -78,18 +66,8 @@ describe('the project pass reads only the Claude Code memory of the store projec
     const home = tmp();
     const project = tmp();
     const other = tmp();
-    writeLesson(
-      home,
-      project,
-      'own.md',
-      'Run the migration check before every deploy of this service.',
-    );
-    writeLesson(
-      home,
-      other,
-      'other.md',
-      'The billing export for the other client runs on Fridays.',
-    );
+    writeLesson(home, project, 'own.md', 'Run the migration check before every deploy of this service.');
+    writeLesson(home, other, 'other.md', 'The billing export for the other client runs on Fridays.');
     const hippoRoot = store(project);
 
     expect(await learnFromClaude(hippoRoot, home)).toBe(1);
@@ -114,12 +92,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
     const worktree = path.join(tmp(), 'wt');
     git(repo, 'worktree', 'add', '-q', worktree);
-    writeLesson(
-      home,
-      repo,
-      'main.md',
-      'Worktrees share the build cache, so clean it before a release build.',
-    );
+    writeLesson(home, repo, 'main.md', 'Worktrees share the build cache, so clean it before a release build.');
 
     expect(await learnFromClaude(store(worktree), home)).toBe(1);
   });
@@ -138,12 +111,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
       'bare.md',
       'This repository needs the fixture server before its tests run.',
     );
-    writeLesson(
-      home,
-      parent,
-      'parent.md',
-      'The parent folder keeps its invoices under the finance share.',
-    );
+    writeLesson(home, parent, 'parent.md', 'The parent folder keeps its invoices under the finance share.');
     const hippoRoot = store(path.join(parent, 'wt'));
 
     expect(await learnFromClaude(hippoRoot, home)).toBe(1);
@@ -155,12 +123,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     const base = tmp();
     fs.mkdirSync(path.join(base, 'gitdirs'));
     git(base, 'init', '-q', `--separate-git-dir=${path.join(base, 'gitdirs', 'proj.git')}`, 'proj');
-    writeLesson(
-      home,
-      path.join(base, 'proj'),
-      'own.md',
-      'Run the schema check before this project ships.',
-    );
+    writeLesson(home, path.join(base, 'proj'), 'own.md', 'Run the schema check before this project ships.');
     writeLesson(
       home,
       path.join(base, 'gitdirs'),
@@ -183,12 +146,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(sup, 'commit', '-q', '--allow-empty', '-m', 'init');
     git(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
     fs.mkdirSync(path.join(sup, 'lib', 'pkg'));
-    writeLesson(
-      home,
-      path.join(sup, 'lib'),
-      'lib.md',
-      'The submodule build needs the vendored headers.',
-    );
+    writeLesson(home, path.join(sup, 'lib'), 'lib.md', 'The submodule build needs the vendored headers.');
     writeLesson(home, sup, 'super.md', 'The superproject deploys from the release branch only.');
     const hippoRoot = store(path.join(sup, 'lib', 'pkg'));
 
@@ -203,12 +161,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     const base = tmp();
     const project = path.join(base, 'p'.repeat(Math.max(1, 205 - base.length)));
     fs.mkdirSync(project);
-    writeLesson(
-      home,
-      project,
-      'own.md',
-      'The long-path project pins its toolchain in the lockfile.',
-    );
+    writeLesson(home, project, 'own.md', 'The long-path project pins its toolchain in the lockfile.');
 
     expect(claudeFolder(project).length).toBeGreaterThan(200);
     expect(await learnFromClaude(store(project), home)).toBe(1);
@@ -222,12 +175,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     fs.mkdirSync(repo);
     git(repo, 'init', '-q');
     fs.mkdirSync(path.join(repo, 'pkg'));
-    writeLesson(
-      home,
-      repo,
-      'repo.md',
-      'The long-named repository builds its docs before the package.',
-    );
+    writeLesson(home, repo, 'repo.md', 'The long-named repository builds its docs before the package.');
 
     expect(claudeFolder(repo).length).toBeGreaterThan(200);
     expect(await learnFromClaude(store(path.join(repo, 'pkg')), home)).toBe(1);
@@ -238,12 +186,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     const base = fs.realpathSync.native(tmp());
     const project = path.join(base, 'q'.repeat(199 - base.length));
     fs.mkdirSync(project);
-    writeLesson(
-      home,
-      project,
-      'own.md',
-      'The exact-length project keeps its fixtures beside the tests.',
-    );
+    writeLesson(home, project, 'own.md', 'The exact-length project keeps its fixtures beside the tests.');
 
     expect(claudeFolder(project)).toHaveLength(200);
     expect(await learnFromClaude(store(project), home)).toBe(1);
@@ -258,12 +201,7 @@ describe('the project pass reads only the Claude Code memory of the store projec
     git(parent, 'clone', '-q', '--bare', seed, 'proj.git');
     git(path.join(parent, 'proj.git'), 'worktree', 'add', '-q', path.join(parent, 'wt'));
     fs.mkdirSync(path.join(parent, 'proj.git', '.git'));
-    writeLesson(
-      home,
-      path.join(parent, 'wt'),
-      'own.md',
-      'This worktree runs the smoke tests against staging only.',
-    );
+    writeLesson(home, path.join(parent, 'wt'), 'own.md', 'This worktree runs the smoke tests against staging only.');
     writeLesson(
       home,
       path.join(parent, 'proj.git'),

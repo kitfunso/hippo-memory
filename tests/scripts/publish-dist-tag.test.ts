@@ -44,10 +44,7 @@ describe('fetchLatest', () => {
   });
 
   it('fails closed on a 404, so a backport never goes out as latest', async () => {
-    vi.stubGlobal(
-      'fetch',
-      async () => new Response('{}', { status: 404, statusText: 'Not Found' }),
-    );
+    vi.stubGlobal('fetch', async () => new Response('{}', { status: 404, statusText: 'Not Found' }));
     await expect(fetchLatest()).rejects.toThrow(/404/);
   });
 

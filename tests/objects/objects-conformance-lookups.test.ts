@@ -2,11 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
-import type {
-  BriefReceipt,
-  ObjectFields,
-  SavableKind,
-} from '../../src/base/records/object-types.js';
+import type { BriefReceipt, ObjectFields, SavableKind } from '../../src/base/records/object-types.js';
 import type { ObjectSave } from '../../src/base/ports/store.js';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -53,13 +49,7 @@ function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutO
     ),
     ...opts.mirror,
   };
-  const saved: ObjectSave<K> = {
-    mirror,
-    fields,
-    supersedesId: opts.supersedesId,
-    actor: ACTOR,
-    at,
-  };
+  const saved: ObjectSave<K> = { mirror, fields, supersedesId: opts.supersedesId, actor: ACTOR, at };
   const call: Call = (g) => {
     vi.setSystemTime(new Date(at));
     return g.saveObject(tenantId, kind, saved);
@@ -69,12 +59,7 @@ function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutO
 
 describe('Objects, the policies in force at an instant', () => {
   const day = (monthDay: string): string => `2026-${monthDay}T00:00:00.000Z`;
-  const policy = (
-    policyName: string,
-    from: string,
-    to: string | null,
-    opts: PutOptions = {},
-  ): Call =>
+  const policy = (policyName: string, from: string, to: string | null, opts: PutOptions = {}): Call =>
     put(
       'policy',
       {
@@ -89,11 +74,7 @@ describe('Objects, the policies in force at an instant', () => {
     (asOf: string, more: { name?: string; limit?: number; tenantId?: string } = {}): Call =>
     async (g) =>
       (
-        await g.listObjects(more.tenantId ?? TENANT_A, 'policy', {
-          asOf,
-          name: more.name,
-          limit: more.limit ?? 10,
-        })
+        await g.listObjects(more.tenantId ?? TENANT_A, 'policy', { asOf, name: more.name, limit: more.limit ?? 10 })
       ).map((p) => p.id);
   /** Ids 1 to 7: 1 is replaced by 2 from June, 3 and 6 share a start, 4 is closed, 5 is the other tenant's and 7 starts in May under the name 3 holds. */
   const seed = (): Call[] => [
@@ -157,8 +138,7 @@ describe('Objects, the policies in force at an instant', () => {
       inForce(day('03-01'), { name: 'export' }),
       inForce(day('03-01'), { name: 'Access' }),
       inForce(day('03-01'), { name: '' }),
-      (g) =>
-        g.listObjects(TENANT_A, 'policy', { asOf: day('07-01'), name: 'retention', limit: 10 }),
+      (g) => g.listObjects(TENANT_A, 'policy', { asOf: day('07-01'), name: 'retention', limit: 10 }),
     ]);
     expect(side.outcomes.slice(SEEDED, -1)).toEqual([
       { value: [6, 3, 1] },
@@ -247,8 +227,7 @@ describe('Objects, the active skills by name', () => {
 
 describe('Objects, the receipts a brief refresh cites', () => {
   const TAG = 'path:acme/web';
-  const decision = (opts: PutOptions) =>
-    put('decision', { decisionText: 'noted', context: undefined }, opts);
+  const decision = (opts: PutOptions) => put('decision', { decisionText: 'noted', context: undefined }, opts);
   const receiptOf = (mirror: MemoryEntry): BriefReceipt => ({
     id: mirror.id,
     created: mirror.created,
@@ -285,11 +264,7 @@ describe('Objects, the receipts a brief refresh cites', () => {
       decision({ tags: ['path:acme/website'] }),
       decision({ tags: ['path:acme'] }),
       decision({ tags: [] }),
-      put(
-        'project_brief',
-        { repo: 'acme/web', summary: 'storefront', receiptCount: undefined },
-        { tags: [TAG] },
-      ),
+      put('project_brief', { repo: 'acme/web', summary: 'storefront', receiptCount: undefined }, { tags: [TAG] }),
       decision({ tags: [TAG], mirror: { scope: 'slack:private:C1' } }),
       decision({ tags: [TAG], mirror: { scope: 'unknown:legacy' } }),
     ];

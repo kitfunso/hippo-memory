@@ -65,9 +65,7 @@ describe('serve() non-loopback host guard', () => {
       handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, allowCleartext: true });
       await handle.stop();
       handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
-      expect(
-        warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext')),
-      ).toEqual([
+      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([
         expect.stringMatching(
           /listening on 0\.0\.0\.0 without TLS, as allowed.*cleartext until the proxy in front adds TLS/,
         ),
@@ -129,17 +127,12 @@ describe('serve() non-loopback host guard', () => {
         expect(postRes.status).toBeLessThan(300);
 
         // A follow-up authorized search finds the newly created row.
-        const followUpRes = await fetch(
-          `http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`,
-          {
-            headers: authHeaders,
-          },
-        );
+        const followUpRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`, {
+          headers: authHeaders,
+        });
         expect(followUpRes.status).toBe(200);
         const followUpBody: { results: Array<{ content: string }> } = await followUpRes.json();
-        const found = followUpBody.results.some((r) =>
-          r.content.includes('nonloopback-auth-marker'),
-        );
+        const found = followUpBody.results.some((r) => r.content.includes('nonloopback-auth-marker'));
         expect(found).toBe(true);
       },
     );
@@ -150,10 +143,7 @@ describe('serve() non-loopback host guard', () => {
 // TLS-terminating proxy every socket carries the proxy's address, so
 // HIPPO_CLIENT_IP_HEADER names the header the proxy stamps with the real
 // client address. Unset (the default), the socket address keys the bucket.
-function fakeReq(
-  headers: Record<string, string | string[]>,
-  remoteAddress = '10.0.0.9',
-): IncomingMessage {
+function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10.0.0.9'): IncomingMessage {
   // SAFETY: clientIpForRateLimit reads only headers and socket.remoteAddress (src/server.ts), the two fields set here.
   return { headers, socket: { remoteAddress } } as IncomingMessage;
 }
@@ -170,9 +160,7 @@ describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES lists', () => {
 
   it('reads a repeated header as one chain and takes its rightmost entry', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
-    expect(
-      clientIpForRateLimit(fakeReq({ 'x-forwarded-for': ['203.0.113.7', '198.51.100.2'] })),
-    ).toBe('198.51.100.2');
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': ['203.0.113.7', '198.51.100.2'] }))).toBe('198.51.100.2');
   });
 
   it('falls back to the socket address when the header is absent or empty', () => {

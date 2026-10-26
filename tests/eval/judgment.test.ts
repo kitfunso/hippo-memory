@@ -106,20 +106,8 @@ describe('judge', () => {
 
   it('returns null rather than a wrong answer when the body is off-schema', async () => {
     const cases: JevBodyFixture[] = [
-      {
-        answers: {
-          durable: { noul: 0.9 },
-          kind: { choice: 'vibes' },
-          valence: { choice: 'neutral' },
-        },
-      },
-      {
-        answers: {
-          durable: { noul: 1.4 },
-          kind: { choice: 'error' },
-          valence: { choice: 'neutral' },
-        },
-      },
+      { answers: { durable: { noul: 0.9 }, kind: { choice: 'vibes' }, valence: { choice: 'neutral' } } },
+      { answers: { durable: { noul: 1.4 }, kind: { choice: 'error' }, valence: { choice: 'neutral' } } },
       { answers: { kind: { choice: 'error' }, valence: { choice: 'neutral' } } },
       {},
     ];
@@ -148,17 +136,10 @@ describe('judge', () => {
 
   it('returns null when a number arrives as a string, which would pass the range check by coercion', async () => {
     const body = JSON.stringify({
-      answers: {
-        durable: { noul: '0.9' },
-        kind: { choice: 'error' },
-        valence: { choice: 'neutral' },
-      },
+      answers: { durable: { noul: '0.9' }, kind: { choice: 'error' }, valence: { choice: 'neutral' } },
     });
     expect(
-      await judgeOne('x y z', {
-        apiKey: 'k',
-        fetcher: async () => new Response(body, { status: 200 }),
-      }),
+      await judgeOne('x y z', { apiKey: 'k', fetcher: async () => new Response(body, { status: 200 }) }),
     ).toBeNull();
   });
 
@@ -166,10 +147,7 @@ describe('judge', () => {
     const padded = JSON.stringify(GOOD).replace(/}$/, `${' '.repeat(1024 * 1024)}}`);
     expect(JSON.parse(padded)).toEqual(GOOD);
     expect(
-      await judgeOne('x y z', {
-        apiKey: 'k',
-        fetcher: async () => new Response(padded, { status: 200 }),
-      }),
+      await judgeOne('x y z', { apiKey: 'k', fetcher: async () => new Response(padded, { status: 200 }) }),
     ).toBeNull();
   });
 
@@ -195,9 +173,7 @@ describe('judge', () => {
       const fetcher: typeof fetch = async () => new Response(body, { status: 401 });
       expect(await judgeOne('abc', { apiKey: 'k', fetcher })).toBeNull();
       const line = write.mock.calls.map((c) => String(c[0])).find((m) => m.includes('non-2xx'));
-      expect(line).toMatch(
-        /^\[hippo\] warn: judge: non-2xx reply ts=\S+ status=401 body=x{200}\n$/,
-      );
+      expect(line).toMatch(/^\[hippo\] warn: judge: non-2xx reply ts=\S+ status=401 body=x{200}\n$/);
     } finally {
       write.mockRestore();
     }
@@ -208,9 +184,7 @@ describe('judge', () => {
     let calls = 0;
     const flaky: typeof fetch = async () => {
       calls++;
-      return calls === 1
-        ? new Response('', { status: 429 })
-        : new Response(JSON.stringify(GOOD), { status: 200 });
+      return calls === 1 ? new Response('', { status: 429 }) : new Response(JSON.stringify(GOOD), { status: 200 });
     };
 
     const result = await judgeOne('abc', { apiKey: 'k', fetcher: flaky });

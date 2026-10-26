@@ -35,10 +35,7 @@ const fetcher = (text: string) =>
         headers: { 'content-type': 'application/json' },
       }),
   );
-const inProject = (entry: MemoryEntry, origin: string | null): MemoryEntry => ({
-  ...entry,
-  originProject: origin,
-});
+const inProject = (entry: MemoryEntry, origin: string | null): MemoryEntry => ({ ...entry, originProject: origin });
 const live = () => loadAllEntries(home, 'default').filter((e) => !e.supersededBy);
 
 describe('sleep partitions by origin project', () => {
@@ -51,12 +48,7 @@ describe('sleep partitions by origin project', () => {
       writeEntry(home, inProject(createMemory(backbone, { layer: Layer.Episodic }), origin));
       writeEntry(
         home,
-        inProject(
-          createMemory(`${backbone} ${marker} notify the on-call channel`, {
-            layer: Layer.Episodic,
-          }),
-          origin,
-        ),
+        inProject(createMemory(`${backbone} ${marker} notify the on-call channel`, { layer: Layer.Episodic }), origin),
       );
     }
 
@@ -64,9 +56,7 @@ describe('sleep partitions by origin project', () => {
 
     const merged = live().filter((e) => e.source === 'consolidation');
     expect(merged.map((e) => e.originProject).sort()).toEqual(['proj-b', 'proj-c']);
-    expect(merged.find((e) => e.originProject === 'proj-b')!.content).not.toContain(
-      'charliemarker',
-    );
+    expect(merged.find((e) => e.originProject === 'proj-b')!.content).not.toContain('charliemarker');
     expect(merged.find((e) => e.originProject === 'proj-c')!.content).not.toContain('bravomarker');
   });
 
@@ -75,10 +65,7 @@ describe('sleep partitions by origin project', () => {
     writeEntry(home, inProject(createMemory(backbone, { layer: Layer.Episodic }), null));
     writeEntry(
       home,
-      inProject(
-        createMemory(`${backbone} notify the on-call channel`, { layer: Layer.Episodic }),
-        null,
-      ),
+      inProject(createMemory(`${backbone} notify the on-call channel`, { layer: Layer.Episodic }), null),
     );
 
     await consolidate(home, { dryRun: false });
@@ -114,31 +101,20 @@ describe('sleep partitions by origin project', () => {
     });
     const always = rule('always alpha beta gamma', 'proj-b', 'b');
     const never = rule('never alpha beta gamma zeta', 'proj-c', 'c');
-    expect(await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH })).toEqual(
-      [],
-    );
+    expect(await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH })).toEqual([]);
     expect(
-      await detectConflicts([always, { ...never, originProject: '' }], now, {
-        strength: PRODUCTION_STRENGTH,
-      }),
+      await detectConflicts([always, { ...never, originProject: '' }], now, { strength: PRODUCTION_STRENGTH }),
     ).toHaveLength(1);
     expect(
-      await detectConflicts(
-        [always, { ...never, originProject: 'proj-b', tenantId: 'other' }],
-        now,
-        {
-          strength: PRODUCTION_STRENGTH,
-        },
-      ),
+      await detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
     ).toEqual([]);
   });
 
   it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', async () => {
     for (const origin of ['proj-b', null]) {
-      const source = inProject(
-        createMemory(`alice prefers dark mode in ${origin}`, { layer: Layer.Episodic }),
-        origin,
-      );
+      const source = inProject(createMemory(`alice prefers dark mode in ${origin}`, { layer: Layer.Episodic }), origin);
       writeEntry(home, source);
       const [fact] = await storeExtractedFacts(
         sqliteStore(home),
@@ -171,10 +147,7 @@ describe('sleep partitions by origin project', () => {
         await buildDag(sqliteStore(home), facts, {
           now: evalNow(),
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          llm: anthropicLlm({
-            apiKey: 'k',
-            fetcher: fetcher('alice files, notes and closes tickets'),
-          }),
+          llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') }),
         })
       ).summariesCreated,
     ).toBe(2);
@@ -199,10 +172,7 @@ describe('sleep partitions by origin project', () => {
         await buildEntityProfiles(sqliteStore(home), [...l2s, ...more], {
           now: evalNow(),
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          llm: anthropicLlm({
-            apiKey: 'k',
-            fetcher: fetcher('alice is the typed-python API owner'),
-          }),
+          llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') }),
         })
       ).profilesCreated,
     ).toBe(2);
@@ -229,27 +199,18 @@ describe('conflicts never pair across a personal scope', () => {
   it('a personal row against a team row gives no pair, while two team rows do', async () => {
     const always = rule('always alpha beta gamma', 'a', null);
     const never = rule('never alpha beta gamma zeta', 'b', null);
-    expect(
-      await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH }),
-    ).toHaveLength(1);
-    expect(
-      await detectConflicts([{ ...always, scope: ALICE }, never], now, {
-        strength: PRODUCTION_STRENGTH,
-      }),
-    ).toEqual([]);
-    expect(
-      await detectConflicts([always, { ...never, scope: ALICE }], now, {
-        strength: PRODUCTION_STRENGTH,
-      }),
-    ).toEqual([]);
+    expect(await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH })).toHaveLength(1);
+    expect(await detectConflicts([{ ...always, scope: ALICE }, never], now, { strength: PRODUCTION_STRENGTH })).toEqual(
+      [],
+    );
+    expect(await detectConflicts([always, { ...never, scope: ALICE }], now, { strength: PRODUCTION_STRENGTH })).toEqual(
+      [],
+    );
   });
 
   it('two rows in one personal scope still pair', async () => {
     const pair = await detectConflicts(
-      [
-        rule('always alpha beta gamma', 'a', ALICE),
-        rule('never alpha beta gamma zeta', 'b', ALICE),
-      ],
+      [rule('always alpha beta gamma', 'a', ALICE), rule('never alpha beta gamma zeta', 'b', ALICE)],
       now,
       { strength: PRODUCTION_STRENGTH },
     );
@@ -259,22 +220,14 @@ describe('conflicts never pair across a personal scope', () => {
   it('two owners, or a case variant of one owner, never pair', async () => {
     const mine = rule('always alpha beta gamma', 'a', ALICE);
     expect(
-      await detectConflicts(
-        [mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')],
-        now,
-        {
-          strength: PRODUCTION_STRENGTH,
-        },
-      ),
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
     ).toEqual([]);
     expect(
-      await detectConflicts(
-        [mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')],
-        now,
-        {
-          strength: PRODUCTION_STRENGTH,
-        },
-      ),
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
     ).toEqual([]);
   });
 });

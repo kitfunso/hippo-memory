@@ -19,8 +19,7 @@ oneRequestPerTest();
 const TAUGHT =
   'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";
-const AGENT_RULE =
-  'The deploy script must run from the repository root because it reads relative paths.';
+const AGENT_RULE = 'The deploy script must run from the repository root because it reads relative paths.';
 const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
 
 describe('capture pins the rules a person states', () => {
@@ -38,12 +37,7 @@ describe('capture pins the rules a person states', () => {
     });
   const injected = async () =>
     (
-      await contextGet(ctx, {
-        pinnedOnly: true,
-        includeRecent: 5,
-        currentProject: 'project',
-        prompt: LATER_PROMPT,
-      })
+      await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT })
     ).entries.map(({ entry }) => entry.content);
 
   beforeEach(() => {
@@ -108,17 +102,11 @@ describe('capture pins the rules a person states', () => {
         payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
       });
     const jsonl = [
-      line(
-        '# AGENTS.md instructions for C:/repo\n\n<INSTRUCTIONS>\nNever push to main.\n</INSTRUCTIONS>',
-      ),
+      line('# AGENTS.md instructions for C:/repo\n\n<INSTRUCTIONS>\nNever push to main.\n</INSTRUCTIONS>'),
       line('<environment_context>\n  <cwd>C:/repo</cwd>\n</environment_context>'),
-      line(
-        '<in-app-browser-context source="ambient-ui-state">\nAlways show the page.\n</in-app-browser-context>',
-      ),
+      line('<in-app-browser-context source="ambient-ui-state">\nAlways show the page.\n</in-app-browser-context>'),
       line('Never edit CHANGELOG.md by hand.'),
     ].join('\n');
-    expect(collectSessionTurns(jsonl)).toEqual([
-      { role: 'user', text: 'Never edit CHANGELOG.md by hand.' },
-    ]);
+    expect(collectSessionTurns(jsonl)).toEqual([{ role: 'user', text: 'Never edit CHANGELOG.md by hand.' }]);
   });
 });

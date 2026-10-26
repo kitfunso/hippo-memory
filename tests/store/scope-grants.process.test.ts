@@ -54,11 +54,7 @@ function beforeScopeChange(keys: KeyWrites, before: (change: ScopeGrantChange) =
   return { ...keys, changeApiKey };
 }
 
-function mintKey(
-  home: string,
-  role: 'admin' | 'member',
-  tenantId = 'default',
-): { plaintext: string; keyId: string } {
+function mintKey(home: string, role: 'admin' | 'member', tenantId = 'default'): { plaintext: string; keyId: string } {
   const db = openHippoDb(home);
   try {
     return createApiKey(db, { tenantId, label: `${role}-test`, role });
@@ -68,10 +64,7 @@ function mintKey(
 }
 
 function seedPrivateMemory(home: string): void {
-  writeEntry(home, {
-    ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic }),
-    scope: PRIVATE_SCOPE,
-  });
+  writeEntry(home, { ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic }), scope: PRIVATE_SCOPE });
 }
 
 describe('scope grants over HTTP', () => {
@@ -101,12 +94,7 @@ describe('scope grants over HTTP', () => {
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name, arguments: args },
-      }),
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
     });
     return { status: res.status, text: await res.text() };
   }
@@ -114,20 +102,14 @@ describe('scope grants over HTTP', () => {
   it('member without a grant is denied on every surface, admin unaffected', async () => {
     const member = mintKey(home, 'member');
 
-    const scoped = await get(
-      `/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
-      member.plaintext,
-    );
+    const scoped = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(scoped.status).toBe(403);
 
     const unscoped = await get('/v1/memories?q=kowalski', member.plaintext);
     expect(unscoped.status).toBe(200);
     expect(await unscoped.text()).not.toContain('payroll');
 
-    const recallDenied = await callTool(member.plaintext, 'hippo_recall', {
-      query: 'kowalski',
-      scope: PRIVATE_SCOPE,
-    });
+    const recallDenied = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski', scope: PRIVATE_SCOPE });
     expect(recallDenied.text).not.toContain('payroll');
     expect(JSON.parse(recallDenied.text).error).toEqual({
       code: -32603,
@@ -136,10 +118,7 @@ describe('scope grants over HTTP', () => {
     const recallOpen = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski' });
     expect(recallOpen.text).not.toContain('payroll');
 
-    const contextDenied = await callTool(member.plaintext, 'hippo_context', {
-      scope: PRIVATE_SCOPE,
-      budget: '4000',
-    });
+    const contextDenied = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
     expect(contextDenied.text).not.toContain('payroll');
     expect(JSON.parse(contextDenied.text).error).toEqual({
       code: -32603,
@@ -159,26 +138,17 @@ describe('scope grants over HTTP', () => {
 
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
-    const scoped = await get(
-      `/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
-      member.plaintext,
-    );
+    const scoped = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(scoped.status).toBe(200);
     expect(await scoped.text()).toContain('payroll');
 
-    const recallAllowed = await callTool(member.plaintext, 'hippo_recall', {
-      query: 'kowalski',
-      scope: PRIVATE_SCOPE,
-    });
+    const recallAllowed = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski', scope: PRIVATE_SCOPE });
     expect(recallAllowed.text).toContain('payroll');
 
     // hippo_context ranks by an auto-detected git query, not args.query, so content
     // relevance is out of scope here; the grant is proven by the absence of the
     // scope-forbidden error that the denied case above asserts.
-    const contextAllowed = await callTool(member.plaintext, 'hippo_context', {
-      scope: PRIVATE_SCOPE,
-      budget: '4000',
-    });
+    const contextAllowed = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
     expect(JSON.parse(contextAllowed.text).error).toBeUndefined();
 
     // A second restricted scope, never granted, stays denied.
@@ -198,10 +168,7 @@ describe('scope grants over HTTP', () => {
 
   it('a member cannot name a mixed-case private scope the SQL filter hides', async () => {
     const member = mintKey(home, 'member');
-    const res = await get(
-      `/v1/memories?q=kowalski&scope=${encodeURIComponent('Slack:Private:C1')}`,
-      member.plaintext,
-    );
+    const res = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent('Slack:Private:C1')}`, member.plaintext);
     expect(res.status).toBe(403);
   });
 
@@ -211,37 +178,27 @@ describe('scope grants over HTTP', () => {
       scope: 'Slack:Private:C9',
     });
     const member = mintKey(home, 'member');
+    expect(await (await get('/v1/memories?q=zzzmixedcasezzz+quarterly', member.plaintext)).text()).not.toContain(
+      'zzzmixedcasezzz',
+    );
     expect(
-      await (await get('/v1/memories?q=zzzmixedcasezzz+quarterly', member.plaintext)).text(),
-    ).not.toContain('zzzmixedcasezzz');
-    expect(
-      (await callTool(member.plaintext, 'hippo_recall', { query: 'zzzmixedcasezzz quarterly' }))
-        .text,
+      (await callTool(member.plaintext, 'hippo_recall', { query: 'zzzmixedcasezzz quarterly' })).text,
     ).not.toContain('zzzmixedcasezzz');
   });
 
   it('a consolidation merge of private sources never reaches a member through default recall', async () => {
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ contextProjectIsolation: false, replay: { count: 0 } }),
-    );
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ contextProjectIsolation: false, replay: { count: 0 } }));
     const backbone = 'rotate the staging tls certificates before expiry';
     writeEntry(home, createMemory(backbone, { layer: Layer.Episodic, scope: PRIVATE_SCOPE }));
     writeEntry(
       home,
-      createMemory(`${backbone} zzzprivatemarkerzzz notify on-call`, {
-        layer: Layer.Episodic,
-        scope: PRIVATE_SCOPE,
-      }),
+      createMemory(`${backbone} zzzprivatemarkerzzz notify on-call`, { layer: Layer.Episodic, scope: PRIVATE_SCOPE }),
     );
     const result = await consolidate(home, { dryRun: false });
     expect(result.semanticCreated).toBe(1);
 
     const member = mintKey(home, 'member');
-    const res = await get(
-      '/v1/memories?q=staging+tls+certificates+zzzprivatemarkerzzz',
-      member.plaintext,
-    );
+    const res = await get('/v1/memories?q=staging+tls+certificates+zzzprivatemarkerzzz', member.plaintext);
     expect(res.status).toBe(200);
     expect(await res.text()).not.toContain('zzzprivatemarkerzzz');
 
@@ -267,24 +224,15 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('a member actor cannot grant', async () => {
     const member = mintKey(home, 'member');
-    const memberCtx: FullContext = apiCtx(home, 'default', {
-      subject: `api_key:${member.keyId}`,
-      role: 'member',
-    });
-    await expect(api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(
-      api.ForbiddenError,
-    );
-    await expect(api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(
-      api.ForbiddenError,
-    );
+    const memberCtx: FullContext = apiCtx(home, 'default', { subject: `api_key:${member.keyId}`, role: 'member' });
+    await expect(api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
   });
 
   it('rejects a key belonging to another tenant', async () => {
     const other = mintKey(home, 'member', 'other-tenant');
     const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
-    await expect(api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).rejects.toThrow(
-      /Unknown key_id/,
-    );
+    await expect(api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).rejects.toThrow(/Unknown key_id/);
   });
 
   it('rejects a grant on a revoked key', async () => {
@@ -316,9 +264,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(
-      (await api.auditList(base, { op: 'auth_grant' })).some((e) => e.targetId === member.keyId),
-    ).toBe(false);
+    expect((await api.auditList(base, { op: 'auth_grant' })).some((e) => e.targetId === member.keyId)).toBe(false);
   });
 
   it('refuses an open or personal scope in the api before the store is asked', async () => {
@@ -328,15 +274,9 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     const keyWrites = beforeScopeChange(base.store.keyWrites, (change) => asked.push(change.scope));
     const counting: FullContext = { ...base, store: { ...base.store, keyWrites } };
 
-    await expect(api.authGrant(counting, member.keyId, 'team:eng')).rejects.toThrow(
-      api.BadRequestError,
-    );
-    await expect(api.authGrant(counting, member.keyId, 'personal:private:alice')).rejects.toThrow(
-      api.BadRequestError,
-    );
-    await expect(api.authUngrant(counting, member.keyId, 'slack:public:general')).rejects.toThrow(
-      api.BadRequestError,
-    );
+    await expect(api.authGrant(counting, member.keyId, 'team:eng')).rejects.toThrow(api.BadRequestError);
+    await expect(api.authGrant(counting, member.keyId, 'personal:private:alice')).rejects.toThrow(api.BadRequestError);
+    await expect(api.authUngrant(counting, member.keyId, 'slack:public:general')).rejects.toThrow(api.BadRequestError);
     expect(asked).toEqual([]);
   });
 
@@ -415,26 +355,16 @@ describe("supersede keeps the old row's scope", () => {
       env: { ...process.env, ...env },
     });
     const hippoDir = join(cliHome, '.hippo');
-    const old = createMemory(PRIVATE_TEXT, {
-      layer: Layer.Episodic,
-      scope: PRIVATE_SCOPE,
-      tenantId: 'default',
-    });
+    const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE, tenantId: 'default' });
     writeEntry(hippoDir, old);
 
-    execFileSync(
-      'node',
-      [HIPPO_BIN, 'supersede', old.id, 'kowalski payroll rollout moved to friday'],
-      {
-        cwd: cliHome,
-        env: { ...process.env, ...env },
-      },
-    );
+    execFileSync('node', [HIPPO_BIN, 'supersede', old.id, 'kowalski payroll rollout moved to friday'], {
+      cwd: cliHome,
+      env: { ...process.env, ...env },
+    });
 
     const refreshed = readEntry(hippoDir, old.id, 'default');
-    const successor = refreshed?.supersededBy
-      ? readEntry(hippoDir, refreshed.supersededBy, 'default')
-      : null;
+    const successor = refreshed?.supersededBy ? readEntry(hippoDir, refreshed.supersededBy, 'default') : null;
     expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });
 });
@@ -456,11 +386,7 @@ describe('graph view carries no private receipt text', () => {
   it('GET /v1/graph as a member never contains private receipt text after a brief refresh + graph extract', async () => {
     const member = mintKey(home, 'member');
     writeEntry(home, {
-      ...createMemory(PRIVATE_TEXT, {
-        layer: Layer.Episodic,
-        tags: ['path:testrepo'],
-        source: 'test',
-      }),
+      ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }),
       scope: PRIVATE_SCOPE,
     });
     writeEntry(home, {
@@ -474,19 +400,12 @@ describe('graph view carries no private receipt text', () => {
 
     await refreshedBrief(
       objectsAt(home),
-      {
-        now: evalNow(),
-        baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
-        tenantId: 'default',
-        actor: 'cli',
-      },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
       'testrepo',
     );
     await extractGraph(sqliteStore(home), 'default');
 
-    const res = await fetch(`${handle.url}/v1/graph`, {
-      headers: { authorization: `Bearer ${member.plaintext}` },
-    });
+    const res = await fetch(`${handle.url}/v1/graph`, { headers: { authorization: `Bearer ${member.plaintext}` } });
     expect(res.status).toBe(200);
     expect(await res.text()).not.toContain('payroll');
   });

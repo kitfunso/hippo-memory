@@ -64,11 +64,7 @@ describe('check-caught-error-logs', () => {
   });
 
   it('accepts errorClassFields, which keeps the class and drops the text on purpose', () => {
-    const text = [
-      'try { x(); } catch (err) {',
-      '  log.warn("late", errorClassFields(err));',
-      '}',
-    ].join('\n');
+    const text = ['try { x(); } catch (err) {', '  log.warn("late", errorClassFields(err));', '}'].join('\n');
     expect(unfieldedLogLines(text)).toEqual([]);
   });
 
@@ -108,8 +104,7 @@ describe('check-caught-error-logs', () => {
   });
 
   it('passes an error listener that hands on errorFields', () => {
-    const text =
-      "child.on('error', (err) => log.warn(`a: ${errorMessage(err)}`, errorFields(err)));\n";
+    const text = "child.on('error', (err) => log.warn(`a: ${errorMessage(err)}`, errorFields(err)));\n";
     expect(unfieldedLogLines(text)).toEqual([]);
   });
 
@@ -136,18 +131,13 @@ describe('check-caught-error-logs', () => {
   });
 
   it('fails the run on a partial pick even when the baseline allows every unfielded call', () => {
-    file(
-      'src/pick.ts',
-      'export const f = (err: Error) => ({ errorClass: errorFields(err).errorClass });\n',
-    );
+    file('src/pick.ts', 'export const f = (err: Error) => ({ errorClass: errorFields(err).errorClass });\n');
     file('src/whole.ts', 'export const g = (err: Error) => errorFields(err);\n');
     expect(findPartialPicks(join(dir, 'src'))).toEqual(['pick.ts:1']);
     writeFileSync(join(dir, BASELINE), '{}\n');
     const r = run();
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain(
-      'src/pick.ts:1: reads one field of errorFields(...) and drops the rest',
-    );
+    expect(r.stderr).toContain('src/pick.ts:1: reads one field of errorFields(...) and drops the rest');
   });
 
   it('counts a log call in a catch nested in another catch once', () => {
@@ -168,9 +158,7 @@ describe('check-caught-error-logs', () => {
     writeFileSync(join(dir, BASELINE), '{}\n');
     const r = run();
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain(
-      'src/bad.ts: 1 log calls in a failure path without errorFields(err) (baseline 0)',
-    );
+    expect(r.stderr).toContain('src/bad.ts: 1 log calls in a failure path without errorFields(err) (baseline 0)');
   });
 
   it('passes at the baseline and refuses --update when a count would rise', () => {
@@ -185,12 +173,9 @@ describe('check-caught-error-logs', () => {
 
   it('passes on the real src tree at its baseline', () => {
     // SAFETY: the baseline is written by the script as a path-to-count object.
-    const base = JSON.parse(
-      readFileSync(resolve(__dirname, '..', '..', BASELINE), 'utf8'),
-    ) as Record<string, number>;
+    const base = JSON.parse(readFileSync(resolve(__dirname, '..', '..', BASELINE), 'utf8')) as Record<string, number>;
     const counts = countUnfieldedLogs(resolve(__dirname, '..', '..', 'src'));
-    for (const [f, n] of Object.entries(counts))
-      expect(n, f).toBeLessThanOrEqual(base[`src/${f}`] ?? 0);
+    for (const [f, n] of Object.entries(counts)) expect(n, f).toBeLessThanOrEqual(base[`src/${f}`] ?? 0);
   });
 
   it('flags a catch that sends only the error text to a result array, with its line', () => {
@@ -224,9 +209,7 @@ describe('check-caught-error-logs', () => {
     writeFileSync(join(dir, BASELINE), '{}\n');
     const r = run();
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain(
-      'src/quiet.ts:1: the caught error goes only into a result array, not a log',
-    );
+    expect(r.stderr).toContain('src/quiet.ts:1: the caught error goes only into a result array, not a log');
   });
 
   it('finds no result-only catch in the real src tree', () => {

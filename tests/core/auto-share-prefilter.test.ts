@@ -42,12 +42,7 @@ beforeEach(() => {
   initTestStore(root);
 });
 
-function put(
-  label: string,
-  extra: Partial<MemoryEntry> = {},
-  tags: string[] = [],
-  tenantId = 'default',
-): string {
+function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {
   const entry = {
     ...createMemory(`${label}: the step needs its flag or the command silently does nothing`, {
       tags,
@@ -88,10 +83,7 @@ function seedSignalRowsIn(): Map<string, string> {
   // The JSON escape spells the same tag, so a plain substring of tags_json cannot find it.
   const db = openHippoDb(root);
   try {
-    db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?').run(
-      '["\\u0065rror"]',
-      ids.get('escaped error 0.6')!,
-    );
+    db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?').run('["\\u0065rror"]', ids.get('escaped error 0.6')!);
   } finally {
     closeHippoDb(db);
   }
@@ -142,10 +134,7 @@ const PICKED: ReadonlyArray<[number, string[]]> = [
       'escaped error 0.6',
     ],
   ],
-  [
-    0.6,
-    ['retrieved thrice 0.6', 'pinned 0.6', 'error 0.6', 'python shell 0.7', 'escaped error 0.6'],
-  ],
+  [0.6, ['retrieved thrice 0.6', 'pinned 0.6', 'error 0.6', 'python shell 0.7', 'escaped error 0.6']],
   [0.65, ['python shell 0.7']],
   [0.75, []],
 ];

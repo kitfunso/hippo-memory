@@ -38,37 +38,26 @@ function mk(id: string, content: string, validFrom: string): MemoryEntry {
 const PRE1 = mk('pre1', 'deploy pipeline runs on jenkins', '2026-05-01T00:00:00.000Z');
 const PRE2 = mk('pre2', 'deploy pipeline needs ops approval', '2026-04-01T00:00:00.000Z');
 const POST = mk('post', 'deploy pipeline moved to github actions', '2026-07-01T00:00:00.000Z');
-const VECTORS = { pre1: [0.6, 0.8, 0], pre2: [0.5, 0, 0.86], post: QUERY_VECTOR } satisfies Record<
-  string,
-  number[]
->;
+const VECTORS = { pre1: [0.6, 0.8, 0], pre2: [0.5, 0, 0.86], post: QUERY_VECTOR } satisfies Record<string, number[]>;
 
 let root: string;
 
 beforeEach(() => {
-  root = makeRoot('physics-asof', {
-    config: { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } },
-  });
+  root = makeRoot('physics-asof', { config: { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } } });
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init: { body: string }) => {
       // SAFETY: body is the OpenAI embeddings request the provider just serialised.
       const body = JSON.parse(init.body) as { input: string[] };
-      return new Response(
-        JSON.stringify({ data: body.input.map(() => ({ embedding: QUERY_VECTOR })) }),
-        {
-          status: 200,
-        },
-      );
+      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: QUERY_VECTOR })) }), {
+        status: 200,
+      });
     }),
   );
   for (const e of [PRE1, PRE2, POST]) writeEntry(root, { ...e, tags: [...e.tags] });
   saveEmbeddingIndex(root, VECTORS);
-  saveStoredEmbeddingModel(
-    handlesOf(root).on,
-    resolveEmbeddingProvider(loadConfig(root).embeddings).id,
-  );
+  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const db = openHippoDb(root);
   try {
     savePhysicsState(
@@ -94,18 +83,10 @@ afterEach(() => {
 });
 
 const ids = (results: SearchResult[]): string[] => results.map((r) => r.entry.id);
-const pool = (...entries: MemoryEntry[]): MemoryEntry[] =>
-  entries.map((e) => ({ ...e, tags: [...e.tags] }));
+const pool = (...entries: MemoryEntry[]): MemoryEntry[] => entries.map((e) => ({ ...e, tags: [...e.tags] }));
 
 describe('physicsSearch with asOf', () => {
-  const base = () => ({
-    now: NOW,
-    budget: 100_000,
-    hippoRoot: root,
-    explain: true,
-    scope: null,
-    asOf: CUT,
-  });
+  const base = () => ({ now: NOW, budget: 100_000, hippoRoot: root, explain: true, scope: null, asOf: CUT });
 
   it('drops a row written after the cut and ranks exactly as the hybrid path does', async () => {
     const physics = await physicsSearch('deploy pipeline', pool(PRE1, PRE2, POST), {

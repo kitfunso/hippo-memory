@@ -33,12 +33,7 @@ const rows: Record<string, MemoryEntry> = {};
 
 function seedRow(name: string, content: string, over: Partial<MemoryEntry> = {}, at = 0): void {
   const created = new Date(Date.parse('2026-02-01T00:00:00.000Z') + at * 60_000).toISOString();
-  const row = {
-    ...createMemory(content, { tenantId: TENANT_A }),
-    originProject: 'proj',
-    created,
-    ...over,
-  };
+  const row = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj', created, ...over };
   writeEntry(fixture.dir, row, { actor: 'cli' });
   rows[name] = row;
 }
@@ -51,12 +46,7 @@ function seed(): void {
   seedRow('team', 'the deploy key sits in the ops vault', { scope: 'team:ops' }, 5);
   seedRow('mine', 'my deploy alias is dpl', { scope: ALICE }, 6);
   seedRow('old', 'deploys went out on fridays', { supersededBy: 'mem_newer' }, 7);
-  seedRow(
-    'raw1',
-    'raw: standup said the deploy slipped',
-    { kind: 'raw', sourceSessionId: 's1' },
-    8,
-  );
+  seedRow('raw1', 'raw: standup said the deploy slipped', { kind: 'raw', sourceSessionId: 's1' }, 8);
   seedRow('raw2', 'raw: standup in the other project', { kind: 'raw', originProject: 'other' }, 9);
   seedRow('raw3', 'raw: a user-global note', { kind: 'raw', originProject: '' }, 10);
   seedRow('rawB', 'raw: tenant b standup', { kind: 'raw', tenantId: TENANT_B }, 11);
@@ -106,52 +96,28 @@ describe('HippoStore base reads', () => {
       (s) => s.searchRecallEntries('deploy', search({ requestedScope: 'team:ops' })).then(contents),
       (s) =>
         s
-          .searchRecallEntries(
-            'deploy',
-            search({ requestedScope: 'team:ops', explicitScopeMode: 'additive' }),
-          )
+          .searchRecallEntries('deploy', search({ requestedScope: 'team:ops', explicitScopeMode: 'additive' }))
           .then(contents),
-      (s) =>
-        s
-          .searchRecallEntries('deploy', search({ includeSuperseded: true, limit: 2 }))
-          .then(contents),
+      (s) => s.searchRecallEntries('deploy', search({ includeSuperseded: true, limit: 2 })).then(contents),
       (s) => s.searchRecallEntries('ploy', search()).then(contents),
       (s) => s.searchRecallEntries('zzz nothing', search({ limit: 3 })).then(contents),
       (s) => s.searchRecallEntries('deploy', search({ originProjects: ['other'] })).then(contents),
       (s) => s.searchRecallEntries('deploy', search({ tenantId: TENANT_B })).then(contents),
-      (s) =>
-        s.entriesByIds(
-          [id('cache'), id('pipeline'), 'mem_none', id('b'), id('pipeline')],
-          TENANT_A,
-        ),
+      (s) => s.entriesByIds([id('cache'), id('pipeline'), 'mem_none', id('b'), id('pipeline')], TENANT_A),
       (s) => s.freshRawEntries(10, TENANT_A, undefined, null).then(contents),
       (s) => s.freshRawEntries(10, TENANT_A, 's1', null).then(contents),
       (s) => s.freshRawEntries(10, TENANT_A, undefined, ['proj']).then(contents),
       (s) => s.freshRawEntries(1, TENANT_B, undefined, null).then(contents),
       (s) =>
-        s
-          .activeGoals({ tenantId: TENANT_A, sessionId: 'none' })
-          .then((a) => ({ ...a, policies: [...a.policies] })),
+        s.activeGoals({ tenantId: TENANT_A, sessionId: 'none' }).then((a) => ({ ...a, policies: [...a.policies] })),
     ]);
-    expect(outcomes.slice(0, 3).map((o) => 'value' in o && o.value !== null)).toEqual([
-      true,
-      true,
-      false,
-    ]);
-    expect(outcomes[3]).toMatchObject({
-      value: expect.arrayContaining(['the deploy pipeline runs nightly']),
-    });
+    expect(outcomes.slice(0, 3).map((o) => 'value' in o && o.value !== null)).toEqual([true, true, false]);
+    expect(outcomes[3]).toMatchObject({ value: expect.arrayContaining(['the deploy pipeline runs nightly']) });
     expect(outcomes[12]).toMatchObject({ value: [{ id: id('pipeline') }, { id: id('cache') }] });
     expect(outcomes[13]).toEqual({
-      value: [
-        'raw: a user-global note',
-        'raw: standup in the other project',
-        'raw: standup said the deploy slipped',
-      ],
+      value: ['raw: a user-global note', 'raw: standup in the other project', 'raw: standup said the deploy slipped'],
     });
-    expect(outcomes[15]).toEqual({
-      value: ['raw: a user-global note', 'raw: standup said the deploy slipped'],
-    });
+    expect(outcomes[15]).toEqual({ value: ['raw: a user-global note', 'raw: standup said the deploy slipped'] });
   });
 });
 
@@ -159,10 +125,7 @@ describe('HippoStore by-id read', () => {
   it('reads every id of a list longer than one SQL chunk, in the by-id order', async () => {
     const gap = Array.from({ length: ID_CHUNK }, (_, i) => `mem_gap_${i}`);
     const { outcomes } = await conforms([
-      (s) =>
-        s
-          .entriesByIds([...gap, id('cache'), id('pipeline')], TENANT_A)
-          .then((found) => found.map((e) => e.id)),
+      (s) => s.entriesByIds([...gap, id('cache'), id('pipeline')], TENANT_A).then((found) => found.map((e) => e.id)),
     ]);
     expect(outcomes[0]).toEqual({ value: [id('pipeline'), id('cache')] });
   });
@@ -179,12 +142,7 @@ describe('HippoStore continuity', () => {
           KEY,
         ),
       (s) =>
-        s.sessions.save(
-          TENANT_A,
-          'handoff',
-          { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } },
-          KEY,
-        ),
+        s.sessions.save(TENANT_A, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } }, KEY),
       (s) =>
         s.sessions.save(
           TENANT_A,
@@ -192,22 +150,10 @@ describe('HippoStore continuity', () => {
           { handoff: { version: 1, sessionId: 's1', summary: 'carry on again' } },
           KEY,
         ),
-      (s) =>
-        s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
-      (s) =>
-        s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
-      (s) =>
-        s.sessions.save(TENANT_A, 'event', {
-          sessionId: 's1',
-          eventType: 'note',
-          content: 'three',
-        }),
-      (s) =>
-        s.sessions.save(TENANT_A, 'event', {
-          sessionId: 's2',
-          eventType: 'note',
-          content: 'other session',
-        }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
       (s) => s.continuity(TENANT_A, 2, KEY),
       (s) => s.continuity(TENANT_A, 8, null),
       (s) => s.continuity(TENANT_A, 8, { owner: 'bob', project: ['proj'] }),
@@ -221,20 +167,13 @@ describe('HippoStore continuity', () => {
         recentSessionEvents: [{ content: 'two' }, { content: 'three' }],
       },
     });
-    expect(outcomes[11]).toEqual({
-      value: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] },
-    });
+    expect(outcomes[11]).toEqual({ value: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] } });
   });
 });
 
 describe('HippoStore base writes', () => {
   const claim = (classTag: string, tenantId = TENANT_A): PredictionSave => {
-    const opts = {
-      classTag,
-      claimText: `the ${classTag} lands on time`,
-      estimateValue: 2,
-      estimateUnit: 'days',
-    };
+    const opts = { classTag, claimText: `the ${classTag} lands on time`, estimateValue: 2, estimateUnit: 'days' };
     return { ...opts, mirror: predictionMirror(tenantId, opts, 30, evalNow()), actor: 'cli' };
   };
 
@@ -246,18 +185,8 @@ describe('HippoStore base writes', () => {
           (s) =>
             s.objects.saveObject(TENANT_A, 'prediction', save),
       ),
-      (s) =>
-        s.objects.closeObject(TENANT_A, 'prediction', 1, {
-          closureState: 'closed',
-          actualValue: 4,
-          actor: 'cli',
-        }),
-      (s) =>
-        s.objects.closeObject(TENANT_A, 'prediction', 2, {
-          closureState: 'closed',
-          actualValue: 3,
-          actor: 'cli',
-        }),
+      (s) => s.objects.closeObject(TENANT_A, 'prediction', 1, { closureState: 'closed', actualValue: 4, actor: 'cli' }),
+      (s) => s.objects.closeObject(TENANT_A, 'prediction', 2, { closureState: 'closed', actualValue: 3, actor: 'cli' }),
       (s) => s.planningFallacyEvidence(TENANT_A, ['deploy', 'work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['nothing']),
@@ -271,9 +200,7 @@ describe('HippoStore base writes', () => {
       (s) =>
         s.finishRecall({
           goalLog: [],
-          audit: [
-            { tenantId: TENANT_A, actor: 'api_key:caller', op: 'recall', metadata: { results: 2 } },
-          ],
+          audit: [{ tenantId: TENANT_A, actor: 'api_key:caller', op: 'recall', metadata: { results: 2 } }],
           trace: {
             tenantId: TENANT_A,
             sessionId: 's1',
@@ -290,8 +217,7 @@ describe('HippoStore base writes', () => {
         s
           .entriesByIds([id('main'), id('cache')], TENANT_A)
           .then((found) => found.map((e) => [e.retrievalCount, e.strength, e.lastRetrieved])),
-      (s) =>
-        s.entriesByIds([id('b')], TENANT_B).then((found) => found.map((e) => e.retrievalCount)),
+      (s) => s.entriesByIds([id('b')], TENANT_B).then((found) => found.map((e) => e.retrievalCount)),
       (s) => s.bumpRecallStats(2),
       (s) => s.reports.stats().then((stats) => stats.total_recalled),
       (s) =>

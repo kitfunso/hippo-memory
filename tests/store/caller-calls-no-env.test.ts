@@ -24,11 +24,7 @@ const TENANT = 'acme-tenant';
 const ENV_TENANT = 'env-tenant';
 const SESSION = 'sA';
 const PROJECT = { name: 'acme/app', legacyName: 'app' } as const;
-const STATE = {
-  task: 'Ship the caller calls',
-  summary: 'Wrote the tests first.',
-  next_step: 'Implement pre-compact',
-};
+const STATE = { task: 'Ship the caller calls', summary: 'Wrote the tests first.', next_step: 'Implement pre-compact' };
 const ITEMS = [
   'The release script must run from the repo root because it reads the env file by a relative path.',
   'Integration tests need the local Postgres container started before the suite or every case times out.',
@@ -43,13 +39,7 @@ const TENANT_TABLES = [
   'token_ledger',
   'session_owners',
 ] as const;
-const ORIGIN_TABLES = [
-  'compactions',
-  'task_snapshots',
-  'session_handoffs',
-  'failure_log',
-  'memories',
-] as const;
+const ORIGIN_TABLES = ['compactions', 'task_snapshots', 'session_handoffs', 'failure_log', 'memories'] as const;
 
 let dir: string;
 let root: string;
@@ -88,11 +78,7 @@ function rowsByTenant(db: DatabaseSyncLike, tenantId: string): Record<string, nu
   return Object.fromEntries(
     TENANT_TABLES.map((t) => [
       t,
-      (
-        db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE tenant_id = ?`).get(tenantId) as {
-          n: number;
-        }
-      ).n,
+      (db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE tenant_id = ?`).get(tenantId) as { n: number }).n,
     ]),
   );
 }
@@ -100,9 +86,7 @@ function rowsByTenant(db: DatabaseSyncLike, tenantId: string): Record<string, nu
 function origins(db: DatabaseSyncLike, table: string): string[] {
   // SAFETY: the SELECT names exactly one TEXT column.
   const rows = db
-    .prepare(
-      `SELECT DISTINCT origin_project FROM ${table} WHERE origin_project IS NOT NULL ORDER BY origin_project`,
-    )
+    .prepare(`SELECT DISTINCT origin_project FROM ${table} WHERE origin_project IS NOT NULL ORDER BY origin_project`)
     .all() as Array<{ origin_project: string }>;
   return rows.map((r) => r.origin_project);
 }
@@ -118,21 +102,12 @@ describe('caller calls under a foreign environment', () => {
     };
     const base = { sessionId: SESSION, project: PROJECT };
 
-    expect(
-      await preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE }),
-    ).toEqual({
+    expect(await preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({
       stdout: PRE_COMPACT_INSTRUCTION,
     });
-    expect((await compactResumeForCaller(ctx, { ...base, source: 'compact' })).stdout).toContain(
-      STATE.task,
-    );
+    expect((await compactResumeForCaller(ctx, { ...base, source: 'compact' })).stdout).toContain(STATE.task);
     expect(
-      await saveCompactionItemsForCaller(ctx, {
-        ...base,
-        trigger: 'auto',
-        items: ITEMS,
-        requestId: 'cmp-1',
-      }),
+      await saveCompactionItemsForCaller(ctx, { ...base, trigger: 'auto', items: ITEMS, requestId: 'cmp-1' }),
     ).toEqual({ written: 2 });
     expect(
       await captureFailureForCaller(ctx, {
@@ -146,9 +121,7 @@ describe('caller calls under a foreign environment', () => {
       }),
     ).toEqual({ outcome: 'stored' });
     const evidence = { gitRef: 'b'.repeat(40), dirtyTree: true, testStatus: 'pass' } as const;
-    expect(
-      await sessionEndHandoffForCaller(ctx, { ...base, workingState: STATE, evidence }),
-    ).toEqual({
+    expect(await sessionEndHandoffForCaller(ctx, { ...base, workingState: STATE, evidence })).toEqual({
       handoffWritten: true,
       snapshotsClosed: 1,
     });
@@ -164,13 +137,8 @@ describe('caller calls under a foreign environment', () => {
         session_owners: 1,
       });
       expect(Object.values(rowsByTenant(db, ENV_TENANT)).every((n) => n === 0)).toBe(true);
-      for (const table of ORIGIN_TABLES)
-        expect([table, origins(db, table)]).toEqual([table, ['acme/app']]);
-      expect(
-        db
-          .prepare(`SELECT snapshot_saved, status FROM compactions WHERE tenant_id = ?`)
-          .get(TENANT),
-      ).toEqual({
+      for (const table of ORIGIN_TABLES) expect([table, origins(db, table)]).toEqual([table, ['acme/app']]);
+      expect(db.prepare(`SELECT snapshot_saved, status FROM compactions WHERE tenant_id = ?`).get(TENANT)).toEqual({
         snapshot_saved: 1,
         status: 'done',
       });

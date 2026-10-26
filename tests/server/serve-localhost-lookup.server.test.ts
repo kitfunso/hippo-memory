@@ -18,20 +18,13 @@ const answering =
 
 describe('loopbackBindHosts', () => {
   it('adds localhost when every address it resolves to is loopback', async () => {
-    const hosts = await loopbackBindHosts(
-      'localhost',
-      answering('127.0.0.1', '::1', '::ffff:127.0.0.1'),
-    );
+    const hosts = await loopbackBindHosts('localhost', answering('127.0.0.1', '::1', '::ffff:127.0.0.1'));
     expect([...hosts].sort()).toEqual(['127.0.0.1', '::1', 'localhost']);
   });
 
   it('leaves localhost out when any address it resolves to is not loopback', async () => {
-    expect(await loopbackBindHosts('localhost', answering('127.0.0.1', '10.0.0.5'))).not.toContain(
-      'localhost',
-    );
-    expect(await loopbackBindHosts('localhost', answering('192.168.1.20'))).not.toContain(
-      'localhost',
-    );
+    expect(await loopbackBindHosts('localhost', answering('127.0.0.1', '10.0.0.5'))).not.toContain('localhost');
+    expect(await loopbackBindHosts('localhost', answering('192.168.1.20'))).not.toContain('localhost');
   });
 
   it('leaves localhost out when it resolves to nothing or the lookup fails', async () => {

@@ -8,10 +8,7 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const HAND_ROLLED =
   /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
 // The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
-const SCOPE_MODULES = [
-  join('base', 'scope', 'recall-scope.ts'),
-  join('store', 'sqlite', 'rule-sql.ts'),
-];
+const SCOPE_MODULES = [join('base', 'scope', 'recall-scope.ts'), join('store', 'sqlite', 'rule-sql.ts')];
 const ALLOWED = new Set(SCOPE_MODULES);
 // Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
@@ -29,16 +26,12 @@ function hitsIn(file: string, text: string): string[] {
   return text
     .split(/\r?\n/)
     .flatMap((line, i) =>
-      HAND_ROLLED.test(line) && !DOC_LINES.has(`${name}: ${line.trim()}`)
-        ? [`${name}:${i + 1}: ${line.trim()}`]
-        : [],
+      HAND_ROLLED.test(line) && !DOC_LINES.has(`${name}: ${line.trim()}`) ? [`${name}:${i + 1}: ${line.trim()}`] : [],
     );
 }
 
 const hits = (file: string): string[] => hitsIn(file, readFileSync(join(SRC, file), 'utf8'));
-const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((f) =>
-  f.endsWith('.ts'),
-);
+const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
 
 describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
@@ -48,9 +41,7 @@ describe('scope SQL guard', () => {
   });
 
   it('no other source file spells the default-deny SQL or the legacy marker', () => {
-    const offenders = sources
-      .filter((f) => !ALLOWED.has(f) && !f.startsWith(EXEMPT_DIR))
-      .flatMap(hits);
+    const offenders = sources.filter((f) => !ALLOWED.has(f) && !f.startsWith(EXEMPT_DIR)).flatMap(hits);
     expect(offenders).toEqual([]);
   });
 
@@ -71,12 +62,9 @@ describe('scope SQL guard', () => {
         "  // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
       ),
     ).toEqual([]);
-    expect(
-      hitsIn(
-        `store${sep}sqlite${sep}handoffs.ts`,
-        "  // continuity excludes 'unknown:legacy' too.",
-      ),
-    ).toHaveLength(1);
+    expect(hitsIn(`store${sep}sqlite${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(
+      1,
+    );
   });
 
   it('every listed doc line still exists, so the list cannot hold a stale pass', () => {

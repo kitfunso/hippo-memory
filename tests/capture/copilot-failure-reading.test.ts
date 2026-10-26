@@ -38,33 +38,23 @@ describe('Copilot tool names in the routine-failure rules', () => {
     });
   });
 
-  it.each(['bash', 'powershell'])(
-    'Copilot CLI shell tool %s with a quiet exit 1 is routine',
-    (tool) => {
-      expect(
-        lessonFromFailure(failure(tool, QUIET_EXIT, 'grep -rn retryBudget src')),
-      ).toMatchObject({
-        skip: 'skipped-routine',
-        rule: 'quiet-exit',
-      });
-    },
-  );
+  it.each(['bash', 'powershell'])('Copilot CLI shell tool %s with a quiet exit 1 is routine', (tool) => {
+    expect(lessonFromFailure(failure(tool, QUIET_EXIT, 'grep -rn retryBudget src'))).toMatchObject({
+      skip: 'skipped-routine',
+      rule: 'quiet-exit',
+    });
+  });
 
   // VS Code names: microsoft/vscode extensions/copilot/src/extension/tools/common/toolNames.ts, ToolName.Codebase, FindFiles, FindTextInFiles, CoreRunInTerminal.
-  it.each(['semantic_search', 'file_search', 'grep_search'])(
-    'VS Code search tool %s is routine',
-    (tool) => {
-      expect(lessonFromFailure(failure(tool, SEARCH_ERROR))).toMatchObject({
-        skip: 'skipped-routine',
-        rule: 'search-tool',
-      });
-    },
-  );
+  it.each(['semantic_search', 'file_search', 'grep_search'])('VS Code search tool %s is routine', (tool) => {
+    expect(lessonFromFailure(failure(tool, SEARCH_ERROR))).toMatchObject({
+      skip: 'skipped-routine',
+      rule: 'search-tool',
+    });
+  });
 
   it('VS Code run_in_terminal with a quiet exit 1 is routine', () => {
-    expect(
-      lessonFromFailure(failure('run_in_terminal', QUIET_EXIT, 'git diff --exit-code')),
-    ).toMatchObject({
+    expect(lessonFromFailure(failure('run_in_terminal', QUIET_EXIT, 'git diff --exit-code'))).toMatchObject({
       skip: 'skipped-routine',
       rule: 'quiet-exit',
     });
@@ -72,9 +62,7 @@ describe('Copilot tool names in the routine-failure rules', () => {
 
   it('a Copilot shell failure that is not a quiet exit stays a lesson', () => {
     expect(
-      lessonFromFailure(
-        failure('bash', 'Command failed with exit code 2: tsc reported TS2345', 'npm run build'),
-      ),
+      lessonFromFailure(failure('bash', 'Command failed with exit code 2: tsc reported TS2345', 'npm run build')),
     ).toEqual({
       text: 'bash: Command failed with exit code 2: tsc reported TS2345',
       detail: 'bash npm run: Command failed with exit code 2: tsc reported TS2345',

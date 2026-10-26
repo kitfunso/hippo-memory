@@ -43,14 +43,7 @@ describe('dumpFrontmatter then parseFrontmatter', () => {
   });
 
   it('keeps strings that look like other scalar types as strings', () => {
-    const data: Frontmatter = {
-      a: 'true',
-      b: 'false',
-      c: 'null',
-      d: '42',
-      e: '-1.5',
-      tags: ['7', 'null'],
-    };
+    const data: Frontmatter = { a: 'true', b: 'false', c: 'null', d: '42', e: '-1.5', tags: ['7', 'null'] };
     expect(roundTrip(data).data).toEqual(data);
   });
 
@@ -60,15 +53,7 @@ describe('dumpFrontmatter then parseFrontmatter', () => {
   });
 
   it('round-trips an empty list, numbers, booleans and null', () => {
-    const data: Frontmatter = {
-      tags: [],
-      count: 3,
-      ratio: 0.25,
-      neg: -2,
-      pinned: true,
-      starred: false,
-      scope: null,
-    };
+    const data: Frontmatter = { tags: [], count: 3, ratio: 0.25, neg: -2, pinned: true, starred: false, scope: null };
     expect(roundTrip(data).data).toEqual(data);
   });
 
@@ -81,27 +66,18 @@ describe('dumpFrontmatter then parseFrontmatter', () => {
 
 describe('parseFrontmatter on hand-written input', () => {
   it('reads a CRLF file the same as an LF file', () => {
-    const lf =
-      '---\nid: mem_1\ntags: [a, "b, c"]\nlist:\n  - x\n  - "y, z"\nnote: "q: \\"r\\""\n---\nbody\n';
+    const lf = '---\nid: mem_1\ntags: [a, "b, c"]\nlist:\n  - x\n  - "y, z"\nnote: "q: \\"r\\""\n---\nbody\n';
     const crlf = lf.replace(/\n/g, '\r\n');
     const fromLf = parseFrontmatter(lf);
     const fromCrlf = parseFrontmatter(crlf);
     expect(fromCrlf.data).toEqual(fromLf.data);
-    expect(fromLf.data).toEqual({
-      id: 'mem_1',
-      tags: ['a', 'b, c'],
-      list: ['x', 'y, z'],
-      note: 'q: "r"',
-    });
+    expect(fromLf.data).toEqual({ id: 'mem_1', tags: ['a', 'b, c'], list: ['x', 'y, z'], note: 'q: "r"' });
     expect(fromCrlf.content.replace(/\r\n/g, '\n')).toBe('body\n');
   });
 
   it('reads an indented block list and unquotes its items', () => {
     const raw = '---\ntags:\n  - plain\n  - "with, comma"\n    - deeper\nnext: 1\n---\n';
-    expect(parseFrontmatter(raw).data).toEqual({
-      tags: ['plain', 'with, comma', 'deeper'],
-      next: 1,
-    });
+    expect(parseFrontmatter(raw).data).toEqual({ tags: ['plain', 'with, comma', 'deeper'], next: 1 });
   });
 
   it('reads an empty inline list and a key with no value', () => {

@@ -11,12 +11,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  replaceDetectedConflicts,
-  listMemoryConflicts,
-  writeEntry,
-  readEntry,
-} from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -37,12 +32,8 @@ afterAll(() => {
 });
 
 async function seedConflict() {
-  const a = createMemory7('Always use semicolons in PowerShell', {
-    tags: ['powershell', 'windows'],
-  });
-  const b = createMemory7('Use && to chain commands in PowerShell', {
-    tags: ['powershell', 'windows'],
-  });
+  const a = createMemory7('Always use semicolons in PowerShell', { tags: ['powershell', 'windows'] });
+  const b = createMemory7('Use && to chain commands in PowerShell', { tags: ['powershell', 'windows'] });
   writeEntry(tmpDir, a);
   writeEntry(tmpDir, b);
 
@@ -61,15 +52,8 @@ async function seedConflict() {
   return { aId: a.id, bId: b.id, conflictId: conflicts[0].id };
 }
 
-const resolve = (
-  conflictId: number,
-  keepId: string,
-  opts: { forget?: boolean; tenantId?: string } = {},
-) =>
-  conflictResolve(apiCtx(tmpDir, opts.tenantId ?? 'default'), conflictId, {
-    keepId,
-    forget: opts.forget,
-  });
+const resolve = (conflictId: number, keepId: string, opts: { forget?: boolean; tenantId?: string } = {}) =>
+  conflictResolve(apiCtx(tmpDir, opts.tenantId ?? 'default'), conflictId, { keepId, forget: opts.forget });
 
 describe('resolveConflict', () => {
   it('resolves conflict and weakens the loser (default)', async () => {
@@ -128,11 +112,7 @@ describe('resolveConflict', () => {
       closeHippoDb(db);
     }
 
-    await expect(resolve(conflictId, aId)).resolves.toEqual({
-      conflictId,
-      keptId: aId,
-      loserId: bId,
-    });
+    await expect(resolve(conflictId, aId)).resolves.toEqual({ conflictId, keptId: aId, loserId: bId });
 
     expect(readEntry(tmpDir, bId)!.conflictsWith).not.toContain(aId);
     expect(readEntry(tmpDir, aId)!.conflictsWith).toEqual([]);
@@ -169,11 +149,7 @@ describe('resolveConflict', () => {
   it("a reject fate removes the value's copies its ownScope may touch, in the same write, and keeps another person's", async () => {
     const { aId, bId, conflictId } = await seedConflict();
     const copyOf = (scope: string, owner: string | null = null) => {
-      const copy = {
-        ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }),
-        scope,
-        owner,
-      };
+      const copy = { ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }), scope, owner };
       writeEntry(tmpDir, copy);
       return copy.id;
     };
@@ -284,9 +260,7 @@ describe('conflict tenant isolation', () => {
   it('resolveConflict with a non-owning tenantId answers not-found and leaves the conflict open', async () => {
     const { aId, conflictId } = await seedTenantConflict('tenant-a');
 
-    await expect(resolve(conflictId, aId, { tenantId: 'tenant-b' })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(resolve(conflictId, aId, { tenantId: 'tenant-b' })).rejects.toBeInstanceOf(NotFoundError);
 
     // The conflict is untouched — still open for its real owner.
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
@@ -313,9 +287,7 @@ describe('conflict tenant isolation', () => {
       closeHippoDb(db);
     }
     expect(
-      (await listMemoryConflicts(tmpDir, 'open')).find(
-        (c) => c.memoryAId === memA && c.memoryBId === memB,
-      )?.reason,
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB)?.reason,
     ).toBe('pre-fix cross-tenant');
 
     // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
@@ -335,18 +307,16 @@ describe('conflict tenant isolation', () => {
 
     // No open cross-tenant row remains.
     expect(
-      (await listMemoryConflicts(tmpDir, 'open')).find(
-        (c) => c.memoryAId === memA && c.memoryBId === memB,
-      ),
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB),
     ).toBeUndefined();
   });
 
   it('resolveConflict --forget with a foreign tenantId cannot delete the loser memory', async () => {
     const { aId, bId, conflictId } = await seedTenantConflict('tenant-a');
 
-    await expect(
-      resolve(conflictId, aId, { forget: true, tenantId: 'tenant-b' }),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(resolve(conflictId, aId, { forget: true, tenantId: 'tenant-b' })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
 
     // The cross-tenant DELETE never fires — both memories survive.
     expect(readEntry(tmpDir, aId)).not.toBeNull();
@@ -356,9 +326,7 @@ describe('conflict tenant isolation', () => {
   it('resolveConflict with the owning tenantId still resolves normally', async () => {
     const { aId, conflictId } = await seedTenantConflict('tenant-a');
 
-    await expect(resolve(conflictId, aId, { tenantId: 'tenant-a' })).resolves.toMatchObject({
-      conflictId,
-    });
+    await expect(resolve(conflictId, aId, { tenantId: 'tenant-a' })).resolves.toMatchObject({ conflictId });
     expect((await listMemoryConflicts(tmpDir, 'resolved', 'tenant-a')).length).toBe(1);
   });
 

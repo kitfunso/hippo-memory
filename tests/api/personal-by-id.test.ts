@@ -8,11 +8,7 @@ import { mapApiError } from '../../src/api/error-reply.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { generateId, type MemoryKind } from '../../src/base/memory/entry.js';
-import {
-  handleMcpRequest,
-  type McpContext,
-  type McpResponse,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { listRejectionsForTenant, rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
@@ -69,10 +65,7 @@ async function masked(id: string, call: ByIdCall): Promise<{ status: number; mes
 }
 
 /** Asserts `actor` gets for `id` exactly what it gets for an id that was never stored. */
-async function expectMissingIdAnswer(
-  id: string,
-  call: (target: string) => ReturnType<ByIdCall>,
-): Promise<void> {
+async function expectMissingIdAnswer(id: string, call: (target: string) => ReturnType<ByIdCall>): Promise<void> {
   const randomId = generateId('mem');
   const forRow = await masked(id, () => call(id));
   expect(forRow.status).toBe(404);
@@ -80,13 +73,7 @@ async function expectMissingIdAnswer(
 }
 
 async function personalRow(kind: MemoryKind = 'distilled'): Promise<string> {
-  return (
-    await remember(ctxFor(actorA), {
-      content: `a's own note ${generateId('n')}`,
-      personal: true,
-      kind,
-    })
-  ).id;
+  return (await remember(ctxFor(actorA), { content: `a's own note ${generateId('n')}`, personal: true, kind })).id;
 }
 
 beforeEach(() => {
@@ -137,23 +124,14 @@ describe('reject next to personal rows', () => {
   it('reject by id: another owner and an unowned admin get the missing-id 404, the owner and the CLI get a 400, and no tombstone is made', async () => {
     const id = await personalRow();
     for (const [, actor] of outsiders) {
-      await expectMissingIdAnswer(id, (target) =>
-        reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }),
-      );
+      await expectMissingIdAnswer(id, (target) => reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }));
     }
-    expect(
-      await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' })),
-    ).toEqual({
+    expect(await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }))).toEqual({
       status: 400,
       message: PERSONAL_REFUSAL,
     });
     await expect(
-      rejectValue(sqliteStore(root), {
-        tenantId: 'default',
-        actor: 'cli',
-        reason: 'wrong',
-        memoryId: id,
-      }),
+      rejectValue(sqliteStore(root), { tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id }),
     ).rejects.toThrow(PERSONAL_REFUSAL);
     expect(await listRejectionsForTenant(sqliteStore(root), 'default')).toHaveLength(0);
     expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
@@ -192,24 +170,15 @@ describe('reject next to personal rows', () => {
     const db = openHippoDb(root);
     try {
       for (const entry of [personal, team]) {
-        insertDormantRow(db, {
-          entry,
-          strength: 0.01,
-          reason: 'decay',
-          dormantAt: new Date().toISOString(),
-        });
+        insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date().toISOString() });
       }
     } finally {
       closeHippoDb(db);
     }
-    expect(
-      (await reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' })).removedIds,
-    ).toEqual([team.id]);
+    expect((await reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' })).removedIds).toEqual([team.id]);
     const after = openHippoDb(root);
     try {
-      expect(readDormantSnapshot(after, 'default', personal.id)?.entry.scope).toBe(
-        'personal:private:a',
-      );
+      expect(readDormantSnapshot(after, 'default', personal.id)?.entry.scope).toBe('personal:private:a');
       expect(readDormantSnapshot(after, 'default', team.id)).toBeNull();
     } finally {
       closeHippoDb(after);

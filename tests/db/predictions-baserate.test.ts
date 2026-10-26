@@ -99,11 +99,7 @@ describe('computePredictionBaserate (baserate detector)', () => {
       estimateValue: 2,
     });
     await closePrediction(home, 'default', closed.id, { closureState: 'closed', actualValue: 4 });
-    await savePrediction(home, 'default', {
-      classTag: 'mixed',
-      claimText: 'open one',
-      estimateValue: 10,
-    });
+    await savePrediction(home, 'default', { classTag: 'mixed', claimText: 'open one', estimateValue: 10 });
 
     const br = computePredictionBaserate(home, 'default', 'mixed');
     expect(br.nClosed).toBe(1);
@@ -117,15 +113,8 @@ describe('computePredictionBaserate (baserate detector)', () => {
       claimText: 'categorical one',
       estimateValue: 1,
     });
-    await closePrediction(home, 'default', a.id, {
-      closureState: 'closed-unknown',
-      closureNote: 'not measurable',
-    });
-    const b = await savePrediction(home, 'default', {
-      classTag: 'unk',
-      claimText: 'numeric one',
-      estimateValue: 2,
-    });
+    await closePrediction(home, 'default', a.id, { closureState: 'closed-unknown', closureNote: 'not measurable' });
+    const b = await savePrediction(home, 'default', { classTag: 'unk', claimText: 'numeric one', estimateValue: 2 });
     await closePrediction(home, 'default', b.id, { closureState: 'closed', actualValue: 4 });
 
     const br = computePredictionBaserate(home, 'default', 'unk');
@@ -191,25 +180,17 @@ describe('computePredictionBaserate (baserate detector)', () => {
       // SAFETY: literal SELECT of the known audit_log columns for this
       // test's own predict_baserate rows.
       const auditRows = db
-        .prepare(
-          `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_baserate' ORDER BY id`,
-        )
+        .prepare(`SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_baserate' ORDER BY id`)
         .all() as Array<{ op: string; target_id: string; metadata_json: string }>;
       expect(auditRows.length).toBe(2);
       expect(auditRows[0].target_id).toBe('audit-test');
       // SAFETY: metadata_json is this test's own audit row, written by
       // computePredictionBaserate's predict_baserate audit call with this
       // exact shape.
-      const meta0 = JSON.parse(auditRows[0].metadata_json) as {
-        class_tag: string;
-        n_closed: number;
-      };
+      const meta0 = JSON.parse(auditRows[0].metadata_json) as { class_tag: string; n_closed: number };
       expect(meta0.n_closed).toBe(0);
       // SAFETY: see above.
-      const meta1 = JSON.parse(auditRows[1].metadata_json) as {
-        class_tag: string;
-        n_closed: number;
-      };
+      const meta1 = JSON.parse(auditRows[1].metadata_json) as { class_tag: string; n_closed: number };
       expect(meta1.n_closed).toBe(1);
     } finally {
       closeHippoDb(db);

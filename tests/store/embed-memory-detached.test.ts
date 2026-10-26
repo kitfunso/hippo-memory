@@ -36,19 +36,14 @@ describe('embedMemoryDetached', () => {
         throw new Error('store is unreachable');
       },
     };
-    const entry = createMemory('a memory whose embed path rejects', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    });
+    const entry = createMemory('a memory whose embed path rejects', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     try {
       embedMemoryDetached(target, entry);
       await vi.waitFor(() => expect(warn).toHaveBeenCalled());
       await new Promise((resolve) => setImmediate(resolve));
       expect(warn).toHaveBeenCalledWith(
         `embedding ${entry.id} failed unexpectedly`,
-        expect.objectContaining({
-          errorClass: 'Error',
-          stack: expect.stringContaining('store is unreachable'),
-        }),
+        expect.objectContaining({ errorClass: 'Error', stack: expect.stringContaining('store is unreachable') }),
       );
       expect(unhandled).toEqual([]);
     } finally {

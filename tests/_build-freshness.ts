@@ -21,8 +21,7 @@ export function staleDependencies(repo: string): string[] {
     const installed = existsSync(installedManifest)
       ? readJson<{ version?: string }>(installedManifest).version
       : 'missing';
-    if (want !== undefined && installed !== want)
-      stale.push(`${name} ${installed}, locked ${want}`);
+    if (want !== undefined && installed !== want) stale.push(`${name} ${installed}, locked ${want}`);
   }
   return stale.sort();
 }
@@ -35,8 +34,7 @@ export function staleSources(srcDir: string, distDir: string): string[] {
     const src = join(entry.parentPath, entry.name);
     const rel = relative(srcDir, src);
     const built = statSync(join(distDir, rel.replace(/\.ts$/, '.js')), { throwIfNoEntry: false });
-    if (built === undefined || statSync(src).mtimeMs > built.mtimeMs)
-      stale.push(rel.replaceAll('\\', '/'));
+    if (built === undefined || statSync(src).mtimeMs > built.mtimeMs) stale.push(rel.replaceAll('\\', '/'));
   }
   return stale.sort();
 }

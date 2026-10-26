@@ -8,12 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getCurrentSchemaVersion,
-  getSchemaVersion,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
 import { createApiKey, validateApiKey } from '../../src/store/sqlite/auth.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -48,11 +43,7 @@ describe('migration v26: api_keys.role', () => {
     const home = makeRoot('v26-create');
     const db = openHippoDb(home);
     try {
-      const { keyId, plaintext } = createApiKey(db, {
-        tenantId: 'default',
-        label: 'test-admin',
-        role: 'admin',
-      });
+      const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'test-admin', role: 'admin' });
       const result = validateApiKey(db, plaintext);
       expect(result).toEqual({
         valid: true,
@@ -89,14 +80,16 @@ describe('migration v26: api_keys.role', () => {
     try {
       // Simulate a legacy 5-column INSERT (what v1.11.x binaries would do).
       // The migration already ran so the column exists; DEFAULT 'admin' fills it.
-      db.prepare(
-        `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`,
-      ).run('hk_legacy_test', 'fake_hash_for_test', 'default', 'legacy', new Date().toISOString());
+      db.prepare(`INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`).run(
+        'hk_legacy_test',
+        'fake_hash_for_test',
+        'default',
+        'legacy',
+        new Date().toISOString(),
+      );
       // SAFETY: literal SELECT of the role column for the legacy row this
       // test just inserted; role is NOT NULL (DEFAULT 'admin').
-      const row = db
-        .prepare(`SELECT role FROM api_keys WHERE key_id = ?`)
-        .get('hk_legacy_test') as { role: string };
+      const row = db.prepare(`SELECT role FROM api_keys WHERE key_id = ?`).get('hk_legacy_test') as { role: string };
       expect(row.role).toBe('admin');
     } finally {
       closeHippoDb(db);

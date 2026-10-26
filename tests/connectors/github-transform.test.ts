@@ -47,12 +47,7 @@ describe('issueEventToRememberOpts', () => {
     expect(opts!.content).toBe('Bug: thing broken\n\nSteps to reproduce: 1. ...');
     expect(opts!.owner).toBe('user:github:octocat');
     expect(opts!.tags).toEqual(
-      expect.arrayContaining([
-        'source:github',
-        'repo:acme/widgets',
-        'event:issues.opened',
-        'user:github:octocat',
-      ]),
+      expect.arrayContaining(['source:github', 'repo:acme/widgets', 'event:issues.opened', 'user:github:octocat']),
     );
   });
 
@@ -273,10 +268,7 @@ describe('the shape all four transforms share', () => {
 
   it('pins the exact opts, tag order included, for an event with no repository', () => {
     expect(
-      issueEventToRememberOpts({
-        action: 'opened',
-        issue: { number: 1, title: ' T ', body: ' B ', user },
-      }),
+      issueEventToRememberOpts({ action: 'opened', issue: { number: 1, title: ' T ', body: ' B ', user } }),
     ).toEqual({
       ...common,
       content: 'T\n\nB',
@@ -293,28 +285,15 @@ describe('the shape all four transforms share', () => {
       ...common,
       content: 'C',
       artifactRef: 'github://unknown/unknown/issue/1/comment/2',
-      tags: [
-        'source:github',
-        'repo:unknown/unknown',
-        'event:issue_comment.created',
-        'user:github:octocat',
-      ],
+      tags: ['source:github', 'repo:unknown/unknown', 'event:issue_comment.created', 'user:github:octocat'],
     });
     expect(
-      pullRequestEventToRememberOpts({
-        action: 'opened',
-        pull_request: { number: 3, title: '', body: ' B ', user },
-      }),
+      pullRequestEventToRememberOpts({ action: 'opened', pull_request: { number: 3, title: '', body: ' B ', user } }),
     ).toEqual({
       ...common,
       content: 'B',
       artifactRef: 'github://unknown/unknown/pull/3',
-      tags: [
-        'source:github',
-        'repo:unknown/unknown',
-        'event:pull_request.opened',
-        'user:github:octocat',
-      ],
+      tags: ['source:github', 'repo:unknown/unknown', 'event:pull_request.opened', 'user:github:octocat'],
     });
     expect(
       prReviewCommentEventToRememberOpts({

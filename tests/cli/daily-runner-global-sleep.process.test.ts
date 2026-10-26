@@ -68,10 +68,7 @@ describe('hippo daily-runner sleeps the global store', () => {
     const globalRoot = join(dir, '.hippo');
     mkdirSync(globalRoot);
     initTestStore(globalRoot);
-    writeFileSync(
-      workspaceRegistryPath(globalRoot),
-      JSON.stringify({ version: 1, workspaces: [dir] }),
-    );
+    writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [dir] }));
 
     const result = await runner(dir, globalRoot);
 
@@ -85,10 +82,7 @@ describe('hippo daily-runner sleeps the global store', () => {
     const workspace = join(dir, 'repo');
     mkdirSync(join(workspace, '.hippo'), PRIVATE_DIR);
     initTestStore(join(workspace, '.hippo'));
-    writeFileSync(
-      workspaceRegistryPath(globalRoot),
-      JSON.stringify({ version: 1, workspaces: [workspace] }),
-    );
+    writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
 
     // One millisecond is less than a node start, so every child step is stopped at the deadline.
     const cut = await runner(dir, globalRoot, {

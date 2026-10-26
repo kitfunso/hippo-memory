@@ -64,9 +64,7 @@ function seed(dir: string): Seeded {
     note,
     copy,
     raw: a('raw slack line: deploy freeze starts friday', { kind: 'raw' }),
-    merged: a('Merged notes\n\n- the office moves in june\n- badges are reissued in july', {
-      source: 'consolidation',
-    }),
+    merged: a('Merged notes\n\n- the office moves in june\n- badges are reissued in july', { source: 'consolidation' }),
     child: a('launch comms are drafted by marketing', { dagParentId: summary.id }),
     noteB: createMemory(SHARED, { tenantId: TENANT_B }),
     own: a('my parking spot is level three', { scope: ALICE }),
@@ -146,11 +144,7 @@ describe('Rejections.apply', () => {
 
   it('archives a raw row and marks a removed child summary dirty', async () => {
     const { raw, child, summary } = seeded;
-    const side = await conforms([
-      byText(raw.content),
-      byText(child.content),
-      readBack(TENANT_A, summary.id),
-    ]);
+    const side = await conforms([byText(raw.content), byText(child.content), readBack(TENANT_A, summary.id)]);
     expect(value<AppliedRejection>(side, 0).removedRawIds).toEqual([raw.id]);
     expect(value<Row[]>(side, 2)[0]?.summaryDirty).toBe(true);
     expect(added(side).map((r) => r.op)).toEqual([
@@ -192,9 +186,7 @@ describe('Rejections.apply', () => {
       (g) => g.apply(rejection({ value: own.content, ownScope: ALICE })),
       readBack(TENANT_A, own.id),
     ]);
-    expect(side.outcomes[0]).toMatchObject({
-      error: expect.stringContaining('reject requires either a memory id'),
-    });
+    expect(side.outcomes[0]).toMatchObject({ error: expect.stringContaining('reject requires either a memory id') });
     expect(value<AppliedRejection>(side, 1).removedIds).toEqual([]);
     expect(value<Row[]>(side, 2).map((r) => r.id)).toEqual([own.id]);
     expect(value<AppliedRejection>(side, 3).removedIds).toEqual([own.id]);
@@ -207,9 +199,7 @@ describe('Rejections.apply', () => {
       (g) => g.apply(rejection({ memoryId: own.id })),
       (g) => g.apply(rejection({ memoryId: noteB.id })),
     ]);
-    expect(side.outcomes[0]).toMatchObject({
-      error: expect.stringContaining("Personal memories can't be rejected"),
-    });
+    expect(side.outcomes[0]).toMatchObject({ error: expect.stringContaining("Personal memories can't be rejected") });
     expect(side.outcomes[1]).toMatchObject({ error: `Error: memory not found: ${noteB.id}` });
     expect(added(side)).toEqual([]);
   });

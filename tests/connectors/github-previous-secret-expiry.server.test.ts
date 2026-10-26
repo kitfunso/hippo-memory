@@ -17,11 +17,7 @@ const secret = (): string => randomBytes(16).toString('hex');
 beforeEach(() => {
   onceKeysPerCase();
   vi.stubEnv('HIPPO_LOG', 'warn');
-  for (const name of [
-    'SLACK_SIGNING_SECRET',
-    'SLACK_SIGNING_SECRET_PREVIOUS',
-    'SLACK_SIGNING_SECRET_PREVIOUS_UNTIL',
-  ]) {
+  for (const name of ['SLACK_SIGNING_SECRET', 'SLACK_SIGNING_SECRET_PREVIOUS', 'SLACK_SIGNING_SECRET_PREVIOUS_UNTIL']) {
     vi.stubEnv(name, undefined);
   }
   vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL', undefined);

@@ -32,21 +32,13 @@ const CLI_MAP = {
   folders: { sub: 'high', surface: 'high', store: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
-const CLI_BASE = {
-  'src/a.ts': '',
-  'src/b.ts': '',
-  'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n',
-};
+const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
 const SURFACE_MAP = {
   order: ['low', 'high'],
   folders: { sub: 'high', surface: 'high', domain: 'low' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
-const SURFACE_BASE = {
-  'src/a.ts': '',
-  'src/b.ts': '',
-  'src/domain/d.ts': 'export const d = 1;\nexport type D = 1;\n',
-};
+const SURFACE_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/domain/d.ts': 'export const d = 1;\nexport type D = 1;\n' };
 type DbAllowed = Record<string, { names: string[]; why: string }>;
 const dbMap = (allowed: DbAllowed) => ({
   order: ['low', 'db', 'store', 'high'],
@@ -94,11 +86,9 @@ const PORT_BASE = {
 };
 const LOCAL_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, domain: 'high' } };
 const LOCAL_BASE = { ...PORT_BASE, 'src/domain/keep.ts': '' };
-const LOCAL_IMPORT =
-  "import { isLocal } from '../store/local/index.js';\nexport const y = isLocal;\n";
+const LOCAL_IMPORT = "import { isLocal } from '../store/local/index.js';\nexport const y = isLocal;\n";
 const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
-const FIXTURES_IMPORT =
-  "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
+const FIXTURES_IMPORT = "import { seed } from '../store/sqlite/fixtures.js';\nexport const z = seed;\n";
 const ENTRY_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, entry: 'high' } };
 const KIT_DOOR = 'store/sqlite/fixtures.ts';
 const KIT_MAP = {
@@ -109,8 +99,7 @@ const KIT_MAP = {
     testKit: { file: 'surface/testing-kit.ts', door: KIT_DOOR },
   },
 };
-const SURFACE_SQLITE_IMPORT =
-  "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
+const SURFACE_SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../../store/sqlite/store.js';\n";
 const APART_MAP = {
   order: ['low', 'high'],
   folders: { sub: 'high', api: 'high', infra: 'low', entry: 'high' },
@@ -150,19 +139,13 @@ type Row = {
 const rows: Row[] = [
   {
     name: 'a runtime import of a higher layer fails with file:line',
-    files: {
-      'src/a.ts': "export const a = 1;\nimport { b } from './b.js';\n",
-      'src/b.ts': 'export const b = 1;\n',
-    },
+    files: { 'src/a.ts': "export const a = 1;\nimport { b } from './b.js';\n", 'src/b.ts': 'export const b = 1;\n' },
     status: 1,
     output: ['a.ts:2 -> b.ts (low -> high, runtime)'],
   },
   {
     name: 'a type-only upward import fails too and is listed as type',
-    files: {
-      'src/a.ts': "import type { B } from './b.js';\nexport type A = B;\n",
-      'src/b.ts': 'export type B = 1;\n',
-    },
+    files: { 'src/a.ts': "import type { B } from './b.js';\nexport type A = B;\n", 'src/b.ts': 'export type B = 1;\n' },
     status: 1,
     output: ['a.ts:1 -> b.ts (low -> high, type)'],
   },
@@ -216,20 +199,14 @@ const rows: Row[] = [
   },
   {
     name: 'a CLI runtime import of the store fails with file:line',
-    files: {
-      ...CLI_BASE,
-      'src/surface/cli/v.ts': "export const v = 1;\nimport { s } from '../../store/s.js';\n",
-    },
+    files: { ...CLI_BASE, 'src/surface/cli/v.ts': "export const v = 1;\nimport { s } from '../../store/s.js';\n" },
     map: CLI_MAP,
     status: 1,
     output: ['src/surface/cli/v.ts:2 imports src/store/s.ts at runtime'],
   },
   {
     name: 'a CLI type-only import of the store passes',
-    files: {
-      ...CLI_BASE,
-      'src/surface/cli/v.ts': "import type { S } from '../../store/s.js';\nexport type V = S;\n",
-    },
+    files: { ...CLI_BASE, 'src/surface/cli/v.ts': "import type { S } from '../../store/s.js';\nexport type V = S;\n" },
     map: CLI_MAP,
     status: 0,
     output: ['Layer order OK'],
@@ -245,8 +222,7 @@ const rows: Row[] = [
     name: 'a type-only or namespace import of the db layer fails too',
     files: {
       ...DB_FILES,
-      'src/api/y.ts':
-        "import type { Handle } from '../db/x.js';\nimport * as db from '../db/x.js';\n",
+      'src/api/y.ts': "import type { Handle } from '../db/x.js';\nimport * as db from '../db/x.js';\n",
     },
     map: dbMap({}),
     status: 1,
@@ -265,10 +241,7 @@ const rows: Row[] = [
   },
   {
     name: 'a store file may import the db layer',
-    files: {
-      ...DB_FILES,
-      'src/store/s.ts': "import { open } from '../db/x.js';\nexport const s = open;\n",
-    },
+    files: { ...DB_FILES, 'src/store/s.ts': "import { open } from '../db/x.js';\nexport const s = open;\n" },
     map: dbMap({}),
     status: 0,
     output: ['Layer order OK'],
@@ -421,10 +394,7 @@ const rows: Row[] = [
   {
     name: 'a test kit layers.json names that does not exist fails',
     files: { ...SQLITE_BASE, 'src/entry/keep.ts': '' },
-    map: {
-      ...KIT_MAP,
-      adapter: { ...KIT_MAP.adapter, testKit: { file: 'surface/gone.ts', door: KIT_DOOR } },
-    },
+    map: { ...KIT_MAP, adapter: { ...KIT_MAP.adapter, testKit: { file: 'surface/gone.ts', door: KIT_DOOR } } },
     status: 1,
     output: ['layers.json adapter.testKit: src/surface/gone.ts does not exist'],
   },
@@ -436,18 +406,14 @@ const rows: Row[] = [
     },
     map: SQLITE_MAP,
     status: 1,
-    output: [
-      "src/surface/open-store.ts:2 imports src/store/sqlite/store.ts past the adapter's doors in layers.json",
-    ],
+    output: ["src/surface/open-store.ts:2 imports src/store/sqlite/store.ts past the adapter's doors in layers.json"],
   },
   {
     name: 'a root that no longer imports the adapter, or is gone, fails until layers.json names the right one',
     files: { ...SQLITE_BASE, 'src/surface/open-store.ts': 'export const t = 1;\n' },
     map: SQLITE_MAP,
     status: 1,
-    output: [
-      'layers.json adapter.root: src/surface/open-store.ts no longer imports src/store/sqlite',
-    ],
+    output: ['layers.json adapter.root: src/surface/open-store.ts no longer imports src/store/sqlite'],
   },
   {
     name: 'a root layers.json names that does not exist fails',
@@ -472,10 +438,8 @@ const rows: Row[] = [
     name: 'the root and the adapter may name SQLite',
     files: {
       ...SQLITE_BASE,
-      'src/surface/open-store.ts':
-        "export { storeFor as sqliteStore } from '../store/sqlite/index.js';\n",
-      'src/store/sqlite/store.ts':
-        "export const storeFor = 1;\nexport type S = 1;\nexport const sqliteX = 'SQLite';\n",
+      'src/surface/open-store.ts': "export { storeFor as sqliteStore } from '../store/sqlite/index.js';\n",
+      'src/store/sqlite/store.ts': "export const storeFor = 1;\nexport type S = 1;\nexport const sqliteX = 'SQLite';\n",
     },
     map: SQLITE_MAP,
     status: 0,
@@ -483,10 +447,7 @@ const rows: Row[] = [
   },
   {
     name: 'naming sqliteStoreOn outside the adapter and the roots fails',
-    files: {
-      ...SQLITE_BASE,
-      'src/sub/s.ts': 'export const pick = (sqliteStoreOn: number) => sqliteStoreOn;\n',
-    },
+    files: { ...SQLITE_BASE, 'src/sub/s.ts': 'export const pick = (sqliteStoreOn: number) => sqliteStoreOn;\n' },
     map: SQLITE_MAP,
     status: 1,
     output: ['src/sub/s.ts:1 names sqliteStoreOn'],
@@ -524,10 +485,7 @@ const rows: Row[] = [
     },
     map: SQLITE_MAP,
     status: 1,
-    output: [
-      'src/api/y.ts:1 imports src/store/rows.ts',
-      'src/api/z.ts:1 imports src/store/rows.ts',
-    ],
+    output: ['src/api/y.ts:1 imports src/store/rows.ts', 'src/api/z.ts:1 imports src/store/rows.ts'],
   },
   {
     name: 'an api import of the port in src/base/ports passes',
@@ -544,11 +502,7 @@ const rows: Row[] = [
         '',
       ].join('\n'),
     },
-    map: {
-      ...SQLITE_MAP,
-      order: ['base', ...SQLITE_MAP.order],
-      folders: { ...SQLITE_MAP.folders, base: 'base' },
-    },
+    map: { ...SQLITE_MAP, order: ['base', ...SQLITE_MAP.order], folders: { ...SQLITE_MAP.folders, base: 'base' } },
     status: 0,
     output: ['Layer order OK'],
   },
@@ -556,26 +510,19 @@ const rows: Row[] = [
     name: 'an api or domain import of store/local fails, runtime or type-only',
     files: {
       ...LOCAL_BASE,
-      'src/api/y.ts':
-        "import type { isLocal } from '../store/local/index.js';\nexport type Y = typeof isLocal;\n",
-      'src/domain/d.ts':
-        "export const d = 1;\nimport { isLocal } from '../store/local/index.js';\n",
+      'src/api/y.ts': "import type { isLocal } from '../store/local/index.js';\nexport type Y = typeof isLocal;\n",
+      'src/domain/d.ts': "export const d = 1;\nimport { isLocal } from '../store/local/index.js';\n",
     },
     map: LOCAL_MAP,
     status: 1,
-    output: [
-      'src/api/y.ts:1 imports src/store/local/index.ts',
-      'src/domain/d.ts:2 imports src/store/local/index.ts',
-    ],
+    output: ['src/api/y.ts:1 imports src/store/local/index.ts', 'src/domain/d.ts:2 imports src/store/local/index.ts'],
   },
   {
     name: 'a store/local import fails even when an old .store-local-pending.json lists it',
     files: {
       ...LOCAL_BASE,
       'src/api/y.ts': LOCAL_IMPORT,
-      '.store-local-pending.json': JSON.stringify([
-        { file: 'api/y.ts', why: 'the next PR moves it' },
-      ]),
+      '.store-local-pending.json': JSON.stringify([{ file: 'api/y.ts', why: 'the next PR moves it' }]),
     },
     map: LOCAL_MAP,
     status: 1,
@@ -607,10 +554,8 @@ const rows: Row[] = [
     name: 'a dashboard import of the store or the CLI fails, runtime or type-only',
     files: {
       ...DASHBOARD_BASE,
-      'src/surface/dashboard/a.ts':
-        "import { rule } from '../../store/rows.js';\nexport const a = rule;\n",
-      'src/surface/dashboard/b.ts':
-        "import type { R } from '../../store/rows.js';\nexport type B = R;\n",
+      'src/surface/dashboard/a.ts': "import { rule } from '../../store/rows.js';\nexport const a = rule;\n",
+      'src/surface/dashboard/b.ts': "import type { R } from '../../store/rows.js';\nexport type B = R;\n",
       'src/surface/dashboard/c.ts': "export const c = 1;\nimport { cli } from '../cli/out.js';\n",
     },
     map: DASHBOARD_MAP,
@@ -625,8 +570,7 @@ const rows: Row[] = [
     name: 'a dashboard import of src/api passes',
     files: {
       ...DASHBOARD_BASE,
-      'src/surface/dashboard/a.ts':
-        "import { read } from '../../api/read.js';\nexport const a = read;\n",
+      'src/surface/dashboard/a.ts': "import { read } from '../../api/read.js';\nexport const a = read;\n",
     },
     map: DASHBOARD_MAP,
     status: 0,
@@ -634,10 +578,7 @@ const rows: Row[] = [
   },
   {
     name: 'a folder importing one apart lists fails with file:line, type-only too',
-    files: {
-      ...APART_BASE,
-      'src/api/x.ts': "import type { I } from '../infra/i.js';\nexport type X = I;\n",
-    },
+    files: { ...APART_BASE, 'src/api/x.ts': "import type { I } from '../infra/i.js';\nexport type X = I;\n" },
     map: APART_MAP,
     status: 1,
     output: ['src/api/x.ts:1 imports src/infra/i.ts'],
@@ -658,10 +599,7 @@ const rows: Row[] = [
   },
   {
     name: 'an api file that reads no infra and a barrel that re-exports only its folder pass',
-    files: {
-      ...APART_BASE,
-      'src/api/x.ts': "import { e } from '../entry/e.js';\nexport const x = e;\n",
-    },
+    files: { ...APART_BASE, 'src/api/x.ts': "import { e } from '../entry/e.js';\nexport const x = e;\n" },
     map: APART_MAP,
     status: 0,
     output: ['Layer order OK'],

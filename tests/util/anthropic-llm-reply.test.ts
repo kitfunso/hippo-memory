@@ -1,11 +1,6 @@
 // The Anthropic Llm reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
 import { describe, expect, it, vi } from 'vitest';
-import {
-  isPermanentFailure,
-  llmFailureFields,
-  type LlmFailure,
-  type LlmReply,
-} from '../../src/base/ports/llm.js';
+import { isPermanentFailure, llmFailureFields, type LlmFailure, type LlmReply } from '../../src/base/ports/llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 
 /** One prompt through an Anthropic Llm whose network is `fetcher`. */
@@ -57,11 +52,7 @@ describe('anthropicLlm reply reading', () => {
     expect(JSON.parse(padded).content[0].text).toBe('tea');
     expect(await send(padded)).toEqual({
       ok: false,
-      failure: {
-        kind: 'unreadable',
-        message: `reply over ${REPLY_CAP_BYTES} bytes`,
-        cause: expect.any(Error),
-      },
+      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes`, cause: expect.any(Error) },
     });
   });
 });
@@ -74,8 +65,7 @@ describe('anthropicLlm on a non-2xx reply', () => {
   }
 
   it('keeps the start of the error body on one line, capped, with key-shaped text masked', async () => {
-    const cause =
-      '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}';
+    const cause = '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}';
     const reply = await failWith(401, `${cause}\n  echoed ${LEAKED_KEY}\n${'x'.repeat(5000)}`);
     if (reply.ok || reply.failure.kind !== 'http') throw new Error('expected an http failure');
     expect(reply.failure.status).toBe(401);
@@ -86,10 +76,7 @@ describe('anthropicLlm on a non-2xx reply', () => {
   });
 
   it('reports an empty detail for an empty body', async () => {
-    expect(await failWith(404, '')).toEqual({
-      ok: false,
-      failure: { kind: 'http', status: 404, detail: '' },
-    });
+    expect(await failWith(404, '')).toEqual({ ok: false, failure: { kind: 'http', status: 404, detail: '' } });
   });
 
   it('warns with the error fields when the body cannot be read, and keeps the empty detail', async () => {
@@ -133,16 +120,12 @@ describe('anthropicLlm on a transport failure', () => {
       llmFailure: 'http',
       status: 500,
     });
-    expect(llmFailureFields({ kind: 'request', message: 'fetch failed' })).toEqual({
-      llmFailure: 'request',
-    });
+    expect(llmFailureFields({ kind: 'request', message: 'fetch failed' })).toEqual({ llmFailure: 'request' });
     expect(llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON' })).toEqual({
       llmFailure: 'unreadable',
     });
     const cause = new Error('unterminated string');
-    expect(
-      llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON', cause }),
-    ).toMatchObject({
+    expect(llmFailureFields({ kind: 'unreadable', message: 'reply is not JSON', cause })).toMatchObject({
       llmFailure: 'unreadable',
       errorClass: 'Error',
     });
@@ -158,8 +141,7 @@ describe('isPermanentFailure', () => {
   });
 
   it('is false for a failure a later call can clear or that belongs to one prompt', () => {
-    for (const status of [400, 413, 429, 500, 529])
-      expect(isPermanentFailure(http(status))).toBe(false);
+    for (const status of [400, 413, 429, 500, 529]) expect(isPermanentFailure(http(status))).toBe(false);
     expect(isPermanentFailure({ kind: 'request', message: 'fetch failed' })).toBe(false);
     expect(isPermanentFailure({ kind: 'unreadable', message: 'reply is not JSON' })).toBe(false);
   });

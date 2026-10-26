@@ -33,9 +33,11 @@ function seed(): void {
   writeEntry(root, recallableEntry());
   const db = openHippoDb(root);
   try {
-    db.prepare(
-      'UPDATE memories SET summary_dirty = 1, last_rebuilt_at = ?, rebuild_count = ? WHERE id = ?',
-    ).run(entry.lastRebuiltAt ?? null, entry.rebuildCount ?? 0, entry.id);
+    db.prepare('UPDATE memories SET summary_dirty = 1, last_rebuilt_at = ?, rebuild_count = ? WHERE id = ?').run(
+      entry.lastRebuiltAt ?? null,
+      entry.rebuildCount ?? 0,
+      entry.id,
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -60,8 +62,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const run = (...args: string[]): Promise<InProcessResult> =>
-  runInProcess(() => runCli(['node', 'hippo', ...args]));
+const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function stdoutOf(...args: string[]): Promise<string> {
   const r = await run(...args);
@@ -90,16 +91,9 @@ describe('memory wire goldens', () => {
   it('dormant snapshot: entry_json bytes, and the entry it restores', () => {
     const db = openHippoDb(root);
     try {
-      insertDormantRow(db, {
-        entry: everyFieldEntry(),
-        reason: 'decay',
-        strength: 0.01,
-        dormantAt: FAKE_NOW,
-      });
+      insertDormantRow(db, { entry: everyFieldEntry(), reason: 'decay', strength: 0.01, dormantAt: FAKE_NOW });
       // SAFETY: the SELECT names the one column read, and the insert above made the row.
-      const row = db
-        .prepare('SELECT entry_json FROM dormant_memories WHERE id = ?')
-        .get(everyFieldEntry().id) as {
+      const row = db.prepare('SELECT entry_json FROM dormant_memories WHERE id = ?').get(everyFieldEntry().id) as {
         entry_json: string;
       };
       expect(row.entry_json).toMatchSnapshot();
@@ -124,18 +118,12 @@ describe('memory wire goldens', () => {
 
   it('a conflict: hippo conflicts --json, trace --json open_conflicts and the conflict mirror', async () => {
     const pair = { memory_a_id: everyFieldEntry().id, memory_b_id: recallableEntry().id };
-    replaceDetectedConflicts(
-      root,
-      [{ ...pair, reason: 'deploy target', score: 0.87654321 }],
-      FAKE_NOW,
-    );
+    replaceDetectedConflicts(root, [{ ...pair, reason: 'deploy target', score: 0.87654321 }], FAKE_NOW);
     // A row write refreshes the side mirrors, the conflict one among them.
     writeEntry(root, recallableEntry());
     expect(await stdoutOf('conflicts', '--json')).toMatchSnapshot();
     expect(await stdoutOf('trace', everyFieldEntry().id, '--json')).toMatchSnapshot();
-    expect(
-      fs.readFileSync(path.join(root, 'conflicts', 'conflict_1.md'), 'utf8'),
-    ).toMatchSnapshot();
+    expect(fs.readFileSync(path.join(root, 'conflicts', 'conflict_1.md'), 'utf8')).toMatchSnapshot();
   });
 
   it('MCP hippo_recall text', async () => {

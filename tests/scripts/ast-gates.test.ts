@@ -22,9 +22,7 @@ describe('ts-facts imports', () => {
   });
 
   it('reads a multi-line import and reports the line of the import keyword', () => {
-    expect(imports("\nimport {\n  a,\n  b as c,\n} from './m.js';\n")).toEqual([
-      ['import', './m.js', 2, false, 'a,b'],
-    ]);
+    expect(imports("\nimport {\n  a,\n  b as c,\n} from './m.js';\n")).toEqual([['import', './m.js', 2, false, 'a,b']]);
   });
 
   it('tells import type, all-type specifiers and a mixed list apart', () => {

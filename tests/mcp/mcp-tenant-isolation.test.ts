@@ -3,11 +3,7 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember as apiRemember } from '../../src/api/index.js';
-import {
-  handleMcpRequest,
-  type McpResponse,
-  type McpContext,
-} from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/surface/mcp/server.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -21,12 +17,7 @@ oneRequestPerTest();
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
-function callTool(
-  reqId: number,
-  name: string,
-  args: Record<string, string | number | boolean>,
-  ctx: McpContext,
-) {
+function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpContext) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -106,9 +97,7 @@ describe('mcp tenant + client-key isolation', () => {
       try {
         // SAFETY: `seeded` was just written via apiRemember above, so its row
         // exists and always has retrieval_count and strength columns.
-        return db
-          .prepare(`SELECT retrieval_count, strength FROM memories WHERE id = ?`)
-          .get(seeded.id) as {
+        return db.prepare(`SELECT retrieval_count, strength FROM memories WHERE id = ?`).get(seeded.id) as {
           retrieval_count: number;
           strength: number;
         };
@@ -202,12 +191,7 @@ describe('mcp tenant + client-key isolation', () => {
       infra: testInfra(),
       callers,
     };
-    const res = await callTool(
-      1,
-      'hippo_remember',
-      { text: 'audit-canary remember actor-mcp shape lock' },
-      ctx,
-    );
+    const res = await callTool(1, 'hippo_remember', { text: 'audit-canary remember actor-mcp shape lock' }, ctx);
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
 
     const db = openHippoDb(home);
@@ -272,12 +256,7 @@ describe('mcp tenant + client-key isolation', () => {
     };
 
     // Recall sets the keyed Map under the stdio-${pid}:alpha fallback.
-    const recallRes = await callTool(
-      1,
-      'hippo_recall',
-      { query: 'stdio-fallback', budget: 1500 },
-      ctxNoKey,
-    );
+    const recallRes = await callTool(1, 'hippo_recall', { query: 'stdio-fallback', budget: 1500 }, ctxNoKey);
     expect(extractText(recallRes)).toContain('stdio-fallback');
 
     // Outcome under the same no-clientKey context resolves the same fallback
@@ -363,9 +342,7 @@ describe('mcp tenant + client-key isolation', () => {
     const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
 
     await callTool(1, 'hippo_recall', { query: 'per-project outcome', budget: 1500 }, acme);
-    expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(
-      /No recent recalls/i,
-    );
+    expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(/No recent recalls/i);
     expect(extractText(await callTool(3, 'hippo_outcome', { good: true }, acme))).toMatch(
       /Applied positive outcome to 1 memories/,
     );
@@ -443,9 +420,7 @@ describe('mcp tenant + client-key isolation', () => {
     const gdb = openHippoDb(globalHome);
     try {
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
-      const rows = gdb
-        .prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%alpha-private%'`)
-        .get() as {
+      const rows = gdb.prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%alpha-private%'`).get() as {
         c: number;
       };
       expect(Number(rows.c)).toBe(0);
@@ -530,10 +505,7 @@ describe('mcp tenant + client-key isolation', () => {
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
-        params: {
-          name: 'hippo_remember',
-          arguments: { text: 'T2-canary fallback no-actor-supplied' },
-        },
+        params: { name: 'hippo_remember', arguments: { text: 'T2-canary fallback no-actor-supplied' } },
       },
       // SAFETY: actor is deliberately omitted to exercise the `ctx?.actor ??
       // 'mcp'` fallback under test; handleMcpRequest only ever reads

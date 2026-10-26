@@ -70,10 +70,7 @@ const SPECIAL: ReadonlyMap<number, Partial<MemoryEntry>> = new Map<number, Parti
   [2, { content: VALUE }],
   [600, { content: '  the DEPLOY window is friday   afternoon ' }],
   [700, { content: VALUE, kind: 'raw' }],
-  [
-    800,
-    { content: mergedText(HEADER, [VALUE, OTHER]), source: 'consolidation', layer: Layer.Semantic },
-  ],
+  [800, { content: mergedText(HEADER, [VALUE, OTHER]), source: 'consolidation', layer: Layer.Semantic }],
   [900, { content: VALUE, scope: 'personal:private:someone-else' }],
   [1000, { content: VALUE, tenantId: 'other' }],
 ]);
@@ -85,9 +82,7 @@ function seed(): string[] {
     try {
       for (let i = 0; i < ROWS; i++) {
         const extra = SPECIAL.get(i) ?? {};
-        const base = createMemory(extra.content ?? `filler row ${i} about topic ${i % 7}`, {
-          tags: [],
-        });
+        const base = createMemory(extra.content ?? `filler row ${i} about topic ${i % 7}`, { tags: [] });
         const created = new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString();
         writeEntryDbOnly(db, { ...base, ...extra, created });
         ids.push(base.id);
@@ -104,20 +99,12 @@ function seed(): string[] {
 function seedDormant() {
   const rows = {
     direct: createMemory(VALUE, { tags: [] }),
-    merged: createMemory(mergedText(HEADER, [OTHER, VALUE]), {
-      source: 'consolidation',
-      layer: Layer.Semantic,
-    }),
+    merged: createMemory(mergedText(HEADER, [OTHER, VALUE]), { source: 'consolidation', layer: Layer.Semantic }),
     unrelated: createMemory('an unrelated dormant lesson about cron', { tags: [] }),
   };
   withDb((db) => {
     for (const entry of Object.values(rows)) {
-      insertDormantRow(db, {
-        entry,
-        strength: 0.1,
-        reason: 'decay',
-        dormantAt: '2026-03-01T00:00:00.000Z',
-      });
+      insertDormantRow(db, { entry, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00.000Z' });
     }
   });
   return { direct: rows.direct.id, merged: rows.merged.id, unrelated: rows.unrelated.id };
@@ -147,33 +134,26 @@ describe('rejections.apply across pages', () => {
     expect(applied.successorIds).toHaveLength(1);
     expect(applied.dormantSuccessorIds).toHaveLength(1);
     const successor = readEntry(root, applied.successorIds[0], 'default');
-    expect(successor?.content).toBe(
-      mergedText('[Consolidated from 1 related memory, newest first]', [OTHER]),
-    );
+    expect(successor?.content).toBe(mergedText('[Consolidated from 1 related memory, newest first]', [OTHER]));
     for (const id of [ids[2], ids[600], ids[800]]) expect(readEntry(root, id)).toBeNull();
     for (const id of [ids[900], ids[1000], ids[5]]) expect(readEntry(root, id)).not.toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(ROWS - 1 - 4 + 1);
     withDb((db) => {
       expect(readDormantSnapshot(db, 'default', dormant.direct)).toBeNull();
       expect(readDormantSnapshot(db, 'default', dormant.merged)).toBeNull();
-      expect(
-        readDormantSnapshot(db, 'default', applied.dormantSuccessorIds[0])?.entry.content,
-      ).toBe(mergedText('[Consolidated from 1 related memory, newest first]', [OTHER]));
+      expect(readDormantSnapshot(db, 'default', applied.dormantSuccessorIds[0])?.entry.content).toBe(
+        mergedText('[Consolidated from 1 related memory, newest first]', [OTHER]),
+      );
       expect(readDormantSnapshot(db, 'default', dormant.unrelated)).not.toBeNull();
       expect(listAuditEvents(db, { tenantId: 'default', op: 'reject_value' })).toMatchObject([
-        {
-          metadata: { digest: rejectionDigest(VALUE), removedIds: removed, count: removed.length },
-        },
+        { metadata: { digest: rejectionDigest(VALUE), removedIds: removed, count: removed.length } },
       ]);
     });
   });
 
   it('refuses a holder written after the rejected value commits and before the walk, while other writes land', async () => {
     const ids = seed();
-    const late = {
-      holder: createMemory(VALUE, { tags: [] }),
-      other: createMemory('a lesson written mid-walk'),
-    };
+    const late = { holder: createMemory(VALUE, { tags: [] }), other: createMemory('a lesson written mid-walk') };
     let refused: unknown;
     const applied = await rejectionsWalking(() => {
       // No wait for a lock: a write scope held across the walk would fail this write with SQLITE_BUSY.

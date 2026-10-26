@@ -40,28 +40,16 @@ const DROPPED_ENV = [
   'PATH',
 ];
 // Counters and one-time repair marks a verb leaves in `meta`; the schema version and the like stay out, as they change with every migration.
-const META_KEYS = [
-  'total_remembered',
-  'total_forgotten',
-  'project_repair_auto',
-  'quality_repair_auto',
-];
+const META_KEYS = ['total_remembered', 'total_forgotten', 'project_repair_auto', 'quality_repair_auto'];
 
 const bases: string[] = [];
 afterAll(() => {
-  for (const base of bases)
-    rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const base of bases) rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 export type Row = Record<string, string | number | null>;
 /** A column value, or the parsed JSON of a `*_json` column. */
-export type Cell =
-  | string
-  | number
-  | boolean
-  | null
-  | readonly Cell[]
-  | { readonly [key: string]: Cell };
+export type Cell = string | number | boolean | null | readonly Cell[] | { readonly [key: string]: Cell };
 /** A row as `rows()` and `auditMeta()` shape it. */
 export type ParsedRow = Record<string, Cell>;
 /** Which store a read looks at: the project's own, or the global one under the home folder. */
@@ -75,12 +63,7 @@ export interface Ran {
 }
 
 // `remember` tags a row with each folder of the project path; Store fills that path with these four names.
-export const PATH_TAGS: readonly string[] = [
-  'path:acme',
-  'path:billing',
-  'path:ledger',
-  'path:app',
-];
+export const PATH_TAGS: readonly string[] = ['path:acme', 'path:billing', 'path:ledger', 'path:app'];
 
 /** What `remember` prints for the row it stored; a `--global` write adds the `[global] ` prefix. */
 export function remembered(row: ParsedRow, prefix = ''): Ran {
@@ -111,8 +94,7 @@ export function query(root: string, sql: string, ...params: Array<string | numbe
 function childEnv(home: string, user: string): NodeJS.ProcessEnv {
   const dropped = new Set(DROPPED_ENV);
   const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (!dropped.has(key.toUpperCase())) env[key] = value;
+  for (const [key, value] of Object.entries(process.env)) if (!dropped.has(key.toUpperCase())) env[key] = value;
   // The global npm folder holds the developer's own `hippo` and agent CLIs, which no case may start.
   const path = (process.env['PATH'] ?? '')
     .split(delimiter)
@@ -176,20 +158,11 @@ export class Store {
 
   /** Rows a case seeds in process are setup: audit rows up to here stay out of `audit()`. */
   settle(): void {
-    this.auditMark = Number(
-      query(this.root, 'SELECT COALESCE(MAX(id), 0) AS n FROM audit_log')[0]?.['n'] ?? 0,
-    );
+    this.auditMark = Number(query(this.root, 'SELECT COALESCE(MAX(id), 0) AS n FROM audit_log')[0]?.['n'] ?? 0);
   }
 
-  seed(
-    content: string,
-    options: Partial<CreateMemoryOptions> = {},
-    fields: Partial<MemoryEntry> = {},
-  ): string {
-    const entry = {
-      ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options }),
-      ...fields,
-    };
+  seed(content: string, options: Partial<CreateMemoryOptions> = {}, fields: Partial<MemoryEntry> = {}): string {
+    const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options }), ...fields };
     writeEntry(this.root, entry);
     return entry.id;
   }
@@ -202,27 +175,14 @@ export class Store {
     options: Partial<CreateMemoryOptions> = {},
     fields: Partial<MemoryEntry> = {},
   ): void {
-    this.seed(content, options, {
-      id,
-      created,
-      lastRetrieved: created,
-      validFrom: created,
-      strength: 1,
-      ...fields,
-    });
+    this.seed(content, options, { id, created, lastRetrieved: created, validFrom: created, strength: 1, ...fields });
   }
 
   async run(...args: string[]): Promise<Ran> {
     const opts = { cwd: this.cwd, env: this.env };
     // Async in both modes, so a run that calls a server this process holds leaves the thread free to answer.
-    const r = this.spawned
-      ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS })
-      : await runCliAs(args, opts);
-    return {
-      status: r.status,
-      stdout: this.mask(r.stdout),
-      stderr: this.mask(ownStderr(r.stderr)),
-    };
+    const r = this.spawned ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS }) : await runCliAs(args, opts);
+    return { status: r.status, stdout: this.mask(r.stdout), stderr: this.mask(ownStderr(r.stderr)) };
   }
 
   /** A verb function with no flag for its test seam (the refine fetcher), run in this process with its output captured. */
@@ -236,9 +196,7 @@ export class Store {
 
   /** The newest row's id. */
   lastId(): string {
-    return String(
-      query(this.root, 'SELECT id FROM memories ORDER BY rowid DESC LIMIT 1')[0]!['id'],
-    );
+    return String(query(this.root, 'SELECT id FROM memories ORDER BY rowid DESC LIMIT 1')[0]!['id']);
   }
 
   private mask(text: string): string {
@@ -258,10 +216,7 @@ export class Store {
   rows(where: Where = 'local'): ParsedRow[] {
     return query(this.rootOf(where), 'SELECT * FROM memories ORDER BY rowid').map((row) => {
       // Strength decays from `created`, so the stored value carries the microseconds the write took.
-      return {
-        ...parsed(row),
-        strength: Number(Number(row['strength']).toFixed(STRENGTH_DECIMALS)),
-      };
+      return { ...parsed(row), strength: Number(Number(row['strength']).toFixed(STRENGTH_DECIMALS)) };
     });
   }
 
@@ -279,18 +234,14 @@ export class Store {
   }
 
   private auditRows(where: Where): Row[] {
-    const sql =
-      'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE id > ? ORDER BY id';
+    const sql = 'SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE id > ? ORDER BY id';
     return query(this.rootOf(where), sql, where === 'local' ? this.auditMark : 0);
   }
 
   /** The counters and repair marks a verb leaves in one store's `meta`. */
   counters(where: Where = 'local'): Record<string, string> {
     const keys = META_KEYS.map((key) => `'${key}'`).join(', ');
-    const rows = query(
-      this.rootOf(where),
-      `SELECT key, value FROM meta WHERE key IN (${keys}) ORDER BY key`,
-    );
+    const rows = query(this.rootOf(where), `SELECT key, value FROM meta WHERE key IN (${keys}) ORDER BY key`);
     return Object.fromEntries(rows.map((r) => [String(r['key']), String(r['value'])]));
   }
 

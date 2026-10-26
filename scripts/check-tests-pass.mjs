@@ -27,9 +27,7 @@ function runGate() {
   if (reserved) {
     return {
       code: 1,
-      lines: [
-        `check-tests-pass: ${reserved} is reserved; the gate needs vitest's JSON report at its own path.`,
-      ],
+      lines: [`check-tests-pass: ${reserved} is reserved; the gate needs vitest's JSON report at its own path.`],
     };
   }
 
@@ -55,9 +53,7 @@ function runGate() {
     if (run.error) {
       return {
         code: 1,
-        lines: [
-          `check-tests-pass: could not start vitest (${run.error.message}); refusing to publish.`,
-        ],
+        lines: [`check-tests-pass: could not start vitest (${run.error.message}); refusing to publish.`],
       };
     }
 

@@ -38,11 +38,7 @@ function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz')
   });
 }
 
-function makeL2Summary(
-  content: string,
-  speaker: string = 'alice',
-  parentId?: string | null,
-): MemoryEntry {
+function makeL2Summary(content: string, speaker: string = 'alice', parentId?: string | null): MemoryEntry {
   const s = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
@@ -146,9 +142,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // All 3 L2s now have dag_parent_id pointing to profile
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT id` projection above.
-      const linkedRows = db
-        .prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`)
-        .all(profile.id) as Array<{
+      const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as Array<{
         id: string;
       }>;
       expect(linkedRows.length).toBe(3);
@@ -177,15 +171,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const unparented2 = makeL2Summary('unlinked alice topic two', 'alice');
     [parented, unparented1, unparented2].forEach((e) => writeEntry(hippoRoot, e));
 
-    const result = await buildEntityProfiles(
-      sqliteStore(hippoRoot),
-      [parented, unparented1, unparented2],
-      {
-        now: evalNow(),
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
-      },
-    );
+    const result = await buildEntityProfiles(sqliteStore(hippoRoot), [parented, unparented1, unparented2], {
+      now: evalNow(),
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
+    });
     // Only the 2 unparented ones cluster
     expect(result.l2sLinked).toBe(2);
     // M2 fold: confirm the parented L2 STILL points at `existing`, not the new L3.
@@ -194,9 +184,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT dag_parent_id` projection above, and `parented` was written
       // to this store just above so a matching row exists.
-      const row = db
-        .prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`)
-        .get(parented.id) as {
+      const row = db.prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`).get(parented.id) as {
         dag_parent_id: string | null;
       };
       expect(row.dag_parent_id).toBe(existing.id);
@@ -222,9 +210,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT id, summary_dirty` projection above, and buildEntityProfiles
       // was awaited just above so exactly one L3 profile row exists.
-      const profile = db
-        .prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`)
-        .get() as {
+      const profile = db.prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`).get() as {
         id: string;
         summary_dirty: number;
       };
@@ -262,9 +248,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT summary_dirty` projection above, and `l3` was written to this
       // store just above so a matching row exists.
-      const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(l3.id) as {
-        summary_dirty: number;
-      };
+      const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(l3.id) as { summary_dirty: number };
       expect(row.summary_dirty).toBe(1);
 
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
@@ -298,12 +282,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
       // below, which always sends `body: JSON.stringify({...})` (src/domain/consolidate/dag.ts).
       const body = init?.body ? JSON.parse(init.body as string) : {};
       capturedPrompt = body?.messages?.[0]?.content ?? '';
-      return new Response(
-        JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }),
-        {
-          status: 200,
-        },
-      );
+      return new Response(JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }), {
+        status: 200,
+      });
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
@@ -416,10 +397,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     for (let i = 0; i < 5; i++) {
       writeEntry(
         hippoRoot,
-        makeL1Fact(
-          l2.id,
-          `fact-${i} with substantial content here for budget test xxxxx yyyy zzzz`,
-        ),
+        makeL1Fact(l2.id, `fact-${i} with substantial content here for budget test xxxxx yyyy zzzz`),
       );
     }
 
@@ -462,10 +440,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const l3 = makeL3Profile('test profile content for isDagSummary', 'alice');
     const l2 = makeL2Summary('test summary content for isDagSummary', 'alice');
     const l1 = makeL1Fact('placeholder-parent-id-here-fake', 'l1 fact content for test');
-    const l0 = createMemory('l0 raw content', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Episodic,
-    });
+    const l0 = createMemory('l0 raw content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     expect(isDagSummary(l3)).toBe(true);
     expect(isDagSummary(l2)).toBe(true);
     expect(isDagSummary(l1)).toBe(false);
@@ -494,18 +469,11 @@ describe('level-3 entity profiles + drillDown depth', () => {
     });
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));
 
-    const result = await buildEntityProfiles(
-      sqliteStore(hippoRoot),
-      [...tenantAL2s, ...tenantBL2s],
-      {
-        now: evalNow(),
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        llm: anthropicLlm({
-          apiKey: 'k',
-          fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz'),
-        }),
-      },
-    );
+    const result = await buildEntityProfiles(sqliteStore(hippoRoot), [...tenantAL2s, ...tenantBL2s], {
+      now: evalNow(),
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') }),
+    });
     // 2 L3s expected — one per tenant cluster (NOT one merged L3 in 'default')
     expect(result.profilesCreated).toBe(2);
     expect(result.l2sLinked).toBe(6);
@@ -514,9 +482,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     try {
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT id, tenant_id` projection above.
-      const profiles = db
-        .prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`)
-        .all() as Array<{
+      const profiles = db.prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`).all() as Array<{
         id: string;
         tenant_id: string;
       }>;

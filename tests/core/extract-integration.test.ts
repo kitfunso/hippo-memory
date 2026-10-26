@@ -26,25 +26,11 @@ describe('storeExtractedFacts', () => {
     writeEntry(dir, source);
 
     const facts: ExtractedFact[] = [
-      {
-        content: 'Alice set the deadline to March 15',
-        tags: ['speaker:Alice', 'topic:deadline'],
-        valence: 'neutral',
-      },
-      {
-        content: 'Bob prefers async standup meetings',
-        tags: ['speaker:Bob', 'topic:standup'],
-        valence: 'positive',
-      },
+      { content: 'Alice set the deadline to March 15', tags: ['speaker:Alice', 'topic:deadline'], valence: 'neutral' },
+      { content: 'Bob prefers async standup meetings', tags: ['speaker:Bob', 'topic:standup'], valence: 'positive' },
     ];
 
-    const entries = await storeExtractedFacts(
-      sqliteStore(dir),
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-      evalNow(),
-    );
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
 
     expect(entries).toHaveLength(2);
 
@@ -73,20 +59,10 @@ describe('storeExtractedFacts', () => {
     writeEntry(dir, source);
 
     const facts: ExtractedFact[] = [
-      {
-        content: 'Deploy uses blue-green strategy',
-        tags: ['speaker:Carol', 'topic:deploy'],
-        valence: 'neutral',
-      },
+      { content: 'Deploy uses blue-green strategy', tags: ['speaker:Carol', 'topic:deploy'], valence: 'neutral' },
     ];
 
-    const entries = await storeExtractedFacts(
-      sqliteStore(dir),
-      source,
-      facts,
-      DEFAULT_HALF_LIFE_DAYS,
-      evalNow(),
-    );
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
     expect(entries).toHaveLength(1);
 
     const tags = entries[0]!.tags;
@@ -108,13 +84,7 @@ describe('storeExtractedFacts', () => {
     });
     writeEntry(dir, source);
 
-    const entries = await storeExtractedFacts(
-      sqliteStore(dir),
-      source,
-      [],
-      DEFAULT_HALF_LIFE_DAYS,
-      evalNow(),
-    );
+    const entries = await storeExtractedFacts(sqliteStore(dir), source, [], DEFAULT_HALF_LIFE_DAYS, evalNow());
     expect(entries).toHaveLength(0);
   });
 });

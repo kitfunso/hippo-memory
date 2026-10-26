@@ -6,11 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
-import {
-  createApiKey,
-  revokeApiKey,
-  type CreateApiKeyResult,
-} from '../../src/store/sqlite/auth.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   requireGroup,
@@ -115,15 +111,10 @@ export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
 export type ConformanceGroup = RequiredGroup | 'consolidation' | 'base';
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
-export type GroupOf<G extends ConformanceGroup> = G extends 'base'
-  ? HippoStore
-  : StoreGroups[Exclude<G, 'base'>];
+export type GroupOf<G extends ConformanceGroup> = G extends 'base' ? HippoStore : StoreGroups[Exclude<G, 'base'>];
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
-export type GroupCall<G extends ConformanceGroup, R> = (
-  group: GroupOf<G>,
-  store: HippoStore,
-) => Promise<R>;
+export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: HippoStore) => Promise<R>;
 
 function groupOf<G extends ConformanceGroup>(store: HippoStore, group: G): GroupOf<G> {
   // SAFETY: GroupOf<G> is HippoStore for 'base' and StoreGroups[G] for every other G, as each branch reads.

@@ -34,12 +34,8 @@ afterEach(() => {
 
 describe('embedAll with a row the provider could not embed', () => {
   it('embeds the rest and warns once with the skipped memory id', async () => {
-    const good = createMemory('the deploy runbook lives in the ops wiki', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    });
-    const bad = createMemory('unembeddable row for the skip test', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    });
+    const good = createMemory('the deploy runbook lives in the ops wiki', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const bad = createMemory('unembeddable row for the skip test', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, good);
     writeEntry(root, bad);
     const lines: string[] = [];

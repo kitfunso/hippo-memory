@@ -13,11 +13,7 @@ import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { memoryCountAll } from '../../src/api/memories/memories.js';
 import { adminActor } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  writeEntriesTogether,
-  loadAllDirtySummaries,
-  loadAllEntries,
-} from '../_helpers/root-forms.js';
+import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -55,10 +51,7 @@ describe('invalidateMatching without onlyId', () => {
       tagOnly: memory('nothing in the text', { tags: ['Zephyrine Cache'] }),
       pinned: memory('pinned zephyrine cache note', { pinned: true }),
     };
-    const misses = [
-      memory('zephyrines and caches differ'),
-      memory('acme zephyrine cache', { tenantId: 'acme' }),
-    ];
+    const misses = [memory('zephyrines and caches differ'), memory('acme zephyrine cache', { tenantId: 'acme' })];
     writeEntriesTogether(root, [...padding(n), ...Object.values(hits), ...misses]);
     return { root, hits };
   }
@@ -85,14 +78,9 @@ describe('invalidateMatching without onlyId', () => {
     writeEntriesTogether(root, [...padding(5), kelvin]);
     expect(
       (
-        await invalidateMatching(
-          sqliteStore(root),
-          { from: 'kappa', to: null, type: 'removal' },
-          'default',
-          {
-            dryRun: true,
-          },
-        )
+        await invalidateMatching(sqliteStore(root), { from: 'kappa', to: null, type: 'removal' }, 'default', {
+          dryRun: true,
+        })
       ).targets,
     ).toEqual([kelvin.id]);
   });

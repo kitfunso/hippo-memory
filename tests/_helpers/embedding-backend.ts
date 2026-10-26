@@ -9,9 +9,7 @@ export function skipWithoutEmbeddings(
 ): void {
   if (available) return;
   if (env[REQUIRE_EMBEDDINGS_VAR] === '1') {
-    throw new Error(
-      `${REQUIRE_EMBEDDINGS_VAR}=1 but the local embedding backend is missing or not functional`,
-    );
+    throw new Error(`${REQUIRE_EMBEDDINGS_VAR}=1 but the local embedding backend is missing or not functional`);
   }
   ctx.skip();
 }

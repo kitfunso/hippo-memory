@@ -3,21 +3,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
-import {
-  EMBEDDING_MODEL_META_KEY,
-  upsertVectors,
-  type VectorIndex,
-} from '../../src/db/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
 import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  clusteredVectors,
-  near,
-  seedVectorRows,
-  type VectorRowSeed,
-} from '../_helpers/vector-rows.js';
+import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
 
 const DIM = 32;
 const THRESHOLD = 300;
@@ -76,28 +67,14 @@ function tenantRows(tenantId: string, n: number, seed: number, scope?: string): 
 }
 
 function spec(tenantId: string, extra: Partial<VectorCandidateSpec> = {}): VectorCandidateSpec {
-  return {
-    tenantId,
-    scope: { mode: 'default-deny' },
-    includeSuperseded: false,
-    limit: 10,
-    ...extra,
-  };
+  return { tenantId, scope: { mode: 'default-deny' }, includeSuperseded: false, limit: 10, ...extra };
 }
 
-async function nearest(
-  f: Fixture,
-  query: readonly number[],
-  s: VectorCandidateSpec,
-): Promise<string[]> {
+async function nearest(f: Fixture, query: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
   return (await listVectorCandidateEntries(f.db, query, s, f.index)).map((e) => e.id);
 }
 
-async function scanned(
-  f: Fixture,
-  query: readonly number[],
-  s: VectorCandidateSpec,
-): Promise<string[]> {
+async function scanned(f: Fixture, query: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
   return (await listVectorCandidateEntries(f.db, query, s)).map((e) => e.id);
 }
 
@@ -177,11 +154,7 @@ describe('a row the scan would not admit', () => {
     elsewhere(f.root, (db) => db.prepare("DELETE FROM memories WHERE id = 'forgotten'").run());
 
     const anyScope = await nearest(f, twin, spec('a'));
-    const exactScope = await nearest(
-      f,
-      twin,
-      spec('a', { scope: { mode: 'exact', value: 'team-a' } }),
-    );
+    const exactScope = await nearest(f, twin, spec('a', { scope: { mode: 'exact', value: 'team-a' } }));
 
     for (const [answer, refused] of [
       [anyScope, banned.slice(0, 4)],
@@ -192,9 +165,7 @@ describe('a row the scan would not admit', () => {
     }
     expect(anyScope[0]).toBe('other-scope');
     expect(anyScope).toEqual(await scanned(f, twin, spec('a')));
-    expect(exactScope).toEqual(
-      await scanned(f, twin, spec('a', { scope: { mode: 'exact', value: 'team-a' } })),
-    );
+    expect(exactScope).toEqual(await scanned(f, twin, spec('a', { scope: { mode: 'exact', value: 'team-a' } })));
     expect(f.answered.slice(1)).toEqual([true, true]);
   });
 });
@@ -242,10 +213,7 @@ describe('a write by another connection', () => {
     await built(f, q, spec('t1'));
     const rebuilt = await nearest(f, q, spec('t1'));
 
-    expect([dropped, rebuilt]).toEqual([
-      await scanned(f, q, spec('t1')),
-      await scanned(f, q, spec('t1')),
-    ]);
+    expect([dropped, rebuilt]).toEqual([await scanned(f, q, spec('t1')), await scanned(f, q, spec('t1'))]);
     expect(f.answered.slice(1)).toEqual([false, false, true]);
   });
 
@@ -281,11 +249,7 @@ describe('a write by another connection', () => {
     const f = fixture(rows);
     const q = near(rows[3].vector, 14);
     await built(f, q, spec('t1'));
-    const late = tenantRows('t1', 33, 15).map((r, i) => ({
-      ...r,
-      id: `late-${i}`,
-      vector: i === 0 ? q : r.vector,
-    }));
+    const late = tenantRows('t1', 33, 15).map((r, i) => ({ ...r, id: `late-${i}`, vector: i === 0 ? q : r.vector }));
 
     seedVectorRows(f.root, late, MODEL);
     const behind = await nearest(f, q, spec('t1'));
@@ -316,9 +280,7 @@ describe('a read the graph cannot fill', () => {
 
 describe('a store over the vector graph cap', () => {
   const capLines = (warn: { mock: { calls: unknown[][] } }): unknown[] =>
-    warn.mock.calls
-      .filter(([line]) => String(line).includes('over the vector graph cap'))
-      .map(([line]) => line);
+    warn.mock.calls.filter(([line]) => String(line).includes('over the vector graph cap')).map(([line]) => line);
 
   it('scans with one warn line naming the count, and builds no graph', async () => {
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);

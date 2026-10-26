@@ -41,9 +41,7 @@ describe('claim', () => {
     expect(claimed!.runId).toBe(liveRun!.id);
     expect(claimed!.leaseUntil).toHaveLength(24);
     expect(claimed!.heartbeatAt).toHaveLength(24);
-    expect(Date.parse(claimed!.leaseUntil!) - Date.parse(claimed!.heartbeatAt!)).toBe(
-      CARD_LEASE_MS,
-    );
+    expect(Date.parse(claimed!.leaseUntil!) - Date.parse(claimed!.heartbeatAt!)).toBe(CARD_LEASE_MS);
     expect(claimed!.heartbeatAt).toBe(claimed!.updatedAt);
 
     await blockCard(root, 'default', card.id, 'why');
@@ -99,9 +97,7 @@ describe('heartbeat', () => {
     const claimed = (await claimCard(root, 'default', card.id, 'r1'))!;
     const db = openHippoDb(root);
     try {
-      db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(
-        card.id,
-      );
+      db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(card.id);
     } finally {
       closeHippoDb(db);
     }
@@ -127,12 +123,8 @@ describe('refusals', () => {
   it("an unknown card id or another tenant's throws unknown card id on heartbeat", async () => {
     const card = await createCard(root, 'default', { title: 'T3 unknown hb' });
     await claimCard(root, 'default', card.id, 'r1');
-    await expect(heartbeatCard(root, 'default', 'nope', 1)).rejects.toThrow(
-      'unknown card id: nope',
-    );
-    await expect(heartbeatCard(root, 'tenant2', card.id, 1)).rejects.toThrow(
-      `unknown card id: ${card.id}`,
-    );
+    await expect(heartbeatCard(root, 'default', 'nope', 1)).rejects.toThrow('unknown card id: nope');
+    await expect(heartbeatCard(root, 'tenant2', card.id, 1)).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it("an unknown card id or another tenant's throws unknown card id on block, review and complete even with a run id", async () => {
@@ -142,15 +134,9 @@ describe('refusals', () => {
       ['default', 'nope'],
       ['tenant2', card.id],
     ]) {
-      await expect(blockCard(root, tenant, id, 'why', claimed.runId)).rejects.toThrow(
-        `unknown card id: ${id}`,
-      );
-      await expect(reviewCard(root, tenant, id, claimed.runId)).rejects.toThrow(
-        `unknown card id: ${id}`,
-      );
-      await expect(completeCard(root, tenant, id, 'success', claimed.runId)).rejects.toThrow(
-        `unknown card id: ${id}`,
-      );
+      await expect(blockCard(root, tenant, id, 'why', claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
+      await expect(reviewCard(root, tenant, id, claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
+      await expect(completeCard(root, tenant, id, 'success', claimed.runId)).rejects.toThrow(`unknown card id: ${id}`);
     }
   });
 
@@ -189,10 +175,7 @@ describe('sweep', () => {
     const nullLease = await createCard(root, 'default', { title: 'T4 null' });
     const readyCard = await createCard(root, 'default', { title: 'T4 ready' });
     const backlogParent = await createCard(root, 'default', { title: 'T4 backlog parent' });
-    const backlogCard = await createCard(root, 'default', {
-      title: 'T4 backlog',
-      dependsOn: [backlogParent.id],
-    });
+    const backlogCard = await createCard(root, 'default', { title: 'T4 backlog', dependsOn: [backlogParent.id] });
     const reviewingCard = await createCard(root, 'default', { title: 'T4 review' });
     const blockedCard = await createCard(root, 'default', { title: 'T4 blocked' });
     const doneCard = await createCard(root, 'default', { title: 'T4 done' });
@@ -217,9 +200,7 @@ describe('sweep', () => {
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ?`).run(pastIso(), passed.id);
-      db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(
-        nullLease.id,
-      );
+      db.prepare(`UPDATE cards SET lease_until = NULL, heartbeat_at = NULL WHERE id = ?`).run(nullLease.id);
       db.prepare(`UPDATE cards SET lease_until = ? WHERE id = ? AND tenant_id = ?`).run(
         pastIso(),
         otherTenant.id,
@@ -410,10 +391,7 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
   `;
   // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
-  const worker = new Worker(workerCode, {
-    eval: true,
-    workerData: { dbPath, sql, params, holdMs, holdEnded },
-  });
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => {
       if (msg === 'locked') resolve();
@@ -642,16 +620,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(nothingYet.status, nothingYet.out).toBe(0);
       expect(nothingYet.out).toContain('No expired leases.');
 
-      const handoff = await runCli(
-        home,
-        env,
-        'handoff',
-        'create',
-        '--summary',
-        's',
-        '--card-id',
-        id,
-      );
+      const handoff = await runCli(home, env, 'handoff', 'create', '--summary', 's', '--card-id', id);
       expect(handoff.status, handoff.out).toBe(0);
 
       backdateLease(home, id);
@@ -700,30 +669,10 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       const blockClaim = await runCli(home, env, 'card', 'claim', blockId, '--runtime', 'r1');
       const blockRunId = runIdFrom(blockClaim.out);
 
-      const blockWrong = await runCli(
-        home,
-        env,
-        'card',
-        'block',
-        blockId,
-        '--reason',
-        'why',
-        '--run',
-        '999',
-      );
+      const blockWrong = await runCli(home, env, 'card', 'block', blockId, '--reason', 'why', '--run', '999');
       expect(blockWrong.status).toBe(1);
       expect(blockWrong.out).toContain('status running');
-      const blockRight = await runCli(
-        home,
-        env,
-        'card',
-        'block',
-        blockId,
-        '--reason',
-        'why',
-        '--run',
-        blockRunId,
-      );
+      const blockRight = await runCli(home, env, 'card', 'block', blockId, '--reason', 'why', '--run', blockRunId);
       expect(blockRight.status, blockRight.out).toBe(0);
 
       const reviewCase = await runCli(home, env, 'card', 'create', '--title', 'review me');
@@ -792,24 +741,12 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       const review = await runCli(home, env, 'card', 'review', id, '--run', runId2);
       expect(review.status, review.out).toBe(0);
 
-      const complete = await runCli(
-        home,
-        env,
-        'card',
-        'complete',
-        id,
-        '--outcome',
-        'success',
-        '--run',
-        runId2,
-      );
+      const complete = await runCli(home, env, 'card', 'complete', id, '--outcome', 'success', '--run', runId2);
       expect(complete.status, complete.out).toBe(0);
 
       const reclaimForce = await runCli(home, env, 'card', 'reclaim', '--force');
       expect(reclaimForce.status).toBe(1);
-      expect(reclaimForce.out).toContain(
-        'Unknown flag --force for hippo card reclaim. Valid flags: (none)',
-      );
+      expect(reclaimForce.out).toContain('Unknown flag --force for hippo card reclaim. Valid flags: (none)');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

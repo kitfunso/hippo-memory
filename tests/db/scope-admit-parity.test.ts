@@ -50,10 +50,7 @@ describe('scopeAdmitSql parity on a real store', () => {
     const db = openStore(root);
     try {
       // SAFETY: the SELECT names the id and scope columns.
-      stored = db.prepare('SELECT id, scope FROM memories').all() as Array<{
-        id: string;
-        scope: string | null;
-      }>;
+      stored = db.prepare('SELECT id, scope FROM memories').all() as Array<{ id: string; scope: string | null }>;
     } finally {
       closeHippoDb(db);
     }

@@ -18,8 +18,7 @@ export interface CliAsOptions {
 function replaceEnv(next: NodeJS.ProcessEnv): void {
   // Mutated in place: a module that kept a reference to process.env must see the swap too.
   for (const key of Object.keys(process.env)) delete process.env[key];
-  for (const [key, value] of Object.entries(next))
-    if (value !== undefined) process.env[key] = value;
+  for (const [key, value] of Object.entries(next)) if (value !== undefined) process.env[key] = value;
 }
 
 /** A hook that writes fd 1 or 2 with writeSync, past the stream buffer, lands in the streams runInProcess reads. */
@@ -40,10 +39,7 @@ function routeStdFdWrites(): () => void {
 }
 
 /** `hippo <args>` in this process, with its exit code as a spawned hippo would have ended with it. */
-export async function runCliAs(
-  args: readonly string[],
-  opts: CliAsOptions = {},
-): Promise<InProcessResult> {
+export async function runCliAs(args: readonly string[], opts: CliAsOptions = {}): Promise<InProcessResult> {
   const savedArgv = process.argv;
   const savedCwd = process.cwd();
   const savedEnv = { ...process.env };

@@ -24,17 +24,13 @@ afterEach(() => {
 // SAFETY: the SELECT below names exactly these three columns.
 type Row = { tenant_id: string; content: string; strength: number };
 const rowOf = (db: DatabaseSyncLike, id: string) =>
-  db.prepare('SELECT tenant_id, content, strength FROM memories WHERE id = ?').get(id) as
-    | Row
-    | undefined;
+  db.prepare('SELECT tenant_id, content, strength FROM memories WHERE id = ?').get(id) as Row | undefined;
 
 function intruderOf(a: MemoryEntry): MemoryEntry {
   return { ...a, tenantId: 'tenant-b', content: 'taken over', strength: 0.123 };
 }
 
-function withHeldRow(
-  run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEntry, b: MemoryEntry) => void,
-): void {
+function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEntry, b: MemoryEntry) => void): void {
   const root = makeRoot('entry-writes-cross-tenant');
   roots.push(root);
   const a = createMemory('tenant a row', { tenantId: 'tenant-a' });
@@ -55,9 +51,7 @@ function withHeldRow(
 
 describe('a write of an id another tenant holds', () => {
   it('is refused by writeEntry', () => {
-    withHeldRow((db, files, _a, b) =>
-      expect(() => writeEntryOn(db, files, b)).toThrow(ConflictError),
-    );
+    withHeldRow((db, files, _a, b) => expect(() => writeEntryOn(db, files, b)).toThrow(ConflictError));
   });
 
   it('is refused by writePromotedEntry', () => {

@@ -16,14 +16,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
-import {
-  embeddingInputText,
-  embeddingIndexIdentity,
-} from '../../src/base/embeddings/index-identity.js';
-import {
-  embeddingModelRequiresReindex,
-  saveStoredEmbeddingModel,
-} from '../../src/store/sqlite/vector-index.js';
+import { embeddingInputText, embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
+import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';

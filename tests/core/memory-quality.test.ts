@@ -40,10 +40,7 @@ describe('automatic assertion quality', () => {
     ['[info] server listening on port 8080', 'raw-output'],
     ['2026-10-05 10:00:01 WARN retrying after 503 from upstream', 'raw-output'],
     ['[error] connection reset while reading body', 'raw-output'],
-    [
-      '2026-10-05 10:00:01 ERROR: upstream refused the call because the token expired',
-      'raw-output',
-    ],
+    ['2026-10-05 10:00:01 ERROR: upstream refused the call because the token expired', 'raw-output'],
     ['bump build 78 for testflight deploy', 'release-activity'],
     ['increment iOS build number to 79', 'release-activity'],
     ['deployed build 78 to TestFlight', 'release-activity'],
@@ -132,19 +129,14 @@ describe('automatic provenance', () => {
     expect(isAutomaticEntry({ ...base, extractedFrom: 'm_1' })).toBe(true);
     expect(isAutomaticEntry({ ...base, dagLevel: 1 })).toBe(true);
     expect(
-      isAutomaticEntry({
-        ...base,
-        content: '[Consolidated from 2 related memories]\n\nNever push from the VM',
-      }),
+      isAutomaticEntry({ ...base, content: '[Consolidated from 2 related memories]\n\nNever push from the VM' }),
     ).toBe(true);
   });
 
   it('leaves watch failures, tool failures and vouched rows to the person floor', () => {
     const base = make('Never push from the VM');
     expect(isAutomaticEntry({ ...base, source: 'autolearn', confidence: 'observed' })).toBe(false);
-    expect(isAutomaticEntry({ ...base, source: 'tool-failure', confidence: 'observed' })).toBe(
-      false,
-    );
+    expect(isAutomaticEntry({ ...base, source: 'tool-failure', confidence: 'observed' })).toBe(false);
     for (const confidence of ['verified', 'stale'] as const) {
       expect(isAutomaticEntry({ ...base, source: 'capture', confidence }), confidence).toBe(false);
     }
@@ -155,11 +147,7 @@ describe('automatic provenance', () => {
     for (const source of ['import:markdown', 'cli', 'mcp']) {
       expect(
         isAutomaticEntry(
-          make('Found local migration files to be', {
-            source,
-            confidence: 'observed',
-            tags: ['imported', 'captured'],
-          }),
+          make('Found local migration files to be', { source, confidence: 'observed', tags: ['imported', 'captured'] }),
         ),
         source,
       ).toBe(false);

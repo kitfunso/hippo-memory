@@ -99,9 +99,7 @@ describe('PlanningFallacyWatching', () => {
         tenantId: 'default',
       }),
     );
-    const result = await retrieve(ctxFor(root), {
-      query: 'this will take 2 days to finish the project',
-    });
+    const result = await retrieve(ctxFor(root), { query: 'this will take 2 days to finish the project' });
     expect(result.planningFallacyWatching!.reason).toBe('no_class_match');
     expect(result.planningFallacyWatching!.detectedPhrase).toMatch(/will\s+take\s+2\s+days/i);
     expect(result.planningFallacyWatching!.suggestion).toMatch(/hippo predict --class/i);

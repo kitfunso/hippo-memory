@@ -25,10 +25,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue, readRejectedValue } from '../../src/store/sqlite/rejection.js';
-import {
-  rejectionDigest,
-  normalizeValueForRejection,
-} from '../../src/base/records/rejection-digest.js';
+import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -41,12 +38,7 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  loadEveryTenantEntries,
-  writeEntry,
-  readEntry,
-  appendSessionEvent,
-} from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
@@ -70,10 +62,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
     const xContent = 'use bearer tokens for outbound api calls';
     const x = createMemory(xContent, { layer: Layer.Episodic });
     writeEntry(home, x);
-    await api.reject(ctx(home), {
-      memoryId: x.id,
-      reason: 'no longer approved for outbound calls',
-    });
+    await api.reject(ctx(home), { memoryId: x.id, reason: 'no longer approved for outbound calls' });
     expect(readEntry(home, x.id)).toBeNull();
 
     // A transcript re-asserting X among 3 extractable decision items.
@@ -179,18 +168,13 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
     writeEntry(globalRoot, s1);
     writeEntry(globalRoot, s2);
 
-    await api.reject(ctx(localRoot), {
-      value: zContent,
-      reason: 'rejected locally, must not sync from global',
-    });
+    await api.reject(ctx(localRoot), { value: zContent, reason: 'rejected locally, must not sync from global' });
 
     // mockRestore() (unlike a bare unspy) also clears recorded call
     // history, so every assertion against errorSpy must run BEFORE it —
     // restore happens last, after the spy has served its purpose.
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
-      embed: TEST_RUN,
-    });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
     expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
     const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
@@ -228,10 +212,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
     const dbBefore = openHippoDb(home);
     let refusalsBefore: number;
     try {
-      refusalsBefore = listAuditEvents(dbBefore, {
-        tenantId: 'default',
-        op: 'reject_refusal',
-      }).length;
+      refusalsBefore = listAuditEvents(dbBefore, { tenantId: 'default', op: 'reject_refusal' }).length;
     } finally {
       closeHippoDb(dbBefore);
     }
@@ -345,10 +326,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     const before = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
 
-    await api.reject(ctx(home), {
-      memoryId: remembered.id,
-      reason: 'staging creds process changed',
-    });
+    await api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
 
     const afterReject = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
@@ -361,10 +339,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     }
     expect(caught).toBeInstanceOf(RejectedValueError);
 
-    const afterReattempt = await api.retrieve(ctx(home), {
-      query: 'zynthkey',
-      window: { limit: 5 },
-    });
+    const afterReattempt = await api.retrieve(ctx(home), { query: 'zynthkey', window: { limit: 5 } });
     expect(afterReattempt.results.some((r) => r.content === wContent)).toBe(false);
   });
 });
@@ -380,8 +355,7 @@ describe('consolidation-loop fix: merge tombstone check', () => {
     // longText is the newer of the two, so mergeContents' newest-first
     // sort deterministically puts it first in the 2-entry merge.
     const shortText = 'migrate the billing database before the next release window';
-    const longText =
-      'migrate the billing database before the next release window with full backups enabled';
+    const longText = 'migrate the billing database before the next release window with full backups enabled';
     const e1 = {
       ...createMemory(shortText, { layer: Layer.Episodic }),
       created: new Date(Date.now() - 60_000).toISOString(),
@@ -443,10 +417,7 @@ describe('import dry-run tombstone accuracy', () => {
     const home = makeRoot('rejection-acceptance-import-dryrun');
     const rejectedChunk = 'never re-import this specific chunk of text again please';
     const otherChunk = 'a completely different unrelated chunk of text here';
-    await api.reject(ctx(home), {
-      value: rejectedChunk,
-      reason: 'pre-emptive dry-run test tombstone',
-    });
+    await api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
 
     const dryResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
       tenantId: 'default',
@@ -477,17 +448,9 @@ describe('import dry-run tombstone accuracy', () => {
       const otherNote = 'a completely different unrelated vault note body here';
       writeFileSync(join(vault, 'rejected.md'), rejectedNote);
       writeFileSync(join(vault, 'other.md'), otherNote);
-      await api.reject(ctx(home), {
-        value: rejectedNote,
-        reason: 'pre-emptive dry-run vault tombstone',
-      });
+      await api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
 
-      const dryResult = await importVault(vault, {
-        hippoRoot: home,
-        tenantId: 'default',
-        name: 'notes',
-        dryRun: true,
-      });
+      const dryResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
       expect(dryResult.rejected).toBe(1);
       expect(dryResult.imported).toBe(1);
       expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
@@ -516,10 +479,7 @@ describe('capture dry-run tombstone accuracy', () => {
     // (hasNoSpecificity) doesn't filter these before they ever reach the
     // rejection guard — same fixture-construction rule as case 1 above.
     const rejectedContent = 'use bearer tokens for outbound api calls to port 8443';
-    await api.reject(ctx(home), {
-      value: rejectedContent,
-      reason: 'pre-emptive dry-run capture tombstone',
-    });
+    await api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
 
     const fixturePath = join(home, 'capture-dryrun-fixture.txt');
     writeFileSync(
@@ -615,8 +575,7 @@ describe('merge tombstone check uses the destination tenant', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
     const shortText = 'rotate the staging tls certificates before expiry';
-    const longText =
-      'rotate the staging tls certificates before expiry and notify the on-call channel';
+    const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
     const e1 = {
       ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }),
       created: new Date(Date.now() - 60_000).toISOString(),
@@ -702,9 +661,7 @@ describe('merge tombstone check uses the destination tenant', () => {
 
     expect(result.semanticCreated).toBe(1);
     const allAfter = loadEveryTenantEntries(home);
-    const semantic = allAfter.find(
-      (e) => e.layer === Layer.Semantic && e.content === mergedContent,
-    );
+    const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
     expect(semantic?.tenantId).toBe('tenant-a');
   });
 });
@@ -727,10 +684,7 @@ describe('autoShare per-candidate rejection containment', () => {
 
     // Reject in the GLOBAL store, the store shareMemory -> writeEntry
     // actually writes into.
-    await api.reject(ctx(globalRoot), {
-      value: rejectedContent,
-      reason: 'must not be shared globally',
-    });
+    await api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
 
     const stats = { secretSkipped: 0, rejectedSkipped: 0 };
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -740,9 +694,7 @@ describe('autoShare per-candidate rejection containment', () => {
       minScore: 0,
       stats,
     });
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('skipped 1 candidate(s) refused'),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 candidate(s) refused'));
     errorSpy.mockRestore();
 
     // The clean candidate shared; the rejected one did not abort the batch.

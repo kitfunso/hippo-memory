@@ -27,10 +27,7 @@ function keyTemplates(): { file: string; parts: string[] }[] {
     if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
     const file = join(entry.parentPath, entry.name);
     for (const [, template] of readFileSync(file, 'utf8').matchAll(KEYED_CALL)) {
-      found.push({
-        file,
-        parts: [...(template ?? '').matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1] ?? ''),
-      });
+      found.push({ file, parts: [...(template ?? '').matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1] ?? '') });
     }
   }
   return found;

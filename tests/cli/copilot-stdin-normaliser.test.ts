@@ -15,13 +15,7 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 
 const CWD = 'C:\\Users\\user\\proj';
 const TRANSCRIPT = 'C:\\Users\\user\\.copilot\\session-state\\copilot-sess-1\\events.jsonl';
-const CLAUDE_FIXTURE = path.resolve(
-  __dirname,
-  '..',
-  'fixtures',
-  'compaction',
-  'post-compact-payloads.jsonl',
-);
+const CLAUDE_FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 function normalized(text: string): JsonValue {
   const out = normalizeHookPayload(text);
@@ -30,10 +24,7 @@ function normalized(text: string): JsonValue {
   return JSON.parse(out) as JsonValue;
 }
 
-function deliveryEvent(
-  stdinText: string | undefined,
-  runtime?: DeliveryRuntime,
-): DeliveryEventInput {
+function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
   const rec = createDeliveryRecorder({
     now: evalNow(),
     ledger: sqliteStore(CWD).ledger,
@@ -75,25 +66,19 @@ describe('normalizeHookPayload on Copilot camelCase payloads', () => {
   });
 
   it('maps hookEventName', () => {
-    expect(
-      normalized(JSON.stringify({ sessionId: 's', hookEventName: 'SessionStart' })),
-    ).toMatchObject({
+    expect(normalized(JSON.stringify({ sessionId: 's', hookEventName: 'SessionStart' }))).toMatchObject({
       hook_event_name: 'SessionStart',
     });
   });
 
   it('keeps toolArgs that are not JSON as the string the model wrote', () => {
-    expect(
-      normalized(JSON.stringify({ sessionId: 's', toolName: 'bash', toolArgs: 'ls -la' })),
-    ).toMatchObject({
+    expect(normalized(JSON.stringify({ sessionId: 's', toolName: 'bash', toolArgs: 'ls -la' }))).toMatchObject({
       tool_input: 'ls -la',
     });
   });
 
   it('keeps toolArgs that are already an object', () => {
-    expect(
-      normalized(JSON.stringify({ sessionId: 's', toolArgs: { command: 'ls' } })),
-    ).toMatchObject({
+    expect(normalized(JSON.stringify({ sessionId: 's', toolArgs: { command: 'ls' } }))).toMatchObject({
       tool_input: { command: 'ls' },
     });
   });
@@ -119,11 +104,7 @@ describe('normalizeHookPayload on Copilot camelCase payloads', () => {
       toolName: 'x',
       tool_name: 'y',
     });
-    expect(normalized(text)).toMatchObject({
-      session_id: 'snake',
-      tool_input: { b: 2 },
-      tool_name: 'y',
-    });
+    expect(normalized(text)).toMatchObject({ session_id: 'snake', tool_input: { b: 2 }, tool_name: 'y' });
   });
 });
 
@@ -171,22 +152,12 @@ describe('every payload reader sees session_id and the copilot runtime', () => {
   });
 
   it('the delivery recorder writes the session id and the runtime the flag set', () => {
-    const camel = deliveryEvent(
-      normalizeHookPayload(copilotPayload('sessionStart', CWD)),
-      'copilot',
-    );
-    expect(camel).toMatchObject({
-      sessionId: 'copilot-sess-1',
-      sessionState: 'payload',
-      runtime: 'copilot',
-    });
+    const camel = deliveryEvent(normalizeHookPayload(copilotPayload('sessionStart', CWD)), 'copilot');
+    expect(camel).toMatchObject({ sessionId: 'copilot-sess-1', sessionState: 'payload', runtime: 'copilot' });
     const snake = copilotPayload('SessionStart', CWD);
     // VS Code sends hook_event_name, so without the flag the recorder would book a Copilot call as Claude Code.
     expect(deliveryEvent(snake).runtime).toBe('claude-code');
-    expect(deliveryEvent(snake, 'copilot')).toMatchObject({
-      sessionId: 'vscode-sess-1',
-      runtime: 'copilot',
-    });
+    expect(deliveryEvent(snake, 'copilot')).toMatchObject({ sessionId: 'vscode-sess-1', runtime: 'copilot' });
   });
 
   it('the PreCompact reader takes the Copilot payload with runtime copilot', () => {

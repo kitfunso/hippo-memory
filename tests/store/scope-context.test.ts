@@ -13,19 +13,12 @@ let hippoDir: string;
 
 /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function runHippo(args: string[]): Promise<string> {
-  const vars = {
-    HIPPO_HOME: path.join(tmpDir, 'global'),
-    HIPPO_SCOPE: '',
-    GSTACK_SKILL: '',
-    OPENCLAW_SKILL: '',
-  };
+  const vars = { HIPPO_HOME: path.join(tmpDir, 'global'), HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '' };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   const saved = process.cwd();
   process.chdir(tmpDir);
   try {
-    const r = await runInProcess(() =>
-      withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])),
-    );
+    const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
     expect(r.status, r.stderr).toBe(0);
     return r.stdout;
   } finally {
@@ -95,16 +88,7 @@ describe('scope-aware context injection', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    const out = await runHippo([
-      'context',
-      '--pinned-only',
-      '--scope',
-      'qa',
-      '--format',
-      'json',
-      '--budget',
-      '2000',
-    ]);
+    const out = await runHippo(['context', '--pinned-only', '--scope', 'qa', '--format', 'json', '--budget', '2000']);
     const parsed = JSON.parse(out);
     expect(parsed.memories.length).toBeGreaterThanOrEqual(2);
 

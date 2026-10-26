@@ -52,10 +52,7 @@ async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Pro
   return run.stdout;
 }
 
-async function recallJson(
-  query: string,
-  flags: Flags = { 'session-id': 's1' },
-): Promise<RecallJson> {
+async function recallJson(query: string, flags: Flags = { 'session-id': 's1' }): Promise<RecallJson> {
   // SAFETY: --json prints one object carrying these fields; each test asserts the ones it reads.
   return JSON.parse(await recall(query, { ...flags, json: true })) as RecallJson;
 }
@@ -69,8 +66,7 @@ describe('hippo recall anchoring hint', () => {
     root = makeRoot('cli-anchor');
     // A global store that does not exist keeps the recall on the local store alone.
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
-    for (const name of ['HIPPO_TENANT', 'HIPPO_SESSION_ID', 'HIPPO_ANCHORING'])
-      vi.stubEnv(name, '');
+    for (const name of ['HIPPO_TENANT', 'HIPPO_SESSION_ID', 'HIPPO_ANCHORING']) vi.stubEnv(name, '');
     callers = createCallerState();
     memoryId = seed('default');
   });

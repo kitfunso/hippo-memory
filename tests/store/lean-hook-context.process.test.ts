@@ -26,9 +26,7 @@ async function hippo(
   input?: string,
   spawned = false,
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
-  const r = spawned
-    ? hippoRun(args, { cwd: project, env, input })
-    : await runCliAs(args, { cwd: project, env, input });
+  const r = spawned ? hippoRun(args, { cwd: project, env, input }) : await runCliAs(args, { cwd: project, env, input });
   expect(r.status, r.stderr).toBe(0);
   return r;
 }
@@ -65,14 +63,8 @@ interface HookPayload {
 }
 
 /** Runs an installed `hippo ...` command line against the built CLI, as Claude Code would. */
-async function runHook(
-  command: string,
-  payload: HookPayload,
-  spawned = false,
-): ReturnType<typeof hippo> {
-  const [bin, ...args] = (command.match(/"[^"]*"|\S+/g) ?? []).map((a) =>
-    a.replace(/^"(.*)"$/, '$1'),
-  );
+async function runHook(command: string, payload: HookPayload, spawned = false): ReturnType<typeof hippo> {
+  const [bin, ...args] = (command.match(/"[^"]*"|\S+/g) ?? []).map((a) => a.replace(/^"(.*)"$/, '$1'));
   expect(bin).toBe('hippo');
   return await hippo(args, JSON.stringify(payload), spawned);
 }
@@ -83,25 +75,15 @@ function additionalContext(stdout: string): string {
 }
 
 async function remember(text: string, ...flags: string[]): Promise<string> {
-  const id = /Remembered \[([^\]]+)\]/.exec(
-    (await hippo(['remember', text, ...flags])).stdout,
-  )?.[1];
+  const id = /Remembered \[([^\]]+)\]/.exec((await hippo(['remember', text, ...flags])).stdout)?.[1];
   expect(id).toMatch(/^mem_[0-9a-f]+$/);
   return id ?? '';
 }
 
 async function promptContext(prompt: string): Promise<string> {
-  const [command] = installedCommands('UserPromptSubmit').filter((c) =>
-    c.includes('hippo context --pinned-only'),
-  );
+  const [command] = installedCommands('UserPromptSubmit').filter((c) => c.includes('hippo context --pinned-only'));
   return additionalContext(
-    (
-      await runHook(command, {
-        session_id: 'lean-session',
-        hook_event_name: 'UserPromptSubmit',
-        prompt,
-      })
-    ).stdout,
+    (await runHook(command, { session_id: 'lean-session', hook_event_name: 'UserPromptSubmit', prompt })).stdout,
   );
 }
 
@@ -123,9 +105,7 @@ function enablePromptRecall(): void {
 describe('SessionStart hooks', () => {
   it('keep the consolidation log out of the stdout Claude Code adds to the model context', async () => {
     const commands = installedCommands('SessionStart');
-    const logFile =
-      /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ??
-      '';
+    const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
     expect(logFile).not.toBe('');
     // The SessionEnd worker leaves the output of a real sleep run in this log.
     await remember('the release script needs the staging flag or it publishes to production');
@@ -141,11 +121,7 @@ describe('SessionStart hooks', () => {
     const runs = [];
     for (const c of commands) {
       runs.push(
-        await runHook(
-          c,
-          { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' },
-          true,
-        ),
+        await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }, true),
       );
     }
     const stdout = runs.map((r) => r.stdout).join('');
@@ -160,9 +136,7 @@ describe('SessionStart hooks', () => {
 
   it('show the user one problems line and still keep the log out of the context', async () => {
     const commands = installedCommands('SessionStart');
-    const logFile =
-      /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ??
-      '';
+    const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
     await remember('the release script needs the staging flag or it publishes to production');
     await hippo(['sleep', '--log-file', logFile]);
     const lines = fs
@@ -175,13 +149,7 @@ describe('SessionStart hooks', () => {
 
     const runs = [];
     for (const c of commands) {
-      runs.push(
-        await runHook(c, {
-          session_id: 'lean-session',
-          hook_event_name: 'SessionStart',
-          source: 'startup',
-        }),
-      );
+      runs.push(await runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
     }
     const stdout = runs.map((r) => r.stdout).join('');
     const stderr = runs.map((r) => r.stderr).join('');
@@ -220,16 +188,7 @@ describe('a memory with a copy in the global store', () => {
 
     // Two recent slots: the copy of the newest memory used to take the second one.
     const narrow = additionalContext(
-      (
-        await hippo([
-          'context',
-          '--pinned-only',
-          '--include-recent',
-          '2',
-          '--format',
-          'additional-context',
-        ])
-      ).stdout,
+      (await hippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context'])).stdout,
     );
     expect(count(narrow, newest)).toBe(1);
     expect(count(narrow, older)).toBe(1);
@@ -276,8 +235,7 @@ describe('a memory with a copy in the global store', () => {
     await hippo(['share', await remember(older), '--force']);
 
     const out = JSON.parse(
-      (await hippo(['recall', 'when does the staging database reset', '--multihop', '--json']))
-        .stdout,
+      (await hippo(['recall', 'when does the staging database reset', '--multihop', '--json'])).stdout,
     );
     expect(out.results.filter((r: { content: string }) => r.content === older)).toHaveLength(1);
   });
@@ -286,9 +244,7 @@ describe('a memory with a copy in the global store', () => {
     await hippo(['promote', await remember(older)]);
 
     expect((await hippo(['sync'])).stdout).toContain('Synced 0 global memories');
-    expect(
-      loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older),
-    ).toHaveLength(1);
+    expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
   it('lands once in another project when `hippo sync` finds two global copies', async () => {
@@ -300,9 +256,7 @@ describe('a memory with a copy in the global store', () => {
     await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
 
     await hippo(['sync', '--cross-project']);
-    expect(
-      loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older),
-    ).toHaveLength(1);
+    expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
   it('is reached once by graph expansion, and a copy of a base result is not reached at all', async () => {
@@ -367,8 +321,7 @@ describe('a memory with a copy in the global store', () => {
       budget: 4000,
     });
     const ids = out.map((r) => r.entry.id);
-    for (const text of [rule, older, newest])
-      expect(out.filter((r) => r.entry.content === text)).toHaveLength(1);
+    for (const text of [rule, older, newest]) expect(out.filter((r) => r.entry.content === text)).toHaveLength(1);
     expect(ids).toContain(linked.id);
     expect(ids).not.toContain(linkedCopy.id);
     expect(ids).not.toContain(seedCopy.id);

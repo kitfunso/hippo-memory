@@ -4,12 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
-import {
-  handleHandoff,
-  handleSession,
-  handleSnapshot,
-  handleWm,
-} from '../../src/surface/cli/continuity.js';
+import { handleHandoff, handleSession, handleSnapshot, handleWm } from '../../src/surface/cli/continuity.js';
 import { handleConflicts, handleOutcome, handleResolve } from '../../src/surface/cli/curate.js';
 import { handleContext } from '../../src/surface/cli/context.js';
 import { handleEval } from '../../src/surface/cli/eval.js';
@@ -28,12 +23,7 @@ oneRequestPerTest();
 const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed' }]);
 
 let root = '';
-const c = (args: string[], flags: CliFlags): CommandContext => ({
-  hippoRoot: root,
-  tenantId: 'default',
-  args,
-  flags,
-});
+const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
 
 async function stored() {
   const ctx = cliApiContext(root, 'default');
@@ -63,21 +53,9 @@ afterEach(() => {
 type Row = readonly [label: string, flag: string, run: () => void | Promise<void>];
 
 const VALUE_LESS: readonly Row[] = [
-  [
-    'snapshot save',
-    'task',
-    () => handleSnapshot(c(['save'], { task: true, summary: 's', 'next-step': 'n' })),
-  ],
-  [
-    'snapshot save',
-    'summary',
-    () => handleSnapshot(c(['save'], { task: 't', summary: true, 'next-step': 'n' })),
-  ],
-  [
-    'snapshot save',
-    'next-step',
-    () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': true })),
-  ],
+  ['snapshot save', 'task', () => handleSnapshot(c(['save'], { task: true, summary: 's', 'next-step': 'n' }))],
+  ['snapshot save', 'summary', () => handleSnapshot(c(['save'], { task: 't', summary: true, 'next-step': 'n' }))],
+  ['snapshot save', 'next-step', () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': true }))],
   [
     'snapshot save',
     'source',
@@ -92,19 +70,11 @@ const VALUE_LESS: readonly Row[] = [
   ],
   ['handoff create', 'summary', () => handleHandoff(c(['create'], { summary: true }))],
   ['handoff create', 'next', () => handleHandoff(c(['create'], { summary: 'x', next: true }))],
-  [
-    'handoff create',
-    'session',
-    () => handleHandoff(c(['create'], { summary: 'x', session: true })),
-  ],
+  ['handoff create', 'session', () => handleHandoff(c(['create'], { summary: 'x', session: true }))],
   ['wm push', 'content', () => handleWm(c(['push'], { content: true }))],
   ['wm push', 'scope', () => handleWm(c(['push'], { content: 'c', scope: true }))],
   ['wm clear', 'session', () => handleWm(c(['clear'], { session: true }))],
-  [
-    'trace record',
-    'task',
-    () => handleTrace(c(['record'], { task: true, steps: STEPS, outcome: 'success' })),
-  ],
+  ['trace record', 'task', () => handleTrace(c(['record'], { task: true, steps: STEPS, outcome: 'success' }))],
   [
     'trace record',
     'source',
@@ -139,9 +109,7 @@ describe('a text flag with no value', () => {
 describe('a text flag with a value', () => {
   it('snapshot save keeps the task, summary and next step it was given', async () => {
     const result = await runInProcess(() =>
-      handleSnapshot(
-        c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' }),
-      ),
+      handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
     );
     expect(result.status).toBe(0);
     expect(await sessionsOf(root).loadSnapshot('default', {}, null)).toMatchObject({
@@ -161,23 +129,17 @@ describe('a text flag with a value', () => {
       { sessionId: 's1', content: 'tried the fix', eventType: 'attempt' },
     ]);
     const made = await runInProcess(() =>
-      handleHandoff(
-        c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' }),
-      ),
+      handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
     );
     expect(made.status).toBe(0);
-    expect(
-      await sessionsOf(root).read('default', 'handoff', { sessionId: 's1' }, null),
-    ).toMatchObject({
+    expect(await sessionsOf(root).read('default', 'handoff', { sessionId: 's1' }, null)).toMatchObject({
       summary: 'stopped at step 2',
       nextAction: 'run the suite',
     });
   });
 
   it('wm push stores the scope and content it was given', async () => {
-    const result = await runInProcess(() =>
-      handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })),
-    );
+    const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
     expect(result.status).toBe(0);
     expect(await sessionsOf(root).read('default', 'working_memory', { limit: 5 })).toMatchObject([
       { scope: 'plan', content: 'check the lease' },
@@ -186,15 +148,11 @@ describe('a text flag with a value', () => {
 
   it('trace record and remember store a row from their text flags', async () => {
     const trace = await runInProcess(() =>
-      handleTrace(
-        c(['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' }),
-      ),
+      handleTrace(c(['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' })),
     );
     expect(trace.status).toBe(0);
     expect(trace.stdout).toContain('Recorded trace');
-    const remembered = await runInProcess(() =>
-      handleRemember(c(['the deploy runs at noon'], { scope: 'team' })),
-    );
+    const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
     expect(remembered.status).toBe(0);
     expect(await memoryList(cliApiContext(root, 'default'))).toHaveLength(2);
   });
@@ -213,13 +171,10 @@ describe('a text flag with a value', () => {
   });
 
   it('recall, conflicts and context read their text flags', async () => {
-    expect(
-      (await runInProcess(() => handleRecall(c(['deploy'], { goal: 'ship', outcome: 'success' }))))
-        .status,
-    ).toBe(0);
-    expect((await runInProcess(() => handleConflicts(c([], { status: 'resolved' })))).status).toBe(
+    expect((await runInProcess(() => handleRecall(c(['deploy'], { goal: 'ship', outcome: 'success' })))).status).toBe(
       0,
     );
+    expect((await runInProcess(() => handleConflicts(c([], { status: 'resolved' })))).status).toBe(0);
     expect((await runInProcess(() => handleContext(c([], { format: 'json' })))).status).toBe(0);
   });
 });

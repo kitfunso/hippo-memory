@@ -121,9 +121,7 @@ describe('GET /v1/recall/drill/:id', () => {
     const over = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1001`);
     expect(over.status).toBe(400);
     expect(await over.json()).toMatchObject({ error: 'limit must be a positive integer <= 1000' });
-    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1000`)).status).toBe(
-      200,
-    );
+    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1000`)).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=2.5`)).status).toBe(200);
   });
 

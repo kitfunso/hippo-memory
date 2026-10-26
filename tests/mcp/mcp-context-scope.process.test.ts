@@ -89,12 +89,7 @@ describe('mcp hippo_context scope filter', () => {
     process.chdir(home);
     try {
       const text = extractText(
-        await callTool(
-          5,
-          'hippo_context',
-          { budget: 4000 },
-          { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-        ),
+        await callTool(5, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }),
       );
       expect(text).toContain('## Active Task Snapshot');
       expect(text).toContain('## Session Handoff');
@@ -134,10 +129,7 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   it('default-deny: no-scope caller does not see private-scope memories or snapshot', async () => {
-    writeEntry(
-      home,
-      createMemory('public memory about the project', { scope: 'slack:public:Cgeneral' }),
-    );
+    writeEntry(home, createMemory('public memory about the project', { scope: 'slack:public:Cgeneral' }));
     writeEntry(home, createMemory('private memory secret', { scope: 'slack:private:Csecret' }));
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Private task that must not leak',

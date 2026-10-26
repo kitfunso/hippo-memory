@@ -9,14 +9,7 @@ import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { hashedVector } from './hashed-embedding-server.js';
-import {
-  FAKE_NOW,
-  rowsOf,
-  seedPortBranches,
-  seedTemplates,
-  TENANT,
-  type Templates,
-} from './recall-golden-seed.js';
+import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
 import { keyFor, onDb } from './store-worker-server.js';
 import { apiCtx } from './api-ctx.js';
 import { objectsAt } from './objects-at.js';
@@ -50,13 +43,7 @@ export interface MovedReadsSeed {
 
 /** Vectors and particles for five rows, one of them 8 numbers long, and a vector whose memory row is gone. */
 function seedVectors(root: string): void {
-  const entries = loadEntriesByIds(root, [
-    'mem_p_plain',
-    'mem_p_new',
-    'mem_p_private',
-    'mem_p_old',
-    'mem_p_noise',
-  ]);
+  const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
   const index = Object.fromEntries(
     entries.map((e): [string, number[]] => [
       e.id,
@@ -64,11 +51,7 @@ function seedVectors(root: string): void {
     ]),
   );
   onDb(root, (db) => {
-    upsertVectors(
-      db,
-      [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]],
-      VECTOR_IDENTITY,
-    );
+    upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
     resetAllPhysicsState(db, entries, index, new Date(FAKE_NOW));
   });
@@ -97,8 +80,7 @@ async function hold(root: string, tenantId: string, ending: string): Promise<str
     untrusted: true,
     scope: HELD_SCOPE,
   });
-  if (saved.quarantined === undefined)
-    throw new Error(`the seed text was not quarantined: ${ending}`);
+  if (saved.quarantined === undefined) throw new Error(`the seed text was not quarantined: ${ending}`);
   return saved.id;
 }
 
@@ -115,18 +97,12 @@ export async function seedMovedReads(): Promise<MovedReadsSeed> {
     seedVectors(root);
     await seedGraph(root);
     held = [];
-    for (const ending of ['commit', 'deploy', 'release'])
-      held.push(await hold(root, TENANT, ending));
+    for (const ending of ['commit', 'deploy', 'release']) held.push(await hold(root, TENANT, ending));
     otherHeld = await hold(root, OTHER_TENANT, 'merge');
     const main = keyFor(root, TENANT);
     const member = keyFor(root, TENANT, { role: 'member' });
     const other = keyFor(root, OTHER_TENANT);
-    keys = {
-      main: main.plaintext,
-      member: member.plaintext,
-      other: other.plaintext,
-      unknown: mintApiKey().plaintext,
-    };
+    keys = { main: main.plaintext, member: member.plaintext, other: other.plaintext, unknown: mintApiKey().plaintext };
     keyIds = [main, member, other].map((key) => key.keyId);
   });
   vi.unstubAllEnvs();
@@ -138,8 +114,7 @@ const LEFT = {
   memories:
     'SELECT id, tenant_id, scope, retrieval_count, strength, half_life_days, last_retrieved FROM memories ORDER BY id',
   held: 'SELECT memory_id, tenant_id, status, original_scope, decided_by, decided_at IS NOT NULL AS decided FROM memory_quarantine ORDER BY memory_id',
-  vectors:
-    'SELECT memory_id, model, dim, hex(vector) AS vector FROM memory_vectors ORDER BY memory_id',
+  vectors: 'SELECT memory_id, model, dim, hex(vector) AS vector FROM memory_vectors ORDER BY memory_id',
   particles: 'SELECT memory_id FROM memory_physics ORDER BY memory_id',
   model: `SELECT value FROM meta WHERE key = '${EMBEDDING_MODEL_META_KEY}'`,
 } as const;

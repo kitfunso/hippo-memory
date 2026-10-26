@@ -91,11 +91,7 @@ describe('writeRecallTrace', () => {
         });
         expect(traceId).not.toBeNull();
 
-        const trace = queryRow<RecallTraceRow>(
-          db,
-          `SELECT * FROM recall_traces WHERE id = ?`,
-          traceId,
-        );
+        const trace = queryRow<RecallTraceRow>(db, `SELECT * FROM recall_traces WHERE id = ?`, traceId);
         expect(trace.tenant_id).toBe('default');
         expect(trace.session_id).toBe('sess-1');
         expect(trace.pipeline).toBe('api');
@@ -193,15 +189,8 @@ describe('writeRecallTrace', () => {
         expect(row.rerank_json).not.toContain('note');
         expect(row.rerank_json).not.toContain('super-secret-project-codename');
         const steps = JSON.parse(row.rerank_json);
-        expect(steps).toEqual([
-          { stage: 'goal-boost', multiplier: 1.5, scoreBefore: 0.6, scoreAfter: 0.9 },
-        ]);
-        expect(Object.keys(steps[0]).sort()).toEqual([
-          'multiplier',
-          'scoreAfter',
-          'scoreBefore',
-          'stage',
-        ]);
+        expect(steps).toEqual([{ stage: 'goal-boost', multiplier: 1.5, scoreBefore: 0.6, scoreAfter: 0.9 }]);
+        expect(Object.keys(steps[0]).sort()).toEqual(['multiplier', 'scoreAfter', 'scoreBefore', 'stage']);
       } finally {
         closeHippoDb(db);
       }
@@ -227,9 +216,7 @@ describe('writeRecallTrace', () => {
       }).not.toThrow();
       expect(traceId).toBeNull();
       expect(errSpy).toHaveBeenCalled();
-      expect(errSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/recall trace write failed.* stack=\S*Error.* at /),
-      );
+      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace write failed.* stack=\S*Error.* at /));
       errSpy.mockRestore();
     } finally {
       restore();
@@ -324,10 +311,7 @@ describe('recordTraceOutcome', () => {
           memoryIds: ['mem-a'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = queryRow<{ c: number }>(
-          db,
-          `SELECT COUNT(*) AS c FROM recall_trace_outcomes`,
-        );
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -350,10 +334,7 @@ describe('recordTraceOutcome', () => {
           memoryIds: ['mem-a'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = queryRow<{ c: number }>(
-          db,
-          `SELECT COUNT(*) AS c FROM recall_trace_outcomes`,
-        );
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -417,10 +398,7 @@ describe('recordTraceOutcome', () => {
           memoryIds: ['mem-z'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = queryRow<{ c: number }>(
-          db,
-          `SELECT COUNT(*) AS c FROM recall_trace_outcomes`,
-        );
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -437,12 +415,7 @@ describe('recordTraceOutcome', () => {
       closeHippoDb(db);
       const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       expect(() => {
-        recordTraceOutcome(db, {
-          traceId: 1,
-          tenantId: 'default',
-          outcome: 'positive',
-          memoryIds: ['mem-a'],
-        });
+        recordTraceOutcome(db, { traceId: 1, tenantId: 'default', outcome: 'positive', memoryIds: ['mem-a'] });
       }).not.toThrow();
       expect(errSpy).toHaveBeenCalled();
       expect(errSpy).toHaveBeenCalledWith(

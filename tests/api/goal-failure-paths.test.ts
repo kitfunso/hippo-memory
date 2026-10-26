@@ -17,15 +17,12 @@ const savedCwd = process.cwd();
 /** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<string> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
-  const res = await runInProcess(() =>
-    runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']),
-  );
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
   expect(res.status, res.stderr).toBe(0);
   return res.stdout;
 }
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('goal recall log and retrieval policy failure paths', () => {
   let env: TestEnv;
@@ -71,9 +68,7 @@ describe('goal recall log and retrieval policy failure paths', () => {
     try {
       // SAFETY: goal_recall_log's memory_id column is a NOT NULL TEXT FK;
       // .all() rows always match the queried SELECT's single column.
-      const rows = db
-        .prepare(`SELECT memory_id FROM goal_recall_log WHERE goal_id = ?`)
-        .all(goal.id) as Array<{
+      const rows = db.prepare(`SELECT memory_id FROM goal_recall_log WHERE goal_id = ?`).all(goal.id) as Array<{
         memory_id: string;
       }>;
       const ids = rows.map((r) => r.memory_id);

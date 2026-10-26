@@ -111,12 +111,8 @@ function findInCli(srcDir, bannedIn) {
   return listSourceFiles(root)
     .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
     .filter(([file]) => file === 'cli.ts' || file.startsWith('surface/cli/'))
-    .flatMap(([file, p]) =>
-      namedOnLines(readFileSync(p, 'utf8'), bannedIn(file)).map((hit) => ({ file, ...hit })),
-    )
-    .sort(
-      (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name),
-    );
+    .flatMap(([file, p]) => namedOnLines(readFileSync(p, 'utf8'), bannedIn(file)).map((hit) => ({ file, ...hit })))
+    .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name));
 }
 
 // Guarded so the test can import the functions without running the check.
@@ -124,9 +120,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const srcDir = process.argv[2] ?? 'src';
   const hits = findCliRecallWrites(srcDir);
   if (hits.length > 0) {
-    console.error(
-      `\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`,
-    );
+    console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
     console.error(
       '\nFix: pass the input to retrieveWithCliCore() (src/api/recall/request.ts) and let it rank and record; the CLI parses flags and prints.\n',
@@ -134,9 +128,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   const writes = findCliStoreWrites(srcDir);
   if (writes.length > 0) {
-    console.error(
-      `\n${writes.length} memory writer or store opener reference(s) in the CLI under ${srcDir}/:`,
-    );
+    console.error(`\n${writes.length} memory writer or store opener reference(s) in the CLI under ${srcDir}/:`);
     for (const h of writes) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
     console.error(
       '\nFix: move the row change into a function that takes the store root, in src/api or the module that owns the rows, and call that.\n',
@@ -144,7 +136,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   if (hits.length + writes.length > 0) process.exit(1);
   console.log('The CLI ranks and records recall only through retrieveWithCliCore(). OK.');
-  console.log(
-    'The CLI writes memories and opens the store only through functions that take the root. OK.',
-  );
+  console.log('The CLI writes memories and opens the store only through functions that take the root. OK.');
 }

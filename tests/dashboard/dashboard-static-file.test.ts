@@ -7,12 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import {
-  assetFor,
-  loadStaticFiles,
-  sendAsset,
-  type StaticFiles,
-} from '../../src/surface/dashboard/static-file.js';
+import { assetFor, loadStaticFiles, sendAsset, type StaticFiles } from '../../src/surface/dashboard/static-file.js';
 import { boundPort } from '../_helpers/listen.js';
 
 const INDEX = '<!doctype html><title>hippo</title>'.repeat(20);
@@ -59,11 +54,7 @@ interface Reply {
 }
 
 /** GETs `urlPath` from a server that answers with sendAsset, with exactly `headers`; fetch would add its own. */
-async function request(
-  files: StaticFiles,
-  urlPath: string,
-  headers: Record<string, string> = {},
-): Promise<Reply> {
+async function request(files: StaticFiles, urlPath: string, headers: Record<string, string> = {}): Promise<Reply> {
   server ??= createServer((req, res) => {
     const asset = assetFor(files, req.url ?? '/');
     if (asset === undefined) res.writeHead(404).end();
@@ -74,9 +65,7 @@ async function request(
     httpGet({ host: '127.0.0.1', port, path: urlPath, headers }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () =>
-        resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }),
-      );
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }));
     }).on('error', reject);
   });
 }
@@ -121,20 +110,8 @@ describe('assetFor', () => {
     const index = files.get('/index.html');
     expect(assetFor(files, '/assets/index-B3x_k9Q-.js')).toBe(bundle);
     expect(assetFor(files, '/assets/%69ndex-B3x_k9Q-.js')).toBe(bundle);
-    const elsewhere = [
-      '/',
-      '/projects/p:alpha',
-      '/notes.txt',
-      '/../secret.js',
-      '/..%2Fsecret.js',
-      '/linked/x.js',
-    ];
-    for (const urlPath of [
-      ...elsewhere,
-      '//etc/passwd',
-      `/${join(dir, 'secret.js')}`,
-      '/app.js%00.html',
-    ]) {
+    const elsewhere = ['/', '/projects/p:alpha', '/notes.txt', '/../secret.js', '/..%2Fsecret.js', '/linked/x.js'];
+    for (const urlPath of [...elsewhere, '//etc/passwd', `/${join(dir, 'secret.js')}`, '/app.js%00.html']) {
       expect(assetFor(files, urlPath), urlPath).toBe(index);
     }
   });
@@ -147,9 +124,7 @@ describe('assetFor', () => {
 describe('sendAsset', () => {
   it('sends gzip to a client that takes it, then a 304 for the ETag it got', async () => {
     const files = load();
-    const first = await request(files, '/assets/index-B3x_k9Q-.js', {
-      'accept-encoding': 'br, gzip;q=0.8',
-    });
+    const first = await request(files, '/assets/index-B3x_k9Q-.js', { 'accept-encoding': 'br, gzip;q=0.8' });
     expect(first.status).toBe(200);
     expect(first.headers).toMatchObject({
       'content-type': 'application/javascript; charset=utf-8',
@@ -168,10 +143,7 @@ describe('sendAsset', () => {
     });
     expect(second.status).toBe(304);
     expect(second.body.length).toBe(0);
-    expect(second.headers).toMatchObject({
-      etag,
-      'cache-control': 'public, max-age=31536000, immutable',
-    });
+    expect(second.headers).toMatchObject({ etag, 'cache-control': 'public, max-age=31536000, immutable' });
     expect(second.headers['content-encoding']).toBeUndefined();
   });
 
@@ -192,12 +164,8 @@ describe('sendAsset', () => {
   it('answers 304 to a weak or listed tag, and 200 to a tag for other bytes', async () => {
     const files = load();
     const { etag } = (await request(files, '/index.html')).headers;
-    expect((await request(files, '/index.html', { 'if-none-match': `W/${etag}` })).status).toBe(
-      304,
-    );
-    expect(
-      (await request(files, '/index.html', { 'if-none-match': `"other", ${etag}` })).status,
-    ).toBe(304);
+    expect((await request(files, '/index.html', { 'if-none-match': `W/${etag}` })).status).toBe(304);
+    expect((await request(files, '/index.html', { 'if-none-match': `"other", ${etag}` })).status).toBe(304);
     expect((await request(files, '/index.html', { 'if-none-match': '"other"' })).status).toBe(200);
   });
 

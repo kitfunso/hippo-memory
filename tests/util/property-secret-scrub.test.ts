@@ -3,11 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { redactSecretsStrict } from '../../src/base/util/secret-detect.js';
 import { scrubForSharing } from '../../src/surface/capture/share-scrub.js';
 import { arr, both, forAll, int, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
-import {
-  ASSIGNED_SECRET,
-  ASSIGNED_SECRET_LINES,
-  ORDINARY_CONFIG_LINES,
-} from '../_helpers/secret-shapes.js';
+import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';
@@ -45,9 +41,7 @@ function secret(
 
 const KINDS: readonly Gen<Secret>[] = [
   secret((b) => `AKIA${b}`, UPPER + DIGITS, 16, 16),
-  oneOf(
-    ['ghp', 'gho', 'ghu', 'ghs', 'ghr'].map((kind) => secret((b) => `${kind}_${b}`, ALNUM, 36, 36)),
-  ),
+  oneOf(['ghp', 'gho', 'ghu', 'ghs', 'ghr'].map((kind) => secret((b) => `${kind}_${b}`, ALNUM, 36, 36))),
   secret((b) => `github_pat_${b}`, `${ALNUM}_`, 22, 40),
   oneOf([...'baprs'].map((kind) => secret((b) => `xox${kind}-${b}`, `${ALNUM}-`, 10, 30))),
   oneOf([`${SK}_live_`, 'rk_test_'].map((head) => secret((b) => head + b, ALNUM, 16, 30))),
@@ -64,12 +58,7 @@ const KINDS: readonly Gen<Secret>[] = [
   ),
   oneOf(
     PEM_KINDS.map((kind) =>
-      secret(
-        (b) => `${pemLine('BEGIN', kind)}\n${b}\n${pemLine('END', kind)}`,
-        `${ALNUM}+/`,
-        40,
-        120,
-      ),
+      secret((b) => `${pemLine('BEGIN', kind)}\n${b}\n${pemLine('END', kind)}`, `${ALNUM}+/`, 40, 120),
     ),
   ),
   secret((b) => `${SK}-${b}`, `${ALNUM}_-`, 20, 48),
@@ -134,10 +123,7 @@ const WORD_RUN = arr(pick(WORDS), 0, 5);
 const LEAKY_TEXT: Gen<{ text: string; secrets: Secret[] }> = map(
   both(arr(both(WORD_RUN, both(oneOf(KINDS), pick([' ', '\n']))), 1, 3), WORD_RUN),
   ([placed, tail]) => ({
-    text: [
-      ...placed.map(([words, [s, gap]]) => [...words, s.text].join(' ') + gap),
-      tail.join(' '),
-    ].join(''),
+    text: [...placed.map(([words, [s, gap]]) => [...words, s.text].join(' ') + gap), tail.join(' ')].join(''),
     secrets: placed.map(([, [s]]) => s),
   }),
 );
@@ -182,13 +168,7 @@ const TWINS = oneOf(KINDS.map((kind) => map(both(kind, kind), ([a, b]) => `${a.t
 const SOUP: Gen<string> = map(
   arr(
     both(
-      oneOf([
-        pick(WORDS),
-        map(oneOf(KINDS), (s) => s.text),
-        TWINS,
-        pick(ORDINARY_CONFIG_LINES),
-        pick(LOOSE_PIECES),
-      ]),
+      oneOf([pick(WORDS), map(oneOf(KINDS), (s) => s.text), TWINS, pick(ORDINARY_CONFIG_LINES), pick(LOOSE_PIECES)]),
       pick(['', ' ', '\n', '/']),
     ),
     0,
@@ -246,9 +226,8 @@ describe('secret scrubbing properties', () => {
   it('sentences of ordinary words and ordinary config lines come back unchanged', async () => {
     // A sentence ends in a full stop, so a word never runs on into the config line under it.
     const sentence = map(arr(pick(WORDS), 1, 8), (words) => `${words.join(' ')}.`);
-    const benign = map(
-      arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8),
-      (lines) => lines.join('\n'),
+    const benign = map(arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8), (lines) =>
+      lines.join('\n'),
     );
     await forAll(0xbe9, 400, benign, (text) => {
       expect(redactSecretsStrict(text)).toBe(text);
@@ -270,9 +249,7 @@ describe('secret scrubbing properties', () => {
   HYPHEN_ENDED.forEach(({ name, key }, index) => {
     it(`a ${name} that ends in hyphens is scrubbed whole`, async () => {
       await forAll(0x600 + index, 200, both(WORD_RUN, key), ([words, text]) => {
-        expect(redactSecretsStrict([...words, text, 'end'].join(' '))).toBe(
-          [...words, '[REDACTED]', 'end'].join(' '),
-        );
+        expect(redactSecretsStrict([...words, text, 'end'].join(' '))).toBe([...words, '[REDACTED]', 'end'].join(' '));
       });
     });
   });

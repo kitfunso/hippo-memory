@@ -45,9 +45,7 @@ describe('hippo audit list', () => {
     vi.stubEnv('HIPPO_HOME', home);
     await hippo('init', '--global');
     const list = (limit: string) =>
-      runInProcess(() =>
-        runCli(['node', 'hippo', 'audit', 'list', '--json', '--global', '--limit', limit]),
-      );
+      runInProcess(() => runCli(['node', 'hippo', 'audit', 'list', '--json', '--global', '--limit', limit]));
 
     for (const ok of ['5000', '10000']) expect((await list(ok)).status, ok).toBe(0);
     const over = await list('10001');

@@ -20,11 +20,7 @@ let root = '';
 let store = '';
 
 function seeded(content: string, id: string): MemoryEntry {
-  return {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    id,
-    strength: 1,
-  };
+  return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), id, strength: 1 };
 }
 
 beforeEach(() => {
@@ -33,14 +29,8 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
   initTestStore(store);
-  writeEntry(
-    store,
-    seeded('the deploy pipeline uses blue green rollout for the api', 'mem_eval_deploy'),
-  );
-  writeEntry(
-    store,
-    seeded('billing service freezes deploys every friday afternoon', 'mem_eval_billing'),
-  );
+  writeEntry(store, seeded('the deploy pipeline uses blue green rollout for the api', 'mem_eval_deploy'));
+  writeEntry(store, seeded('billing service freezes deploys every friday afternoon', 'mem_eval_billing'));
   writeEntry(store, seeded('lunch options near the office include a noodle bar', 'mem_eval_lunch'));
 });
 
@@ -68,16 +58,9 @@ describe('hippo eval output (in process)', () => {
     const transcript: string[] = [];
     const step = async (label: string, corpus: string | null, flags: Flags = {}): Promise<void> => {
       const r = await runInProcess(() =>
-        handleEval({
-          hippoRoot: store,
-          tenantId: 'default',
-          args: corpus === null ? [] : [corpus],
-          flags,
-        }),
+        handleEval({ hippoRoot: store, tenantId: 'default', args: corpus === null ? [] : [corpus], flags }),
       );
-      transcript.push(
-        `$ eval ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`,
-      );
+      transcript.push(`$ eval ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
     const corpus = join(root, 'corpus.json');
     writeFileSync(
@@ -85,11 +68,7 @@ describe('hippo eval output (in process)', () => {
       JSON.stringify({
         cases: [
           { id: 'deploy', query: 'deploy pipeline rollout', expectedIds: ['mem_eval_deploy'] },
-          {
-            id: 'billing',
-            query: 'billing friday',
-            expectedIds: ['mem_eval_billing', 'mem_eval_missing'],
-          },
+          { id: 'billing', query: 'billing friday', expectedIds: ['mem_eval_billing', 'mem_eval_missing'] },
           { id: 'miss', query: 'quantum chromodynamics', expectedIds: ['mem_eval_lunch'] },
         ],
       }),
@@ -127,30 +106,21 @@ describe('hippo eval output (in process)', () => {
     const out = join(root, 'out', 'boot.json');
     await step('--bootstrap --out', null, { bootstrap: true, out });
     transcript.push(`boot.json:\n${readFileSync(out, 'utf8')}`);
-    await step('--suite', null, {
-      suite: true,
-      'save-baseline': true,
-      baseline: join(root, 'suite', 'base.json'),
-    });
+    await step('--suite', null, { suite: true, 'save-baseline': true, baseline: join(root, 'suite', 'base.json') });
     await step('--suite (with baseline) --json', null, {
       suite: true,
       json: true,
       baseline: join(root, 'suite', 'base.json'),
     });
     writeFileSync(join(root, 'suite', 'base.json'), 'garbage');
-    await step('--suite (unreadable baseline)', null, {
-      suite: true,
-      baseline: join(root, 'suite', 'base.json'),
-    });
+    await step('--suite (unreadable baseline)', null, { suite: true, baseline: join(root, 'suite', 'base.json') });
 
     expect(transcript.join('\n')).toMatchSnapshot();
   });
 
   it('names the file and the missing field when the corpus or baseline has the wrong shape', async () => {
     const run = (corpus: string, flags: Flags = {}) =>
-      runInProcess(() =>
-        handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags }),
-      );
+      runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags }));
     const noQuery = join(root, 'no-query.json');
     writeFileSync(noQuery, JSON.stringify([{ id: 'a', expectedIds: ['m1'] }]));
     const corpusReply = await run(noQuery);

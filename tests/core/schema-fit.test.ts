@@ -17,12 +17,8 @@ function makePool(): MemoryEntry[] {
   return [
     createMemory('FRED cache dropped tips_10y', { tags: ['data-pipeline', 'fred', 'error'] }),
     createMemory('EIA API path changed silently', { tags: ['data-pipeline', 'eia', 'error'] }),
-    createMemory('Cache refresh reported OK but data was stale', {
-      tags: ['data-pipeline', 'staleness', 'error'],
-    }),
-    createMemory('Walk-forward Sharpe overestimates by 50%', {
-      tags: ['quant', 'backtest', 'sharpe'],
-    }),
+    createMemory('Cache refresh reported OK but data was stale', { tags: ['data-pipeline', 'staleness', 'error'] }),
+    createMemory('Walk-forward Sharpe overestimates by 50%', { tags: ['quant', 'backtest', 'sharpe'] }),
     createMemory('Equal weight beats optimization', { tags: ['quant', 'portfolio'] }),
     createMemory('Never overwrite production files', { tags: ['production', 'rule'] }),
   ];
@@ -37,11 +33,7 @@ describe('computeSchemaFit', () => {
   it('returns high fit for content+tags matching existing patterns', () => {
     const pool = makePool();
     // New memory about data pipeline errors — fits the dominant pattern
-    const fit = computeSchemaFit(
-      'World Bank data download failed with SSL error',
-      ['data-pipeline', 'error'],
-      pool,
-    );
+    const fit = computeSchemaFit('World Bank data download failed with SSL error', ['data-pipeline', 'error'], pool);
     expect(fit).toBeGreaterThan(0.5);
   });
 
@@ -59,11 +51,7 @@ describe('computeSchemaFit', () => {
   it('tag overlap matters: shared rare tags score higher than no overlap', () => {
     const pool = makePool();
 
-    const fitWithTags = computeSchemaFit(
-      'New data source failed',
-      ['data-pipeline', 'error'],
-      pool,
-    );
+    const fitWithTags = computeSchemaFit('New data source failed', ['data-pipeline', 'error'], pool);
     const fitNoTags = computeSchemaFit('New data source failed', ['unrelated', 'novel'], pool);
 
     expect(fitWithTags).toBeGreaterThan(fitNoTags);
@@ -134,21 +122,13 @@ describe('contextReads.schemaFit', () => {
       ['another tenant', []],
     ];
     const fits = await Promise.all(
-      probes.map(([content, tags]) =>
-        sqliteStore(root).contextReads.schemaFit('default', content, tags),
-      ),
+      probes.map(([content, tags]) => sqliteStore(root).contextReads.schemaFit('default', content, tags)),
     );
     expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
     expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
     // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
-    expect(await sqliteStore(root).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(
-      0.4,
-    );
-    expect(
-      await sqliteStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', [
-        'data-pipeline',
-      ]),
-    ).toBe(0.5);
+    expect(await sqliteStore(root).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(0.4);
+    expect(await sqliteStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
   it('scores against only the newest window of rows, not the whole tenant', async () => {
@@ -182,15 +162,9 @@ describe('contextReads.schemaFit', () => {
     expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);
 
     const tags = ['oldonly', 'recent'];
-    const fit = await sqliteStore(root).contextReads.schemaFit(
-      'default',
-      'ancient ledger entry',
-      tags,
-    );
+    const fit = await sqliteStore(root).contextReads.schemaFit('default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
-    expect(fit).not.toBe(
-      computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')),
-    );
+    expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
   }, 30_000);
 });
 

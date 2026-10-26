@@ -43,43 +43,17 @@ describe('every ledger value, on rows from the real writer', () => {
     expect(cases).toHaveLength(42);
     cases.forEach(({ stage, reason }, i) => {
       const v = read(`r1-${i}`, `mem_${i}`);
-      expect([v.class, v.stage, v.cand_reason, v.reason]).toEqual([
-        'rejected',
-        stage,
-        reason,
-        reason,
-      ]);
+      expect([v.class, v.stage, v.cand_reason, v.reason]).toEqual(['rejected', stage, reason, reason]);
     });
   });
 
   it('every block state maps per the table', () => {
     const m = present();
     write(event('r2-sent', { candidates: [row(m.id)] }));
-    write(
-      event('r2-reused', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }),
-    );
-    write(
-      event('r2-mixed', {
-        blockState: 'reused-recall-sent',
-        candidates: [row(m.id, { outcome: 'reused' })],
-      }),
-    );
-    write(
-      event('r2-empty', {
-        blockState: 'empty',
-        consideredCount: 0,
-        selectedCount: 0,
-        emittedCount: 0,
-      }),
-    );
-    write(
-      event('r2-disabled', {
-        blockState: 'disabled',
-        consideredCount: 0,
-        selectedCount: 0,
-        emittedCount: 0,
-      }),
-    );
+    write(event('r2-reused', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
+    write(event('r2-mixed', { blockState: 'reused-recall-sent', candidates: [row(m.id, { outcome: 'reused' })] }));
+    write(event('r2-empty', { blockState: 'empty', consideredCount: 0, selectedCount: 0, emittedCount: 0 }));
+    write(event('r2-disabled', { blockState: 'disabled', consideredCount: 0, selectedCount: 0, emittedCount: 0 }));
     const got = ['sent', 'reused', 'mixed', 'empty', 'disabled'].map((s) => {
       const v = read(`r2-${s}`, m.id);
       return [v.class, v.reason];
@@ -95,9 +69,7 @@ describe('every ledger value, on rows from the real writer', () => {
 
   it('a context row with no target row is indeterminate context-surface, and a rejected one is rejected', () => {
     const m = present();
-    write(
-      event('r3', { eventType: 'context', surface: 'context', promptHash: null, candidates: [] }),
-    );
+    write(event('r3', { eventType: 'context', surface: 'context', promptHash: null, candidates: [] }));
     expect(read('r3', m.id)).toMatchObject({ class: 'indeterminate', reason: 'context-surface' });
     write(
       event('r3b', {
@@ -106,9 +78,7 @@ describe('every ledger value, on rows from the real writer', () => {
         promptHash: null,
         emittedCount: 0,
         rejectedCount: 1,
-        candidates: [
-          row(m.id, { outcome: 'rejected', stage: 'limit', reason: 'limit', rank: null }),
-        ],
+        candidates: [row(m.id, { outcome: 'rejected', stage: 'limit', reason: 'limit', rank: null })],
       }),
     );
     expect(read('r3b', m.id)).toMatchObject({ class: 'rejected', reason: 'limit' });
@@ -118,21 +88,11 @@ describe('every ledger value, on rows from the real writer', () => {
 describe('defensive reuse arms', () => {
   it('a compaction row between a send and a reuse leaves the reuse unconfirmed compacted-since-send', () => {
     const m = present();
-    const first = write(
-      event('r4', { emittedHash: blockHash('the block'), candidates: [row(m.id)] }),
-    );
+    const first = write(event('r4', { emittedHash: blockHash('the block'), candidates: [row(m.id)] }));
     write(
-      event('r4', {
-        eventType: 'pre-compact',
-        promptHash: null,
-        candidates: [],
-        selectedCount: 0,
-        emittedCount: 0,
-      }),
+      event('r4', { eventType: 'pre-compact', promptHash: null, candidates: [], selectedCount: 0, emittedCount: 0 }),
     );
-    const third = write(
-      event('r4', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }),
-    );
+    const third = write(event('r4', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
     const v = read('r4', m.id);
     expect(v.notes.some((n: string) => n.startsWith('pre-compact:'))).toBe(true);
     expect([v.turns.map((t) => t.event_id), v.turns[1].why, v.turns[1].delivery]).toEqual([
@@ -164,22 +124,14 @@ describe('defensive reuse arms', () => {
       }),
     );
     const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
-    const rows = check
-      .prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id')
-      .all();
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
     check.close();
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [a, 1, null],
       [b, null, a],
     ]);
-    const v = read('r5', m.id, {
-      transcript: transcript([{ prompt: 'one prompt fired twice', attach: block }]),
-    });
-    expect([v.class, v.turns[0].duplicates, v.turns[0].delivery]).toEqual([
-      'application-unknown',
-      [b],
-      'confirmed',
-    ]);
+    const v = read('r5', m.id, { transcript: transcript([{ prompt: 'one prompt fired twice', attach: block }]) });
+    expect([v.class, v.turns[0].duplicates, v.turns[0].delivery]).toEqual(['application-unknown', [b], 'confirmed']);
   });
 
   it('a recall-only attachment does not confirm a pin whose duplicate row printed the full block', () => {
@@ -204,9 +156,7 @@ describe('defensive reuse arms', () => {
       }),
     );
     const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
-    const rows = check
-      .prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id')
-      .all();
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
     check.close();
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [a, 1, null],
@@ -226,15 +176,9 @@ describe('defensive reuse arms', () => {
   it('a reused turn whose latest send had another static hash has no original', () => {
     const m = present();
     write(
-      event('r6', {
-        staticHash: 'bbbbbbbbbbbbbbbb',
-        emittedHash: blockHash('old block'),
-        candidates: [row(m.id)],
-      }),
+      event('r6', { staticHash: 'bbbbbbbbbbbbbbbb', emittedHash: blockHash('old block'), candidates: [row(m.id)] }),
     );
-    const second = write(
-      event('r6', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }),
-    );
+    const second = write(event('r6', { blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
     const v = read('r6', m.id);
     expect([v.turns[1].event_id, v.turns[1].why]).toEqual([second, 'no-original']);
   });
@@ -243,15 +187,7 @@ describe('defensive reuse arms', () => {
 describe('fold edge cases', () => {
   it('only range turns fold to indeterminate, and a valid label on them is unused', () => {
     const m = present();
-    write(
-      event('r7', {
-        candidates: [],
-        selectedCount: 0,
-        emittedCount: 0,
-        rejectedCount: 3,
-        rejectedUnlisted: 3,
-      }),
-    );
+    write(event('r7', { candidates: [], selectedCount: 0, emittedCount: 0, rejectedCount: 3, rejectedUnlisted: 3 }));
     const label = {
       session_id: 'r7',
       memory_id: m.id,
@@ -321,24 +257,14 @@ describe('fold edge cases', () => {
       created: new Date(ts.getTime() - 60_000).toISOString(),
     });
     const after = read('r24', later.id);
-    expect([after.class, after.reason, after.turns[0].event_id]).toEqual([
-      'not-written',
-      'written-after',
-      id,
-    ]);
+    expect([after.class, after.reason, after.turns[0].event_id]).toEqual(['not-written', 'written-after', id]);
     const before = read('r24', earlier.id);
-    expect([before.class, before.reason, before.turns[0].event_id]).toEqual([
-      'rejected',
-      'block-disabled',
-      id,
-    ]);
+    expect([before.class, before.reason, before.turns[0].event_id]).toEqual(['rejected', 'block-disabled', id]);
   });
 
   it('a shared copy with no remember row has no presence time, so a turn with no candidate row is indeterminate presence-unknown', () => {
     const copy = {
-      ...createMemory('a lesson copied in without an audit row', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      ...createMemory('a lesson copied in without an audit row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       created: CREATED,
       source: 'shared:elsewhere:2026-10-05T00:00:00.000Z',
     };
@@ -366,10 +292,7 @@ describe('fold edge cases', () => {
     const g = path.join(dir, 'g31');
     fs.mkdirSync(g);
     initTestStore(g);
-    expect(read('r31', 'mem_nowhere', { global: g })).toMatchObject({
-      class: 'not-written',
-      reason: 'no-row',
-    });
+    expect(read('r31', 'mem_nowhere', { global: g })).toMatchObject({ class: 'not-written', reason: 'no-row' });
   });
 
   it('a reuse after a group whose sent row was a duplicate is confirmed through that group', () => {
@@ -402,9 +325,7 @@ describe('fold edge cases', () => {
       }),
     );
     const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
-    const rows = check
-      .prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id')
-      .all();
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
     check.close();
     expect(rows.map((r) => [r.id, r.turn_seq !== null, r.duplicate_of])).toEqual([
       [a, true, null],
@@ -430,10 +351,7 @@ describe('fold edge cases', () => {
       signal: 'resolved-check',
       evidence: 'a passing run',
     };
-    const never = read('r20', 'mem_never', {
-      labels: [label],
-      global: path.join(dir, 'no-global'),
-    });
+    const never = read('r20', 'mem_never', { labels: [label], global: path.join(dir, 'no-global') });
     expect([never.class, never.reason, never.notes, never.label]).toEqual([
       'not-written',
       'no-row',
@@ -448,11 +366,7 @@ describe('fold edge cases', () => {
       key: 'shared phrase',
       labels: [{ ...label, memory_id: first.id }],
     });
-    expect([amb.class, amb.reason, amb.notes]).toEqual([
-      'indeterminate',
-      'key-ambiguous',
-      ['label-unused'],
-    ]);
+    expect([amb.class, amb.reason, amb.notes]).toEqual(['indeterminate', 'key-ambiguous', ['label-unused']]);
   });
 
   it('a row from another store and its duplicate are both noted as dropped', () => {
@@ -467,13 +381,9 @@ describe('fold edge cases', () => {
         candidates: [row(m.id)],
       }),
     );
-    const b = write(
-      event('r21', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }),
-    );
+    const b = write(event('r21', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }));
     const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
-    const rows = check
-      .prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id')
-      .all();
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
     check.close();
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
       [a, 1, null],
@@ -487,18 +397,12 @@ describe('fold edge cases', () => {
     const m = present();
     const promptHash = blockHash('one prompt fired twice');
     const t = Date.parse('2026-10-02T00:00:00.000Z');
-    const a = write(
-      event('r23', { ts: new Date(t).toISOString(), promptHash, candidates: [row(m.id)] }),
-    );
-    const b = write(
-      event('r23', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }),
-    );
+    const a = write(event('r23', { ts: new Date(t).toISOString(), promptHash, candidates: [row(m.id)] }));
+    const b = write(event('r23', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }));
     const db = new DatabaseSync(path.join(dir, 'hippo.db'));
     const raw = () =>
       db
-        .prepare(
-          'SELECT id, turn_seq, duplicate_of, session_state FROM delivery_events ORDER BY id',
-        )
+        .prepare('SELECT id, turn_seq, duplicate_of, session_state FROM delivery_events ORDER BY id')
         .all()
         .map((r) => [r.id, r.turn_seq, r.duplicate_of, r.session_state]);
     expect(raw()).toEqual([
@@ -517,13 +421,7 @@ describe('fold edge cases', () => {
   it('label validation: bad fields, other sessions and duplicates', () => {
     const m = present();
     const block = 'the block that was sent';
-    write(
-      event('r11', {
-        emittedHash: blockHash(block),
-        promptHash: blockHash('a prompt'),
-        candidates: [row(m.id)],
-      }),
-    );
+    write(event('r11', { emittedHash: blockHash(block), promptHash: blockHash('a prompt'), candidates: [row(m.id)] }));
     const t = transcript([{ prompt: 'a prompt', attach: block }]);
     const ok = {
       session_id: 'r11',
@@ -534,10 +432,7 @@ describe('fold edge cases', () => {
     };
     const run = (labels: Json[]) => read('r11', m.id, { transcript: t, labels });
     for (const signal of ['failed-check', 'explicit-correction', 'revert', 'repeated-error']) {
-      expect(run([{ ...ok, signal }])).toMatchObject({
-        class: 'applied-but-wrong',
-        label: { signal },
-      });
+      expect(run([{ ...ok, signal }])).toMatchObject({ class: 'applied-but-wrong', label: { signal } });
     }
     expect(run([{ ...ok, signal: 'guess' }])).toMatchObject({
       class: 'application-unknown',
@@ -556,9 +451,7 @@ describe('fold edge cases', () => {
       notes: ['label-error:duplicate'],
       label: null,
     });
-    expect(run([{ ...ok, application: 'unknown', signal: 'unknown', evidence: '' }]).class).toBe(
-      'application-unknown',
-    );
+    expect(run([{ ...ok, application: 'unknown', signal: 'unknown', evidence: '' }]).class).toBe('application-unknown');
     expect(run([ok]).class).toBe('applied-but-wrong');
   });
 });

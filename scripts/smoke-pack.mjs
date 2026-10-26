@@ -57,10 +57,7 @@ try {
     throw new Error(`Pack smoke test expected status output, got:\n${statusOutput}`);
   }
 
-  const rememberOutput = run(
-    `${quote(hippoBin)} remember "pack smoke memory" --tag smoke`,
-    workspaceDir,
-  );
+  const rememberOutput = run(`${quote(hippoBin)} remember "pack smoke memory" --tag smoke`, workspaceDir);
   const idMatch = rememberOutput.match(/\[(mem_[^\]]+)\]/);
   if (!idMatch) {
     throw new Error(`Could not extract memory id from remember output:\n${rememberOutput}`);
@@ -69,9 +66,7 @@ try {
 
   const recallOutput = run(`${quote(hippoBin)} recall "pack smoke memory"`, workspaceDir);
   if (!recallOutput.toLowerCase().includes('pack smoke memory')) {
-    throw new Error(
-      `Pack smoke test expected recall output to include stored memory, got:\n${recallOutput}`,
-    );
+    throw new Error(`Pack smoke test expected recall output to include stored memory, got:\n${recallOutput}`);
   }
 
   const outcomeOutput = run(`${quote(hippoBin)} outcome --good`, workspaceDir);
@@ -84,31 +79,22 @@ try {
     workspaceDir,
   );
   if (!/Saved active task snapshot/i.test(snapshotSaveOutput)) {
-    throw new Error(
-      `Pack smoke test expected snapshot save confirmation, got:\n${snapshotSaveOutput}`,
-    );
+    throw new Error(`Pack smoke test expected snapshot save confirmation, got:\n${snapshotSaveOutput}`);
   }
 
   const snapshotShowOutput = run(`${quote(hippoBin)} snapshot show`, workspaceDir);
-  if (
-    !snapshotShowOutput.includes('Pack smoke task') ||
-    !snapshotShowOutput.includes('Clear the snapshot')
-  ) {
+  if (!snapshotShowOutput.includes('Pack smoke task') || !snapshotShowOutput.includes('Clear the snapshot')) {
     throw new Error(`Pack smoke test expected snapshot show output, got:\n${snapshotShowOutput}`);
   }
 
   const contextOutput = run(`${quote(hippoBin)} context --auto --budget 200`, workspaceDir);
   if (!contextOutput.includes('## Active Task Snapshot')) {
-    throw new Error(
-      `Pack smoke test expected context output to include active snapshot, got:\n${contextOutput}`,
-    );
+    throw new Error(`Pack smoke test expected context output to include active snapshot, got:\n${contextOutput}`);
   }
 
   const snapshotClearOutput = run(`${quote(hippoBin)} snapshot clear`, workspaceDir);
   if (!/Cleared active task snapshot/i.test(snapshotClearOutput)) {
-    throw new Error(
-      `Pack smoke test expected snapshot clear confirmation, got:\n${snapshotClearOutput}`,
-    );
+    throw new Error(`Pack smoke test expected snapshot clear confirmation, got:\n${snapshotClearOutput}`);
   }
 
   const conflictsOutput = run(`${quote(hippoBin)} conflicts`, workspaceDir);
@@ -118,9 +104,7 @@ try {
 
   const inspectOutput = run(`${quote(hippoBin)} inspect ${memoryId}`, workspaceDir);
   if (!inspectOutput.includes(memoryId)) {
-    throw new Error(
-      `Pack smoke test expected inspect output for ${memoryId}, got:\n${inspectOutput}`,
-    );
+    throw new Error(`Pack smoke test expected inspect output for ${memoryId}, got:\n${inspectOutput}`);
   }
 
   const forgetOutput = run(`${quote(hippoBin)} forget ${memoryId}`, workspaceDir);

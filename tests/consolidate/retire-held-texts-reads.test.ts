@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import {
-  normalizeValueForRejection,
-  rejectionDigest,
-} from '../../src/base/records/rejection-digest.js';
+import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
@@ -60,18 +57,12 @@ function seeded(perTenant: number): Seeded {
   const rows: MemoryEntry[] = TENANTS.flatMap((tenantId) =>
     Array.from({ length: perTenant }, (_, i) => {
       const sources = texts(i).map((text) => createMemory(text, { ...at, tenantId }));
-      const merged = createMemory(mergedText(HEADER, texts(i)), {
-        ...at,
-        tenantId,
-        source: 'consolidation',
-      });
+      const merged = createMemory(mergedText(HEADER, texts(i)), { ...at, tenantId, source: 'consolidation' });
       return [...sources, { ...merged, parents: sources.map((s) => s.id) }];
     }).flat(),
   );
   writeEntriesTogether(root, rows);
-  const acmeMerged = rows
-    .filter((r) => r.tenantId === 'acme' && r.source === 'consolidation')
-    .map((r) => r.id);
+  const acmeMerged = rows.filter((r) => r.tenantId === 'acme' && r.source === 'consolidation').map((r) => r.id);
   const db = openHippoDb(root);
   try {
     // acme alone rejects each row's middle text; default and globex hold the same text and keep it.
@@ -117,13 +108,10 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
 }
 
 describe("sleep's retired-text check", () => {
-  it.each([2, 40])(
-    'asks once per tenant over %i merged rows a tenant, and retires only acme rows',
-    async (n) => {
-      const { asks, retired, acmeMerged } = await sleepCountingAsks(n);
-      expect(asks).toEqual([...TENANTS]);
-      expect(retired).toEqual(acmeMerged);
-      expect(retired).toHaveLength(n);
-    },
-  );
+  it.each([2, 40])('asks once per tenant over %i merged rows a tenant, and retires only acme rows', async (n) => {
+    const { asks, retired, acmeMerged } = await sleepCountingAsks(n);
+    expect(asks).toEqual([...TENANTS]);
+    expect(retired).toEqual(acmeMerged);
+    expect(retired).toHaveLength(n);
+  });
 });

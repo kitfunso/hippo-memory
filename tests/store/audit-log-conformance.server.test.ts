@@ -10,11 +10,7 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
-import {
-  type AuditEvent,
-  type HippoStore,
-  type KeysetPosition,
-} from '../../src/entry/store-kit.js';
+import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import {
   runOnFixture,
@@ -131,15 +127,7 @@ describe('AuditLog.listAuditEvents', () => {
     const [none, one] = await conforms([list({ tenantId: 'nobody' }), list({ tenantId: 'solo' })]);
     expect(none).toEqual([]);
     expect(one).toEqual([
-      {
-        id: 21,
-        ts: at(6),
-        tenantId: 'solo',
-        actor: 'cli',
-        op: 'remember',
-        targetId: 's1',
-        metadata: { second: 6 },
-      },
+      { id: 21, ts: at(6), tenantId: 'solo', actor: 'cli', op: 'remember', targetId: 's1', metadata: { second: 6 } },
     ]);
   });
 
@@ -179,13 +167,7 @@ describe('AuditLog.listAuditEvents', () => {
       list({ since: '2020-01-01T00:00:03.001Z' }),
       list({ since: '2999-01-01T00:00:00.000Z' }),
     ]);
-    expect(got.map(ids)).toEqual([
-      [18, 16, 13, 12, 22],
-      [],
-      [...seeded, 18, 17, 16, 15],
-      [...seeded, 18, 17],
-      [],
-    ]);
+    expect(got.map(ids)).toEqual([[18, 16, 13, 12, 22], [], [...seeded, 18, 17, 16, 15], [...seeded, 18, 17], []]);
   });
 
   it('resumes below a position alone, between two rows sharing a timestamp and inside the asking tenant', async () => {
@@ -210,22 +192,12 @@ describe('AuditLog.listAuditEvents', () => {
   });
 
   it('pages a tenant by cursor with no row twice and none missed, a page boundary falling inside a shared timestamp', async () => {
-    const got = await conforms([
-      pages(9),
-      pages(4),
-      pages(1),
-      pages(50, 'bulk'),
-      pages(5, 'nobody'),
-    ]);
+    const got = await conforms([pages(9), pages(4), pages(1), pages(50, 'bulk'), pages(5, 'nobody')]);
     const idPages = got.map((read) => read.map(ids));
     expect(idPages[0]).toEqual([A_IDS.slice(0, 9), [15, 13, 12, 22]]);
     expect(idPages[1]).toEqual([A_IDS.slice(0, 4), A_IDS.slice(4, 8), A_IDS.slice(8, 12), [22]]);
     expect(idPages[2]).toEqual(A_IDS.map((id) => [id]));
-    expect(idPages[3]).toEqual([
-      BULK_IDS.slice(0, 50),
-      BULK_IDS.slice(50, 100),
-      BULK_IDS.slice(100),
-    ]);
+    expect(idPages[3]).toEqual([BULK_IDS.slice(0, 50), BULK_IDS.slice(50, 100), BULK_IDS.slice(100)]);
     expect(idPages[4]).toEqual([]);
   });
 });
@@ -270,17 +242,11 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
     const replies: Reply[] = [];
     try {
       for (const [asker, query] of SERVED) {
-        const cursor = query.endsWith('cursor=')
-          ? encodeURIComponent(replies[replies.length - 1]?.next ?? '')
-          : '';
+        const cursor = query.endsWith('cursor=') ? encodeURIComponent(replies[replies.length - 1]?.next ?? '') : '';
         const res = await fetch(`${handle.url}/v1/audit${query}${cursor}`, {
           headers: { authorization: `Bearer ${tokens[asker]}` },
         });
-        replies.push({
-          status: res.status,
-          body: await res.json(),
-          next: res.headers.get('x-next-cursor'),
-        });
+        replies.push({ status: res.status, body: await res.json(), next: res.headers.get('x-next-cursor') });
       }
     } finally {
       await handle.stop();

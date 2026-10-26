@@ -4,11 +4,7 @@ import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import {
-  failureHash,
-  failureReport,
-  lessonFromFailure,
-} from '../../src/surface/capture/failure-reading.js';
+import { failureHash, failureReport, lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -42,9 +38,7 @@ function logRows(): LogRow[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: the SELECT names exactly LogRow's columns.
-    return db
-      .prepare(`SELECT tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log`)
-      .all() as LogRow[];
+    return db.prepare(`SELECT tool, outcome, skip_rule, sig_hash, detail_hash FROM failure_log`).all() as LogRow[];
   } finally {
     closeHippoDb(db);
   }
@@ -65,25 +59,11 @@ const PAYLOADS: Array<[string, JsonValue]> = [
   ],
   [
     'an error past 200 chars',
-    {
-      session_id: 's1',
-      tool_name: 'Bash',
-      tool_input: { command: 'npm run build' },
-      error: LONG_ERROR,
-    },
+    { session_id: 's1', tool_name: 'Bash', tool_input: { command: 'npm run build' }, error: LONG_ERROR },
   ],
-  [
-    'a routine skip',
-    { session_id: 's1', tool_name: 'Grep', error: 'No matches found for pattern foo' },
-  ],
-  [
-    'an interrupt',
-    { session_id: 's1', tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true },
-  ],
-  [
-    'no tool name',
-    { session_id: 's1', error: 'ENOENT: no such file or directory, open config.json' },
-  ],
+  ['a routine skip', { session_id: 's1', tool_name: 'Grep', error: 'No matches found for pattern foo' }],
+  ['an interrupt', { session_id: 's1', tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true }],
+  ['no tool name', { session_id: 's1', error: 'ENOENT: no such file or directory, open config.json' }],
 ];
 
 describe('failureReport', () => {
@@ -111,10 +91,7 @@ describe('failureReport', () => {
     const error = `mail to a@b.co and /root/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`;
     const report = failureReport({ tool_name: 'Bash', error });
     expect(report.text).toBe(
-      `Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(
-        0,
-        200,
-      ),
+      `Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200),
     );
     // Only what leaves the machine is masked: the local reading and the detail hash are as before.
     expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toContain('a@b.co');

@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  openHippoDb,
-  getCurrentSchemaVersion,
-  getSchemaVersion,
-  closeHippoDb,
-} from '../../src/db/index.js';
+import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../../src/db/index.js';
 import { v14 } from '../../src/db/migrations/v14.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -32,10 +27,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const home = makeRoot('a3');
     const db = openHippoDb(home);
     // SAFETY: PRAGMA table_info always returns rows with these column names.
-    const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{
-      name: string;
-      dflt_value: string | null;
-    }>;
+    const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; dflt_value: string | null }>;
     const kind = cols.find((c) => c.name === 'kind');
     expect(kind?.dflt_value).toContain('distilled');
     closeHippoDb(db);
@@ -62,9 +54,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('u1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
     ).run();
-    expect(() => db.prepare(`UPDATE memories SET kind='bogus' WHERE id='u1'`).run()).toThrow(
-      /invalid kind/i,
-    );
+    expect(() => db.prepare(`UPDATE memories SET kind='bogus' WHERE id='u1'`).run()).toThrow(/invalid kind/i);
     closeHippoDb(db);
     removeAfterRequest(home);
   });
@@ -75,9 +65,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('r1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','raw')`,
     ).run();
-    expect(() => db.prepare(`DELETE FROM memories WHERE id='r1'`).run()).toThrow(
-      /raw is append-only/,
-    );
+    expect(() => db.prepare(`DELETE FROM memories WHERE id='r1'`).run()).toThrow(/raw is append-only/);
     const row = db.prepare(`SELECT id FROM memories WHERE id='r1'`).get();
     expect(row).toEqual({ id: 'r1' });
     closeHippoDb(db);
@@ -101,10 +89,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const home = makeRoot('a3');
     const db = openHippoDb(home);
     // SAFETY: PRAGMA table_info always returns rows with these column names.
-    const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{
-      name: string;
-      notnull: number;
-    }>;
+    const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; notnull: number }>;
     const c = cols.find((x) => x.name === col);
     expect(c?.notnull).toBe(0);
     closeHippoDb(db);
@@ -144,14 +129,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const cols = db.prepare(`PRAGMA table_info(raw_archive)`).all() as Array<{ name: string }>;
     const names = cols.map((c) => c.name);
     expect(names).toEqual(
-      expect.arrayContaining([
-        'id',
-        'memory_id',
-        'archived_at',
-        'reason',
-        'archived_by',
-        'payload_json',
-      ]),
+      expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']),
     );
     closeHippoDb(db);
     removeAfterRequest(home);
@@ -219,9 +197,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('upd1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
     ).run();
-    expect(() => db.prepare(`UPDATE memories SET kind=NULL WHERE id='upd1'`).run()).toThrow(
-      /invalid kind/i,
-    );
+    expect(() => db.prepare(`UPDATE memories SET kind=NULL WHERE id='upd1'`).run()).toThrow(/invalid kind/i);
     closeHippoDb(db);
     removeAfterRequest(home);
   });

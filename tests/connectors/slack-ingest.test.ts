@@ -5,8 +5,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('ingestMessage', () => {
   let root: string;
@@ -18,13 +17,7 @@ describe('ingestMessage', () => {
     const evt = {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: {
-        type: 'message' as const,
-        channel: 'C1',
-        user: 'U1',
-        text: 'hello',
-        ts: '1700.0001',
-      },
+      message: { type: 'message' as const, channel: 'C1', user: 'U1', text: 'hello', ts: '1700.0001' },
       eventId: 'Ev1',
     };
     const r1 = await ingestMessage(ctx(root), evt);
@@ -36,9 +29,7 @@ describe('ingestMessage', () => {
     expect(r2.memoryId).toBe(r1.memoryId);
 
     const entries = loadAllEntries(root, 'default');
-    const slackEntries = entries.filter(
-      (e) => e.source === 'slack' || e.tags.includes('source:slack'),
-    );
+    const slackEntries = entries.filter((e) => e.source === 'slack' || e.tags.includes('source:slack'));
     expect(slackEntries).toHaveLength(1);
     expect(slackEntries[0].kind).toBe('raw');
   });

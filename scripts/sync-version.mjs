@@ -17,8 +17,7 @@ const JSON_MANIFESTS = [
 for (const path of JSON_MANIFESTS) {
   // Replace in place so each file keeps its own layout; the parse catches a nested "version" listed first.
   const next = readFileSync(path, 'utf8').replace(/("version"\s*:\s*")[^"]*"/, `$1${version}"`);
-  if (JSON.parse(next).version !== version)
-    throw new Error(`${path}: top-level "version" not found`);
+  if (JSON.parse(next).version !== version) throw new Error(`${path}: top-level "version" not found`);
   writeFileSync(path, next);
 }
 

@@ -48,24 +48,19 @@ describe('E1 generator', () => {
   it('honors the registered fractions and structural invariants', () => {
     const p = generateProtocol({ seed: 1, numFacts: 50, numSessions: 10, distractorMultiple: 10 });
     // 40% updates, 10% contradictions (exact via shuffled-slice draws).
-    const updatedFacts = new Set(
-      p.memories.filter((m: any) => m.kind === 'update').map((m: any) => m.factId),
-    );
+    const updatedFacts = new Set(p.memories.filter((m: any) => m.kind === 'update').map((m: any) => m.factId));
     expect(updatedFacts.size).toBe(20);
     expect(p.memories.filter((m: any) => m.kind === 'contradiction').length).toBe(5);
     // Updates and contradictions are DISJOINT (codex P2): a contradicted fact
     // never has a version chain, so contradiction-intrusion is unconfounded.
-    const contraFacts = new Set(
-      p.memories.filter((m: any) => m.kind === 'contradiction').map((m: any) => m.factId),
-    );
+    const contraFacts = new Set(p.memories.filter((m: any) => m.kind === 'contradiction').map((m: any) => m.factId));
     for (const cf of contraFacts) expect(updatedFacts.has(cf)).toBe(false);
     // Hard-negative pool >= 10x facts.
     expect(p.meta.counts.distractors).toBeGreaterThanOrEqual(500);
     // Version timelines strictly ordered; updates strictly after v1.
     for (const probe of p.probes) {
       const sessions = probe.versionTimeline.map((s: any) => s.session);
-      for (let i = 1; i < sessions.length; i++)
-        expect(sessions[i]).toBeGreaterThan(sessions[i - 1]);
+      for (let i = 1; i < sessions.length; i++) expect(sessions[i]).toBeGreaterThan(sessions[i - 1]);
     }
     // Every outcome target exists and is scheduled at/after its ingestion session.
     const memById = new Map<string, { session: number }>(p.memories.map((m: any) => [m.id, m]));
@@ -76,34 +71,26 @@ describe('E1 generator', () => {
     }
     // Traps are bad-marked; some positive outcomes exist.
     const trapIds = new Set(p.memories.filter((m: any) => m.kind === 'trap').map((m: any) => m.id));
-    expect(
-      p.outcomeSchedule.filter((o: any) => !o.good).every((o: any) => trapIds.has(o.memoryRef)),
-    ).toBe(true);
+    expect(p.outcomeSchedule.filter((o: any) => !o.good).every((o: any) => trapIds.has(o.memoryRef))).toBe(true);
     expect(p.outcomeSchedule.some((o: any) => o.good)).toBe(true);
   });
 
   it("lookalikeWindow: the default is byte-identical; 'v1' only moves distractor sessions", () => {
     const base = generateProtocol({ seed: 5, ...TINY });
-    expect(JSON.stringify(generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'all' }))).toBe(
-      JSON.stringify(base),
-    );
+    expect(JSON.stringify(generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'all' }))).toBe(JSON.stringify(base));
     const v1 = generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'v1' });
     expect(v1.meta.lookalikeWindow).toBe('v1');
     const floor = Math.floor(TINY.numSessions * 0.6);
     const strip = (p: any, keep: (m: any) => boolean) =>
       JSON.stringify(
-        p.memories
-          .filter(keep)
-          .map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })),
+        p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })),
       );
     expect(strip(v1, () => true)).toBe(strip(base, () => true));
     const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
     expect(negs).toHaveLength(TINY.numFacts * TINY.distractorMultiple);
     expect(negs.every((m: any) => m.session < floor)).toBe(true);
     // @ts-expect-error - 'junk' is deliberately outside the lookalikeWindow union to reach the runtime validation
-    expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(
-      /lookalikeWindow/,
-    );
+    expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
   });
 });
 
@@ -118,9 +105,7 @@ describe('E1 driver', () => {
       // Every created timestamp lies within the protocol's simulated range -
       // nothing stamped with the real 2026 clock (rev #8 invariant).
       for (const e of entries) {
-        expect(Date.parse(e.created)).toBeGreaterThanOrEqual(
-          Date.parse('2025-01-06T00:00:00.000Z'),
-        );
+        expect(Date.parse(e.created)).toBeGreaterThanOrEqual(Date.parse('2025-01-06T00:00:00.000Z'));
         expect(Date.parse(e.created)).toBeLessThan(Date.parse('2025-06-01T00:00:00.000Z'));
       }
       // Scheduled retrievals strengthened SOMETHING (full arm: writes live).

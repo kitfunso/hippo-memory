@@ -48,9 +48,7 @@ describe('autoDetectContext', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(autoDetectContext(processGit)).toBe('');
-      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain(
-        'auto context: no git-derived query',
-      );
+      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('auto context: no git-derived query');
     } finally {
       stderr.mockRestore();
       vi.unstubAllEnvs();

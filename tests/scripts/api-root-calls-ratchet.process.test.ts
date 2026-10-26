@@ -8,10 +8,7 @@ const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-api-root-
 const STORE =
   'export function readThing(hippoRoot: string) { return hippoRoot; }\nexport function other(db: string) { return db; }\n';
 
-function withFixture(
-  apiSource: string,
-  body: (run: () => { status: number | null; stderr: string }) => void,
-) {
+function withFixture(apiSource: string, body: (run: () => { status: number | null; stderr: string }) => void) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-api-root-calls-'));
   const write = (p: string, text: string) => {
     mkdirSync(dirname(join(root, p)), { recursive: true });

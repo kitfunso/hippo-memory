@@ -35,11 +35,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
       infra: testInfra(),
     };
     expect(
-      await startDeliveryRecorder(ctx, {
-        stdinText: undefined,
-        runtime: 'claude-code',
-        envSessionId: undefined,
-      }),
+      await startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined }),
     ).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(
@@ -59,10 +55,7 @@ describe('startToolFailureRecorder', () => {
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot);
     initTestStore(globalRoot);
-    fs.writeFileSync(
-      path.join(globalRoot, 'config.json'),
-      JSON.stringify({ deliveryLedger: { enabled: true } }),
-    );
+    fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
     vi.stubEnv('HIPPO_HOME', globalRoot);
     const noStore = path.join(tmp, 'proj', '.hippo');
     const start = { stdinText: '{}', runtime: 'claude-code' as const, envSessionId: undefined };

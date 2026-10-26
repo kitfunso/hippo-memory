@@ -33,17 +33,11 @@ export function transcriptJsonl(entries: unknown[]): string {
 }
 
 /** Backdates the active snapshot's updated_at directly in sqlite, to test compact-resume's age gate without waiting real minutes. */
-export function backdateActiveSnapshot(
-  hippoRoot: string,
-  tenantId: string,
-  minutesAgo: number,
-): void {
+export function backdateActiveSnapshot(hippoRoot: string, tenantId: string, minutesAgo: number): void {
   const db = openHippoDb(hippoRoot);
   try {
     const at = new Date(Date.now() - minutesAgo * 60_000).toISOString();
-    db.prepare(
-      `UPDATE task_snapshots SET updated_at = ? WHERE tenant_id = ? AND status = 'active'`,
-    ).run(at, tenantId);
+    db.prepare(`UPDATE task_snapshots SET updated_at = ? WHERE tenant_id = ? AND status = 'active'`).run(at, tenantId);
   } finally {
     closeHippoDb(db);
   }

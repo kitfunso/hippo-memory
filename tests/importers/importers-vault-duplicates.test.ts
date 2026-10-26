@@ -11,14 +11,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import {
-  tmpDir,
-  vaultDir,
-  useVaultImport,
-  writeNote,
-  opts,
-  archivedRows,
-} from '../_helpers/importers-vault.js';
+import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -32,8 +25,7 @@ useVaultImport();
 //     archive EVERY matching row, not just the last one scanned.
 // ---------------------------------------------------------------------------
 
-const vaultCtx = (): FullContext =>
-  apiCtx(tmpDir, 'default', { subject: 'connector:vault', role: 'admin' });
+const vaultCtx = (): FullContext => apiCtx(tmpDir, 'default', { subject: 'connector:vault', role: 'admin' });
 
 /** Inject a SECOND live raw row sharing dup.md's artifactRef + content-hash,
  *  exactly as a concurrent importVault run would. Returns both live row ids. */
@@ -86,9 +78,7 @@ describe('importVault (t) — duplicate raw rows for one artifactRef archive ALL
     expect(second.total).toBe(0); // vault now empty
     expect(second.archived).toBe(2); // BOTH rows archived on deletion-sync
 
-    const live = loadAllEntries(tmpDir, 'default').filter(
-      (e) => e.artifactRef === 'vault:v:dup.md',
-    );
+    const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef === 'vault:v:dup.md');
     expect(live.length).toBe(0);
 
     const archived = archivedRows();
@@ -125,9 +115,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     // A real import first, so live vault rows exist to be (wrongly) archived.
     writeNote('keep.md', '# Keep\na genuine vault note worth keeping');
     expect((await importVault(vaultDir, opts({ name: 'v' }))).imported).toBe(1);
-    const before = loadAllEntries(tmpDir, 'default').filter((e) =>
-      e.artifactRef?.startsWith('vault:v:'),
-    );
+    const before = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
     expect(before.length).toBe(1);
 
     // Now point the importer at the STORE itself. This must be a no-op, NOT a
@@ -137,9 +125,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(selfImport.imported).toBe(0);
     expect(selfImport.archived).toBe(0); // the regression guard
 
-    const after = loadAllEntries(tmpDir, 'default').filter((e) =>
-      e.artifactRef?.startsWith('vault:v:'),
-    );
+    const after = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
     expect(after.length).toBe(1); // row survived
     expect(after[0].id).toBe(before[0].id);
     expect(archivedRows().length).toBe(0); // nothing archived at all
@@ -155,9 +141,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     const selfImport = await importVault(childOfStore, opts({ name: 'v' }));
     expect(selfImport.total).toBe(0);
     expect(selfImport.archived).toBe(0);
-    expect(
-      loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:')).length,
-    ).toBe(1);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:')).length).toBe(1);
     expect(archivedRows().length).toBe(0);
   });
 
@@ -181,9 +165,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
         const aliased = await importVault(link, opts({ name: 'v' }));
         expect(aliased.total).toBe(0);
         expect(aliased.archived).toBe(0); // the regression guard
-        const live = loadAllEntries(tmpDir, 'default').filter((e) =>
-          e.artifactRef?.startsWith('vault:v:'),
-        );
+        const live = loadAllEntries(tmpDir, 'default').filter((e) => e.artifactRef?.startsWith('vault:v:'));
         expect(live.length).toBe(1);
         expect(archivedRows().length).toBe(0);
       }
@@ -254,9 +236,7 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
         // Only the real note imports; the nested store's mirror file is skipped.
         expect(result.total).toBe(1);
         expect(result.imported).toBe(1);
-        const rows = loadAllEntries(hippoAlias, 'default').filter((e) =>
-          e.tags.includes('vault:v'),
-        );
+        const rows = loadAllEntries(hippoAlias, 'default').filter((e) => e.tags.includes('vault:v'));
         expect(rows.length).toBe(1);
         expect(rows[0].artifactRef).toBe('vault:v:realnote.md');
         expect(rows.some((e) => (e.artifactRef ?? '').includes('Store/'))).toBe(false);
@@ -290,9 +270,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
       /explicit vault name/,
     );
     // A blank/whitespace name is rejected the same way.
-    await expect(importVault(vaultDir, opts({ name: '   ' }))).rejects.toThrow(
-      /explicit vault name/,
-    );
+    await expect(importVault(vaultDir, opts({ name: '   ' }))).rejects.toThrow(/explicit vault name/);
   });
 
   it('re-imports an unchanged file when --scope changes (archive old + new scoped row)', async () => {
@@ -326,9 +304,9 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     await expect(importVault(vaultDir, opts({ name: 'v', scope: 'private' }))).rejects.toThrow(
       /not recognized as private/,
     );
-    await expect(
-      importVault(vaultDir, opts({ name: 'v', scope: 'private:secret' })),
-    ).rejects.toThrow(/not recognized as private/);
+    await expect(importVault(vaultDir, opts({ name: 'v', scope: 'private:secret' }))).rejects.toThrow(
+      /not recognized as private/,
+    );
     // Nothing was written by the rejected runs; the source-prefixed form is accepted.
     expect(loadAllEntries(tmpDir, 'default').length).toBe(0);
     const ok = await importVault(vaultDir, opts({ name: 'v', scope: 'vault:private:v' }));
@@ -350,9 +328,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
 
   it('re-imports an unchanged file when an extra tag is REMOVED', async () => {
     writeNote('note.md', '# Note\nstable content across the tag removal');
-    expect(
-      (await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported,
-    ).toBe(1);
+    expect((await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported).toBe(1);
     expect(loadAllEntries(tmpDir, 'default')[0].tags).toContain('campaign:q3');
 
     // Re-import the SAME bytes WITHOUT the extra tag: a subset check would skip

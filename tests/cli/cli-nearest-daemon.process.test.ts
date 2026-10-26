@@ -14,10 +14,7 @@ import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js'
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { localIndex } from '../_helpers/cli-stores.js';
-import {
-  startHashedEmbeddings,
-  type HashedEmbeddings,
-} from '../_helpers/hashed-embedding-server.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { boundPort } from '../_helpers/listen.js';
 import { makeRoot, makeStore, type MadeStore } from '../_helpers/make-root.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
@@ -33,8 +30,7 @@ const COMMANDS = [
   ['recall', QUERY, '--budget', '1500'],
   ['context', QUERY, '--budget', '1500'],
 ] as const;
-const HOP_WARN =
-  'the hippo server did not answer the nearest-vector read, so this process scans its own store';
+const HOP_WARN = 'the hippo server did not answer the nearest-vector read, so this process scans its own store';
 
 type Run = Awaited<ReturnType<typeof hippoRunAsync>>;
 
@@ -86,10 +82,7 @@ beforeAll(async () => {
     withWriteScope(db, 'seed_rows', () => {
       for (let i = 0; i < ROWS; i++) {
         const text = `${i % 9 === 0 ? 'deploy pipeline' : 'release notes'} step ${i} touches service ${i % 37}`;
-        const entry = createMemory(text, {
-          tenantId: 'default',
-          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        });
+        const entry = createMemory(text, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
         writeEntryDbOnly(db, { ...entry, originProject: PROJECT });
       }
     });
@@ -147,9 +140,7 @@ describe('hippo recall and hippo context beside a hippo serve on the same store'
     const posts: string[] = [];
     const stalled = createServer((req, res) => {
       if (req.method === 'GET' && req.url === '/health') {
-        res
-          .writeHead(200, { 'content-type': 'application/json' })
-          .end(JSON.stringify({ started_at: startedAt }));
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ started_at: startedAt }));
         return;
       }
       posts.push(`${req.method} ${req.url}`);

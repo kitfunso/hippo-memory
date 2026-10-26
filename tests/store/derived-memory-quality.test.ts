@@ -20,10 +20,7 @@ const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observ
 let root: string;
 beforeEach(() => {
   root = makeRoot('derived-quality');
-  writeFileSync(
-    join(root, 'config.json'),
-    JSON.stringify({ replay: { count: 0 }, extraction: { enabled: false } }),
-  );
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 }, extraction: { enabled: false } }));
 });
 
 describe('quality at automatic derivation boundaries', () => {
@@ -37,10 +34,7 @@ describe('quality at automatic derivation boundaries', () => {
   });
 
   it("derives from a person's rows whatever the automatic check says of the text", async () => {
-    for (const content of [
-      'bump build 78 for testflight deploy',
-      'bump build 79 for testflight deploy',
-    ]) {
+    for (const content of ['bump build 78 for testflight deploy', 'bump build 79 for testflight deploy']) {
       writeEntry(root, createMemory(content, { layer: Layer.Episodic }));
     }
     const result = await consolidate(root);
@@ -62,10 +56,7 @@ describe('quality at automatic derivation boundaries', () => {
 
   it('still derives from short memories the checks are only unsure about', async () => {
     const inputs = ['alice reviews every schema change', 'alice reviews every schema change now'];
-    expect(inputs.map((content) => assessAutomaticMemory(content).accepted)).toEqual([
-      false,
-      false,
-    ]);
+    expect(inputs.map((content) => assessAutomaticMemory(content).accepted)).toEqual([false, false]);
     for (const content of inputs) writeEntry(root, createMemory(content, captured));
     const result = await consolidate(root);
     expect(result.merged).toBe(2);
@@ -102,10 +93,7 @@ describe('quality at automatic derivation boundaries', () => {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
-          new Response(
-            JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }),
-            { status: 200 },
-          ),
+          new Response(JSON.stringify({ content: [{ text: 'Found local migration files to be' }] }), { status: 200 }),
       }),
       onError: (message) => errors.push(message),
     });

@@ -37,8 +37,7 @@ const ids = (store: string) =>
   loadAllEntries(store, 'default')
     .map((entry) => entry.id)
     .sort();
-const repairQualityOnce = (files: StoreFiles, tenantId: string) =>
-  repairStoreOnce(files, tenantId, protect);
+const repairQualityOnce = (files: StoreFiles, tenantId: string) => repairStoreOnce(files, tenantId, protect);
 function flag(store: string): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
   try {
@@ -72,25 +71,17 @@ describe('repairQualityOnce', () => {
     seed(root, CUT);
     const tenantPage = /FROM memories WHERE \(1\) AND tenant_id = \? ORDER BY created/;
     const preview = await recordStatementsAsync(
-      async () =>
-        await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', protect }),
+      async () => await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', protect }),
     );
     expect(countMatching(preview.statements, tenantPage)).toBe(1);
     const { statements } = await recordStatementsAsync(
-      async () =>
-        await repairAutomaticMemories(storeFilesOf(root), {
-          tenantId: 'default',
-          protect,
-          apply: true,
-        }),
+      async () => await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', protect, apply: true }),
     );
     const locked = statements.slice(statements.indexOf('BEGIN IMMEDIATE'));
     expect(countMatching(statements, tenantPage)).toBe(1);
     expect(statements).toContain('BEGIN IMMEDIATE');
     expect(countMatching(locked, tenantPage)).toBe(0);
-    expect(
-      countMatching(locked, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)/),
-    ).toBeGreaterThan(0);
+    expect(countMatching(locked, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)/)).toBeGreaterThan(0);
   });
 
   it('marks a clean store done without a backup', async () => {
@@ -98,10 +89,7 @@ describe('repairQualityOnce', () => {
       root,
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
-    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({
-      appliedIds: [],
-      backup: null,
-    });
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(flag(root)).toBe('1');
   });
@@ -129,10 +117,7 @@ describe('repairQualityOnce', () => {
     } finally {
       db.close();
     }
-    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({
-      supported: false,
-      appliedIds: [],
-    });
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({ supported: false, appliedIds: [] });
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
   });
@@ -171,13 +156,9 @@ describe('the upgrade runs the repair once', () => {
 
     const first = await cli('sleep', '--no-learn');
     expect(first.status).toBe(0);
-    expect(first.stdout).toContain(
-      'Set aside 1 automatic memory with a certain defect, once after the upgrade',
-    );
+    expect(first.stdout).toContain('Set aside 1 automatic memory with a certain defect, once after the upgrade');
     expect(first.stdout).toContain('Bring one back: hippo dormant restore <id>\n');
-    expect(first.stdout).toContain(
-      '  1 more looks doubtful and was kept; hippo audit repair lists them.',
-    );
+    expect(first.stdout).toContain('  1 more looks doubtful and was kept; hippo audit repair lists them.');
     expect(ids(local)).not.toContain(bad.id);
     expect(ids(local)).toContain(doubtful.id);
 
@@ -213,9 +194,7 @@ describe('the upgrade runs the repair once', () => {
   it('the daily runner cleans the global store once and names --global', async () => {
     const bad = seed(global, CUT);
     const first = await cli('daily-runner');
-    expect(first.stdout).toContain(
-      'Set aside 1 automatic memory with a certain defect, once after the upgrade',
-    );
+    expect(first.stdout).toContain('Set aside 1 automatic memory with a certain defect, once after the upgrade');
     expect(first.stdout).toContain('Bring one back: hippo dormant restore <id> --global');
     expect(ids(global)).not.toContain(bad.id);
     expect((await cli('daily-runner')).stdout).not.toContain('once after the upgrade');

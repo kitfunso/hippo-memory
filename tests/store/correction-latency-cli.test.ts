@@ -23,10 +23,7 @@ interface RunResult {
 
 // In process, so coverage sees the verb; the shape matches the spawned run it replaced.
 async function runHippo(args: string[]): Promise<RunResult> {
-  const r = await runCliAs(args, {
-    env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') },
-    cwd: tmpDir,
-  });
+  const r = await runCliAs(args, { env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') }, cwd: tmpDir });
   return { stdout: r.stdout, status: r.status ?? 1 };
 }
 
@@ -42,9 +39,7 @@ describe('hippo correction-latency CLI', () => {
     initTestStore(hippoDir);
     writeEntry(
       hippoDir,
-      createMemory('a single belief, never corrected', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
 
     const r = await runHippo(['correction-latency']);
@@ -71,10 +66,7 @@ describe('hippo correction-latency CLI', () => {
       '2026-03-15T00:00:00.000Z',
     );
     const newFact = withCreated(
-      createMemory('belief: tier is 120', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        extractedFrom: raw.id,
-      }),
+      createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id }),
       '2026-04-01T10:30:00.000Z',
     );
     oldFact.supersededBy = newFact.id;

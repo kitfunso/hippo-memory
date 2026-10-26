@@ -41,10 +41,7 @@ function writeClaudeTranscript(): string {
   const file = path.join(dir, 'session.jsonl');
   const lines = [
     { type: 'user', message: { role: 'user', content: USER_TEXT } },
-    {
-      type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Noted, I will use pnpm.' }] },
-    },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Noted, I will use pnpm.' }] } },
   ];
   fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   return file;
@@ -138,9 +135,7 @@ describe('__session-end-worker with no store in the folder', () => {
     expect(log).toContain('closed 1 active snapshot(s) for session sess-global-close');
     expect(log).toContain('wrote handoff for session sess-global-close');
     expect(loadActiveTaskSnapshot(globalRoot, 'default')).toBeNull();
-    expect(loadLatestHandoff(globalRoot, 'default', 'sess-global-close')?.taskId).toBe(
-      'billing service lockfile task',
-    );
+    expect(loadLatestHandoff(globalRoot, 'default', 'sess-global-close')?.taskId).toBe('billing service lockfile task');
   });
 
   it('with no store anywhere, exits 0, creates no store and logs the skip in a fresh log', async () => {
@@ -237,8 +232,6 @@ describe('__codex-session-end-worker with no store in the folder', () => {
     expect(status).toBe(0);
     expect(fs.existsSync(path.join(cwd, '.hippo'))).toBe(false);
     expect(fs.existsSync(globalRoot)).toBe(false);
-    expect(fs.readFileSync(logFile, 'utf8')).toContain(
-      'skip: no hippo store for this folder or globally',
-    );
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: no hippo store for this folder or globally');
   });
 });

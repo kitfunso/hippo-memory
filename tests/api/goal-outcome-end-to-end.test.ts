@@ -19,9 +19,7 @@ const savedCwd = process.cwd();
 /** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<void> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
-  const res = await runInProcess(() =>
-    runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']),
-  );
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
   expect(res.status, res.stderr).toBe(0);
 }
 
@@ -49,8 +47,7 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string): FullContext =>
-  apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;

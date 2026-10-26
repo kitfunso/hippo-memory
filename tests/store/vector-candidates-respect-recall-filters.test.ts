@@ -5,11 +5,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry, CreateMemoryOptions } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  saveEmbeddingIndex,
-  loadVectorCandidateEntries,
-  batchWriteAndDeleteInFolder,
-} from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, loadVectorCandidateEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -32,11 +28,7 @@ function seed(
 ): MemoryEntry[] {
   const entries = rows.map((r) => {
     const entry = {
-      ...createMemory(r.content, {
-        tenantId: 'default',
-        ...r.opts,
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      ...createMemory(r.content, { tenantId: 'default', ...r.opts, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       supersededBy: r.supersededBy ?? null,
     };
     if ('origin' in r) entry.originProject = r.origin;
@@ -56,20 +48,10 @@ describe('vector candidates', () => {
       { content: 'theirs', vector: QUERY, opts: { tenantId: 'other' } },
     ]);
     expect(
-      contents(
-        await loadVectorCandidateEntries(root, QUERY, {
-          tenantId: 'default',
-          includeSuperseded: false,
-        }),
-      ),
+      contents(await loadVectorCandidateEntries(root, QUERY, { tenantId: 'default', includeSuperseded: false })),
     ).toEqual(['ours']);
     expect(
-      contents(
-        await loadVectorCandidateEntries(root, QUERY, {
-          tenantId: 'other',
-          includeSuperseded: false,
-        }),
-      ),
+      contents(await loadVectorCandidateEntries(root, QUERY, { tenantId: 'other', includeSuperseded: false })),
     ).toEqual(['theirs']);
   });
 
@@ -100,19 +82,12 @@ describe('vector candidates', () => {
       scope: recallScopeFilter('slack:private:c1', 'additive'),
       includeSuperseded: false,
     };
-    expect(contents(await loadVectorCandidateEntries(root, QUERY, spec))).toEqual([
-      'requested',
-      'plain',
-    ]);
+    expect(contents(await loadVectorCandidateEntries(root, QUERY, spec))).toEqual(['requested', 'plain']);
   });
 
   it("another project's nearer rows cannot push the caller's row out of the top k", async () => {
     seed([
-      ...Array.from({ length: 20 }, (_, i) => ({
-        content: `beta ${i}`,
-        vector: QUERY,
-        origin: 'beta',
-      })),
+      ...Array.from({ length: 20 }, (_, i) => ({ content: `beta ${i}`, vector: QUERY, origin: 'beta' })),
       { content: 'no project', vector: QUERY, origin: null },
       { content: 'acme', vector: [0.6, 0.8, 0], origin: 'acme' },
       { content: 'user-global', vector: [0.5, 0.5, 0], origin: '' },
@@ -124,14 +99,9 @@ describe('vector candidates', () => {
       limit: 5,
       origin: ['acme'],
     };
-    expect(contents(await loadVectorCandidateEntries(root, QUERY, spec))).toEqual([
-      'user-global',
-      'acme',
-    ]);
+    expect(contents(await loadVectorCandidateEntries(root, QUERY, spec))).toEqual(['user-global', 'acme']);
     const unfiltered = { ...spec, origin: undefined };
-    expect(contents(await loadVectorCandidateEntries(root, QUERY, unfiltered))).not.toContain(
-      'acme',
-    );
+    expect(contents(await loadVectorCandidateEntries(root, QUERY, unfiltered))).not.toContain('acme');
   });
 
   it('skip superseded rows unless asked for them, and return nearest first', async () => {
@@ -141,20 +111,10 @@ describe('vector candidates', () => {
       { content: 'far', vector: [0.1, 0.9, 0] },
     ]);
     expect(
-      contents(
-        await loadVectorCandidateEntries(root, QUERY, {
-          tenantId: 'default',
-          includeSuperseded: false,
-        }),
-      ),
+      contents(await loadVectorCandidateEntries(root, QUERY, { tenantId: 'default', includeSuperseded: false })),
     ).toEqual(['near', 'far']);
     expect(
-      contents(
-        await loadVectorCandidateEntries(root, QUERY, {
-          tenantId: 'default',
-          includeSuperseded: true,
-        }),
-      ),
+      contents(await loadVectorCandidateEntries(root, QUERY, { tenantId: 'default', includeSuperseded: true })),
     ).toEqual(['old', 'near', 'far']);
   });
 });

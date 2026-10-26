@@ -3,12 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
-import {
-  closeHippoDb,
-  getHippoDbPath,
-  openHippoDb,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { stageWinner } from '../_helpers/race-winner.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -44,9 +39,7 @@ function bulkStore(n: number): string {
   try {
     // SAFETY: pragma_table_info yields one row per column with its name.
     const columns = (
-      db
-        .prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`)
-        .all() as Array<{ name: string }>
+      db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>
     ).map((c) => c.name);
     db.exec(`
       WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < ${n - 1})
@@ -63,9 +56,7 @@ function refsOf(root: string, id: string): string | null {
   try {
     // SAFETY: SELECT of one nullable TEXT column.
     return (
-      db.prepare(`SELECT conflicts_with_json AS refs FROM memories WHERE id = ?`).get(id) as {
-        refs: string | null;
-      }
+      db.prepare(`SELECT conflicts_with_json AS refs FROM memories WHERE id = ?`).get(id) as { refs: string | null }
     ).refs;
   } finally {
     closeHippoDb(db);
@@ -89,10 +80,7 @@ describe('conflict refresh', () => {
     let touchedUnderLock = 0;
     const { exec } = DatabaseSync.prototype;
     const { run, get, all, iterate } = StatementSync.prototype;
-    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
-      this: DatabaseSyncLike,
-      sql: string,
-    ) {
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       exec.call(this, sql);
       if (sql === 'BEGIN IMMEDIATE') {
         locked = true;
@@ -103,24 +91,15 @@ describe('conflict refresh', () => {
         commits++;
       }
     });
-    vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (
-      this: StatementProto,
-      ...params: unknown[]
-    ) {
+    vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       if (locked) touchedUnderLock++;
       return run.apply(this, params);
     });
-    vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (
-      this: StatementProto,
-      ...params: unknown[]
-    ) {
+    vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       if (locked) touchedUnderLock++;
       return get.apply(this, params);
     });
-    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (
-      this: StatementProto,
-      ...params: unknown[]
-    ) {
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       const rows = all.apply(this, params);
       if (locked) touchedUnderLock += rows.length;
       return rows;
@@ -156,10 +135,7 @@ describe('conflict refresh', () => {
     replaceDetectedConflicts(root, [pair(1, 2), pair(3, 4)], NOW);
     let rowsRead = 0;
     const { all } = StatementSync.prototype;
-    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (
-      this: StatementProto,
-      ...params: unknown[]
-    ) {
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       const rows = all.apply(this, params);
       rowsRead += rows.length;
       return rows;

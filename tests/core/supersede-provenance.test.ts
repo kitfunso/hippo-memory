@@ -25,10 +25,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'supersede-provenance-test', role: 'admin' });
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const entry = {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    ...extra,
-  };
+  const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
   writeEntry(root, entry);
   return entry;
 }
@@ -50,14 +47,10 @@ afterEach(() => {
 
 describe('supersede keeps provenance', () => {
   it('keeps a project row in its project when it is superseded in the global store', async () => {
-    const old = seed(
-      globalStore,
-      'the billing service retries a failed charge three times before it pages',
-      {
-        originProject: 'proj-a',
-        sourceSessionId: 'sess-old',
-      },
-    );
+    const old = seed(globalStore, 'the billing service retries a failed charge three times before it pages', {
+      originProject: 'proj-a',
+      sourceSessionId: 'sess-old',
+    });
 
     const { newId } = await supersede(
       ctxFor(globalStore),
@@ -72,13 +65,9 @@ describe('supersede keeps provenance', () => {
   });
 
   it('keeps a user-global row user-global in a project store', async () => {
-    const old = seed(
-      projectStore,
-      'the release checklist lives in the wiki under the platform section',
-      {
-        originProject: '',
-      },
-    );
+    const old = seed(projectStore, 'the release checklist lives in the wiki under the platform section', {
+      originProject: '',
+    });
 
     const { newId } = await supersede(
       ctxFor(projectStore),
@@ -92,13 +81,9 @@ describe('supersede keeps provenance', () => {
   });
 
   it('lets the store stamp the origin of a legacy row that has none', async () => {
-    const old = seed(
-      projectStore,
-      'the nightly export job writes its files to the shared archive bucket',
-      {
-        originProject: null,
-      },
-    );
+    const old = seed(projectStore, 'the nightly export job writes its files to the shared archive bucket', {
+      originProject: null,
+    });
     expect(readEntry(projectStore, old.id)?.originProject).toBeNull();
 
     const { newId } = await supersede(
@@ -153,31 +138,19 @@ describe('createSuccessor', () => {
 
   it('keeps a user-global origin', () => {
     expect(
-      createSuccessor(
-        oldRow({ originProject: '' }),
-        'the deploy pipeline now signs twice',
-        opts,
-        evalNow(),
-      ).originProject,
+      createSuccessor(oldRow({ originProject: '' }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBe('');
   });
 
   it('leaves a legacy null or unset origin unset so the store stamps it', () => {
     expect(
-      createSuccessor(
-        oldRow({ originProject: null }),
-        'the deploy pipeline now signs twice',
-        opts,
-        evalNow(),
-      ).originProject,
+      createSuccessor(oldRow({ originProject: null }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBeUndefined();
     expect(
-      createSuccessor(
-        oldRow({ originProject: undefined }),
-        'the deploy pipeline now signs twice',
-        opts,
-        evalNow(),
-      ).originProject,
+      createSuccessor(oldRow({ originProject: undefined }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBeUndefined();
   });
 
@@ -203,12 +176,8 @@ describe('createSuccessor', () => {
 
   it('takes the tenant from the options', () => {
     expect(
-      createSuccessor(
-        oldRow(),
-        'the deploy pipeline now signs twice',
-        { ...opts, tenantId: 'tenant-b' },
-        evalNow(),
-      ).tenantId,
+      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }, evalNow())
+        .tenantId,
     ).toBe('tenant-b');
   });
 });

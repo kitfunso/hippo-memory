@@ -36,12 +36,7 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
-import {
-  saveCustomerNote,
-  saveDecision,
-  savePolicy,
-  saveProjectBrief,
-} from '../../src/entry/testing.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -160,9 +155,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
       90,
     );
     const plain = aged(
-      createMemory('the billing sandbox nightly job runs at 02:00 UTC', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('the billing sandbox nightly job runs at 02:00 UTC', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       90,
     );
     writeEntry(home, secret);
@@ -194,9 +187,7 @@ describe('a faded credential-tagged memory', () => {
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(0);
     expect(result.removedIds).toEqual([tagged.id]);
-    expect(
-      detailLines(result).some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `)),
-    ).toBe(true);
+    expect(detailLines(result).some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(loadAllEntries(home, 'default')).toEqual([]);
   });
@@ -274,19 +265,14 @@ describe('dormant retention', () => {
       const other = openHippoDb(home);
       try {
         // SAFETY: the seeded table holds rows, and the SELECT returns the single id column.
-        kept = (other.prepare(`SELECT id FROM dormant_memories LIMIT 1`).get() as { id: string })
-          .id;
-        other
-          .prepare(`UPDATE dormant_memories SET dormant_at = ? WHERE id = ?`)
-          .run(new Date().toISOString(), kept);
+        kept = (other.prepare(`SELECT id FROM dormant_memories LIMIT 1`).get() as { id: string }).id;
+        other.prepare(`UPDATE dormant_memories SET dormant_at = ? WHERE id = ?`).run(new Date().toISOString(), kept);
       } finally {
         closeHippoDb(other);
       }
     };
     const spy = vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
-    const result = await consolidate(home, { now: FIXED_NOW, budget: { holdMs: 0 } }).finally(() =>
-      spy.mockRestore(),
-    );
+    const result = await consolidate(home, { now: FIXED_NOW, budget: { holdMs: 0 } }).finally(() => spy.mockRestore());
     expect(result.dormantExpired).toBe(4);
     expect(pauses).toBe(4);
     expect(ids).toContain(kept);
@@ -294,11 +280,7 @@ describe('dormant retention', () => {
   });
 
   it('still ages out old dormant memories after the feature is turned off', async () => {
-    const { home } = storeWithOldDormant(
-      'dormant-off-expire',
-      { dormant: { enabled: false } },
-      400,
-    );
+    const { home } = storeWithOldDormant('dormant-off-expire', { dormant: { enabled: false } }, 400);
     expect((await consolidate(home, { now: FIXED_NOW })).dormantExpired).toBe(1);
   });
 });
@@ -323,9 +305,7 @@ describe('with dormant memories enabled', () => {
 
     expect(result.removed).toBe(0);
     expect(result.dormant).toBe(1);
-    expect(detailLines(result).some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(
-      true,
-    );
+    expect(detailLines(result).some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(true);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([fresh.id]);
     // The markdown mirror goes too, so a bootstrap of an empty table
     // cannot re-import the row as active.
@@ -343,9 +323,7 @@ describe('with dormant memories enabled', () => {
   it('a dormant memory never reaches recall or context', async () => {
     const home = makeRoot('dormant-recall', { config: DORMANT_ON });
     const faded = aged(
-      createMemory('zanzibar gateway requires the legacy auth header', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       90,
     );
     writeEntry(home, faded);
@@ -377,10 +355,7 @@ describe('with dormant memories enabled', () => {
   it('pinned memories and raw receipts never go dormant', async () => {
     const home = makeRoot('dormant-exempt', { config: DORMANT_ON });
     const pinned = aged(
-      createMemory('never force-push to master', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        pinned: true,
-      }),
+      createMemory('never force-push to master', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }),
       400,
     );
     const receipt = aged(
@@ -418,9 +393,7 @@ describe('with dormant memories enabled', () => {
     const result = await consolidate(home, { now: FIXED_NOW, dryRun: true });
 
     expect(result.dormant).toBe(1);
-    expect(
-      detailLines(result).some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `)),
-    ).toBe(true);
+    expect(detailLines(result).some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([faded.id]);
     expect(countDormantRows(home)).toBe(0);
   });
@@ -464,16 +437,10 @@ describe('listing, restoring and forgetting dormant memories', () => {
       'coverage stays at 100% for the parser',
       'the env var is named HIPPO_TENANT',
     ]);
-    expect(
-      (await api.dormantList(ctxFor(home), { query: 'staging vpn' })).map((m) => m.id),
-    ).toEqual([ids[0]]);
+    expect((await api.dormantList(ctxFor(home), { query: 'staging vpn' })).map((m) => m.id)).toEqual([ids[0]]);
     expect(await api.dormantList(ctxFor(home), { query: 'STAGING' })).toHaveLength(2);
-    expect((await api.dormantList(ctxFor(home), { query: '100%' })).map((m) => m.id)).toEqual([
-      ids[2],
-    ]);
-    expect(
-      (await api.dormantList(ctxFor(home), { query: 'hippo_tenant' })).map((m) => m.id),
-    ).toEqual([ids[3]]);
+    expect((await api.dormantList(ctxFor(home), { query: '100%' })).map((m) => m.id)).toEqual([ids[2]]);
+    expect((await api.dormantList(ctxFor(home), { query: 'hippo_tenant' })).map((m) => m.id)).toEqual([ids[3]]);
     // As LIKE wildcards these would match "staging database" and
     // "to Staging need"; taken literally they match nothing.
     expect(await api.dormantList(ctxFor(home), { query: 'g_d' })).toEqual([]);
@@ -494,9 +461,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(
-      (await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map(
-        (r) => r.id,
-      ),
+      (await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id),
     ).toContain(ids[0]);
 
     const next = await consolidate(home, { now: FIXED_NOW });
@@ -521,15 +486,9 @@ describe('listing, restoring and forgetting dormant memories', () => {
   });
 
   it("restore refuses an unknown id, another tenant's memory, and an id that is already active", async () => {
-    const { home, ids } = await storeWithDormant('dormant-guard', [
-      'zanzibar gateway requires the legacy auth header',
-    ]);
-    await expect(api.dormantRestore(ctxFor(home), 'mem_doesnotexist')).rejects.toThrow(
-      /dormant memory not found/,
-    );
-    await expect(api.dormantRestore(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(
-      /dormant memory not found/,
-    );
+    const { home, ids } = await storeWithDormant('dormant-guard', ['zanzibar gateway requires the legacy auth header']);
+    await expect(api.dormantRestore(ctxFor(home), 'mem_doesnotexist')).rejects.toThrow(/dormant memory not found/);
+    await expect(api.dormantRestore(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(await api.dormantList(ctxFor(home, 'tenant-b'))).toEqual([]);
 
     // Same id written back as active (e.g. by an old binary): restore must
@@ -553,9 +512,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     });
     // A rejected value may not linger in dormant storage either.
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
-    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(
-      /dormant memory not found/,
-    );
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
   });
 
   it('restore honours a tombstone that skipped the purge, and keeps the dormant copy in place', async () => {
@@ -580,9 +537,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
     await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(RejectedValueError);
     expect((await api.dormantList(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).not.toContain(ids[0]);
-    expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([
-      [ids[0], 'test'],
-    ]);
+    expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
   });
 
   it("another person's dormant personal row reads as missing to every call, and its owner keeps it", async () => {
@@ -595,35 +550,23 @@ describe('listing, restoring and forgetting dormant memories', () => {
       90,
     );
     const team = aged(
-      createMemory('the quillfen gateway serves the whole team', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('the quillfen gateway serves the whole team', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       90,
     );
     writeEntry(home, mine);
     writeEntry(home, team);
     await consolidate(home, { now: FIXED_NOW });
     const as = (owner: string | undefined, role: 'admin' | 'member'): FullContext =>
-      apiCtx(
-        home,
-        'default',
-        owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner },
-      );
+      apiCtx(home, 'default', owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner });
     for (const ctx of [as('oid-b', 'member'), as(undefined, 'admin'), as('oid-b', 'admin')]) {
       expect((await api.dormantList(ctx)).map((m) => m.id)).toEqual([team.id]);
       expect(await api.isDormant(ctx, team.id)).toBe(true);
       expect(await api.isDormant(ctx, mine.id)).toBe(false);
-      await expect(api.dormantRestore(ctx, mine.id)).rejects.toThrow(
-        `dormant memory not found: ${mine.id}`,
-      );
-      await expect(api.dormantForget(ctx, mine.id)).rejects.toThrow(
-        `dormant memory not found: ${mine.id}`,
-      );
+      await expect(api.dormantRestore(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
+      await expect(api.dormantForget(ctx, mine.id)).rejects.toThrow(`dormant memory not found: ${mine.id}`);
     }
     const owner = as('oid-a', 'member');
-    expect((await api.dormantList(owner)).map((m) => m.id).sort()).toEqual(
-      [mine.id, team.id].sort(),
-    );
+    expect((await api.dormantList(owner)).map((m) => m.id).sort()).toEqual([mine.id, team.id].sort());
     expect(await api.isDormant(owner, mine.id)).toBe(true);
     expect((await api.dormantRestore(owner, mine.id)).scope).toBe('personal:private:oid-a');
   });
@@ -632,14 +575,10 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const { home, ids } = await storeWithDormant('dormant-forget', [
       'zanzibar gateway requires the legacy auth header',
     ]);
-    await expect(api.dormantForget(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(
-      /dormant memory not found/,
-    );
+    await expect(api.dormantForget(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
     await api.dormantForget(ctxFor(home), ids[0]);
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
-    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(
-      /dormant memory not found/,
-    );
+    await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([
       [ids[0], 'test', { dormant: true }],
     ]);
@@ -653,9 +592,7 @@ function linkedRows(home: string, table: string, memoryId: string): number {
   const db = openHippoDb(home);
   try {
     // SAFETY: row's shape matches the single aliased COUNT column in the SELECT.
-    const row = db
-      .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE memory_id = ?`)
-      .get(memoryId) as { n: number };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE memory_id = ?`).get(memoryId) as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -732,10 +669,7 @@ const objectSavers: [string, string, (home: string) => Promise<{ memoryId: strin
     'prediction',
     'predictions',
     async (home) =>
-      savePrediction(home, 'default', {
-        classTag: 'migration-effort',
-        claimText: 'the migration takes two days',
-      }),
+      savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' }),
   ],
 ];
 
@@ -764,9 +698,7 @@ describe('memories that back a first-class object', () => {
   it('sleep stops, retiring nothing, when it cannot read an object table', async () => {
     const home = makeRoot('dormant-unreadable', { config: {} });
     const faded = aged(
-      createMemory('the old staging hostname was build-02', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('the old staging hostname was build-02', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       3000,
     );
     writeEntry(home, faded);
@@ -791,9 +723,7 @@ describe('memories that back a first-class object', () => {
         WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`)
         .all() as { name: string }[];
       // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
-      const objectTables = rows
-        .map((r) => r.name)
-        .filter((t) => t !== 'entities' && t !== 'relations');
+      const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
     } finally {
       closeHippoDb(db);
@@ -805,17 +735,13 @@ describe('hippo dormant CLI', () => {
   // In process, so coverage sees the dormant verb; out is stdout, plus stderr on a failure, as the spawned run gave.
   async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; status: number }> {
     const r = await runCliAs(args, { cwd, env: { ...process.env } });
-    return r.status === 0
-      ? { out: r.stdout, status: 0 }
-      : { out: `${r.stdout}${r.stderr}`, status: r.status ?? 1 };
+    return r.status === 0 ? { out: r.stdout, status: 0 } : { out: `${r.stdout}${r.stderr}`, status: r.status ?? 1 };
   }
 
   it('lists, restores and forgets dormant memories', async () => {
     const { base: workspace, root: hippoRoot } = makeStore('dormant-cli', { config: DORMANT_ON });
     const keep = aged(
-      createMemory('zanzibar gateway requires the legacy auth header', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
+      createMemory('zanzibar gateway requires the legacy auth header', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       90,
     );
     const drop = aged(
@@ -854,9 +780,7 @@ describe('hippo dormant CLI', () => {
     writeEntry(
       hippoRoot,
       aged(
-        createMemory('a third faded memory about the retired cron host', {
-          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        }),
+        createMemory('a third faded memory about the retired cron host', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
         90,
       ),
     );

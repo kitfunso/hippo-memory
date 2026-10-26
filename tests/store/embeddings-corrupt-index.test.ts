@@ -72,9 +72,7 @@ describe('corrupt embeddings.json at import', () => {
     expect(fs.readFileSync(path.join(root, aside[0]!), 'utf8')).toBe(corrupt);
     expect(fs.existsSync(fp)).toBe(false);
     expect(Object.keys(loadEmbeddingIndex(root)).sort()).toEqual([first, second, third].sort());
-    const logged = stderrSpy.mock.calls
-      .map((c) => String(c[0]))
-      .filter((l) => l.includes('embeddings.json'));
+    const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('embeddings.json'));
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('[hippo] error:');
   });

@@ -9,12 +9,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  replaceDetectedConflicts,
-  listMemoryConflicts,
-  readEntry,
-  writeEntry,
-} from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -69,16 +64,9 @@ function supersedeB({ b }: Pair): void {
   writeEntry(root, { ...b, supersededBy: successor.id, kind: 'superseded' });
 }
 
-async function mcpResolve(
-  args: Record<string, string | number | boolean>,
-): Promise<McpResponse | null> {
+async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
   return handleMcpRequest(
-    {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name: 'hippo_resolve', arguments: args },
-    },
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } },
     {
       hippoRoot: root,
       tenantId: TENANT,
@@ -98,43 +86,35 @@ function replyText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-function cliResolve(
-  conflictId: number,
-  flags: Record<string, string | boolean>,
-): ReturnType<typeof runInProcess> {
-  return runInProcess(() =>
-    handleResolve({ hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }),
-  );
+function cliResolve(conflictId: number, flags: Record<string, string | boolean>): ReturnType<typeof runInProcess> {
+  return runInProcess(() => handleResolve({ hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }));
 }
 
-const openIds = async (): Promise<number[]> =>
-  (await listMemoryConflicts(root, 'open', TENANT)).map((c) => c.id);
+const openIds = async (): Promise<number[]> => (await listMemoryConflicts(root, 'open', TENANT)).map((c) => c.id);
 
 describe('MCP hippo_resolve', () => {
   it('keeps its reply for a valid resolve', async () => {
     const pair = await seedPair();
     const reply = await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id });
-    expect(replyText(reply)).toBe(
-      `Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened ${pair.b.id}`,
-    );
+    expect(replyText(reply)).toBe(`Resolved conflict ${pair.conflictId}: kept ${pair.a.id}, weakened ${pair.b.id}`);
     expect(await openIds()).toEqual([]);
   });
 
   it('refuses a pair whose member is superseded, as the dashboard does', async () => {
     const pair = await seedPair();
     supersedeB(pair);
-    expect(
-      replyText(await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id, forget: true })),
-    ).toBe(NOT_RESOLVED);
+    expect(replyText(await mcpResolve({ conflict_id: pair.conflictId, keep: pair.a.id, forget: true }))).toBe(
+      NOT_RESOLVED,
+    );
     expect(await openIds()).toEqual([pair.conflictId]);
     expect(readEntry(root, pair.b.id, TENANT)?.halfLifeDays).toBe(pair.b.halfLifeDays);
   });
 
   it('refuses a keep id outside the pair with a message naming the pair', async () => {
     const pair = await seedPair();
-    await expect(
-      mcpResolve({ conflict_id: pair.conflictId, keep: 'mem_elsewhere' }),
-    ).rejects.toThrow(`keep must be one of the two memories in conflict ${pair.conflictId}`);
+    await expect(mcpResolve({ conflict_id: pair.conflictId, keep: 'mem_elsewhere' })).rejects.toThrow(
+      `keep must be one of the two memories in conflict ${pair.conflictId}`,
+    );
     expect(await openIds()).toEqual([pair.conflictId]);
   });
 });
@@ -152,9 +132,7 @@ describe('CLI hippo resolve', () => {
   it('refuses a pair whose member is superseded, as the dashboard does', async () => {
     const pair = await seedPair();
     supersedeB(pair);
-    await expect(cliResolve(pair.conflictId, { keep: pair.a.id, forget: true })).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(cliResolve(pair.conflictId, { keep: pair.a.id, forget: true })).rejects.toThrow(NotFoundError);
     expect(await openIds()).toEqual([pair.conflictId]);
     expect(readEntry(root, pair.b.id, TENANT)).not.toBeNull();
   });
@@ -180,16 +158,12 @@ describe('conflictResolve', () => {
 
   it("answers a resolved conflict with 409 and another tenant's with 404", async () => {
     const pair = await seedPair();
-    await expect(
-      conflictResolve(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id }),
-    ).rejects.toThrow(NotFoundError);
+    await expect(conflictResolve(ctxIn('acme'), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(NotFoundError);
     expect(await conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).toEqual({
       conflictId: pair.conflictId,
       keptId: pair.a.id,
       loserId: pair.b.id,
     });
-    await expect(
-      conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id }),
-    ).rejects.toThrow(ConflictError);
+    await expect(conflictResolve(ctxIn(TENANT), pair.conflictId, { keepId: pair.a.id })).rejects.toThrow(ConflictError);
   });
 });
