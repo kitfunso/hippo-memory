@@ -24,13 +24,13 @@ One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 - `check-layers.mjs`: a src file imports only from its own layer or a lower one (layers.json).
 - `check-lint-ratchet.mjs`: oxlint hits per rule may fall, never rise.
 - `check-manifest-versions.mjs`: every JSON manifest declares the version about to be published.
-- `check-migration-line.mjs`: the migration line holds the versions next/3.0 skips.
+- `check-migration-line.mjs`: each migration version is the previous plus one, except the gaps listed for next/3.0.
 - `check-open-core.mjs`: a change adds no commercial-only file or identifier to the MIT repo.
 - `check-openclaw-dist.mjs`: each `.ts` openclaw.extensions entry has a compiled dist twin Node imports as ESM.
 - `check-positional-params.mjs`: no declaration in src takes six or more positional parameters.
 - `check-process-exit.mjs`: src gains no process.exit call outside the list.
 - `check-request-path-timing.mjs`: request-path work at 10,000 memories per store stays inside its time budget.
-- `check-roadmap.mjs`: ROADMAP.md holds well-formed initiatives and valid anchors.
+- `check-roadmap.mjs`: ROADMAP.md holds unique initiative ids, valid references and local anchors.
 - `check-row-casts.mjs`: src and tests cast no SQLite read to a row shape nothing proves.
 - `check-size-ratchet.mjs`: no file over 800 lines, no function over 50, no src line over 120 columns beyond the baseline.
 - `check-store-port.mjs`: every server route reaches the database through the store port.

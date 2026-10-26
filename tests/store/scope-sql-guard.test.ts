@@ -58,13 +58,13 @@ describe('scope SQL guard', () => {
     for (const line of bad) expect(hitsIn('store/x.ts', line), line).toHaveLength(1);
     expect(
       hitsIn(
-        `store${sep}sqlite${sep}handoffs.ts`,
+        `store${sep}sqlite${sep}sessions${sep}handoffs.ts`,
         "  // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
       ),
     ).toEqual([]);
-    expect(hitsIn(`store${sep}sqlite${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too.")).toHaveLength(
-      1,
-    );
+    expect(
+      hitsIn(`store${sep}sqlite${sep}sessions${sep}handoffs.ts`, "  // continuity excludes 'unknown:legacy' too."),
+    ).toHaveLength(1);
   });
 
   it('every listed doc line still exists, so the list cannot hold a stale pass', () => {
