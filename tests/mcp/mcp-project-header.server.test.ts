@@ -5,15 +5,11 @@ import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
-import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed, type KeyedServer } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -26,7 +22,7 @@ interface Reply {
 }
 
 let tmp: string;
-let handle: ServerHandle | null = null;
+let handle: KeyedServer | null = null;
 
 function makeStore(shared: boolean): string {
   const store = path.join(tmp, 'srv', shared ? 'hippo-team' : 'hippo-solo');
@@ -49,7 +45,7 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
       `${handle!.url}/mcp`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
+        headers: { 'content-type': 'application/json', accept: 'application/json', ...handle?.auth, ...headers },
       },
       (res) => {
         let text = '';
@@ -83,7 +79,7 @@ describe('X-Hippo-Project on a shared store', () => {
     'stamps hippo_remember with the decoded name, and an encoded comma in an alias widens recall to it',
     async () => {
       const store = makeStore(true);
-      handle = await serve({ hippoRoot: store, port: 0 });
+      handle = await serveKeyed({ hippoRoot: store, port: 0 });
       const headers = {
         'x-hippo-project': encodeURIComponent('acme/café'),
         'x-hippo-project-aliases': [encodeURIComponent('old,name'), 'legacy'].join(','),
@@ -103,7 +99,7 @@ describe('X-Hippo-Project on a shared store', () => {
 
   it.skipIf(needsHippoDb('team'))('reads an empty aliases header as no aliases', async () => {
     const store = makeStore(true);
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 });
     const r = await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': '' });
     expect(r.status, r.text).toBe(200);
     expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme']);
@@ -111,7 +107,7 @@ describe('X-Hippo-Project on a shared store', () => {
 
   it('answers 400 with no JSON-RPC body for each bad header, and stores nothing', async () => {
     const store = makeStore(true);
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 });
     const withName = (aliases: string): http.OutgoingHttpHeaders => ({
       'x-hippo-project': 'acme',
       'x-hippo-project-aliases': aliases,
@@ -141,13 +137,13 @@ describe('X-Hippo-Project on a shared store', () => {
   });
 
   it('answers 401 for a bad key before it looks at the header', async () => {
-    handle = await serve({ hippoRoot: makeStore(true), port: 0 });
+    handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     const r = await post({ authorization: 'Bearer hk_bogus', 'x-hippo-project': 'Acme' });
     expect(r.status).toBe(401);
   });
 
   it("answers 431 for a 20 KB header, Node's own cap, and the next request still gets 200", async () => {
-    handle = await serve({ hippoRoot: makeStore(true), port: 0 });
+    handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     expect((await post({ 'x-hippo-project': 'a'.repeat(20 * 1024) })).status).toBe(431);
     expect((await post({ 'x-hippo-project': 'acme' })).status).toBe(200);
   });
@@ -155,7 +151,7 @@ describe('X-Hippo-Project on a shared store', () => {
 
 describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
   it('marks a 200, 202, 400 and 401 from a shared store', async () => {
-    handle = await serve({ hippoRoot: makeStore(true), port: 0 });
+    handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     const replies: ReadonlyArray<readonly [number, Reply]> = [
       [200, await post({ 'x-hippo-project': 'acme' })],
       [202, await post({}, JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))],
@@ -170,7 +166,7 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
   });
 
   it('marks a 200 and a 429 from a store that is not shared', async () => {
-    handle = await serve({
+    handle = await serveKeyed({
       hippoRoot: makeStore(false),
       port: 0,
       rateLimits: { perAddress: { ratePerSec: 0.001, burst: 1 } },
@@ -182,7 +178,7 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
 
   it('exports the header name, and the alias cap the server holds a caller to', async () => {
     expect(MCP_PROJECT_SCOPED_HEADER).toBe('X-Hippo-Project-Scoped');
-    handle = await serve({ hippoRoot: makeStore(true), port: 0 });
+    handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     const aliases = (n: number): string => Array.from({ length: n }, (_, i) => `a${i}`).join(',');
     expect(
       (await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES) })).status,
@@ -196,7 +192,7 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
 describe('X-Hippo-Project on a store that is not shared', () => {
   it.skipIf(needsHippoDb('team'))('ignores the headers, valid or not', async () => {
     const store = makeStore(false);
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 });
     for (const name of ['acme', 'Acme App']) {
       const r = await post(
         { 'x-hippo-project': name },

@@ -1,6 +1,6 @@
 // Route rules every typed object shares over HTTP, one table row per kind; a rule only one kind has stays in its
 // http-<kind> test. One server serves the whole file, so the request limits are off and every test makes its own rows.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { type Body, handle, apiKeyB, useObjectsServer, jsonAs, post, get } from '../_helpers/http-objects-server.js';
 
@@ -161,9 +161,7 @@ describe.each(KINDS)('HTTP $root ($kind)', (k) => {
     expect((await post(`${k.root}/${row.id}/close`)).status).toBe(409);
   });
 
-  it('the create route is auth-gated: HIPPO_REQUIRE_AUTH=1 and no Authorization answers 401', async () => {
-    // The server lets loopback in without a key by design; HIPPO_REQUIRE_AUTH=1 must close that per route.
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
+  it('the create route is auth-gated: no Authorization answers 401', async () => {
     const res = await fetch(`${handle.url}${k.root}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -351,7 +351,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
         slackTimestamp: stray.sent.ts,
       },
     ]);
-    expect(readdirSync(served.root).sort()).toEqual([OTHER_STORE_MARKER, 'server.pid']);
+    expect(readdirSync(served.root).sort()).toEqual([OTHER_STORE_MARKER, 'server.key', 'server.pid']);
   });
 
   it('a delivery signed with another secret is a 401 and adds no event, letter or audit row', async () => {

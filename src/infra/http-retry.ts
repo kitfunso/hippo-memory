@@ -16,10 +16,11 @@ export interface RetryPolicy {
   baseDelayMs?: number;
   /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
   maxDelayMs?: number;
-  /** Which responses to retry; defaults to 429 and 5xx. A write narrows it to answers that prove nothing committed. */
+  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call (`retryTransport`). A write narrows it
+   * to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
-  /** Also retry a dropped connection or a timed-out attempt. On for GET and HEAD; any other method turns it on only
-   * when a replay cannot commit twice. */
+  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out attempt is replayed. On
+   * for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
   /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
@@ -141,16 +142,23 @@ async function backoffWait(
   }
 }
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see `retryTransport`) transport
- * faults; the last response or error comes back as is. */
+/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429 refused the call
+ * unrun. */
+const defaultRetryOn =
+  (replaySafe: boolean) =>
+  (res: Response): boolean =>
+    res.status === 429 || (replaySafe && isRetryableStatus(res.status));
+
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe call (see
+ * `retryTransport`), on 5xx and transport faults; the last response or error comes back as is. */
 export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);
   const baseDelayMs = policy.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
   const maxDelayMs = policy.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
   const random = policy.random ?? Math.random;
-  const retryOn = policy.retryOn ?? ((res: Response) => isRetryableStatus(res.status));
-  const retryTransport = policy.retryTransport ?? isIdempotent(init.method);
+  const replaySafe = policy.retryTransport ?? isIdempotent(init.method);
+  const retryOn = policy.retryOn ?? defaultRetryOn(replaySafe);
   const now = policy.now ?? Date.now;
   const deadline = policy.totalMs === undefined ? Infinity : now() + policy.totalMs;
   const fitsBudget = (delayMs: number): boolean => now() + delayMs < deadline;
@@ -168,7 +176,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
       res = await fetchFn(url, { ...init, signal });
     } catch (err) {
       // The caller's own abort is a decision, not a fault, so it ends the call.
-      if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
+      if (!replaySafe || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
       const delay = backoffMs(attempt);
       if (!fitsBudget(delay)) throw err;
       const reason = errorCode(err) || (err instanceof Error ? err.name : 'transport');

@@ -41,7 +41,6 @@ let url = '';
 let stop: (() => Promise<void>) | undefined;
 
 beforeEach(() => {
-  vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
   vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
   vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
   root = makeRoot('key-bounds');

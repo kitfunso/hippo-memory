@@ -144,7 +144,13 @@ describe('log fields', () => {
   });
 
   it('flattens newlines so one event stays on one line', () => {
-    expect(formatLogLine('error', 'a\nb', { requestId: 'x\r\ny' })).toBe('[hippo] error: a b requestId=x y');
+    expect(formatLogLine('error', 'a\nb', { requestId: 'x\r\ny' })).toBe('[hippo] error: a b requestId="x y"');
+  });
+
+  it('quotes a value with a space, quote or =, so a reader can tell where it ends', () => {
+    expect(formatLogLine('warn', 'm', { a: 'plain', b: 'two words', c: 'say "hi"', d: 'k=v' })).toBe(
+      '[hippo] warn: m a=plain b="two words" c="say \\"hi\\"" d="k=v"',
+    );
   });
 
   it('HIPPO_LOG_FORMAT=json writes the same fields as one JSON object per line', () => {

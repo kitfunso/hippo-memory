@@ -47,6 +47,10 @@ import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { remember as apiRemember } from '../../dist/entry/eval-scripts.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
+import { readLocalKey } from '../../dist/surface/server/local-key.js';
+
+// The key serve wrote for this machine, set once the server is up.
+let authHeader = { authorization: '' };
 
 interface CliArgs {
   storeSize: number;
@@ -228,7 +232,7 @@ async function runQueries(
     const url = `${baseUrl}/v1/memories?q=${encodeURIComponent(queries[i % queries.length]!)}&limit=10`;
     const t0 = performance.now();
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: authHeader });
       await res.text();
       const dt = performance.now() - t0;
       if (res.ok) samples.push(dt);
@@ -276,9 +280,9 @@ async function main(): Promise<void> {
   // Port 0 = ephemeral to avoid collisions.
   // The bench measures recall, not the per-IP limiter, which would 429 most queries and drop them from the stats.
   process.env.HIPPO_V1_RPS = '0';
-  // The bench sends no key, so it runs the server in keyless local mode.
-  process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
-  const server: ServerHandle = await serve({ hippoRoot: home, port: 0 });
+  // One key sends every request, so the per-caller limiter would measure itself rather than recall.
+  const server: ServerHandle = await serve({ hippoRoot: home, port: 0, rateLimits: { perCaller: 'off' } });
+  authHeader = { authorization: `Bearer ${readLocalKey(home)}` };
   console.log(`[p99-recall] server listening on ${server.url}`);
 
   const wallStart = Date.now();

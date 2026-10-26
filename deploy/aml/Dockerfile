@@ -30,7 +30,6 @@ RUN chmod +x /entrypoint.sh
 
 # /data is the Fly volume mount; the hippo store root is /data/.hippo.
 WORKDIR /data
-ENV HIPPO_REQUIRE_AUTH=1
 ENV HIPPO_PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/entrypoint.sh"]

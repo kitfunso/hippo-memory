@@ -14,6 +14,7 @@ import {
   type HookRuntime,
 } from '../../base/session/capture-contract.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
+import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
@@ -47,8 +48,8 @@ function appendPreCompactLog(logFile: string, message: string): void {
       fs.closeSync(fd);
     }
   } catch (err) {
-    // Diagnostic-only; a log write failure must never affect the exit-0 contract.
-    logger.debug(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
+    // A log write failure must never affect the exit-0 contract, but a log that never fills is told.
+    logger.warn(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -300,7 +301,7 @@ export async function preCompactHook(
     logger.error(`pre-compact failed: ${errorMessage(err)}`, errorFields(err));
   }
 
-  process.exit(0);
+  exitAfterFlush(0);
 }
 
 export interface PostCompactOptions {

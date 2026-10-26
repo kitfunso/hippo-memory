@@ -23,8 +23,6 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-request-timing-'));
 const localRoot = path.join(tmp, 'proj', '.hippo');
 const globalRoot = path.join(tmp, 'global');
 process.env.HIPPO_HOME = globalRoot;
-// The http rows time the recall p99-recall.ts sends, with no key, so both servers run in keyless local mode.
-process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 // Outside git, so hippo_context's auto query is empty and the timing measures the store, not git.
 process.chdir(tmp);
 
@@ -44,6 +42,7 @@ const { handleMcpRequest } = await load('surface/mcp/server.js');
 const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/index.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
+const { readLocalKey } = await load('surface/server/local-key.js');
 const { serveDashboard } = await load('surface/server/dashboard-listener.js');
 
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
@@ -194,18 +193,26 @@ const keyLookup = async () => {
 
 // The request benchmarks/a1/p99-recall.ts times, through a real server and socket. serve() answers it from store worker threads, where this thread
 // counts nothing, so its work is counted on a second server over a copy of the store, in process.
-const server = await serve({ hippoRoot: localRoot, port: 0 });
+// Every request sends the one local key, which the per-caller limiter would otherwise throttle.
+const unthrottled = { perCaller: 'off' };
+const server = await serve({ hippoRoot: localRoot, port: 0, rateLimits: unthrottled });
 const inProcess = sqliteStore(copyRoot);
-const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inProcess });
+const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inProcess, rateLimits: unthrottled });
+// Each server's own local key, as the CLI on this machine sends it.
+const keyOf = new Map([
+  [server.url, readLocalKey(localRoot)],
+  [inProcessServer.url, readLocalKey(copyRoot)],
+]);
+const keyed = (url, headers = {}) => ({ headers: { ...headers, authorization: `Bearer ${keyOf.get(url)}` } });
 const httpRecall = (url, limit) => async () => {
-  const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`);
+  const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`, keyed(url));
   const body = await res.json();
   if (!res.ok || body.results.length === 0) {
     throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
   }
 };
 const httpContext = (url) => async () => {
-  const res = await fetch(`${url}/v1/context?q=${encodeURIComponent('kafka redis')}`);
+  const res = await fetch(`${url}/v1/context?q=${encodeURIComponent('kafka redis')}`, keyed(url));
   if (!res.ok) throw new Error(`GET /v1/context failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 };
 const httpTool =
@@ -214,7 +221,7 @@ const httpTool =
     const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
     const res = await fetch(`${url}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      ...keyed(url, { 'content-type': 'application/json' }),
       body: JSON.stringify(call),
     });
     const body = await res.json();

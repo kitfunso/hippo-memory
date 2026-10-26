@@ -22,11 +22,8 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 type Args = Record<string, string | number | boolean>;
 type Call = { via: 'http'; args: Args } | { via: 'mcp'; args: Args };
@@ -117,7 +114,7 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
     const store = makeStore?.(s.root);
-    const handle = await serve({ hippoRoot: s.root, port: 0, store });
+    const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
     try {
       for (const call of scenario.calls) replies.push(await send(handle.url, call));

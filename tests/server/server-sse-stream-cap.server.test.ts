@@ -1,5 +1,5 @@
-// GET /mcp/stream holds a socket and a timer per stream, so each API key (or each IP
-// when keyless) gets a bounded number of concurrent streams; a closed stream frees its slot.
+// GET /mcp/stream holds a socket and a timer per stream, so each API key
+// gets a bounded number of concurrent streams; a closed stream frees its slot.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -7,11 +7,8 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import type { ServerHandle } from '../../src/server.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -56,7 +53,7 @@ describe('/mcp/stream concurrent stream cap', () => {
   beforeEach(async () => {
     vi.stubEnv('MCP_SSE_MAX_STREAMS', '2');
     root = makeRoot('sse-cap');
-    handle = await serve({ hippoRoot: root, port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0 });
   });
 
   afterEach(async () => {
@@ -80,7 +77,7 @@ describe('/mcp/stream concurrent stream cap', () => {
     expect(status).toBe(200);
   });
 
-  it.skipIf(needsHippoDb('db'))('counts each API key separately from the keyless loopback caller', async () => {
+  it.skipIf(needsHippoDb('db'))('counts each API key separately from the local key', async () => {
     const keyA = mintKey('sse-cap-a');
     const auth = { authorization: `Bearer ${keyA}` };
     expect((await openStream(auth)).status).toBe(200);

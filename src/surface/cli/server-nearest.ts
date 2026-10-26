@@ -1,11 +1,11 @@
 // A CLI store's nearest-row read, handed to the `hippo serve` on the same store: its vector graph answers in
 // milliseconds where this process would score every stored vector.
-import { envApiKey } from '../../base/util/env.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { NearestIdsAsk, VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 import { detectServer } from '../server/server-detect.js';
+import { callerKey } from '../server/local-key.js';
 import { nearestIds } from './client.js';
 
 // A graph read takes milliseconds (docs/ARCHITECTURE.md), so a later reply means a stalled server, and the scan after
@@ -21,7 +21,7 @@ export function serverNearestAsk(hippoRoot: string): NearestIdsAsk {
     try {
       const info = await detectServer(hippoRoot);
       if (info === null) return undefined;
-      return await nearestIds(info.url, envApiKey(), { vector: queryVector, spec: wire }, NEAREST_TIMEOUT_MS);
+      return await nearestIds(info.url, callerKey(hippoRoot), { vector: queryVector, spec: wire }, NEAREST_TIMEOUT_MS);
     } catch (err) {
       log.warn('the hippo server did not answer the nearest-vector read, so this process scans its own store', {
         hippoRoot,

@@ -5,11 +5,8 @@ import type { ServerHandle } from '../../src/server.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -47,7 +44,7 @@ async function callTool(
 
 beforeEach(async () => {
   home = makeRoot('mcp-redact');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 });
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 

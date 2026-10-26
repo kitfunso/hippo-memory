@@ -4,11 +4,12 @@
 import type { ConfidenceLevel, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
 import { Layer } from '../../base/memory/memory.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { envApiKey, envRequireServer } from '../../base/util/env.js';
+import { envRequireServer } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import * as api from '../../api/index.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
+import { callerKey } from '../server/local-key.js';
 import * as client from './client.js';
 import { type CliContext, cliApiContext } from './api-context.js';
 import { fail } from './exit.js';
@@ -69,8 +70,8 @@ export interface MemoryWrites {
 }
 
 const SERVED_KEY_HINT =
-  'hippo serve is running, so the CLI acts as the key in HIPPO_API_KEY, or as a member without one: ' +
-  'set HIPPO_API_KEY to that key or an admin key.';
+  'hippo serve is running, so the CLI acts as the key in HIPPO_API_KEY, or as the member key in server.key without ' +
+  'one: set HIPPO_API_KEY to that key or an admin key.';
 
 /** What `hippo forget <id>` says when the store refuses it; the dry run says the same. */
 export async function forgetRefusal(ctx: api.Context, id: string, cause: unknown): Promise<string> {
@@ -190,7 +191,7 @@ function servedReason(err: Error): string {
 }
 
 function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites): MemoryWrites {
-  const apiKey = envApiKey();
+  const apiKey = callerKey(hippoRoot);
   const send = <T>(request: () => Promise<T>, refused: Refused, fallBack: () => Promise<T>): Promise<T> =>
     sendOrFallBack(hippoRoot, server, { request, refused, fallBack });
   return {

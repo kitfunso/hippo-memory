@@ -202,6 +202,8 @@ describe('boundary row contents and a boundary callback that throws', () => {
           throw new Error('boom');
         },
       });
+      // The hook exits once stdout and stderr drain, so the stub must be in place until then.
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
       const log = fs.readFileSync(logFile, 'utf8');
       expect(log).toContain('boundary callback failed: boom');
       expect(log).toContain('snapshot saved');

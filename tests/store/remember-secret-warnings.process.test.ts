@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { remember } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -14,10 +15,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -57,7 +54,7 @@ describe('api.remember', () => {
 describe('HTTP POST /v1/memories', () => {
   let handle: ServerHandle;
   beforeEach(async () => {
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 }, serve);
   });
   afterEach(async () => {
     await handle.stop();

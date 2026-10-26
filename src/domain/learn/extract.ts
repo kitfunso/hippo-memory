@@ -3,9 +3,9 @@ import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { describeLlmFailure, type Llm, type LlmFailure } from '../../base/ports/llm.js';
+import { describeLlmFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { neverAutoShareTags } from '../sharing/share.js';
-import { errorMessage, log } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
 
@@ -20,7 +20,7 @@ export interface ExtractOptions {
   model?: string;
   /**
    * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the model
-   * call itself failed.
+   * call itself failed. Without it each failure logs a warn with its error fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
 }
@@ -51,7 +51,9 @@ export async function extractFacts(text: string, opts: ExtractOptions): Promise<
     prompt: EXTRACTION_PROMPT + redactSecretsStrict(text),
   });
   if (!reply.ok) {
-    opts.onError?.(describeLlmFailure(reply.failure), reply.failure);
+    const msg = describeLlmFailure(reply.failure);
+    if (opts.onError) opts.onError(msg, reply.failure);
+    else log.warn(`fact extraction failed: ${msg}`, llmFailureFields(reply.failure));
     return [];
   }
 
@@ -64,7 +66,9 @@ export async function extractFacts(text: string, opts: ExtractOptions): Promise<
 
     return parseExtractedFacts(parsed);
   } catch (err) {
-    opts.onError?.(`unparseable response: ${errorMessage(err)}`);
+    const msg = `unparseable response: ${errorMessage(err)}`;
+    if (opts.onError) opts.onError(msg);
+    else log.warn(`fact extraction failed: ${msg}`, errorFields(err));
     return [];
   }
 }

@@ -6,15 +6,12 @@ import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { ServerHandle } from '../../src/server.js';
 import { readAuthHeader } from '../../src/surface/server/auth.js';
+import { readLocalKey } from '../../src/surface/server/local-key.js';
 import type { RememberResult } from '../../src/api/index.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -36,10 +33,11 @@ describe('server auth middleware', () => {
     await handle.stop();
   });
 
-  it.skipIf(needsHippoDb('db'))('loopback no-auth: 200 and audit shows actor=localhost:cli', async () => {
+  it.skipIf(needsHippoDb('db'))('the local key: 200 and audit shows actor=localhost:cli', async () => {
+    const localKey = readLocalKey(home)!;
     const res = await fetch(`${handle.url}/v1/memories`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${localKey}` },
       body: JSON.stringify({ content: 'auth-canary-loopback-noauth' }),
     });
     expect(res.status).toBe(200);

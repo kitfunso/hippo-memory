@@ -51,7 +51,6 @@ describe('serve() bound to localhost', () => {
 
   beforeEach(() => {
     hippoRoot = makeStore('localhost-lookup').root;
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', undefined);
   });
 
@@ -67,20 +66,14 @@ describe('serve() bound to localhost', () => {
     vi.spyOn(dns, 'lookup').mockImplementation(vi.fn().mockResolvedValue(answer));
   }
 
-  it('refuses the bind without auth when localhost resolves to a routable address', async () => {
+  it('asks for TLS when localhost resolves to a routable address', async () => {
     resolveEverythingTo('10.0.0.5');
-    await expect(serve({ hippoRoot, host: 'localhost', port: 0 })).rejects.toThrow(/Refusing to bind hippo serve/);
-  });
-
-  it('asks for TLS once auth is on and localhost resolves to a routable address', async () => {
-    resolveEverythingTo('10.0.0.5');
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     await expect(serve({ hippoRoot, host: 'localhost', port: 0 })).rejects.toMatchObject({
       name: 'CleartextBindError',
     });
   });
 
-  it('boots without auth or TLS when localhost resolves to loopback only', async () => {
+  it('boots without TLS when localhost resolves to loopback only', async () => {
     resolveEverythingTo('127.0.0.1', '::1');
     handle = await serve({ hippoRoot, host: 'localhost', port: 0 });
     const res = await fetch(`http://localhost:${handle.port}/health`);

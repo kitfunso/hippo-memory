@@ -1,21 +1,20 @@
-// What a user sees after upgrading: `hippo serve` says the key rule at start, and a routed CLI write with no key fails with the fix in its text.
+// What a user sees after upgrading: `hippo serve` says the key rule at start, and a routed CLI write sends the key
+// serve wrote, with no switch to set.
 import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest';
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { mintedKeyId } from '../../src/base/scope/api-key.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
 import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeStore } from '../_helpers/make-root.js';
 
+// The removed keyless switches stay in this list, so a leftover one in the test run's env cannot change a case.
 const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH', 'HIPPO_API_KEY'];
-const KEY_REQUIRED_LINE =
-  'every request needs an API key: mint one with `hippo auth create` and send it as "Authorization: Bearer <key>" ' +
-  '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, start with HIPPO_ALLOW_KEYLESS_LOCAL=1';
-const KEYLESS_LINE =
-  'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
+const KEY_RULE = 'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ';
 
 interface Served {
   readonly stdout: string;
@@ -25,7 +24,7 @@ interface Served {
 let workspace: string;
 let stops: Array<() => Promise<void>>;
 
-/** The test run's env with the three auth switches removed, so each case states the ones it sets. */
+/** The test run's env with the auth variables removed, so each case states the ones it sets. */
 function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -82,7 +81,7 @@ function rememberActors(): string[] {
 }
 
 beforeEach(() => {
-  workspace = makeStore('keyless-upgrade').base;
+  workspace = makeStore('local-key-cli').base;
   stops = [];
 });
 
@@ -92,61 +91,42 @@ afterEach(async () => {
 
 describe('hippo serve says its key rule at start', () => {
   it.each([
-    ['no switch set', {}, KEY_REQUIRED_LINE],
-    ['HIPPO_ALLOW_KEYLESS_LOCAL=1', { HIPPO_ALLOW_KEYLESS_LOCAL: '1' }, KEYLESS_LINE],
-    [
-      'HIPPO_KEYLESS_LOCAL_ROLE=admin, which nothing reads',
-      { HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_KEYLESS_LOCAL_ROLE: 'admin' },
-      KEYLESS_LINE,
-    ],
-    ['HIPPO_REQUIRE_AUTH=1', { HIPPO_REQUIRE_AUTH: '1' }, 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)'],
-    [
-      'both switches',
-      { HIPPO_REQUIRE_AUTH: '1', HIPPO_ALLOW_KEYLESS_LOCAL: '1' },
-      'every request needs an API key (HIPPO_REQUIRE_AUTH=1)',
-    ],
-  ])('with %s', async (_name, env, line) => {
+    ['no variable set', {}],
+    ['the removed HIPPO_ALLOW_KEYLESS_LOCAL=1, which nothing reads', { HIPPO_ALLOW_KEYLESS_LOCAL: '1' }],
+    ['the removed HIPPO_REQUIRE_AUTH=1, which nothing reads', { HIPPO_REQUIRE_AUTH: '1' }],
+  ])('with %s', async (_name, env) => {
     const { stdout } = await startServe(env);
-    expect(stdout.split(/\r?\n/)).toContain(line);
+    const line = stdout.split(/\r?\n/).find((l) => l.startsWith(KEY_RULE));
+    expect(line).toMatch(/server\.key \(readable by this user only\); mint others with `hippo auth create`$/);
   });
 });
 
-describe('a routed CLI write against a server on the new default', () => {
-  it('fails with the fix in its text and stores nothing, then works with a key', async () => {
-    await startServe();
-    const refused = hippoRun(['remember', 'upgrade-canary-no-key'], { cwd: workspace, env: childEnv() });
-    // Not toBe(1): on Windows, Node can abort inside process.exit after a fetch and report its own exit code.
-    expect(refused.status).not.toBe(0);
-    expect(refused.stderr).toContain('Error: auth required: this server takes no request without an API key.');
-    expect(refused.stderr).toContain('hippo auth create');
-    expect(refused.stderr).toContain('HIPPO_API_KEY');
-    expect(refused.stderr).toContain('HIPPO_ALLOW_KEYLESS_LOCAL=1');
-    expect(rememberActors()).toEqual([]);
-
-    // The host CLI opens the store itself, so a key can be minted while the server refuses keyless requests.
-    // SAFETY: `hippo auth create --json` prints one JSON object whose `plaintext` is the key.
-    const minted = JSON.parse(
-      hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() }),
-    ) as { plaintext: string };
-    const keyed = hippoRun(['remember', 'upgrade-canary-with-key'], {
-      cwd: workspace,
-      env: childEnv({ HIPPO_API_KEY: minted.plaintext }),
-    });
-    expect(keyed.stderr).not.toContain('auth required');
-    expect(keyed.status).toBe(0);
-    expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
-  });
-
-  it('works with no key once the server is started with HIPPO_ALLOW_KEYLESS_LOCAL=1', async () => {
+describe('a routed CLI write', () => {
+  it('sends the key serve wrote when HIPPO_API_KEY is unset', async () => {
     await startServe({ HIPPO_ALLOW_KEYLESS_LOCAL: '1' });
-    const run = hippoRun(['remember', 'upgrade-canary-opt-in'], { cwd: workspace, env: childEnv() });
+    const run = hippoRun(['remember', 'local-key-canary'], { cwd: workspace, env: childEnv() });
     expect(run.stderr).not.toContain('auth required');
     expect(run.status).toBe(0);
     expect(rememberActors()).toEqual(['localhost:cli']);
   });
 
+  it('sends HIPPO_API_KEY when it is set', async () => {
+    await startServe();
+    // The host CLI opens the store itself, so a key can be minted while the server runs.
+    // SAFETY: `hippo auth create --json` prints one JSON object whose `plaintext` is the key.
+    const minted = JSON.parse(
+      hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() }),
+    ) as { plaintext: string };
+    const keyed = hippoRun(['remember', 'env-key-canary'], {
+      cwd: workspace,
+      env: childEnv({ HIPPO_API_KEY: minted.plaintext }),
+    });
+    expect(keyed.status).toBe(0);
+    expect(rememberActors()).toEqual([`api_key:${mintedKeyId(minted.plaintext)}`]);
+  });
+
   it('is untouched when no server runs: the CLI writes to the store itself', () => {
-    const run = hippoRun(['remember', 'upgrade-canary-direct'], { cwd: workspace, env: childEnv() });
+    const run = hippoRun(['remember', 'direct-canary'], { cwd: workspace, env: childEnv() });
     expect(run.status).toBe(0);
     expect(rememberActors()).toEqual(['cli']);
   });

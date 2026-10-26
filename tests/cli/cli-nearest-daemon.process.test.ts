@@ -8,6 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { serve } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -54,7 +55,6 @@ function run(base: string, args: readonly string[]): Promise<Run> {
       ...ROUTED_CLI_ENV,
       HIPPO_HOME: globalRoot,
       HIPPO_FAKE_NOW: fakeNow,
-      HIPPO_ALLOW_KEYLESS_LOCAL: '1',
       HIPPO_API_KEY: '',
       OPENAI_API_KEY: 'sk-test',
     },
@@ -71,7 +71,6 @@ async function runAll(base: string): Promise<Run[]> {
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   globalRoot = makeRoot('nearest-global');
   template = makeRoot('nearest-template', {
     config: { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } },
@@ -113,7 +112,7 @@ describe('hippo recall and hippo context beside a hippo serve on the same store'
         },
       },
     };
-    const server = await serve({ hippoRoot: root, port: 0, store, autoSleep: false });
+    const server = await serveKeyed({ hippoRoot: root, port: 0, store, autoSleep: false }, serve);
     let hopped: Run[];
     try {
       hopped = await runAll(base);
