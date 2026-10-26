@@ -106,7 +106,8 @@ describe('check-store-port.mjs', () => {
 
   it('passes a port that takes data and required tenants', () => {
     const r = runOn({
-      'src/base/ports/store.ts': 'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
+      'src/base/ports/store.ts':
+        'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
     });
     expect(r.status, r.stderr).toBe(0);
   });

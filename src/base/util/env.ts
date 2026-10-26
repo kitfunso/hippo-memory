@@ -1,5 +1,5 @@
-// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other
-// read, and on an import of this module outside the roots, the adapters and the eval switches.
+// The one module in src/ that reads process.env; oxlint fails CI on any other read, and
+// dependency-cruiser on an import of this module outside the roots and the adapters.
 // Accessors read at call time, so a test that sets a variable between cases still holds.
 import type { ClefSettings, RuntimeSettings } from '../config/config.js';
 import { DEFAULT_TENANT_ID } from './tenant.js';
