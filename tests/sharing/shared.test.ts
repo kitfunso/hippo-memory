@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as os from 'os';
-import * as path from 'path';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

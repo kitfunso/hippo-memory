@@ -7,7 +7,7 @@ import type { HandoffOutcome } from '../../src/base/session/handoff.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import type { CardCreate } from '../../src/base/ports/store/cards.js';
 import { keysetPages } from '../../src/api/pages.js';
-import type { PushGoalOpts } from '../../src/base/ports/store/goals.js';
+import type { PushGoalOptions } from '../../src/base/ports/store/goals.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   runOnFixture,
@@ -217,7 +217,7 @@ describe('Cards', () => {
 
 describe('Goals', () => {
   const push =
-    (tenantId: string, goal: (store: HippoStore) => Omit<PushGoalOpts, 'tenantId'>): GroupCall<'goals', unknown> =>
+    (tenantId: string, goal: (store: HippoStore) => Omit<PushGoalOptions, 'tenantId'>): GroupCall<'goals', unknown> =>
     async (g, s) => {
       const pushed = await g.push(tenantId, goal(s));
       keep(s, pushed.id, pushed.retrievalPolicyId);

@@ -1,0 +1,28 @@
+GET /v1/policies/1/supersede -> 404 not found
+POST /v1/policies/1/supersede -> 400 policyText is required (non-empty string)
+DELETE /v1/policies/1/supersede -> 404 not found
+PUT /v1/policies/1/supersede -> 404 not found
+GET /v1/policies/007/supersede -> 404 not found
+POST /v1/policies/007/supersede -> 400 policyText is required (non-empty string)
+DELETE /v1/policies/007/supersede -> 404 not found
+PUT /v1/policies/007/supersede -> 404 not found
+GET /v1/policies/abc/supersede -> 404 not found
+POST /v1/policies/abc/supersede -> 404 not found
+DELETE /v1/policies/abc/supersede -> 404 not found
+PUT /v1/policies/abc/supersede -> 404 not found
+GET /v1/policies/-1/supersede -> 404 not found
+POST /v1/policies/-1/supersede -> 404 not found
+DELETE /v1/policies/-1/supersede -> 404 not found
+PUT /v1/policies/-1/supersede -> 404 not found
+GET /v1/policies/%31/supersede -> 404 not found
+POST /v1/policies/%31/supersede -> 404 not found
+DELETE /v1/policies/%31/supersede -> 404 not found
+PUT /v1/policies/%31/supersede -> 404 not found
+GET /v1/policies//supersede -> 404 not found
+POST /v1/policies//supersede -> 404 not found
+DELETE /v1/policies//supersede -> 404 not found
+PUT /v1/policies//supersede -> 404 not found
+GET /v1/policies/1/supersede/ -> 404 not found
+POST /v1/policies/1/supersede/ -> 404 not found
+DELETE /v1/policies/1/supersede/ -> 404 not found
+PUT /v1/policies/1/supersede/ -> 404 not found

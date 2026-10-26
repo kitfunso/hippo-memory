@@ -1,7 +1,7 @@
 // The secret-assignment shapes both the detectSecret and the scrubForSharing tables run, so the two lists cannot drift.
 
 /** Built at runtime, so no secret-shaped literal sits in source: 14 characters with a digit. */
-export const ASSIGNED_SECRET = 'Hunter2' + 'Hunter2';
+export const ASSIGNED_SECRET = runtimeJoin('Hunter2', 'Hunter2');
 const V = ASSIGNED_SECRET;
 
 /** Each line leaks ASSIGNED_SECRET unless the secret-assignment pattern catches it. */
@@ -43,3 +43,8 @@ export const ORDINARY_CONFIG_LINES: readonly string[] = [
   'bypass_mode = "strict-2024-v2"',
   'compass: "north-2024-heading"',
 ];
+
+/** Joins parts at run time, so a secret-shaped fixture never sits in source as one literal. */
+export function runtimeJoin(...parts: string[]): string {
+  return parts.join('');
+}

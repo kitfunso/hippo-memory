@@ -3,8 +3,9 @@
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { PhysicsParticle } from '../../rank/physics.js';
 import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
-import type { AppendAuditOpts, EntryCursor, EntryPage } from './types.js';
+import type { AppendAuditOptions, EntryCursor, EntryPage } from './types.js';
 import type { RejectedValueRow } from './rejections.js';
+import type { SessionEvent } from './sessions.js';
 
 export type {
   HalfLifeChange,
@@ -42,7 +43,7 @@ export interface Consolidation {
   /** Replaces the detected conflicts, appends the run row and adds one to the sleep count, each its own write. */
   recordSleep(record: SleepRecord): Promise<void>;
   /** Appends each row as its own write; a failed row is logged and counted, and the failures returned as a count. */
-  auditEachRow(events: readonly AppendAuditOpts[]): Promise<number>;
+  auditEachRow(events: readonly AppendAuditOptions[]): Promise<number>;
   /** The current distilled memories that may share a text with another, and the order partitions first appear in. */
   duplicateCandidates(): Promise<DuplicateCandidates>;
   /** Tenants with pending graph work, each with its highest pending queue id. */
@@ -70,8 +71,14 @@ export interface SleepStart {
   readonly sleepCount: number;
   /** The newest 20 run times, newest first. */
   readonly recentRuns: readonly string[];
-  /** The session ids `traces` asked for. */
-  readonly sessions: readonly string[];
+  /** The sessions `traces` asked for, each with its newest events. */
+  readonly sessions: readonly UntracedSession[];
+}
+
+/** A completed session with no trace yet and its newest TRACE_EVENT_ROWS events, oldest first. */
+export interface UntracedSession {
+  readonly sessionId: string;
+  readonly events: readonly SessionEvent[];
 }
 
 /** EntryPage with only each row's id. */
@@ -100,7 +107,7 @@ export interface SummarySettle {
     readonly latestAt: string | null;
   };
   /** Appended in order when the row changes, after a refusal row. */
-  readonly audit: readonly AppendAuditOpts[];
+  readonly audit: readonly AppendAuditOptions[];
 }
 
 /** `changed` when this call's write hit the row; `refused` when a tombstone kept the new content out. */

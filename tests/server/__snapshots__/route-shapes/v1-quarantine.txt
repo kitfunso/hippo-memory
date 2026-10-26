@@ -1,0 +1,8 @@
+GET /v1/quarantine -> 200
+POST /v1/quarantine -> 404 not found
+DELETE /v1/quarantine -> 404 not found
+PUT /v1/quarantine -> 404 not found
+GET /v1/quarantine/ -> 404 not found
+POST /v1/quarantine/ -> 404 not found
+DELETE /v1/quarantine/ -> 404 not found
+PUT /v1/quarantine/ -> 404 not found

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { appendAuditEvents, listAuditEvents } from '../../src/store/sqlite/audit.js';
-import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../src/base/ports/store/types.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { recordAuditEventsRowByRow } from '../_helpers/root-forms.js';
@@ -90,7 +90,7 @@ describe('audit log', () => {
   });
 
   it('appendAuditEvents writes in one statement the rows it writes one call per row', () => {
-    const events: AppendAuditOpts[] = [
+    const events: AppendAuditOptions[] = [
       { tenantId: 'default', actor: 'cli', op: 'remember', targetId: 'm1', metadata: { n: 1, s: '2', nested: [true] } },
       { tenantId: 'other', actor: 'api_key:hk_1', op: 'recall' },
       { tenantId: 'default', actor: 'cli', op: 'forget', metadata: {} },

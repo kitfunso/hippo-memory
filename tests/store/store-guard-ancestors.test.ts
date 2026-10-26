@@ -1,10 +1,11 @@
 // Test-isolation guard ancestor coverage (episode 01M31DR9BAD95WQ5DJTX03Z1FC). Real filesystem in a
 // mkdtemp sandbox; exercises watchedStoreDirs() directly, not the globalSetup leak check itself.
 import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { snapshot, watchedStoreDirs } from '../_real-store-guard.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -31,7 +32,7 @@ beforeAll(() => {
   outer = path.join(home, 'outer');
   checkout = path.join(outer, 'checkout');
   fixture = path.join(checkout, 'fixture');
-  fs.mkdirSync(path.join(outer, '.hippo'), { recursive: true });
+  fs.mkdirSync(path.join(outer, '.hippo'), PRIVATE_DIR);
   fs.mkdirSync(fixture, { recursive: true });
   offWalkHome = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-offwalk-')));
 });

@@ -25,6 +25,7 @@ import type {
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { META_KEY } from '../../db/meta.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
   try {
@@ -54,7 +55,7 @@ function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth 
  * column. */
 function storeInventory(db: DatabaseSyncLike): StoreInventory {
   const schemaVersion = getSchemaVersion(db);
-  const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
+  const minCompatibleBinary = getMeta(db, META_KEY.minCompatibleBinary, '') || null;
   const tables: JsonObject = {};
   for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
   return { schemaVersion, minCompatibleBinary, tables };

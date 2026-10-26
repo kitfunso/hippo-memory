@@ -9,9 +9,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { importProjectMemories } from '../../src/api/agent-memories.js';
 import { totalTally, type Tally } from '../../src/base/memory/agent-memory-report.js';
 import { detectSecret } from '../../src/base/util/secret-detect.js';

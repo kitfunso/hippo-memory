@@ -1,0 +1,8 @@
+GET /v1/skills/export -> 200
+POST /v1/skills/export -> 404 not found
+DELETE /v1/skills/export -> 404 not found
+PUT /v1/skills/export -> 404 not found
+GET /v1/skills/export/ -> 404 not found
+POST /v1/skills/export/ -> 404 not found
+DELETE /v1/skills/export/ -> 404 not found
+PUT /v1/skills/export/ -> 404 not found

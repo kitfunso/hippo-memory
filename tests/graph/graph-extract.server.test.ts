@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cpSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { once } from 'node:events';
@@ -30,6 +30,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadNeighborRelations, loadEntities, loadRelations } from '../_helpers/root-forms.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -381,7 +382,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       }
     });
     const copy = `${home}-copy`;
-    cpSync(home, copy, { recursive: true });
+    copyTree(home, copy);
     try {
       const begins = countRebuildBegins();
       const chunked = await extractGraphChunked(sqliteStore(home), 'default', budget(0)).finally(begins.restore);

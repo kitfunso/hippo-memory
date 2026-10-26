@@ -1,0 +1,28 @@
+GET /v1/memories/1 -> 404 not found
+POST /v1/memories/1 -> 404 not found
+DELETE /v1/memories/1 -> 404 memory not found: 1
+PUT /v1/memories/1 -> 404 not found
+GET /v1/memories/007 -> 404 not found
+POST /v1/memories/007 -> 404 not found
+DELETE /v1/memories/007 -> 404 memory not found: 007
+PUT /v1/memories/007 -> 404 not found
+GET /v1/memories/abc -> 404 not found
+POST /v1/memories/abc -> 404 not found
+DELETE /v1/memories/abc -> 404 memory not found: abc
+PUT /v1/memories/abc -> 404 not found
+GET /v1/memories/-1 -> 404 not found
+POST /v1/memories/-1 -> 404 not found
+DELETE /v1/memories/-1 -> 404 memory not found: -1
+PUT /v1/memories/-1 -> 404 not found
+GET /v1/memories/%31 -> 404 not found
+POST /v1/memories/%31 -> 404 not found
+DELETE /v1/memories/%31 -> 404 memory not found: 1
+PUT /v1/memories/%31 -> 404 not found
+GET /v1/memories/ -> 404 not found
+POST /v1/memories/ -> 404 not found
+DELETE /v1/memories/ -> 404 not found
+PUT /v1/memories/ -> 404 not found
+GET /v1/memories/1/ -> 404 not found
+POST /v1/memories/1/ -> 404 not found
+DELETE /v1/memories/1/ -> 404 not found
+PUT /v1/memories/1/ -> 404 not found

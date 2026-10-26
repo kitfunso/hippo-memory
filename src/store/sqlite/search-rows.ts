@@ -167,36 +167,69 @@ function listFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredi
   }
 }
 
-/** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch
- * for a part-word that FTS5 tokens miss. */
+/** Substring matches in content or tags: the trigram index answers each term of 3 or more characters over every
+ * admitted row, and LIKE tests the rest over the newest admitted rows. */
 function listLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
+  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has no index at all.
+  const indexed = isFtsAvailable(db) ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS) : [];
+  const windowed = terms.filter((term) => !indexed.includes(term));
+  const arms = [
+    ...(indexed.length > 0 ? [trigramArm(indexed, p)] : []),
+    ...(windowed.length > 0 ? [windowArm(windowed, p, limit)] : []),
+  ];
+  try {
+    return unionByRecency(db, arms, limit);
+  } catch (err) {
+    if (indexed.length === 0) throw err;
+    log.warnThenSample(
+      'trigram-match-fallback',
+      `trigram search failed, using LIKE: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+    return unionByRecency(db, [windowArm(terms, p, limit)], limit);
+  }
+}
+
+const MIN_TRIGRAM_CHARS = 3;
+
+/** Matches through the trigram index, which leads the join, so only the matching rows are read. */
+function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment {
+  return {
+    sql:
+      `SELECT ${MEMORY_SEARCH_COLUMNS}, m.updated_at FROM memories_trigram t CROSS JOIN memories m ` +
+      `ON m.rowid = t.rowid WHERE memories_trigram MATCH ?` +
+      `${p.tenantPredicate}${p.archivedClauseAlias}${p.aliasScope.sql}${p.currentAlias}`,
+    params: [terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR '), ...p.tenantParams, ...p.scopeParams],
+  };
+}
+
+/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the whole store. */
+function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
   const where = terms
     .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
     .join(' OR ');
-  const params = terms.flatMap((term) => {
+  const likes = terms.flatMap((term) => {
     const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
   // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
+  return {
+    sql:
+      `SELECT * FROM (SELECT ${MEMORY_SELECT_COLUMNS}, updated_at ` +
+      `FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ` +
+      `ORDER BY ${newestFirst} LIMIT ?) WHERE (${where})`,
+    params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...likes],
+  };
+}
 
-  // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the
-  // upgrade.
+/** The arms' rows, each once, most recently updated first. */
+function unionByRecency(db: DatabaseSyncLike, arms: readonly SqlFragment[], limit: number): MemoryRow[] {
   return cachedStatement(
     db,
-    `
-    SELECT ${MEMORY_SELECT_COLUMNS}
-    FROM (
-      SELECT ${MEMORY_SELECT_COLUMNS}, updated_at
-      FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias}
-      ORDER BY ${newestFirst}
-      LIMIT ?
-    )
-    WHERE (${where})
-    ORDER BY updated_at DESC, created DESC, content ASC, id ASC
-    LIMIT ?
-  `,
-  ).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM (${arms.map((arm) => arm.sql).join(' UNION ')}) ` +
+      `ORDER BY updated_at DESC, created DESC, content ASC, id ASC LIMIT ?`,
+  ).all(...arms.flatMap((arm) => arm.params), limit) as MemoryRow[];
 }
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. */

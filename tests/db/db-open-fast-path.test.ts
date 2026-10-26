@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
@@ -199,8 +200,12 @@ describe('one open reads the store once', () => {
     Number((db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c: number }).c);
 
   it('a current store with a memory opens on its PRAGMAs and the one probe, through openHippoDb and openStore', () => {
-    expect(afterPragmas(() => openHippoDb(root))).toHaveLength(1);
-    expect(afterPragmas(() => openStore(root))).toHaveLength(1);
+    // The runtime remembers the once-per-store steps the first open ran, as a CLI or server process does.
+    new StoreRuntime().run(() => {
+      closeHippoDb(openStore(root));
+      expect(afterPragmas(() => openHippoDb(root))).toHaveLength(1);
+      expect(afterPragmas(() => openStore(root))).toHaveLength(1);
+    });
   });
 
   it("a later openStore in one request asks once whether a memory row is there, for both of setup's steps", () => {

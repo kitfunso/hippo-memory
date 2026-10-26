@@ -1,0 +1,28 @@
+GET /v1/memories/1/promote -> 404 not found
+POST /v1/memories/1/promote -> 404 memory not found: 1
+DELETE /v1/memories/1/promote -> 404 not found
+PUT /v1/memories/1/promote -> 404 not found
+GET /v1/memories/007/promote -> 404 not found
+POST /v1/memories/007/promote -> 404 memory not found: 007
+DELETE /v1/memories/007/promote -> 404 not found
+PUT /v1/memories/007/promote -> 404 not found
+GET /v1/memories/abc/promote -> 404 not found
+POST /v1/memories/abc/promote -> 404 memory not found: abc
+DELETE /v1/memories/abc/promote -> 404 not found
+PUT /v1/memories/abc/promote -> 404 not found
+GET /v1/memories/-1/promote -> 404 not found
+POST /v1/memories/-1/promote -> 404 memory not found: -1
+DELETE /v1/memories/-1/promote -> 404 not found
+PUT /v1/memories/-1/promote -> 404 not found
+GET /v1/memories/%31/promote -> 404 not found
+POST /v1/memories/%31/promote -> 404 memory not found: 1
+DELETE /v1/memories/%31/promote -> 404 not found
+PUT /v1/memories/%31/promote -> 404 not found
+GET /v1/memories//promote -> 404 not found
+POST /v1/memories//promote -> 404 not found
+DELETE /v1/memories//promote -> 404 not found
+PUT /v1/memories//promote -> 404 not found
+GET /v1/memories/1/promote/ -> 404 not found
+POST /v1/memories/1/promote/ -> 404 not found
+DELETE /v1/memories/1/promote/ -> 404 not found
+PUT /v1/memories/1/promote/ -> 404 not found

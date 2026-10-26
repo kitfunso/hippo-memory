@@ -1,0 +1,28 @@
+GET /v1/project-briefs/1/close -> 404 not found
+POST /v1/project-briefs/1/close -> 404 brief 1 not found for tenant default
+DELETE /v1/project-briefs/1/close -> 404 not found
+PUT /v1/project-briefs/1/close -> 404 not found
+GET /v1/project-briefs/007/close -> 404 not found
+POST /v1/project-briefs/007/close -> 404 brief 7 not found for tenant default
+DELETE /v1/project-briefs/007/close -> 404 not found
+PUT /v1/project-briefs/007/close -> 404 not found
+GET /v1/project-briefs/abc/close -> 404 not found
+POST /v1/project-briefs/abc/close -> 404 not found
+DELETE /v1/project-briefs/abc/close -> 404 not found
+PUT /v1/project-briefs/abc/close -> 404 not found
+GET /v1/project-briefs/-1/close -> 404 not found
+POST /v1/project-briefs/-1/close -> 404 not found
+DELETE /v1/project-briefs/-1/close -> 404 not found
+PUT /v1/project-briefs/-1/close -> 404 not found
+GET /v1/project-briefs/%31/close -> 404 not found
+POST /v1/project-briefs/%31/close -> 404 not found
+DELETE /v1/project-briefs/%31/close -> 404 not found
+PUT /v1/project-briefs/%31/close -> 404 not found
+GET /v1/project-briefs//close -> 404 not found
+POST /v1/project-briefs//close -> 404 not found
+DELETE /v1/project-briefs//close -> 404 not found
+PUT /v1/project-briefs//close -> 404 not found
+GET /v1/project-briefs/1/close/ -> 404 not found
+POST /v1/project-briefs/1/close/ -> 404 not found
+DELETE /v1/project-briefs/1/close/ -> 404 not found
+PUT /v1/project-briefs/1/close/ -> 404 not found

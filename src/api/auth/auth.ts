@@ -9,7 +9,7 @@ import type { ApiKeyOwner, ApiKeyRecord } from '../../base/ports/store/types.js'
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context, type EntryContext } from '../types.js';
-import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../base/ports/store/keys.js';
+import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../../base/ports/store/keys.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -18,7 +18,7 @@ function keyIdOfSubject(subject: string): string | null {
   return subject.startsWith(API_KEY_SUBJECT) ? subject.slice(API_KEY_SUBJECT.length) : null;
 }
 
-export interface AuthCreateOpts {
+export interface AuthCreateOptions {
   label?: string;
   /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
    * by name. */
@@ -42,7 +42,7 @@ export interface AuthCreateResult {
 /** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
  * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
  * mints members. */
-export async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+export async function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
@@ -78,7 +78,7 @@ export { DEFAULT_KEY_TTL_DAYS };
 export const MAX_TTL_DAYS = 3650;
 
 /** A 400, not a RangeError, since the caller of the mint chose these. */
-function mintExpiry({ ttlDays, noExpiry }: AuthCreateOpts, now: Date): string | null {
+function mintExpiry({ ttlDays, noExpiry }: AuthCreateOptions, now: Date): string | null {
   if (noExpiry && ttlDays !== undefined) {
     throw new BadRequestError('send ttlDays or noExpiry, not both');
   }
@@ -90,7 +90,7 @@ function mintExpiry({ ttlDays, noExpiry }: AuthCreateOpts, now: Date): string | 
   return new Date(now.getTime() + days * DAY_MS).toISOString();
 }
 
-function adminKeyMint(ctx: Context, opts: AuthCreateOpts): KeyMintPlan<KeyMint> {
+function adminKeyMint(ctx: Context, opts: AuthCreateOptions): KeyMintPlan<KeyMint> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can create API keys');
   }
@@ -109,7 +109,7 @@ function createResult({ key }: KeyMint, plaintext: string): AuthCreateResult {
   return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: key.role, expiresAt: key.expiresAt };
 }
 
-export interface AuthCreateSelfOpts {
+export interface AuthCreateSelfOptions {
   label?: string;
   /** Days until the new key expires. */
   ttlDays: number;
@@ -124,7 +124,7 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
 
 /** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a
  * departed user's key short-lived. */
-function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
+function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): void {
   if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
     throw new RangeError(`authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`);
   }
@@ -135,14 +135,14 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 
 /** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's
  * revokes, the mint and its audit rows commit or fail together. */
-export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
+export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOptions): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
   await keyWrites.changeApiKey('create_self', mint);
   return selfResult(mint, plaintext);
 }
 
-function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKeyMint> {
+function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<SelfKeyMint> {
   if (!ctx.actor.viaAuthResolver) {
     throw new ForbiddenError('Only a caller signed in through the auth resolver can mint its own key');
   }
@@ -201,7 +201,7 @@ function memberKeyIdOf(actor: Actor): string | null {
 function memberListFilter(
   actor: Actor,
   owner: string | null | undefined,
-): Pick<ListApiKeysOpts, 'ownerSubject' | 'keyId'> | null {
+): Pick<ListApiKeysOptions, 'ownerSubject' | 'keyId'> | null {
   if (actor.role === 'admin') return {};
   if (actor.viaAuthResolver) return { ownerSubject: actor.subject };
   const keyId = memberKeyIdOf(actor);

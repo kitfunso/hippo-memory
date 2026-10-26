@@ -179,10 +179,8 @@ function dagSummaryEntry(now: Date): MemoryEntry {
   return mem(
     now,
     'dag-summary-1',
-    'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing ' +
-      'index), ' +
-      '/reports takes 8s ' +
-      '(needs job queue)',
+    'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing index), ' +
+      '/reports takes 8s (needs job queue)',
     {
       created: dateOffset(16),
       layer: Layer.Semantic,

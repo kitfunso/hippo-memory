@@ -27,13 +27,13 @@ export function initStore(hippoRoot: string): void {
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
 export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
-  const { db, facts } = openHippoDbWithFacts(hippoRoot, opts);
+  const { db, facts, reused } = openHippoDbWithFacts(hippoRoot, opts);
   // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection
   // cannot write them.
   if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
   try {
     ensureMirrorDirectories(hippoRoot);
-    recoverDueMirrors(hippoRoot, db);
+    if (!reused) recoverDueMirrors(hippoRoot, db, facts?.mirrorsDue);
     // Both steps act only on a store with no memory row. A cached request handle has no probe facts, so it asks once
     // for both; a store emptied on that handle is still set up again.
     if (facts?.hasMemories ?? holdsMemory(db)) return db;

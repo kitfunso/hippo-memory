@@ -1,0 +1,327 @@
+{
+  "global": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"7990dd94e0f5e8c5","query_length":27,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [
+      {
+        "id": "mem_p_global",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"class_tag":"deploy-duration","detected_phrase":"will take 3 days","n_closed":1,"mean_ratio":1.6666666666666667}",
+        "op": "recall_autodebias_hint",
+        "target_id": "deploy-duration",
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"7990dd94e0f5e8c5","query_length":27}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"7990dd94e0f5e8c5","query_length":27,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 20,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 948,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_noise",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_cafe",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_raw",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_summary",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "<claim>",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "20",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 1,
+        "score": 0.9784108209147198,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 2,
+        "score": 0.9596865633327044,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_raw",
+        "result_rank": 3,
+        "score": 0.9107485445829212,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 4,
+        "score": 0.8998084735230687,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "<claim>",
+        "result_rank": 5,
+        "score": 0.8977499171337031,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 6,
+        "score": 0.8757996604702298,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 7,
+        "score": 0.8479982915130975,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 8,
+        "score": 0.8464884614343464,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 9,
+        "score": 0.8305462896919783,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 10,
+        "score": 0.8292805747253252,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 11,
+        "score": 0.8265134688481299,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 12,
+        "score": 0.8253465880529014,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 13,
+        "score": 0.8180011349820211,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 14,
+        "score": 0.8112167671021598,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 15,
+        "score": 0.787606705656424,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child2",
+        "result_rank": 16,
+        "score": 0.7586708165585544,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_noise",
+        "result_rank": 17,
+        "score": 0.5973839666623236,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 18,
+        "score": 0.582134455473454,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_summary",
+        "result_rank": 19,
+        "score": 0.3877022629503664,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_global",
+        "result_rank": 20,
+        "score": 0.10193871766143314,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 20,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{"query":"the deploy will take 3 days","budget":4000,"results":[{"id":"mem_p_plain","score":0.9784108209147198,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_pinned","score":0.9596865633327044,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_x_raw","score":0.9107485445829212,"strength":1,"tokens":14,"tags":[],"content":"raw capture of the deploy window from the golden session","layer":"episodic"},{"id":"mem_p_new","score":0.8998084735230687,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"<claim>","score":0.8977499171337031,"strength":1,"tokens":11,"tags":["prediction","deploy-duration"],"content":"rollout duration estimate for the eu cluster","layer":"semantic"},{"id":"mem_p_trace","score":0.8757996604702298,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_p_fill4","score":0.8479982915130975,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 4 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill3","score":0.8464884614343464,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 3 for the nightly batch","layer":"episodic"},{"id":"mem_p_goal","score":0.8305462896919783,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"},{"id":"mem_p_fill5","score":0.8292805747253252,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 5 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill2","score":0.8265134688481299,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 2 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill1","score":0.8253465880529014,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 1 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill0","score":0.8180011349820211,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 0 for the nightly batch","layer":"episodic"},{"id":"mem_p_scoped","score":0.8112167671021598,"strength":1,"tokens":14,"tags":[],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_x_child1","score":0.787606705656424,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child one moved the cron","layer":"episodic"},{"id":"mem_x_child2","score":0.7586708165585544,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child two moved the queue","layer":"episodic"},{"id":"mem_p_noise","score":0.5973839666623236,"strength":1,"tokens":13,"tags":[],"content":"unrelated note about lunch options near the office","layer":"episodic"},{"id":"mem_x_cafe","score":0.582134455473454,"strength":1,"tokens":10,"tags":[],"content":"café opening hours for the team lunch","layer":"episodic"},{"id":"mem_x_summary","score":0.3877022629503664,"strength":1,"tokens":11,"tags":["dag-summary"],"content":"rollout summary for the nightly batch move","layer":"semantic"},{"id":"mem_p_global","score":0.10193871766143314,"strength":1,"tokens":13,"tags":[],"content":"deploy notes from the global store about rollbacks","layer":"episodic"}],"total":20,"suppressionSummary":{"totalCandidates":20,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0},"planningFallacyHint":{"classTag":"deploy-duration","baserateSummary":"Last 1 estimate in class deploy-duration averaged 1.67x actual (MAE 2.00).","source":"j3.2-auto","detectedPhrase":"will take 3 days","nClosed":1,"meanRatio":1.6666666666666667}}
+",
+  },
+}

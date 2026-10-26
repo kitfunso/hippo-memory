@@ -1,0 +1,8 @@
+GET /v1/outcome -> 404 not found
+POST /v1/outcome -> 400 good is required (boolean)
+DELETE /v1/outcome -> 404 not found
+PUT /v1/outcome -> 404 not found
+GET /v1/outcome/ -> 404 not found
+POST /v1/outcome/ -> 404 not found
+DELETE /v1/outcome/ -> 404 not found
+PUT /v1/outcome/ -> 404 not found

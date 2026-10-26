@@ -4,7 +4,6 @@ import {
   setMeta,
   isSqliteBusy,
   pruneConsolidationRuns,
-  getMeta,
 } from '../../db/index.js';
 import { errorFields, log } from '../../base/util/log.js';
 import type { HippoIndex } from './rows.js';
@@ -12,21 +11,20 @@ import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { currentStoreRuntime } from '../../db/store-runtime.js';
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
+import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
 export function saveIndex(db: DatabaseSyncLike, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   withWriteScope(db, 'save_index', () => {
-    setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
-    setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
+    setMeta(db, META_KEY.lastRetrievalIds, JSON.stringify(index.last_retrieval_ids ?? []));
+    setMeta(db, META_KEY.lastTraceId, index.last_trace_id ?? '');
   });
 }
 
 type StatsDelta = { remembered?: number; recalled?: number; forgotten?: number };
-
-// Increments a busy store refused, one entry per root, folded into the next update that lands.
-const pendingStats = new Map<string, Required<StatsDelta>>();
 
 function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
   return {
@@ -38,18 +36,24 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  const total = addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta);
-  updateStatsOn(db, files.hippoRoot, total);
-  pendingStats.delete(files.hippoRoot);
+  // Increments a busy store refused, held by the runtime and folded into the next update that lands.
+  const runtime = currentStoreRuntime();
+  const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
+  try {
+    updateStatsOn(db, files.hippoRoot, total);
+  } catch (err) {
+    runtime?.holdStats(files.hippoRoot, total);
+    throw err;
+  }
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {
   // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
   // over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
-    ['total_remembered', delta.remembered ?? 0],
-    ['total_recalled', delta.recalled ?? 0],
-    ['total_forgotten', delta.forgotten ?? 0],
+    [META_KEY.totalRemembered, delta.remembered ?? 0],
+    [META_KEY.totalRecalled, delta.recalled ?? 0],
+    [META_KEY.totalForgotten, delta.forgotten ?? 0],
   ];
   for (const [key, amount] of increments) {
     if (amount === 0) continue;
@@ -77,7 +81,6 @@ export function updateStatsUnlessBusy(
     updateStats(db, files, delta);
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
-    pendingStats.set(files.hippoRoot, addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta));
     log.warnThenDebug(
       'stats-busy',
       `${committed}, but the store was busy; the stats wait for the next update`,
@@ -127,11 +130,11 @@ export function readSleepHistory(db: DatabaseSyncLike): Pick<SleepStart, 'sleepC
     db,
     `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`,
   ).all() as Array<{ timestamp: string }>;
-  return { sleepCount: Number(getMeta(db, 'sleep_count', '0')) || 0, recentRuns: rows.map((r) => r.timestamp) };
+  return { sleepCount: getMetaNumber(db, META_KEY.sleepCount), recentRuns: rows.map((r) => r.timestamp) };
 }
 
 /** Increment the sleep counter after each consolidation run. */
 export function incrementSleepCount(db: DatabaseSyncLike): void {
-  const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
-  setMeta(db, 'sleep_count', String(current + 1));
+  const current = getMetaNumber(db, META_KEY.sleepCount);
+  setMeta(db, META_KEY.sleepCount, String(current + 1));
 }

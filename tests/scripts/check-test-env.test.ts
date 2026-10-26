@@ -102,7 +102,7 @@ describe('earlyUnstubs', () => {
 
 // Built from pieces so this file's own text starts nothing and it stays a unit test.
 const CHILD = `import { spawn } from 'node:${['child', 'process'].join('_')}';\n`;
-const SERVER = `await ${'ser' + 've'}({ port: 0 });\n`;
+const SERVER = `await ${['ser', 've'].join('')}({ port: 0 });\n`;
 
 function misnamedIn(files: Record<string, string>): { file: string; has: string; want: string }[] {
   const root = mkdtempSync(join(tmpdir(), 'hippo-test-names-'));
@@ -134,6 +134,16 @@ describe('misnamedTests', () => {
     ]);
   });
 
+  it('puts a unit test with a long timeout of its own in the slow project, and leaves the slow name alone', () => {
+    const withTimeout = (ms: string): string => `it('x', () => {\n}, ${ms});\n`;
+    const files = {
+      'long.test.ts': withTimeout('90_000'),
+      'ok.test.ts': withTimeout('30_000'),
+      'named.slow.test.ts': "import { x } from '../../src/x.js';\n",
+    };
+    expect(misnamedIn(files)).toEqual([{ file: 'tests/long.test.ts', has: 'unit', want: 'slow' }]);
+  });
+
   it('follows a _helpers module that starts a child, through a helper that imports it', () => {
     const files = {
       '_helpers/run.ts': CHILD,
@@ -148,7 +158,7 @@ describe('misnamedTests', () => {
       'g.process.test.ts': CHILD,
       'g.server.test.ts': SERVER,
       'g.test.ts': "import { x } from '../../src/x.js';\n",
-      'token-eval-ab-run.test.ts': CHILD,
+      'eval/token-eval-ab-run.test.ts': CHILD,
     };
     expect(misnamedIn(files)).toEqual([]);
   });

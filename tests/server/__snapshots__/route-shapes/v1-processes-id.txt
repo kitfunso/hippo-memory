@@ -1,0 +1,28 @@
+GET /v1/processes/1 -> 404 process 1 not found
+POST /v1/processes/1 -> 404 not found
+DELETE /v1/processes/1 -> 404 not found
+PUT /v1/processes/1 -> 404 not found
+GET /v1/processes/007 -> 404 process 7 not found
+POST /v1/processes/007 -> 404 not found
+DELETE /v1/processes/007 -> 404 not found
+PUT /v1/processes/007 -> 404 not found
+GET /v1/processes/abc -> 404 not found
+POST /v1/processes/abc -> 404 not found
+DELETE /v1/processes/abc -> 404 not found
+PUT /v1/processes/abc -> 404 not found
+GET /v1/processes/-1 -> 404 not found
+POST /v1/processes/-1 -> 404 not found
+DELETE /v1/processes/-1 -> 404 not found
+PUT /v1/processes/-1 -> 404 not found
+GET /v1/processes/%31 -> 404 not found
+POST /v1/processes/%31 -> 404 not found
+DELETE /v1/processes/%31 -> 404 not found
+PUT /v1/processes/%31 -> 404 not found
+GET /v1/processes/ -> 404 not found
+POST /v1/processes/ -> 404 not found
+DELETE /v1/processes/ -> 404 not found
+PUT /v1/processes/ -> 404 not found
+GET /v1/processes/1/ -> 404 not found
+POST /v1/processes/1/ -> 404 not found
+DELETE /v1/processes/1/ -> 404 not found
+PUT /v1/processes/1/ -> 404 not found

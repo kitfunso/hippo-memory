@@ -2,7 +2,7 @@
 // down, and both webhooks serve from a folder that never holds a hippo.db.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Actor, Context } from '../../src/api/index.js';
@@ -20,6 +20,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const slackActor: Actor = { subject: 'connector:slack', role: 'admin' };
@@ -33,7 +34,7 @@ let n = 0;
 
 function copyOf(): string {
   const root = join(home, `copy-${String(++n)}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

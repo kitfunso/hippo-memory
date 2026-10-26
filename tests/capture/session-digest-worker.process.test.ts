@@ -1,11 +1,10 @@
 // End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
-import { spawn } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sessionDigestId } from '../../src/base/session/session-digest-row.js';
-import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
+import { sessionDigestId, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
+import { currentStoreRuntime } from './store-runtime.js';
 
 // WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long write pays the
 // checkpoint's two flushes once per 1,000 pages, not once per 100.
@@ -54,11 +55,9 @@ export interface WalCheckpointer {
   stop(): Promise<void>;
 }
 
-const backgrounded = new Set<string>();
-
-/** The wal_autocheckpoint value for a new connection to `dbPath` in this process. */
-export function autoCheckpointPages(dbPath: string): number {
-  return backgrounded.has(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
+/** The wal_autocheckpoint value for a new connection to `dbPath` under `runtime`. */
+export function autoCheckpointPages(dbPath: string, runtime = currentStoreRuntime()): number {
+  return runtime?.checkpointsInBackground(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
 }
 
 interface CheckpointWorker {
@@ -97,8 +96,9 @@ function newCheckpointWorker(
 
 /**
  * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first checkpoint that is due.
+ * Connections `runtime` opens meanwhile leave checkpoints to it; outside a runtime they still checkpoint inline.
  */
-export function startWalCheckpointer(dbPath: string): WalCheckpointer {
+export function startWalCheckpointer(dbPath: string, runtime = currentStoreRuntime()): WalCheckpointer {
   const key = path.resolve(dbPath);
   let worker: Worker | undefined;
   let exited: Promise<void> | undefined;
@@ -106,11 +106,11 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
   let stopped = false;
   let responses = 0;
   let due = RESPONSES_PER_CHECKPOINT;
-  backgrounded.add(key);
+  runtime?.markBackground(key, true);
 
   const end = (): void => {
     stopped = true;
-    backgrounded.delete(key);
+    runtime?.markBackground(key, false);
   };
   const spawn = (): Worker => {
     const settle = (settled: boolean): void => {

@@ -6,6 +6,7 @@ import { workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 const HOUR_MS = 3_600_000;
 
@@ -79,7 +80,7 @@ describe('hippo daily-runner sleeps the global store', () => {
   it('counts a failed global step and still runs the workspaces', async () => {
     const { dir, globalRoot } = setup('daily-global-fail');
     const workspace = join(dir, 'repo');
-    mkdirSync(join(workspace, '.hippo'), { recursive: true });
+    mkdirSync(join(workspace, '.hippo'), PRIVATE_DIR);
     initTestStore(join(workspace, '.hippo'));
     writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
 

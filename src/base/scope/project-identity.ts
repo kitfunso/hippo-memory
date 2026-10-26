@@ -23,7 +23,7 @@ export interface ProjectIdentity {
 
 /** Options for resolveProjectIdentity. Both fields are test seams; stopDir bounds the upward walk so tests in a temp
  * sandbox never reach the host's real markers. */
-export interface ResolveProjectIdentityOpts {
+export interface ResolveProjectIdentityOptions {
   homeDir?: string;
   stopDir?: string;
 }

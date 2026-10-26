@@ -1,7 +1,7 @@
 // Where hippo and the agent tools keep their config and data, from a machine's home folder and environment: the rules
 // only. src/host/agent-homes.ts reads this process's home, and src/infra/machine.ts builds the real Machine.
 
-import * as path from 'path';
+import * as path from 'node:path';
 import type { AgentFiles } from './agent-files.js';
 import type { GitRunner } from '../ports/git.js';
 import type { ProjectIdentity } from '../scope/project-identity.js';

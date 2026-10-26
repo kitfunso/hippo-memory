@@ -1,5 +1,5 @@
 import type { RerankStep } from '../../rank/search-types.js';
-import type { OriginFilter, AppendAuditOpts } from './types.js';
+import type { OriginFilter, AppendAuditOptions } from './types.js';
 import type { EntryTarget } from './entry-writes.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
@@ -21,7 +21,7 @@ export interface RecallWrites {
    * `localGoalRecallRows` does. */
   readonly goalLog: readonly GoalRecallLogRow[];
   /** In the order they happened. */
-  readonly audit: readonly AppendAuditOpts[];
+  readonly audit: readonly AppendAuditOptions[];
   readonly trace?: RecallTraceInput;
   /** Nothing when `recallBoostAblated`. Each id found, in `tenantId` when set, gets the retrieval_count,
    * last_retrieved, half_life_days and strength `markRetrieved` computes from the row read before any update, so a

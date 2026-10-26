@@ -1,7 +1,7 @@
-import { execFileSync, spawnSync } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // withFakeHome empties PATH; a child process still needs node and cmd.exe.
@@ -13,8 +13,8 @@ import {
   isCodexWrapperInstalled,
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
+  resolveCodexWrapperPaths,
 } from '../../src/surface/hooks-install/codex-wrapper.js';
-import { resolveCodexWrapperPaths } from '../../src/surface/hooks-install/codex-wrapper.js';
 import { resolveCodexSessionTranscript } from '../../src/surface/capture/codex-session.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -380,8 +380,8 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     fs.writeFileSync(
       script,
       [
-        "const fs = require('fs');",
-        "const path = require('path');",
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
         'const home = process.env.CODEX_HOME;',
         "const sessions = path.join(home, 'sessions', '2026', '10', '03');",
         'fs.mkdirSync(sessions, { recursive: true });',

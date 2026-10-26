@@ -1,6 +1,5 @@
 // Exit negative controls: constructions where a join must NOT confirm, so a reader that over-joins fails here.
 import { describe, it, expect, afterEach } from 'vitest';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   PROMPT_HOOK,
@@ -24,6 +23,7 @@ import {
   type TurnSpec,
   type Verdict,
 } from '../_helpers/host-transcript.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const PROMPT = 'how should the postgres migration rollback plan work';
 const P1 = 'first question about deploys';
@@ -174,7 +174,7 @@ describe('negative controls', () => {
     p = project();
     fire(p, 'n7', P1);
     const copyProj = path.join(p.dir, 'copy', 'proj');
-    fs.cpSync(p.proj, copyProj, { recursive: true });
+    copyTree(p.proj, copyProj);
     const copy: Project = { ...p, proj: copyProj, cwd: copyProj, hippoRoot: path.join(copyProj, '.hippo') };
     const r2 = hippo(copy, PROMPT_HOOK, {
       input: JSON.stringify({ session_id: 'n7', prompt: P2, hook_event_name: 'UserPromptSubmit' }),

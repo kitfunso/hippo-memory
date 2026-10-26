@@ -1,7 +1,7 @@
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { SessionEvent } from '../../base/ports/store/sessions.js';
-import type { SleepBegin } from '../../base/ports/store/consolidation.js';
+import type { SleepBegin, UntracedSession } from '../../base/ports/store/consolidation.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { commonDerivationScope } from '../../base/scope/recall-scope.js';
@@ -20,21 +20,22 @@ export function traceWindow(run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 
 }
 
 // 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via source_session_id)
-// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
-export async function promoteSessionTraces(run: SleepRun, sessions: readonly string[]): Promise<void> {
+// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics. The
+// store read the sessions with their events at sleep begin, and one tombstone read covers every trace.
+export async function promoteSessionTraces(run: SleepRun, sessions: readonly UntracedSession[]): Promise<void> {
   const { result } = run;
+  const built = sessions.flatMap((session) => sessionTrace(run, run.tenantId, session) ?? []);
+  const rejected = await run.tombstones.rejectedAmong(
+    run.tenantId,
+    built.map(({ trace }) => rejectionDigest(trace.content)),
+  );
   let tracesSkippedRejected = 0;
-  const consolidationTenant = run.tenantId;
-
-  for (const sessionId of sessions) {
-    const built = await sessionTrace(run, consolidationTenant, sessionId);
-    if (!built) continue;
-    const { trace, outcome } = built;
-    if (await traceRejected(run, trace, sessionId)) {
+  for (const { trace, outcome, sessionId } of built) {
+    if (rejected.has(rejectionDigest(trace.content))) {
+      await auditRejectedTrace(run, trace, sessionId);
       tracesSkippedRejected++;
       continue;
     }
-
     run.pendingWrites.push(trace);
     run.survivors.push(trace);
     result.promotedTraces++;
@@ -54,13 +55,11 @@ export async function promoteSessionTraces(run: SleepRun, sessions: readonly str
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
 /** The trace a completed session renders to, or null when it cannot be promoted. */
-async function sessionTrace(
+function sessionTrace(
   run: SleepRun,
   consolidationTenant: string,
-  sessionId: string,
-): Promise<{ trace: MemoryEntry; outcome: TraceOutcome } | null> {
-  const events = await run.store.sessions.read(consolidationTenant, 'event', { sessionId, limit: 1000 });
-
+  { sessionId, events }: UntracedSession,
+): { trace: MemoryEntry; outcome: TraceOutcome; sessionId: string } | null {
   // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
   if (!sessionScope.ok) {
@@ -92,13 +91,13 @@ async function sessionTrace(
     },
     run.now,
   );
-  return { trace, outcome };
+  return { trace, outcome, sessionId };
 }
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
 function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.eventType === 'session_complete');
-  if (!completeEvent) return null; // defence-in-depth; listPromotableSessions filters already.
+  if (!completeEvent) return null; // defence-in-depth; the store's untraced-session read filters already.
 
   const outcomeRaw = completeEvent.content;
   if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
@@ -113,23 +112,20 @@ function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome
   return { outcome: outcomeRaw, summary };
 }
 
-// traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every sleep; check the
-// tombstone under the entry's own stamped tenantId, never a guessed one.
-async function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): Promise<boolean> {
+// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused under.
+async function auditRejectedTrace(run: SleepRun, trace: MemoryEntry, sessionId: string): Promise<void> {
   const traceDigest = rejectionDigest(trace.content);
   const tombstone = await run.tombstones.find(trace.tenantId, traceDigest);
-  if (!tombstone) return false;
   await run.tombstones.auditOrCount({
     tenantId: trace.tenantId,
     actor: 'sleep',
     op: 'reject_refusal',
     metadata: {
       digest: traceDigest,
-      reason: tombstone.reason,
+      reason: tombstone?.reason ?? null,
       sourceSessionId: sessionId,
     },
   });
-  return true;
 }
 
 // 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal

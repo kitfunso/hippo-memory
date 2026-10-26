@@ -15,7 +15,7 @@ import { duplicateKey } from '../../base/util/same-text.js';
 
 // Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
 // Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
-const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
+const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]');
 const PHRASE_WORDS = 32;
 
 /** The first words of `text`, which a row holding the text word for word holds in a row; null when they might name no

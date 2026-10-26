@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { makeRoot } from '../_helpers/make-root.js';

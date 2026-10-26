@@ -1,0 +1,8 @@
+GET /v1/connectors/github/events -> 404 not found
+POST /v1/connectors/github/events -> 404 not found
+DELETE /v1/connectors/github/events -> 404 not found
+PUT /v1/connectors/github/events -> 404 not found
+GET /v1/connectors/github/events/ -> 404 not found
+POST /v1/connectors/github/events/ -> 404 not found
+DELETE /v1/connectors/github/events/ -> 404 not found
+PUT /v1/connectors/github/events/ -> 404 not found

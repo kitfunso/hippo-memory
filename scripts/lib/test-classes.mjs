@@ -23,10 +23,14 @@ export const EVAL_TESTS = [
   'z0-codex-guards',
   'z0-codex-faults',
   'z0-codex-install',
-].map((name) => `tests/token-eval-${name}.test.ts`);
+].map((name) => `tests/eval/token-eval-${name}.test.ts`);
 
 export const PROCESS_GLOBS = ['tests/**/*.process.test.ts', 'tests/**/*.process.test.mjs'];
 export const SERVER_GLOBS = ['tests/**/*.server.test.ts', 'tests/**/*.server.test.mjs'];
+/** Tests that start nothing but need minutes of CPU or disk: seeded stores in the thousands, a TypeScript program over src. */
+export const SLOW_GLOBS = ['tests/**/*.slow.test.ts', 'tests/**/*.slow.test.mjs'];
+/** A unit test that asks for more than this of its own is slow, and takes the slow project's budget instead. */
+export const UNIT_OWN_TIMEOUT_CEILING_MS = 30_000;
 
 /** A test that names the child process module starts a child. */
 export const STARTS_A_CHILD = /\bchild_process\b/;
@@ -36,11 +40,24 @@ export const STARTS_A_SERVER = /\bworker_threads\b|\bserve\(|\bserveDashboard\(|
 /**
  * The project a test file's name puts it in.
  * @param {string} file
- * @returns {'process' | 'server' | 'unit'}
+ * @returns {'process' | 'server' | 'slow' | 'unit'}
  */
 export function projectOfName(file) {
-  const m = /\.(process|server)\.test\.(ts|mjs)$/.exec(file);
-  return m ? /** @type {'process' | 'server'} */ (m[1]) : 'unit';
+  const m = /\.(process|server|slow)\.test\.(ts|mjs)$/.exec(file);
+  return m ? /** @type {'process' | 'server' | 'slow'} */ (m[1]) : 'unit';
+}
+
+const OWN_TIMEOUT = /\}, *(\d[\d_]*)\)|\btestTimeout: *(\d[\d_]*)/g;
+
+/**
+ * The longest timeout a test source sets for itself, per test, per hook or with vi.setConfig.
+ * @param {string} source
+ * @returns {number} milliseconds, 0 when it sets none
+ */
+export function longestOwnTimeoutMs(source) {
+  let longest = 0;
+  for (const m of source.matchAll(OWN_TIMEOUT)) longest = Math.max(longest, Number((m[1] ?? m[2]).replaceAll('_', '')));
+  return longest;
 }
 
 /** A test that lifts its own unit budget with `vi.setConfig({ testTimeout })`. */

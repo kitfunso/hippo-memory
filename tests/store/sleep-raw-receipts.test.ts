@@ -21,6 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 
@@ -29,8 +30,6 @@ oneRequestPerTest();
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Replay off keeps the decay assertions deterministic (replay re-strengthens a random sample of survivors).
 // Dormant off: these tests pin the delete path (tests/store/dormant-memories.test.ts covers the dormant default).

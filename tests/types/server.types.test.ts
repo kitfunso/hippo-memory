@@ -15,7 +15,7 @@ import {
   type CaptureContext,
   type HippoStore,
   type SessionCaptureRequest,
-  type ServeOpts,
+  type ServeOptions,
   type ServerHandle,
 } from '../../src/server.js';
 import type { HippoConfig } from '../../src/entry/store-kit.js';
@@ -26,20 +26,20 @@ declare const plain: Context;
 declare const sessionReq: SessionCaptureRequest;
 
 describe('hippo-memory/server entry types', () => {
-  it('serve takes ServeOpts and resolves to a ServerHandle', () => {
-    expectTypeOf(serve).parameters.toEqualTypeOf<[ServeOpts]>();
+  it('serve takes ServeOptions and resolves to a ServerHandle', () => {
+    expectTypeOf(serve).parameters.toEqualTypeOf<[ServeOptions]>();
     expectTypeOf(serve).returns.toEqualTypeOf<Promise<ServerHandle>>();
     // hippoRoot is required, and the argument is an options object
-    expectTypeOf<{ port: number }>().not.toMatchTypeOf<ServeOpts>();
-    expectTypeOf<string>().not.toMatchTypeOf<ServeOpts>();
+    expectTypeOf<{ port: number }>().not.toMatchTypeOf<ServeOptions>();
+    expectTypeOf<string>().not.toMatchTypeOf<ServeOptions>();
   });
 
-  it('ServeOpts pins the fields an integrator sets', () => {
-    expectTypeOf<ServeOpts['hippoRoot']>().toEqualTypeOf<string>();
-    expectTypeOf<ServeOpts['port']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<ServeOpts['host']>().toEqualTypeOf<string | undefined>();
-    expectTypeOf<ServeOpts['store']>().toEqualTypeOf<HippoStore | undefined>();
-    expectTypeOf<ServeOpts['autoSleep']>().toEqualTypeOf<false | undefined>();
+  it('ServeOptions pins the fields an integrator sets', () => {
+    expectTypeOf<ServeOptions['hippoRoot']>().toEqualTypeOf<string>();
+    expectTypeOf<ServeOptions['port']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<ServeOptions['host']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<ServeOptions['store']>().toEqualTypeOf<HippoStore | undefined>();
+    expectTypeOf<ServeOptions['autoSleep']>().toEqualTypeOf<false | undefined>();
   });
 
   it('ServerHandle exposes the port, url and an async stop', () => {

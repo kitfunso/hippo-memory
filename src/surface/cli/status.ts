@@ -1,11 +1,11 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
 import { envHomeDir } from '../../base/util/env.js';
-import { strengthOf } from '../../api/types.js';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { calculateStrength, calculateRewardFactor, resolveConfidence } from '../../base/memory/strength.js';
+import { strengthOf } from '../../api/types.js';
 import { Layer } from '../../base/memory/entry.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';

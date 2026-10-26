@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as path from 'path';
+import * as path from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { createMemory } from '../../src/entry/memory.js';

@@ -9,7 +9,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { tombstoneChecks } from '../../src/domain/consolidate/tombstones.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -45,7 +45,7 @@ function particle(memoryId: string, i: number): PhysicsParticle {
 function storedParticles(root: string): Map<string, PhysicsParticle> {
   const db = openHippoDb(root);
   try {
-    return loadPhysicsState(db);
+    return loadAllPhysicsState(db);
   } finally {
     closeHippoDb(db);
   }

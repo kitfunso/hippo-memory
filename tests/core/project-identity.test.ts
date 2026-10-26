@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity, deriveOriginProject } from '../../src/host/project-identity.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -24,7 +25,7 @@ beforeEach(() => {
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pid-'));
   home = mkdirs('home');
   // The global store lives in the home dir, like ~/.hippo on a real machine.
-  fs.mkdirSync(path.join(home, '.hippo'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.hippo'), PRIVATE_DIR);
 });
 
 afterEach(() => {
@@ -34,14 +35,14 @@ afterEach(() => {
 describe('resolveProjectIdentity', () => {
   it('resolves a project by its .hippo directory', () => {
     const proj = mkdirs('home', 'my-app');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const id = resolveProjectIdentity(proj, { homeDir: home });
     expect(id).toEqual({ root: fs.realpathSync.native(proj), name: 'my-app', legacyName: 'my-app', isHome: false });
   });
 
   it('resolves from a nested subdirectory to the nearest .hippo ancestor', () => {
     const proj = mkdirs('home', 'my-app');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const nested = mkdirs('home', 'my-app', 'src', 'deep');
     const id = resolveProjectIdentity(nested, { homeDir: home });
     expect(id.name).toBe('my-app');
@@ -59,7 +60,7 @@ describe('resolveProjectIdentity', () => {
 
   it('prefers .hippo over a nearer .git', () => {
     const outer = mkdirs('home', 'mono');
-    fs.mkdirSync(path.join(outer, '.hippo'));
+    fs.mkdirSync(path.join(outer, '.hippo'), PRIVATE_DIR);
     const inner = mkdirs('home', 'mono', 'vendored');
     fs.mkdirSync(path.join(inner, '.git'));
     const id = resolveProjectIdentity(inner, { homeDir: home });
@@ -97,7 +98,7 @@ describe('resolveProjectIdentity', () => {
     fs.writeFileSync(path.join(link, 'commondir'), '../..\n');
     const wt = mkdirs('home', 'repo-wt');
     fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${link}\n`);
-    fs.mkdirSync(path.join(wt, '.hippo'));
+    fs.mkdirSync(path.join(wt, '.hippo'), PRIVATE_DIR);
     expect(resolveProjectIdentity(wt, { homeDir: home }).name).toBe('repo-wt');
   });
 
@@ -138,7 +139,7 @@ describe('resolveProjectIdentity', () => {
 
   it('ends the walk at the temp root unchecked, so markers above it never name a sandbox', () => {
     const tmp = mkdirs('outer', 'tmp');
-    fs.mkdirSync(path.join(tmpRoot, 'outer', '.hippo'));
+    fs.mkdirSync(path.join(tmpRoot, 'outer', '.hippo'), PRIVATE_DIR);
     fs.mkdirSync(path.join(tmpRoot, 'outer', '.git'));
     const plain = mkdirs('outer', 'tmp', 'plain');
     const repo = mkdirs('outer', 'tmp', 'repo');
@@ -153,14 +154,14 @@ describe('resolveProjectIdentity', () => {
 
   it('lowercases the project name', () => {
     const proj = mkdirs('home', 'MyApp');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const id = resolveProjectIdentity(proj, { homeDir: home });
     expect(id.name).toBe('myapp');
   });
 
   it('caches by input path only when no test homeDir is injected', () => {
     const proj = mkdirs('home', 'cached-app');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const first = resolveProjectIdentity(proj, { homeDir: home });
     // Remove the marker; an uncached resolve must now differ.
     fs.rmdirSync(path.join(proj, '.hippo'));
@@ -172,7 +173,7 @@ describe('resolveProjectIdentity', () => {
   const junctionIt = process.platform === 'win32' ? it : it.skip;
   junctionIt('resolves a junction alias to the same identity as the real path', () => {
     const proj = mkdirs('home', 'real-app');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const alias = path.join(tmpRoot, 'alias-app');
     fs.symlinkSync(proj, alias, 'junction');
     const viaAlias = resolveProjectIdentity(alias, { homeDir: home });
@@ -185,7 +186,7 @@ describe('resolveProjectIdentity', () => {
 describe('deriveOriginProject', () => {
   it('returns the project name inside a project', () => {
     const proj = mkdirs('home', 'origin-app');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     expect(deriveOriginProject(proj, { homeDir: home })).toBe('origin-app');
   });
 

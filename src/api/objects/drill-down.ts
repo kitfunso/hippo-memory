@@ -8,8 +8,8 @@ import { descendantAdmits, type DescendantAdmission } from '../../base/scope/rea
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from '../types.js';
 
-const DEFAULT_DRILL_DOWN_LIMIT = 50;
-const MAX_DRILL_DOWN_DEPTH = 10;
+export const DEFAULT_DRILL_DOWN_LIMIT = 50;
+export const MAX_DRILL_DOWN_DEPTH = 10;
 
 export interface DrillDownOptions {
   /** Cap on number of children returned. Default 50. */

@@ -8,7 +8,7 @@ export const KEY_REQUIRED_MESSAGE =
   'auth required: this server takes no request without an API key. Mint one with `hippo auth create` and send it as ' +
   '"Authorization: Bearer <key>"; the hippo CLI reads HIPPO_API_KEY, else the key `hippo serve` wrote to server.key.';
 
-type ServeOpts = Parameters<typeof serveSwitched>[0];
+type ServeOptions = Parameters<typeof serveSwitched>[0];
 
 export interface KeyedServer extends ServerHandle {
   readonly key: string;
@@ -39,7 +39,7 @@ export function sendKeyTo(handle: ServerHandle, key: string): KeyedServer {
 
 /** `serve` (the suites' store switch unless a test pins its own) plus the local key it wrote; the per-caller limiter is
  * off unless the test names its own, as every request here comes from the one key. */
-export async function serveKeyed(opts: ServeOpts, serve = serveSwitched): Promise<KeyedServer> {
+export async function serveKeyed(opts: ServeOptions, serve = serveSwitched): Promise<KeyedServer> {
   const handle = await serve({ ...opts, rateLimits: { perCaller: 'off', ...opts.rateLimits } });
   const key = readLocalKey(opts.hippoRoot);
   if (key === undefined) throw new Error(`serve() wrote no key file under ${opts.hippoRoot}`);

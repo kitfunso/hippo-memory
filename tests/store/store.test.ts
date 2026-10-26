@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   loadSearchEntries,
   writeEntry,
@@ -10,6 +10,11 @@ import {
   updateStats,
   saveActiveTaskSnapshot,
   appendSessionEvent,
+  deleteEntry,
+  loadLastRecall,
+  loadActiveTaskSnapshot,
+  clearActiveTaskSnapshot,
+  listSessionEvents,
 } from '../_helpers/root-forms.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -24,13 +29,6 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  deleteEntry,
-  loadLastRecall,
-  loadActiveTaskSnapshot,
-  clearActiveTaskSnapshot,
-  listSessionEvents,
-} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 

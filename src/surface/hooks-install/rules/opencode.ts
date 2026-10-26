@@ -1,6 +1,6 @@
 // The OpenCode plugin hippo installs and the hippo hooks it strips from an old opencode.json; surface/hooks-install
 // does the reads and writes.
-import * as path from 'path';
+import * as path from 'node:path';
 import { userHome, type Homes } from '../../../base/util/agent-homes.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../../base/util/json.js';
 

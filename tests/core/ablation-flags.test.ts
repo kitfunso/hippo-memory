@@ -12,13 +12,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import * as path from 'path';
-import { calculateStrength, createMemory, applyOutcome } from '../../src/entry/memory.js';
+import * as path from 'node:path';
+import { calculateStrength, createMemory, applyOutcome, markRetrieved } from '../../src/entry/memory.js';
 import { calculateRewardFactor, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { outcomeMultiplier } from '../../src/domain/search/boosts.js';
-import { markRetrieved } from '../../src/entry/memory.js';
 import { evalNow, evalSwitches, type StrengthAblation } from '../../src/infra/eval-switches.js';
 import {
   envAblateDecay,

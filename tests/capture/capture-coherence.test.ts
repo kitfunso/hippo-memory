@@ -261,7 +261,7 @@ describe('capture coherence', () => {
       ).toEqual([text.slice(0, -1)]);
     }
     for (const text of [
-      "Always pass '" + 'a, ' + 'x'.repeat(600) + "' to the parser.",
+      "Always pass 'a, " + 'x'.repeat(600) + "' to the parser.",
       "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
     ]) {
       expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual([]);

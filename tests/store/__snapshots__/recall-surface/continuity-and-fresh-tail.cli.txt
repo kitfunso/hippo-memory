@@ -1,0 +1,318 @@
+{
+  "global": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [
+      {
+        "id": "mem_p_global",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":20}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [
+      {
+        "goal_id": "<goal>",
+        "memory_id": "mem_p_goal",
+        "score": 1.3352221262280533,
+        "session_id": "golden-session",
+      },
+    ],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 20,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 1076,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_noise",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_cafe",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_raw",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_summary",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "<claim>",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "20",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 1,
+        "score": 1.3352221262280533,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.9104453098338096,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 3,
+        "score": 0.8272957909042091,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 4,
+        "score": 0.8121235358917,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 5,
+        "score": 0.7877662160703595,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 6,
+        "score": 0.7385130541272472,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 7,
+        "score": 0.7381187482028272,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 8,
+        "score": 0.7186744718443804,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 9,
+        "score": 0.7180944527833344,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 10,
+        "score": 0.7130069682796575,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 11,
+        "score": 0.7127300985947632,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 12,
+        "score": 0.7071532689868216,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 13,
+        "score": 0.67937221146189,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child2",
+        "result_rank": 14,
+        "score": 0.6738688101075895,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_raw",
+        "result_rank": 15,
+        "score": 0.6698089985343848,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "<claim>",
+        "result_rank": 16,
+        "score": 0.6445413548469767,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_noise",
+        "result_rank": 17,
+        "score": 0.4288670144791946,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 18,
+        "score": 0.2959343196464122,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_global",
+        "result_rank": 19,
+        "score": 0.25484679415358286,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_summary",
+        "result_rank": 20,
+        "score": 0.21786298303207888,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 20,
+        "session_id": "golden-session",
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_p_goal","score":1.3352221262280533,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"},{"id":"mem_p_plain","score":0.9104453098338096,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_pinned","score":0.8272957909042091,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_p_trace","score":0.8121235358917,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_p_scoped","score":0.7877662160703595,"strength":1,"tokens":14,"tags":[],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_p_fill5","score":0.7385130541272472,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 5 for the nightly batch","layer":"episodic"},{"id":"mem_p_new","score":0.7381187482028272,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_p_fill2","score":0.7186744718443804,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 2 for the nightly batch","layer":"episodic"},{"id":"mem_x_child1","score":0.7180944527833344,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child one moved the cron","layer":"episodic"},{"id":"mem_p_fill4","score":0.7130069682796575,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 4 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill1","score":0.7127300985947632,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 1 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill3","score":0.7071532689868216,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 3 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill0","score":0.67937221146189,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 0 for the nightly batch","layer":"episodic"},{"id":"mem_x_child2","score":0.6738688101075895,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child two moved the queue","layer":"episodic"},{"id":"mem_x_raw","score":0.6698089985343848,"strength":1,"tokens":14,"tags":[],"content":"raw capture of the deploy window from the golden session","layer":"episodic"},{"id":"<claim>","score":0.6445413548469767,"strength":1,"tokens":11,"tags":["prediction","deploy-duration"],"content":"rollout duration estimate for the eu cluster","layer":"semantic"},{"id":"mem_p_noise","score":0.4288670144791946,"strength":1,"tokens":13,"tags":[],"content":"unrelated note about lunch options near the office","layer":"episodic"},{"id":"mem_x_cafe","score":0.2959343196464122,"strength":1,"tokens":10,"tags":[],"content":"café opening hours for the team lunch","layer":"episodic"},{"id":"mem_p_global","score":0.25484679415358286,"strength":1,"tokens":13,"tags":[],"content":"deploy notes from the global store about rollbacks","layer":"episodic"},{"id":"mem_x_summary","score":0.21786298303207888,"strength":1,"tokens":11,"tags":["dag-summary"],"content":"rollout summary for the nightly batch move","layer":"semantic"}],"total":20,"suppressionSummary":{"totalCandidates":17,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0},"continuity":{"activeSnapshot":{"id":1,"task":"ship the eu cluster","summary":"cutover planned","next_step":"run the canary","status":"active","source":"cli","session_id":"golden-session","scope":null,"created_at":"<ts>","updated_at":"<ts>"},"sessionHandoff":{"version":1,"sessionId":"golden-session","summary":"handoff after the canary","nextAction":"promote it","artifacts":[],"scope":null,"updatedAt":"<ts>","constraints":[],"evidence":null,"outcome":null,"targetRuntime":null,"cardId":null},"recentSessionEvents":[{"id":1,"session_id":"golden-session","task":null,"event_type":"note","content":"canary passed","source":"cli","scope":null,"metadata":{},"created_at":"<ts>"}]},"continuityTokens":128}
+",
+  },
+}

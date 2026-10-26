@@ -1,6 +1,6 @@
 // A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can
 // derive it.
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';

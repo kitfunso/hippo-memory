@@ -29,22 +29,18 @@ import {
 } from './entry-reads.js';
 import { setHalfLives } from './entry-writes.js';
 import { type Handles, type StoreFiles, waitingOpener } from './open.js';
-import {
-  HALF_LIFE_BASE_META_KEY,
-  TYPED_HALF_LIFE_META_KEY,
-  halfLifeAuditRows,
-  recordedHalfLifeBase,
-} from '../rules/half-life.js';
+import { halfLifeAuditRows, recordedHalfLifeBase } from '../rules/half-life.js';
 import { commitInChunks } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
 import { listPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
 import { appendConsolidationRun, incrementSleepCount, readSleepHistory } from './index-and-stats.js';
-import { listPromotableSessions, traceExistsForSession } from './sessions.js';
+import { listUntracedSessions } from './sessions.js';
 import { saveStoredParticles, storedParticleIds } from './vector-index.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
 import { auditRows, dirtySummaries, listL2SummariesPage, settleSummary } from './consolidation-summaries.js';
+import { META_KEY } from '../../db/meta.js';
 
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
 function listHalfLifeRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
@@ -78,32 +74,25 @@ function moveHalfLives(
   opts: { dryRun: boolean; actor: string },
 ): { from: number; outcome: HalfLifeOutcome | null } {
   const run = () => {
-    const from = recordedHalfLifeBase(getMeta(db, HALF_LIFE_BASE_META_KEY, ''));
-    const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
+    const from = recordedHalfLifeBase(getMeta(db, META_KEY.halfLifeBase, ''));
+    const typedPending = getMeta(db, META_KEY.typedHalfLife, '') === '';
     if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) return { from, outcome: null };
     const { moves, outcome } = planHalfLifeMoves(listHalfLifeRows(db, from, typedPending), to);
     if (opts.dryRun) return { from, outcome };
 
     for (const move of moves) writeMove(db, move, opts.actor);
-    setMeta(db, HALF_LIFE_BASE_META_KEY, String(to));
-    setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
+    setMeta(db, META_KEY.halfLifeBase, String(to));
+    setMeta(db, META_KEY.typedHalfLife, '1');
     return { from, outcome };
   };
   // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
 }
 
-/** The tenant's sessions completed since `sinceMs` that hold no trace yet. */
-function untracedSessions(db: DatabaseSyncLike, { tenantId, sinceMs }: NonNullable<SleepBegin['traces']>): string[] {
-  return listPromotableSessions(db, tenantId, sinceMs)
-    .map((row) => row.session_id)
-    .filter((sessionId) => !traceExistsForSession(db, tenantId, sessionId));
-}
-
 function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
   const { from, outcome } = moveHalfLives(db, to, opts);
   const fts = ftsDrift(db, !opts.dryRun);
-  const sessions = opts.traces ? untracedSessions(db, opts.traces) : [];
+  const sessions = opts.traces ? listUntracedSessions(db, opts.traces.tenantId, opts.traces.sinceMs) : [];
   return { from, outcome, fts, ...readSleepHistory(db), sessions };
 }
 

@@ -1,7 +1,7 @@
 // The goal options the Goals group takes.
 import type { PolicyType, Goal } from './types.js';
 
-export interface PushGoalOpts {
+export interface PushGoalOptions {
   sessionId: string;
   tenantId: string;
   goalName: string;
@@ -17,7 +17,7 @@ export interface PushGoalOpts {
   };
 }
 
-export interface CompleteGoalOpts {
+export interface CompleteGoalOptions {
   outcomeScore?: number;
   /** When true, skip the strength-multiplier propagation (default false); status still goes to 'completed' and
    * `outcome_score` is still recorded. The idempotency guard returns early on a second `completeGoal` call before this
@@ -26,11 +26,11 @@ export interface CompleteGoalOpts {
 }
 
 export interface Goals {
-  push(tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Promise<Goal>;
+  push(tenantId: string, goal: Omit<PushGoalOptions, 'tenantId'>): Promise<Goal>;
   /** Every status, for `hippo goal list --all`; active-only reads use base `activeGoals`. */
   sessionGoals(tenantId: string, sessionId: string): Promise<Goal[]>;
   /** The tenant's goal by id; another tenant's goal, like an unknown id, changes nothing. Suspend and resume alike. */
-  complete(tenantId: string, goalId: string, opts: CompleteGoalOpts): Promise<void>;
+  complete(tenantId: string, goalId: string, opts: CompleteGoalOptions): Promise<void>;
   suspend(tenantId: string, goalId: string): Promise<void>;
   resume(tenantId: string, goalId: string): Promise<void>;
 }

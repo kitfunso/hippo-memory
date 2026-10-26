@@ -13,16 +13,9 @@ import type {
   FilterTally,
   ListedRow,
 } from '../../base/ports/store/dashboard-reads.js';
-import {
-  FACT_COLUMNS,
-  factInputs,
-  FILTER_SLOTS,
-  HOLDS_TEXT,
-  holdsTextBinds,
-  tallyOf,
-  type FactRow,
-} from './dashboard-functions.js';
+import { FACT_COLUMNS, factInputs, FILTER_SLOTS, textFilter, tallyOf, type FactRow } from './dashboard-functions.js';
 import { IN_PROJECT, OPEN_PAIRS } from './dashboard-sql.js';
+import { julianDayOfMs, strengthSqlAt } from './rule-sql.js';
 
 // One past the list's cut, so the cut and its truncated flag come out as they would on the whole text.
 const HEAD_READ = 241;
@@ -102,19 +95,28 @@ interface ListScan {
   readonly binds: Record<string, SqlValue>;
 }
 
-// Strength is a JavaScript function, so a row pays for it only under a strength brush or sort; LIMIT -1 makes `listed`
-// a co-routine, so each function runs once per row.
-function scanSql(sort: DashboardSortKey, descending: boolean, byStrength: boolean): string {
+/** What one list scan computes: its sort, whether a strength brush narrows it, and its text filter. */
+interface ScanPlan {
+  readonly sort: DashboardSortKey;
+  readonly descending: boolean;
+  readonly byStrength: boolean;
+  readonly holds: string;
+}
+
+// LIMIT -1 makes `listed` a co-routine, so each function runs once per row; strength is native SQL, unparseable dates
+// at 0 as calculateStrength scores them.
+function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: StoreModel): string {
+  const strength = `COALESCE(${strengthSqlAt(julianDayOfMs(':now'), rules.strength)}, 0.0)`;
   const extra = [
     sort === 'content' ? `substr(content, 1, ${HEAD_READ}) AS head, ` : '',
     sort === 'age' ? 'hippo_days(created, :now) AS age, ' : '',
-    sort === 'strength' || byStrength ? `hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` : '',
+    sort === 'strength' || byStrength ? `${strength} AS strength, ` : '',
   ].join('');
   const kept = byStrength ? ' WHERE strength >= :minStrength AND strength <= :maxStrength' : '';
   return (
     `WITH ${OPEN_PAIRS}, listed AS (SELECT id, ${FACT_COLUMNS}, scope, ${extra}` +
     `id IN (SELECT a FROM open_pairs UNION ALL SELECT b FROM open_pairs) AS in_conflict FROM memories ` +
-    `WHERE ${IN_PROJECT} AND layer IN (${LAYER_SLOTS}) AND ${AGE_KEPT} AND ${HOLDS_TEXT} ORDER BY created, id ` +
+    `WHERE ${IN_PROJECT} AND layer IN (${LAYER_SLOTS}) AND ${AGE_KEPT} AND ${holds} ORDER BY created, id ` +
     `LIMIT -1), kept AS MATERIALIZED (SELECT * FROM listed${kept}) ` +
     `INSERT INTO ${LISTS} (list, pos, id, in_conflict, tally) ` +
     `SELECT :list, 0, NULL, 0, hippo_filter_tally(${FACT_COLUMNS}, in_conflict, :now) FROM kept UNION ALL ` +
@@ -125,7 +127,12 @@ function scanSql(sort: DashboardSortKey, descending: boolean, byStrength: boolea
 
 /** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id the chip keeps, in sort
  * order; a layer the query leaves out binds NULL, which no row's layer equals. */
-function listScan(tenantId: string, query: DashboardPageQuery, nowMs: number, list: number): ListScan {
+/** The page query with the tenant and the time the scan dates its facts at. */
+type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
+
+function listScan(db: DatabaseSyncLike, rules: StoreModel, query: ScanQuery, list: number): ListScan {
+  const { tenantId, nowMs } = query;
+  const holds = textFilter(db, query.text);
   const byStrength = query.minStrength !== Number.NEGATIVE_INFINITY || query.maxStrength !== Number.POSITIVE_INFINITY;
   const layers = LAYER_ORDER.map((layer, i) => [`layer${i}`, query.layers.includes(i) ? layer : null]);
   const binds = {
@@ -134,13 +141,13 @@ function listScan(tenantId: string, query: DashboardPageQuery, nowMs: number, li
     now: nowMs,
     ...Object.fromEntries(layers),
     ...ageBinds(query.minAgeDays, query.maxAgeDays, nowMs),
-    ...holdsTextBinds(query.text),
+    ...holds.binds,
     chip: query.chip,
     list,
   } satisfies Record<string, SqlValue>;
   const { minStrength, maxStrength } = query;
   return {
-    sql: scanSql(query.sort, query.descending, byStrength),
+    sql: scanSql({ sort: query.sort, descending: query.descending, byStrength, holds: holds.sql }, rules),
     binds: byStrength ? { ...binds, minStrength, maxStrength } : binds,
   };
 }
@@ -258,7 +265,7 @@ export class MemoryLists {
     });
     if (any === undefined) return null;
     const id = this.#next++;
-    const scan = listScan(tenantId, query, nowMs, id);
+    const scan = listScan(db, this.#rules, { ...query, tenantId, nowMs }, id);
     cachedStatement(db, scan.sql).run(scan.binds);
     // SAFETY: the scan's aggregate arm writes position 0 on every run, with the tally as a BLOB.
     const head = cachedStatement(db, `SELECT tally FROM ${LISTS} WHERE list = ? AND pos = 0`).get(id) as {

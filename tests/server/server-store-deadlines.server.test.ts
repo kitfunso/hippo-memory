@@ -9,7 +9,7 @@ import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/ports/store.j
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
 import { currentSignal } from '../../src/base/util/request-scope.js';
-import type { AuthResolver, ServeOpts, ServerHandle } from '../../src/server.js';
+import type { AuthResolver, ServeOptions, ServerHandle } from '../../src/server.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -22,6 +22,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -51,7 +52,7 @@ function deadline(ms: string): void {
   vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', ms);
 }
 
-async function start(root: string, opts: Partial<ServeOpts> = {}): Promise<ServerHandle> {
+async function start(root: string, opts: Partial<ServeOptions> = {}): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
   const server = await serveKeyed({ hippoRoot: root, port: 0, ...opts });
   cleanups.push(async () => {
@@ -300,7 +301,7 @@ describe("a read still running at its request's deadline", () => {
     const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
-    mkdirSync(join(root, '.hippo'), { recursive: true });
+    mkdirSync(join(root, '.hippo'), PRIVATE_DIR);
     initTestStore(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
@@ -633,7 +634,7 @@ const STEPS: readonly Step[] = [
 const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
 
 /** Every step's status, headers and body, less what differs between two stores by construction: generated ids and clock readings. */
-async function replies(root: string, opts: Partial<ServeOpts> = {}) {
+async function replies(root: string, opts: Partial<ServeOptions> = {}) {
   const server = await start(root, opts);
   const seen = [];
   for (const [label, send] of STEPS) {

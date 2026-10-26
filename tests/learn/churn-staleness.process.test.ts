@@ -1,9 +1,9 @@
 /** FE2 staleness-from-code-churn: extraction and detection. */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { execFileSync } from 'child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { extractChurnRefs, detectChurnStale } from '../../src/domain/learn/invalidation.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { CHURN_STALE_TAG } from '../../src/base/memory/entry.js';
@@ -13,9 +13,10 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { initGitRepo, commit, DAY, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
+import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { markChurnStaleInReach } from '../../src/api/sleep/churn.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -468,7 +469,7 @@ describe('detectChurnStale', () => {
 
   it('a merge after the anchor of a branch commit dated before it is evidence (first-parent diff)', async () => {
     fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v1');
-    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
+    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY_MS).toISOString());
     const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd: repoDir,
       encoding: 'utf8',
@@ -497,7 +498,7 @@ describe('detectChurnStale', () => {
 
   it('resolves the anchor snapshot on first-parent history, so a merged side-branch removal counts', async () => {
     fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function mergedAwaySymbol() {}\n');
-    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
+    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY_MS).toISOString());
     const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd: repoDir,
       encoding: 'utf8',

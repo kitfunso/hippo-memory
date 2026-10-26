@@ -20,4 +20,4 @@ export { hybridSearch } from './folder-search.js';
 export { explainMatch, MatchExplanation } from '../domain/search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from '../domain/search/temporal.js';
 export { SearchResult } from '../base/rank/search-types.js';
-export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from '../domain/graph/recall.js';
+export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOptions } from '../domain/graph/recall.js';

@@ -14,6 +14,10 @@ const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
 // with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context budget
 const MERGE_MAX_SOURCES = 5;
+/** Characters of merged text the detail line quotes. */
+const MERGE_DETAIL_PREVIEW_CHARS = 60;
+/** Characters of each source line the legacy merge format kept as a bullet. */
+const LEGACY_BULLET_CHARS = 120;
 const MERGE_MAX_CHARS = 2000; // total source text; sources past either cap stay unmerged and keep their half-life
 // Half-life scale for merged source episodics. Demote via half_life_days: calculateStrength() recomputes live strength
 // and never reads the stored field, so a stored-strength write is inert for ranking and overwritten by the next decay
@@ -189,7 +193,11 @@ async function mergeCluster(
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
 
-  result.events.push({ kind: 'merged', count: cluster.length, preview: mergedContent.slice(0, 60) });
+  result.events.push({
+    kind: 'merged',
+    count: cluster.length,
+    preview: mergedContent.slice(0, MERGE_DETAIL_PREVIEW_CHARS),
+  });
 
   if (!dryRun && semantic) {
     run.pendingWrites.push(semantic);
@@ -301,7 +309,7 @@ function legacyMergeContents(entries: MemoryEntry[]): string {
   // The old format dropped text, so it is only ever digested to match rejections recorded against it, never written.
   const sorted = [...entries].sort((a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b));
   if (entries.length === 2) return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
-  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
+  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, LEGACY_BULLET_CHARS)}`).join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 

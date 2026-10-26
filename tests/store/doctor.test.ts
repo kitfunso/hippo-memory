@@ -29,6 +29,7 @@ import {
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 oneRequestPerTest();
 
@@ -400,7 +401,7 @@ describe('hippo doctor', () => {
   it('flags a bare .hippo folder and creates nothing', async () => {
     const cwd = tmp('doctor-bare-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    mkdirSync(join(cwd, '.hippo'));
+    mkdirSync(join(cwd, '.hippo'), PRIVATE_DIR);
     const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     const store = r.checks.find((c) => c.id === 'store')!;
     expect(store.status).toBe('fail');
@@ -438,7 +439,7 @@ describe('hippo doctor', () => {
   it('a hippo.db that is not a database is one failed schema check and no other database check', async () => {
     const cwd = tmp('doctor-notdb-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    mkdirSync(join(cwd, '.hippo'));
+    mkdirSync(join(cwd, '.hippo'), PRIVATE_DIR);
     writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
 
     const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });

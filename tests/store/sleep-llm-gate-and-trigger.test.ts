@@ -14,10 +14,10 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
-const DAY = 86_400_000;
 const roots: string[] = [];
 const FAKE_AWS_KEY = 'AKIA' + 'X'.repeat(16);
 
@@ -130,6 +130,7 @@ describe('the sleep LLM gate', () => {
   describe('extraction concurrency', () => {
     const COUNT = 10;
     const FAIL_AT = 5;
+    const CAP = 4;
 
     function rootWithMany(): string {
       const root = newRoot();
@@ -142,10 +143,16 @@ describe('the sleep LLM gate', () => {
     function trackedFetcher(failOrdinal: number | null) {
       vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
       const seen = { launched: 0, inFlight: 0, peak: 0 };
+      // The first CAP calls wait on a latch until all are in flight, so overlap never depends on timing; later calls pause 5 ms.
+      let capFull!: () => void;
+      const full = new Promise<void>((resolve) => {
+        capFull = resolve;
+      });
       const fetcher = vi.fn<typeof fetch>(async () => {
         const ordinal = seen.launched++;
         seen.peak = Math.max(seen.peak, ++seen.inFlight);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (seen.inFlight === CAP) capFull();
+        await (ordinal < CAP ? full : new Promise((resolve) => setTimeout(resolve, 5)));
         seen.inFlight--;
         if (ordinal === failOrdinal) return new Response('{"type":"error"}', { status: 401 });
         return emptyFacts();
@@ -159,8 +166,7 @@ describe('the sleep LLM gate', () => {
       await consolidate(rootWithMany(), { fetcher });
 
       expect(seen.launched).toBe(COUNT);
-      expect(seen.peak).toBeGreaterThan(1);
-      expect(seen.peak).toBeLessThanOrEqual(4);
+      expect(seen.peak).toBe(CAP);
     });
 
     it('stops launching at a permanent failure and counts the skipped rows by input index', async () => {
@@ -199,7 +205,7 @@ describe('the auto-sleep trigger', () => {
   it('never counts memories older than 24 hours', async () => {
     const root = newRoot();
     const old = createMemory('an old memory about the quarterly budget review');
-    writeEntry(root, { ...old, created: new Date(Date.now() - 2 * DAY).toISOString() });
+    writeEntry(root, { ...old, created: new Date(Date.now() - 2 * DAY_MS).toISOString() });
     expect(await sqliteStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
   });
 });

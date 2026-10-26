@@ -270,9 +270,10 @@ const cases = [
   ['served predictions list', () => served.objects.listObjects('default', 'prediction', { limit: 20 }), [0, 0, 0]],
   ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
-  ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 1]],
+  // A running server reuses the read handle an earlier request returned to its store runtime, so it opens none.
+  ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 0]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
-  ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [37, 333, 1]],
+  ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [37, 333, 0]],
   // As serve() answers by default: a statement or an open on the server thread during a recall fails here.
   ['served http recall, limit 10', httpRecall(server.url, 10), [0, 0, 0]],
   ['served http recall, limit 50', httpRecall(server.url, 50), [0, 0, 0]],

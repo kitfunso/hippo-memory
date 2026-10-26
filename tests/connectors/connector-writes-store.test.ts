@@ -1,6 +1,6 @@
 // With ctx.store, a connector's write and archive go through the store's connectorWrites group and never open hippo.db.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rawArchive, remember, type Actor, type RememberOptions } from '../../src/api/index.js';
@@ -19,6 +19,7 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { rowsOf, sqliteConnectorSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -31,7 +32,7 @@ let n = 0;
 
 function copyOf(): string {
   const root = join(home, `copy-${String(++n)}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

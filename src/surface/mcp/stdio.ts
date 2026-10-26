@@ -3,7 +3,7 @@
 import { exitAfterFlush, installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { envRequestDeadlineMs, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requestDeadlineMs } from '../../base/util/request-scope.js';
+import { requestDeadlineMs, currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
 import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import {
@@ -19,7 +19,7 @@ import { handleMcpRequest } from './request.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
-import { currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
+import { AsyncResource } from 'node:async_hooks';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
@@ -230,13 +230,16 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
  * directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`) does not steal stdin or exit when its
  * parent closes a pipe. The caller picks the host, so src/surface/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
+  // Bound to the loop's start, so every frame runs inside the root's store runtime, whatever context stdin was made in.
   process.stdin.on(
     'data',
-    frameReader((body) => {
-      // One id per frame, so the error reply and every line logged for the call name the same request.
-      const abort = new AbortController();
-      runWithRequestId(randomUUID(), () => dispatch(body, abort, host), undefined, abort.signal);
-    }),
+    AsyncResource.bind(
+      frameReader((body) => {
+        // One id per frame, so the error reply and every line logged for the call name the same request.
+        const abort = new AbortController();
+        runWithRequestId(randomUUID(), () => dispatch(body, abort, host), undefined, abort.signal);
+      }),
+    ),
   );
 
   process.stdin.on('end', () => {

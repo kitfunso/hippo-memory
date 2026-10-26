@@ -1,9 +1,9 @@
 // K1 vault importer: duplicate raw rows, importing the store path, nested stores and envelope-aware idempotency (tests t-x).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { createHash } from 'node:crypto';
 import { importVault } from '../../src/entry/importers.js';
 import { remember } from '../../src/api/index.js';

@@ -11,7 +11,7 @@ on:
       - 'src/**'
       - 'bin/**'
       - 'scripts/token-eval/**'
-      - 'tests/token-eval*'
+      - 'tests/eval/token-eval*'
       - 'tests/fixtures/fake-claude.mjs'
       - 'tests/fixtures/fake-codex.mjs'
       - 'tests/fixtures/z0-checks/**'

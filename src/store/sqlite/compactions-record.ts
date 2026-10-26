@@ -1,5 +1,5 @@
 // The compaction record's SQL: one record per Claude Code compaction, and the rows its summary's items become.
-import * as path from 'path';
+import * as path from 'node:path';
 import { otherSessionsRequest } from '../rules/request-ids.js';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { isStringValue } from '../../base/session/capture-contract.js';

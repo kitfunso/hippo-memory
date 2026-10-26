@@ -1,8 +1,8 @@
 import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry, deserializeEntry } from '../../src/base/memory/markdown.js';
 import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
@@ -10,6 +10,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -92,7 +93,7 @@ describe('markdown mirror round-trip', () => {
     const base = createMemory('round trip content here');
     for (const origin of ['proj-a', '']) {
       const raw = serializeEntry({ ...base, originProject: origin });
-      const back = deserializeEntry(raw, new Date());
+      const back = deserializeEntry(raw, evalNow());
       expect(back?.originProject).toBe(origin);
     }
   });
@@ -100,13 +101,13 @@ describe('markdown mirror round-trip', () => {
   it('round-trips an unknown (null) origin, so a rebuild never stamps it user-global', () => {
     const raw = serializeEntry({ ...createMemory('unknown-origin row content here'), originProject: null });
     expect(raw).toContain('origin_project: null');
-    expect(deserializeEntry(raw, new Date())?.originProject).toBeNull();
+    expect(deserializeEntry(raw, evalNow())?.originProject).toBeNull();
   });
 
   it('omits an unstamped origin and reads a mirror with no origin field as unstamped', () => {
     const raw = serializeEntry(createMemory('unstamped row content here'));
     expect(raw).not.toContain('origin_project');
-    expect(deserializeEntry(raw, new Date())?.originProject).toBeUndefined();
+    expect(deserializeEntry(raw, evalNow())?.originProject).toBeUndefined();
   });
 
   it('a rebuild keeps an explicit null and stamps only a mirror with no origin field', () => {

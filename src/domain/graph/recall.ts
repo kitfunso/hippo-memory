@@ -26,7 +26,7 @@ type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
 type GraphStore = Pick<HippoStore, 'graphReads' | 'entriesByIds'>;
 type GraphHit = SearchResult & { graphVia: GraphVia };
 
-export interface GraphExpandOpts {
+export interface GraphExpandOptions {
   /** Hops to expand. <= 0 is a no-op (caller should not invoke, but guarded anyway). */
   hops: number;
   /** Per-hop fanout cap. Defaults to DEFAULT_MAX_NEIGHBORS. */
@@ -59,7 +59,7 @@ export interface GraphExpandOpts {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-type HitOptions = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+type HitOptions = Required<Pick<GraphExpandOptions, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
   asOfDate: Date | null;
   recallScope: { requested?: string; additive?: boolean; ownScope?: string };
   /** True when the store being walked is the global one. */
@@ -250,7 +250,10 @@ async function loadSuccessorValidFrom(
  * Returns `baseResults` unchanged when `hops <= 0`, there are no base results, or nothing new survives the filters and
  * the token budget.
  */
-export async function graphExpandRecall(baseResults: SearchResult[], opts: GraphExpandOpts): Promise<SearchResult[]> {
+export async function graphExpandRecall(
+  baseResults: SearchResult[],
+  opts: GraphExpandOptions,
+): Promise<SearchResult[]> {
   const { hops, store, global, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
@@ -305,7 +308,7 @@ function sortHitsWithinOrigin(hitsByOrigin: Map<string, GraphHit[]>): void {
 function selectWithinBudget(
   baseResults: SearchResult[],
   allHits: GraphHit[],
-  opts: GraphExpandOpts,
+  opts: GraphExpandOptions,
 ): Set<SearchResult> {
   const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const minResults = opts.minResults ?? 1;

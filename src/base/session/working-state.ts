@@ -6,6 +6,8 @@ import { truncateCodePointSafe } from '../util/code-point-cut.js';
 const PRE_COMPACT_TASK_CAP = 200;
 const PRE_COMPACT_SUMMARY_CAP = 2000;
 const PRE_COMPACT_NEXT_STEP_CAP = 500;
+/** How far past the cut a trim looks for a line start, so a trimmed summary does not open mid-line. */
+const LINE_ALIGN_WINDOW_CHARS = 200;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 
 /** The longest each field of a derived working state can be, so a check of a sent working state imports these instead
@@ -75,7 +77,7 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   const code = text.charCodeAt(start);
   if (code >= 0xdc00 && code <= 0xdfff) start += 1; // never start on a low surrogate
   const nl = text.indexOf('\n', start);
-  if (nl !== -1 && nl + 1 < text.length && nl - start < 200) start = nl + 1;
+  if (nl !== -1 && nl + 1 < text.length && nl - start < LINE_ALIGN_WINDOW_CHARS) start = nl + 1;
   return TRIM_MARKER + text.slice(start);
 }
 

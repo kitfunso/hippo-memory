@@ -1,0 +1,103 @@
+{
+  "global": {
+    "audit": [],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"0fb91c7693196ba9","query_length":3}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"0fb91c7693196ba9","query_length":3,"results":1}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 1,
+        "session_id": null,
+        "surface": "http_recall",
+        "tenant_id": "default",
+        "tokens": 10,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_cafe",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "1",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 1,
+        "score": 1,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "api",
+        "result_count": 1,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "body": "{"results":[{"id":"mem_x_cafe","content":"café opening hours for the team lunch","score":1,"layer":"episodic","strength":1}],"total":1,"tokens":10,"windowSize":200,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}",
+    "status": 200,
+  },
+}

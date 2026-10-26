@@ -1,21 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { createMemory, calculateStrength, resolveConfidence } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
-import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 pinClock();
@@ -467,7 +466,7 @@ describe('Physics pass', () => {
   function storedParticles(): PhysicsParticle[] {
     const db = openHippoDb(tmpDir);
     try {
-      return Array.from(loadPhysicsState(db).values());
+      return Array.from(loadAllPhysicsState(db).values());
     } finally {
       closeHippoDb(db);
     }

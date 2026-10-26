@@ -2,7 +2,7 @@
 // (handoff, snapshot close, re-read count); plus the compact-resume read. The hook verbs keep stdin, spawning and the
 // log file.
 
-import * as path from 'path';
+import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SessionEvent } from '../base/ports/store/sessions.js';

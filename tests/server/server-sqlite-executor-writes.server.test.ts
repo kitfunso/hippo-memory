@@ -7,6 +7,7 @@ import { revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { autoCheckpointPages, startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { log } from '../../src/base/util/log.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -665,9 +666,11 @@ describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
     const inlineLimit = autoCheckpointPages(getHippoDbPath(root));
-    const checkpointer = startWalCheckpointer(getHippoDbPath(root));
+    // The checkpointer and the store share one runtime, as a server's do.
+    const runtime = new StoreRuntime();
+    const checkpointer = startWalCheckpointer(getHippoDbPath(root), runtime);
     cleanups.push(() => checkpointer.stop());
-    const store = workerSqliteStore(root);
+    const store = runtime.run(() => workerSqliteStore(root));
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };

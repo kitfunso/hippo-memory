@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { cpSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -13,6 +13,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -189,7 +190,7 @@ interface FreshStore {
 
 function freshStore(c: Pick<Case, 'global'>): FreshStore {
   const home = makeRoot('golden', { init: false });
-  cpSync(template, join(home, '.hippo'), { recursive: true });
+  copyTree(template, join(home, '.hippo'));
   const globalRoot = join(home, 'global-hippo');
   if (c.global) {
     initTestStore(globalRoot);

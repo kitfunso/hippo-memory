@@ -1,8 +1,8 @@
 // What the hook commands share: session id, store choice, delivery recorder, session-end log and store-busy handling.
 
 import { envClaudeCodeSessionId, envHippoSessionId } from '../../base/util/env.js';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
@@ -19,6 +19,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type CliFlags, stringFlag } from './flag-values.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /**
  * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does
@@ -54,7 +55,7 @@ export function appendSessionEndCloseLog(
 ): void {
   if (!logFile) return;
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same log-forgery guard
     // appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;

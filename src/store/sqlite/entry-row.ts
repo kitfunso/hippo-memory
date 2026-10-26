@@ -12,6 +12,7 @@ import type { StoreFiles } from './open.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
+import { duplicateHash } from '../../base/util/same-text.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
@@ -40,11 +41,13 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   return holder === undefined;
 }
 
-const UPDATED_COLUMNS = MEMORY_ROW_COLUMNS.slice(1);
+// The duplicate read's key goes with every row write; no read selects it, so it stays out of MEMORY_ROW_COLUMNS.
+const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash'] as const;
+const UPDATED_COLUMNS = WRITTEN_COLUMNS.slice(1);
 
 const UPSERT_MEMORY_SQL =
-  `INSERT INTO memories(${MEMORY_ROW_COLUMNS.join(', ')}, updated_at) ` +
-  `VALUES (${placeholders(MEMORY_ROW_COLUMNS.length)}, datetime('now')) ` +
+  `INSERT INTO memories(${WRITTEN_COLUMNS.join(', ')}, updated_at) ` +
+  `VALUES (${placeholders(WRITTEN_COLUMNS.length)}, datetime('now')) ` +
   `ON CONFLICT(id) DO UPDATE SET ${UPDATED_COLUMNS.map((c) => `${c} = excluded.${c}`).join(', ')}, ` +
   `updated_at = datetime('now')`;
 
@@ -52,16 +55,16 @@ const UPSERT_MEMORY_SQL =
  * the transaction, the rejection guard and the full-text rows. */
 export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
-  for (const chunk of chunked(entries, rowsPerStatement(MEMORY_ROW_COLUMNS.length))) {
+  for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
     cachedStatement(
       db,
-      `WITH v(${MEMORY_ROW_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, MEMORY_ROW_COLUMNS.length)}) ` +
+      `WITH v(${WRITTEN_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, WRITTEN_COLUMNS.length)}) ` +
         `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
     ).run(...chunk.flatMap(memoryRowValues));
   }
 }
 
-/** Bind values for MEMORY_ROW_COLUMNS, in its order. */
+/** Bind values for WRITTEN_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by time in SQL.
   const created = isoInstant(entry.created) ?? entry.created;
@@ -103,6 +106,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.earliestAt ?? null,
     entry.latestAt ?? null,
     entry.dagLevel3BuiltAt ?? null,
+    duplicateHash(entry.content),
   ];
 }
 

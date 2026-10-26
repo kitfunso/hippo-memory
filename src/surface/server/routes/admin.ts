@@ -23,7 +23,7 @@ import type { AuditOp } from '../../../base/records/audit-ops.js';
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
 // A key mint is a few short fields, so even an authenticated caller gets a small cap and a short wait.
-// ServeOpts.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not sit through it.
+// ServeOptions.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not sit through it.
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 

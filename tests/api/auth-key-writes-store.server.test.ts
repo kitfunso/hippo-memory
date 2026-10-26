@@ -1,7 +1,7 @@
 // authCreate, authCreateSelf and authListRows with a store go through its keyWrites group and never open hippo.db, and
 // POST and GET /v1/auth/keys run under another store only when that store has the group.
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authListRows, type AuthCreateResult } from '../../src/api/index.js';
@@ -17,6 +17,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
 import { testInfra } from '../_helpers/infra.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;
@@ -25,7 +26,7 @@ let n = 0;
 
 function copyOf(): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

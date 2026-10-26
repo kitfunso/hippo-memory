@@ -1,0 +1,28 @@
+GET /v1/incidents/1/resolve -> 404 not found
+POST /v1/incidents/1/resolve -> 400 resolutionText is required (non-empty string)
+DELETE /v1/incidents/1/resolve -> 404 not found
+PUT /v1/incidents/1/resolve -> 404 not found
+GET /v1/incidents/007/resolve -> 404 not found
+POST /v1/incidents/007/resolve -> 400 resolutionText is required (non-empty string)
+DELETE /v1/incidents/007/resolve -> 404 not found
+PUT /v1/incidents/007/resolve -> 404 not found
+GET /v1/incidents/abc/resolve -> 404 not found
+POST /v1/incidents/abc/resolve -> 404 not found
+DELETE /v1/incidents/abc/resolve -> 404 not found
+PUT /v1/incidents/abc/resolve -> 404 not found
+GET /v1/incidents/-1/resolve -> 404 not found
+POST /v1/incidents/-1/resolve -> 404 not found
+DELETE /v1/incidents/-1/resolve -> 404 not found
+PUT /v1/incidents/-1/resolve -> 404 not found
+GET /v1/incidents/%31/resolve -> 404 not found
+POST /v1/incidents/%31/resolve -> 404 not found
+DELETE /v1/incidents/%31/resolve -> 404 not found
+PUT /v1/incidents/%31/resolve -> 404 not found
+GET /v1/incidents//resolve -> 404 not found
+POST /v1/incidents//resolve -> 404 not found
+DELETE /v1/incidents//resolve -> 404 not found
+PUT /v1/incidents//resolve -> 404 not found
+GET /v1/incidents/1/resolve/ -> 404 not found
+POST /v1/incidents/1/resolve/ -> 404 not found
+DELETE /v1/incidents/1/resolve/ -> 404 not found
+PUT /v1/incidents/1/resolve/ -> 404 not found

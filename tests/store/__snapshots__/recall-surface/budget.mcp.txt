@@ -1,0 +1,162 @@
+{
+  "global": {
+    "audit": [],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "mcp",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":4}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "mcp",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 0,
+        "session_id": null,
+        "surface": "mcp_recall",
+        "tenant_id": "default",
+        "tokens": 105,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 1,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 2,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 3,
+        "score": 0.9638377685691942,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 4,
+        "score": 0.9538596061193713,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "mcp",
+        "result_count": 4,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "## Cutoff
+Showing 4 of 19 candidates; 15 not shown (rank, budget or limit).
+
+---
+
+Found 4 memories:
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+",
+          "type": "text",
+        },
+      ],
+    },
+  },
+}

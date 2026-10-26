@@ -11,6 +11,7 @@ import { pathBoostMultiplier } from './path-context.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { clamp } from '../../base/util/stats.js';
 
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
@@ -45,12 +46,18 @@ function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): nu
   return Math.exp(-ageDays / (ablation.recencyDays ?? RECENCY_SCALE_DAYS));
 }
 
+/** A multiplier near 1 that follows the net outcome score through tanh, kept inside [min, max]. The always-on boost
+ * and the value-aware rank differ only in these four inputs. */
+export function outcomeNudge(net: number, slope: number, min: number, max: number): number {
+  return clamp(1 + slope * Math.tanh(net), min, max);
+}
+
 /** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it too. */
 export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
-  return Math.max(OUTCOME_NUDGE_MIN, Math.min(OUTCOME_NUDGE_MAX, 1 + OUTCOME_NUDGE_SLOPE * Math.tanh((pos - neg) / 2)));
+  return outcomeNudge((pos - neg) / 2, OUTCOME_NUDGE_SLOPE, OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX);
 }
 
 /** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same deboost. */

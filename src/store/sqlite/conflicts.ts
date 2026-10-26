@@ -155,7 +155,8 @@ export function replaceDetectedConflicts(
   detectedAt: string = handleStamp(db),
 ): void {
   const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
-  syncChangedMirrors(files.hippoRoot, db, [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()]);
+  const changed = [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()];
+  syncChangedMirrors(files.hippoRoot, db, changed, detectedAt);
 }
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before
@@ -265,7 +266,9 @@ function upsertDetectedConflicts(
   sameTenant: SameTenant,
   detectedAt: string,
 ): void {
-  const upsert = db.prepare(`
+  const upsert = cachedStatement(
+    db,
+    `
     INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at)
     VALUES (?, ?, ?, ?, 'open', ?, ?)
     ON CONFLICT(memory_a_id, memory_b_id) DO UPDATE SET
@@ -273,7 +276,8 @@ function upsertDetectedConflicts(
       score = excluded.score,
       status = 'open',
       updated_at = excluded.updated_at
-  `);
+  `,
+  );
   for (const conflict of canonicalDetected) {
     // Skip cross-tenant pairs — never persist a conflict spanning tenants.
     if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
@@ -283,13 +287,10 @@ function upsertDetectedConflicts(
 
 /** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
 function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs }: ConflictRefreshReads): string[] {
-  const openConflicts = db
-    .prepare(`
-    SELECT memory_a_id, memory_b_id
-    FROM memory_conflicts
-    WHERE status = 'open'
-  `)
-    .all() as Array<{ memory_a_id: string; memory_b_id: string }>;
+  const openConflicts = cachedStatement(
+    db,
+    `SELECT memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'open'`,
+  ).all() as Array<{ memory_a_id: string; memory_b_id: string }>;
 
   const refMap = new Map<string, Set<string>>();
   for (const row of openConflicts) {
@@ -303,7 +304,8 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
 
   // Only a row holding refs, or due some, can change. Compare-and-set, so a writer since the read keeps its value and
   // the next sleep redoes the row.
-  const update = db.prepare(
+  const update = cachedStatement(
+    db,
     `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') ` +
       `WHERE id = ? AND conflicts_with_json IS ?`,
   );
@@ -341,10 +343,9 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
   const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
   const claimed = cachedStatement(
     db,
-    `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? ` +
-      `WHERE id = ? AND status = 'open' ` +
-      `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
-      `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
+    `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ? AND status = 'open' AND ` +
+      `((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) AND ${SIDE_HOLDS} AND ` +
+      `${SIDE_HOLDS}`,
   ).run(resolution.at, conflictId, ...pair, ...sides);
   return Number(claimed.changes ?? 0) > 0;
 }
@@ -370,7 +371,8 @@ function resolveConflict(
   });
   if (removal === null) return false;
   const { keep, loser } = resolution;
-  syncChangedMirrors(files.hippoRoot, db, [...readEntriesByIds(db, [keep.id, loser.id], tenantId).values()]);
+  const changed = [...readEntriesByIds(db, [keep.id, loser.id], tenantId).values()];
+  syncChangedMirrors(files.hippoRoot, db, changed, resolution.at);
   if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
   return true;
 }
@@ -582,20 +584,22 @@ function purgeRemovedLoserMirrors(
 /** The conflict and loser ids every conflict_resolve audit row names. */
 export function conflictResolveAudits(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
   // SAFETY: every conflict_resolve audit row's metadata holds both ids (ConflictResolveMeta above).
-  return db
-    .prepare(
-      `SELECT json_extract(metadata_json, '$.conflictId') ` +
-        `AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
-        `FROM audit_log WHERE op = 'conflict_resolve'`,
-    )
-    .all() as { conflictId: number; loserId: string }[];
+  return cachedStatement(
+    db,
+    `SELECT json_extract(metadata_json, '$.conflictId') ` +
+      `AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
+      `FROM audit_log WHERE op = 'conflict_resolve'`,
+  ).all() as { conflictId: number; loserId: string }[];
 }
 
 /** Every resolved conflict with both sides. */
 export function resolvedConflicts(
   db: DatabaseSyncLike,
 ): Array<{ id: number; memory_a_id: string; memory_b_id: string }> {
-  return db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as {
+  return cachedStatement(
+    db,
+    `SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`,
+  ).all() as {
     id: number;
     memory_a_id: string;
     memory_b_id: string;

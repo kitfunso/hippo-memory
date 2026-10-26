@@ -3,7 +3,7 @@
 **Date:** 2026-09-23
 **Roadmap:** ROADMAP Part IX, Track TE, TE5
 **Research record:** `docs/plans/2026-09-23-token-savings-eval-research.md`
-**Analyzer:** `scripts/token-eval/ab-analyze.mjs` (tested in `tests/token-eval-ab-analyze.test.ts`)
+**Analyzer:** `scripts/token-eval/ab-analyze.mjs` (tested in `tests/eval/token-eval-ab-analyze.test.ts`)
 **Status:** registered before any run. No result exists yet. Thresholds below do not move after the first run; a changed threshold is a new registration with its own date.
 
 ## Question

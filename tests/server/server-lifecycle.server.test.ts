@@ -4,6 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -12,7 +13,7 @@ afterEach(() => {
 // Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
+  mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
   return home;
 }
 

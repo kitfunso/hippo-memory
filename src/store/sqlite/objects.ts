@@ -26,7 +26,6 @@ import {
   type ObjectFields,
 } from '../../base/records/object-types.js';
 import type { Handles, OnHandle, StoreFiles, StoreModel } from './open.js';
-import { TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
 import { openStore } from './handles.js';
 import { answered, bound, type Bodies } from './bound.js';
 import type {
@@ -55,6 +54,7 @@ import {
 } from './predictions.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { JsonObject } from '../../base/util/json.js';
+import { META_KEY } from '../../db/meta.js';
 
 // Each typed-object kind's table and audit rows: the table its ids follow, whether it keeps
 // versions, and the op, target and keys of its open, create, supersede and close rows.
@@ -408,7 +408,7 @@ interface MirroredWrite {
 /** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read
  * under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: StoreModel): MemoryEntry {
-  if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
+  if (getMeta(db, META_KEY.typedHalfLife, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
   return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
 }

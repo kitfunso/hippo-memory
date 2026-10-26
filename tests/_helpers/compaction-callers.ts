@@ -19,6 +19,7 @@ import { makeRoot } from './make-root.js';
 import { writeEntry } from './root-forms.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // A server ctx carries a reach from its composition root; the ledger books nowhere without one.
 export const SHARED_REACH: ContextReach = { hasLocal: true, isGlobal: false, shared: true };
@@ -48,7 +49,7 @@ export function useCallerStore(): void {
     dir = makeRoot('compaction-callers', { init: false });
     for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
     root = path.join(dir, 'server', '.hippo');
-    fs.mkdirSync(root, { recursive: true });
+    fs.mkdirSync(root, PRIVATE_DIR);
     initTestStore(root);
     // A server's store: its own folder names no project, so nothing here may fall back to it.
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ sharedStore: true }));

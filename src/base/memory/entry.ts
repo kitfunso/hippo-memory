@@ -1,7 +1,7 @@
 // The memory entry: its shape, kinds and tags, how one is created, succeeded and retrieved, and its schema fit.
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { isJsonString } from '../util/json.js';
 import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';

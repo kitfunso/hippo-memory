@@ -1,6 +1,6 @@
 // The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts maps each path
 // here.
-import type * as http from 'http';
+import type * as http from 'node:http';
 import type { Context } from '../../api/index.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../http/http-util.js';

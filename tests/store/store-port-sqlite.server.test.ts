@@ -65,7 +65,7 @@ import {
   appendSessionEvent,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../src/base/ports/store/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -483,13 +483,13 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
 });
 
 describe('sqliteStore writes leave the rows the hippo.db functions leave, each on one handle', () => {
-  const recallAudit = (op: AppendAuditOpts['op'], metadata: AppendAuditOpts['metadata']): AppendAuditOpts => ({
+  const recallAudit = (op: AppendAuditOptions['op'], metadata: AppendAuditOptions['metadata']): AppendAuditOptions => ({
     tenantId: TENANT,
     actor: 'api_key:hk_test',
     op,
     metadata,
   });
-  const events: readonly AppendAuditOpts[] = [
+  const events: readonly AppendAuditOptions[] = [
     recallAudit('recall', { query_length: 6, results: 3 }),
     recallAudit('recall_availability_detected', { recent_fraction: 1, older_passed_over: 2, returned_count: 3 }),
   ];

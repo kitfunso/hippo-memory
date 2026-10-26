@@ -1,8 +1,8 @@
 // embedAll and embedMemory with a store embed through its vectorWrites group, never opening hippo.db in hippoRoot,
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
@@ -12,9 +12,8 @@ import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/se
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../../src/entry/memory.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { loadPhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -25,6 +24,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
@@ -52,7 +52,7 @@ function provider(
 
 function copyOf(from: string = fixture.dir): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(from, root, { recursive: true });
+  copyTree(from, root);
   return root;
 }
 
@@ -99,7 +99,7 @@ function indexOn(root: string): HippoDbIndex {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY memory_id')
         .all(),
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
+      particles: [...loadAllPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);

@@ -8,6 +8,21 @@ export function duplicateKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/** A 53-bit hash (cyrb53) of the text with every space removed: texts duplicateKey calls equal share it. */
+export function duplicateHash(text: string): number {
+  const bare = text.replace(/\s+/g, '');
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < bare.length; i++) {
+    const ch = bare.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
 /** A sleep-merged row's text: a header, a blank line, then each text as a "- " bullet with its later lines indented. */
 export function mergedText(header: string, texts: readonly string[]): string {
   return `${header}\n\n${texts.map((t) => `- ${t.trim().replace(/\n/g, '\n  ')}`).join('\n')}`;

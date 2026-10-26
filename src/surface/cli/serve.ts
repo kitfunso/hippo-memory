@@ -1,11 +1,11 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import { installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js';
 import { envBodyTimeoutMs, envPort, envTlsCert, envTlsKey } from '../../base/util/env.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';

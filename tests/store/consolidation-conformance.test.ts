@@ -151,6 +151,12 @@ function rebuilt(name: string, text: string): SummarySettle {
   };
 }
 
+// An untraced session comes with its events, the ones its complete event ends.
+const untraced = (sessionId: string) => ({
+  sessionId,
+  events: expect.arrayContaining([expect.objectContaining({ eventType: 'session_complete' })]),
+});
+
 describe('Consolidation', () => {
   it('opens a sleep: moves the half-lives once, and reads the history and the untraced sessions', async () => {
     const traces = (tenantId: string) => ({ tenantId, sinceMs: 0 });
@@ -160,8 +166,12 @@ describe('Consolidation', () => {
       (g) => g.begin(30, { dryRun: true, actor: 'test', traces: traces(TENANT_B) }),
       read(['kept', 'pinned', 'trace']),
     ]);
-    expect(valueAt(sqlite.outcomes, 0)).toMatchObject({ from: DEFAULT_HALF_LIFE_DAYS, fts: null, sessions: ['done'] });
-    expect(valueAt(sqlite.outcomes, 2)).toMatchObject({ from: 30, outcome: null, sessions: ['elsewhere'] });
+    expect(valueAt(sqlite.outcomes, 0)).toMatchObject({
+      from: DEFAULT_HALF_LIFE_DAYS,
+      fts: null,
+      sessions: [untraced('done')],
+    });
+    expect(valueAt(sqlite.outcomes, 2)).toMatchObject({ from: 30, outcome: null, sessions: [untraced('elsewhere')] });
     expect(sqlite.audit.filter((row) => row.op === 'half_life_migrate').length).toBeGreaterThan(0);
   });
 

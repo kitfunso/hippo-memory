@@ -6,8 +6,7 @@ import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
 import type { HippoStore } from '../../base/ports/store.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { Context } from '../types.js';
 
 /** The repo store's reads and the digest's write. */
@@ -54,14 +53,13 @@ function skipped(reason: string): DigestOutcome {
   return { written: false, reason, sentences: 0, files: 0 };
 }
 
-/** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient
- * handoff, never this session's own. */
+/** What hippo could have injected into the session: the newest live digests (prompt recall reaches older ones too,
+ * but the echo filter only needs the recent ones a session most likely saw) and the ambient handoff, never this
+ * session's own. */
 async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]> {
   const filter = { tenantId: ctx.tenantId, source: SESSION_DIGEST_TAG, tag: SESSION_DIGEST_TAG, live: true } as const;
-  const rows = await readAll((after?: EntryCursor) =>
-    ctx.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after }),
-  );
-  const digests = rows.filter((e) => !e.extractedFrom && e.sourceSessionId !== key).map((e) => e.content);
+  const { entries } = await ctx.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, newest: true });
+  const digests = entries.filter((e) => !e.extractedFrom && e.sourceSessionId !== key).map((e) => e.content);
   const handoff = await ctx.store.sessions.read(
     ctx.tenantId,
     'handoff',

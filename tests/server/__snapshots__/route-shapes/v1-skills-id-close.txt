@@ -1,0 +1,28 @@
+GET /v1/skills/1/close -> 404 not found
+POST /v1/skills/1/close -> 404 skill 1 not found for tenant default
+DELETE /v1/skills/1/close -> 404 not found
+PUT /v1/skills/1/close -> 404 not found
+GET /v1/skills/007/close -> 404 not found
+POST /v1/skills/007/close -> 404 skill 7 not found for tenant default
+DELETE /v1/skills/007/close -> 404 not found
+PUT /v1/skills/007/close -> 404 not found
+GET /v1/skills/abc/close -> 404 not found
+POST /v1/skills/abc/close -> 404 not found
+DELETE /v1/skills/abc/close -> 404 not found
+PUT /v1/skills/abc/close -> 404 not found
+GET /v1/skills/-1/close -> 404 not found
+POST /v1/skills/-1/close -> 404 not found
+DELETE /v1/skills/-1/close -> 404 not found
+PUT /v1/skills/-1/close -> 404 not found
+GET /v1/skills/%31/close -> 404 not found
+POST /v1/skills/%31/close -> 404 not found
+DELETE /v1/skills/%31/close -> 404 not found
+PUT /v1/skills/%31/close -> 404 not found
+GET /v1/skills//close -> 404 not found
+POST /v1/skills//close -> 404 not found
+DELETE /v1/skills//close -> 404 not found
+PUT /v1/skills//close -> 404 not found
+GET /v1/skills/1/close/ -> 404 not found
+POST /v1/skills/1/close/ -> 404 not found
+DELETE /v1/skills/1/close/ -> 404 not found
+PUT /v1/skills/1/close/ -> 404 not found

@@ -1,13 +1,14 @@
 // Summaries post-compact could not record because the store was busy, waiting on disk for the next replay.
 import { MINUTE_MS } from '../base/util/time.js';
-import { randomBytes } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
+import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isObjectLike, isStringValue, type PostCompactPayload } from '../base/session/capture-contract.js';
 import type { CompactionText, StepFailure } from '../base/ports/store/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';
 import { errorCode, errorMessage } from '../base/util/log.js';
 import { tryParseJson } from '../base/util/json.js';
+import { PRIVATE_DIR } from '../host/private-dir.js';
 
 const STAMP_DIGITS = 13;
 
@@ -42,7 +43,7 @@ export type Log = (message: string) => void;
 /** Only the fs calls the spool makes, so a test can stand in for one of them. */
 export interface SpoolFs {
   existsSync(file: string): boolean;
-  mkdirSync(dir: string, options: { recursive: true }): void;
+  mkdirSync(dir: string, options: typeof PRIVATE_DIR): void;
   readdirSync(dir: string): string[];
   readFileSync(file: string, encoding: 'utf8'): string;
   renameSync(from: string, to: string): void;
@@ -182,7 +183,7 @@ export interface SpoolOptions {
 export function spool(options: SpoolOptions): void {
   const { hippoRoot, tenantId, payload, text, at, fsx = fs } = options;
   const file = spoolFile(hippoRoot);
-  fsx.mkdirSync(path.dirname(file), { recursive: true });
+  fsx.mkdirSync(path.dirname(file), PRIVATE_DIR);
   const body = {
     tenantId,
     sessionId: payload.sessionId,

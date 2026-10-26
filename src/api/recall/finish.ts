@@ -9,7 +9,7 @@ import { recordTokens } from '../tokens.js';
 import { strengthOf, type Context } from '../types.js';
 import type { CallerState } from '../callers.js';
 import { keepShownIds } from './last-recalled.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
 /**
@@ -347,7 +347,7 @@ export function recallAuditRow(
   op: AuditOp,
   targetId?: string,
   metadata?: RecallAuditMetadata,
-): AppendAuditOpts {
+): AppendAuditOptions {
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
 }
 
@@ -360,12 +360,12 @@ export function recallAuditMetadata(query: string, results: number) {
  * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy to reverse on short
  * queries.
  */
-export function anchorSkippedRows(config: HintConfig, who: RecallAuditCaller, query: string): AppendAuditOpts[] {
+export function anchorSkippedRows(config: HintConfig, who: RecallAuditCaller, query: string): AppendAuditOptions[] {
   if (!biasHintEnabled(config, 'anchoring')) return [];
   return [recallAuditRow(who, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query))];
 }
 
-export function anchoringRows(who: RecallAuditCaller, hint: AnchoringHint | null): AppendAuditOpts[] {
+export function anchoringRows(who: RecallAuditCaller, hint: AnchoringHint | null): AppendAuditOptions[] {
   if (hint?.reason === 'memory_dominance') {
     return [
       recallAuditRow(who, 'recall_anchor_detected_memory_dominance', hint.memoryId, {
@@ -380,7 +380,7 @@ export function anchoringRows(who: RecallAuditCaller, hint: AnchoringHint | null
   return [];
 }
 
-export function availabilityRows(who: RecallAuditCaller, hint: AvailabilityHint | null): AppendAuditOpts[] {
+export function availabilityRows(who: RecallAuditCaller, hint: AvailabilityHint | null): AppendAuditOptions[] {
   if (!hint) return [];
   return [
     recallAuditRow(who, 'recall_availability_detected', undefined, {
@@ -403,7 +403,7 @@ export interface ShownRecall {
 /**
  * The hint rows for a list a surface showed, so a surface on the store port can hand them to the recall's one write.
  */
-export function shownRecallRows(config: HintConfig, who: RecallAuditCaller, shown: ShownRecall): AppendAuditOpts[] {
+export function shownRecallRows(config: HintConfig, who: RecallAuditCaller, shown: ShownRecall): AppendAuditOptions[] {
   return [
     ...(shown.sessionId ? [] : anchorSkippedRows(config, who, shown.query)),
     ...anchoringRows(who, shown.anchoring),
@@ -433,7 +433,7 @@ export const RECALL_RECORDING = {
 /** What a recorded recall takes into ranking. */
 export interface RecallLead {
   readonly recallHistory: RecallHistorySnapshot | undefined;
-  readonly leadingAudit: readonly AppendAuditOpts[];
+  readonly leadingAudit: readonly AppendAuditOptions[];
 }
 
 /** For a surface whose hint `retrieve` judges: the session's history, or the row saying the recall named no session. */

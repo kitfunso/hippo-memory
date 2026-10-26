@@ -20,6 +20,7 @@ import { sessionCookie } from '../_helpers/dashboard-fixture.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -28,10 +29,9 @@ afterEach(() => {
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
 const NOW = new Date('2026-09-07T12:00:00.000Z');
-const DAY = 86_400_000;
 
 function ago(days: number): string {
-  return new Date(NOW.getTime() - days * DAY).toISOString();
+  return new Date(NOW.getTime() - days * DAY_MS).toISOString();
 }
 
 function seed(root: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -131,11 +131,11 @@ describe('confidence facets', () => {
   it('ages out one millisecond past thirty days, not at thirty days', () => {
     const at = seed(hippoRoot, 'a row retrieved exactly thirty days ago', {
       confidence: 'observed',
-      lastRetrieved: new Date(NOW.getTime() - 30 * DAY).toISOString(),
+      lastRetrieved: new Date(NOW.getTime() - 30 * DAY_MS).toISOString(),
     });
     const past = seed(hippoRoot, 'a row retrieved a millisecond earlier than that', {
       confidence: 'observed',
-      lastRetrieved: new Date(NOW.getTime() - 30 * DAY - 1).toISOString(),
+      lastRetrieved: new Date(NOW.getTime() - 30 * DAY_MS - 1).toISOString(),
     });
     expect(confidenceFacets(at, NOW).agedOut).toBe(false);
     expect(confidenceFacets(past, NOW).agedOut).toBe(true);

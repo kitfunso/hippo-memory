@@ -3,8 +3,8 @@
  * JSON index.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
@@ -12,10 +12,11 @@ import { chunked } from '../base/util/chunked.js';
 import { tryParseJson } from '../base/util/json.js';
 import { ZERO_NORM, cosineToQuery, norm } from '../base/rank/cosine.js';
 import { cachedStatement } from './statement-cache.js';
+import { META_KEY } from './meta.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
-export const EMBEDDING_MODEL_META_KEY = 'embedding_model';
+export const EMBEDDING_MODEL_META_KEY = META_KEY.embeddingModel;
 // Never equal to a real index identity, so the next embed run treats it as a model change and rebuilds every vector.
 const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
 
@@ -63,8 +64,8 @@ export function upsertVectors(
 
 // A TEMP table: only the handle that made it sees it, and it goes with that handle, so a crash leaves nothing staged.
 const STAGED_VECTORS_DDL =
-  'CREATE TEMP TABLE IF NOT EXISTS staged_vectors ' +
-  '(memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB NOT NULL)';
+  'CREATE TEMP TABLE IF NOT EXISTS staged_vectors (memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB ' +
+  'NOT NULL)';
 
 /** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock on hippo.db. */
 export function openVectorStaging(db: DatabaseSyncLike): void {
@@ -115,9 +116,8 @@ export function countVectors(db: DatabaseSyncLike): VectorCounts {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,
-    'SELECT COUNT(*) AS vectors, ' +
-      'COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS embedded ' +
-      'FROM memory_vectors v',
+    'SELECT COUNT(*) AS vectors, COALESCE(SUM(EXISTS (SELECT 1 FROM memories m WHERE m.id = v.memory_id)), 0) AS ' +
+      'embedded FROM memory_vectors v',
   ).get() as { vectors: number; embedded: number };
   return { vectors: Number(row.vectors), embedded: Number(row.embedded) };
 }

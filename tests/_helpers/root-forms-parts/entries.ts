@@ -6,7 +6,7 @@ import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
-import type { DormantMemory, ListDormantOpts } from '../../../src/base/ports/store/dormant.js';
+import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
@@ -17,7 +17,7 @@ import { waitingOpener } from '../../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
 import type { SqlFragment } from '../../../src/db/sql.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
-import type { HeldText } from '../../../src/base/ports/store/types.js';
+import type { HeldText, EntryCursor } from '../../../src/base/ports/store/types.js';
 import type {
   AmbientLoadResult,
   AmbientRecallRequest,
@@ -27,7 +27,6 @@ import type {
 import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/ports/store/sharing.js';
 import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
-import type { EntryCursor } from '../../../src/base/ports/store/types.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
 
 export {
@@ -107,7 +106,7 @@ export function deleteEntry(
 export function loadDormantMemories(
   hippoRoot: string,
   tenantId: string,
-  opts: ListDormantOpts = {},
+  opts: ListDormantOptions = {},
   admit?: SqlFragment,
 ): DormantMemory[] {
   return onHandle(hippoRoot, (db) => listDormantRows(db, tenantId, opts, admit ?? EVERY_SCOPE));

@@ -16,7 +16,7 @@ import {
   dormantListCap,
   dormantTerms,
   type DormantMemory,
-  type ListDormantOpts,
+  type ListDormantOptions,
 } from '../../base/ports/store/dormant.js';
 import { DORMANT_ORDER, orderSql } from '../rules/order.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
@@ -126,7 +126,7 @@ const DORMANT_WITH_SCOPE = `(SELECT *, ${entryField('scope')} AS scope FROM dorm
 export function listDormantRows(
   db: DatabaseSyncLike,
   tenantId: string,
-  opts: ListDormantOpts = {},
+  opts: ListDormantOptions = {},
   admit: SqlFragment = EVERY_SCOPE,
 ): DormantMemory[] {
   const terms = dormantTerms(opts);

@@ -24,6 +24,8 @@ import {
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 import { SCATTER_COLS, SCATTER_ROWS } from '../../base/ports/store/dashboard-reads.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
+import { isFtsAvailable } from '../../db/meta.js';
+import { TAGS_NOT_AS_WRITTEN, TEXT_OUTSIDE_TRIGRAMS } from '../../db/continuity.js';
 
 /** The columns each fact function reads first, in this order. */
 export const FACT_COLUMNS =
@@ -110,11 +112,6 @@ const asciiFolded = (column: string): string =>
 
 const NOT_ASCII = (column: string): string => `length(CAST(${column} AS BLOB)) <> length(${column})`;
 
-// A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
-// value String() writes another way.
-const TAGS_NOT_AS_WRITTEN =
-  `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*' ` + `OR instr(substr(tags_json, 2), '[') > 0`;
-
 // A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded; for a needle with no
 // ASCII, those with a letter past ASCII; else every row.
 const TEXT_ADMITS =
@@ -123,7 +120,7 @@ const TEXT_ADMITS =
   `WHEN :wide THEN ${NOT_ASCII('content')} OR ${NOT_ASCII('tags_json')} OR instr(tags_json, '\\') > 0 ELSE 1 END`;
 
 /** True when :text is null or the row's content or tags hold it, by hippo_holds_text on the rows native SQL admits. */
-export const HOLDS_TEXT =
+const HOLDS_TEXT =
   `CASE WHEN :text IS NULL THEN 1 WHEN ${TEXT_ADMITS} ` +
   `THEN hippo_holds_text(id, content, tags_json, :text) ELSE 0 END`;
 
@@ -140,12 +137,37 @@ interface TextBinds {
   readonly wide: number;
 }
 
-export function holdsTextBinds(text: string | null): TextBinds {
+function holdsTextBinds(text: string | null): TextBinds {
   if (text === null) return { text, probe: null, wide: 0 };
   // node:sqlite hands a function text only up to its first NUL, so that is all of the needle the rule tests.
   const seen = text.split('\0', 1)[0];
   const probe = seen.split(PROBE_BREAK).reduce((long, run) => (run.length > long.length ? run : long), '');
   return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
+}
+
+// FTS5 cannot look up fewer than 3 characters, so a shorter probe leaves the needle to HOLDS_TEXT over every row.
+const MIN_PROBE_CHARS = 3;
+
+// Every row TEXT_ADMITS can admit for a probe: the trigram index's matches, and the rows it may miss, read by the
+// partial index v64 made for them.
+const TEXT_CANDIDATES =
+  `SELECT rowid FROM memories_trigram WHERE memories_trigram MATCH :phrase UNION ALL ` +
+  `SELECT rowid FROM memories WHERE tenant_id = :tenant AND (${TEXT_OUTSIDE_TRIGRAMS})`;
+
+/** A statement's text filter: SQL over a memories row and the named parameters it binds. */
+export interface TextFilter {
+  readonly sql: string;
+  readonly binds: Readonly<Record<string, SqlValue>>;
+}
+
+/** HOLDS_TEXT and its parameters, a statement's text filter; it tests only the trigram index's candidates when the
+ * needle has a probe long enough to look up. */
+export function textFilter(db: DatabaseSyncLike, text: string | null): TextFilter {
+  const { probe, wide } = holdsTextBinds(text);
+  const binds = { text, probe, wide };
+  if (probe === null || probe.length < MIN_PROBE_CHARS || !isFtsAvailable(db)) return { sql: HOLDS_TEXT, binds };
+  // PROBE_BREAK leaves no `"` in a probe, so quoting it makes one FTS5 phrase.
+  return { sql: `(rowid IN (${TEXT_CANDIDATES}) AND ${HOLDS_TEXT})`, binds: { ...binds, phrase: `"${probe}"` } };
 }
 
 /** UTF-16 big-endian bytes, so SQLite's byte order sorts text as JavaScript's `<` does. */

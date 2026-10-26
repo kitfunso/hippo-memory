@@ -20,10 +20,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { detectAvailabilityBias, type AgeRef } from '../../src/api/availability.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 // Fixed reference "now" so every fixture age is deterministic.
 const NOW = Date.parse('2026-05-28T00:00:00.000Z');
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Build an AgeRef whose `created` is `ageDays` before NOW. */
 function ref(id: string, ageDays: number): AgeRef {

@@ -8,8 +8,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { escapeRegex } from '../../src/base/util/escape.js';
 import { installCopilot } from '../../src/surface/hooks-install/copilot.js';
-import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
-import { resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
+import { installJsonHooks, resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { registerWorkspace, workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -35,7 +34,7 @@ function seed(): string {
 
 /** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
 async function holdOpen(file: string) {
-  const script = `const fs = require('fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
+  const script = `const fs = require('node:fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
   const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   await once(child.stdout, 'data');
   return child;

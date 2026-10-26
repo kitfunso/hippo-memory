@@ -23,7 +23,7 @@ import type { ContextCost, ContextOptions, ContextResultEntry } from './context-
 import { heldIds } from './recall/finish.js';
 import type { Context, GlobalInReach } from './types.js';
 import type { AmbientLoadResult } from '../base/ports/store/context-reads.js';
-import type { AppendAuditOpts } from '../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../base/ports/store/types.js';
 
 import {
   admitWithinBudget,
@@ -469,7 +469,7 @@ async function searchLocalRows(
 
 // Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they never emit.
 async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): Promise<void> {
-  const row: AppendAuditOpts = {
+  const row: AppendAuditOptions = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     op: 'recall',

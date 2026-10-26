@@ -6,10 +6,10 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { tokenize } from '../../src/base/util/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from '../_helpers/pairwise-sleep-oracle.js';
 import { mulberry32 } from '../_helpers/property.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const NOW = new Date('2026-10-01T00:00:00.000Z');
-const DAY = 24 * 60 * 60 * 1000;
 const SIZES = [0, 1, 2, 3, 8, 30, 120, 300];
 const SEEDS_PER_SIZE = 4;
 
@@ -104,7 +104,7 @@ function randomEntries(rnd: () => number, n: number): MemoryEntry[] {
     const r = rnd();
     const layer = r < 0.1 ? Layer.Semantic : r < 0.25 ? Layer.Trace : Layer.Episodic;
     const tags = rnd() < 0.05 ? ['extracted'] : rnd() < 0.05 ? ['session-digest'] : [];
-    const created = new Date(NOW.getTime() - Math.floor(rnd() * 60) * DAY).toISOString();
+    const created = new Date(NOW.getTime() - Math.floor(rnd() * 60) * DAY_MS).toISOString();
     return {
       ...createMemory(text, { layer, tags }),
       id: `e${k}`,

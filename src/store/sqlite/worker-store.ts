@@ -77,109 +77,24 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-type RecallAndWriteGroups = Pick<
-  StoreGroups,
-  | 'keyWrites'
-  | 'vectorWrites'
-  | 'entryWrites'
-  | 'contextReads'
-  | 'dagReads'
-  | 'auditLog'
-  | 'quarantine'
-  | 'graphReads'
-  | 'objects'
-  | 'lastRecall'
-  | 'connectorWrites'
-  | 'connectorEvents'
->;
+/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a Map, readiness is
+ * probed. */
+type CustomGroup = 'base' | 'vectors' | 'readiness';
+type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
-function recallAndWriteGroups(executor: SqliteExecutor, inProcess: StoreGroups): RecallAndWriteGroups {
-  const ops = WORKER_OPS;
-  return {
-    keyWrites: onWorkers(executor, 'keyWrites', ops.keyWrites, inProcess.keyWrites),
-    vectorWrites: onWorkers(executor, 'vectorWrites', ops.vectorWrites, inProcess.vectorWrites),
-    entryWrites: onWorkers(executor, 'entryWrites', ops.entryWrites, inProcess.entryWrites),
-    contextReads: onWorkers(executor, 'contextReads', ops.contextReads, inProcess.contextReads),
-    dagReads: onWorkers(executor, 'dagReads', ops.dagReads, inProcess.dagReads),
-    auditLog: onWorkers(executor, 'auditLog', ops.auditLog, inProcess.auditLog),
-    quarantine: onWorkers(executor, 'quarantine', ops.quarantine, inProcess.quarantine),
-    graphReads: onWorkers(executor, 'graphReads', ops.graphReads, inProcess.graphReads),
-    objects: onWorkers(executor, 'objects', ops.objects, inProcess.objects),
-    lastRecall: onWorkers(executor, 'lastRecall', ops.lastRecall, inProcess.lastRecall),
-    connectorWrites: onWorkers(executor, 'connectorWrites', ops.connectorWrites, inProcess.connectorWrites),
-    connectorEvents: onWorkers(executor, 'connectorEvents', ops.connectorEvents, inProcess.connectorEvents),
-  };
-}
+const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
+  group !== 'base' && group !== 'vectors' && group !== 'readiness';
 
-type SessionAndAdminGroups = Pick<
-  StoreGroups,
-  | 'auditMaintenance'
-  | 'lessonWrites'
-  | 'sessions'
-  | 'cards'
-  | 'goals'
-  | 'conflicts'
-  | 'dormant'
-  | 'reports'
-  | 'rejections'
-  | 'failureLog'
-  | 'compactions'
->;
+// SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
+const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
 
-function sessionAndAdminGroups(executor: SqliteExecutor, inProcess: StoreGroups): SessionAndAdminGroups {
-  const ops = WORKER_OPS;
-  return {
-    auditMaintenance: onWorkers(executor, 'auditMaintenance', ops.auditMaintenance, inProcess.auditMaintenance),
-    lessonWrites: onWorkers(executor, 'lessonWrites', ops.lessonWrites, inProcess.lessonWrites),
-    sessions: onWorkers(executor, 'sessions', ops.sessions, inProcess.sessions),
-    cards: onWorkers(executor, 'cards', ops.cards, inProcess.cards),
-    goals: onWorkers(executor, 'goals', ops.goals, inProcess.goals),
-    conflicts: onWorkers(executor, 'conflicts', ops.conflicts, inProcess.conflicts),
-    dormant: onWorkers(executor, 'dormant', ops.dormant, inProcess.dormant),
-    reports: onWorkers(executor, 'reports', ops.reports, inProcess.reports),
-    rejections: onWorkers(executor, 'rejections', ops.rejections, inProcess.rejections),
-    failureLog: onWorkers(executor, 'failureLog', ops.failureLog, inProcess.failureLog),
-    compactions: onWorkers(executor, 'compactions', ops.compactions, inProcess.compactions),
-  };
-}
-
-type FolderGroups = Pick<StoreGroups, 'ledger' | 'embeddingIndex' | 'promotion' | 'folderFiles' | 'sharing'>;
-
-function folderGroups(executor: SqliteExecutor, inProcess: StoreGroups): FolderGroups {
-  const ops = WORKER_OPS;
-  return {
-    ledger: onWorkers(executor, 'ledger', ops.ledger, inProcess.ledger),
-    embeddingIndex: onWorkers(executor, 'embeddingIndex', ops.embeddingIndex, inProcess.embeddingIndex),
-    promotion: onWorkers(executor, 'promotion', ops.promotion, inProcess.promotion),
-    folderFiles: onWorkers(executor, 'folderFiles', ops.folderFiles, inProcess.folderFiles),
-    sharing: onWorkers(executor, 'sharing', ops.sharing, inProcess.sharing),
-  };
-}
-
-type LocalGroups = Pick<
-  StoreGroups,
-  | 'consolidation'
-  | 'learning'
-  | 'captures'
-  | 'compactionHooks'
-  | 'projectTags'
-  | 'diagnostics'
-  | 'graphRebuild'
-  | 'agentImport'
->;
-
-function localGroups(executor: SqliteExecutor, inProcess: StoreGroups): LocalGroups {
-  const ops = WORKER_OPS;
-  return {
-    consolidation: onWorkers(executor, 'consolidation', ops.consolidation, inProcess.consolidation),
-    learning: onWorkers(executor, 'learning', ops.learning, inProcess.learning),
-    captures: onWorkers(executor, 'captures', ops.captures, inProcess.captures),
-    compactionHooks: onWorkers(executor, 'compactionHooks', ops.compactionHooks, inProcess.compactionHooks),
-    projectTags: onWorkers(executor, 'projectTags', ops.projectTags, inProcess.projectTags),
-    diagnostics: onWorkers(executor, 'diagnostics', ops.diagnostics, inProcess.diagnostics),
-    graphRebuild: onWorkers(executor, 'graphRebuild', ops.graphRebuild, inProcess.graphRebuild),
-    agentImport: onWorkers(executor, 'agentImport', ops.agentImport, inProcess.agentImport),
-  };
+/** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it misses a compile
+ * error. */
+function plainGroups(executor: SqliteExecutor, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
+  const wrapped = PLAIN_GROUPS.map((group) => [group, onWorkers(executor, group, WORKER_OPS[group], inProcess[group])]);
+  // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has every PlainGroup
+  // key.
+  return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
 }
 
 /** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
@@ -195,10 +110,7 @@ export function workerSqliteStore(
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
-    ...recallAndWriteGroups(executor, inProcess),
-    ...sessionAndAdminGroups(executor, inProcess),
-    ...folderGroups(executor, inProcess),
-    ...localGroups(executor, inProcess),
+    ...plainGroups(executor, inProcess),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };

@@ -2,7 +2,7 @@
 // meta upserts on every open turned a concurrent writer into a locked read.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';

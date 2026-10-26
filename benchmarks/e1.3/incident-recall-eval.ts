@@ -17,9 +17,9 @@
  * that on >=7/10 scenarios.
  */
 
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { retrieve, adminActor, type Context } from '../../src/entry/eval-scripts.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

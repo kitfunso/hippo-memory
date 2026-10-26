@@ -25,6 +25,7 @@ import {
   link,
   toolFailureScratch,
 } from '../_helpers/tool-failure-ledger.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 let p: Project;
 
@@ -257,7 +258,7 @@ describe('controls', () => {
     await fail(p, 'ntf5', { tool_use_id: 'toolu_copy' });
     const [row] = events('ntf5');
     const copyProj = path.join(p.dir, 'copy', 'proj');
-    fs.cpSync(p.proj, copyProj, { recursive: true });
+    copyTree(p.proj, copyProj);
     const copy = path.join(copyProj, '.hippo');
     expect(events('ntf5', copy).map((e) => e.id)).toEqual([row.id]);
     expect(list('ntf5').entries).toHaveLength(1);

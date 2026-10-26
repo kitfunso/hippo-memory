@@ -1,7 +1,7 @@
 // backfillFtsIndex counted the FTS5 virtual table itself on every open,
 // walking every document. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';

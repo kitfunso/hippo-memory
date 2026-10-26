@@ -1,7 +1,7 @@
 // GET /v1/context and the hippo_context MCP tool answer the same over serve() on hippo.db's default store, in process
 // and through the port alone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { shareRoot } from '../_helpers/share-root.js';
@@ -11,6 +11,7 @@ import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '.
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 type Call =
   | { readonly via: 'http'; readonly query: string }
@@ -47,7 +48,7 @@ async function runServed(makeStore?: (root: string) => HippoStore) {
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-served-'));
   try {
     const root = join(home, 'store');
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     // serve() reads a store that is not hippo.db as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);

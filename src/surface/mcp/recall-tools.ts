@@ -1,6 +1,6 @@
 // Read-side tool handlers: hippo_recall, hippo_assemble, hippo_drill and hippo_context.
 
-import * as path from 'path';
+import * as path from 'node:path';
 import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';

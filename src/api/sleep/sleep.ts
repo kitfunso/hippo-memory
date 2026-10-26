@@ -7,7 +7,7 @@ import { runSleep } from './sleep-run.js';
 
 /** Options for `sleep`, one consolidation cycle on a store with the sleep groups that returns counts; unlike
  * `hippo sleep` it skips the auto-learn step. */
-export interface SleepOpts {
+export interface SleepOptions {
   /** Report what a sleep would change without applying it; sharing, the ambient summary and the graph refresh are
    * skipped. */
   dryRun?: boolean;
@@ -52,6 +52,6 @@ export interface SleepResult {
 
 /** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes pinned, raw, kept or
  * object-backing rows. */
-export async function sleepWholeStore(ctx: SleepContext, opts: SleepOpts = {}): Promise<SleepResult> {
+export async function sleepWholeStore(ctx: SleepContext, opts: SleepOptions = {}): Promise<SleepResult> {
   return runSleep(ctx, opts);
 }

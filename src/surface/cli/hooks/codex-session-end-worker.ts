@@ -1,5 +1,5 @@
 // The Codex wrapper's session-end worker (`__codex-session-end-worker`): sleep, then capture and digest the rollout.
-import * as path from 'path';
+import * as path from 'node:path';
 import { resolveCodexSessionTranscript } from '../../capture/codex-session.js';
 import { resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
 import { readSessionScan, recordSessionDigest } from '../../capture/session-digest.js';

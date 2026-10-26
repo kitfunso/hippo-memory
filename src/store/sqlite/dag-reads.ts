@@ -110,10 +110,9 @@ function countedLevel(
     // SAFETY: the WHERE keeps dag_parent_id a string.
     const groups = cachedStatement(
       db,
-      `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories ` +
-        `WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ${TENANT_IS} AND id <> ? ` +
-        `GROUP BY dag_parent_id, scope, ` +
-        `origin_project`,
+      `SELECT dag_parent_id, scope, origin_project AS originProject, COUNT(*) AS n FROM memories WHERE ` +
+        `dag_parent_id IN (SELECT value FROM json_each(?)) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, ` +
+        `scope, origin_project`,
     ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.admit(group)) return null;
@@ -164,10 +163,8 @@ function childrenInOrder(
   for (const chunk of chunked([...parents])) {
     const rows = cachedStatement(
       db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ${TENANT_IS} AND ` +
-        `id <> ? ` +
-        `ORDER BY created ASC, id ASC LIMIT ?`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (SELECT value FROM json_each(?)) AND ` +
+        `${TENANT_IS} AND id <> ? ORDER BY created ASC, id ASC LIMIT ?`,
     ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id, limit) as MemoryRow[];
     for (const row of rows) {
       const bucket = byParent.get(row.dag_parent_id ?? '');

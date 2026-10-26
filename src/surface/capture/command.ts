@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -13,6 +13,7 @@ import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
 export interface CaptureOptions {
@@ -74,7 +75,7 @@ function beginLogTee(logFile: string): () => void {
 /** Creates the log's folder and appends the banner line; false, after a warning, when the log cannot be written. */
 function writeLogBanner(logFile: string): boolean {
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} capturing session...\n`, 'utf8');
   } catch (err) {
     log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));

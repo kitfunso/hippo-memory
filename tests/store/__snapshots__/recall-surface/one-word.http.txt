@@ -1,0 +1,202 @@
+{
+  "global": {
+    "audit": [],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":10}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 10,
+        "session_id": null,
+        "surface": "http_recall",
+        "tenant_id": "default",
+        "tokens": 107,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "10",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 1,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.9,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 3,
+        "score": 0.8,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child2",
+        "result_rank": 4,
+        "score": 0.7,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 5,
+        "score": 0.6,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 6,
+        "score": 0.5,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 7,
+        "score": 0.4,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 8,
+        "score": 0.30000000000000004,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 9,
+        "score": 0.19999999999999996,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 10,
+        "score": 0.09999999999999998,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "api",
+        "result_count": 10,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "body": "{"results":[{"id":"mem_p_pinned","content":"deploy freeze applies to the billing service on fridays","score":1,"layer":"episodic","strength":1},{"id":"mem_p_plain","content":"deploy pipeline uses blue green rollout for the api","score":0.9,"layer":"episodic","strength":1},{"id":"mem_x_child1","content":"deploy batch child one moved the cron","score":0.8,"layer":"episodic","strength":1},{"id":"mem_x_child2","content":"deploy batch child two moved the queue","score":0.7,"layer":"episodic","strength":1},{"id":"mem_p_fill0","content":"deploy log line 0 for the nightly batch","score":0.6,"layer":"episodic","strength":1},{"id":"mem_p_fill1","content":"deploy log line 1 for the nightly batch","score":0.5,"layer":"episodic","strength":1},{"id":"mem_p_fill2","content":"deploy log line 2 for the nightly batch","score":0.4,"layer":"episodic","strength":1},{"id":"mem_p_fill3","content":"deploy log line 3 for the nightly batch","score":0.30000000000000004,"layer":"episodic","strength":1},{"id":"mem_p_fill4","content":"deploy log line 4 for the nightly batch","score":0.19999999999999996,"layer":"episodic","strength":1},{"id":"mem_p_fill5","content":"deploy log line 5 for the nightly batch","score":0.09999999999999998,"layer":"episodic","strength":1}],"total":16,"tokens":107,"windowSize":200,"suppressionSummary":{"totalCandidates":16,"droppedPreRank":0,"droppedByBudget":6,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}",
+    "status": 200,
+  },
+}

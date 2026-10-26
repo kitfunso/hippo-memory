@@ -3,7 +3,7 @@
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
 import { getHippoRoot } from './host/project-identity.js';
@@ -24,6 +24,7 @@ import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags }
 import { COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
+import { withRootStoreRuntime } from './surface/open-store.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
@@ -259,7 +260,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
   try {
-    await main(command, args, flags, getHippoRoot(process.cwd()));
+    await withRootStoreRuntime(() => main(command, args, flags, getHippoRoot(process.cwd())));
   } catch (err) {
     // The verb printed its own message. The process ends as a success does, never by process.exit, which on Windows
     // aborts Node (libuv async.c) while a fetch still has work in flight.

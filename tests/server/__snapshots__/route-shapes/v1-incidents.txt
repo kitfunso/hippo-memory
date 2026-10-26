@@ -1,0 +1,8 @@
+GET /v1/incidents -> 200
+POST /v1/incidents -> 400 text is required (non-empty string)
+DELETE /v1/incidents -> 404 not found
+PUT /v1/incidents -> 404 not found
+GET /v1/incidents/ -> 404 not found
+POST /v1/incidents/ -> 404 not found
+DELETE /v1/incidents/ -> 404 not found
+PUT /v1/incidents/ -> 404 not found

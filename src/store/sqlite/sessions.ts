@@ -17,6 +17,7 @@ import type {
   WorkingMemoryFilter,
   WorkingMemoryPush,
 } from '../../base/ports/store/sessions.js';
+import type { UntracedSession } from '../../base/ports/store/consolidation.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey } from '../../base/ports/store/types.js';
@@ -38,7 +39,7 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../rules/windows.js';
+import { SESSION_EVENT_LIMIT, TRACE_EVENT_ROWS, WM_MAX_ENTRIES } from '../rules/windows.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
@@ -204,36 +205,31 @@ export function listSessionEvents(
   return rows.map(rowToSessionEvent).reverse();
 }
 
-/** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed
- * window. */
-export function listPromotableSessions(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sinceMs: number,
-): Array<{ session_id: string }> {
-  assertTenantId('listPromotableSessions', tenantId);
+/** The tenant's sessions completed since `sinceMs` with no trace yet, each with its newest TRACE_EVENT_ROWS events
+ * oldest first: two statements for any number of sessions. */
+export function listUntracedSessions(db: DatabaseSyncLike, tenantId: string, sinceMs: number): UntracedSession[] {
+  assertTenantId('listUntracedSessions', tenantId);
+  // SAFETY: one TEXT column, session_id.
+  const ids = (
+    cachedStatement(
+      db,
+      `SELECT DISTINCT e.session_id AS session_id FROM session_events e ` +
+        `WHERE e.event_type = 'session_complete' AND e.created_at >= ? AND e.tenant_id = ? AND NOT EXISTS ` +
+        `(SELECT 1 FROM memories m WHERE m.source_session_id = e.session_id AND m.layer = 'trace' ` +
+        `AND m.tenant_id = e.tenant_id)`,
+    ).all(new Date(sinceMs).toISOString(), tenantId) as Array<{ session_id: string }>
+  ).map((row) => row.session_id);
+  if (ids.length === 0) return [];
   const rows = cachedStatement(
     db,
-    `
-    SELECT DISTINCT session_id FROM session_events
-    WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
-  `,
-  ).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
-  return rows;
-}
-
-/** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
-export function traceExistsForSession(db: DatabaseSyncLike, tenantId: string, session_id: string): boolean {
-  assertTenantId('traceExistsForSession', tenantId);
-  const row = cachedStatement(
-    db,
-    `
-    SELECT 1 FROM memories
-    WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
-    LIMIT 1
-  `,
-  ).get(session_id, tenantId);
-  return !!row;
+    `SELECT ${SESSION_EVENT_COLUMNS} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY session_id ` +
+      `ORDER BY created_at DESC, id DESC) AS newest FROM session_events ` +
+      `WHERE tenant_id = ? AND session_id IN (SELECT value FROM json_each(?))) ` +
+      `WHERE newest <= ? ORDER BY created_at ASC, id ASC`,
+  ).all(tenantId, JSON.stringify(ids), TRACE_EVENT_ROWS) as SessionEventRow[];
+  const events = new Map<string, SessionEvent[]>(ids.map((id) => [id, []]));
+  for (const row of rows) events.get(row.session_id)?.push(rowToSessionEvent(row));
+  return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
 }
 
 /** The owner a session id is bound to, or null. */

@@ -2,7 +2,7 @@
 // stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
+import { type Actor, type SleepOptions, type SleepResult, type Context } from '../../api/index.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
@@ -17,7 +17,7 @@ export type SleepJob =
       readonly hippoRoot: string;
       readonly tenantId: string;
       readonly actor: Actor;
-      readonly opts: SleepOpts;
+      readonly opts: SleepOptions;
     }
   | { readonly kind: 'consolidate'; readonly hippoRoot: string };
 
@@ -125,7 +125,7 @@ const SLEEP_RETRY_AFTER_SEC = 30;
 export interface SleepQueue {
   /** `sleep` for the HTTP route: same result and errors, stopped at the deadline (10 minutes, or
    * HIPPO_SLEEP_TIMEOUT_MS). */
-  readonly sleep: (ctx: Context, opts: SleepOpts) => Promise<SleepResult>;
+  readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;
   /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never rejects. */

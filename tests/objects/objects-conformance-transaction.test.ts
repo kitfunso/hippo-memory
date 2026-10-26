@@ -1,6 +1,5 @@
 // On hippo.db a write whose audit row fails keeps nothing.
 import { describe, expect, it } from 'vitest';
-import { cpSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { TENANT_A } from '../_helpers/store-conformance.js';
@@ -23,6 +22,7 @@ import {
   useObjectsConformance,
 } from '../_helpers/objects-conformance.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -46,7 +46,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     'a $kind save or close whose audit row is refused keeps no row, no mirror, no successor link, no closed status and no audit row',
     async (c) => {
       const root = makeRoot('objects-atomic', { init: false });
-      cpSync(fixture.dir, root, { recursive: true });
+      copyTree(fixture.dir, root);
       const store = sqliteStore(root);
       const { objects } = store;
       const first = saving(c, 1);
@@ -73,7 +73,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
 
   it('an incident with more links than one lookup chunk is checked across chunks and names the first unheld link', async () => {
     const root = makeRoot('objects-links', { init: false });
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     const store = sqliteStore(root);
     const { objects } = store;
     const first = opening(1);
@@ -93,7 +93,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
 
   it('an incident open or resolve whose audit row is refused keeps no row, no mirror, no resolved status and no audit row', async () => {
     const root = makeRoot('objects-atomic', { init: false });
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     const store = sqliteStore(root);
     const { objects } = store;
     const first = opening(1);

@@ -33,13 +33,21 @@ export function rewardFactorSql(model: StrengthModel): string {
  * step. An unparseable date scores NULL here and 0 in JS, so sums agree. `now` is bound, so the text, and the statement
  * cached for it, stay the same at every call. */
 export function strengthSql(now: Date, model: StrengthModel): SqlFragment {
+  return {
+    sql: strengthSqlAt('?', model),
+    params: model.decays ? [now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY] : [],
+  };
+}
+
+/** strengthSql with the current time as the Julian day `julianNow` names, for a statement that binds by name. */
+export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
   const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
   const pos = 'COALESCE(outcome_positive, 0)';
   const neg = 'COALESCE(outcome_negative, 0)';
   const wrong = `MIN(MAX(0, ${neg} - ${pos}), ${model.maxWrongHalvings})`;
   const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${rewardFactorSql(model)})`;
   const anchor = model.recallStrengthens ? 'last_retrieved' : 'created';
-  const decay = model.decays ? `pow(${model.decayBase}, (? - julianday(${anchor})) / ${halfLife})` : '1.0';
+  const decay = model.decays ? `pow(${model.decayBase}, (${julianNow} - julianday(${anchor})) / ${halfLife})` : '1.0';
   const boost = model.recallStrengthens
     ? `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${model.retrievalBoostSlope} * ` +
       `log2(COALESCE(retrieval_count, 0) + 1) END)`
@@ -51,12 +59,12 @@ export function strengthSql(now: Date, model: StrengthModel): SqlFragment {
     .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], model.lossAversionRatio))}`)
     .join(' ')} ELSE 1.0 END)`;
   const penalty = `pow(${model.decayBase}, ${wrong})`;
-  return {
-    sql: `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
-    ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`,
-    params: model.decays ? [now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY] : [],
-  };
+  return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
+    ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }
+
+/** The Julian day of the epoch milliseconds a statement binds as `msParam`, as strengthSqlAt reads the time. */
+export const julianDayOfMs = (msParam: string): string => `(${msParam} / ${DAY_MS}.0 + ${UNIX_EPOCH_JULIAN_DAY})`;
 
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
 const keepPairSql = (p: KeepPair): SqlFragment => ({

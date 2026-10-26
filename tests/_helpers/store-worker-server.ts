@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import type { ServeOpts, ServerHandle } from '../../src/server.js';
+import type { ServeOptions, ServerHandle } from '../../src/server.js';
 import { serveKeyed } from './keyed-server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import {
@@ -46,7 +46,11 @@ export function newRoot(label = 'sqlite-executor'): string {
 }
 
 /** A server on `root`, sent its local key by any call naming no token: on the default store when `store` is absent, which is the worker-backed one. */
-export async function start(root: string, store?: HippoStore, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
+export async function start(
+  root: string,
+  store?: HippoStore,
+  extra: Partial<ServeOptions> = {},
+): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
   // These runs compare route output, so neither limiter may answer first.
   const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const }, ...extra };

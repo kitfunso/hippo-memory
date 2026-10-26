@@ -1,0 +1,28 @@
+GET /v1/customer-notes/1/close -> 404 not found
+POST /v1/customer-notes/1/close -> 404 note 1 not found for tenant default
+DELETE /v1/customer-notes/1/close -> 404 not found
+PUT /v1/customer-notes/1/close -> 404 not found
+GET /v1/customer-notes/007/close -> 404 not found
+POST /v1/customer-notes/007/close -> 404 note 7 not found for tenant default
+DELETE /v1/customer-notes/007/close -> 404 not found
+PUT /v1/customer-notes/007/close -> 404 not found
+GET /v1/customer-notes/abc/close -> 404 not found
+POST /v1/customer-notes/abc/close -> 404 not found
+DELETE /v1/customer-notes/abc/close -> 404 not found
+PUT /v1/customer-notes/abc/close -> 404 not found
+GET /v1/customer-notes/-1/close -> 404 not found
+POST /v1/customer-notes/-1/close -> 404 not found
+DELETE /v1/customer-notes/-1/close -> 404 not found
+PUT /v1/customer-notes/-1/close -> 404 not found
+GET /v1/customer-notes/%31/close -> 404 not found
+POST /v1/customer-notes/%31/close -> 404 not found
+DELETE /v1/customer-notes/%31/close -> 404 not found
+PUT /v1/customer-notes/%31/close -> 404 not found
+GET /v1/customer-notes//close -> 404 not found
+POST /v1/customer-notes//close -> 404 not found
+DELETE /v1/customer-notes//close -> 404 not found
+PUT /v1/customer-notes//close -> 404 not found
+GET /v1/customer-notes/1/close/ -> 404 not found
+POST /v1/customer-notes/1/close/ -> 404 not found
+DELETE /v1/customer-notes/1/close/ -> 404 not found
+PUT /v1/customer-notes/1/close/ -> 404 not found

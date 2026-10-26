@@ -1,9 +1,9 @@
 // Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem in a
 // mkdtemp sandbox; the walk stops at the temp root, so stores above it cannot leak into these cases.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -22,6 +22,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 oneRequestPerTest();
 
@@ -45,7 +46,7 @@ function samePath(a: string, b: string): boolean {
 beforeEach(() => {
   tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-walkup-')));
   home = mkdirs('home');
-  fs.mkdirSync(path.join(home, '.hippo'));
+  fs.mkdirSync(path.join(home, '.hippo'), PRIVATE_DIR);
 });
 
 afterEach(() => {
@@ -55,14 +56,14 @@ afterEach(() => {
 describe('getHippoRoot ancestor walk', () => {
   it('resolves a nested subdirectory to the nearest ancestor .hippo directory', () => {
     const proj = mkdirs('home', 'proj');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const deep = mkdirs('home', 'proj', 'src', 'deep');
     expect(getHippoRoot(deep, { homeDir: home })).toBe(path.join(proj, '.hippo'));
   });
 
   it('does not look above stopDir and falls back to <cwd>/.hippo', () => {
     const outer = mkdirs('home', 'outer');
-    fs.mkdirSync(path.join(outer, '.hippo'));
+    fs.mkdirSync(path.join(outer, '.hippo'), PRIVATE_DIR);
     const stop = mkdirs('home', 'outer', 'inner');
     const leaf = mkdirs('home', 'outer', 'inner', 'leaf');
     expect(getHippoRoot(leaf, { homeDir: home, stopDir: stop })).toBe(path.join(leaf, '.hippo'));
@@ -91,14 +92,14 @@ describe('getHippoRoot ancestor walk', () => {
     const link = path.join(tmpRoot, 'link-proj');
     fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
     const before = getHippoRoot(link, { homeDir: home, stopDir: tmpRoot });
-    fs.mkdirSync(path.join(real, '.hippo'));
+    fs.mkdirSync(path.join(real, '.hippo'), PRIVATE_DIR);
     expect(getHippoRoot(link, { homeDir: home, stopDir: tmpRoot })).toBe(before);
     expect(before).toBe(path.join(real, '.hippo'));
   });
 
   it('ends the walk at the temp root unchecked, so a sandbox under it never resolves upward', () => {
     const tmp = mkdirs('scratch', 'tmp');
-    fs.mkdirSync(path.join(tmpRoot, 'scratch', '.hippo'));
+    fs.mkdirSync(path.join(tmpRoot, 'scratch', '.hippo'), PRIVATE_DIR);
     const work = mkdirs('scratch', 'tmp', 'work');
     expect(findHippoStoreDir(work, { homeDir: home })).toBe(path.join(tmpRoot, 'scratch', '.hippo'));
     vi.stubEnv('TMPDIR', tmp);
@@ -111,7 +112,7 @@ describe('getHippoRoot ancestor walk', () => {
 
   it('returns a bare ancestor .hippo directory, which isInitialized then rejects', () => {
     const proj = mkdirs('home', 'proj');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const src = mkdirs('home', 'proj', 'src');
     const root = getHippoRoot(src, { homeDir: home });
     expect(root).toBe(path.join(proj, '.hippo'));
@@ -277,7 +278,7 @@ describe('MCP findHippoRoot', () => {
     const globalStore = mkdirs('global-store');
     vi.stubEnv('HIPPO_HOME', globalStore);
     const proj = mkdirs('home', 'proj');
-    fs.mkdirSync(path.join(proj, '.hippo'));
+    fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const src = mkdirs('home', 'proj', 'src');
     expect(findHippoRoot(src, { homeDir: home })).toBe(path.join(proj, '.hippo'));
   });

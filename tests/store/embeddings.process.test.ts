@@ -91,9 +91,9 @@ describe('isEmbeddingAvailable', () => {
 describe('embedding index persistence', () => {
   it('round-trips an index via save + load', async () => {
     const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
-    const fs = await import('fs');
-    const os = await import('os');
-    const path = await import('path');
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-'));
     // We need the .hippo structure; here we just use tmpDir directly as root

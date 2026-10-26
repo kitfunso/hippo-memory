@@ -7,8 +7,8 @@ import * as githubSql from '../../../src/store/sqlite/connectors/github.js';
 import * as slackSql from '../../../src/store/sqlite/connectors/slack.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
-import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/base/ports/store/keys.js';
-import type { AppendAuditOpts } from '../../../src/base/ports/store/types.js';
+import type { ApiKeyListItem, ListApiKeysOptions } from '../../../src/base/ports/store/keys.js';
+import type { AppendAuditOptions } from '../../../src/base/ports/store/types.js';
 import type { ConnectorEventRecord } from '../../../src/base/ports/store/connectors.js';
 
 /** The highest audit id hippo.db ever assigned, pruned rows included. */
@@ -22,7 +22,10 @@ export function auditHighId(hippoRoot: string): number {
   });
 }
 
-export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
+export function recordAuditEventsRowByRow(
+  hippoRoot: string,
+  events: readonly AppendAuditOptions[],
+): FailedAuditEvent[] {
   return onHandle(hippoRoot, (db) => auditSql.recordAuditEventsRowByRow(db, events));
 }
 
@@ -46,6 +49,6 @@ export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId:
   });
 }
 
-export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyListItem[] {
+export function listApiKeys(hippoRoot: string, opts: ListApiKeysOptions): ApiKeyListItem[] {
   return onHandle(hippoRoot, (db) => listApiKeyRows(db, opts).map((r) => r.key));
 }

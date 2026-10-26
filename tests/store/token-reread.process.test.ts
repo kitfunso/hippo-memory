@@ -21,10 +21,10 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordRereads, writeEntry, appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
-const DAY = 86_400_000;
 const minute = (m: number): number => BASE + m * 60_000;
 const iso = (at: number): string => new Date(at).toISOString();
 
@@ -260,13 +260,13 @@ describe('recordRereads', () => {
 
   it("dates each row at its UTC day's last re-read or send, and keeps an empty row on the day of a send nothing re-read", async () => {
     const calls: ApiCall[] = [
-      { at: minute(1) - DAY, compactions: 0 },
-      { at: minute(2) - DAY, compactions: 0 },
+      { at: minute(1) - DAY_MS, compactions: 0 },
+      { at: minute(2) - DAY_MS, compactions: 0 },
       { at: minute(3), compactions: 0 },
       { at: minute(4), compactions: 1 },
     ];
     withDb(root, (db) => {
-      book(db, 'hook', 'inject', minute(0) - DAY, 100);
+      book(db, 'hook', 'inject', minute(0) - DAY_MS, 100);
       // Sent after the compaction and never re-read; the ledger hands it over first, so the day's date must not be last-write.
       book(db, 'hook', 'inject', minute(3.5), 70);
       book(db, 'hook_recall', 'inject', minute(4.5), 40);
@@ -278,7 +278,7 @@ describe('recordRereads', () => {
       { tenant_id: 'default', session_id: SESSION, surface: 'hook_recall', items: 0, tokens: 0 },
     ]);
     expect(rereadStamps(root)).toEqual([
-      ['hook', iso(minute(2) - DAY)],
+      ['hook', iso(minute(2) - DAY_MS)],
       ['hook', iso(minute(3.5))],
       ['hook_recall', iso(minute(4.5))],
     ]);
@@ -373,7 +373,7 @@ describe('__session-end-worker counts re-reads', async () => {
   });
 
   it('dates re-reads by the day their calls happened, so hippo tokens --days 1 counts only the recent day', async () => {
-    const sent = minute(0) - 2 * DAY;
+    const sent = minute(0) - 2 * DAY_MS;
     withDb(join(proj, '.hippo'), (db) => book(db, 'hook', 'inject', sent, 100));
     const transcript = join(root, `${SESSION}.jsonl`);
     const calls = [callLine('m1', sent + 60_000), callLine('m2', sent + 120_000), callLine('m3', Date.now() - 60_000)];
@@ -648,7 +648,7 @@ describe("a sub-agent's hooks", () => {
       source: 'pre-compact',
       sessionId: SESSION,
     });
-    withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY)));
+    withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY_MS)));
     expect((await hippo(HOOK, proj, env, sub({ prompt: 'hi' }))).stdout).toContain('parent task');
     // Control: another session's hook still gets the pin but no longer sees the stale snapshot.
     const other = (await hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' }))).stdout;

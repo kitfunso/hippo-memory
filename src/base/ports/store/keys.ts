@@ -35,7 +35,7 @@ export interface SelfKeyMint extends KeyMint {
 }
 
 /** `listApiKeyRows`'s filters; ALL_TENANTS is sent only by the host's `hippo auth list`. */
-export type KeyListQuery = ListApiKeysOpts;
+export type KeyListQuery = ListApiKeysOptions;
 
 /** Every key write commits with its audit rows in one transaction, so with either one failing, neither is written. */
 export interface KeyWrites {
@@ -93,7 +93,7 @@ export interface ApiKeyListItem {
   ownerSubject: string | null;
 }
 
-export interface ListApiKeysOpts {
+export interface ListApiKeysOptions {
   /** Only keys that still work: unrevoked and unexpired. */
   active: boolean;
   /** Only this tenant's keys; ALL_TENANTS is every tenant's (the CLI's single-tenant view). */

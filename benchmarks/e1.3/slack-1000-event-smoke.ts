@@ -20,7 +20,7 @@ import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 
-export interface SmokeOpts {
+export interface SmokeOptions {
   hippoRoot: string;
   count: number;
   replay: number;
@@ -33,7 +33,7 @@ export interface SmokeResult {
   durationMs: number;
 }
 
-export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
+export async function runSlackSmoke(opts: SmokeOptions): Promise<SmokeResult> {
   const ctx = {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
@@ -91,11 +91,11 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
 // Standalone CLI: 1000 events, replay=2, fail loud on regression.
 // Use pathToFileURL for cross-platform `import.meta.url` matching (Windows
 // emits `file:///C:/...` which `file://${process.argv[1]}` cannot match).
-const { pathToFileURL } = await import('url');
+const { pathToFileURL } = await import('node:url');
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { mkdtempSync, rmSync } = await import('fs');
-  const { tmpdir } = await import('os');
-  const { join } = await import('path');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
   const { initStore } = await import('../../src/entry/testing.js');
 
   const root = mkdtempSync(join(tmpdir(), 'hippo-slack-smoke-cli-'));

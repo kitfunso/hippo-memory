@@ -1,6 +1,6 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as path from 'path';
+import * as path from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
@@ -11,8 +11,7 @@ import { autoShare, neverAutoShareTags } from '../../src/domain/sharing/share.js
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { recordSessionDigest, type SessionScan } from '../../src/surface/capture/session-digest.js';
-import { sessionDigestId } from '../../src/base/session/session-digest-row.js';
-import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
+import { sessionDigestId, SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';

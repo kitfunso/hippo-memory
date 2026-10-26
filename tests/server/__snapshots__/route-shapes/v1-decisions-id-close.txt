@@ -1,0 +1,28 @@
+GET /v1/decisions/1/close -> 404 not found
+POST /v1/decisions/1/close -> 404 decision 1 not found for tenant default
+DELETE /v1/decisions/1/close -> 404 not found
+PUT /v1/decisions/1/close -> 404 not found
+GET /v1/decisions/007/close -> 404 not found
+POST /v1/decisions/007/close -> 404 decision 7 not found for tenant default
+DELETE /v1/decisions/007/close -> 404 not found
+PUT /v1/decisions/007/close -> 404 not found
+GET /v1/decisions/abc/close -> 404 not found
+POST /v1/decisions/abc/close -> 404 not found
+DELETE /v1/decisions/abc/close -> 404 not found
+PUT /v1/decisions/abc/close -> 404 not found
+GET /v1/decisions/-1/close -> 404 not found
+POST /v1/decisions/-1/close -> 404 not found
+DELETE /v1/decisions/-1/close -> 404 not found
+PUT /v1/decisions/-1/close -> 404 not found
+GET /v1/decisions/%31/close -> 404 not found
+POST /v1/decisions/%31/close -> 404 not found
+DELETE /v1/decisions/%31/close -> 404 not found
+PUT /v1/decisions/%31/close -> 404 not found
+GET /v1/decisions//close -> 404 not found
+POST /v1/decisions//close -> 404 not found
+DELETE /v1/decisions//close -> 404 not found
+PUT /v1/decisions//close -> 404 not found
+GET /v1/decisions/1/close/ -> 404 not found
+POST /v1/decisions/1/close/ -> 404 not found
+DELETE /v1/decisions/1/close/ -> 404 not found
+PUT /v1/decisions/1/close/ -> 404 not found

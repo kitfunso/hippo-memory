@@ -1,0 +1,8 @@
+GET /v1/predictions -> 200
+POST /v1/predictions -> 400 claim is required (non-empty string)
+DELETE /v1/predictions -> 404 not found
+PUT /v1/predictions -> 404 not found
+GET /v1/predictions/ -> 404 not found
+POST /v1/predictions/ -> 404 not found
+DELETE /v1/predictions/ -> 404 not found
+PUT /v1/predictions/ -> 404 not found

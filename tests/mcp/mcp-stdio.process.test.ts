@@ -1,8 +1,8 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
-import { once } from 'events';
-import { createInterface } from 'readline';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseFrame } from '../../src/surface/mcp/framing.js';

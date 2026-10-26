@@ -1,7 +1,7 @@
 // The `hippo eval` verb; main() loads it lazily from the command table.
 
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js';

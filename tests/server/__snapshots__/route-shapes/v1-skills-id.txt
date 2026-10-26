@@ -1,0 +1,28 @@
+GET /v1/skills/1 -> 404 skill 1 not found
+POST /v1/skills/1 -> 404 not found
+DELETE /v1/skills/1 -> 404 not found
+PUT /v1/skills/1 -> 404 not found
+GET /v1/skills/007 -> 404 skill 7 not found
+POST /v1/skills/007 -> 404 not found
+DELETE /v1/skills/007 -> 404 not found
+PUT /v1/skills/007 -> 404 not found
+GET /v1/skills/abc -> 404 not found
+POST /v1/skills/abc -> 404 not found
+DELETE /v1/skills/abc -> 404 not found
+PUT /v1/skills/abc -> 404 not found
+GET /v1/skills/-1 -> 404 not found
+POST /v1/skills/-1 -> 404 not found
+DELETE /v1/skills/-1 -> 404 not found
+PUT /v1/skills/-1 -> 404 not found
+GET /v1/skills/%31 -> 404 not found
+POST /v1/skills/%31 -> 404 not found
+DELETE /v1/skills/%31 -> 404 not found
+PUT /v1/skills/%31 -> 404 not found
+GET /v1/skills/ -> 404 not found
+POST /v1/skills/ -> 404 not found
+DELETE /v1/skills/ -> 404 not found
+PUT /v1/skills/ -> 404 not found
+GET /v1/skills/1/ -> 404 not found
+POST /v1/skills/1/ -> 404 not found
+DELETE /v1/skills/1/ -> 404 not found
+PUT /v1/skills/1/ -> 404 not found

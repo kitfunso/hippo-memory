@@ -3,7 +3,7 @@ import { log } from '../../base/util/log.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { LIMITER_MAX_KEYS } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import type { RateLimitSpec, ServeOpts } from './types.js';
+import type { RateLimitSpec, ServeOptions } from './types.js';
 
 // The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one server per store.
 function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
@@ -60,7 +60,7 @@ function defaultCallerSpec(): RateLimitSpec | 'off' {
 }
 
 /** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
-export function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
+export function bootLimiters(rateLimits: ServeOptions['rateLimits']): BootedLimiters {
   const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
   if (perCaller !== 'off') assertRateLimitSpec('perCaller', perCaller);
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);

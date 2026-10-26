@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';

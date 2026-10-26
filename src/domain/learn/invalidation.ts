@@ -15,7 +15,7 @@ import {
   type ChurnRepo,
 } from './churn-git.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
+import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
 
 const HEADLINE_CHARS = 60;
 // The share of a row's tokens that must match the target's before the row counts as mentioning it.
@@ -633,10 +633,16 @@ export async function detectChurnStale(
 
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
   const current = { tenantId: opts.tenantId, origins, live: true, kinds: ['distilled', 'superseded'] } as const;
-  const entries = await readAll((after?: EntryCursor) =>
+  const candidates: ChurnCandidate[] = [];
+  const skippedPinned: string[] = [];
+  // Page by page, so only the candidates stay held, never every row of the project.
+  for await (const page of readPages((after?: EntryCursor) =>
     reports.entriesWhere(current, { limit: READ_PAGE_ROWS, after }),
-  );
-  const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
+  )) {
+    const found = collectChurnCandidates(page, opts);
+    candidates.push(...found.candidates);
+    skippedPinned.push(...found.skippedPinned);
+  }
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
   const { confirmedAt, firstReadAt, anchorOf } = await readChurnAnchors(learning, opts.tenantId, candidates);

@@ -37,7 +37,7 @@ import type {
   RecallWindowOptions,
   ShownCliCore,
 } from './types.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
@@ -262,7 +262,7 @@ function resultOf(ranking: RankRecallResult, shown: readonly SearchResult[]): Re
 interface ShownRanking {
   readonly ranking: RankRecallResult;
   readonly shown: ShownCliCore;
-  readonly planningAudit: AppendAuditOpts | undefined;
+  readonly planningAudit: AppendAuditOptions | undefined;
 }
 
 /** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or count, as under the

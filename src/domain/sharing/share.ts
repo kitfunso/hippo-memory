@@ -1,7 +1,7 @@
 // Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
-import * as path from 'path';
+import * as path from 'node:path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, ERROR_TAG, EXTRACTED_TAG } from '../../base/memory/entry.js';
 import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';

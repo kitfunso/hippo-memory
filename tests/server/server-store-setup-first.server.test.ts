@@ -8,7 +8,6 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { HALF_LIFE_BASE_META_KEY } from '../../src/store/rules/half-life.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
@@ -25,6 +24,7 @@ import {
   undoAll,
 } from '../_helpers/store-worker-server.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
+import { META_KEY } from '../../src/db/meta.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,7 +34,7 @@ afterEach(undoAll);
 
 const bareRoot = (): string => removeLater(mkdtempSync(join(tmpdir(), 'hippo-setup-first-')));
 
-const halfLifeBase = (root: string): string => onDb(root, (db) => getMeta(db, HALF_LIFE_BASE_META_KEY, ''));
+const halfLifeBase = (root: string): string => onDb(root, (db) => getMeta(db, META_KEY.halfLifeBase, ''));
 
 /** A memory as a store kept it before hippo.db: one markdown file, which setup imports while the store has no memory row. */
 function legacyMarkdown(root: string, content: string): void {
@@ -108,7 +108,7 @@ describe('a setup still waiting for the write lock', () => {
   it('holds the read sent with it, so the read fails with the busy error of the setup and the next call runs it', async () => {
     const root = newRoot('setup-first');
     // An empty store with no recorded base: the setup has one row to write, and the lock below makes it wait.
-    execOn(root, `DELETE FROM meta WHERE key = '${HALF_LIFE_BASE_META_KEY}'`);
+    execOn(root, `DELETE FROM meta WHERE key = '${META_KEY.halfLifeBase}'`);
     // A short wait ends the setup in its busy error. A read that was not held would answer from a reader meanwhile.
     const executor = createSqliteExecutor(root, { busyWaitMs: 100 });
     cleanups.push(() => executor.close());
