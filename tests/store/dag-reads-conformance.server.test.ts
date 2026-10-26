@@ -1,7 +1,7 @@
 // DagReads answers, with no audit row written, and the assemble and drill
 // routes built on it answer the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
@@ -23,6 +23,7 @@ import {
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';
@@ -358,7 +359,7 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
   const home = mkdtempSync(join(tmpdir(), 'hippo-dag-served-'));
   try {
     const root = join(home, 'store');
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);

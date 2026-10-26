@@ -1,6 +1,6 @@
 // embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
@@ -29,6 +29,7 @@ import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -104,7 +105,7 @@ function writeRows(root: string, entries: readonly MemoryEntry[]): void {
 
 function copyOf(from: string): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(from, root, { recursive: true });
+  copyTree(from, root);
   return root;
 }
 

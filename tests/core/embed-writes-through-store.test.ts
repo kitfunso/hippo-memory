@@ -1,7 +1,7 @@
 // embedAll and embedMemory with a store embed through its vectorWrites group, never opening hippo.db in hippoRoot,
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
@@ -22,6 +22,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -48,7 +49,7 @@ function provider(
 
 function copyOf(from: string = fixture.dir): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(from, root, { recursive: true });
+  copyTree(from, root);
   return root;
 }
 

@@ -19,6 +19,7 @@ import {
 } from '../_helpers/delivery-boundary.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';
@@ -206,7 +207,7 @@ describe('the ledger changes nothing a context call prints', () => {
     // A byte copy of the seeded store, since a retrieval strengthens what it returns and seeding twice dates rows apart.
     off = project();
     fs.rmSync(off.hippoRoot, { recursive: true, force: true });
-    fs.cpSync(p.hippoRoot, off.hippoRoot, { recursive: true });
+    copyTree(p.hippoRoot, off.hippoRoot);
     writeConfig(off, { ledger: false });
   });
 

@@ -18,6 +18,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -142,7 +143,7 @@ describe('promptHookContext', () => {
     });
     // Copied before either side runs: the first prompt of a session must not see the other side's ledger rows.
     const srvStore = path.join(tmp, 'srv', 'proj', '.hippo');
-    fs.cpSync(cliStore, srvStore, { recursive: true });
+    copyTree(cliStore, srvStore);
 
     // A prompt swaps the recent-5 backfill for prompt recall, so one session takes each path.
     const withPrompt: HookPayload = {

@@ -12,6 +12,7 @@ import {
 } from '../../src/surface/cli/scheduler.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');
@@ -75,9 +76,9 @@ describe('scheduler', () => {
     // runCommand is an argument, so a fake here never spawns a real hippo.
     const runCommand = vi.fn();
     const [repoA, repoB, repoC] = ['repo-a', 'repo-b', 'repo-c'].map((name) => join(root, name));
-    mkdirSync(join(repoA, '.hippo'), { recursive: true });
+    mkdirSync(join(repoA, '.hippo'), PRIVATE_DIR);
     mkdirSync(repoB, { recursive: true });
-    mkdirSync(join(repoC, '.hippo'), { recursive: true });
+    mkdirSync(join(repoC, '.hippo'), PRIVATE_DIR);
 
     runDailyMaintenance([repoA, repoB, repoC], runCommand);
 
@@ -92,7 +93,7 @@ describe('scheduler', () => {
   it('runDailyMaintenance learns in, but does not sleep, a workspace whose store is the global root', () => {
     const runCommand = vi.fn();
     const home = join(root, 'home');
-    mkdirSync(join(home, '.hippo'), { recursive: true });
+    mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
 
     runDailyMaintenance([home], runCommand, join(home, '.hippo'));
 
@@ -107,7 +108,7 @@ describe('hippo daily-runner', () => {
     const globalRoot = join(dir, 'global');
     const workspace = join(dir, 'repo');
     mkdirSync(globalRoot);
-    mkdirSync(join(workspace, '.hippo'), { recursive: true });
+    mkdirSync(join(workspace, '.hippo'), PRIVATE_DIR);
     initTestStore(join(workspace, '.hippo'));
     writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
     // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.

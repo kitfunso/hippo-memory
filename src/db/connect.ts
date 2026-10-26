@@ -7,6 +7,7 @@ import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
 import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 import { currentStoreRuntime, storeKey } from './store-runtime.js';
+import { PRIVATE_DIR } from '../host/private-dir.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
@@ -29,7 +30,7 @@ function createStoreFilesOwnerOnly(hippoRoot: string): void {
     oncePerStore(hippoRoot, 'mode-check', () => warnWideModes(hippoRoot));
     return;
   }
-  fs.mkdirSync(hippoRoot, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(hippoRoot, PRIVATE_DIR);
   try {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
     currentStoreRuntime()?.forget(storeKey(hippoRoot));

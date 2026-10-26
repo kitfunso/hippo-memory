@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll } from 'vitest';
 import { initTestStore } from './store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */
@@ -30,7 +31,7 @@ function build(label: string, rootOf: (base: string) => string, { config, init =
   const root = rootOf(base);
   if (!init) return { base, root };
   // makeStore's root is left for initTestStore to create, so it gets the owner-only mode a real store gets.
-  if (root === base) mkdirSync(join(base, '.hippo'), { recursive: true });
+  if (root === base) mkdirSync(join(base, '.hippo'), PRIVATE_DIR);
   initTestStore(root);
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   return { base, root };

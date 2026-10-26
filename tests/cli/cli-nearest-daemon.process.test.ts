@@ -1,7 +1,7 @@
 // `hippo recall` and `hippo context` on a store a `hippo serve` holds ask that server for the nearest rows and print
 // what they print with no server; a server that does not answer costs one warn line and the local scan.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cpSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
@@ -18,6 +18,7 @@ import { boundPort } from '../_helpers/listen.js';
 import { makeRoot, makeStore, type MadeStore } from '../_helpers/make-root.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { hippoRunAsync } from '../_helpers/spawn-hippo.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 // Past the graph threshold of 1,000 vectors, so the CLI asks the server; the first case fails if the threshold rises.
 const ROWS = 1_100;
@@ -42,7 +43,7 @@ let fakeNow: string;
 // gives every copy the project its rows came from.
 function copyOfTemplate(): MadeStore {
   const made = makeStore('nearest-run', { init: false });
-  cpSync(template, made.root, { recursive: true });
+  copyTree(template, made.root);
   writeFileSync(join(made.base, '.hippo-project.json'), JSON.stringify({ id: PROJECT }));
   return made;
 }

@@ -29,6 +29,7 @@ import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -42,15 +43,12 @@ export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
 
-// Owner-only wherever a mirror folder is made, at open or by a writer that finds it gone.
-const MIRROR_FOLDER = { recursive: true, mode: 0o700 } as const;
-
 /** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing
  * later. */
 export function ensureMirrorDirectories(hippoRoot: string): void {
   oncePerStore(hippoRoot, 'mirror-folders', () => {
     for (const sub of ['buffer', 'episodic', 'semantic', 'conflicts']) {
-      fs.mkdirSync(path.join(hippoRoot, sub), MIRROR_FOLDER);
+      fs.mkdirSync(path.join(hippoRoot, sub), PRIVATE_DIR);
     }
   });
 }
@@ -98,7 +96,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
     body.push(`## Session`, snapshot.sessionId, '');
   }
 
-  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
+  fs.mkdirSync(path.dirname(filePath), PRIVATE_DIR);
   writeMirror(filePath, `${fm}\n\n${body.join('\n')}`);
 }
 
@@ -143,7 +141,7 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
 
   lines.push('');
 
-  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
+  fs.mkdirSync(path.dirname(filePath), PRIVATE_DIR);
   writeMirror(filePath, `${fm}\n\n${lines.join('\n')}`);
 }
 
@@ -167,7 +165,7 @@ function writeConflictMirror(conflictDir: string, conflict: MemoryConflict): voi
 /** Every open conflict's file, and no other: the full sync's rebuild of the folder. */
 function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflict[]): void {
   const conflictDir = path.join(hippoRoot, 'conflicts');
-  fs.mkdirSync(conflictDir, MIRROR_FOLDER);
+  fs.mkdirSync(conflictDir, PRIVATE_DIR);
   const keep = new Set(open.map(conflictMirrorName));
   for (const conflict of open) writeConflictMirror(conflictDir, conflict);
   for (const existing of fs.readdirSync(conflictDir)) {
@@ -179,7 +177,7 @@ function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflic
 function writeChangedConflictMirrors(hippoRoot: string, changed: readonly MemoryConflict[]): void {
   if (changed.length === 0) return;
   const conflictDir = path.join(hippoRoot, 'conflicts');
-  fs.mkdirSync(conflictDir, MIRROR_FOLDER);
+  fs.mkdirSync(conflictDir, PRIVATE_DIR);
   for (const conflict of changed) {
     if (conflict.status === 'open') writeConflictMirror(conflictDir, conflict);
     else fs.rmSync(path.join(conflictDir, conflictMirrorName(conflict)), { force: true });
@@ -189,7 +187,7 @@ function writeChangedConflictMirrors(hippoRoot: string, changed: readonly Memory
 export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
-  fs.mkdirSync(dir, MIRROR_FOLDER);
+  fs.mkdirSync(dir, PRIVATE_DIR);
   writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
@@ -263,7 +261,7 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
     if (listed.get(layer)?.has(name) ?? fs.existsSync(file)) fs.rmSync(file, { force: true });
   }
   const dir = layerDir(hippoRoot, entry.layer);
-  if (!made.has(dir)) fs.mkdirSync(dir, MIRROR_FOLDER);
+  if (!made.has(dir)) fs.mkdirSync(dir, PRIVATE_DIR);
   made.add(dir);
   writeMirror(path.join(dir, name), serializeEntry(entry));
 }

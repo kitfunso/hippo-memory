@@ -12,6 +12,7 @@ import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { tmp, isolate, readRecords, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
 import type { FixtureRepo, FamilyDef, TaskDef, RunExtra, RunRecord } from './z0-harness.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 export const FAKE_CODEX = resolve(__dirname, 'fake-codex.mjs');
 const WIN = process.platform === 'win32';
@@ -43,7 +44,7 @@ export function wrapOperator(op: Operator, { metadata = true }: { metadata?: boo
   if (WIN) writeFileSync(op.launcher, `@echo off\r\nREM hippo codex wrapper\r\necho ran> "${sentinel}"\r\n"${real}" %*\r\n`);
   else writeFileSync(op.launcher, `#!/bin/sh\n# hippo codex wrapper\necho ran > "${sentinel}"\nexec "${real}" "$@"\n`, { mode: 0o755 });
   if (metadata) {
-    mkdirSync(join(op.home, '.hippo', 'integrations'), { recursive: true });
+    mkdirSync(join(op.home, '.hippo', 'integrations'), PRIVATE_DIR);
     writeFileSync(join(op.home, '.hippo', 'integrations', 'codex.json'), JSON.stringify({ realCodexPath: real, originalCodexPath: op.launcher, commandPath: op.launcher, backupPath: real }));
   }
   return { real, sentinel };

@@ -2,7 +2,7 @@
 // event log rows, quarantine records and audit rows, over two tenants. The last block holds hippo.db to all-or-nothing.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reject } from '../../src/api/index.js';
@@ -29,6 +29,7 @@ import {
   type HeldRecord,
   type LoggedEvent,
 } from '../_helpers/connector-sides.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -80,7 +81,7 @@ async function seed(dir: string): Promise<Seeded> {
 
 function copyOfFixture(): string {
   const root = join(home, `copy-${String(++copies)}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

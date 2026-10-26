@@ -14,6 +14,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -70,7 +71,7 @@ function configure(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInj
 /** A copy of the project with the ledger switched; same folder name, since the project name gates which memories load. */
 function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject']> = {}): string {
   const dir = path.join(tmp, `clone-${ledger ? 'on' : 'off'}-${fs.readdirSync(tmp).length}`, 'proj');
-  fs.cpSync(proj, dir, { recursive: true });
+  copyTree(proj, dir);
   configure(ledger, pinnedInject, dir);
   return dir;
 }
