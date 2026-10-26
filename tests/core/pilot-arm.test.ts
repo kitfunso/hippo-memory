@@ -1,5 +1,5 @@
 // CD11 units: config parsing, the arm helpers, the consumer's arm query, ledger readers and doctor.
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,10 +14,10 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
-import { sqliteLedger } from '../../src/store/sqlite/ledger.js';
-import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
+import { sqliteLedger } from '../../src/store/sqlite/ledger/ledger.js';
+import { firstPilotArmHash } from '../../src/store/sqlite/ledger/token-ledger-rows.js';
 import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
-import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
+import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/ledger/token-ledger.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';

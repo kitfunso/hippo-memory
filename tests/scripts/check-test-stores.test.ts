@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { handBuiltStores } from '../../scripts/check-test-stores.mjs';
+import { handBuiltStores } from '../../scripts/checks/check-test-stores.mjs';
 
 const lines = (text: string): number[] => handBuiltStores(text).map((hit) => hit.line);
 

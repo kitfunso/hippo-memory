@@ -23,7 +23,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

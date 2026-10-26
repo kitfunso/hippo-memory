@@ -1,9 +1,9 @@
-// loadSearchRows (src/store/sqlite/search-rows.ts) answers through one of four paths: no terms, FTS5, LIKE, then
+// loadSearchRows (src/store/sqlite/recall/search-rows.ts) answers through one of four paths: no terms, FTS5, LIKE, then
 // every row. FTS5's bm25 only orders the rows; no row carries a search score.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { listRecallEntries } from '../../src/store/sqlite/search-rows.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
+import { listRecallEntries } from '../../src/store/sqlite/recall/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';

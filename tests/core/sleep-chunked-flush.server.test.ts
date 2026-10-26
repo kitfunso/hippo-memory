@@ -13,11 +13,11 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
-import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
+import { upsertEntryRow } from '../../src/store/sqlite/entries/entry-row.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import {
   closeHippoDb,
   getHippoDbPath,

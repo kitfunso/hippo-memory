@@ -1,6 +1,6 @@
 /** The row-write column list is the base of the read list; the read list adds only the summary rebuild columns. */
 import { describe, expect, it } from 'vitest';
-import { MEMORY_ROW_COLUMNS, MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_ROW_COLUMNS, MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 
 describe('memory column lists', () => {
   it('reads every column a row write sets, plus the three rebuild columns', () => {

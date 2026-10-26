@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { readEntriesInIdOrder } from '../../src/store/sqlite/entry-reads.js';
-import { pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { readEntriesInIdOrder } from '../../src/store/sqlite/entries/entry-reads.js';
+import { pickRarestFtsQuery } from '../../src/store/sqlite/recall/search-rows.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

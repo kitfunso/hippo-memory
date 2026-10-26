@@ -2,21 +2,21 @@
 
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
-import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
+import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
-import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
-import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
+import { deleteEntriesInBatches } from '../../../src/store/sqlite/entries/delete-and-batch.js';
+import * as deleteAndBatchSql from '../../../src/store/sqlite/entries/delete-and-batch.js';
 import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
-import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
-import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
-import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
-import { listEntriesWhere } from '../../../src/store/sqlite/entry-filter.js';
-import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
-import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
-import { waitingOpener } from '../../../src/store/sqlite/open.js';
-import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
+import { listDormantRows } from '../../../src/store/sqlite/dormant/dormant-rows.js';
+import { EVERY_SCOPE } from '../../../src/store/sqlite/runtime/rule-sql.js';
+import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entries/entry-reads.js';
+import { listEntriesWhere } from '../../../src/store/sqlite/entries/entry-filter.js';
+import * as entryReadsSql from '../../../src/store/sqlite/entries/entry-reads.js';
+import * as entryWritesSql from '../../../src/store/sqlite/entries/entry-writes.js';
+import { waitingOpener } from '../../../src/store/sqlite/runtime/open.js';
+import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/runtime/handles.js';
 import type { SqlFragment } from '../../../src/db/sql.js';
-import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
+import * as searchRowsSql from '../../../src/store/sqlite/recall/search-rows.js';
 import type { HeldText, EntryCursor } from '../../../src/base/ports/store/types.js';
 import type {
   AmbientLoadResult,
@@ -35,7 +35,7 @@ export {
   loadEmbeddingIndex,
   writeEntry,
 } from '../../../src/store/sqlite/fixtures.js';
-export { strengthenRetrieved } from '../../../src/store/sqlite/entry-writes.js';
+export { strengthenRetrieved } from '../../../src/store/sqlite/entries/entry-writes.js';
 
 /** One tenant's entries, oldest first. */
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {

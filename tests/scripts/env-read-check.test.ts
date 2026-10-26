@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { envReadLines, findEnvImports, findEnvReads } from '../../scripts/check-env-reads.mjs';
+import { envReadLines, findEnvImports, findEnvReads } from '../../scripts/checks/check-env-reads.mjs';
 
 describe('check-env-reads', () => {
   let dir: string;

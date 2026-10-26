@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import {
   captureSessionTexts,
@@ -14,7 +14,7 @@ import {
 import { collectSessionTurns, sessionTail } from '../../src/surface/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deriveOriginProject } from '../../src/host/project-identity.js';
-import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compaction-hooks.js';

@@ -3,10 +3,10 @@ import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from './store-switch.js';
-import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot } from './make-root.js';
 
 export type Body = { [key: string]: JsonValue };
 

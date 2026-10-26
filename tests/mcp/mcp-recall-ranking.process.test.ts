@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -20,7 +20,7 @@ import {
   saveActiveTaskSnapshot,
   appendSessionEvent,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';

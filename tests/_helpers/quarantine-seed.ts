@@ -1,14 +1,14 @@
 // The quarantine fixture: records in three tenants, one with no memory row and one moved out of its quarantine
 // scope, plus 105 records of one timestamp, written straight to hippo.db.
 import { vi } from 'vitest';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
+import { recordQuarantine } from '../../src/store/sqlite/connectors/quarantine.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { writeEntry } from './root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore } from '../../src/store/sqlite/runtime/handles.js';
 
 export const HELD = {
   a1: 'mem_qa1',

@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { beforeEach, afterAll } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { calculateStrength } from '../../src/entry/memory.js';
-import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { createMemory } from './default-half-life-memory.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { makeRoot } from './make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

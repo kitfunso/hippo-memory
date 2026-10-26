@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { mintedKeyId } from '../../src/base/scope/api-key.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { HIPPO_BIN } from '../_helpers/hippo-bin.js';

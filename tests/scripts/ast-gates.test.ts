@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { failPairLines } from '../../scripts/check-cli-fail.mjs';
-import { handFlagLines } from '../../scripts/check-cli-flags.mjs';
-import { namedOnLines } from '../../scripts/check-cli-recall-writes.mjs';
-import { envReadLines } from '../../scripts/check-env-reads.mjs';
-import { processExitLines } from '../../scripts/check-process-exit.mjs';
+import { failPairLines } from '../../scripts/checks/check-cli-fail.mjs';
+import { handFlagLines } from '../../scripts/checks/check-cli-flags.mjs';
+import { namedOnLines } from '../../scripts/checks/check-cli-recall-writes.mjs';
+import { envReadLines } from '../../scripts/checks/check-env-reads.mjs';
+import { processExitLines } from '../../scripts/checks/check-process-exit.mjs';
 import { readFacts, runtimeSpecifiers } from '../../scripts/lib/ts-facts.mjs';
 
 const imports = (text: string) =>

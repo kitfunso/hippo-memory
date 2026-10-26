@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

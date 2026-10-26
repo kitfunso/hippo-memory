@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-config-reads.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-config-reads.mjs');
 const LAYERS = { folders: { api: 'api', surface: 'surface', base: 'base', store: 'store' }, rootFiles: {} };
 
 function withFixture(

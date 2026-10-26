@@ -1,0 +1,56 @@
+// hippo.db's LessonWrites group: git learn's batch, with the word and tag reads it checks first.
+import { listTextsHolding } from '../recall/candidates.js';
+import { contentsWithTag } from '../entries/entry-reads.js';
+import { writeEntriesSkippingRejected, writeEntriesTogether } from '../entries/entry-writes.js';
+import { updateStats } from '../entries/index-and-stats.js';
+import type { Handles, StoreFiles } from '../runtime/open.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
+import type { MemoryEntry } from '../../../base/memory/entry.js';
+import { bound, skipEmpty, type Bodies } from '../runtime/bound.js';
+import { openStore } from '../runtime/handles.js';
+import type { LessonWrites } from '../../../base/ports/store.js';
+import { touchableScopeSql } from '../runtime/rule-sql.js';
+
+/** `entries` in order, each one a rejection refuses left out; returns the ids written. */
+function writeSkippingRejected(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  entries: readonly MemoryEntry[],
+  actor: string,
+): string[] {
+  const written: string[] = [];
+  writeEntriesSkippingRejected(
+    db,
+    files,
+    (put) => {
+      for (const entry of entries) if (put(entry)) written.push(entry.id);
+    },
+    actor,
+  );
+  return written;
+}
+
+const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHolding' | 'contentsWithTag'>> = {
+  textsHolding: (db, tenantId, texts, ownScope) =>
+    listTextsHolding(db, tenantId, texts, undefined, touchableScopeSql('', ownScope)),
+  contentsWithTag: contentsWithTag,
+};
+
+function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
+  return {
+    writeSkippingRejected: (db, ...args) => writeSkippingRejected(db, files, ...args),
+    writeTogether: (db, entries) => {
+      writeEntriesTogether(db, files, entries);
+    },
+    bumpRemembered: (db, count) => updateStats(db, files, { remembered: count }),
+  };
+}
+
+export function sqliteLessonWrites({ on, files }: Handles): LessonWrites {
+  const writes = bound(on, lessonWritesBodies(files), openStore);
+  return {
+    ...bound(on, lessonReadsBodies, openStore),
+    ...writes,
+    writeTogether: skipEmpty(writes.writeTogether, () => undefined),
+  };
+}

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
@@ -14,7 +14,7 @@ import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipelin
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

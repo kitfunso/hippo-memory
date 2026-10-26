@@ -9,7 +9,7 @@ import { deserializeEntry } from '../../src/base/memory/markdown.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { everyFieldEntry, GOLDEN_TENANT, recallableEntry } from '../_helpers/every-field-entry.js';

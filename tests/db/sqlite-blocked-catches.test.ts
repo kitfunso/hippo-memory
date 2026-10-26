@@ -7,14 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
+import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
 import { physicsSearch, folderVectorSource } from '../../src/entry/folder-search.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { strengthenRetrieved } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -40,7 +40,7 @@ const ROWS: readonly Row[] = [
     'returned',
   ],
   [
-    'store/sqlite/entry-writes.ts strengthenRetrieved',
+    'store/sqlite/entries/entry-writes.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) =>
       `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }).size}`,

@@ -1,6 +1,6 @@
 // The one module outside the SQLite adapter that names it: each composition root opens the default store, its request
 // scopes, its store runtime and its server runtime here, so a second adapter changes this file and no root
-// (scripts/check-layers.mjs). The exit hooks live here too, since the store layers install none.
+// (scripts/checks/check-layers.mjs). The exit hooks live here too, since the store layers install none.
 import {
   currentStoreRuntime,
   sqliteServerRuntime,

@@ -10,7 +10,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
 import {
   pushGoal,
   closePrediction,

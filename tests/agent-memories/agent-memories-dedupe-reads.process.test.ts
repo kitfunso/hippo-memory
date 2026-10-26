@@ -6,8 +6,8 @@ import type { ImportReport } from '../../src/base/memory/agent-memory-report.js'
 import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { setFtsInSync } from '../../src/db/index.js';
-import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { sqliteImportStores } from '../../src/store/sqlite/maintenance/agent-import-stores.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

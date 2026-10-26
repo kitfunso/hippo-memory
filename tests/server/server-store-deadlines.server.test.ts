@@ -15,9 +15,9 @@ import {
   createSqliteExecutor,
   type ExecutorOptions,
   type SqliteExecutor,
-} from '../../src/store/sqlite/executor.js';
+} from '../../src/store/sqlite/runtime/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';

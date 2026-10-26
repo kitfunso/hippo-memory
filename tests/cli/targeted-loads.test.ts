@@ -5,7 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/base/util/same-text.js';

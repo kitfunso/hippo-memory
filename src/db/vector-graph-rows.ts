@@ -72,7 +72,7 @@ export function addRow(g: GraphRows, rowid: number, id: string, vector: Float32A
   g.lastRowid = Math.max(g.lastRowid, rowid);
 }
 
-// SAFETY: every read cast to this row selects ROWS_ABOVE_SQL; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects ROWS_ABOVE_SQL; scripts/checks/check-row-casts.mjs proves it.
 // node:sqlite returns BLOBs as Uint8Array.
 export interface StoredRow {
   readonly rowid: number;

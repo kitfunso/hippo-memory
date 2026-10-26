@@ -5,8 +5,8 @@ import { MessageChannel } from 'node:worker_threads';
 import { RequestStores } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
-import type { Job } from '../../src/store/sqlite/worker-ops.js';
+import { serveJobs } from '../../src/store/sqlite/runtime/worker-jobs.js';
+import type { Job } from '../../src/store/sqlite/runtime/worker-ops.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

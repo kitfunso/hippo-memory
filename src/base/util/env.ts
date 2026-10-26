@@ -1,6 +1,6 @@
-// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read, and on an
-// import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a test
-// that sets a variable between cases still holds.
+// The one module in src/ that reads process.env; scripts/checks/check-env-reads.mjs fails CI on any other read, and on
+// an import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a
+// test that sets a variable between cases still holds.
 import type { ClefSettings, RuntimeSettings } from '../config/config.js';
 import { DEFAULT_TENANT_ID } from './tenant.js';
 

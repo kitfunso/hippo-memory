@@ -12,14 +12,14 @@ import type {
   TaskSnapshot,
   WorkingMemoryItem,
 } from '../../../src/base/ports/store/sessions.js';
-import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
-import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
-import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
-import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
-import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
-import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
+import * as handoffsSql from '../../../src/store/sqlite/sessions/handoffs.js';
+import * as indexAndStatsSql from '../../../src/store/sqlite/entries/index-and-stats.js';
+import { readLastRecall } from '../../../src/store/sqlite/folder-files/mirrors.js';
+import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/runtime/handles.js';
+import type { HippoIndex } from '../../../src/store/sqlite/runtime/rows.js';
+import * as sessionsSql from '../../../src/store/sqlite/sessions/sessions.js';
 import type { UntracedSession } from '../../../src/base/ports/store/consolidation.js';
-import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
+import * as taskSnapshotsSql from '../../../src/store/sqlite/sessions/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
 import type { ContinuityKey } from '../../../src/base/ports/store/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';

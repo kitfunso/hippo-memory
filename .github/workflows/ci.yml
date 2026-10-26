@@ -45,82 +45,82 @@ jobs:
       - run: npm ci
       - name: Dependency security audit
         run: npm run audit:security
-      # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
+      # Hit counts per rule may fall but never rise; see scripts/checks/check-lint-ratchet.mjs.
       - name: Lint ratchet
-        run: node scripts/check-lint-ratchet.mjs
+        run: node scripts/checks/check-lint-ratchet.mjs
       - name: Format check
         run: npm run fmt:check
       # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
       - name: Comment history ratchet
-        run: node scripts/check-comment-history.mjs
+        run: node scripts/checks/check-comment-history.mjs
       # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
       - name: Error text ratchet
-        run: node scripts/check-error-text.mjs
+        run: node scripts/checks/check-error-text.mjs
       # A log call in a catch block may fall per file but never rise without errorFields(err), so the log keeps the error class and stack.
       - name: Caught-error log ratchet
-        run: node scripts/check-caught-error-logs.mjs
+        run: node scripts/checks/check-caught-error-logs.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
-      - run: node scripts/check-manifest-versions.mjs
-      - run: node scripts/check-graph-writes.mjs
+      - run: node scripts/checks/check-manifest-versions.mjs
+      - run: node scripts/checks/check-graph-writes.mjs
       - name: No runtime import cycles between src folders
-        run: node scripts/check-folder-cycles.mjs
+        run: node scripts/checks/check-folder-cycles.mjs
       # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
-        run: node scripts/check-size-ratchet.mjs
+        run: node scripts/checks/check-size-ratchet.mjs
       # Six or more positional parameters on a src declaration become one options object; there is no baseline.
       - name: Positional parameters
-        run: node scripts/check-positional-params.mjs
+        run: node scripts/checks/check-positional-params.mjs
       - name: API root-keyed store call ratchet
-        run: node scripts/check-api-root-calls.mjs
+        run: node scripts/checks/check-api-root-calls.mjs
       - name: config.json read only by the surface layer
-        run: node scripts/check-config-reads.mjs
+        run: node scripts/checks/check-config-reads.mjs
       - name: process.env read only through src/base/util/env.ts
-        run: node scripts/check-env-reads.mjs
+        run: node scripts/checks/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists
-        run: node scripts/check-process-exit.mjs
+        run: node scripts/checks/check-process-exit.mjs
       - name: Every promise call in src awaited or handled
-        run: node scripts/check-floating-promises.mjs
+        run: node scripts/checks/check-floating-promises.mjs
       - name: Every SQLite row cast in src proven by its SELECT
-        run: node scripts/check-row-casts.mjs
+        run: node scripts/checks/check-row-casts.mjs
       - name: Every api write call in src and tests awaited or returned
-        run: node scripts/check-floating-api.mjs
+        run: node scripts/checks/check-floating-api.mjs
       - name: Store-port ratchet
-        run: node scripts/check-store-port.mjs
+        run: node scripts/checks/check-store-port.mjs
       - name: Layer order
-        run: node scripts/check-layers.mjs
+        run: node scripts/checks/check-layers.mjs
       - name: No fs or child_process import in src/domain or src/api
-        run: node scripts/check-domain-io.mjs
+        run: node scripts/checks/check-domain-io.mjs
       - name: No test-only exports
-        run: node scripts/check-test-only-exports.mjs
+        run: node scripts/checks/check-test-only-exports.mjs
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
-        run: node scripts/check-test-stores.mjs
+        run: node scripts/checks/check-test-stores.mjs
       # A hand-written process.env write outlives its test; vi.stubEnv with unstubAllEnvs in afterEach restores the value vitest.config.ts set.
       - name: Tests set env only through vi.stubEnv
-        run: node scripts/check-test-env.mjs
+        run: node scripts/checks/check-test-env.mjs
       # The CLI parses flags and prints; ranking and every row a recall writes belong to retrieve().
       - name: CLI recall ranks and records only through retrieve()
-        run: node scripts/check-cli-recall-writes.mjs
+        run: node scripts/checks/check-cli-recall-writes.mjs
       # A value-less flag arrives as `true`; hand-rolled String(flags[x]) stores that as text.
       - name: CLI flags read only through flag-values helpers
-        run: node scripts/check-cli-flags.mjs
+        run: node scripts/checks/check-cli-flags.mjs
       # A hand-written printError + CliExit(1) pair can drift apart; fail() prints and exits 1 in one call.
       - name: CLI error exits go through fail()
-        run: node scripts/check-cli-fail.mjs
-      - run: node scripts/check-roadmap.mjs
-      - run: node scripts/check-agent-inventory.mjs
+        run: node scripts/checks/check-cli-fail.mjs
+      - run: node scripts/checks/check-roadmap.mjs
+      - run: node scripts/checks/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
       # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
       - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
-        run: node scripts/check-dist-imports.mjs
+        run: node scripts/checks/check-dist-imports.mjs
       # The committed API report must match the built declarations.
       - run: npm run check:dts
       # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
-      - run: node scripts/check-openclaw-dist.mjs
+      - run: node scripts/checks/check-openclaw-dist.mjs
       - name: Perf regression gate
-        run: node scripts/check-request-path-timing.mjs
+        run: node scripts/checks/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
       # Gated on the fastest of 5 rounds, so one runner stall does not fail it; docs/ARCHITECTURE.md has the margin's numbers.
       - name: p99 recall at 1k memories
@@ -140,7 +140,7 @@ jobs:
       # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
       - name: Binary floors name a release that ships their schema
         if: always()
-        run: node scripts/check-expiring-keys-floor.mjs
+        run: node scripts/checks/check-expiring-keys-floor.mjs
 
   # The suite is about 9 minutes of test time summed over three shards, which run in parallel.
   test:
@@ -215,7 +215,7 @@ jobs:
         with:
           node-version: '24'
       - name: Open-core line
-        run: node scripts/check-open-core.mjs
+        run: node scripts/checks/check-open-core.mjs
 
   # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
   # not 'sqlite', so the port holds for a store that is not hippo.db. A test that needs hippo.db's folder skips with its

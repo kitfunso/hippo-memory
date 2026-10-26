@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/surface/server/api-key.js';
 import type { VerifiedApiKey } from '../../src/base/scope/api-key.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';

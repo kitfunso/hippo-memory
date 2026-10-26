@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   listProjects,
