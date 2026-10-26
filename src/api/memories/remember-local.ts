@@ -9,7 +9,7 @@ import {
   folderEmbedTarget,
   type EmbedOutcome,
 } from '../../domain/search/embed-memories.js';
-import { captureError } from '../../domain/learn/autolearn.js';
+import { captureError, type FailedCommand } from '../../domain/learn/autolearn.js';
 import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
@@ -178,12 +178,10 @@ export async function extractRememberedFacts(
  * stored every time, since watch has never put a failure to the salience gate. */
 export async function rememberFailedCommand(
   ctx: Context,
-  failed: { readonly command: string; readonly exitCode: number; readonly stderr: string },
+  failed: FailedCommand,
 ): Promise<LocalRememberOutcome> {
   const { content, tags, layer, source, confidence } = captureError(
-    failed.exitCode,
-    failed.stderr,
-    failed.command,
+    failed,
     ctx.tenantId,
     ctx.infra.clock(),
   );

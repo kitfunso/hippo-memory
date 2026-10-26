@@ -23,7 +23,11 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 
 describe('captureError', () => {
   it('creates a memory entry with error tags', () => {
-    const entry = captureError(1, 'TypeError: Cannot read property x', 'npm test', undefined, evalNow());
+    const entry = captureError(
+      { command: 'npm test', exitCode: 1, stderr: 'TypeError: Cannot read property x' },
+      undefined,
+      evalNow(),
+    );
     expect(entry.tags).toContain('error');
     expect(entry.tags).toContain('autolearn');
     expect(entry.content).toContain('npm test');
@@ -32,29 +36,31 @@ describe('captureError', () => {
 
   it('truncates stderr to 500 chars', () => {
     const longStderr = 'x'.repeat(600);
-    const entry = captureError(2, longStderr, 'cmd', undefined, evalNow());
+    const entry = captureError({ command: 'cmd', exitCode: 2, stderr: longStderr }, undefined, evalNow());
     expect(entry.content.length).toBeLessThan(700);
     expect(entry.content).toContain('truncated');
   });
 
   it('includes exit code in content', () => {
-    const entry = captureError(127, 'command not found', 'badcmd', undefined, evalNow());
+    const entry = captureError({ command: 'badcmd', exitCode: 127, stderr: 'command not found' }, undefined, evalNow());
     expect(entry.content).toContain('exit 127');
   });
 
   it('sets emotional_valence to negative', () => {
-    const entry = captureError(1, 'err', 'cmd', undefined, evalNow());
+    const entry = captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow());
     expect(entry.emotionalValence).toBe('negative');
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError(1, 'err', 'cmd', 'tenant_b', evalNow()).tenantId).toBe('tenant_b');
-    expect(captureError(1, 'err', 'cmd', undefined, evalNow()).tenantId).toBe('default');
+    expect(captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, 'tenant_b', evalNow()).tenantId).toBe(
+      'tenant_b',
+    );
+    expect(captureError({ command: 'cmd', exitCode: 1, stderr: 'err' }, undefined, evalNow()).tenantId).toBe('default');
   });
 
   it('short stderr passes through unchanged', () => {
     const stderr = 'short error';
-    const entry = captureError(1, stderr, 'cmd', undefined, evalNow());
+    const entry = captureError({ command: 'cmd', exitCode: 1, stderr }, undefined, evalNow());
     expect(entry.content).toContain('short error');
     expect(entry.content).not.toContain('truncated');
   });

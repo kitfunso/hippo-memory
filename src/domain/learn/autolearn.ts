@@ -13,12 +13,16 @@ const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
 const MAX_LESSON_CHARS = 500;
 
+export interface FailedCommand {
+  readonly command: string;
+  readonly exitCode: number;
+  readonly stderr: string;
+}
+
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch`
  * stores its text and tags through remember. */
 export function captureError(
-  exitCode: number,
-  stderr: string,
-  command: string,
+  { command, exitCode, stderr }: FailedCommand,
   tenantId: string | undefined,
   now: Date,
 ): MemoryEntry {

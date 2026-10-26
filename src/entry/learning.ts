@@ -14,5 +14,5 @@ export function captureError(
   command: string,
   tenantId?: string,
 ): MemoryEntry {
-  return captureErrorAt(exitCode, stderr, command, tenantId, evalNow());
+  return captureErrorAt({ command, exitCode, stderr }, tenantId, evalNow());
 }
