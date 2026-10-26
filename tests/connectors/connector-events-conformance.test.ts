@@ -452,7 +452,7 @@ describe('ConnectorEvents.route', () => {
     routing({}),
   ];
 
-  it('answers the registered tenant, an installation ahead of a repository and the first tenant to register a repository, else the rows a match could have come from', async () => {
+  it('answers the registered tenant, an installation ahead of a repository and the one tenant that registered a repository, else the rows a match could have come from', async () => {
     const side = await conforms(CALLS, registerRoutes);
     const routes = (n: number) => ({ tenantId: null, routes: n });
     expect(values(side)).toEqual([
@@ -460,7 +460,8 @@ describe('ConnectorEvents.route', () => {
       routes(1),
       { tenantId: TENANT_A },
       routes(1),
-      { tenantId: TENANT_A },
+      // Two tenants registered acme/shared, and nothing in an event without an installation id says which one sent it.
+      routes(4),
       { tenantId: TENANT_B },
       routes(4),
       routes(4),

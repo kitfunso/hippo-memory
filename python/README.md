@@ -24,7 +24,7 @@ hippo init       # creates a .hippo directory
 hippo serve      # binds 127.0.0.1:3737 by default
 ```
 
-`hippo serve` takes no request without an API key, from this machine too. Pass the client the member key the server wrote to `.hippo/server.key`, or mint one (see Authentication).
+`hippo serve` takes no request without an API key, from this machine too. With no `api_key`, the client sends `HIPPO_API_KEY`, else, for a server on `127.0.0.1`, `::1` or `localhost`, the member key `hippo serve` wrote to `server.key`: in the `.hippo` folder nearest the working folder, else in the global store (`HIPPO_HOME`). This is the rule the hippo CLI follows. To act as another key, mint one (see Authentication).
 
 The Python SDK talks to this loopback server. Requires `hippo-memory@>=1.11.4` server (the `/v1/outcome`, `/v1/context`, `/v1/sleep` routes land in v1.11.4).
 
