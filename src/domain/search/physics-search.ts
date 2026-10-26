@@ -126,7 +126,7 @@ export async function rankPhysics(
       : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
-  return fitBudget(merged, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  return fitBudget(merged, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults, options.cost);
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */

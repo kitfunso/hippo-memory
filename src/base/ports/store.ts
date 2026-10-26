@@ -157,8 +157,9 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session id and non-null
-   * `origins` (those projects and user-global rows) must narrow, by created descending, then content and id ascending.
+  /** The first `count` (at most MAX_FRESH_RAW) unsuperseded raw rows of `tenantId` that a non-empty session id and
+   * non-null `origins` (those projects and user-global rows) must narrow, by created descending, then content and id
+   * ascending.
    */
   freshRawEntries(
     count: number,

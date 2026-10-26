@@ -1,5 +1,6 @@
 // embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -310,6 +311,7 @@ describe('a model identity change on hippo.db', () => {
       rows: cliStore(root),
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
+      failureNotices: new FailureNotices(),
     };
     expect(await embedAll(target, undefined, fake('fake-new'))).toBe(ROWS);
     expect(staged).toEqual([PAGE, PAGE, PAGE, PAGE, ROWS - 4 * PAGE]);

@@ -33,7 +33,7 @@ export {
   type SqliteStoreOptions as StoreOptions,
   type StoreRuntime,
 } from '../store/sqlite/index.js';
-// The published entries' own names: ./store-kit's default store and vector rules.
+// The vector rules ./store-kit publishes under the names they have here.
 export {
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
@@ -44,9 +44,10 @@ export {
   type VectorRow,
 } from '../store/sqlite/index.js';
 
-/** ./store-kit's default store takes only the rules an add-on picks: a runtime or a session belongs to a composition
- * root, and the published entries export neither. */
-export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups = sqliteStoreWith;
+/** The default store as ./store-kit publishes it, with only the rules an add-on picks: a runtime or a session belongs
+ * to a composition root, and the published entries export neither. */
+export const publishedDefaultStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups =
+  sqliteStoreWith;
 
 /** A store runtime for a root that runs until the process exits, such as the CLI or the stdio MCP loop; its exit hook
  * disposes it. */

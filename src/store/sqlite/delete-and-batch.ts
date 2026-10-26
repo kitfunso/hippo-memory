@@ -243,11 +243,10 @@ function batchWriteAndDeleteOn(
     fts: { rows: [], staleIds: [] },
     dirty: { parents: new Set(), tenantById: new Map() },
   };
-  let next = from;
   // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a concurrent `hippo
   // reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
-  withWriteScope(db, 'flush_chunk', () => {
-    next = applyUntilHold(db, files, components, { ...opts, from, clock: now }, out);
+  const next = withWriteScope(db, 'flush_chunk', () => {
+    const reached = applyUntilHold(db, files, components, { ...opts, from, clock: now }, out);
     const removed = new Set(out.removedIds);
     replaceFtsRows(
       db,
@@ -259,6 +258,7 @@ function batchWriteAndDeleteOn(
     for (const parentId of out.dirty.parents) {
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }
+    return reached;
   });
   reportChunk(files.hippoRoot, out);
   return { next, removedIds: out.removedIds };

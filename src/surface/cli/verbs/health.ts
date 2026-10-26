@@ -1,7 +1,10 @@
 // Store health, connectors, the summary tree and curation verbs, in `hippo help` order.
 
 import { TAIL_MAX_LINES } from '../support-bundle.js';
-import { DEFAULT_ASSEMBLE_BUDGET } from '../../../api/assemble.js';
+import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../../api/assemble.js';
+import { DEFAULT_DRILL_DOWN_LIMIT } from '../../../api/objects/drill-down.js';
+import { DEFAULT_REPORT_WINDOW_DAYS } from '../../../api/tokens.js';
+import { DEFAULT_DORMANT_LIST_LIMIT } from '../../../base/ports/store/dormant.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../../base/util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
@@ -95,7 +98,7 @@ export const HEALTH_VERBS = {
     usage: [
       `
   drill <summary-id>       Walk down a DAG level-2 summary to its children
-    --limit N              Cap children list (default 50)
+    --limit N              Cap children list (default ${DEFAULT_DRILL_DOWN_LIMIT})
     --budget N             Token budget for the printed children (≈ chars/4)
     --json                 Output as JSON`,
     ],
@@ -107,7 +110,7 @@ export const HEALTH_VERBS = {
       `
   assemble --session <id>  Build a session's chronological context window
     --budget N             Token budget for the printed window (default ${DEFAULT_ASSEMBLE_BUDGET})
-    --fresh-tail N         Recent rows always kept verbatim (default 10)
+    --fresh-tail N         Recent rows always kept verbatim (default ${DEFAULT_FRESH_TAIL_COUNT})
     --no-summarize-older   Disable older-row summary substitution
     --scope <s>            Restrict to exact scope (default: deny *:private:*)
     --json                 Output as JSON`,
@@ -190,7 +193,7 @@ export const HEALTH_VERBS = {
       `
   dormant [<query>]        List faded memories sleep kept instead of deleting
                            (on by default; "dormant": {"enabled": false} deletes instead)
-    --limit <n>            Max rows, newest first (default: 20)
+    --limit <n>            Max rows, newest first (default: ${DEFAULT_DORMANT_LIST_LIMIT})
     --json                 Output as JSON
     --global               Operate on the global store
     dormant restore <id>   Bring a dormant memory back to active memory
@@ -264,7 +267,7 @@ export const HEALTH_VERBS = {
                            skipping unchanged hook blocks saved, and how much of the
                            hook and compact-resume blocks later model calls re-read,
                            counted when a session ends. Estimates (characters / 4)
-    --days <n>             Window in days (default: 30)
+    --days <n>             Window in days (default: ${DEFAULT_REPORT_WINDOW_DAYS})
     --json                 Output as JSON
     --global               Operate on the global store`,
     ],
@@ -276,7 +279,7 @@ export const HEALTH_VERBS = {
       `
   failures                 Failed tool calls capture-error saw, by outcome, and how
                            many errors first happened in another session
-    --days <n>             Window in days (default: 30)
+    --days <n>             Window in days (default: ${DEFAULT_REPORT_WINDOW_DAYS})
     --json                 Output as JSON
     --global               Operate on the global store`,
     ],

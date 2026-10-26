@@ -2,7 +2,7 @@
 // holds them, read when a root builds its ports; each strength switch becomes a StrengthModel value, never a branch.
 import { type EvalSwitches, type RankAblation } from '../base/memory/eval-switches.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
-import type { Clock, InfraPorts, StoreRules } from '../base/ports/infra.js';
+import type { Clock, StoreRules } from '../base/ports/infra.js';
 import { hostClock } from '../host/clock.js';
 import {
   envAblateDecay,
@@ -73,11 +73,6 @@ export function evalClock(): Clock {
 /** What a root opens its store with: the eval strength model at its HIPPO_LOSS_AVERSION_RATIO, and HIPPO_FAKE_NOW. */
 export function evalStoreRules(lossAversionRatio: number | undefined): StoreRules {
   return { strength: evalSwitches().strength, lossAversionRatio, fakeNowMs: envFakeNowMs() };
-}
-
-/** The switches and clock a root with no Context hands an embedding run. */
-export function evalRun(): Pick<InfraPorts, 'evalSwitches' | 'clock'> {
-  return { evalSwitches: evalSwitches(), clock: evalClock() };
 }
 
 /** HIPPO_FAKE_NOW when set and parseable, else the wall clock, read at each call: the entry layer's default `now`. */

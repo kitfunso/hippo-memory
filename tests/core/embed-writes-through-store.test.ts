@@ -1,6 +1,7 @@
 // embedAll and embedMemory with a store embed through its vectorWrites group, never opening hippo.db in hippoRoot,
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
@@ -71,6 +72,7 @@ function on(hippoRoot: string, store: HippoStore): EmbedTarget {
     store,
     embeddings: loadConfig(hippoRoot).embeddings,
     embedderFor: resolveEmbeddingProvider,
+    failureNotices: new FailureNotices(),
     strength: PRODUCTION_STRENGTH,
     clock: evalNow,
   };

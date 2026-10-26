@@ -52,6 +52,7 @@ describe('check-env-reads', () => {
       { file: 'api/lazy.ts', line: 2 },
       { file: 'base/memory/flag.ts', line: 1 },
       { file: 'base/memory/typed.ts', line: 2 },
+      { file: 'domain/rerankers/a.ts', line: 1 },
       { file: 'store/tenant-only.ts', line: 1 },
     ]);
   });

@@ -39,7 +39,8 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { SESSION_EVENT_LIMIT, TRACE_EVENT_ROWS, WM_MAX_ENTRIES } from '../rules/windows.js';
+import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../rules/windows.js';
+import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../base/util/limits.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
@@ -164,7 +165,7 @@ function appendSessionEvent(
   // Scope is stored as given, since reads deny by default.
   // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
-  const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.sessionId, 20);
+  const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.sessionId, RECENT_MIRROR_EVENTS);
   writeRecentSessionMirror(hippoRoot, tenantId, recent);
   return loaded;
 }

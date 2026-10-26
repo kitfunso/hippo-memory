@@ -156,6 +156,7 @@ export async function shareMemory(
       store: global.store,
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
+      failureNotices: options.embed.failureNotices,
       strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
       clock: options.embed.clock,
     };

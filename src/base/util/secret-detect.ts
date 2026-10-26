@@ -98,14 +98,6 @@ export function maskEmails(text: string): string {
   return text.replace(EMAIL, '[email]');
 }
 
-/**
- * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and
- * JWTs.
- */
-export function redactSecretsStrict(text: string): string {
-  return redactText(text);
-}
-
 /** The text a write keeps, plus what to tell its caller about secret material in it. */
 export interface SecretVet {
   content: string;
@@ -160,7 +152,11 @@ function redactPemBlocks(text: string): string {
   return out + text.slice(from);
 }
 
-function redactText(text: string): string {
+/**
+ * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and
+ * JWTs.
+ */
+export function redactSecretsStrict(text: string): string {
   if (!text) return text;
   // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
   let result = redactPemBlocks(text);

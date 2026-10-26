@@ -44,7 +44,7 @@ function cliCore(): CliCoreRecall {
         explain: false,
       },
     },
-    show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
+    show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
     lastRecall: sqliteStore(hippoRoot).lastRecall,
   };
 }
@@ -101,7 +101,7 @@ describe('retrieve with the CLI ranking core', () => {
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
+    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall_anchor_skipped_no_session', 'recall']);
     expect([...(writes[0]!.strengthen?.ids ?? [])].sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(recallRowsInHippoDb()).toBe(1);
     expect(writes[0]!.trace?.results).toHaveLength(2);

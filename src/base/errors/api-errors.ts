@@ -38,6 +38,11 @@ export class NotFoundError extends ApiError {
   }
 }
 
+/** What a missing memory answers; one out of the caller's reach answers the same, so the caller learns nothing more. */
+export function memoryNotFoundText(id: string): string {
+  return `memory not found: ${id}`;
+}
+
 /** The row exists but its current state forbids the change (already superseded, closed, or decided). */
 export class ConflictError extends ApiError {
   readonly status = 409;

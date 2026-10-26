@@ -13,10 +13,8 @@ import type { McpContext, McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup } from '../../base/ports/store.js';
-import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import {
   askingNearestFirst,
-  defaultDiagnostics,
   defaultImportFiles,
   defaultImportStores,
   defaultReach,
@@ -77,11 +75,6 @@ export function cliStore(
   });
 }
 
-/** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
-export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
-  return defaultDiagnostics(hippoRoot);
-}
-
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
   return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot), embedderFor: resolveEmbeddingProvider };
@@ -99,7 +92,7 @@ export function cliImportBatch(hippoRoot: string): <T>(run: (files: ImportFiles)
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
 export function cliInitGlobal(): void {
-  cliImportFiles(hippoHomeDir()).ensure();
+  defaultImportFiles(hippoHomeDir()).ensure();
 }
 
 async function asCommand<T>(session: StoreSession, run: () => T | Promise<T>): Promise<T> {
