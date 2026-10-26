@@ -59,7 +59,62 @@
         "id-denylist": ["error", "sqliteStoreOn"],
         "no-restricted-properties": [
           "error",
-          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." }
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." }
+        ],
+        "unicorn/no-process-exit": "error",
+        "boundaries/no-hand-transaction": "error",
+        "boundaries/no-twin-function": "error"
+      }
+    },
+    {
+      "files": ["src/db/**/*.ts", "src/store/**/*.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." }
+        ]
+      }
+    },
+    {
+      "files": ["src/store/sqlite/**/*.ts"],
+      "rules": {
+        "id-denylist": "off",
+        "no-restricted-properties": [
+          "error",
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." }
+        ]
+      }
+    },
+    {
+      "files": ["src/base/util/env.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." }
+        ]
+      }
+    },
+    {
+      "files": ["src/host/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "config-file[.]js$",
+                "importNames": ["loadConfig"],
+                "message": "Only the surface reads config.json; host code takes a ConfigReader."
+              }
+            ]
+          }
         ]
       }
     },
@@ -70,21 +125,137 @@
     {
       "files": ["src/api/**/*.ts"],
       "rules": {
-        "id-denylist": ["error", "sqliteStoreOn", "hippoRoot"],
+        "id-denylist": ["error", "sqliteStoreOn", "hippoRoot", "requireGroup", "hasGroup"],
         "no-restricted-properties": [
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
-          { "property": "hippoRoot", "message": "The api reads what the folder gave from a port method." }
+          { "property": "hippoRoot", "message": "The api reads what the folder gave from a port method." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          { "property": "requireGroup", "message": "Groups are bound at boot; api code uses the store it is given." },
+          { "property": "hasGroup", "message": "Groups are bound at boot; api code uses the store it is given." }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^[.]",
+                "importNames": ["requireGroup", "hasGroup"],
+                "message": "Groups are bound at boot; api code uses the store it is given."
+              }
+            ]
+          }
+        ],
+        "boundaries/no-store-branch": "error"
+      }
+    },
+    {
+      "files": ["src/domain/**/*.ts"],
+      "rules": {
+        "id-denylist": ["error", "sqliteStoreOn", "requireGroup", "hasGroup"],
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          { "property": "requireGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
+          { "property": "hasGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
+          { "object": "globalThis", "property": "fetch", "message": "Domain code reaches the network through a port." }
+        ],
+        "no-restricted-globals": ["error", { "name": "fetch", "message": "Domain code reaches the network through a port." }],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(http-retry|embedding-provider|embeddings/provider|local-embedder|transformers)([.][cm]?[jt]s)?$",
+                "message": "Domain code reaches a model or the network through a port that src/infra implements."
+              },
+              {
+                "regex": "^[.]",
+                "importNames": ["fetchWithRetry", "resolveEmbeddingProvider", "importTransformers"],
+                "message": "Domain code reaches a model or the network through a port that src/infra implements."
+              },
+              {
+                "regex": "^[.]",
+                "importNames": ["requireGroup", "hasGroup"],
+                "message": "Groups are bound at boot; domain code uses the store it is given."
+              }
+            ]
+          }
         ]
       }
     },
     {
-      "files": ["src/surface/server/routes/**/*.ts"],
+      "files": ["src/surface/**/*.ts", "src/cli.ts"],
       "rules": {
-        "id-denylist": ["error", "sqliteStoreOn", "requireGroup"],
+        "id-denylist": ["error", "sqliteStoreOn", "bumpRecallStats", "noteRecall", "lastShown"],
         "no-restricted-properties": [
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." }
+        ],
+        "boundaries/no-recall-ledger-label": "error"
+      }
+    },
+    {
+      "files": ["src/surface/cli/**/*.ts", "src/cli.ts"],
+      "rules": {
+        "id-denylist": [
+          "error",
+          "sqliteStoreOn",
+          "bumpRecallStats",
+          "noteRecall",
+          "lastShown",
+          "rankRecall",
+          "resolveTenantId"
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "api/recall/pipeline[.]js$",
+                "importNames": ["rankRecall"],
+                "message": "The CLI ranks a recall through retrieveWithCliCore() in src/api/recall/request.ts."
+              },
+              {
+                "regex": "(server/boot|entry/testing)[.]js$",
+                "importNames": ["resolveTenantId"],
+                "message": "The CLI resolves its tenant once, at dispatch, and hands it down."
+              }
+            ]
+          }
+        ],
+        "boundaries/no-hand-flag-read": "error",
+        "boundaries/no-hand-fail": "error"
+      }
+    },
+    {
+      "files": ["src/surface/cli/exit.ts"],
+      "rules": { "boundaries/no-hand-fail": "off" }
+    },
+    {
+      "files": ["src/surface/server/routes/**/*.ts"],
+      "rules": {
+        "id-denylist": ["error", "sqliteStoreOn", "bumpRecallStats", "noteRecall", "lastShown", "requireGroup"],
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "requireGroup", "message": "A route calls a src/api function that takes the Context." }
         ],
         "no-restricted-imports": [
@@ -102,8 +273,31 @@
       }
     },
     {
-      "files": ["src/store/sqlite/**/*.ts", "src/surface/open-store.ts"],
-      "rules": { "id-denylist": "off", "no-restricted-properties": "off" }
+      "files": ["src/surface/open-store.ts"],
+      "rules": {
+        "id-denylist": "off",
+        "no-restricted-properties": [
+          "error",
+          { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
+          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." }
+        ]
+      }
+    },
+    {
+      "files": ["src/db/busy.ts"],
+      "rules": { "boundaries/no-hand-transaction": "off" }
+    },
+    {
+      "files": [
+        "src/base/util/crash-handlers.ts",
+        "src/surface/server/sleep-child.ts",
+        "src/surface/cli/hooks/codex-run.ts"
+      ],
+      "rules": { "unicorn/no-process-exit": "off" }
     },
     {
       "files": ["scripts/**"],
@@ -116,6 +310,14 @@
     {
       "files": ["tests/**/*.ts"],
       "rules": { "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }] }
+    },
+    {
+      "files": ["tests/**"],
+      "rules": { "boundaries/no-env-write": "error" }
+    },
+    {
+      "files": ["tests/**/_helpers/**"],
+      "rules": { "boundaries/no-env-write": "off" }
     },
     { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } },
     {
