@@ -4,7 +4,7 @@ import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { portError } from '../../src/store/sqlite/port-errors.js';
+import { portError } from '../../src/store/sqlite/runtime/port-errors.js';
 import {
   openHippoDb,
   closeHippoDb,

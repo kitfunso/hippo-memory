@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { judgeExports } from '../../scripts/check-test-only-exports.mjs';
+import { judgeExports } from '../../scripts/checks/check-test-only-exports.mjs';
 
 const CALC = `
 export function double(n: number): number { return n * 2; }

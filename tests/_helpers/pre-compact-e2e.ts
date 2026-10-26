@@ -4,9 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { hippoRun } from '../_helpers/spawn-hippo.js';
-import { runCliAs } from '../_helpers/run-cli-as.js';
-import type { InProcessResult } from '../_helpers/run-in-process.js';
+import { hippoRun } from './spawn-hippo.js';
+import { runCliAs } from './run-cli-as.js';
+import type { InProcessResult } from './run-in-process.js';
 
 // Verbs run through runCli in this process; the first case of each verb spawns the local built CLI, never a global install.
 

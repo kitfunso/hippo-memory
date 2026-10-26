@@ -20,7 +20,7 @@ import { consolidate } from '../../src/index.js';
 import { DECISION } from '../../src/domain/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
 import { supersede, adminActor } from '../../src/api/index.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { allocatedBytes } from '../_helpers/allocated-bytes.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -35,7 +35,7 @@ import {
   readEntry,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveCustomerNote, saveDecision } from '../../src/entry/testing.js';

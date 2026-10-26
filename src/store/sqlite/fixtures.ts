@@ -6,22 +6,22 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
 import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
-import * as ambient from './ambient.js';
-import * as batches from './delete-and-batch.js';
-import * as entryReads from './entry-reads.js';
-import * as entryWrites from './entry-writes.js';
-import type { WriteEntryOptions } from './entry-writes.js';
-import { onHandle, openStore, storeFilesOf } from './handles.js';
-import { listRecallEntries } from './search-rows.js';
-import * as vectorIndex from './vector-index.js';
+import * as ambient from './recall/ambient.js';
+import * as batches from './entries/delete-and-batch.js';
+import * as entryReads from './entries/entry-reads.js';
+import * as entryWrites from './entries/entry-writes.js';
+import type { WriteEntryOptions } from './entries/entry-writes.js';
+import { onHandle, openStore, storeFilesOf } from './runtime/handles.js';
+import { listRecallEntries } from './recall/search-rows.js';
+import * as vectorIndex from './vectors/vector-index.js';
 
-export { initStore } from './handles.js';
-export { upsertEntryRow } from './entry-row.js';
-export { writeEntryDbOnly, type WriteEntryOptions } from './entry-writes.js';
-export { buildIndexFromDb, writeIndexMirror } from './mirrors.js';
-export { listVectorCandidateEntries } from './search-rows.js';
-export { writeDeliveryEventOnHandle } from './recall-trace.js';
-export { recordTokenUse, tokensBySession } from './token-ledger.js';
+export { initStore } from './runtime/handles.js';
+export { upsertEntryRow } from './entries/entry-row.js';
+export { writeEntryDbOnly, type WriteEntryOptions } from './entries/entry-writes.js';
+export { buildIndexFromDb, writeIndexMirror } from './folder-files/mirrors.js';
+export { listVectorCandidateEntries } from './recall/search-rows.js';
+export { writeDeliveryEventOnHandle } from './recall/recall-trace.js';
+export { recordTokenUse, tokensBySession } from './ledger/token-ledger.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
@@ -52,7 +52,7 @@ export function listRecallEntriesInFolder(
   return onHandle(hippoRoot, (db) => listRecallEntries(db, query, options), openStore);
 }
 
-/** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
+/** The per-prompt tally, timed by scripts/checks/check-request-path-timing.mjs on a folder it seeds. */
 export function countAmbientInFolder(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
   return onHandle(hippoRoot, (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter), openStore);
 }

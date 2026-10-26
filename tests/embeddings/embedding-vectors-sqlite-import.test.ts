@@ -14,7 +14,7 @@ import {
   getCurrentSchemaVersion,
 } from '../../src/db/index.js';
 import { embeddingInputText } from '../../src/base/embeddings/index-identity.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import {
@@ -36,7 +36,7 @@ import {
   batchWriteAndDeleteInFolder,
   loadEmbeddingIndex,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 
 let root: string;
 

@@ -6,10 +6,10 @@ import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
-import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
-import { sqliteObjects } from '../../src/store/sqlite/objects.js';
+import { createSqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
+import { sqliteObjects } from '../../src/store/sqlite/objects/objects.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import {
   auditFailures,
   auditRows,
@@ -28,7 +28,7 @@ import {
   undoAll,
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';

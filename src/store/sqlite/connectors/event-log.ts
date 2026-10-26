@@ -4,7 +4,7 @@ import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { handleStamp } from '../handle-clock.js';
+import { handleStamp } from '../runtime/handle-clock.js';
 
 /** Which log table a connector writes and the column its dedupe key lives in. */
 export interface EventLogSpec {

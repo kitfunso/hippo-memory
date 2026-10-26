@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { releaseEmbedLock, tryEmbedLock } from '../../src/store/sqlite/embed-lock.js';
+import { releaseEmbedLock, tryEmbedLock } from '../../src/store/sqlite/vectors/embed-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const deadPid = (): number => spawnSync(process.execPath, ['-e', '0']).pid;

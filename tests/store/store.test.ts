@@ -16,7 +16,7 @@ import {
   clearActiveTaskSnapshot,
   listSessionEvents,
 } from '../_helpers/root-forms.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,

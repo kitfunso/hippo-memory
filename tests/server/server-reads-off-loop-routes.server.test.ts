@@ -6,7 +6,7 @@ import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import {
   EMBEDDING_MODEL,

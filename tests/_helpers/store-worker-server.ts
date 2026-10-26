@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServeOptions, ServerHandle } from '../../src/server.js';
@@ -14,8 +14,8 @@ import {
   createSqliteExecutor,
   type ExecutorOptions,
   type SqliteExecutor,
-} from '../../src/store/sqlite/executor.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+} from '../../src/store/sqlite/runtime/executor.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { makeRoot } from './make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.

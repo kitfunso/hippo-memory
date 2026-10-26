@@ -2,7 +2,7 @@
 // 403 naming the key that can; an admin key and the CLI operator keep every right. Real server, over HTTP and MCP.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { runCli } from '../../src/cli.js';
 import type { JsonValue } from '../../src/base/util/json.js';

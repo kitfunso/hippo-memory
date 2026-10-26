@@ -23,7 +23,7 @@ import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';

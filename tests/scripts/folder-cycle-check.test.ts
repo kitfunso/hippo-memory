@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findFolderCycles } from '../../scripts/check-folder-cycles.mjs';
+import { findFolderCycles } from '../../scripts/checks/check-folder-cycles.mjs';
 
 describe('check-folder-cycles', () => {
   let dir: string;

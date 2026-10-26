@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const SRC = fileURLToPath(new URL('../../src/', import.meta.url));
+const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const CLI_OBJECT_VERBS = [
   'briefs',
   'decisions',

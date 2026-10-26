@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "about": "Every agent surface hippo names, what hippo does there today, and per mode how far saving a checkpoint and lessons before context loss has got. Null means unknown, and unknown is never a pass. Rules: docs/integrations/agent-inventory.md. Check: node scripts/check-agent-inventory.mjs",
+  "about": "Every agent surface hippo names, what hippo does there today, and per mode how far saving a checkpoint and lessons before context loss has got. Null means unknown, and unknown is never a pass. Rules: docs/integrations/agent-inventory.md. Check: node scripts/checks/check-agent-inventory.mjs",
   "nonAgentKeywords": ["memory", "agent-memory", "ai-memory", "llm-memory", "long-term-memory", "persistent-memory", "memory-layer", "mcp", "mcp-server", "model-context-protocol", "claude", "ai-agents", "coding-agent", "agents", "llm", "rag", "retrieval", "hybrid-search", "embeddings", "sqlite", "local-first", "cli", "context", "recall"],
   "entries": [
     {

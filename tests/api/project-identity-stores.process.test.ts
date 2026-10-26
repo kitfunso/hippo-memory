@@ -1,5 +1,5 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { contextGet } from '../../src/api/index.js';
 import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
 import { importAtSessionEnd } from '../../src/api/agent-memories.js';
-import { saveItems } from '../../src/store/sqlite/compactions-record.js';
+import { saveItems } from '../../src/store/sqlite/capture/compactions-record.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
@@ -30,7 +30,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -103,7 +103,7 @@ async function nextProcess() {
     import('../../src/api/agent-memories.js'),
     import('../../src/api/objects/projects.js'),
     import('../../src/surface/cli/api-context.js'),
-    import('../../src/store/sqlite/agent-import-stores.js'),
+    import('../../src/store/sqlite/agent-import/agent-import-stores.js'),
     import('../../src/host/config-file.js'),
   ]);
   return {

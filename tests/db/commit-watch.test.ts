@@ -1,7 +1,7 @@
 // A real store connection, so isTransaction is the driver's own answer, not a stand-in.
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { watchCommits } from '../../src/store/sqlite/commit-watch.js';
+import { watchCommits } from '../../src/store/sqlite/runtime/commit-watch.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const opened: DatabaseSyncLike[] = [];

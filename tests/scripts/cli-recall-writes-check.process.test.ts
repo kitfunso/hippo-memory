@@ -9,9 +9,9 @@ import {
   findCliStoreWrites,
   namedOnLines,
   STORE_WRITER_EXCEPTIONS,
-} from '../../scripts/check-cli-recall-writes.mjs';
+} from '../../scripts/checks/check-cli-recall-writes.mjs';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-cli-recall-writes.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-cli-recall-writes.mjs');
 const SRC = join(import.meta.dirname, '..', '..', 'src');
 
 describe('check-cli-recall-writes: memory writers and the store opener', () => {

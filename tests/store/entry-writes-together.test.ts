@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
-import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { onHandle, openStore } from '../../src/store/sqlite/runtime/handles.js';
 
 describe('writeEntriesTogether', () => {
   const roots: string[] = [];

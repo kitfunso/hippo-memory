@@ -5,14 +5,14 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
-import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
+import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals/goals.js';
 import { boostByGoals } from '../../src/domain/search/goal-boost.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { planningFallacyEvidence } from '../../src/store/sqlite/planning-fallacy-evidence.js';
-import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
+import { planningFallacyEvidence } from '../../src/store/sqlite/learning/planning-fallacy-evidence.js';
+import { writeRecallTrace } from '../../src/store/sqlite/recall/recall-trace.js';
 import { serve } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 import {
@@ -27,10 +27,10 @@ import {
   type RecallWrites,
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
-import { readLatestHandoff } from '../../src/store/sqlite/handoffs.js';
+import { readLatestHandoff } from '../../src/store/sqlite/sessions/handoffs.js';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
-import { listSessionEvents } from '../../src/store/sqlite/sessions.js';
-import { readActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
+import { listSessionEvents } from '../../src/store/sqlite/sessions/sessions.js';
+import { readActiveTaskSnapshot } from '../../src/store/sqlite/sessions/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -66,7 +66,7 @@ import {
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
 import type { AppendAuditOptions } from '../../src/base/ports/store/types.js';
-import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/runtime/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';

@@ -1,6 +1,6 @@
 // In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
 // each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
-// src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never text.
+// src/store/sqlite/recall/recall-trace.ts); hashes, ids, counts and enums only, never text.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';

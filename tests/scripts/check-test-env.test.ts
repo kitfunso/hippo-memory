@@ -8,7 +8,7 @@ import {
   misnamedTests,
   onceStubs,
   unscrubbedEnvReads,
-} from '../../scripts/check-test-env.mjs';
+} from '../../scripts/checks/check-test-env.mjs';
 
 const lines = (text: string): number[] => envWrites(text).map((hit) => hit.line);
 

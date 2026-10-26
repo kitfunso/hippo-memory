@@ -2,9 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
-import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
+import { createSqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { cleanups, newRoot, undoAll } from '../_helpers/store-worker-server.js';
 import { clusteredVectors, near, seedVectorRows } from '../_helpers/vector-rows.js';
 import { waitFor } from '../_helpers/wait-for.js';

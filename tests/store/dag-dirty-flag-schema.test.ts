@@ -9,12 +9,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { markSummaryDirtyInTx } from '../../src/store/sqlite/summary-dirty.js';
+import { markSummaryDirtyInTx } from '../../src/store/sqlite/entries/summary-dirty.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

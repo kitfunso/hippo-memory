@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entries/entry-filter.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';

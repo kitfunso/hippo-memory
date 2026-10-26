@@ -11,7 +11,7 @@ import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { replaySlackDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
-import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
+import { archiveRawMemory } from '../../src/store/sqlite/entries/raw-archive.js';
 import { verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../../src/surface/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../../src/server.js';

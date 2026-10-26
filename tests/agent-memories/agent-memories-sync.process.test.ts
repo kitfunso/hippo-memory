@@ -8,12 +8,12 @@ import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
-import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
-import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
+import { removeEntryMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
+import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-writes.js';
 import {
   agentRows,
   auditCount,
@@ -33,7 +33,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { TEST_RUN } from '../_helpers/test-run.js';

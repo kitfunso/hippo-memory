@@ -11,7 +11,7 @@ import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { sleepWholeStore, supersede } from '../../src/api/index.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

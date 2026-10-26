@@ -24,7 +24,7 @@ import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { reproveStoreSchema } from '../../src/db/connect.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore } from '../../src/store/sqlite/runtime/handles.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 afterEach(() => {

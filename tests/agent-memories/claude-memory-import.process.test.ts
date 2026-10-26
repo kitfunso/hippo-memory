@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { importProjectMemories } from '../../src/api/agent-memories.js';
 import { totalTally } from '../../src/base/memory/agent-memory-report.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import/agent-import-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';

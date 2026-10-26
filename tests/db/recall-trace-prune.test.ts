@@ -6,7 +6,7 @@ import {
   recordTraceOutcome,
   writeDeliveryEventOnHandle,
   writeRecallTrace,
-} from '../../src/store/sqlite/recall-trace.js';
+} from '../../src/store/sqlite/recall/recall-trace.js';
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

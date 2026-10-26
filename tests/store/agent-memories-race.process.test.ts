@@ -25,7 +25,7 @@ import { join } from 'node:path';
 const [, , syncUrl, root, home, barrier, index, total] = process.argv;
 const { importForStore } = await import(syncUrl);
 const { loadConfig } = await import(new URL('../host/config-file.js', syncUrl).href);
-const { sqliteImportStores } = await import(new URL('../store/sqlite/agent-import-stores.js', syncUrl).href);
+const { sqliteImportStores } = await import(new URL('../store/sqlite/agent-import/agent-import-stores.js', syncUrl).href);
 const { currentMachine } = await import(new URL('../infra/machine.js', syncUrl).href);
 const { evalNow } = await import(new URL('../infra/eval-switches.js', syncUrl).href);
 mkdirSync(barrier, { recursive: true });

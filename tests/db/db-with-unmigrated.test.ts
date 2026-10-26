@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { OTHER_STORE_MARKER, withUnmigratedDb } from '../../src/db/open.js';
 import { OtherStoreFolderError } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { initStore } from '../../src/store/sqlite/handles.js';
+import { initStore } from '../../src/store/sqlite/runtime/handles.js';
 
 let root: string;
 beforeEach(() => {

@@ -1,4 +1,4 @@
-// The SQL twins in src/store/sqlite/rule-sql.ts equal their JS rules over a seeded spread: strength under a
+// The SQL twins in src/store/sqlite/runtime/rule-sql.ts equal their JS rules over a seeded spread: strength under a
 // loss-aversion ratio (tests/core/memory.test.ts holds the default ratio) and the bare text of a stored content.
 import { rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import { calculateStrength } from '../../src/entry/memory.js';
 import type { EmotionalValence, MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { bareText, SPACE_CODES } from '../../src/store/rules/copies.js';
-import { bareTextSql, strengthSql } from '../../src/store/sqlite/rule-sql.js';
+import { bareTextSql, strengthSql } from '../../src/store/sqlite/runtime/rule-sql.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

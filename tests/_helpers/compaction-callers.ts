@@ -69,7 +69,7 @@ export function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface RecordRow {
   origin_project: string;
   status: string;
@@ -154,7 +154,7 @@ export function rowCounts(): Record<string, number> {
   return withDb((db) => Object.fromEntries(WRITTEN_TABLES.map((t) => [t, count(db, t)])));
 }
 
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface SnapshotRow {
   id: number;
   status: string;

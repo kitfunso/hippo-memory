@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import type { Rejection } from '../../src/base/ports/store/rejections.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';

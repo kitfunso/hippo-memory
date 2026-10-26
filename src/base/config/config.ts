@@ -148,7 +148,7 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
-  /** Per-turn delivery ledger (src/store/sqlite/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+  /** Per-turn delivery ledger (sqlite/recall/recall-trace.ts): hashes, ids, counts and rejection reasons for each
    *  pinned-only context call. Default off; read from the store the token ledger writes to. */
   deliveryLedger: {
     enabled: boolean;
