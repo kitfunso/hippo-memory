@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -46,7 +46,8 @@ function configIn(root: string): string {
 
 /** Lints `files` under a fresh folder with the repo's rules; `file -> rule codes` for each hit. */
 function lint(files: Record<string, string>): Map<string, string[]> {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-boundary-rules-'));
+  // macOS tmpdir sits behind the /var symlink; oxlint sees the real path, so the test must too.
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-rules-')));
   try {
     for (const [p, text] of Object.entries(files)) {
       mkdirSync(dirname(join(root, p)), { recursive: true });
