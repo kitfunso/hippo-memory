@@ -7,7 +7,7 @@ import type { Http } from '../base/ports/http.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../base/util/limits.js';
-import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../base/util/json.js';
+import { type JsonValue, isJsonNumber, isJsonObject, knownOption } from '../base/util/json.js';
 import { JEV_MODEL, postScoring, TYPESAFE_ENDPOINT } from './rerankers/endpoint.js';
 
 const MAX_CONCURRENCY = 8;
@@ -83,10 +83,6 @@ const QUESTIONS = {
 const KINDS: readonly JudgedKind[] = ['error', 'decision', 'convention', 'preference', 'trivia'];
 const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive', 'neutral'];
 
-function oneOf<T extends string>(value: JsonValue | undefined, allowed: readonly T[]): T | null {
-  return isJsonString(value) ? (allowed.find((option) => option === value) ?? null) : null;
-}
-
 /** `verified` is unreachable: that tier means a human or a test confirmed it. */
 function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
   if (kindConfidence >= OBSERVED_CONFIDENCE_MIN) return 'observed';
@@ -139,8 +135,8 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 
   const durable = answerNamed(data, 'durable').noul;
   const kindAnswer = answerNamed(data, 'kind');
-  const kind = oneOf(kindAnswer.choice, KINDS);
-  const valence = oneOf(answerNamed(data, 'valence').choice, VALENCES);
+  const kind = knownOption(KINDS, kindAnswer.choice) ?? null;
+  const valence = knownOption(VALENCES, answerNamed(data, 'valence').choice) ?? null;
   if (!isJsonNumber(durable) || durable < 0 || durable > 1 || !kind || !valence) return null;
 
   const kindConfidence = isJsonNumber(kindAnswer.confidence) ? kindAnswer.confidence : 0;

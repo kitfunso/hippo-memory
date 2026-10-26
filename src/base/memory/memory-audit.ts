@@ -5,11 +5,13 @@ import {
   assessAutomaticMemory,
   automaticDefect,
   BUNDLE_HEADER,
-  hasNoSpecificity,
   isAutomaticEntry,
   isCertainReason,
   isFragment,
   isReleaseCommitNoise,
+  isShortAndUnspecific,
+  MIN_MEMORY_CHARS,
+  MIN_SUBSTANTIVE_WORDS,
   substantiveWordCount,
   type AutomaticMemoryDefect,
 } from './memory-quality.js';
@@ -41,15 +43,18 @@ export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue
   return issue;
 }
 
+/** Text this short is an error, not a weak memory. */
+const TRIVIAL_CHARS = 3;
+
 function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   const content = entry.content.trim();
 
-  if (content.length < 3) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 3 chars)' };
+  if (content.length < TRIVIAL_CHARS) {
+    return { memoryId: entry.id, content, severity: 'error', reason: `too short (< ${TRIVIAL_CHARS} chars)` };
   }
 
-  if (content.length < 10) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 10 chars)' };
+  if (content.length < MIN_MEMORY_CHARS) {
+    return { memoryId: entry.id, content, severity: 'error', reason: `too short (< ${MIN_MEMORY_CHARS} chars)` };
   }
 
   if (isReleaseCommitNoise(content)) {
@@ -61,7 +66,7 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   }
 
   const substantive = substantiveWordCount(content);
-  if (substantive < 2) {
+  if (substantive < MIN_SUBSTANTIVE_WORDS) {
     return {
       memoryId: entry.id,
       content,
@@ -70,7 +75,7 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
     };
   }
 
-  if (content.length < 40 && hasNoSpecificity(content)) {
+  if (isShortAndUnspecific(content)) {
     return {
       memoryId: entry.id,
       content,

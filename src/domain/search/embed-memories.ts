@@ -30,7 +30,7 @@ import type {
 import { chunked } from '../../base/util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { MINUTE_MS } from '../../base/util/time.js';
+import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { SerialQueues } from '../../base/util/serial-queue.js';
 
@@ -114,11 +114,11 @@ async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
 
 // The close releases the lock inside the turn: a lock with this thread's own token reads as leaked to the next turn.
 async function withEmbedLock<T>(
-  { embeddingIndex: index, rows }: IndexOf,
+  { embeddingIndex: index, rows, failureNotices }: IndexOf,
   fn: (turn: IndexTurn) => Promise<T>,
 ): Promise<T> {
   const { id, key } = await index.open();
-  const turn: IndexTurn = { rows, step: (step) => index.step(id, step) };
+  const turn: IndexTurn = { rows, failureNotices, step: (step) => index.step(id, step) };
   return embedTurns.run(key, async () => {
     try {
       await acquireIndexLock(turn);
@@ -128,12 +128,6 @@ async function withEmbedLock<T>(
     }
   });
 }
-
-// A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows
-// at most once per interval.
-const EMBED_WARN_KEY_CAP = 64;
-const EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS = MINUTE_MS;
-const embedFailureSeen = new Map<string, { lastNoticeAt: number; suppressed: number }>();
 
 function embedFailureKey(source: string, cause: unknown): string {
   const kind = errorCode(cause) || (cause instanceof Error ? cause.constructor.name : 'NonError');
@@ -147,30 +141,16 @@ function withoutTrailingDots(text: string): string {
   return text.slice(0, end);
 }
 
-function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknown): void {
-  const key = embedFailureKey(source, cause);
-  const now = Date.now();
-  const seen = embedFailureSeen.get(key);
-  if (seen) {
-    seen.suppressed += 1;
-    if (now - seen.lastNoticeAt >= EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS) {
-      log.warn(
-        `${seen.suppressed} more embedding errors from ${source} since ` +
-          `the last notice; memories are still stored without embeddings.`,
-      );
-      seen.suppressed = 0;
-      seen.lastNoticeAt = now;
-    }
+function warnEmbedFailureOnce(notices: FailureNotices, source: string, rawMessage: string, cause?: unknown): void {
+  const notice = notices.note(embedFailureKey(source, cause), Date.now());
+  if (notice === null) return;
+  if (notice.kind === 'repeats') {
+    log.warn(
+      `${notice.count} more embedding errors from ${source} since ` +
+        `the last notice; memories are still stored without embeddings.`,
+    );
     return;
   }
-  // Oldest key out, so a full map still lets a new failure warn.
-  if (embedFailureSeen.size >= EMBED_WARN_KEY_CAP) {
-    for (const oldest of embedFailureSeen.keys()) {
-      embedFailureSeen.delete(oldest);
-      break;
-    }
-  }
-  embedFailureSeen.set(key, { lastNoticeAt: now, suppressed: 0 });
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = withoutTrailingDots(redactSecretsStrict(rawMessage).replace(/\s+/g, ' '));
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
@@ -278,10 +258,10 @@ function embedMemoryInStore(
               target,
             )
           ).modelMismatch;
-        if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
+        if (refused) warnEmbedFailureOnce(target.failureNotices, 'index', OTHER_MODEL_INDEX);
         return refused ? 'failed' : 'indexed';
       } catch (err) {
-        warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+        warnEmbedFailureOnce(target.failureNotices, provider.kind, errorMessage(err), err);
         return 'failed';
       }
     })
@@ -301,21 +281,23 @@ export type EmbedOutcome = 'indexed' | 'off' | 'failed';
  * names the provider and the embedder that builds it. */
 export type EmbedTarget = IndexEmbedTarget | StoreEmbedTarget;
 
-/** The embeddings config and the root's embedder, which every target carries. */
+/** The embeddings config, the root's embedder and the failures the root warned about, which every target carries. */
 interface EmbedWith {
   readonly embeddings: EmbeddingsConfig;
   readonly embedderFor: EmbedderFor;
+  readonly failureNotices: FailureNotices;
 }
 
 /** The rows an index embeds, read by id. */
 type IndexRows = Pick<HippoStore, 'entriesByIds'>;
 
 /** A store's own index with the rows it embeds. */
-type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows'>;
+type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows' | 'failureNotices'>;
 
 /** One session on a store's own index under its lock, with the rows it embeds. */
 interface IndexTurn {
   readonly rows: IndexRows;
+  readonly failureNotices: FailureNotices;
   readonly step: <K extends IndexStepKind>(step: IndexStep<K>) => Promise<IndexStepAnswers[K]>;
 }
 
@@ -335,21 +317,22 @@ export interface StoreEmbedTarget extends EmbedWith, ParticleScoring {
   readonly store: HippoStore;
 }
 
-/** The root's eval switches and clock, which score the particles a vector write seeds. */
-export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock'>;
+/** The root's eval switches and clock, which score the particles a vector write seeds, and its warned failures. */
+export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
 /** The store's own index when it keeps one, else its vector groups, whose seeded particles score under `run`. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<HippoStore>,
-  { evalSwitches: switches, clock }: EmbedRun,
+  { evalSwitches: switches, clock, failureNotices }: EmbedRun,
 ): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
-    return { embeddingIndex, rows, embeddings, embedderFor };
+    return { embeddingIndex, rows, embeddings, embedderFor, failureNotices };
   }
-  return { store, embeddings, embedderFor, strength: rankStrength({ switches, runtime: config.runtime }), clock };
+  const strength = rankStrength({ switches, runtime: config.runtime });
+  return { store, embeddings, embedderFor, failureNotices, strength, clock };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
@@ -363,7 +346,7 @@ export async function embedMemoryInto(on: EmbedTarget, entry: MemoryEntry, model
     available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
-    warnEmbedFailureOnce('config', errorMessage(err), err);
+    warnEmbedFailureOnce(on.failureNotices, 'config', errorMessage(err), err);
     return 'failed';
   }
   if (!available) return 'off';
@@ -395,7 +378,7 @@ async function embedMemoryLocked(
       // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the
       // lock for a whole-store embed. A next page means more than INLINE_REINDEX_MAX_ROWS rows.
       if ((await step({ kind: 'ids', page: { limit: INLINE_REINDEX_MAX_ROWS } })).next !== null) {
-        warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
+        warnEmbedFailureOnce(on.failureNotices, 'index', OTHER_MODEL_INDEX);
         return 'failed';
       }
       await rebuildIndexForProvider(on, provider);
@@ -411,7 +394,7 @@ async function embedMemoryLocked(
     return 'indexed';
   } catch (err) {
     // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
-    warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+    warnEmbedFailureOnce(on.failureNotices, provider.kind, errorMessage(err), err);
     return 'failed';
   }
 }

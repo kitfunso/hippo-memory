@@ -336,6 +336,20 @@ describe('recall surface differences', () => {
     },
   );
 
+  // The api writes the hint rows from the hints a presenter detected, so each row's bytes must not depend on who builds it.
+  it.each(['cli', 'mcp'] as const)('%s: the hint audit rows, byte for byte', async (surface) => {
+    const calls: RecallCall[] = [
+      { query: 'deploy' },
+      { query: 'deploy', session: SESSION },
+      { query: 'deploy', session: SESSION },
+    ];
+    const rows = await onFreshStore('local', async (s) => {
+      await recallOn(surface, s, calls);
+      return rowsOf(s.root).audit;
+    });
+    expect(rows).toMatchSnapshot();
+  });
+
   it('rings do not cross surfaces: a repeat on another surface is a first recall there', async () => {
     const got = await onFreshStore('local', async (s) => {
       const call: RecallCall = { query: 'deploy', session: SESSION };
@@ -467,7 +481,7 @@ describe('recall surface differences', () => {
         },
         ({ ranked }) => {
           rankedScore = ranked.find((r) => r.entry.id === 'mem_p_goal')?.score ?? 0;
-          return { ids: ranked.map((r) => r.entry.id), audit: [] };
+          return { ids: ranked.map((r) => r.entry.id), hints: { anchoring: null, availability: null } };
         },
       );
       const idx = result.results.findIndex((r) => r.id === 'mem_p_goal');

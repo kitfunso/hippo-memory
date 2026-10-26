@@ -1,5 +1,6 @@
 // A write that fires its embedding and moves on must log a rejection from the embed path, never leave it unhandled.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -30,6 +31,7 @@ describe('embedMemoryDetached', () => {
     const target: EmbedTarget = {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
+      failureNotices: new FailureNotices(),
       strength: PRODUCTION_STRENGTH,
       clock: evalNow,
       get store(): HippoStore {

@@ -46,6 +46,7 @@ import type {
 } from '../base/ports/store/context-reads.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
+import { CONTINUITY_EVENT_LIMIT } from './continuity.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -378,7 +379,7 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
-  const block = await store.continuity(ctx.tenantId, 5, key);
+  const block = await store.continuity(ctx.tenantId, CONTINUITY_EVENT_LIMIT, key);
   // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.

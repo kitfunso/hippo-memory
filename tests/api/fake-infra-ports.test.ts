@@ -1,6 +1,7 @@
 // The api runs remember, recall, context and sleep on the ports its Context carries: fakes here and a real SQLite
 // store. check-layers keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -91,6 +92,7 @@ function fakeInfra(cwd: string): FakeInfra {
     llm,
     embedderFor,
     reranker: (name) => (name === 'fake' ? rerank : null),
+    failureNotices: new FailureNotices(),
   };
   return { infra, prompts, reranked, embedders, fileReads };
 }
@@ -160,7 +162,7 @@ describe('the api on fake infra ports', () => {
             explain: false,
           },
         },
-        show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
+        show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
         lastRecall: ctx.store.lastRecall,
       },
     );

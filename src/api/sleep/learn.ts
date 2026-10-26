@@ -134,8 +134,16 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const { embedderFor, clock } = ctx.infra;
-  const target = { store: ctx.store, embeddings: ctx.config.embeddings, embedderFor, strength: strengthOf(ctx), clock };
+  const { embedderFor, clock, failureNotices } = ctx.infra;
+  const { store, config } = ctx;
+  const target = {
+    store,
+    embeddings: config.embeddings,
+    embedderFor,
+    failureNotices,
+    strength: strengthOf(ctx),
+    clock,
+  };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
