@@ -27,7 +27,9 @@ function heldKeys(
 ): Set<string> {
   const texts = entries.map((entry) => entry.content);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
-  return storedTextKeys(listTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
+  return storedTextKeys(
+    listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit }),
+  );
 }
 
 /** One outcome per entry, in order, in one transaction that reads the caller's dedup again
@@ -62,7 +64,7 @@ function writeCapturedEntries(
 
 const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
   textsHolding: (db, tenantId, texts, { project, everyScope } = {}) =>
-    listTextsHolding(db, tenantId, texts, project, everyScope ? EVERY_SCOPE : undefined),
+    listTextsHolding(db, { tenantId, texts, project, admit: everyScope ? EVERY_SCOPE : undefined }),
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {

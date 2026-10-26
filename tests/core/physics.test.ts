@@ -238,7 +238,7 @@ describe('Force computations', () => {
     it('similar particles attract (cosine > 0)', () => {
       const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]) });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
-      const force = attractionForce(pi, pj, 0.01);
+      const force = attractionForce({ pi, pj, gMemory: 0.01 });
       // The force is a unit direction times G * m_i * m_j * cos^3, with cos = 1.02 / sqrt(1.01 * 1.04).
       expect(norm(force)).toBeCloseTo(0.01 * (1.02 / Math.sqrt(1.01 * 1.04)) ** 3, 10);
     });
@@ -246,7 +246,7 @@ describe('Force computations', () => {
     it('opposing particles get zero attraction', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: [-1, 0, 0] });
-      const force = attractionForce(pi, pj, 0.01);
+      const force = attractionForce({ pi, pj, gMemory: 0.01 });
       expect(norm(force)).toBe(0);
     });
 
@@ -255,8 +255,8 @@ describe('Force computations', () => {
       const pj1 = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]), mass: 1 });
       const pi2 = makeParticle({ memoryId: 'c', position: vecNormalize([1, 0.1, 0]), mass: 2 });
       const pj2 = makeParticle({ memoryId: 'd', position: vecNormalize([1, 0.2, 0]), mass: 3 });
-      const f1 = norm(attractionForce(pi1, pj1, 1.0));
-      const f2 = norm(attractionForce(pi2, pj2, 1.0));
+      const f1 = norm(attractionForce({ pi: pi1, pj: pj1, gMemory: 1.0 }));
+      const f2 = norm(attractionForce({ pi: pi2, pj: pj2, gMemory: 1.0 }));
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
@@ -264,7 +264,7 @@ describe('Force computations', () => {
       // Identical positions: cos=1, cos^3=1
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0], mass: 1 });
       const pj = makeParticle({ memoryId: 'b', position: [1, 0, 0], mass: 1 });
-      const force = attractionForce(pi, pj, 1.0);
+      const force = attractionForce({ pi, pj, gMemory: 1.0 });
       // Direction of (pj - pi) = [0,0,0] -> normalized to zero -> magnitude * zero = zero
       // Identical positions means difference is zero, so force is zero despite high cosine
       expect(norm(force)).toBe(0);
@@ -273,7 +273,7 @@ describe('Force computations', () => {
     it('force direction points from i toward j', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 1, 0]) });
-      const force = attractionForce(pi, pj, 1.0);
+      const force = attractionForce({ pi, pj, gMemory: 1.0 });
       // Should have positive y component (toward pj): cos^3 = 1 / (2 * sqrt(2)) along pj - pi, whose length is sqrt(2 - sqrt(2)).
       expect(force[1]).toBeCloseTo(0.25 / Math.sqrt(2 - Math.SQRT2), 10);
     });
@@ -283,7 +283,7 @@ describe('Force computations', () => {
     it('pushes particles apart', () => {
       const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]) });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
-      const force = repulsionForce(pi, pj, 0.5);
+      const force = repulsionForce({ pi, pj, kRepulsion: 0.5 });
       // Force should point from j toward i (away from j)
       // pi is at [~1, ~0.1, 0], pj is at [~1, ~0.2, 0]
       // Direction away from pj should have negative y component relative to pj
@@ -296,8 +296,8 @@ describe('Force computations', () => {
       const pj1 = makeParticle({ memoryId: 'b', position: [0, 1, 0], mass: 1 });
       const pi2 = makeParticle({ memoryId: 'c', position: [1, 0, 0], mass: 2 });
       const pj2 = makeParticle({ memoryId: 'd', position: [0, 1, 0], mass: 3 });
-      const f1 = norm(repulsionForce(pi1, pj1, 1.0));
-      const f2 = norm(repulsionForce(pi2, pj2, 1.0));
+      const f1 = norm(repulsionForce({ pi: pi1, pj: pj1, kRepulsion: 1.0 }));
+      const f2 = norm(repulsionForce({ pi: pi2, pj: pj2, kRepulsion: 1.0 }));
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
@@ -307,15 +307,15 @@ describe('Force computations', () => {
       const close_j = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.1, 0]) });
       const far_i = makeParticle({ memoryId: 'c', position: [1, 0, 0] });
       const far_j = makeParticle({ memoryId: 'd', position: [0, 1, 0] });
-      const fClose = norm(repulsionForce(close_i, close_j, 1.0));
-      const fFar = norm(repulsionForce(far_i, far_j, 1.0));
+      const fClose = norm(repulsionForce({ pi: close_i, pj: close_j, kRepulsion: 1.0 }));
+      const fFar = norm(repulsionForce({ pi: far_i, pj: far_j, kRepulsion: 1.0 }));
       expect(fClose).toBeGreaterThan(fFar);
     });
 
     it('direction points away from other particle', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: [0, 1, 0] });
-      const force = repulsionForce(pi, pj, 1.0);
+      const force = repulsionForce({ pi, pj, kRepulsion: 1.0 });
       // Direction is normalize(pi.pos - pj.pos) = normalize([1,-1,0]); orthogonal rows have distance 1, so magnitude 1.
       expect(force[0]).toBeCloseTo(Math.SQRT1_2, 10);
       expect(force[1]).toBeCloseTo(-Math.SQRT1_2, 10);

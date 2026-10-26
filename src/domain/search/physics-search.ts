@@ -151,7 +151,13 @@ async function rankByParticles(
   ranking: ParticleRanking,
 ): Promise<SearchResult[]> {
   const { queryVector, hybrid, scoring } = ranking;
-  const pools = splitByParticle(pool, physicsMap, queryVector, scoring.now, rankStrength(hybrid));
+  const pools = splitByParticle({
+    pool,
+    physicsMap,
+    queryVector,
+    now: scoring.now,
+    model: rankStrength(hybrid),
+  });
   const config = hybrid.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults =
@@ -243,13 +249,21 @@ async function loadCandidateParticles(
   }
 }
 
-function splitByParticle(
-  pool: MemoryEntry[],
-  physicsMap: Map<string, PhysicsParticle>,
-  queryVector: number[],
-  now: Date,
-  model: StrengthModel,
-): PhysicsPools {
+interface SplitByParticleOptions {
+  readonly pool: MemoryEntry[];
+  readonly physicsMap: Map<string, PhysicsParticle>;
+  readonly queryVector: number[];
+  readonly now: Date;
+  readonly model: StrengthModel;
+}
+
+function splitByParticle({
+  pool,
+  physicsMap,
+  queryVector,
+  now,
+  model,
+}: SplitByParticleOptions): PhysicsPools {
   const pools: PhysicsPools = { entries: [], particles: [], classic: [] };
   const liveMass = !model.recallStrengthens;
   for (const entry of pool) {

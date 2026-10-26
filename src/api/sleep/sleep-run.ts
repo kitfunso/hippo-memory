@@ -90,7 +90,7 @@ export async function runSleep(
     phaseError = { thrown: err };
     throw err;
   } finally {
-    await emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
+    await emitSleepAudit(ctx, { opts, dryRun, counts, phaseError });
   }
 }
 
@@ -350,7 +350,7 @@ async function drainGraphQueue(
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
     for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
-      await rebuildDirtyTenant(ctx, phases, { tenantId, maxPendingId }, rebuilt, result);
+      await rebuildDirtyTenant(ctx, { phases, dirty: { tenantId, maxPendingId }, rebuilt, result });
     }
     if (rebuilt.tenants > 0) {
       result.graph = rebuilt;
@@ -366,14 +366,18 @@ async function drainGraphQueue(
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
+interface RebuildDirtyTenantOptions {
+  readonly phases: SleepPhases;
+  readonly dirty: DirtyTenantSnapshot['dirtyTenants'][number];
+  readonly rebuilt: GraphTotals;
+  readonly result: SleepResult;
+}
+
 /** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is an event
  * and the tenant stays pending. */
 async function rebuildDirtyTenant(
   ctx: SleepContext,
-  phases: SleepPhases,
-  dirty: DirtyTenantSnapshot['dirtyTenants'][number],
-  rebuilt: GraphTotals,
-  result: SleepResult,
+  { phases, dirty, rebuilt, result }: RebuildDirtyTenantOptions,
 ): Promise<void> {
   try {
     const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
@@ -416,14 +420,18 @@ interface SleepAuditMetadata {
   nextUnitIds?: string[];
 }
 
+interface EmitSleepAuditOptions {
+  readonly opts: SleepOptions;
+  readonly dryRun: boolean;
+  readonly counts: SleepCounts;
+  readonly phaseError: { thrown: unknown } | null;
+}
+
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got
 // done. An audit failure is logged and never replaces the original phase error.
 async function emitSleepAudit(
   ctx: SleepContext,
-  opts: SleepOptions,
-  dryRun: boolean,
-  counts: SleepCounts,
-  phaseError: { thrown: unknown } | null,
+  { opts, dryRun, counts, phaseError }: EmitSleepAuditOptions,
 ): Promise<void> {
   try {
     // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.

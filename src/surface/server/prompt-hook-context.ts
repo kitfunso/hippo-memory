@@ -29,6 +29,12 @@ async function folderReach(
 ): Promise<ContextReach | undefined> {
   if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
-  const reach = defaultReach(folder, store, opts?.sharedStore, undefined, entryHost);
+  const reach = defaultReach({
+    hippoRoot: folder,
+    store,
+    shared: opts?.sharedStore,
+    openGlobal: undefined,
+    host: entryHost,
+  });
   return contextReach(reach, loadConfig, resolveEmbeddingProvider);
 }

@@ -57,13 +57,17 @@ interface TagRewrite<T> {
   readonly purge: readonly string[];
 }
 
+interface RewriteStep<T> {
+  readonly tenantId: string;
+  readonly backupLabel: string;
+  readonly body: (backup: string) => TagRewrite<T>;
+}
+
 /** One transaction, the store backed up first, with mirrors following the commit. */
 function rewrite<T>(
   db: DatabaseSyncLike,
   files: StoreFiles,
-  tenantId: string,
-  backupLabel: string,
-  body: (backup: string) => TagRewrite<T>,
+  { tenantId, backupLabel, body }: RewriteStep<T>,
 ): T {
   const done = withBackup(db, files.hippoRoot, backupLabel, (backup) =>
     withWriteScope(db, TX_LABEL, () => body(backup)),
@@ -83,16 +87,8 @@ function rowsWhere(db: DatabaseSyncLike, filter: EntryFilter): Iterable<MemoryEn
   );
 }
 
-/** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into`
- * already holds. */
-function fold(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  { from, into }: ProjectFold,
-): FoldResult {
-  // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already
-  // holds would show twice.
+/** The keys of the live imports `into` already holds. */
+function heldNotes(db: DatabaseSyncLike, tenantId: string, into: string): Set<string> {
   const held = new Set<string>();
   const imports = {
     tenantId,
@@ -103,6 +99,20 @@ function fold(
   for (const row of rowsWhere(db, imports)) {
     held.add(noteKey(row.source));
   }
+  return held;
+}
+
+/** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into`
+ * already holds. */
+function fold(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  { from, into }: ProjectFold,
+): FoldResult {
+  // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already
+  // holds would show twice.
+  const held = heldNotes(db, tenantId, into);
   const setAside: string[] = [];
   const restamped: string[] = [];
   // A row set aside sits at or before the page cursor, so the write never moves a row the walk has
@@ -113,8 +123,12 @@ function fold(
     const copy = live && tag !== null && held.has(noteKey(row.source));
     if (
       copy &&
-      setAsideRow(db, tag, { ...row, originProject: into }, 'project-merge', files).kind ===
-        'dormant'
+      setAsideRow(db, {
+        tag,
+        row: { ...row, originProject: into },
+        why: 'project-merge',
+        rules: files,
+      }).kind === 'dormant'
     ) {
       setAside.push(row.id);
     } else restamped.push(row.id);
@@ -146,7 +160,7 @@ function merge(
   };
   // A dry run rolls back, so it writes no backup and no mirror.
   if (dryRun) return withTrialScope(db, TX_LABEL, () => body(null)).result;
-  return rewrite(db, files, tenantId, 'before-merge', body);
+  return rewrite(db, files, { tenantId, backupLabel: 'before-merge', body });
 }
 
 /** Sets aside each planned copy still live under the name the plan read it with. */
@@ -168,7 +182,9 @@ function setAsideCopies(
     if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin) {
       continue;
     }
-    if (setAsideRow(db, tag, row, 'project-repair', files).kind === 'dormant') done.push(id);
+    if (setAsideRow(db, { tag, row, why: 'project-repair', rules: files }).kind === 'dormant') {
+      done.push(id);
+    }
   }
   return done;
 }
@@ -184,14 +200,15 @@ function userGlobalMerges(
   return new Map([...rows].filter(([, e]) => !e.supersededBy && e.originProject === ''));
 }
 
+interface RetireOptions {
+  readonly files: StoreFiles;
+  readonly row: MemoryEntry;
+  readonly actor: string;
+  readonly now: Date;
+}
+
 /** A live row to dormant storage, restorable, as sleep's dormant move does. */
-function retire(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  row: MemoryEntry,
-  actor: string,
-  now: Date,
-): void {
+function retire(db: DatabaseSyncLike, { files, row, actor, now }: RetireOptions): void {
   insertDormantRow(db, {
     entry: row,
     strength: calculateStrength(row, now, files.strength),
@@ -208,7 +225,7 @@ function repair(
   plan: RepairPlan,
 ): AppliedRepair {
   const { tenantId, actor } = scope;
-  return rewrite(db, files, tenantId, 'before-repair', (backup) => {
+  const body = (backup: string): TagRewrite<AppliedRepair> => {
     const copies = setAsideCopies(db, files, tenantId, plan.copies);
     const { folds, untraced } = plan;
     const folded = folds.map((f) => fold(db, files, tenantId, f));
@@ -220,7 +237,7 @@ function repair(
     stampOriginProjects(db, tenantId, toProject);
     const retired = plan.setAside.flatMap((id) => merges.get(id) ?? []);
     const now = files.clock();
-    for (const row of retired) retire(db, files, row, actor, now);
+    for (const row of retired) retire(db, { files, row, actor, now });
     const setAside = retired.map((row) => row.id);
     const metadata = { backup, copies, folds, folded, toProject, setAside, untraced };
     appendAuditEvents(db, [{ tenantId, actor, op: 'project_repair', metadata }]);
@@ -229,7 +246,8 @@ function repair(
       rewrite: [...toProject.map((r) => r.id), ...folded.flatMap((f) => f.restamped)],
       purge: [...copies, ...setAside, ...folded.flatMap((f) => f.setAside)],
     };
-  });
+  };
+  return rewrite(db, files, { tenantId, backupLabel: 'before-repair', body });
 }
 
 type Reads = Omit<ProjectTags, 'merge' | 'repair' | 'markRepairedOnce'>;

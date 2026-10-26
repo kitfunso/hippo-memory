@@ -118,7 +118,7 @@ describe('skills store (executable/exportable first-class object)', () => {
       instructions: 'x2',
       supersedesSkillId: b.id,
     });
-    await closeObject(objectsAt(home), SKILL, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), SKILL, { tenantId: 'default', id: c.id, actor: CLI_ACTOR, now: evalNow() });
     const active = await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
@@ -178,7 +178,7 @@ describe('skills store (executable/exportable first-class object)', () => {
       skillName: 'Zulu',
       instructions: 'old',
     });
-    await closeObject(objectsAt(home), SKILL, 'default', closed.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), SKILL, { tenantId: 'default', id: closed.id, actor: CLI_ACTOR, now: evalNow() });
     const sup = await cliSave(home, 'default', SKILL, {
       skillName: 'Yankee',
       instructions: 'v1',

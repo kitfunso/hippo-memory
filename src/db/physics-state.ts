@@ -148,15 +148,18 @@ export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticl
 
 const RESET_BATCH = 64;
 
-/** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. */
+export interface ResetAllPhysicsStateOptions {
+  readonly now?: Date;
+  readonly model?: StrengthModel;
+}
+
+/** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. The first
+ * three stay positional: the frozen scripts/lifecycle-stress scripts call it that way through dist. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
-  // Kept for the frozen lifecycle-stress scripts, which pass no clock on a raw handle; the wall
-  // clock stands in.
-  now: Date = new Date(),
-  model: StrengthModel = PRODUCTION_STRENGTH,
+  { now = new Date(), model = PRODUCTION_STRENGTH }: ResetAllPhysicsStateOptions = {},
 ): number {
   return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), model, now);
 }

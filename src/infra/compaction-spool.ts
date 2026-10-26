@@ -499,17 +499,18 @@ function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptio
   return true;
 }
 
+interface PromoteTmpOptions {
+  readonly dir: string;
+  readonly names: readonly string[];
+  readonly tenantId: string;
+  readonly log: Log;
+}
+
 /**
  * A tmp over STALE_MS old belongs to a spool that never renamed it: a whole one joins the waiting
  * files, a torn one is set aside. True when one joined.
  */
-function promoteTmp(
-  fsx: SpoolFs,
-  dir: string,
-  names: readonly string[],
-  tenantId: string,
-  log: Log,
-): boolean {
+function promoteTmp(fsx: SpoolFs, { dir, names, tenantId, log }: PromoteTmpOptions): boolean {
   const now = Date.now();
   let promoted = false;
   for (const name of names) {
@@ -557,6 +558,9 @@ function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log): void 
 }
 
 interface ImportFailedOptions {
+  readonly dir: string;
+  readonly claim: string;
+  readonly entry: Waiting;
   readonly text: string;
   readonly recorded: boolean;
   readonly failure: StepFailure;
@@ -567,14 +571,8 @@ interface ImportFailedOptions {
  * After an importer failure: a busy store stops the run with the count unchanged, any other error
  * counts one try toward .bad.
  */
-function importFailed(
-  fsx: SpoolFs,
-  dir: string,
-  claim: string,
-  entry: Waiting,
-  options: ImportFailedOptions,
-): FileOutcome {
-  const { text, recorded, failure, log } = options;
+function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
+  const { dir, claim, entry, text, recorded, failure, log } = options;
   const { name } = entry;
   const { busy, message } = failure;
   if (recorded) {
@@ -644,7 +642,7 @@ async function importFile(options: ImportFileOptions): Promise<FileOutcome> {
     failure = { busy: isStoreBusy(err), message: errorMessage(err) };
   }
   if (failure !== null) {
-    return importFailed(fsx, dir, claim, entry, { text, recorded, failure, log });
+    return importFailed(fsx, { dir, claim, entry, text, recorded, failure, log });
   }
   markRecorded();
   return 'imported';
@@ -761,7 +759,7 @@ export async function importSpool(options: ImportSpoolOptions): Promise<number> 
   try {
     if (!ownsLock(fsx, dir, mine.token, log)) return 0;
     const names = fsx.readdirSync(dir);
-    const promoted = promoteTmp(fsx, dir, names, tenantId, log);
+    const promoted = promoteTmp(fsx, { dir, names, tenantId, log });
     const recovered = recoverStaleClaims(fsx, dir, names, log);
     let finished = 0;
     // Only promotion and recovery add waiting names, so the folder is listed again only after one

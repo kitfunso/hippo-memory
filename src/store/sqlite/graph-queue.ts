@@ -19,13 +19,12 @@ function enqueueExtraction(
   const now = handleStamp(db);
   // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you
   // cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
-  const { sourceKind } = resolveConsolidatedSource(
-    db,
+  const { sourceKind } = resolveConsolidatedSource(db, {
     tenantId,
     memoryId,
-    null,
-    'enqueueExtraction',
-  );
+    sourceObject: null,
+    label: 'enqueueExtraction',
+  });
   const result = cachedStatement(
     db,
     `

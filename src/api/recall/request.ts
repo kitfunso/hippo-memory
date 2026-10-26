@@ -245,7 +245,12 @@ export async function retrieveWithCliCore(
   }
   const planning = await planningFor(ctx, store, opts.query);
   const shown = await core.show(ranking, planning?.output ?? {});
-  await recordShown(ctx, store, opts, core, { ranking, shown, planningAudit: planning?.audit });
+  await recordShown(ctx, {
+    store,
+    opts,
+    core,
+    done: { ranking, shown, planningAudit: planning?.audit },
+  });
   const result = resultOf(ranking, shown.results);
   if (planning?.output.hint) result.planningFallacyHint = planning.output.hint;
   if (planning?.output.watching) result.planningFallacyWatching = planning.output.watching;
@@ -288,14 +293,18 @@ interface ShownRanking {
   readonly planningAudit: AppendAuditOptions | undefined;
 }
 
+interface RecordShownOptions {
+  readonly store: HippoStore;
+  readonly opts: CliCoreQuery;
+  readonly core: CliCoreRecall;
+  readonly done: ShownRanking;
+}
+
 /** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or
  * count, as under the other rankers. */
 async function recordShown(
   ctx: Context,
-  store: HippoStore,
-  opts: CliCoreQuery,
-  core: CliCoreRecall,
-  done: ShownRanking,
+  { store, opts, core, done }: RecordShownOptions,
 ): Promise<void> {
   const { ranking, shown, planningAudit } = done;
   const ids = shown.results.map((r) => r.entry.id);

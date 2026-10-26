@@ -154,7 +154,7 @@ async function captureFromCli(
   if (!options.dryRun) {
     return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   }
-  return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
+  return previewCapture({ store, config }, writeOpts, extracted, keys);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are
@@ -334,20 +334,24 @@ export async function captureExtractedItems(
   return tally;
 }
 
+interface PreviewStore {
+  readonly store: Pick<StoreGroups, 'rejections'>;
+  readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
+}
+
 /** A dry run asks the store the same rejected-value question the write's gate does, so a
  * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
-  { rejections }: Pick<StoreGroups, 'rejections'>,
+  { store: { rejections }, config }: PreviewStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,
-  baseHalfLifeDays: number,
 ): Promise<CaptureTally> {
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const fresh = extracted.filter((item) => !keys.has(duplicateKey(item.content)));
   const refused = await rejections.refusedAmong(
     fresh.map((item) => {
-      const entry = captureEntry(item, options, baseHalfLifeDays);
+      const entry = captureEntry(item, options, config.defaultHalfLifeDays);
       return { tenantId: entry.tenantId, entryId: entry.id, content: entry.content };
     }),
   );

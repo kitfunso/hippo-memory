@@ -215,17 +215,25 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   };
 }
 
+export interface SqliteReachOptions {
+  readonly hippoRoot: string;
+  readonly store: HippoStore;
+  readonly shared?: boolean;
+  readonly openGlobal?: (root: string) => HippoStore & StoreGroups;
+  readonly host?: Host;
+}
+
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the
  * transport's flag); `openGlobal` builds the global store, read and written, which a server
  * keeps on threads of its own. A root that probes per request passes its own `host`, so a store
  * once shared stays shared for it. */
-export function sqliteReach(
-  hippoRoot: string,
-  store: HippoStore,
-  shared?: boolean,
-  openGlobal: (root: string) => HippoStore & StoreGroups = sqliteStore,
-  host: Host = createHost(),
-): StoreReach {
+export function sqliteReach({
+  hippoRoot,
+  store,
+  shared,
+  openGlobal = sqliteStore,
+  host = createHost(),
+}: SqliteReachOptions): StoreReach {
   const other = isHippoDbStore(store) ? undefined : store;
   const sharedStore = shared === true || host.isSharedStore(hippoRoot);
   const globalRoot = hippoHomeDir();
@@ -300,7 +308,9 @@ function continuity(
   const sessionId = activeSnapshot?.sessionId ?? undefined;
   return {
     activeSnapshot,
-    sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key) : null,
+    sessionHandoff: sessionId
+      ? readLatestHandoff(db, { tenantId, sessionId, opts: {}, key })
+      : null,
     recentSessionEvents: sessionId
       ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: eventLimit })
       : [],

@@ -112,13 +112,13 @@ export async function searchBothHybrid(
     local: folderVectorSource(local, embedderFor),
     global: folderVectorSource(global, embedderFor),
   };
-  return rankBothStores(
+  return rankBothStores({
     query,
     sources,
-    { local: localEntries, global: globalEntries },
-    recallVectorCandidates(options, admit),
+    entries: { local: localEntries, global: globalEntries },
+    vectorCandidates: recallVectorCandidates(options, admit),
     options,
-  );
+  });
 }
 
 // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows
@@ -225,15 +225,23 @@ function mergeStoreResults(
   return deduped;
 }
 
+export interface RankBothStoresOptions {
+  readonly query: string;
+  readonly sources: { local: VectorSource | undefined; global: VectorSource | undefined };
+  readonly entries: { local: MemoryEntry[]; global: MemoryEntry[] };
+  readonly vectorCandidates: HybridVectorCandidates;
+  readonly options: HybridSearchOptions & RankTime;
+}
+
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text,
  * then the shared budget. */
-export async function rankBothStores(
-  query: string,
-  sources: { local: VectorSource | undefined; global: VectorSource | undefined },
-  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
-  vectorCandidates: HybridVectorCandidates,
-  options: HybridSearchOptions & RankTime,
-): Promise<SearchResult[]> {
+export async function rankBothStores({
+  query,
+  sources,
+  entries,
+  vectorCandidates,
+  options,
+}: RankBothStoresOptions): Promise<SearchResult[]> {
   const {
     budget = DEFAULT_RECALL_BUDGET,
     localBump = DEFAULT_LOCAL_BUMP,

@@ -159,7 +159,7 @@ export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportRepo
   let synced: ContainerWork[] = [];
   try {
     store = await openTarget(pass.target, hasItems, opts);
-    if (store !== null) synced = await syncStore(pass, listings, store, opts, report);
+    if (store !== null) synced = await syncStore({ pass, listings, store, opts, report });
   } catch (err) {
     const why = opts.stores.isBusy(err) ? 'the store was busy' : errorMessage(err);
     report.warnings.push(`agent memories not synced into ${pass.target}: ${why}`);
@@ -258,13 +258,21 @@ interface PassStore {
 
 type SyncedContainer = ContainerOutcome & { readonly work: ContainerWork };
 
-async function syncStore(
-  pass: Pass,
-  listings: readonly Listing[],
-  store: OpenStore,
-  opts: SyncOptions,
-  report: ImportReport,
-): Promise<ContainerWork[]> {
+interface SyncStoreOptions {
+  readonly pass: Pass;
+  readonly listings: readonly Listing[];
+  readonly store: OpenStore;
+  readonly opts: SyncOptions;
+  readonly report: ImportReport;
+}
+
+async function syncStore({
+  pass,
+  listings,
+  store,
+  opts,
+  report,
+}: SyncStoreOptions): Promise<ContainerWork[]> {
   const legacy = pass.legacy ? await legacyWork(store.store, opts.tenantId, listings) : null;
   const session = storeSession(pass, store, opts, legacy);
   const partition = store.global && pass.scope === 'project' ? (pass.originProject ?? '') : null;

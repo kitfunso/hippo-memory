@@ -104,15 +104,23 @@ function liveSession(
   return sameSecret(given, sessionValue(token, port, issuedAtMs));
 }
 
+export interface PassDashboardSessionOptions {
+  readonly req: IncomingMessage;
+  readonly res: ServerResponse;
+  readonly query: URLSearchParams;
+  readonly access: DashboardAccess;
+  readonly now?: () => number;
+}
+
 /** The dashboard gate: refuses a foreign page (403) before any secret is read, then takes a
  * ticket, setting the cookie, or the cookie; anything else is a 401. */
-export function passDashboardSession(
-  req: IncomingMessage,
-  res: ServerResponse,
-  query: URLSearchParams,
-  access: DashboardAccess,
-  now: () => number = Date.now,
-): DashboardSession {
+export function passDashboardSession({
+  req,
+  res,
+  query,
+  access,
+  now = Date.now,
+}: PassDashboardSessionOptions): DashboardSession {
   if (isForeignPage(req)) throw new HttpError(403, 'cross-site or non-local request refused');
   const port = req.socket.localPort ?? access.port;
   // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate

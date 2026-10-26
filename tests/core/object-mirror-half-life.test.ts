@@ -55,13 +55,12 @@ async function saveOneOfEach(root: string): Promise<void> {
     { decisionText: 'ship on fridays', context: 'release train' },
     ACTOR,
   );
-  await openIncident(
-    objectsAt(root),
-    loadConfig(root).defaultHalfLifeDays,
-    TENANT,
-    { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] },
-    { actor: ACTOR, now: evalNow() },
-  );
+  await openIncident(objectsAt(root), {
+    baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+    tenantId: TENANT,
+    opts: { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] },
+    by: { actor: ACTOR, now: evalNow() },
+  });
   await saveObject(
     objectsAt(root),
     PROCESS,
@@ -271,13 +270,12 @@ describe.each([
     const ticks = stubTickingClock();
     const saves = [
       await ticked(ticks, () =>
-        openIncident(
-          objectsAt(root),
-          loadConfig(root).defaultHalfLifeDays,
-          TENANT,
-          { incidentText: 'checkout latency' },
-          { actor: ACTOR, now: evalNow() },
-        ),
+        openIncident(objectsAt(root), {
+          baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+          tenantId: TENANT,
+          opts: { incidentText: 'checkout latency' },
+          by: { actor: ACTOR, now: evalNow() },
+        }),
       ),
       await ticked(ticks, () =>
         saveDecision(
@@ -289,13 +287,12 @@ describe.each([
         ),
       ),
       await ticked(ticks, () =>
-        openIncident(
-          objectsAt(root),
-          loadConfig(root).defaultHalfLifeDays,
-          TENANT,
-          { incidentText: 'login errors', extraTags: ['error'] },
-          { actor: ACTOR, now: evalNow() },
-        ),
+        openIncident(objectsAt(root), {
+          baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+          tenantId: TENANT,
+          opts: { incidentText: 'login errors', extraTags: ['error'] },
+          by: { actor: ACTOR, now: evalNow() },
+        }),
       ),
     ];
     vi.unstubAllGlobals();

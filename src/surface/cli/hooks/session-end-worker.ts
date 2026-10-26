@@ -52,16 +52,24 @@ async function sessionEndWork(
 ): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const held = heldLog((line) => appendSessionEndCloseLog(logFile, line));
-  await flushingOnExit(held, () => runSessionEndWork(hippoRoot, tenantId, flags, mode, held));
+  await flushingOnExit(held, () => runSessionEndWork({ hippoRoot, tenantId, flags, mode, held }));
 }
 
-function runSessionEndWork(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-  mode: WorkerMode,
-  held: HeldLog,
-): Promise<void> {
+interface RunSessionEndWorkOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly flags: CliFlags;
+  readonly mode: WorkerMode;
+  readonly held: HeldLog;
+}
+
+function runSessionEndWork({
+  hippoRoot,
+  tenantId,
+  flags,
+  mode,
+  held,
+}: RunSessionEndWorkOptions): Promise<void> {
   const transcriptPath = stringFlag(flags, 'transcript');
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;

@@ -371,17 +371,26 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const closed = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
       decisionText: 'freeze deploys on Fridays',
     });
-    await closeObject(objectsAt(root), DECISION, 'default', closed.id, { actor: CLI_ACTOR, now: evalNow() });
-    const incident = await openIncident(
-      objectsAt(root),
-      loadConfig(root).defaultHalfLifeDays,
-      'default',
-      { incidentText: 'the billing cron charged twice on the 1st' },
-      { actor: 'cli', now: evalNow() },
-    );
-    await resolveOpenIncident(objectsAt(root), 'default', incident.id, 'made the charge idempotent', {
-      actor: 'cli',
+    await closeObject(objectsAt(root), DECISION, {
+      tenantId: 'default',
+      id: closed.id,
+      actor: CLI_ACTOR,
       now: evalNow(),
+    });
+    const incident = await openIncident(objectsAt(root), {
+      baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+      tenantId: 'default',
+      opts: { incidentText: 'the billing cron charged twice on the 1st' },
+      by: { actor: 'cli', now: evalNow() },
+    });
+    await resolveOpenIncident(objectsAt(root), {
+      tenantId: 'default',
+      id: incident.id,
+      resolutionText: 'made the charge idempotent',
+      by: {
+        actor: 'cli',
+        now: evalNow(),
+      },
     });
     for (const id of [old.memoryId!, closed.memoryId!, incident.memoryId!]) pinTo90(root, id);
     unrecord(root, META_KEY.typedHalfLife);

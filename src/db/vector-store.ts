@@ -368,13 +368,7 @@ export interface ProposedMatches {
 /** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the caller
  * scans. */
 export interface VectorIndex {
-  matches(
-    db: DatabaseSyncLike,
-    query: readonly number[],
-    k: number,
-    where: string,
-    params: readonly (string | number)[],
-  ): ProposedMatches | undefined;
+  matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined;
 }
 
 /** The admitted vectors of length `?` among `memories m` rows passing `where`, narrowed by
@@ -412,7 +406,7 @@ export async function topVectorMatches(
   if (!best) return [];
   // A graph answers for the rows it covers and the rows above them are scored exactly; with no
   // graph every admitted vector is scored, a page at a time.
-  const proposed = index?.matches(db, query, k, where, params);
+  const proposed = index?.matches(db, { query, k, where, params });
   if (proposed === undefined) return offerPages(db, best, options, { key: 'memory_id', after: '' });
   for (const match of proposed.matches) best.seed(match);
   // A re-embed moves a row to a new rowid, so a row may come back above the covered one or on a

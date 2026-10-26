@@ -134,12 +134,16 @@ function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): Hand
   ];
 }
 
+interface InsertHandoffRowOptions {
+  readonly tenantId: string;
+  readonly handoff: Omit<SessionHandoff, 'updatedAt'>;
+  readonly stamp: ContinuityStamp | null;
+  readonly now: string;
+}
+
 function insertHandoffRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  handoff: Omit<SessionHandoff, 'updatedAt'>,
-  stamp: ContinuityStamp | null,
-  now: string,
+  { tenantId, handoff, stamp, now }: InsertHandoffRowOptions,
 ) {
   const columns: HandoffColumn[] = [
     ['session_id', handoff.sessionId],
@@ -169,7 +173,7 @@ export function saveSessionHandoff(
 
   // Scope is stored as given, since reads deny by default.
   // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.
-  const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
+  const result = insertHandoffRow(db, { tenantId, handoff, stamp, now });
 
   const id = Number(result.lastInsertRowid ?? 0);
   const row = cachedStatement(
@@ -183,13 +187,15 @@ export function saveSessionHandoff(
   return rowToSessionHandoff(row);
 }
 
-function handoffConditions(
-  tenantId: string,
-  sessionId: string | null | undefined,
-  opts: HandoffFilter,
-  key: ContinuityKey | null | undefined,
-  now: Date,
-) {
+interface HandoffConditionsOptions {
+  readonly tenantId: string;
+  readonly sessionId: string | null | undefined;
+  readonly opts: HandoffFilter;
+  readonly key: ContinuityKey | null | undefined;
+  readonly now: Date;
+}
+
+function handoffConditions({ tenantId, sessionId, opts, key, now }: HandoffConditionsOptions) {
   const owned = key ? continuityWhere(key) : null;
   const conditions: string[] = ['tenant_id = ?'];
   const params: Array<string | number> = [tenantId];
@@ -229,16 +235,26 @@ function handoffConditions(
   return { conditions, params };
 }
 
+export interface ReadLatestHandoffOptions {
+  readonly tenantId: string;
+  readonly sessionId?: string | null;
+  readonly opts?: HandoffFilter;
+  readonly key?: ContinuityKey | null;
+}
+
 /** Load the most recent handoff, optionally filtered by session ID. */
 export function readLatestHandoff(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId?: string | null,
-  opts: HandoffFilter = {},
-  key?: ContinuityKey | null,
+  { tenantId, sessionId, opts = {}, key }: ReadLatestHandoffOptions,
 ): SessionHandoff | null {
   assertTenantId('readLatestHandoff', tenantId);
-  const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key, handleNow(db));
+  const { conditions, params } = handoffConditions({
+    tenantId,
+    sessionId,
+    opts,
+    key,
+    now: handleNow(db),
+  });
   const row = cachedStatement(
     db,
     `
@@ -304,13 +320,13 @@ function replaceTranscriptHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
-  const { conditions, params } = handoffConditions(
+  const { conditions, params } = handoffConditions({
     tenantId,
-    handoff.sessionId,
-    {},
+    sessionId: handoff.sessionId,
+    opts: {},
     key,
-    handleNow(db),
-  );
+    now: handleNow(db),
+  });
   const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC, id DESC LIMIT 1`;
   const columns: HandoffColumn[] = [
@@ -332,22 +348,26 @@ function replaceTranscriptHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
+export interface WriteSessionEndHandoffOptions {
+  readonly files: StoreFiles;
+  readonly tenantId: string;
+  readonly request: SessionEndHandoffRequest;
+  readonly key: ContinuityKey | null | undefined;
+}
+
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace`
  * rewrites an earlier transcript read instead of adding a revision. Returns null when no source
  * is the session's, a newer handoff covers it, or the latest one is not transcript-derived or
  * already holds `derived`. */
 export function writeSessionEndHandoff(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  request: SessionEndHandoffRequest,
-  key: ContinuityKey | null | undefined,
+  { files, tenantId, request, key }: WriteSessionEndHandoffOptions,
 ): SessionHandoff | null {
   const { sessionId, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = readActiveTaskSnapshot(db, files, tenantId, key);
-  const existing = readLatestHandoff(db, tenantId, sessionId, {}, key);
+  const existing = readLatestHandoff(db, { tenantId, sessionId, opts: {}, key });
   const source = sessionEndSource(active, existing, request);
   if (!source) return null;
   const handoff = sessionEndHandoff(

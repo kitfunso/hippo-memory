@@ -238,7 +238,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     config: d.config,
     infra: d.infra,
   };
-  if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
+  if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.
   await parkAndAck(d, {
@@ -307,14 +307,22 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
   return body;
 }
 
+interface DispatchGitHubEventOptions {
+  readonly d: SignedDelivery;
+  readonly ctx: Context;
+  readonly body: SignedEnvelope;
+  readonly deliveryId: string;
+  readonly routing: DlqRouting;
+}
+
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
-async function dispatchGitHubEvent(
-  d: SignedDelivery,
-  ctx: Context,
-  body: SignedEnvelope,
-  deliveryId: string,
-  routing: DlqRouting,
-): Promise<boolean> {
+async function dispatchGitHubEvent({
+  d,
+  ctx,
+  body,
+  deliveryId,
+  routing,
+}: DispatchGitHubEventOptions): Promise<boolean> {
   const action = deliveryAction(d.eventName, body);
   if (action === null) return false;
 

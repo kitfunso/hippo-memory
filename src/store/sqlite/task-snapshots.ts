@@ -48,12 +48,16 @@ export function assertKeyedOnSharedStore(
   }
 }
 
+interface InsertSnapshotOptions {
+  readonly tenantId: string;
+  readonly snapshot: SnapshotInput;
+  readonly now: string;
+  readonly stamp: ContinuityStamp | null;
+}
+
 function insertSnapshot(
   db: DatabaseSyncLike,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  now: string,
-  stamp: ContinuityStamp | null,
+  { tenantId, snapshot, now, stamp }: InsertSnapshotOptions,
 ): number {
   const result = cachedStatement(
     db,
@@ -78,12 +82,16 @@ function insertSnapshot(
   return Number(result.lastInsertRowid ?? 0);
 }
 
+export interface SaveActiveTaskSnapshotOptions {
+  readonly files: StoreFiles;
+  readonly tenantId: string;
+  readonly snapshot: SnapshotInput;
+  readonly key?: ContinuityKey | null;
+}
+
 export function saveActiveTaskSnapshot(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  key?: ContinuityKey | null,
+  { files, tenantId, snapshot, key }: SaveActiveTaskSnapshotOptions,
 ): TaskSnapshot {
   const { hippoRoot } = files;
   assertTenantId('saveActiveTaskSnapshot', tenantId);
@@ -97,7 +105,7 @@ export function saveActiveTaskSnapshot(
       `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
         `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
-    const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
+    const inserted = insertSnapshot(db, { tenantId, snapshot, now, stamp });
     // An older binary's tenant-wide supersede would close other owners' rows, so the first owner
     // row shuts it out.
     if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);

@@ -200,7 +200,9 @@ describe('deny-only read sites', () => {
     };
     const db = openHippoDb(root);
     try {
-      expect(saveItems(db, storeFilesOf(root), ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(
+        saveItems(db, { files: storeFilesOf(root), ctx, log: () => {}, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(1);
       // SAFETY: the SELECT names only the content column.
       const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{
         content: string;

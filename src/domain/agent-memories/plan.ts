@@ -82,7 +82,13 @@ export function planContainer(input: PlanInput): ContainerPlan {
     refused: 0,
   };
   for (const item of input.items) {
-    planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
+    planItem({
+      input,
+      item,
+      rows: live.get(item.key) ?? [],
+      snaps: dormant.get(item.key) ?? [],
+      draft,
+    });
   }
 
   const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
@@ -98,13 +104,15 @@ export function planContainer(input: PlanInput): ContainerPlan {
   return { ...plan, writes: [...plan.writes, ...fresh] };
 }
 
-function planItem(
-  input: PlanInput,
-  item: PlanItem,
-  rows: readonly LiveRow[],
-  snaps: readonly DormantRow[],
-  draft: Draft,
-): void {
+interface PlanItemOptions {
+  readonly input: PlanInput;
+  readonly item: PlanItem;
+  readonly rows: readonly LiveRow[];
+  readonly snaps: readonly DormantRow[];
+  readonly draft: Draft;
+}
+
+function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
   const tagged = rows.filter((r) => r.tagged);
   if (item.refused) {
     draft.refused++;

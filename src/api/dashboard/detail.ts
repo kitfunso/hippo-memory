@@ -16,12 +16,16 @@ import type { MemoryConflictDetail, MemoryDetail } from './types.js';
 /** The reads a detail takes beyond the memory's own row. */
 export type DetailReads = Pick<DashboardReads, 'openConflictsOf' | 'hasVector'>;
 
+interface OpenConflictsOfOptions {
+  readonly reads: DetailReads;
+  readonly tenantId: string;
+  readonly entry: MemoryEntry;
+  readonly at: { readonly nowMs: number; readonly strength: StrengthModel };
+}
+
 async function openConflictsOf(
   store: Pick<HippoStore, 'entriesByIds'>,
-  reads: DetailReads,
-  tenantId: string,
-  entry: MemoryEntry,
-  at: { readonly nowMs: number; readonly strength: StrengthModel },
+  { reads, tenantId, entry, at }: OpenConflictsOfOptions,
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
   const otherId = (c: MemoryConflict): string =>
@@ -51,13 +55,17 @@ interface MemoryDetailOptions {
   readonly strength: StrengthModel;
 }
 
+interface BuildMemoryDetailOptions {
+  readonly reads: DetailReads;
+  readonly tenantId: string;
+  readonly entry: MemoryEntry;
+  readonly options: MemoryDetailOptions;
+}
+
 /** Full detail read fresh from the store, so the drawer is current inside the coalescing window. */
 async function buildMemoryDetail(
   store: Pick<HippoStore, 'entriesByIds'>,
-  reads: DetailReads,
-  tenantId: string,
-  entry: MemoryEntry,
-  options: MemoryDetailOptions,
+  { reads, tenantId, entry, options }: BuildMemoryDetailOptions,
 ): Promise<MemoryDetail> {
   const { snapshotId, nowMs, strength } = options;
   const f = memoryFacts(entry, nowMs, strength);
@@ -89,7 +97,7 @@ async function buildMemoryDetail(
     tenant: entry.tenantId,
     kind: entry.kind,
     embedded: await reads.hasVector(entry.id),
-    conflicts: await openConflictsOf(store, reads, tenantId, entry, { nowMs, strength }),
+    conflicts: await openConflictsOf(store, { reads, tenantId, entry, at: { nowMs, strength } }),
   };
 }
 
@@ -105,7 +113,12 @@ export async function dashboardMemoryDetail(
   if (entry === null || !isLiveMemory(entry)) return null;
   const { id: snapshotId } = await view.clock.at(ctx.tenantId, at.fresh);
   const options = { snapshotId, nowMs: at.nowMs, strength: strengthOf(ctx) };
-  return buildMemoryDetail(ctx.store, view.reads, ctx.tenantId, entry, options);
+  return buildMemoryDetail(ctx.store, {
+    reads: view.reads,
+    tenantId: ctx.tenantId,
+    entry,
+    options,
+  });
 }
 
 /** What a dashboard write reports: whether it committed, and the live entry it acted on, if any. */
@@ -126,5 +139,10 @@ export async function dashboardDetailAfterWrite(
   if (write.changed) view.clock.invalidate();
   if (write.entry === undefined) return null;
   const options = { snapshotId: view.clock.currentId(), nowMs, strength: strengthOf(ctx) };
-  return buildMemoryDetail(ctx.store, view.reads, ctx.tenantId, write.entry, options);
+  return buildMemoryDetail(ctx.store, {
+    reads: view.reads,
+    tenantId: ctx.tenantId,
+    entry: write.entry,
+    options,
+  });
 }

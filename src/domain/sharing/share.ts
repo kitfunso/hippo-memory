@@ -385,15 +385,23 @@ async function sharePage(
   return { shared, refused: copies.length - shared.length };
 }
 
+interface ShareCandidatesOptions {
+  readonly local: StoreHome;
+  readonly to: SharingStore;
+  readonly candidates: readonly MemoryEntry[];
+  readonly stats: AutoShareStats | undefined;
+  readonly now: Date;
+}
+
 // A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort
 // the autoShare sleep phase. The caller embeds once via embedAll() afterwards.
-async function shareCandidates(
-  local: StoreHome,
-  to: SharingStore,
-  candidates: readonly MemoryEntry[],
-  stats: AutoShareStats | undefined,
-  now: Date,
-): Promise<MemoryEntry[]> {
+async function shareCandidates({
+  local,
+  to,
+  candidates,
+  stats,
+  now,
+}: ShareCandidatesOptions): Promise<MemoryEntry[]> {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
   for (const page of chunked(candidates, READ_PAGE_ROWS)) {
@@ -439,13 +447,13 @@ export async function autoShare(
 
   if (dryRun) return candidates;
 
-  const shared = await shareCandidates(
-    await from.store.folderFiles.home(),
+  const shared = await shareCandidates({
+    local: await from.store.folderFiles.home(),
     to,
     candidates,
-    options.stats,
-    options.embed.clock(),
-  );
+    stats: options.stats,
+    now: options.embed.clock(),
+  });
 
   if (shared.length > 0) {
     void embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>

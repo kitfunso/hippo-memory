@@ -66,16 +66,24 @@ export function selectGraphSeeds(
     .map(([index, best]) => ({ index, strength: 1 / (best + 1) }));
 }
 
+interface BestStrengthAtDepthOptions {
+  readonly rels: ReadonlyArray<Relation>;
+  readonly frontierSet: ReadonlySet<number>;
+  readonly visited: ReadonlySet<number>;
+  readonly frontierStrength: ReadonlyMap<number, number>;
+  readonly originStrength: ReadonlyMap<number, number>;
+}
+
 // Pass 1: take the STRONGEST reaching-seed strength per new neighbor across ALL relations at this
 // depth before committing any to `visited`; marking mid-loop would lock a node to whichever
 // relation came first and drop a stronger seed's later edge.
-function bestStrengthAtDepth(
-  rels: ReadonlyArray<Relation>,
-  frontierSet: ReadonlySet<number>,
-  visited: ReadonlySet<number>,
-  frontierStrength: ReadonlyMap<number, number>,
-  originStrength: ReadonlyMap<number, number>,
-): Map<number, number> {
+function bestStrengthAtDepth({
+  rels,
+  frontierSet,
+  visited,
+  frontierStrength,
+  originStrength,
+}: BestStrengthAtDepthOptions): Map<number, number> {
   const bestStrengthThisDepth = new Map<number, number>();
   for (const rel of rels) {
     const fromIn = frontierSet.has(rel.fromEntityId);
@@ -100,6 +108,9 @@ function bestStrengthAtDepth(
 }
 
 interface ReachedEntityScoresOptions {
+  readonly tenantId: string;
+  readonly seedIds: number[];
+  readonly originStrength: ReadonlyMap<number, number>;
   readonly hops: number;
   readonly decay: number;
   readonly maxNeighbors: number;
@@ -109,12 +120,9 @@ interface ReachedEntityScoresOptions {
  * reached entity. */
 async function reachedEntityScores(
   store: GraphStore,
-  tenantId: string,
-  seedIds: number[],
-  originStrength: ReadonlyMap<number, number>,
   options: ReachedEntityScoresOptions,
 ): Promise<Map<number, number>> {
-  const { hops, decay, maxNeighbors } = options;
+  const { tenantId, seedIds, originStrength, hops, decay, maxNeighbors } = options;
   const visited = new Set<number>(seedIds); // seeds never re-reached
   const reachedScore = new Map<number, number>(); // entityId -> best score
   let frontier: number[] = seedIds;
@@ -128,13 +136,13 @@ async function reachedEntityScores(
       ids: frontier,
       limit,
     });
-    const bestStrengthThisDepth = bestStrengthAtDepth(
+    const bestStrengthThisDepth = bestStrengthAtDepth({
       rels,
       frontierSet,
       visited,
       frontierStrength,
       originStrength,
-    );
+    });
     const next = commitStrongest(bestStrengthThisDepth, {
       visited,
       reachedScore,
@@ -218,13 +226,14 @@ async function accumulateForStore(
 
   const originStrength = originStrengthOf(seedEntities, strengthByMemId);
 
-  const reachedScore = await reachedEntityScores(
-    store,
+  const reachedScore = await reachedEntityScores(store, {
     tenantId,
-    seedEntities.map((e) => e.id),
+    seedIds: seedEntities.map((e) => e.id),
     originStrength,
-    { hops, decay, maxNeighbors },
-  );
+    hops,
+    decay,
+    maxNeighbors,
+  });
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.

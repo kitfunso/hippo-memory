@@ -113,12 +113,16 @@ export interface ComposedRecall {
 type ScoredEntry = { entry: MemoryEntry; score: number };
 type SummaryDecoration = { entry: MemoryEntry; childIds: string[] };
 
+export interface PlanRecallOptions {
+  readonly opts: RecallOptions;
+  readonly all: MemoryEntry[];
+  readonly personalScope: string | undefined;
+  readonly profile: RecallProfile;
+}
+
 export function planRecall(
   ctx: Context,
-  opts: RecallOptions,
-  all: MemoryEntry[],
-  personalScope: string | undefined,
-  profile: RecallProfile,
+  { opts, all, personalScope, profile }: PlanRecallOptions,
 ): RecallPlan {
   const limit = opts.window?.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, personalScope);

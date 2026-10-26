@@ -289,17 +289,11 @@ export class GraphFileIndex implements VectorIndex {
     this.#hippoRoot = hippoRoot;
   }
 
-  matches(
-    db: DatabaseSyncLike,
-    query: readonly number[],
-    k: number,
-    where: string,
-    params: readonly (string | number)[],
-  ): ProposedMatches | undefined {
-    return this.#onFile(query.length, (file) => {
+  matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined {
+    return this.#onFile(ask.query.length, (file) => {
       const covered = coverage(db, file);
       if (covered === undefined || covered.stale > STALE_SHARE * file.stamp.nodes) return undefined;
-      const matches = fileMatches(db, file, covered.rowid, { query, k, where, params });
+      const matches = fileMatches(db, file, covered.rowid, ask);
       return matches && { matches, coveredRowid: covered.rowid };
     });
   }

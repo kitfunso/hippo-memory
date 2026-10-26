@@ -45,12 +45,16 @@ function insertDlqRow(
   return Number(result.lastInsertRowid);
 }
 
+interface ListDlqRowsOptions {
+  readonly table: DlqTable;
+  readonly selectColumns: string;
+  readonly tenantId: string;
+  readonly limit: number;
+}
+
 function listDlqRows(
   db: DatabaseSyncLike,
-  table: DlqTable,
-  selectColumns: string,
-  tenantId: string,
-  limit: number,
+  { table, selectColumns, tenantId, limit }: ListDlqRowsOptions,
 ): DlqRawRow[] {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
@@ -65,12 +69,16 @@ function listDlqRows(
   ).all(tenantId, limit) as DlqRawRow[];
 }
 
+interface ReadDlqRowOptions {
+  readonly table: DlqTable;
+  readonly selectColumns: string;
+  readonly tenantId: string;
+  readonly id: number;
+}
+
 function readDlqRow(
   db: DatabaseSyncLike,
-  table: DlqTable,
-  selectColumns: string,
-  tenantId: string,
-  id: number,
+  { table, selectColumns, tenantId, id }: ReadDlqRowOptions,
 ): DlqRawRow | null {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
@@ -143,9 +151,9 @@ export function dlqAccess<Item, Insert extends object>(
       return insertDlqRow(db, table, pairs);
     },
     list: (db, tenantId, limit) =>
-      listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
+      listDlqRows(db, { table, selectColumns, tenantId, limit }).map(toItem),
     get: (db, tenantId, id) => {
-      const row = readDlqRow(db, table, selectColumns, tenantId, id);
+      const row = readDlqRow(db, { table, selectColumns, tenantId, id });
       return row ? toItem(row) : null;
     },
     markRetried: (db, tenantId, id) => markDlqRetried(db, table, tenantId, id),

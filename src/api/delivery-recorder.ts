@@ -58,6 +58,14 @@ export interface DeliverySelected {
   promptRecall?: boolean;
 }
 
+/** Where and why a candidate fell out, with its score and tokens when the stage knew them. */
+export interface CandidateRejection {
+  readonly stage: DeliveryStage;
+  readonly reason: DeliveryRejectReason;
+  readonly score?: number;
+  readonly tokens?: number;
+}
+
 /** What contextGet reports while it selects. Every method only reads; none changes what is
  * selected. */
 export interface DeliveryObserver {
@@ -75,13 +83,7 @@ export interface DeliveryObserver {
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
-  reject(
-    entry: MemoryEntry,
-    stage: DeliveryStage,
-    reason: DeliveryRejectReason,
-    score?: number,
-    tokens?: number,
-  ): void;
+  reject(entry: MemoryEntry, rejection: CandidateRejection): void;
   dropMissing(
     before: readonly MemoryEntry[],
     after: readonly MemoryEntry[],
@@ -380,13 +382,21 @@ function sentFields(state: RecorderState, startedMs: number): SentFields {
   };
 }
 
-function buildEvent(
-  init: DeliveryRecorderInit,
-  payload: PayloadFacts,
-  state: RecorderState,
-  ts: string,
-  startedMs: number,
-): DeliveryEventInput {
+interface BuildEventOptions {
+  readonly init: DeliveryRecorderInit;
+  readonly payload: PayloadFacts;
+  readonly state: RecorderState;
+  readonly ts: string;
+  readonly startedMs: number;
+}
+
+function buildEvent({
+  init,
+  payload,
+  state,
+  ts,
+  startedMs,
+}: BuildEventOptions): DeliveryEventInput {
   const { facts, outcome } = state;
   const picked = pickedRows(state);
   const rejected = rejectedRows(state);
@@ -492,7 +502,7 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
   return {
     qualityDropped: (...args) => guard(() => markQualityDropped(state, ...args)),
     offer: (...args) => guard(() => offerEntries(state, ...args)),
-    reject: (e, stage, reason, score, tokens) =>
+    reject: (e, { stage, reason, score, tokens }) =>
       guard(() =>
         rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null }),
       ),
@@ -633,17 +643,25 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     dropMissing,
     gated,
     selected,
-    takeEvent: recorderTake(init, payload, state, ts, startedMs),
+    takeEvent: recorderTake({ init, payload, state, ts, startedMs }),
   };
 }
 
-function recorderTake(
-  init: DeliveryRecorderInit,
-  payload: PayloadFacts,
-  state: RecorderState,
-  ts: string,
-  startedMs: number,
-): DeliveryRecorder['takeEvent'] {
+interface RecorderTakeOptions {
+  readonly init: DeliveryRecorderInit;
+  readonly payload: PayloadFacts;
+  readonly state: RecorderState;
+  readonly ts: string;
+  readonly startedMs: number;
+}
+
+function recorderTake({
+  init,
+  payload,
+  state,
+  ts,
+  startedMs,
+}: RecorderTakeOptions): DeliveryRecorder['takeEvent'] {
   const fault = init.fault ?? null;
   return () => {
     if (state.flushed) return null;
@@ -656,7 +674,7 @@ function recorderTake(
       return null;
     }
     if (fault === 'build') throw new Error('injected build fault');
-    const input = buildEvent(init, payload, state, ts, startedMs);
+    const input = buildEvent({ init, payload, state, ts, startedMs });
     if (fault === 'flush') throw new Error('injected flush fault');
     return input;
   };

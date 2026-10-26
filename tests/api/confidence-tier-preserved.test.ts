@@ -78,7 +78,7 @@ describe('confidence tier survives sleep', () => {
     const marked = agedEntry({ confidence: 'stale' });
     const fresh = { ...agedEntry({ confidence: 'observed' }), lastRetrieved: now.toISOString() };
 
-    const picked = await sampleForReplay([aged, marked, fresh], 3, now, 42);
+    const picked = await sampleForReplay({ survivors: [aged, marked, fresh], count: 3, now, seed: 42 });
     expect(picked).toEqual([fresh.id]);
   });
 

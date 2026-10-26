@@ -119,7 +119,12 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       customer: 'Beta',
       note: 'b note',
     });
-    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), CUSTOMER_NOTE, {
+      tenantId: 'default',
+      id: b1.id,
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer

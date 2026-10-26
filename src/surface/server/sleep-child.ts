@@ -45,7 +45,7 @@ function sleepJob({
 }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = storeAt(hippoRoot);
   const reach = contextReach(
-    defaultReach(hippoRoot, store, undefined, storeAt, childHost),
+    defaultReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     resolveEmbeddingProvider,
   );

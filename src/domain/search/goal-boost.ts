@@ -29,14 +29,22 @@ export interface GoalStackBoost<R> {
   log: GoalRecallLogRow[];
 }
 
+interface GoalBoostMultiplierOptions {
+  readonly entry: MemoryEntry;
+  readonly tags: string[];
+  readonly matches: string[];
+  readonly goalsByTag: Map<string, Goal>;
+  readonly policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>;
+}
+
 /** The capped boost for one row whose tags match `matches` active goals. */
-function goalBoostMultiplier(
-  entry: MemoryEntry,
-  tags: string[],
-  matches: string[],
-  goalsByTag: Map<string, Goal>,
-  policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
-): number {
+function goalBoostMultiplier({
+  entry,
+  tags,
+  matches,
+  goalsByTag,
+  policiesByGoalId,
+}: GoalBoostMultiplierOptions): number {
   // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at
   // MAX_FINAL_MULTIPLIER.
   let multiplier = Math.min(
@@ -109,7 +117,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   if (active.goals.length === 0) return { results, log: [] };
 
   const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
-  const policiesByGoalId = active.policies;
+  const goals = { goalsByTag, policiesByGoalId: active.policies };
 
   // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker
   // property) so `boosted` stays exactly R[] with no cast-then-strip.
@@ -120,7 +128,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       const tags = r.entry.tags ?? [];
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
-      const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
+      const multiplier = goalBoostMultiplier({ entry: r.entry, tags, matches, ...goals });
       // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by
       // entry id; a pure read of r.score.
       if (trace) {

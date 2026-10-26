@@ -50,20 +50,23 @@ interface ResolvedGraphSource {
   sourceKind: SourceKind;
   memoryId: string | null;
 }
+export interface ResolveConsolidatedSourceOptions {
+  readonly tenantId: string;
+  readonly memoryId: string | null;
+  readonly sourceObject: SourceObjectRef | null;
+  readonly label: string;
+}
+
 export function resolveConsolidatedSource(
   db: DatabaseSyncLike,
-  tenantId: string,
-  memoryId: string | null,
-  sourceObject: SourceObjectRef | null,
-  label: string,
+  { tenantId, memoryId, sourceObject, label }: ResolveConsolidatedSourceOptions,
 ): ResolvedGraphSource {
-  const { memKind, effectiveMemoryId } = checkSourceMemory(
-    db,
+  const { memKind, effectiveMemoryId } = checkSourceMemory(db, {
     tenantId,
     memoryId,
     sourceObject,
     label,
-  );
+  });
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
 
   // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only
@@ -78,12 +81,16 @@ interface CheckedSourceMemory {
   effectiveMemoryId: string | null;
 }
 
+interface CheckSourceMemoryOptions {
+  readonly tenantId: string;
+  readonly memoryId: string | null;
+  readonly sourceObject: SourceObjectRef | null;
+  readonly label: string;
+}
+
 function checkSourceMemory(
   db: DatabaseSyncLike,
-  tenantId: string,
-  memoryId: string | null,
-  sourceObject: SourceObjectRef | null,
-  label: string,
+  { tenantId, memoryId, sourceObject, label }: CheckSourceMemoryOptions,
 ): CheckedSourceMemory {
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
@@ -160,13 +167,12 @@ export function insertEntityRow(
   const now = handleStamp(db);
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
-  const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(
-    db,
+  const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, {
     tenantId,
     memoryId,
     sourceObject,
-    'insertEntity',
-  );
+    label: 'insertEntity',
+  });
   const result = cachedStatement(
     db,
     `
@@ -234,13 +240,12 @@ export function updateEntityRow(
     entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
       ? null
       : { type: entity.sourceObjectType, id: entity.sourceObjectId };
-  const resolved = resolveConsolidatedSource(
-    db,
+  const resolved = resolveConsolidatedSource(db, {
     tenantId,
-    opts.memoryId ?? null,
+    memoryId: opts.memoryId ?? null,
     sourceObject,
-    'updateEntity',
-  );
+    label: 'updateEntity',
+  });
   cachedStatement(
     db,
     `UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`,
@@ -332,13 +337,12 @@ function relationSource(
   tenantId: string,
   opts: InsertRelationOptions,
 ): Pick<RelationRow, 'memory_id' | 'source_kind'> {
-  const resolved = resolveConsolidatedSource(
-    db,
+  const resolved = resolveConsolidatedSource(db, {
     tenantId,
-    opts.memoryId ?? null,
-    opts.sourceObject ?? null,
-    'insertRelation',
-  );
+    memoryId: opts.memoryId ?? null,
+    sourceObject: opts.sourceObject ?? null,
+    label: 'insertRelation',
+  });
   return { memory_id: resolved.memoryId, source_kind: resolved.sourceKind };
 }
 
@@ -376,12 +380,16 @@ export function entityIdBySource(
   return row?.id;
 }
 
+export interface RelationPresentOptions {
+  readonly tenantId: string;
+  readonly fromEntityId: number;
+  readonly toEntityId: number;
+  readonly relType: RelationType;
+}
+
 export function relationPresent(
   db: DatabaseSyncLike,
-  tenantId: string,
-  fromEntityId: number,
-  toEntityId: number,
-  relType: RelationType,
+  { tenantId, fromEntityId, toEntityId, relType }: RelationPresentOptions,
 ): boolean {
   const present = cachedStatement(
     db,

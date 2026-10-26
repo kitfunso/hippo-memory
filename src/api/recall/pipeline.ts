@@ -518,24 +518,26 @@ async function engineSearch(
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it
     // rather than read both stores again.
-    return rankBothStores(
+    return rankBothStores({
       query,
-      {
+      sources: {
         local: vectorSourceOf(ctx),
         global: vectorSourceOf({ ...ctx.global, embedderFor: ctx.embedderFor }),
       },
-      { local: pool.local, global: pool.global },
+      entries: { local: pool.local, global: pool.global },
       vectorCandidates,
-      { ...shared, ...ranking, localBump: search.localBump },
-    );
+      options: { ...shared, ...ranking, localBump: search.localBump },
+    });
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
   // asOf must reach physics, or later rows leak.
   const tuning = engineTuning(physics !== null, explain, ranking);
-  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, {
-    ...shared,
-    vectorCandidates,
-    ...tuning,
+  return searchByEngine({
+    source: vectorSourceOf(ctx),
+    query,
+    pool: pool.local,
+    physics,
+    options: { ...shared, vectorCandidates, ...tuning },
   });
 }
 
@@ -592,14 +594,18 @@ function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
+interface RescoreStep {
+  readonly stage: string;
+  readonly note?: string;
+}
+
 /** Multiplies each row's score by `multiplier(row)` (undefined leaves the row alone), traces the
  * step and re-sorts. */
 function rescore(
   opts: RankRecallOptions,
   results: SearchResult[],
-  stage: string,
+  { stage, note }: RescoreStep,
   multiplier: (r: SearchResult) => number | undefined,
-  note?: string,
 ): SearchResult[] {
   return byScore(
     results.map((r) => {
@@ -616,7 +622,7 @@ function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
   // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never
   // delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
-  state.results = rescore(opts, state.results, 'interference', (r) =>
+  state.results = rescore(opts, state.results, { stage: 'interference' }, (r) =>
     (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId))
       ? CONFLICT_PEER_MULTIPLIER
       : undefined,
@@ -625,7 +631,7 @@ function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
 
 function applyValueAware(opts: RankRecallOptions, state: RankState): void {
   // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
-  state.results = rescore(opts, state.results, 'value', (r) => {
+  state.results = rescore(opts, state.results, { stage: 'value' }, (r) => {
     const pos = r.entry.outcomePositive ?? 0;
     const neg = r.entry.outcomeNegative ?? 0;
     if (pos === 0 && neg === 0) return undefined;
@@ -638,7 +644,7 @@ function applyValueAware(opts: RankRecallOptions, state: RankState): void {
 }
 
 function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
-  state.results = rescore(opts, state.results, 'utility', (r) => {
+  state.results = rescore(opts, state.results, { stage: 'utility' }, (r) => {
     const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
     return (
       (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) *
@@ -719,14 +725,19 @@ function applyRecallReranker(
 ): Promise<SearchResult[]> {
   const rerankerOptions = { topK: reranker.topK, clef: config.runtime?.clef };
   // The reranker's score becomes `score` so later stages that sort by score keep its order.
-  return applyReranker(opts.query, results, reranker.fn, rerankerOptions, (r) =>
-    traced(
-      opts,
-      r,
-      { ...r, score: r.rerankScore },
-      { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
-    ),
-  );
+  return applyReranker({
+    query: opts.query,
+    ordered: results,
+    reranker: reranker.fn,
+    rerankerOptions,
+    onRanked: (r) =>
+      traced(
+        opts,
+        r,
+        { ...r, score: r.rerankScore },
+        { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
+      ),
+  });
 }
 
 async function applyGoalBoosts(
@@ -741,9 +752,8 @@ async function applyGoalBoosts(
     state.results = rescore(
       opts,
       state.results,
-      'goal',
+      { stage: 'goal', note: `--goal ${goalTag}` },
       (r) => (r.entry.tags?.includes(goalTag) ? GOAL_TAG_BOOST : undefined),
-      `--goal ${goalTag}`,
     );
     return;
   }
@@ -775,7 +785,7 @@ function applySalience(
   threshold: number,
   results: SearchResult[],
 ): SearchResult[] {
-  return rescore(opts, results, 'retrieval-count-downweight', (r) => {
+  return rescore(opts, results, { stage: 'retrieval-count-downweight' }, (r) => {
     const count = r.entry.retrievalCount ?? 0;
     return count >= threshold ? undefined : Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
   });

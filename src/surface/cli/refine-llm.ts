@@ -141,18 +141,22 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
     if (opts.limit !== undefined && processed >= opts.limit) break;
     processed++;
 
-    await refineOneEntry(ctx, reach, entry, opts, result);
+    await refineOneEntry(ctx, { reach, entry, opts, result });
   }
 
   return result;
 }
 
+interface RefineOneEntryOptions {
+  readonly reach: TenantReach;
+  readonly entry: MemoryEntry;
+  readonly opts: RefineOptions;
+  readonly result: RefineResult;
+}
+
 async function refineOneEntry(
   ctx: CliContext,
-  reach: TenantReach,
-  entry: MemoryEntry,
-  opts: RefineOptions,
-  result: RefineResult,
+  { reach, entry, opts, result }: RefineOneEntryOptions,
 ): Promise<void> {
   // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we
   // still refine using just the merged content.

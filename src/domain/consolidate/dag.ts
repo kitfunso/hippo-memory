@@ -138,13 +138,17 @@ function createClusterSummaryEntry(
   return summaryEntry;
 }
 
+interface SummarizeClusterOptions {
+  readonly cluster: FactCluster;
+  readonly home: PartitionHome;
+  readonly opts: DagSummaryOptions;
+  readonly result: DagBuildResult;
+}
+
 /** Summarize one eligible cluster, write the summary, then re-parent its members under it. */
 async function summarizeCluster(
   store: DagStore,
-  cluster: FactCluster,
-  home: PartitionHome,
-  opts: DagSummaryOptions,
-  result: DagBuildResult,
+  { cluster, home, opts, result }: SummarizeClusterOptions,
 ): Promise<void> {
   const summary = await generateDagSummary(
     cluster.label,
@@ -207,7 +211,7 @@ export async function buildDag(
     result.candidateClusters += eligibleClusters.length;
 
     for (const cluster of eligibleClusters) {
-      await summarizeCluster(store, cluster, home, opts, result);
+      await summarizeCluster(store, { cluster, home, opts, result });
     }
   }
 
@@ -406,13 +410,17 @@ function createProfileEntry(
   return profileEntry;
 }
 
+interface ProfileClusterOptions {
+  readonly cluster: FactCluster;
+  readonly home: PartitionHome;
+  readonly opts: DagSummaryOptions;
+  readonly result: EntityProfilesBuildResult;
+}
+
 /** Profile one eligible cluster of L2s, write it, then re-link the L2s under it. */
 async function profileCluster(
   store: DagStore,
-  cluster: FactCluster,
-  home: PartitionHome,
-  opts: DagSummaryOptions,
-  result: EntityProfilesBuildResult,
+  { cluster, home, opts, result }: ProfileClusterOptions,
 ): Promise<void> {
   const summary = await generateDagSummary(
     cluster.label,
@@ -479,7 +487,7 @@ export async function buildEntityProfiles(
     result.candidateClusters += eligible.length;
 
     for (const cluster of eligible) {
-      await profileCluster(store, cluster, home, opts, result);
+      await profileCluster(store, { cluster, home, opts, result });
     }
   }
 

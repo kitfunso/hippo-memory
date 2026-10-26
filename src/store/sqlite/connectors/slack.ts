@@ -67,7 +67,7 @@ export function markSlackEventSeen(
   eventId: string,
   memoryId: string | null,
 ): boolean {
-  return markEventSeen(db, SLACK_LOG, eventId, [], memoryId);
+  return markEventSeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
 }
 
 export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string | null {

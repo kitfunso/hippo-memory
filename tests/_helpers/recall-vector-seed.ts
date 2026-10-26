@@ -35,7 +35,7 @@ export async function seedVectors(root: string, url: string): Promise<void> {
       db,
       entries.filter((e) => !NO_PARTICLE.has(e.id)),
       index,
-      new Date(FAKE_NOW),
+      { now: new Date(FAKE_NOW) },
     );
   });
   writeFileSync(

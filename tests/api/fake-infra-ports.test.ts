@@ -118,7 +118,7 @@ function contextOn(fake: FakeInfra): ContextWith<OptionalGroup> {
     tenantId: 'default',
     actor: adminActor('fake-infra'),
     store,
-    reach: contextReach(sqliteReach(hippoRoot, store), loadConfig, fake.infra.embedderFor),
+    reach: contextReach(sqliteReach({ hippoRoot, store }), loadConfig, fake.infra.embedderFor),
     config: loadConfig(hippoRoot),
     infra: fake.infra,
   };

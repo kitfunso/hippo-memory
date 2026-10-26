@@ -143,7 +143,7 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
   return contextReach(
-    defaultReach(hippoRoot, store, undefined, cliStore, cliHost),
+    defaultReach({ hippoRoot, store, shared: undefined, openGlobal: cliStore, host: cliHost }),
     cliConfig,
     resolveEmbeddingProvider,
   );

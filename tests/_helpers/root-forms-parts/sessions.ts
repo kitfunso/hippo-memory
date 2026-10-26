@@ -33,7 +33,7 @@ export function saveActiveTaskSnapshot(
 ): TaskSnapshot {
   return onHandle(
     hippoRoot,
-    (db) => taskSnapshotsSql.saveActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, snapshot, key),
+    (db) => taskSnapshotsSql.saveActiveTaskSnapshot(db, { files: storeFilesOf(hippoRoot), tenantId, snapshot, key }),
     openStore,
   );
 }
@@ -62,7 +62,7 @@ export function loadLatestHandoff(
   opts: HandoffFilter = {},
   key?: ContinuityKey,
 ): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => handoffsSql.readLatestHandoff(db, tenantId, sessionId, opts, key), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.readLatestHandoff(db, { tenantId, sessionId, opts, key }), openStore);
 }
 
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
@@ -84,7 +84,11 @@ export function writeSessionEndHandoff(
 ): SessionHandoff | null {
   const files = storeFilesOf(hippoRoot);
   const { tenantId, key } = request;
-  return onHandle(hippoRoot, (db) => handoffsSql.writeSessionEndHandoff(db, files, tenantId, request, key), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => handoffsSql.writeSessionEndHandoff(db, { files, tenantId, request, key }),
+    openStore,
+  );
 }
 
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {

@@ -60,16 +60,24 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }
 
+export interface SampleForReplayOptions {
+  readonly survivors: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>;
+  readonly count: number;
+  readonly now: Date;
+  readonly seed?: number;
+  readonly model?: StrengthModel;
+}
+
 /** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`,
  * without replacement; deterministic for a seed. Weighted, not greedy: always taking the top-N
  * overfits. Holds ids, not rows. */
-export async function sampleForReplay(
-  survivors: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
-  count: number,
-  now: Date,
-  seed: number = Date.now() >>> 0,
-  model: StrengthModel = PRODUCTION_STRENGTH,
-): Promise<string[]> {
+export async function sampleForReplay({
+  survivors,
+  count,
+  now,
+  seed = Date.now() >>> 0,
+  model = PRODUCTION_STRENGTH,
+}: SampleForReplayOptions): Promise<string[]> {
   if (count <= 0) return [];
   const outcomeAblated = model.rewardSlope === 0;
   const ids: string[] = [];

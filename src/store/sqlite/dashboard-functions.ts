@@ -267,13 +267,14 @@ function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel):
 
 type Step = (t: Float64Array, v: readonly SqlValue[], rules: StoreModel) => Float64Array;
 
-function tally(
-  db: DatabaseSyncLike,
-  name: string,
-  start: () => Float64Array,
-  step: Step,
-  rules: StoreModel,
-): void {
+interface TallyOptions {
+  readonly name: string;
+  readonly start: () => Float64Array;
+  readonly step: Step;
+  readonly rules: StoreModel;
+}
+
+function tally(db: DatabaseSyncLike, { name, start, step, rules }: TallyOptions): void {
   db.aggregate<Float64Array>(name, {
     start,
     step: (t, ...v) => step(t, v, rules),
@@ -301,9 +302,19 @@ export function useDashboardFunctions(db: DatabaseSyncLike, rules: StoreModel): 
     utf16Key(listHead(text(content)).head.toLowerCase()),
   );
   db.function('hippo_text_key', fixed, utf16Key);
-  tally(db, 'hippo_project_tally', newProjectTally, addProjectRow, rules);
-  tally(db, 'hippo_filter_tally', () => new Float64Array(F_SIZE), addFilteredRow, rules);
-  tally(db, 'hippo_scatter_grid', () => new Float64Array(GRID_CELLS * 4), addGridRow, rules);
+  tally(db, { name: 'hippo_project_tally', start: newProjectTally, step: addProjectRow, rules });
+  tally(db, {
+    name: 'hippo_filter_tally',
+    start: () => new Float64Array(F_SIZE),
+    step: addFilteredRow,
+    rules,
+  });
+  tally(db, {
+    name: 'hippo_scatter_grid',
+    start: () => new Float64Array(GRID_CELLS * 4),
+    step: addGridRow,
+    rules,
+  });
 }
 
 /** An aggregate's Float64Array state, read back from the BLOB SQLite returns. */

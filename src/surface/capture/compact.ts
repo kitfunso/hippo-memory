@@ -123,13 +123,13 @@ async function runPreCompact(
   const { input, vscode } = accepted;
   const { stdinText, runtime = 'claude-code' } = options;
   const closable = runtime === 'claude-code' && !vscode;
-  const recordId = await markCompactionBoundary(
-    store.compactionHooks,
+  const recordId = await markCompactionBoundary({
+    hooks: store.compactionHooks,
     options,
     logFile,
     input,
     closable,
-  );
+  });
 
   const transcriptPath = resolvePreCompactTranscript(
     input.transcriptPath,
@@ -147,7 +147,13 @@ async function runPreCompact(
   if (!derived) return;
 
   const { sessionId } = input;
-  await saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
+  await saveDerivedSnapshot(store, {
+    tenantId: options.tenantId,
+    logFile,
+    sessionId,
+    recordId,
+    derived,
+  });
 }
 
 /** The compaction payload this entry runs, or null after logging why it skips it. */
@@ -201,15 +207,23 @@ async function otherEntrySkip(
   return null;
 }
 
+interface MarkCompactionBoundaryOptions {
+  readonly hooks: CompactionHooks;
+  readonly options: PreCompactOptions;
+  readonly logFile: string;
+  readonly input: CaptureInput;
+  readonly closable: boolean;
+}
+
 /** Starts the compaction record when the host will close one (`closable`), then tells
  * `onBoundary` what was printed; the record id, or null without a record. */
-async function markCompactionBoundary(
-  hooks: CompactionHooks,
-  options: PreCompactOptions,
-  logFile: string,
-  input: CaptureInput,
-  closable: boolean,
-): Promise<string | null> {
+async function markCompactionBoundary({
+  hooks,
+  options,
+  logFile,
+  input,
+  closable,
+}: MarkCompactionBoundaryOptions): Promise<string | null> {
   const { sessionId } = input;
   // The record is the "something saved before every compaction", so it lands even when no snapshot
   // is derivable later. Copilot has no PostCompact hook to close a record, so its compactions get
@@ -301,12 +315,17 @@ function resolvePreCompactTranscript(
   return transcriptPath;
 }
 
+interface DerivedSnapshot {
+  readonly tenantId: string;
+  readonly logFile: string;
+  readonly sessionId: string | null;
+  readonly recordId: string | null;
+  readonly derived: WorkingState;
+}
+
 async function saveDerivedSnapshot(
   { compactionHooks: hooks, sessions }: CompactionStore,
-  tenantId: string,
-  logFile: string,
-  { sessionId, recordId }: { sessionId: string | null; recordId: string | null },
-  derived: WorkingState,
+  { tenantId, logFile, sessionId, recordId, derived }: DerivedSnapshot,
 ): Promise<void> {
   let existing: TaskSnapshot | null = null;
   try {

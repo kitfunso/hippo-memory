@@ -267,9 +267,10 @@ async function renderAdditionalContext(view: ContextView): Promise<RenderedConte
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
+  const staticCount = staticItems.length;
   const sendStatic =
     staticBlock.trim().length > 0 &&
-    !(await skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length));
+    !(await skipUnchangedStatic({ view, surface, staticBlock, recallBlock, staticCount }));
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext =
@@ -292,22 +293,30 @@ async function renderAdditionalContext(view: ContextView): Promise<RenderedConte
     await recordAdditionalContextRows(
       view,
       surface,
-      { text: finalStatic, items: staticItems.length },
+      { text: finalStatic, items: staticCount },
       { text: recallBlock, items: recallItems.length },
     );
   }
   return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
 
+interface SkipUnchangedStaticOptions {
+  readonly view: ContextView;
+  readonly surface: TokenSurface;
+  readonly staticBlock: string;
+  readonly recallBlock: string;
+  readonly staticCount: number;
+}
+
 /** True, after booking the skip row, when the hook may omit a static block this session already
  * holds. */
-async function skipUnchangedStatic(
-  view: ContextView,
-  surface: TokenSurface,
-  staticBlock: string,
-  recallBlock: string,
-  staticCount: number,
-): Promise<boolean> {
+async function skipUnchangedStatic({
+  view,
+  surface,
+  staticBlock,
+  recallBlock,
+  staticCount,
+}: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block

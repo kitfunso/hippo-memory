@@ -189,18 +189,20 @@ function listRecentRows(
     kept = rows.filter(keep);
     if (kept.length >= needed || rows.length < window) return kept;
   }
-  return [...kept, ...keptPastWindow(read, own, rows, needed - kept.length, keep)];
+  return [...kept, ...keptPastWindow({ read, own, rows, wanted: needed - kept.length, keep })];
+}
+
+interface KeptPastWindowOptions {
+  readonly read: ReadNewest;
+  readonly own: SqlFragment;
+  readonly rows: readonly MemoryEntry[];
+  readonly wanted: number;
+  readonly keep: (e: MemoryEntry) => boolean;
 }
 
 // A window of refused rows can hide older ones, so read on in keyset pages, each four times the
 // last, until enough are kept.
-function keptPastWindow(
-  read: ReadNewest,
-  own: SqlFragment,
-  rows: readonly MemoryEntry[],
-  wanted: number,
-  keep: (e: MemoryEntry) => boolean,
-): MemoryEntry[] {
+function keptPastWindow({ read, own, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
   const out: MemoryEntry[] = [];
   let last = rows[rows.length - 1];
   for (let size = rows.length * 4; out.length < wanted; size *= 4) {
@@ -426,16 +428,20 @@ export function listContextCandidates(
 // being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
+export interface ListTextsHoldingOptions {
+  readonly tenantId: TenantId;
+  readonly texts: readonly string[];
+  readonly project?: readonly string[];
+  readonly admit?: SqlFragment;
+}
+
 /** Tenant rows that may hold one of `texts` and that `admit` passes (default: team-visible):
  * equal to a text apart from spacing, or a sleep-merged row holding one. With `project`, only
  * rows carrying one of those names plus user-global rows, as listContextCandidates' filter. A
  * superset the caller checks again with heldTextKeys. */
 export function listTextsHolding(
   db: DatabaseSyncLike,
-  tenantId: TenantId,
-  texts: readonly string[],
-  project?: readonly string[],
-  admit: SqlFragment = TEAM_VISIBLE,
+  { tenantId, texts, project, admit = TEAM_VISIBLE }: ListTextsHoldingOptions,
 ): HeldText[] {
   const origin =
     project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
@@ -513,14 +519,18 @@ export function tallySources(db: DatabaseSyncLike, tenantId: TenantId): SourceTa
 export const jsonList = (column: string): string =>
   `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
+export interface StrengthTalliesOptions {
+  readonly rules: StoreModel;
+  readonly tenantId: string;
+  readonly now: Date;
+  readonly atRiskBelow: number;
+}
+
 /** calculateStrength over every row of a tenant in one aggregate pass, no row loaded, on a
  * handle the caller holds so it can share a snapshot with other reads. */
 export function strengthTallies(
   db: DatabaseSyncLike,
-  rules: StoreModel,
-  tenantId: string,
-  now: Date,
-  atRiskBelow: number,
+  { rules, tenantId, now, atRiskBelow }: StrengthTalliesOptions,
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
   const bound = strengthSql(now, rules.strength);

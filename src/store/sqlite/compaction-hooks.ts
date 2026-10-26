@@ -108,10 +108,9 @@ function recordStep(step: SaveStep): CompactionRecord | null {
 function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   const { meta, files, log } = step;
   try {
-    step.result.written = saveItems(
-      step.db,
+    step.result.written = saveItems(step.db, {
       files,
-      {
+      ctx: {
         tenantId: step.tenantId,
         recordId: record?.id ?? null,
         sessionId: meta.sessionId,
@@ -120,8 +119,8 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
         items: step.text.items,
       },
       log,
-      step.baseHalfLifeDays,
-    );
+      baseHalfLifeDays: step.baseHalfLifeDays,
+    });
   } catch (err) {
     if (!isSqliteBusy(err) || record === null) throw err;
     // The record already holds the items; sleep finishes them.
@@ -170,7 +169,12 @@ function saveStalled(
     try {
       const record = toRecord(row);
       if (record === null) continue;
-      saveItems(db, files, itemContext(tenantId, record, record.items), log, opts.baseHalfLifeDays);
+      saveItems(db, {
+        files,
+        ctx: itemContext(tenantId, record, record.items),
+        log,
+        baseHalfLifeDays: opts.baseHalfLifeDays,
+      });
       saved++;
     } catch (err) {
       if (isSqliteBusy(err)) {
@@ -205,13 +209,12 @@ function saveRecordItems(
 ): ItemsSaved {
   const notes: string[] = [];
   try {
-    saveItems(
-      db,
+    saveItems(db, {
       files,
-      itemContext(tenantId, record, record.items),
-      noteTo(notes),
-      opts.baseHalfLifeDays,
-    );
+      ctx: itemContext(tenantId, record, record.items),
+      log: noteTo(notes),
+      baseHalfLifeDays: opts.baseHalfLifeDays,
+    });
     return { notes, failure: null };
   } catch (err) {
     return { notes, failure: { busy: isSqliteBusy(err), message: errorMessage(err) } };
@@ -265,7 +268,7 @@ function fillRecord(
     log(`${record.id} was filled by another process`);
     return false;
   }
-  saveItems(db, files, itemContext(tenantId, record, text.items), log, baseHalfLifeDays);
+  saveItems(db, { files, ctx: itemContext(tenantId, record, text.items), log, baseHalfLifeDays });
   return true;
 }
 

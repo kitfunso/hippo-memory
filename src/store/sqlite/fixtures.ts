@@ -84,7 +84,13 @@ export function batchWriteAndDeleteInFolder(
   }
   return onHandle(
     hippoRoot,
-    (db) => batches.batchWriteAndDelete(db, storeFilesOf(hippoRoot), toWrite, toDeleteIds, opts),
+    (db) =>
+      batches.batchWriteAndDelete(db, {
+        files: storeFilesOf(hippoRoot),
+        toWrite,
+        toDeleteIds,
+        opts,
+      }),
     openStore,
   );
 }

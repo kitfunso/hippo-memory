@@ -143,7 +143,7 @@ describe('heartbeatVerdict', () => {
     const failedAuth = limiter(0.1);
     failedAuth.check('203.0.113.9');
     const store = sqliteStore(root);
-    const reachOf = (shared: boolean) => sqliteReach(root, store, shared);
+    const reachOf = (shared: boolean) => sqliteReach({ hippoRoot: root, store, shared });
     const opts = { hippoRoot: root, store, reachOf, failedAuthLimiter: failedAuth };
     expect(await heartbeatVerdict(streamReq(plaintext, '203.0.113.9'), opts)).toBe('unavailable');
     const wrong = `${plaintext.slice(0, plaintext.indexOf('.'))}.${'a'.repeat(32)}`;

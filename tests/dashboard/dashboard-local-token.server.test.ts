@@ -201,7 +201,7 @@ describe('dashboard local access token', () => {
     const savedTty = process.stdout.isTTY;
     process.stdout.isTTY = tty;
     try {
-      printDashboardBanner(hippoRoot, 4567, 'a-ticket-abcdef', null);
+      printDashboardBanner({ hippoRoot, port: 4567, ticket: 'a-ticket-abcdef', staticRoot: null });
       return lines;
     } finally {
       process.stdout.isTTY = savedTty;
@@ -227,7 +227,7 @@ describe('dashboard local access token', () => {
   it('writes a URL that opens the dashboard once and never carries the per-start token', async () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      printDashboardBanner(hippoRoot, port, ticket(), null);
+      printDashboardBanner({ hippoRoot, port, ticket: ticket(), staticRoot: null });
     } finally {
       spy.mockRestore();
     }
@@ -244,7 +244,7 @@ describe('dashboard local access token', () => {
   it('keeps the file in the store folder off Windows and in the profile-private global folder on Windows', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      printDashboardBanner(hippoRoot, 4567, 'tok-win', null, 'win32');
+      printDashboardBanner({ hippoRoot, port: 4567, ticket: 'tok-win', staticRoot: null, platform: 'win32' });
     } finally {
       spy.mockRestore();
     }

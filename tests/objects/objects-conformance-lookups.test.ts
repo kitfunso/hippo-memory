@@ -37,16 +37,16 @@ interface PutOptions {
 function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOptions = {}) {
   const { at = T1, tenantId = TENANT_A } = opts;
   const mirror: MemoryEntry = {
-    ...objectMirror(
-      loadConfig(fixture.dir).defaultHalfLifeDays,
+    ...objectMirror({
+      baseHalfLifeDays: loadConfig(fixture.dir).defaultHalfLifeDays,
       tenantId,
-      kind,
-      {
+      source: kind,
+      text: {
         content: `${kind} at ${at}`,
         tags: opts.tags ?? [],
       },
-      new Date(),
-    ),
+      now: new Date(),
+    }),
     ...opts.mirror,
   };
   const saved: ObjectSave<K> = { mirror, fields, supersedesId: opts.supersedesId, actor: ACTOR, at };

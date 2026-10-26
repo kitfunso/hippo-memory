@@ -12,13 +12,19 @@ const MAX_LINKED_MEMORY_IDS = 256;
 
 function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined {
   const entry = `each linkedMemoryIds entry must be a non-empty string <= ${MAX_SHORT_FIELD_LEN} chars`;
-  return getStringArray(body, 'linkedMemoryIds', MAX_LINKED_MEMORY_IDS, MAX_SHORT_FIELD_LEN, {
-    nonEmpty: 'raw',
-    messages: {
-      notArray: 'linkedMemoryIds must be an array of memory ids',
-      itemType: entry,
-      empty: entry,
-      length: entry,
+  return getStringArray({
+    obj: body,
+    key: 'linkedMemoryIds',
+    maxItems: MAX_LINKED_MEMORY_IDS,
+    maxItemLen: MAX_SHORT_FIELD_LEN,
+    rule: {
+      nonEmpty: 'raw',
+      messages: {
+        notArray: 'linkedMemoryIds must be an array of memory ids',
+        itemType: entry,
+        empty: entry,
+        length: entry,
+      },
     },
   });
 }

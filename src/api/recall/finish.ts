@@ -252,17 +252,25 @@ export function getOrCreateRing(
   return ring;
 }
 
+export interface AppendRecallOptions {
+  readonly ring: RingBuffer;
+  readonly queryHash: number;
+  readonly topMemoryId: string | null;
+  readonly now: Date;
+  readonly anchoredOn?: string;
+}
+
 /**
  * Appends a recall to a ring; `anchoredOn` is the memoryId of the hint that fired on THIS recall
  * (or undefined), read by detectAnchoring for cooldown.
  */
-export function appendRecall(
-  ring: RingBuffer,
-  queryHash: number,
-  topMemoryId: string | null,
-  now: Date,
-  anchoredOn?: string,
-): void {
+export function appendRecall({
+  ring,
+  queryHash,
+  topMemoryId,
+  now,
+  anchoredOn,
+}: AppendRecallOptions): void {
   const entry: RecallHistoryEntry = {
     queryHash,
     topMemoryId,
@@ -333,15 +341,17 @@ function peekSessionRing(
   return ring ? snapshotRing(ring) : [];
 }
 
+export interface NoteRecallOptions {
+  readonly ring: RingBuffer;
+  readonly query: string;
+  readonly topId: string | null;
+  readonly anchoredOn: string | undefined;
+  readonly now: Date;
+}
+
 /** Records this recall's top row and hint, which the next recall's cooldown reads. */
-export function noteRecall(
-  ring: RingBuffer,
-  query: string,
-  topId: string | null,
-  anchoredOn: string | undefined,
-  now: Date,
-): void {
-  appendRecall(ring, hashQueryText(query), topId, now, anchoredOn);
+export function noteRecall({ ring, query, topId, anchoredOn, now }: NoteRecallOptions): void {
+  appendRecall({ ring, queryHash: hashQueryText(query), topMemoryId: topId, now, anchoredOn });
 }
 
 /** Whom a recall audit row names. */
@@ -532,7 +542,13 @@ export async function recordShownRecall(
   // cannot LRU-evict a live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
   if (ring) {
-    noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn, ctx.infra.clock());
+    noteRecall({
+      ring,
+      query: shown.query,
+      topId: shown.ids[0] ?? null,
+      anchoredOn: shown.anchoredOn,
+      now: ctx.infra.clock(),
+    });
   }
   const items = how.counts === 'none' ? 0 : shown.ids.length;
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.

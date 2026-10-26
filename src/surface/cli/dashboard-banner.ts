@@ -14,16 +14,24 @@ function dashboardUrlFile(hippoRoot: string, platform: NodeJS.Platform): string 
   return path.join(platform === 'win32' ? hippoHomeDir() : hippoRoot, DASHBOARD_URL_FILE);
 }
 
+export interface PrintDashboardBannerOptions {
+  readonly hippoRoot: string;
+  readonly port: number;
+  readonly ticket: string;
+  readonly staticRoot: string | null;
+  readonly platform?: NodeJS.Platform;
+}
+
 /** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a
  * terminal, like a captured log, never shows the ticket, since whoever spends it first can read
  * every memory. */
-export function printDashboardBanner(
-  hippoRoot: string,
-  port: number,
-  ticket: string,
-  staticRoot: string | null,
-  platform: NodeJS.Platform = process.platform,
-): void {
+export function printDashboardBanner({
+  hippoRoot,
+  port,
+  ticket,
+  staticRoot,
+  platform = process.platform,
+}: PrintDashboardBannerOptions): void {
   const file = dashboardUrlFile(hippoRoot, platform);
   fs.mkdirSync(path.dirname(file), PRIVATE_DIR);
   // Created fresh, so its mode holds even where an older file had a wider one.

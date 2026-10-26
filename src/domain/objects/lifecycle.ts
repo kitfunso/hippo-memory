@@ -91,26 +91,38 @@ function closed<K extends ObjectKind>(
   );
 }
 
+/** Which object to retire, and who retires it when. */
+export interface CloseObjectOptions extends ActedBy {
+  readonly tenantId: string;
+  readonly id: number;
+}
+
 /** Retires one object; its mirror memory stays as saved. */
 export async function closeObject<K extends ObjectKind>(
   objects: Objects,
   d: ObjectDescriptor<K>,
-  tenantId: string,
-  id: number,
-  by: ActedBy,
+  { tenantId, id, actor, now }: CloseObjectOptions,
 ): Promise<ObjectByKind[K]> {
-  const close = closing(d, tenantId, by.actor, by.now);
+  const close = closing(d, tenantId, actor, now);
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
+export interface ObjectMirrorOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly source: ObjectKind;
+  readonly text: { readonly content: string; readonly tags: readonly string[] };
+  readonly now: Date;
+}
+
 /** The memory a typed object writes beside its row, so recall finds the object. */
-export function objectMirror(
-  baseHalfLifeDays: number,
-  tenantId: string,
-  source: ObjectKind,
-  text: { readonly content: string; readonly tags: readonly string[] },
-  now: Date,
-): MemoryEntry {
+export function objectMirror({
+  baseHalfLifeDays,
+  tenantId,
+  source,
+  text,
+  now,
+}: ObjectMirrorOptions): MemoryEntry {
   return createMemory(
     text.content,
     {
@@ -146,7 +158,13 @@ function objectSave<K extends SavableKind>(
   kind: K,
   draft: ObjectDraft<K>,
 ): ObjectSave<K> {
-  const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft, site.now);
+  const mirror = objectMirror({
+    baseHalfLifeDays: site.baseHalfLifeDays,
+    tenantId: site.tenantId,
+    source: kind,
+    text: draft,
+    now: site.now,
+  });
   return {
     mirror,
     fields: draft.fields,

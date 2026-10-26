@@ -143,7 +143,7 @@ function seedVectors(root: string): void {
   try {
     upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
-    resetAllPhysicsState(db, entries, index, new Date(FAKE_NOW));
+    resetAllPhysicsState(db, entries, index, { now: new Date(FAKE_NOW) });
   } finally {
     closeHippoDb(db);
   }
@@ -368,7 +368,9 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
           const sessionId = activeSnapshot?.sessionId ?? undefined;
           return {
             activeSnapshot,
-            sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined) : null,
+            sessionHandoff: sessionId
+              ? readLatestHandoff(db, { tenantId, sessionId, opts: {}, key: key ?? undefined })
+              : null,
             recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: 5 }) : [],
           };
         }, openStore),

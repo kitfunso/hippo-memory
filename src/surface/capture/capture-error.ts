@@ -36,19 +36,27 @@ export async function captureToolFailure(
     outcome = 'skip' in lesson ? lesson.skip : await storeLesson(target, lesson.text);
     return outcome;
   } finally {
-    await logAndReport(target, payload, lesson, outcome, onLogged);
+    await logAndReport({ target, payload, lesson, outcome, onLogged });
   }
+}
+
+interface LogAndReportOptions {
+  readonly target: FailureTarget;
+  readonly payload: JsonValue;
+  readonly lesson: FailureReading;
+  readonly outcome: FailureOutcome;
+  readonly onLogged: ((failureId: number | null) => void) | undefined;
 }
 
 /** Logs the failure, then tells the caller the row id, or null when the write threw; the throw
  * goes on. */
-async function logAndReport(
-  target: FailureTarget,
-  payload: JsonValue,
-  lesson: FailureReading,
-  outcome: FailureOutcome,
-  onLogged: ((failureId: number | null) => void) | undefined,
-): Promise<void> {
+async function logAndReport({
+  target,
+  payload,
+  lesson,
+  outcome,
+  onLogged,
+}: LogAndReportOptions): Promise<void> {
   let id: number;
   try {
     id = await logFailure(target, payload, lesson, outcome);

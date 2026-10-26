@@ -160,14 +160,19 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
   readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
+/** Which parked row to replay; `force` skips the signature check. */
+export interface ReplayTarget {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly force: boolean;
+}
+
 /** Re-runs a parked row under today's secret and routing; every attempt past the read is counted
  * once, except a missing signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
   store: HippoStore,
-  tenantId: string,
-  id: number,
-  force: boolean,
+  { tenantId, id, force }: ReplayTarget,
 ): Promise<ReplayResult> {
   const row = await replayableRow(store, steps.dlq.connector, tenantId, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);

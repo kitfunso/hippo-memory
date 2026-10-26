@@ -51,7 +51,12 @@ export async function handleDashboard({
     reportListenFailure(port, err.cause);
     return;
   }
-  printDashboardBanner(hippoRoot, dashboard.port, dashboard.ticket(), builtStaticRoot());
+  printDashboardBanner({
+    hippoRoot,
+    port: dashboard.port,
+    ticket: dashboard.ticket(),
+    staticRoot: builtStaticRoot(),
+  });
   // A later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C

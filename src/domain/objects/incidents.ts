@@ -52,26 +52,34 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   closeRefusal: 'already closed',
 };
 
+interface IncidentOpenOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly opts: SaveIncidentOptions;
+  readonly actor: string;
+  readonly now: Date;
+}
+
 /** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new
  * mirror starts on. */
-function incidentOpen(
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveIncidentOptions,
-  actor: string,
-  now: Date,
-): IncidentOpen {
+function incidentOpen({
+  baseHalfLifeDays,
+  tenantId,
+  opts,
+  actor,
+  now,
+}: IncidentOpenOptions): IncidentOpen {
   assertTenantId('openIncident', tenantId);
   const incidentText = requireText(opts.incidentText, MAX_SHORT_FIELD_LEN, 'incidentText');
   const at = now.toISOString();
   const content = opts.context ? `${incidentText}\n\nContext: ${opts.context}` : incidentText;
-  const mirror = objectMirror(
+  const mirror = objectMirror({
     baseHalfLifeDays,
     tenantId,
-    'incident',
-    { content, tags: opts.extraTags ?? [] },
+    source: 'incident',
+    text: { content, tags: opts.extraTags ?? [] },
     now,
-  );
+  });
   const fields = {
     incidentText,
     context: opts.context ?? undefined,
@@ -89,18 +97,22 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
   throw new Error('failed to reload saved incident row');
 }
 
+export interface OpenIncidentOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly opts: SaveIncidentOptions;
+  readonly by: ActedBy;
+}
+
 /** Opens an incident with its mirror memory (content "<text>
  *
  * Context: <context>" when context is given) in one write; a linked memory outside the tenant
  * refuses the whole write. */
 export async function openIncident(
   objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveIncidentOptions,
-  by: ActedBy,
+  { baseHalfLifeDays, tenantId, opts, by }: OpenIncidentOptions,
 ): Promise<Incident> {
-  const open = incidentOpen(baseHalfLifeDays, tenantId, opts, by.actor, by.now);
+  const open = incidentOpen({ baseHalfLifeDays, tenantId, opts, actor: by.actor, now: by.now });
   return opened(tenantId, await objects.saveObject(tenantId, 'incident', open));
 }
 
@@ -127,14 +139,18 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   );
 }
 
+export interface ResolveOpenIncidentOptions {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly resolutionText: string;
+  readonly by: ActedBy;
+}
+
 /** Moves an open incident to resolved and keeps it on record; a missing incident and one that is
  * not open are told apart. */
 export async function resolveOpenIncident(
   objects: Objects,
-  tenantId: string,
-  id: number,
-  resolutionText: string,
-  by: ActedBy,
+  { tenantId, id, resolutionText, by }: ResolveOpenIncidentOptions,
 ): Promise<Incident> {
   return resolved(
     tenantId,

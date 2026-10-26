@@ -111,18 +111,27 @@ export async function captureFailureForCaller(
     return { outcome };
   } finally {
     // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
-    await logOutcome(ctx, { ...req, text: failure.text }, key, logged, earlier !== null);
+    await logOutcome(ctx, {
+      req: { ...req, text: failure.text },
+      key,
+      outcome: logged,
+      retried: earlier !== null,
+    });
   }
+}
+
+interface LogOutcomeOptions {
+  readonly req: CallerFailureRequest;
+  readonly key: ContinuityKey;
+  readonly outcome: FailureOutcome;
+  readonly retried: boolean;
 }
 
 /** Runs after the outcome in its own try, so a log error never hides the store's error or its
  * outcome. */
 async function logOutcome(
   ctx: Context,
-  req: CallerFailureRequest,
-  key: ContinuityKey,
-  outcome: FailureOutcome,
-  retried: boolean,
+  { req, key, outcome, retried }: LogOutcomeOptions,
 ): Promise<void> {
   try {
     // The request id allows one row, so a retry rewrites the first try's outcome.

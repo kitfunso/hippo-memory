@@ -508,13 +508,21 @@ function churnCommitLookups(
   return { resolveAnchorCommit, symbolsPresentAt, scriptsAt };
 }
 
-function loadChurnGitView(
-  repo: ChurnRepo,
-  projectName: string,
-  candidates: readonly ChurnCandidate[],
-  anchorOf: (entry: MemoryEntry) => string,
-  needs: ChurnNeeds,
-): ChurnGitView {
+interface LoadChurnGitViewOptions {
+  readonly repo: ChurnRepo;
+  readonly projectName: string;
+  readonly candidates: readonly ChurnCandidate[];
+  readonly anchorOf: (entry: MemoryEntry) => string;
+  readonly needs: ChurnNeeds;
+}
+
+function loadChurnGitView({
+  repo,
+  projectName,
+  candidates,
+  anchorOf,
+  needs,
+}: LoadChurnGitViewOptions): ChurnGitView {
   const headFiles = gitLsFilesAtHead(repo);
   let windowLog: ChurnCommit[] = [];
   if (needs.paths) {
@@ -618,13 +626,21 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
  * read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
-async function tagChurnStale(
-  learning: Learning,
-  tenantId: string,
-  toTag: readonly MemoryEntry[],
-  confirmedAt: Map<string, string>,
-  firstReadAt: number,
-): Promise<void> {
+interface TagChurnStaleOptions {
+  readonly learning: Learning;
+  readonly tenantId: string;
+  readonly toTag: readonly MemoryEntry[];
+  readonly confirmedAt: Map<string, string>;
+  readonly firstReadAt: number;
+}
+
+async function tagChurnStale({
+  learning,
+  tenantId,
+  toTag,
+  confirmedAt,
+  firstReadAt,
+}: TagChurnStaleOptions): Promise<void> {
   // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past
   // the evidence. Only outcomes since the first read can have landed, so that is all the recheck
   // reads.
@@ -755,13 +771,13 @@ export async function detectChurnStale(
 
   try {
     const gitProject = opts.legacyName ?? opts.projectName;
-    const git = loadChurnGitView(repo, gitProject, candidates, anchorOf, needs);
+    const git = loadChurnGitView({ repo, projectName: gitProject, candidates, anchorOf, needs });
     // Collected here and written only after every candidate's evidence is computed, so a
     // GitReadError mid-loop cannot leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
     if (!dryRun && toTag.length > 0) {
-      await tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
+      await tagChurnStale({ learning, tenantId: opts.tenantId, toTag, confirmedAt, firstReadAt });
     }
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);

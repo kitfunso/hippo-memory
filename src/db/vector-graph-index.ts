@@ -22,7 +22,7 @@ import {
   storedModel,
   VECTOR_GRAPH_THRESHOLD,
 } from './vector-graph-rows.js';
-import type { ProposedMatches, VectorIndex } from './vector-store.js';
+import type { ProposedMatches, VectorIndex, VectorMatchQuery } from './vector-store.js';
 import { cachedStatement } from './statement-cache.js';
 
 // Longest a build holds the thread before a waiting job may run.
@@ -113,25 +113,19 @@ export class VectorGraphs implements VectorIndex {
     this.#file = new GraphFileIndex(hippoRoot);
   }
 
-  matches(
-    db: DatabaseSyncLike,
-    query: readonly number[],
-    k: number,
-    where: string,
-    params: readonly (string | number)[],
-  ): ProposedMatches | undefined {
-    const dim = query.length;
+  matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined {
+    const dim = ask.query.length;
     const slot = this.#slots.get(dim);
     if (slot?.kind === 'ready') {
       const covered = this.#covered(db, dim, slot);
       if (covered !== undefined) {
-        const matches = graphMatches(db, slot.rows, { query, k, where, params });
+        const matches = graphMatches(db, slot.rows, ask);
         return matches && { matches, coveredRowid: covered };
       }
     } else if (this.#mayBuild(db, slot)) {
       this.#start(dim);
     }
-    return this.#file.matches(db, query, k, where, params);
+    return this.#file.matches(db, ask);
   }
 
   /** Stops every build at its next turn; each closes its own connection as it stops. */

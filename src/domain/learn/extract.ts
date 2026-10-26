@@ -119,12 +119,16 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
+export interface StoreExtractedFactsOptions {
+  readonly source: MemoryEntry;
+  readonly facts: ExtractedFact[];
+  readonly baseHalfLifeDays: number;
+  readonly now: Date;
+}
+
 export async function storeExtractedFacts(
   store: StoreWith<'learning'>,
-  source: MemoryEntry,
-  facts: ExtractedFact[],
-  baseHalfLifeDays: number,
-  now: Date,
+  { source, facts, baseHalfLifeDays, now }: StoreExtractedFactsOptions,
 ): Promise<MemoryEntry[]> {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),

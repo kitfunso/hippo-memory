@@ -181,13 +181,21 @@ export interface RecallJsonRow {
   rerankTrace?: SearchResult['rerankTrace'];
 }
 
-export function recallJsonRow(
-  r: SearchResult,
-  query: string,
-  showWhy: boolean,
-  isGlobal: boolean,
-  now: Date,
-): RecallJsonRow {
+export interface RecallJsonRowOptions {
+  readonly r: SearchResult;
+  readonly query: string;
+  readonly showWhy: boolean;
+  readonly isGlobal: boolean;
+  readonly now: Date;
+}
+
+export function recallJsonRow({
+  r,
+  query,
+  showWhy,
+  isGlobal,
+  now,
+}: RecallJsonRowOptions): RecallJsonRow {
   const base: RecallJsonRow = {
     id: r.entry.id,
     score: r.score,

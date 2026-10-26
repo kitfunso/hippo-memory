@@ -119,7 +119,9 @@ export function objectClose<K extends ObjectKind>(
   kind: K,
   id: number,
 ): Promise<ObjectByKind[K]> {
-  return closeObject(objectsOf(ctx), DESCRIPTORS[kind], ctx.tenantId, id, {
+  return closeObject(objectsOf(ctx), DESCRIPTORS[kind], {
+    tenantId: ctx.tenantId,
+    id,
     actor: ctx.actor.subject,
     now: ctx.infra.clock(),
   });
@@ -136,14 +138,18 @@ export function objectCreate<K extends SavableKind>(
   return saveObject(objectsOf(ctx), SAVABLE[kind], saveSiteOf(ctx), taggedFrom(write, origin));
 }
 
+export interface ObjectSupersedeOptions<K extends SavableKind> {
+  readonly id: number;
+  readonly next: (existing: ObjectByKind[K]) => ObjectWrites[K];
+  readonly origin?: WriteOrigin;
+}
+
 /** The version that replaces object `id`, built from it by `next`, or null when the tenant has
  * no such object; the save's own check that `id` is still active is the one that counts. */
 export async function objectSupersede<K extends SavableKind>(
   ctx: Context,
   kind: K,
-  id: number,
-  next: (existing: ObjectByKind[K]) => ObjectWrites[K],
-  origin?: WriteOrigin,
+  { id, next, origin }: ObjectSupersedeOptions<K>,
 ): Promise<ObjectByKind[K] | null> {
   const existing = await objectGet(ctx, kind, id);
   if (existing === null) return null;

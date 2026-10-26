@@ -240,7 +240,12 @@ async function printRecall({
       hostSessionId: hostSessionId(),
       lastRecall: ctx.store.lastRecall,
       show: async (rank, planning) => {
-        slot.presented = await presentRecall(ctx, query, parsed, { rank, ...priced }, planning);
+        slot.presented = await presentRecall(ctx, {
+          query,
+          parsed,
+          ranked: { rank, ...priced },
+          planning,
+        });
         return slot.presented.shown;
       },
     },
@@ -327,7 +332,7 @@ function priceRecallEntries(
   const isGlobal = origin.isGlobal;
   const now = ctx.infra.clock();
   const entryText = (r: SearchResult): string =>
-    recallEntryText(r, query, parsed.showWhy, isGlobal(r), now);
+    recallEntryText({ r, query, showWhy: parsed.showWhy, isGlobal: isGlobal(r), now });
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   return { globalOn: origin.globalOn, isGlobal, entryText, printCost };
 }
@@ -609,21 +614,31 @@ export interface PresentedRecall {
   readonly shown: api.ShownCliCore;
 }
 
+interface PresentRecallOptions {
+  readonly query: string;
+  readonly parsed: ParsedRecallFlags;
+  readonly ranked: RankedRecall;
+  readonly planning: PlanningFallacyOutput;
+}
+
 /** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and
  * names the rows and hint rows to record. */
 async function presentRecall(
   ctx: api.Context,
-  query: string,
-  parsed: ParsedRecallFlags,
-  ranked: RankedRecall,
-  planning: PlanningFallacyOutput,
+  { query, parsed, ranked, planning }: PresentRecallOptions,
 ): Promise<PresentedRecall> {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a
   // resume packet.
   const loaded = await loadScopedContinuity(ctx, parsed.setting, parsed.includeContinuity);
   const fit = fitRecallBlock({ ctx, query, parsed, ranked, loaded, planning });
   const { results, hints } = fit;
-  const text = recallOutput(query, parsed, fit, ranked.isGlobal, ctx.infra.clock());
+  const text = recallOutput({
+    query,
+    parsed,
+    fit,
+    isGlobal: ranked.isGlobal,
+    now: ctx.infra.clock(),
+  });
   const audit = shownRecallRows(
     ctx.config,
     { tenantId: parsed.tenantId, actor: CLI_ACTOR },
@@ -649,14 +664,16 @@ interface PresentedSlot {
   presented?: PresentedRecall;
 }
 
+interface RecallOutputOptions {
+  readonly query: string;
+  readonly parsed: ParsedRecallFlags;
+  readonly fit: FittedRecall;
+  readonly isGlobal: (r: SearchResult) => boolean;
+  readonly now: Date;
+}
+
 /** What this recall prints: the JSON object, or the fitted block. */
-function recallOutput(
-  query: string,
-  parsed: ParsedRecallFlags,
-  fit: FittedRecall,
-  isGlobal: (r: SearchResult) => boolean,
-  now: Date,
-): string {
+function recallOutput({ query, parsed, fit, isGlobal, now }: RecallOutputOptions): string {
   const { asJson, includeContinuity } = parsed;
   const { results, recallText } = fit;
   if (results.length === 0) {
@@ -666,7 +683,9 @@ function recallOutput(
       : recallText;
   }
   if (!asJson) return recallText;
-  const output = results.map((r) => recallJsonRow(r, query, parsed.showWhy, isGlobal(r), now));
+  const output = results.map((r) =>
+    recallJsonRow({ r, query, showWhy: parsed.showWhy, isGlobal: isGlobal(r), now }),
+  );
   return JSON.stringify({
     query,
     budget: parsed.budget,

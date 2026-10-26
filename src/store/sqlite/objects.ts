@@ -279,14 +279,18 @@ function listRows<K extends ObjectKind>(
   return rows.map((row) => spec.rowTo(row));
 }
 
+interface CloseRow<K extends ObjectKind> {
+  readonly tenantId: string;
+  readonly kind: K;
+  readonly id: number;
+  readonly close: ObjectClose<K>;
+}
+
 /** The status guard sits in the UPDATE, so zero rows changed means missing or not closable; the
  * reread tells which. */
 function closeRow<K extends ObjectKind>(
   db: DatabaseSyncLike,
-  tenantId: string,
-  kind: K,
-  id: number,
-  close: ObjectClose<K>,
+  { tenantId, kind, id, close }: CloseRow<K>,
 ): ObjectByKind[K] | ObjectRefusal {
   const spec = rowSpec(kind);
   const table = objectTable(kind);
@@ -322,7 +326,7 @@ function close<K extends ObjectKind>(
 ): ObjectByKind[K] | ObjectRefusal {
   const { graphType } = rowSpec(kind);
   return on((db) => {
-    const closed = closeRow(db, tenantId, kind, id, close);
+    const closed = closeRow(db, { tenantId, kind, id, close });
     if (isObjectRefusal(closed) || !graphType) return closed;
     // Each graph write takes its own write lock, so both wait for the commit. The rows go at once
     // because the rebuild queue is keyed by a mirror memory that may be gone.
@@ -407,10 +411,7 @@ function supersedeRow<K extends SavableKind>(
  * throw here leaves no row, memory or audit event. */
 function writeObjectRow<K extends SavableKind>(
   db: DatabaseSyncLike,
-  tenantId: string,
-  kind: K,
-  memoryId: string,
-  save: ObjectSave<K>,
+  { tenantId, kind, memoryId, save }: Omit<NewRow<K>, 'version'>,
 ): RowByKind[K] | ObjectRefusal {
   const replaced = save.supersedesId;
   const next =
@@ -497,7 +498,7 @@ function save<K extends SavableKind>(
     graphTenant: spec.graphType ? tenantId : undefined,
   };
   const written = withMirror<RowByKind[K], ObjectRefusal>(on, write, (db, memoryId) =>
-    writeObjectRow(db, tenantId, kind, memoryId, save),
+    writeObjectRow(db, { tenantId, kind, memoryId, save }),
   );
   return isObjectRefusal(written) ? written : spec.rowTo(written);
 }

@@ -156,7 +156,13 @@ export async function replayPass(run: SleepRun): Promise<void> {
   if (!(replayCount > 0 && survivors.size > 0 && run.strength.recallStrengthens)) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = await survivors.get(
-    await sampleForReplay(survivors.rows(), replayCount, now, seed, run.strength),
+    await sampleForReplay({
+      survivors: survivors.rows(),
+      count: replayCount,
+      now,
+      seed,
+      model: run.strength,
+    }),
   );
   if (picked.length === 0) return;
   const rehearsed = markRetrieved(picked, now, run.strength);

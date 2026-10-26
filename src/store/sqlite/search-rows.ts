@@ -87,12 +87,16 @@ interface SearchRowsOptions {
   readonly originProjects?: OriginFilter;
 }
 
+interface ListSearchRowsOptions {
+  readonly query: string;
+  readonly limit: number;
+  readonly tenantId: TenantId;
+  readonly options?: SearchRowsOptions;
+}
+
 function listSearchRows(
   db: DatabaseSyncLike,
-  query: string,
-  limit: number,
-  tenantId: TenantId,
-  options: SearchRowsOptions = {},
+  { query, limit, tenantId, options = {} }: ListSearchRowsOptions,
 ): MemoryRow[] {
   const { scopeFilter, includeSuperseded = true, originProjects } = options;
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
@@ -286,7 +290,7 @@ export function listSearchEntries(
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId: TenantId,
 ): MemoryEntry[] {
-  return listSearchRows(db, query, limit, tenantId).map(rowToEntry);
+  return listSearchRows(db, { query, limit, tenantId }).map(rowToEntry);
 }
 
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty
@@ -308,10 +312,15 @@ export function listRecallEntries(
     ownScope,
   } = options;
   const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
-  return listSearchRows(db, query, limit, tenantId, {
-    scopeFilter,
-    includeSuperseded,
-    originProjects,
+  return listSearchRows(db, {
+    query,
+    limit,
+    tenantId,
+    options: {
+      scopeFilter,
+      includeSuperseded,
+      originProjects,
+    },
   }).map(rowToEntry);
 }
 

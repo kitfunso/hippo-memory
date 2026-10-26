@@ -90,19 +90,18 @@ describe('git-learned rows and the global store', () => {
   });
 
   it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', async () => {
-    const [fact] = await storeExtractedFacts(
-      sqliteStore(hippoRoot),
-      seed,
-      [
+    const [fact] = await storeExtractedFacts(sqliteStore(hippoRoot), {
+      source: seed,
+      facts: [
         {
           content: 'The uploader retries when the storage token expires mid-transfer.',
           tags: ['topic:upload'],
           valence: 'neutral',
         },
       ],
-      DEFAULT_HALF_LIFE_DAYS,
-      new Date(),
-    );
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: new Date(),
+    });
     expect(fact.tags).toContain('git-learned');
     const recalled = { ...fact, retrievalCount: 3 };
     writeEntry(hippoRoot, recalled);
@@ -120,17 +119,16 @@ describe('git-learned rows and the global store', () => {
         { status: 200 },
       );
     const facts = (
-      await storeExtractedFacts(
-        sqliteStore(hippoRoot),
-        seed,
-        [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => ({
+      await storeExtractedFacts(sqliteStore(hippoRoot), {
+        source: seed,
+        facts: [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => ({
           content: `Upload fact ${n}: the storage token can expire mid-transfer.`,
           tags: ['topic:upload'],
           valence: 'neutral',
         })),
-        DEFAULT_HALF_LIFE_DAYS,
-        new Date(),
-      )
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        now: new Date(),
+      })
     ).map((f) => ({ ...f, dagLevel: 1 }));
     await buildDag(sqliteStore(hippoRoot), facts.slice(0, 3), {
       now: evalNow(),

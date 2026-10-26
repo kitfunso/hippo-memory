@@ -187,17 +187,25 @@ export interface MvRankInfo {
   keepN: number;
 }
 
+export interface RankNonPinnedByTenantOptions {
+  readonly entries: MemoryEntry[];
+  readonly now: Date;
+  readonly weights?: Readonly<Record<string, number>>;
+  readonly digest?: string;
+  readonly model?: StrengthModel;
+}
+
 /**
  * Group non-pinned entries by tenantId, score and rank each group independently, and return rank
  * context for every non-pinned entry; rescueSet and the consolidate audit rows share it so they
  * never compute the ranking differently. */
-export function rankNonPinnedByTenant(
-  entries: MemoryEntry[],
-  now: Date,
-  weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
-  digest: string = SOURCE_ARTIFACT_SHA256,
-  model: StrengthModel = PRODUCTION_STRENGTH,
-): Map<string, MvRankInfo> {
+export function rankNonPinnedByTenant({
+  entries,
+  now,
+  weights = MEMORY_VALUE_WEIGHTS,
+  digest = SOURCE_ARTIFACT_SHA256,
+  model = PRODUCTION_STRENGTH,
+}: RankNonPinnedByTenantOptions): Map<string, MvRankInfo> {
   validateWeights(weights, digest);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now, model));
@@ -377,7 +385,8 @@ export function rescueSet(
     strength,
   } = options;
   validateWeights(weights, digest); // fail loud before any rescue computation
-  const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest, strength);
+  const ranked =
+    precomputedRanks ?? rankNonPinnedByTenant({ entries, now, weights, digest, model: strength });
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);

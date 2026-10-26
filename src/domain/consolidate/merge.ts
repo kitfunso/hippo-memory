@@ -49,18 +49,20 @@ export async function retireHeldTexts(run: SleepRun): Promise<void> {
     const rejected = await rejectedAmongPage(run, [...rows.values()], sources);
     for (const [index, id] of [...page].reverse()) {
       const row = rows.get(id);
-      if (row) retireHeldText(run, index, row, sources, rejected);
+      if (row) retireHeldText({ run, index, row, sources, rejected });
     }
   }
 }
 
-function retireHeldText(
-  run: SleepRun,
-  index: number,
-  row: MemoryEntry,
-  sources: ReadonlyMap<string, MemoryEntry>,
-  rejected: ReadonlyMap<string, ReadonlySet<string>>,
-): void {
+interface RetireHeldTextOptions {
+  readonly run: SleepRun;
+  readonly index: number;
+  readonly row: MemoryEntry;
+  readonly sources: ReadonlyMap<string, MemoryEntry>;
+  readonly rejected: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+function retireHeldText({ run, index, row, sources, rejected }: RetireHeldTextOptions): void {
   const digests = rejected.get(row.tenantId);
   const successor = successorAfterRetirement(
     row,
@@ -191,7 +193,15 @@ export async function mergePass(run: SleepRun): Promise<number> {
       const relatedRows = await run.survivors.get(related.map((k) => ids[k]));
       const clusterIds = new Set(cluster.map((k) => ids[k]));
       const clusterRows = relatedRows.filter((e) => clusterIds.has(e.id));
-      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used))) {
+      if (
+        !(await mergeCluster({
+          run,
+          partition: bucket.partition,
+          cluster: clusterRows,
+          related: relatedRows,
+          used,
+        }))
+      ) {
         mergesSkippedRejected++;
       }
     }
@@ -199,15 +209,23 @@ export async function mergePass(run: SleepRun): Promise<number> {
   return mergesSkippedRejected;
 }
 
+interface MergeClusterOptions {
+  readonly run: SleepRun;
+  readonly partition: MergePartition;
+  readonly cluster: MemoryEntry[];
+  readonly related: MemoryEntry[];
+  readonly used: Set<string>;
+}
+
 /** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged
  * text. */
-async function mergeCluster(
-  run: SleepRun,
-  partition: MergePartition,
-  cluster: MemoryEntry[],
-  related: MemoryEntry[],
-  used: Set<string>,
-): Promise<boolean> {
+async function mergeCluster({
+  run,
+  partition,
+  cluster,
+  related,
+  used,
+}: MergeClusterOptions): Promise<boolean> {
   const { result, dryRun } = run;
   const mergedContent = mergeContents(cluster);
 
@@ -216,7 +234,7 @@ async function mergeCluster(
   // in.
   const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run);
 
-  if (semantic && (await mergeRejected(run, semantic, cluster, related, used))) return false;
+  if (semantic && (await mergeRejected({ run, semantic, cluster, related, used }))) return false;
 
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
@@ -281,16 +299,24 @@ async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promi
   for (const e of demoted) run.pendingWrites.push(e);
 }
 
+interface MergeRejectedOptions {
+  readonly run: SleepRun;
+  readonly semantic: MemoryEntry;
+  readonly cluster: MemoryEntry[];
+  readonly related: MemoryEntry[];
+  readonly used: Set<string>;
+}
+
 // mergeContents is deterministic, so a rollup a human already rejected would regenerate each cycle
 // and batchWriteAndDelete's guard bypass would re-assert it; this producer-side check makes that
 // bypass safe. A hit skips the whole cluster (no demote, no delete) so a later sleep can retry.
-async function mergeRejected(
-  run: SleepRun,
-  semantic: MemoryEntry,
-  cluster: MemoryEntry[],
-  related: MemoryEntry[],
-  used: Set<string>,
-): Promise<boolean> {
+async function mergeRejected({
+  run,
+  semantic,
+  cluster,
+  related,
+  used,
+}: MergeRejectedOptions): Promise<boolean> {
   const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
   // tombstones from older releases hold this format's digest

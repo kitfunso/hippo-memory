@@ -485,11 +485,15 @@ function saveAny(
   files: StoreFiles,
   ...[tenantId, kind, row, key]: SessionSaveArgs
 ) {
-  if (kind === 'snapshot') return saveActiveTaskSnapshot(db, files, tenantId, row, key);
+  if (kind === 'snapshot') {
+    return saveActiveTaskSnapshot(db, { files, tenantId, snapshot: row, key });
+  }
   if (kind === 'event') return appendSessionEvent(db, files, tenantId, row);
   if (kind === 'working_memory') return wmPush(db, tenantId, row);
   if ('handoff' in row) return saveSessionHandoff(db, tenantId, row.handoff, key);
-  if ('sessionEnd' in row) return writeSessionEndHandoff(db, files, tenantId, row.sessionEnd, key);
+  if ('sessionEnd' in row) {
+    return writeSessionEndHandoff(db, { files, tenantId, request: row.sessionEnd, key });
+  }
   return stampHandoffOutcome(db, tenantId, row.sessionId, row.outcome);
 }
 
@@ -504,7 +508,7 @@ function readAny(db: DatabaseSyncLike, ...[tenantId, kind, query, key]: SessionR
   }
   if (kind === 'working_memory') return wmRead(db, tenantId, query);
   if ('id' in query) return readHandoff(db, tenantId, query.id);
-  return readLatestHandoff(db, tenantId, query.sessionId, query, key);
+  return readLatestHandoff(db, { tenantId, sessionId: query.sessionId, opts: query, key });
 }
 
 function clearAny(

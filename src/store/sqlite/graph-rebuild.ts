@@ -37,7 +37,9 @@ function insertDesiredRelation(
   ) {
     return false;
   }
-  if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
+  if (relationPresent(db, { tenantId, fromEntityId, toEntityId, relType: rel.relType })) {
+    return false;
+  }
   insertRelationRow(db, tenantId, {
     fromEntityId,
     toEntityId,

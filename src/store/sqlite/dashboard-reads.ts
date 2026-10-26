@@ -156,13 +156,14 @@ function scatterPoints(db: DatabaseSyncLike, binds: ProjectBinds, maxAgeDays: nu
   return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
 }
 
-function scatter(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  origin: Origin,
-  nowMs: number,
-  tally: ProjectTally,
-) {
+interface ScatterOptions {
+  readonly tenantId: string;
+  readonly origin: Origin;
+  readonly nowMs: number;
+  readonly tally: ProjectTally;
+}
+
+function scatter(db: DatabaseSyncLike, { tenantId, origin, nowMs, tally }: ScatterOptions) {
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
   const binds = { tenant: tenantId, origin, now: nowMs };
   if (tally.live <= SCATTER_POINTS_MAX) return scatterPoints(db, binds, maxAgeDays);
@@ -201,7 +202,7 @@ function project(
       `WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs WHERE pa IS :origin OR pb IS :origin`,
     ).get({ tenant: tenantId, origin }) as { n: number };
     const tally = projectTally(origin, row.tally, Number(conflicts.n));
-    return { tally, scatter: scatter(db, tenantId, origin, nowMs, tally) };
+    return { tally, scatter: scatter(db, { tenantId, origin, nowMs, tally }) };
   });
 }
 

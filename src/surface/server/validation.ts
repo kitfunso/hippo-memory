@@ -150,13 +150,21 @@ export interface StringArrayRule {
   };
 }
 
-export function getStringArray(
-  obj: Record<string, JsonValue>,
-  key: string,
-  maxItems: number,
-  maxItemLen: number,
-  rule: StringArrayRule = {},
-): string[] | undefined {
+export interface GetStringArrayOptions {
+  readonly obj: Record<string, JsonValue>;
+  readonly key: string;
+  readonly maxItems: number;
+  readonly maxItemLen: number;
+  readonly rule?: StringArrayRule;
+}
+
+export function getStringArray({
+  obj,
+  key,
+  maxItems,
+  maxItemLen,
+  rule = {},
+}: GetStringArrayOptions): string[] | undefined {
   const v = obj[key];
   const messages = rule.messages ?? {};
   const notArray = messages.notArray ?? `${key} must be an array of strings`;
@@ -199,7 +207,12 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
   if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
     throw new HttpError(400, 'project.aliases must be an array of strings');
   }
-  const aliases = getStringArray(v, 'aliases', MAX_ARRAY_ITEMS, MAX_ID_LEN);
+  const aliases = getStringArray({
+    obj: v,
+    key: 'aliases',
+    maxItems: MAX_ARRAY_ITEMS,
+    maxItemLen: MAX_ID_LEN,
+  });
   return { name: v.name, aliases };
 }
 

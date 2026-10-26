@@ -54,7 +54,12 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
     scope: getString(body, 'scope', MAX_ID_LEN),
     owner: getString(body, 'owner', MAX_ID_LEN),
     artifactRef: getString(body, 'artifactRef', MAX_SHORT_FIELD_LEN),
-    tags: getStringArray(body, 'tags', MAX_ARRAY_ITEMS, MAX_ID_LEN),
+    tags: getStringArray({
+      obj: body,
+      key: 'tags',
+      maxItems: MAX_ARRAY_ITEMS,
+      maxItemLen: MAX_ID_LEN,
+    }),
     project: getCallerProject(body),
     personal: personalRaw === true,
     salienceGate: forceRaw !== true,
@@ -135,12 +140,18 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the
   // count, and writes the mirrors after its job. Auth runs first, so only a caller with a key
   // reaches it.
-  const ids = getStringArray(body, 'ids', MAX_OUTCOME_IDS, MAX_ID_LEN, {
-    nonEmpty: 'raw',
-    rejectNull: true,
-    messages: {
-      notArray: 'ids must be an array of non-empty strings',
-      count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap`,
+  const ids = getStringArray({
+    obj: body,
+    key: 'ids',
+    maxItems: MAX_OUTCOME_IDS,
+    maxItemLen: MAX_ID_LEN,
+    rule: {
+      nonEmpty: 'raw',
+      rejectNull: true,
+      messages: {
+        notArray: 'ids must be an array of non-empty strings',
+        count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap`,
+      },
     },
   });
   if (ids !== undefined) {

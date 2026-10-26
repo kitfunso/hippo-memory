@@ -197,15 +197,23 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   );
 }
 
+interface WriteVectorPageOptions {
+  readonly writes: VectorWrites;
+  readonly write: Pick<VectorWrite, 'model' | 'replaceIndex'>;
+  readonly page: readonly MemoryEntry[];
+  readonly vectors: readonly number[][];
+  readonly particles: ParticleScoring | undefined;
+}
+
 /** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write;
  * `particles`, when given, scores the particle each memory seeds. */
-async function writeVectorPage(
-  writes: VectorWrites,
-  write: Pick<VectorWrite, 'model' | 'replaceIndex'>,
-  page: readonly MemoryEntry[],
-  vectors: readonly number[][],
-  particles: ParticleScoring | undefined,
-): Promise<VectorWriteResult> {
+async function writeVectorPage({
+  writes,
+  write,
+  page,
+  vectors,
+  particles,
+}: WriteVectorPageOptions): Promise<VectorWriteResult> {
   const byTenant = new Map<string, VectorRowWrite[]>();
   page.forEach((entry, i) => {
     const vector = vectors[i];
@@ -231,15 +239,23 @@ async function writeVectorPage(
 const OTHER_MODEL_INDEX =
   "the vector index was built by another embedding model; run 'hippo embed' to rebuild it";
 
+interface BackfillInStoreOptions {
+  readonly writes: VectorWrites;
+  readonly provider: EmbeddingProvider;
+  readonly model: string;
+  readonly rebuild: boolean;
+  readonly particles: ParticleScoring;
+}
+
 /** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps
  * the pages written; a rebuild reseeds the particles it drops. */
-async function backfillInStore(
-  writes: VectorWrites,
-  provider: EmbeddingProvider,
-  model: string,
-  rebuild: boolean,
-  particles: ParticleScoring,
-): Promise<number> {
+async function backfillInStore({
+  writes,
+  provider,
+  model,
+  rebuild,
+  particles,
+}: BackfillInStoreOptions): Promise<number> {
   let count = 0;
   let afterId: string | undefined;
   for (;;) {
@@ -255,13 +271,13 @@ async function backfillInStore(
       page.map((e) => embeddingInputText(e)),
       'passage',
     );
-    const result = await writeVectorPage(
+    const result = await writeVectorPage({
       writes,
-      { model, replaceIndex: rebuild },
+      write: { model, replaceIndex: rebuild },
       page,
       vectors,
-      rebuild ? particles : undefined,
-    );
+      particles: rebuild ? particles : undefined,
+    });
     // Another process rebuilt the index mid-run; every later page would be refused too, after
     // paying the provider for it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
@@ -278,7 +294,13 @@ async function embedAllInStore(
 ): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = store;
   const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
-  return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild, particles);
+  return backfillInStore({
+    writes,
+    provider,
+    model: embeddingIndexIdentity(provider.id),
+    rebuild,
+    particles,
+  });
 }
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it
@@ -298,13 +320,13 @@ function embedMemoryInStore(
         const refused =
           replacesIndex(await reads.embeddingIndexState(), model) ||
           (
-            await writeVectorPage(
+            await writeVectorPage({
               writes,
-              { model, replaceIndex: false },
-              [entry],
-              await provider.embed([embeddingInputText(entry)], 'passage'),
-              target,
-            )
+              write: { model, replaceIndex: false },
+              page: [entry],
+              vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
+              particles: target,
+            })
           ).modelMismatch;
         if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
         return refused ? 'failed' : 'indexed';

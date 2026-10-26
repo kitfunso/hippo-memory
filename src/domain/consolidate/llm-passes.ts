@@ -121,7 +121,12 @@ function keepFacts(
   source: MemoryEntry,
   facts: Extraction['facts'],
 ): Promise<MemoryEntry[]> {
-  return storeExtractedFacts(run.store, source, facts, run.config.defaultHalfLifeDays, run.now);
+  return storeExtractedFacts(run.store, {
+    source,
+    facts,
+    baseHalfLifeDays: run.config.defaultHalfLifeDays,
+    now: run.now,
+  });
 }
 
 /**

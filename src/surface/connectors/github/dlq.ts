@@ -86,9 +86,7 @@ export async function replayGithubDlqEntry(
       },
     },
     ctx.store,
-    ctx.tenantId,
-    id,
-    opts.force === true,
+    { tenantId: ctx.tenantId, id, force: opts.force === true },
   );
 }
 

@@ -25,14 +25,18 @@ export function eventMemory(db: DatabaseSyncLike, log: EventLogSpec, key: string
   return row?.memory_id ?? null;
 }
 
+export interface MarkEventSeenOptions {
+  readonly log: EventLogSpec;
+  readonly key: string;
+  readonly extra: ReadonlyArray<readonly [string, string]>;
+  readonly memoryId: string | null;
+}
+
 /** Records the key unless a row holds it already; false means another writer got there first.
  * `extra` pairs connector-only columns with values. */
 export function markEventSeen(
   db: DatabaseSyncLike,
-  log: EventLogSpec,
-  key: string,
-  extra: ReadonlyArray<readonly [string, string]>,
-  memoryId: string | null,
+  { log, key, extra, memoryId }: MarkEventSeenOptions,
 ): boolean {
   const names = [log.keyColumn, ...extra.map(([name]) => name), 'ingested_at', 'memory_id'];
   const values = [key, ...extra.map(([, value]) => value), handleStamp(db), memoryId];

@@ -186,14 +186,22 @@ function l2normalize(v: number[]): number[] {
   return v.map((x) => x / length);
 }
 
+interface ApiProviderSettings {
+  readonly kind: 'openai' | 'voyage' | 'cohere';
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly batchSize: number;
+  readonly enabled: boolean;
+}
+
 class ApiEmbeddingProvider implements EmbeddingProvider {
-  constructor(
-    readonly kind: 'openai' | 'voyage' | 'cohere',
-    readonly model: string,
-    private readonly baseUrl: string,
-    private readonly batchSize: number,
-    private readonly enabled: boolean = true,
-  ) {}
+  readonly kind: 'openai' | 'voyage' | 'cohere';
+  readonly model: string;
+
+  constructor(private readonly settings: ApiProviderSettings) {
+    this.kind = settings.kind;
+    this.model = settings.model;
+  }
 
   get id(): string {
     return `${this.kind}:${this.model}`;
@@ -204,7 +212,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   isAvailable(): boolean {
-    return this.enabled && !!envByName(this.keyEnv)?.trim();
+    return this.settings.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
   async embed(
@@ -223,8 +231,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     }
 
     const out: number[][] = [];
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const chunk = texts.slice(i, i + this.batchSize);
+    for (let i = 0; i < texts.length; i += this.settings.batchSize) {
+      const chunk = texts.slice(i, i + this.settings.batchSize);
       const vecs = await this.embedChunk(chunk, key, role, withRequestSignal(call.signal));
       for (const v of vecs) out.push(v.length > 0 ? l2normalize(v) : v);
     }
@@ -270,7 +278,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     signal?: AbortSignal,
   ): Promise<Response> {
     const spec = API_PROVIDER_SPECS[this.kind];
-    const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
+    const url = `${this.settings.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     try {
       return await fetchWithRetry(
         url,
@@ -394,5 +402,5 @@ export function resolveEmbeddingProvider(
     cfg.batchSize !== undefined && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0
       ? cfg.batchSize
       : DEFAULT_API_BATCH_SIZE;
-  return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
+  return new ApiEmbeddingProvider({ kind, model, baseUrl, batchSize, enabled });
 }

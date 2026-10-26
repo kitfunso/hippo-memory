@@ -11,13 +11,19 @@ import type { VersionedRouteConfig } from './object-routes.js';
 // this is the fail-fast 400 gate.
 function validateProcessStepsBody(body: Record<string, JsonValue>): string[] {
   return (
-    getStringArray(body, 'steps', OBJECT_CAPS.processSteps, OBJECT_CAPS.processStep, {
-      nonEmpty: 'trimmed',
-      messages: {
-        itemType: 'each step must be a string',
-        empty: 'a step is empty',
-        count: `steps exceeds ${OBJECT_CAPS.processSteps}-step cap`,
-        length: `a step exceeds the ${OBJECT_CAPS.processStep}-character cap`,
+    getStringArray({
+      obj: body,
+      key: 'steps',
+      maxItems: OBJECT_CAPS.processSteps,
+      maxItemLen: OBJECT_CAPS.processStep,
+      rule: {
+        nonEmpty: 'trimmed',
+        messages: {
+          itemType: 'each step must be a string',
+          empty: 'a step is empty',
+          count: `steps exceeds ${OBJECT_CAPS.processSteps}-step cap`,
+          length: `a step exceeds the ${OBJECT_CAPS.processStep}-character cap`,
+        },
       },
     }) ?? []
   );

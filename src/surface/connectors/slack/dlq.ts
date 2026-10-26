@@ -70,9 +70,7 @@ export async function replaySlackDlqEntry(
         }),
     },
     ctx.store,
-    ctx.tenantId,
-    id,
-    opts.force === true,
+    { tenantId: ctx.tenantId, id, force: opts.force === true },
   );
 }
 

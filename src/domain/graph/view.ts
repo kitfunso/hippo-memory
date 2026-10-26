@@ -120,15 +120,17 @@ function gridOf(pts: readonly Point[], reach: number): Map<number, number[]> {
   return cells;
 }
 
+interface AddRepulsionOptions {
+  readonly nodes: GraphNode[];
+  readonly pos: Map<number, Point>;
+  readonly disp: Point[];
+  readonly k: number;
+  readonly visits: { pairs: number };
+}
+
 /** Adds every pair's repulsion within the reach, reading only the 3 by 3 cells around each node;
  * `visits` counts the pairs looked at. */
-function addRepulsion(
-  nodes: GraphNode[],
-  pos: Map<number, Point>,
-  disp: Point[],
-  k: number,
-  visits: { pairs: number },
-): void {
+function addRepulsion({ nodes, pos, disp, k, visits }: AddRepulsionOptions): void {
   const reach = REPULSION_REACH_K * k;
   const pts = nodes.map((node) => pos.get(node.id)!);
   const cells = gridOf(pts, reach);
@@ -166,13 +168,15 @@ function repel({ pi, pj, di, dj }: RepelOptions, k: number): void {
   dj.y -= uy * rep;
 }
 
-function addAttraction(
-  edges: GraphEdge[],
-  idIndex: Map<number, number>,
-  pos: Map<number, Point>,
-  disp: Point[],
-  k: number,
-): void {
+interface AddAttractionOptions {
+  readonly edges: GraphEdge[];
+  readonly idIndex: Map<number, number>;
+  readonly pos: Map<number, Point>;
+  readonly disp: Point[];
+  readonly k: number;
+}
+
+function addAttraction({ edges, idIndex, pos, disp, k }: AddAttractionOptions): void {
   for (const e of edges) {
     const i = idIndex.get(e.from);
     const j = idIndex.get(e.to);
@@ -241,8 +245,8 @@ export function layoutGraph(
 
   for (let iter = 0; iter < iterations; iter++) {
     const disp = nodes.map(() => ({ x: 0, y: 0 }));
-    addRepulsion(nodes, pos, disp, k, visits);
-    addAttraction(model.edges, idIndex, pos, disp, k);
+    addRepulsion({ nodes, pos, disp, k, visits });
+    addAttraction({ edges: model.edges, idIndex, pos, disp, k });
     const temp = Math.max(1, (width / 10) * (1 - iter / iterations));
     applyDisplacement({ nodes, pos, disp, temp, width, height });
   }

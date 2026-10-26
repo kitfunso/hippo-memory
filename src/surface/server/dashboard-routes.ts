@@ -76,7 +76,7 @@ interface DashboardCall {
 }
 
 function passGate({ req, res, query, serving }: DashboardCall): DashboardSession {
-  return passDashboardSession(req, res, query, serving.access);
+  return passDashboardSession({ req, res, query, access: serving.access });
 }
 
 function admitted(call: DashboardCall, session: DashboardSession): DashboardRouteRequest {

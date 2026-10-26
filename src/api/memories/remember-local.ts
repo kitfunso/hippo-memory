@@ -158,7 +158,12 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      await storeExtractedFacts(ctx.store, entry, found, defaultHalfLifeDays, ctx.infra.clock());
+      await storeExtractedFacts(ctx.store, {
+        source: entry,
+        facts: found,
+        baseHalfLifeDays: defaultHalfLifeDays,
+        now: ctx.infra.clock(),
+      });
       facts = found.length;
     }
   } catch (cause) {

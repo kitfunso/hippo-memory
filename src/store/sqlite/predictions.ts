@@ -190,7 +190,12 @@ export function writePrediction(
   let savedRow: PredictionRow | undefined;
 
   writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
-    savedRow = insertPredictionRow(writeDb, memoryId, tenantId, save, { now, actor });
+    savedRow = insertPredictionRow(writeDb, {
+      memoryId,
+      tenantId,
+      opts: save,
+      stamp: { now, actor },
+    });
   });
 
   if (!savedRow) {
@@ -206,12 +211,16 @@ interface PredictionStamp {
   readonly actor: string;
 }
 
+interface InsertPredictionRowOptions {
+  readonly memoryId: string;
+  readonly tenantId: string;
+  readonly opts: SavePredictionOptions;
+  readonly stamp: PredictionStamp;
+}
+
 function insertPredictionRow(
   db: DatabaseSyncLike,
-  memoryId: string,
-  tenantId: string,
-  opts: SavePredictionOptions,
-  stamp: PredictionStamp,
+  { memoryId, tenantId, opts, stamp }: InsertPredictionRowOptions,
 ): PredictionRow {
   const { now, actor } = stamp;
   const result = cachedStatement(
@@ -288,18 +297,22 @@ export function closePrediction(
   }
   const now = handleStamp(db);
   const row = withWriteScope(db, 'close_prediction', () =>
-    closeOpenPredictionRow(db, tenantId, id, opts, { now, actor: opts.actor }),
+    closeOpenPredictionRow(db, { tenantId, id, opts, stamp: { now, actor: opts.actor } }),
   );
   return rowToPrediction(row);
+}
+
+interface CloseOpenPredictionRowOptions {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly opts: PredictionClose;
+  readonly stamp: PredictionStamp;
 }
 
 /** Closes the row, reloads it and audits the close; the caller owns the transaction. */
 function closeOpenPredictionRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: number,
-  opts: PredictionClose,
-  stamp: PredictionStamp,
+  { tenantId, id, opts, stamp }: CloseOpenPredictionRowOptions,
 ): PredictionRow {
   const { now, actor } = stamp;
   // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and

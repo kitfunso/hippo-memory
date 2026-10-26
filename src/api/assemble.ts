@@ -100,7 +100,7 @@ export async function assemble(
   // Substitute parent summaries for older rows that share one.
   const { olderItems, summarized } =
     summarizeOlder && olderRows.length > 0
-      ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
+      ? await substituteSummaries(ctx, { olderRows, scope: opts.scope, own, project: opts.project })
       : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems = tailRows.map(freshTailItem);
@@ -210,12 +210,16 @@ interface SubstitutedOlder {
   summarized: number;
 }
 
+interface SubstituteSummariesOptions {
+  readonly olderRows: MemoryEntry[];
+  readonly scope: string | undefined;
+  readonly own: string | undefined;
+  readonly project: CallerProject | undefined;
+}
+
 async function substituteSummaries(
   ctx: Context,
-  olderRows: MemoryEntry[],
-  scope: string | undefined,
-  own: string | undefined,
-  project: CallerProject | undefined,
+  { olderRows, scope, own, project }: SubstituteSummariesOptions,
 ): Promise<SubstitutedOlder> {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;

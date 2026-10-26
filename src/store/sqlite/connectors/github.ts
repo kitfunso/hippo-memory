@@ -41,16 +41,15 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
 /** False when the key was already logged, so a caller inside a write scope can roll its own row
  * back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  return markEventSeen(
-    db,
-    GITHUB_LOG,
-    entry.idempotencyKey,
-    [
+  return markEventSeen(db, {
+    log: GITHUB_LOG,
+    key: entry.idempotencyKey,
+    extra: [
       ['delivery_id', entry.deliveryId],
       ['event_name', entry.eventName],
     ],
-    entry.memoryId,
-  );
+    memoryId: entry.memoryId,
+  });
 }
 
 export function githubEventRecord(

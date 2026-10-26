@@ -115,19 +115,27 @@ export function velocityAlignmentBonus(
   return Math.max(0, cosineOf(particle.velocity, queryEmbedding));
 }
 
+export interface AttractionForceOptions {
+  readonly pi: PhysicsParticle;
+  readonly pj: PhysicsParticle;
+  readonly gMemory: number;
+  readonly out?: number[];
+  readonly diff?: number[];
+}
+
 /**
  * Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3,
  * directed along (pos_j - pos_i) projected tangent to the unit sphere at pos_i (positions are
  * re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector by default)
  * using `diff` as scratch.
  */
-export function attractionForce(
-  pi: PhysicsParticle,
-  pj: PhysicsParticle,
-  gMemory: number,
-  out: number[] = vecZero(pi.position.length),
-  diff: number[] = vecZero(pi.position.length),
-): number[] {
+export function attractionForce({
+  pi,
+  pj,
+  gMemory,
+  out = vecZero(pi.position.length),
+  diff = vecZero(pi.position.length),
+}: AttractionForceOptions): number[] {
   const cos = cosineOf(pi.position, pj.position);
   if (cos <= 0) return out;
 
@@ -141,18 +149,26 @@ export function attractionForce(
   return out;
 }
 
+export interface RepulsionForceOptions {
+  readonly pi: PhysicsParticle;
+  readonly pj: PhysicsParticle;
+  readonly kRepulsion: number;
+  readonly out?: number[];
+  readonly diff?: number[];
+}
+
 /**
  * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01,
  * cosine_distance)^2, where cosine_distance = 1 - cosine_similarity. Adds into `out` (a fresh zero
  * vector by default) using `diff` as scratch.
  */
-export function repulsionForce(
-  pi: PhysicsParticle,
-  pj: PhysicsParticle,
-  kRepulsion: number,
-  out: number[] = vecZero(pi.position.length),
-  diff: number[] = vecZero(pi.position.length),
-): number[] {
+export function repulsionForce({
+  pi,
+  pj,
+  kRepulsion,
+  out = vecZero(pi.position.length),
+  diff = vecZero(pi.position.length),
+}: RepulsionForceOptions): number[] {
   const cos = cosineOf(pi.position, pj.position);
   const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
   const magnitude = (kRepulsion * pi.mass * pj.mass) / (dist * dist);
@@ -189,15 +205,17 @@ export interface ForceContext {
   config: PhysicsConfig;
 }
 
+interface ComputeNetForceOptions {
+  readonly i: number;
+  readonly particles: PhysicsParticle[];
+  readonly ctx: ForceContext;
+  readonly net: number[];
+  readonly diff: number[];
+}
+
 /** Zeroes `net`, then accumulates the net force on particle i into it; `diff` is the caller's
  * scratch. */
-function computeNetForce(
-  i: number,
-  particles: PhysicsParticle[],
-  ctx: ForceContext,
-  net: number[],
-  diff: number[],
-) {
+function computeNetForce({ i, particles, ctx, net, diff }: ComputeNetForceOptions) {
   const pi = particles[i];
   net.fill(0);
   const conflicts = ctx.conflictPairs.get(pi.memoryId);
@@ -206,9 +224,11 @@ function computeNetForce(
     if (i === j) continue;
     const pj = particles[j];
 
-    attractionForce(pi, pj, ctx.config.gMemory, net, diff);
+    attractionForce({ pi, pj, gMemory: ctx.config.gMemory, out: net, diff });
 
-    if (conflicts?.has(pj.memoryId)) repulsionForce(pi, pj, ctx.config.kRepulsion, net, diff);
+    if (conflicts?.has(pj.memoryId)) {
+      repulsionForce({ pi, pj, kRepulsion: ctx.config.kRepulsion, out: net, diff });
+    }
   }
 
   dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS, net);
@@ -224,7 +244,7 @@ function computeAccelerations(
 ): void {
   for (let i = 0; i < particles.length; i++) {
     const accel = into[i];
-    computeNetForce(i, particles, ctx, accel, diff);
+    computeNetForce({ i, particles, ctx, net: accel, diff });
     const inv = 1 / Math.max(MIN_MASS, particles[i].mass);
     for (let k = 0; k < accel.length; k++) accel[k] *= inv;
   }
@@ -249,15 +269,17 @@ function clampInPlace(v: number[], maxMag: number): void {
   for (let k = 0; k < v.length; k++) v[k] *= scale;
 }
 
+interface VerletStepOptions {
+  readonly particles: PhysicsParticle[];
+  readonly accelerations: number[][];
+  readonly next: number[][];
+  readonly ctx: ForceContext;
+  readonly diff: number[];
+}
+
 /** One Velocity Verlet step for all particles; the vectors of particles, `accelerations` and
  * `next` change in place, and `next` holds the new accelerations for the caller to swap in. */
-function verletStep(
-  particles: PhysicsParticle[],
-  accelerations: number[][],
-  next: number[][],
-  ctx: ForceContext,
-  diff: number[],
-): void {
+function verletStep({ particles, accelerations, next, ctx, diff }: VerletStepOptions): void {
   const dt = ctx.config.dt;
   const maxVel = ctx.config.maxVelocity;
   const halfDt2 = 0.5 * dt * dt;
@@ -303,7 +325,7 @@ export function simulate(particles: PhysicsParticle[], ctx: ForceContext): Simul
   computeAccelerations(particles, ctx, accelerations, diff);
 
   for (let step = 0; step < ctx.config.substeps; step++) {
-    verletStep(particles, accelerations, next, ctx, diff);
+    verletStep({ particles, accelerations, next, ctx, diff });
     [accelerations, next] = [next, accelerations];
   }
 

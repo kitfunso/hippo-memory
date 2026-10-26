@@ -286,7 +286,7 @@ function seedVectors(dir: string): void {
     const identity = embeddingIndexIdentity(`openai:${MODEL}`);
     upsertVectors(db, Object.entries(index), identity);
     setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-    resetAllPhysicsState(db, entries, index, new Date(CONTEXT_NOW));
+    resetAllPhysicsState(db, entries, index, { now: new Date(CONTEXT_NOW) });
   } finally {
     closeHippoDb(db);
   }
@@ -377,7 +377,7 @@ async function runPass(
   // A store of another kind gets no reach: the api reads it as one project with no global store.
   const reach =
     served.kind === 'sqlite'
-      ? contextReach(sqliteReach(root, served), loadConfig, resolveEmbeddingProvider)
+      ? contextReach(sqliteReach({ hippoRoot: root, store: served }), loadConfig, resolveEmbeddingProvider)
       : undefined;
   const ctx = {
     hippoRoot: root,

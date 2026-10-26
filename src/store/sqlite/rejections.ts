@@ -218,14 +218,20 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
 }
 
+/** The rows a rejection found unlocked, and the test each must still pass to go. */
+interface FoundHolders {
+  readonly rejection: Rejection;
+  readonly digest: string;
+  readonly holdsValue: HoldsValue;
+  readonly found: string[];
+}
+
 /** One short write scope: every found row that still holds the text goes, with one reject_value
  * audit row. */
 function removeHolders(
   db: DatabaseSyncLike,
   files: StoreFiles,
-  rejection: Rejection,
-  { digest, holdsValue }: { digest: string; holdsValue: HoldsValue },
-  found: string[],
+  { rejection, digest, holdsValue, found }: FoundHolders,
 ): Removal {
   const removal: Removal = {
     removedIds: [],
@@ -288,7 +294,7 @@ function applyRejection(
   // needs a schema migration, held until approved.
   const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
   const found = listHolderIds(db, rejection, holdsValue);
-  const removal = removeHolders(db, files, rejection, { digest, holdsValue }, found);
+  const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 
   purgeRemovedMirrors(db, hippoRoot, removal);
 

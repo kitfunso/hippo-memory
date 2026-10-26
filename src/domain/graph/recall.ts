@@ -79,14 +79,18 @@ interface RelationWalk {
   originMemByEntityId: Map<number, string | null>;
 }
 
+interface WalkRelationsOptions {
+  readonly tenantId: string;
+  readonly seedEntities: readonly Entity[];
+  readonly hops: number;
+  readonly maxNeighbors: number;
+}
+
 /** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it
  * descends from. */
 async function walkRelations(
   store: GraphStore,
-  tenantId: string,
-  seedEntities: readonly Entity[],
-  hops: number,
-  maxNeighbors: number,
+  { tenantId, seedEntities, hops, maxNeighbors }: WalkRelationsOptions,
 ): Promise<RelationWalk> {
   // `visited` makes expansion cycle-safe; `originMemByEntityId` carries each node's base-result
   // memory id for adjacency placement and score inheritance.
@@ -202,7 +206,7 @@ async function produceHitsForStore(
   });
   if (seedEntities.length === 0) return;
 
-  const walk = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
+  const walk = await walkRelations(store, { tenantId, seedEntities, hops, maxNeighbors });
   if (walk.reached.size === 0) return;
 
   const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, {

@@ -60,9 +60,14 @@ export function incidentOpen(
 ): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
-  return openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, tagged, {
-    actor: ctx.actor.subject,
-    now: ctx.infra.clock(),
+  return openIncident(objectsOf(ctx), {
+    baseHalfLifeDays: defaultHalfLifeDays,
+    tenantId: ctx.tenantId,
+    opts: tagged,
+    by: {
+      actor: ctx.actor.subject,
+      now: ctx.infra.clock(),
+    },
   });
 }
 
@@ -72,9 +77,14 @@ export function incidentResolve(
   id: number,
   resolutionText: string,
 ): Promise<Incident> {
-  return resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, {
-    actor: ctx.actor.subject,
-    now: ctx.infra.clock(),
+  return resolveOpenIncident(objectsOf(ctx), {
+    tenantId: ctx.tenantId,
+    id,
+    resolutionText,
+    by: {
+      actor: ctx.actor.subject,
+      now: ctx.infra.clock(),
+    },
   });
 }
 

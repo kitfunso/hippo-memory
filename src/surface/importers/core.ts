@@ -102,7 +102,7 @@ export function importEntriesInto(
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;
   const newEntry = (chunk: string): MemoryEntry =>
-    createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
+    createImportEntry({ chunk, source, allTags, options, baseHalfLifeDays });
 
   // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
   // probe, shares its handle.
@@ -191,13 +191,21 @@ function prepareImportChunk(raw: string) {
   return { chunk: trimmed.slice(0, MAX_IMPORT_CHARS), wasRedacted };
 }
 
-function createImportEntry(
-  chunk: string,
-  source: string,
-  allTags: string[],
-  options: TargetedImport,
-  baseHalfLifeDays: number,
-): MemoryEntry {
+interface CreateImportEntryOptions {
+  readonly chunk: string;
+  readonly source: string;
+  readonly allTags: string[];
+  readonly options: TargetedImport;
+  readonly baseHalfLifeDays: number;
+}
+
+function createImportEntry({
+  chunk,
+  source,
+  allTags,
+  options,
+  baseHalfLifeDays,
+}: CreateImportEntryOptions): MemoryEntry {
   // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a
   // system of record (see MEMORY_ENVELOPE.md). The write must use the same tenant as the scoped
   // dedup read above: global=true writes host-wide, global=false writes to options.tenantId.

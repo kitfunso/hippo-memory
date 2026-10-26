@@ -89,7 +89,12 @@ export async function retrieveRanking(
   const window = ranking.results.slice(0, windowSize).map((r) => r.entry);
   // The caller traces and audits the rows it shows, so the window writes neither.
   const windowOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
-  const plan = planRecall(ctx, windowOpts, window, personalScope, BAND_RANKED);
+  const plan = planRecall(ctx, {
+    opts: windowOpts,
+    all: window,
+    personalScope,
+    profile: BAND_RANKED,
+  });
   const reads = await readRecall(ctx, windowOpts, plan, ranking.goals);
   const composed = composeRecall(ctx, windowOpts, {
     windowSize,
@@ -148,7 +153,7 @@ async function recallFromWindow(
     POSITION_BAND,
   );
   const candidates = ranking.results.map((r) => r.entry);
-  const plan = planRecall(ctx, opts, candidates, personalScope, POSITION_BAND);
+  const plan = planRecall(ctx, { opts, all: candidates, personalScope, profile: POSITION_BAND });
   const reads = await readRecall(ctx, opts, plan, ranking.goals);
   const composed = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
   await finishRecall(

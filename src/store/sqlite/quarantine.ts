@@ -73,12 +73,21 @@ function readQuarantineRow(
   return row ? fromDbRow(row) : null;
 }
 
+interface ListQuarantineRowsOptions {
+  readonly tenantId: string;
+  readonly status?: QuarantineStatus | 'all';
+  readonly limit?: number;
+  readonly afterRow?: KeysetPosition;
+}
+
 function listQuarantineRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  status: QuarantineStatus | 'all' = 'pending',
-  limit = QUARANTINE_LIST_LIMIT,
-  afterRow?: KeysetPosition,
+  {
+    tenantId,
+    status = 'pending',
+    limit = QUARANTINE_LIST_LIMIT,
+    afterRow,
+  }: ListQuarantineRowsOptions,
 ): QuarantineRow[] {
   // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history,
   // drop it from the queue.
@@ -165,7 +174,7 @@ function listQuarantined(
   tenantId: string,
   { status, limit, after }: QuarantineListQuery,
 ): QuarantinedMemory[] {
-  const rows = listQuarantineRows(db, tenantId, status, limit, after);
+  const rows = listQuarantineRows(db, { tenantId, status, limit, afterRow: after });
   const entries = readEntriesByIds(
     db,
     rows.map((row) => row.memoryId),

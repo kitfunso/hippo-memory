@@ -126,7 +126,7 @@ const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const localStore = sqliteStore(localRoot);
-const reach = contextReach(sqliteReach(localRoot, localStore), loadConfig);
+const reach = contextReach(sqliteReach({ hippoRoot: localRoot, store: localStore }), loadConfig);
 const config = loadConfig(localRoot);
 // The script is its own composition root, so it hands the api the real ports as the CLI does.
 const infra = rootInfra()();
@@ -166,7 +166,7 @@ const inHook = (run) => () => runSqliteRequest(run, 'hook');
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
   try {
-    await run({ ...ctx, reach: contextReach(sqliteReach(localRoot, localStore), loadConfig) });
+    await run({ ...ctx, reach: contextReach(sqliteReach({ hippoRoot: localRoot, store: localStore }), loadConfig) });
   } finally {
     process.env.HIPPO_HOME = globalRoot;
   }

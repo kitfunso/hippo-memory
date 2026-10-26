@@ -13,14 +13,22 @@ export function fmt(n: number, digits = 2): string {
   return n.toFixed(digits);
 }
 
+export interface RecallEntryTextOptions {
+  readonly r: SearchResult;
+  readonly query: string;
+  readonly showWhy: boolean;
+  readonly isGlobal: boolean;
+  readonly now: Date;
+}
+
 // What `hippo recall` prints for one result; the budget prices this same text.
-export function recallEntryText(
-  r: SearchResult,
-  query: string,
-  showWhy: boolean,
-  isGlobal: boolean,
-  now: Date,
-): string {
+export function recallEntryText({
+  r,
+  query,
+  showWhy,
+  isGlobal,
+  now,
+}: RecallEntryTextOptions): string {
   const e = r.entry;
   const label = confidenceLabel(e, now);
   const confLabel = label.warn ? `[${label.text}] ⚠️` : `[${label.text}]`;
@@ -36,7 +44,7 @@ export function recallEntryText(
   if (showWhy) {
     // The row --json prints carries the same reason and envelope, so the two outputs never explain
     // a match apart.
-    const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal, now);
+    const { reason, envelope: env } = recallJsonRow({ r, query, showWhy: true, isGlobal, now });
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
       `    reason: ${reason}`,

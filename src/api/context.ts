@@ -195,17 +195,17 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
-  const recall = promptRecallRequest(opts, plan);
-  const pools = await loadPools(ctx, plan, admission, recall, sections.left);
+  const recallRequest = promptRecallRequest(opts, plan);
+  const pools = await loadPools(ctx, { plan, admission, recallRequest, left: sections.left });
   const noSections =
     !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
   if (nothingToInject(plan, pools, noSections)) return { entries: [], tokens: 0 };
 
   const picked = plan.pinnedOnly
-    ? selectPinned(opts, plan, sections.left, pools, admission)
+    ? selectPinned({ opts, plan, left: sections.left, pools, admission })
     : plan.query === NO_QUERY
       ? selectStrongest(plan, sections.left, pools)
-      : await selectBySearch(ctx, plan, sections.left, pools, admission);
+      : await selectBySearch(ctx, { plan, left: sections.left, pools, admission });
   if (picked === null) return { entries: [], tokens: 0 };
 
   const { items, tokens } = finalizeSelection(picked, plan);
@@ -220,7 +220,12 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
   // retrieval_count or extend half_life every turn.
   const recorded = plan.pinnedOnly
     ? { items, ambientState: undefined }
-    : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
+    : await recordRetrieval(ctx, {
+        opts,
+        plan,
+        selected: items,
+        activeSnapshot: sections.activeSnapshot,
+      });
   return contextResult(recorded, tokens, sections);
 }
 
@@ -550,12 +555,16 @@ function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   return plan.originProject && { names: plan.originProject, userGlobal: true };
 }
 
+interface LoadPoolsOptions {
+  readonly plan: ContextPlan;
+  readonly admission: ContextAdmission;
+  readonly recallRequest: AmbientRecallRequest | undefined;
+  readonly left: number;
+}
+
 async function loadPools(
   ctx: Context,
-  plan: ContextPlan,
-  admission: ContextAdmission,
-  recallRequest: AmbientRecallRequest | undefined,
-  left: number,
+  { plan, admission, recallRequest, left }: LoadPoolsOptions,
 ): Promise<ContextPools> {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
@@ -713,13 +722,17 @@ interface RecordedRetrieval {
   ambientState: AmbientState | undefined;
 }
 
+interface RecordRetrievalOptions {
+  readonly opts: ContextOptions;
+  readonly plan: ContextPlan;
+  readonly selected: ContextResultEntry[];
+  readonly activeSnapshot: TaskSnapshot | null;
+}
+
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
   ctx: Context,
-  opts: ContextOptions,
-  plan: ContextPlan,
-  selected: ContextResultEntry[],
-  activeSnapshot: TaskSnapshot | null,
+  { opts, plan, selected, activeSnapshot }: RecordRetrievalOptions,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
   const updatedEntries = markRetrieved(toUpdate, plan.now, plan.strength);

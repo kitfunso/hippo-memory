@@ -287,15 +287,19 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   return { ids: new Set(ids), rows, issues };
 }
 
+interface ApplyPlanOptions {
+  readonly run: RepairRun;
+  readonly plan: QualityRepairResult;
+  readonly backup: string;
+  readonly rules: StoreModel;
+}
+
 /** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock
  * never spans the tenant; a writer refuses these defects, so no new one can appear between the
  * plan and the lock. */
 function applyPlan(
   db: DatabaseSyncLike,
-  run: RepairRun,
-  plan: QualityRepairResult,
-  backup: string,
-  rules: StoreModel,
+  { run, plan, backup, rules }: ApplyPlanOptions,
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const blockers = capabilityBlockers(db);
@@ -331,7 +335,7 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
   }
   db.exec('PRAGMA foreign_keys = ON');
   const result = withBackup(db, root, 'before-quality-repair', (backup) =>
-    applyPlan(db, run, initial, backup, files),
+    applyPlan(db, { run, plan: initial, backup, rules: files }),
   );
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {

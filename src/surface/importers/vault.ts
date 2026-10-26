@@ -272,16 +272,24 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
     tally.skipped++;
     return;
   }
-  await writeChangedNote(run, artifactRef, priors, body, tags);
+  await writeChangedNote({ run, artifactRef, priors, body, tags });
 }
 
-async function writeChangedNote(
-  run: VaultImportRun,
-  artifactRef: string,
-  priors: MemoryEntry[],
-  body: string,
-  tags: string[],
-): Promise<void> {
+interface WriteChangedNoteOptions {
+  readonly run: VaultImportRun;
+  readonly artifactRef: string;
+  readonly priors: MemoryEntry[];
+  readonly body: string;
+  readonly tags: string[];
+}
+
+async function writeChangedNote({
+  run,
+  artifactRef,
+  priors,
+  body,
+  tags,
+}: WriteChangedNoteOptions): Promise<void> {
   const { ctx, tally } = run;
   // Changed file: archive EVERY old raw row for this ref (>1 only after a concurrent
   // double-insert), then append the new one; NEVER supersede. rawArchive commits before remember()
@@ -304,7 +312,7 @@ async function writeChangedNote(
     },
     ctx.infra.clock(),
   );
-  if (!(await storeVaultNote(run, echo, content, tags, artifactRef))) {
+  if (!(await storeVaultNote({ run, echo, content, tags, artifactRef }))) {
     tally.rejected++;
     return;
   }
@@ -388,14 +396,22 @@ function vaultEnvelopeUnchanged(
   );
 }
 
+interface StoreVaultNoteOptions {
+  readonly run: VaultImportRun;
+  readonly echo: MemoryEntry;
+  readonly content: string;
+  readonly tags: string[];
+  readonly artifactRef: string;
+}
+
 /** Returns false when the rejection guard refuses the note; any other error propagates. */
-async function storeVaultNote(
-  run: VaultImportRun,
-  echo: MemoryEntry,
-  content: string,
-  tags: string[],
-  artifactRef: string,
-): Promise<boolean> {
+async function storeVaultNote({
+  run,
+  echo,
+  content,
+  tags,
+  artifactRef,
+}: StoreVaultNoteOptions): Promise<boolean> {
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches
   // what a real run would refuse.
   if (run.dryRun) {

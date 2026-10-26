@@ -8,17 +8,26 @@ import { hybridSearch, type HybridSearchOptions } from './hybrid.js';
 import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
 
+export interface SearchByEngineOptions {
+  readonly source: VectorSource;
+  readonly query: string;
+  readonly pool: MemoryEntry[];
+  readonly physics: PhysicsConfig | null;
+  readonly options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'> &
+    RankTime;
+}
+
 /**
  * Physics scoring when `physics` holds its config, hybrid otherwise, both on the store `source`
  * names; each caller keeps its own options.
  */
-export function searchByEngine(
-  source: VectorSource,
-  query: string,
-  pool: MemoryEntry[],
-  physics: PhysicsConfig | null,
-  options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'> & RankTime,
-): Promise<SearchResult[]> {
+export function searchByEngine({
+  source,
+  query,
+  pool,
+  physics,
+  options,
+}: SearchByEngineOptions): Promise<SearchResult[]> {
   return physics
     ? rankPhysics(query, pool, { ...options, physicsConfig: physics, source })
     : hybridSearch(query, pool, { ...options, source });

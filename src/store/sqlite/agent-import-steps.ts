@@ -248,7 +248,12 @@ class ContainerSteps {
   }
 
   private setAside(id: string, why: SetAsideWhy): StepOutcome {
-    const result = setAsideRow(this.db, this.plan.tag, this.row(id), why, this.files);
+    const result = setAsideRow(this.db, {
+      tag: this.plan.tag,
+      row: this.row(id),
+      why,
+      rules: this.files,
+    });
     if (result.kind === 'untagged') this.mirror.push(result.entry);
     else this.purge.push(result.id);
     return result.kind;

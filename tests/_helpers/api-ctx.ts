@@ -15,7 +15,7 @@ export type FullContext = ContextWith<OptionalGroup> & { readonly hippoRoot: str
 
 /** The reach a root sets for `store` on `hippoRoot`, with the global store's config read as the CLI reads it. */
 export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(sqliteReach(hippoRoot, store), loadConfig, resolveEmbeddingProvider);
+  return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider);
 }
 
 /** A Context on hippo.db under `hippoRoot` with its store built at the eval rules and clock, as the CLI root hands it. */

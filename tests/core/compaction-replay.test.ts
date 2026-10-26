@@ -447,9 +447,13 @@ describe('two replayers working the same store', () => {
         cwd: null,
         items: ITEMS,
       };
-      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(
+        saveItems(db, { files: storeFilesOf(s.hippoRoot), ctx, log, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(
+        saveItems(db, { files: storeFilesOf(s.hippoRoot), ctx, log, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(2);
     } finally {
       closeHippoDb(db);
     }

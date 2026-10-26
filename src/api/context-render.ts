@@ -135,13 +135,21 @@ export function contextHeading(heading: string, entries: number, tokens: number)
   return `## ${heading} (${entries} entries, ${tokens} tokens)\n`;
 }
 
-export function contextLine(
-  item: { entry: MemoryEntry; isGlobal: boolean },
-  framing: string,
-  showStrength: boolean,
-  now: Date,
-  strengthPct: number,
-): string {
+export interface ContextLineOptions {
+  readonly item: { entry: MemoryEntry; isGlobal: boolean };
+  readonly framing: string;
+  readonly showStrength: boolean;
+  readonly now: Date;
+  readonly strengthPct: number;
+}
+
+export function contextLine({
+  item,
+  framing,
+  showStrength,
+  now,
+  strengthPct,
+}: ContextLineOptions): string {
   const e = item.entry;
   const content = shownContent(e);
   const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
@@ -176,13 +184,13 @@ export function contextBlockLines(
   return [
     contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
     ...items.map((item) =>
-      contextLine(
+      contextLine({
         item,
         framing,
         showStrength,
         now,
-        Math.round(calculateStrength(item.entry, now, strength) * 100),
-      ),
+        strengthPct: Math.round(calculateStrength(item.entry, now, strength) * 100),
+      }),
     ),
   ];
 }
@@ -324,13 +332,13 @@ export function contextCost(
       price(
         item.category === 'cross-project' && !(hook && item.promptRecall)
           ? crossProjectLine(item)
-          : contextLine(
-              { entry: item.entry, isGlobal: item.isGlobal ?? false },
+          : contextLine({
+              item: { entry: item.entry, isGlobal: item.isGlobal ?? false },
               framing,
-              !hook,
+              showStrength: !hook,
               now,
-              100,
-            ),
+              strengthPct: 100,
+            }),
       ),
     fixed: (budget, can) =>
       price(contextHeading('Project Memory', budget, budget)) +

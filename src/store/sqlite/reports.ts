@@ -107,7 +107,7 @@ function memoryStatus(
   atRiskBelow: number,
 ): StrengthTallies & { openConflicts: number } {
   return withReadSnapshot(db, () => ({
-    ...strengthTallies(db, rules, tenantId, now, atRiskBelow),
+    ...strengthTallies(db, { rules, tenantId, now, atRiskBelow }),
     openConflicts: countOpenConflicts(db, tenantId),
   }));
 }

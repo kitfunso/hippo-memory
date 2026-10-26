@@ -166,7 +166,7 @@ describe('decisions store (first-class object)', () => {
     const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'to-supersede',
     });
-    await closeObject(objectsAt(home), DECISION, 'default', b.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: b.id, actor: CLI_ACTOR, now: evalNow() });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'successor',
       supersedesDecisionId: c.id,

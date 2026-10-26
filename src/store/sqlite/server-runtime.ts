@@ -80,7 +80,8 @@ export function sqliteServerRuntime(
     store,
     host,
     onHippoDb: isHippoDbStore(store),
-    reachOf: (shared) => sqliteReach(hippoRoot, store, shared, globalStores.open, host),
+    reachOf: (shared) =>
+      sqliteReach({ hippoRoot, store, shared, openGlobal: globalStores.open, host }),
     offLoop: offLoopFor(store),
     outsideRouteBlock,
     workerCounts,

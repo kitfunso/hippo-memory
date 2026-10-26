@@ -162,7 +162,12 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
+    const stored = await storeExtractedFacts(sqliteStore(home), {
+      source,
+      facts,
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: evalNow(),
+    });
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.tenantId).toBe('tenant-extract');

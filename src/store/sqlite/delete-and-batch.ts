@@ -228,16 +228,20 @@ function mergeOwnChanges({ base, ours, live }: MergeOwnChangesOptions): MemoryEn
   return row;
 }
 
+export interface BatchWriteAndDeleteOptions {
+  readonly files: StoreFiles;
+  readonly toWrite: MemoryEntry[];
+  readonly toDeleteIds: string[];
+  readonly opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] };
+}
+
 /** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the
  * fields the caller changed and never resurrects a gone row. Dormant moves (sqlite/dormant.ts)
  * leave `memories` like a delete; both skip rows no longer auto-deletable. Returns ids that left
  * `memories`. */
 export function batchWriteAndDelete(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  toWrite: MemoryEntry[],
-  toDeleteIds: string[],
-  opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
+  { files, toWrite, toDeleteIds, opts }: BatchWriteAndDeleteOptions,
 ): string[] {
   // One component, so every op keeps the statement order this call has always had.
   const all: FlushComponent = {
@@ -246,8 +250,12 @@ export function batchWriteAndDelete(
     deletes: toDeleteIds,
     dormant: opts?.dormant ?? [],
   };
-  return batchWriteAndDeleteOn(db, files, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity })
-    .removedIds;
+  return batchWriteAndDeleteOn(db, {
+    files,
+    components: [all],
+    from: 0,
+    opts: { snapshot: opts?.snapshot, holdMs: Infinity },
+  }).removedIds;
 }
 
 /** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit
@@ -262,16 +270,20 @@ function noteFailedComponent(err: Error, component: FlushComponent | undefined):
   ]);
 }
 
+interface BatchWriteAndDeleteOnOptions {
+  readonly files: StoreFiles;
+  readonly components: readonly FlushComponent[];
+  readonly from: number;
+  readonly opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number };
+}
+
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole,
  * closing the transaction at the first component boundary after `holdMs`. Returns the next
  * component's index and the ids that left `memories`.
  */
 function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  components: readonly FlushComponent[],
-  from: number,
-  opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number },
+  { files, components, from, opts }: BatchWriteAndDeleteOnOptions,
 ): FlushChunk {
   const now = opts.clock ?? clock;
   const out: ChunkLog = {
@@ -286,7 +298,7 @@ function batchWriteAndDeleteOn(
   // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the
   // batch.
   withWriteScope(db, 'flush_chunk', () => {
-    next = applyUntilHold(db, files, components, { ...opts, from, clock: now }, out);
+    next = applyUntilHold(db, { files, components, opts: { ...opts, from, clock: now }, out });
     const removed = new Set(out.removedIds);
     replaceFtsRows(
       db,
@@ -311,14 +323,18 @@ function batchWriteAndDeleteOn(
 // twice the ops it applies, plus 16, however early its hold closes it.
 const FIRST_WINDOW_OPS = 16;
 
+interface ApplyUntilHoldOptions {
+  readonly files: StoreFiles;
+  readonly components: readonly FlushComponent[];
+  readonly opts: { from: number; snapshot?: LoadedRows; holdMs: number; clock: () => number };
+  readonly out: ChunkLog;
+}
+
 /** Applies components from `from` until the hold runs out, each window of them planned on one
  * read; the next index. */
 function applyUntilHold(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  components: readonly FlushComponent[],
-  opts: { from: number; snapshot?: LoadedRows; holdMs: number; clock: () => number },
-  out: ChunkLog,
+  { files, components, opts, out }: ApplyUntilHoldOptions,
 ): number {
   const begunAt = opts.clock();
   let next = opts.from;
@@ -335,7 +351,12 @@ function applyUntilHold(
         });
         windowOps = Math.min(windowOps * 2, ID_CHUNK);
       }
-      applyComponent(db, components[at]!, window.writes[at - window.from]!, window.refused, out);
+      applyComponent(db, {
+        component: components[at]!,
+        writes: window.writes[at - window.from]!,
+        refused: window.refused,
+        out,
+      });
     } catch (err) {
       if (err instanceof Error) noteFailedComponent(err, components[at]);
       throw err;
@@ -360,14 +381,18 @@ interface ChunkLog {
   dirty: DirtyParents;
 }
 
+interface ApplyComponentOptions {
+  readonly component: FlushComponent;
+  readonly writes: readonly PlannedWrite[];
+  readonly refused: ReadonlyMap<string, RejectedValueRow>;
+  readonly out: ChunkLog;
+}
+
 /** One component in the open transaction, in the order a single batch always ran: pin-checked
  * deletes, writes, dormant moves, row deletes. */
 function applyComponent(
   db: DatabaseSyncLike,
-  component: FlushComponent,
-  writes: readonly PlannedWrite[],
-  refused: ReadonlyMap<string, RejectedValueRow>,
-  out: ChunkLog,
+  { component, writes, refused, out }: ApplyComponentOptions,
 ): void {
   // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through
   // here every cycle, so without it parents would never be marked dirty for decay, merge or
@@ -656,10 +681,15 @@ export async function commitInChunks(
     let committedAt = 0;
     while (next < components.length) {
       if (next > 0) await budget.pause(committedAt);
-      const chunk = batchWriteAndDeleteOn(db, files, components, next, {
-        snapshot,
-        holdMs: budget.holdMs,
-        clock: budget.clock,
+      const chunk = batchWriteAndDeleteOn(db, {
+        files,
+        components,
+        from: next,
+        opts: {
+          snapshot,
+          holdMs: budget.holdMs,
+          clock: budget.clock,
+        },
       });
       committedAt = budget.clock();
       next = chunk.next;

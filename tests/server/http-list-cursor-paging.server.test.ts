@@ -63,13 +63,12 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, {
       decisionText: `${tenantId} decision ${i}`,
     });
-    await openIncident(
-      objectsAt(home),
-      loadConfig(home).defaultHalfLifeDays,
+    await openIncident(objectsAt(home), {
+      baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
       tenantId,
-      { incidentText: `${tenantId} incident ${i}` },
-      { actor: 'cli', now: evalNow() },
-    );
+      opts: { incidentText: `${tenantId} incident ${i}` },
+      by: { actor: 'cli', now: evalNow() },
+    });
     await cliSave(home, tenantId, PROCESS, {
       processName: `${tenantId} process ${i}`,
       steps: ['one', 'two'],

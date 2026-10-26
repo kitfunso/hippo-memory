@@ -312,13 +312,21 @@ interface ItemWrites {
   restated: string[];
 }
 
-function compactionEntry(
-  text: string,
-  ctx: ItemContext,
-  origin: string | null,
-  baseHalfLifeDays: number,
-  now: Date,
-): MemoryEntry {
+interface CompactionEntryOptions {
+  readonly text: string;
+  readonly ctx: ItemContext;
+  readonly origin: string | null;
+  readonly baseHalfLifeDays: number;
+  readonly now: Date;
+}
+
+function compactionEntry({
+  text,
+  ctx,
+  origin,
+  baseHalfLifeDays,
+  now,
+}: CompactionEntryOptions): MemoryEntry {
   return {
     ...createMemory(
       text,
@@ -338,14 +346,18 @@ function compactionEntry(
   };
 }
 
+interface WriteItemRowsOptions {
+  readonly files: StoreFiles;
+  readonly ctx: ItemContext;
+  readonly rows: readonly string[];
+  readonly baseHalfLifeDays: number;
+}
+
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go
  * through the write gate. */
 function writeItemRows(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  ctx: ItemContext,
-  rows: readonly string[],
-  baseHalfLifeDays: number,
+  { files, ctx, rows, baseHalfLifeDays }: WriteItemRowsOptions,
 ): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
   const held = heldRows(
@@ -368,7 +380,7 @@ function writeItemRows(
       out.refused++;
       continue;
     }
-    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays, files.clock());
+    const entry = compactionEntry({ text, ctx, origin, baseHalfLifeDays, now: files.clock() });
     if (
       gatedWrite(db, files, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written'
     ) {
@@ -403,14 +415,18 @@ function finishItemWrites(
   }
 }
 
+export interface SaveItemsOptions {
+  readonly files: StoreFiles;
+  readonly ctx: ItemContext;
+  readonly log: Log;
+  readonly baseHalfLifeDays: number;
+}
+
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot
  * both insert one text. Mirrors after commit. */
 export function saveItems(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  ctx: ItemContext,
-  log: Log,
-  baseHalfLifeDays: number,
+  { files, ctx, log, baseHalfLifeDays }: SaveItemsOptions,
 ): number {
   const rows = writableItemRows(ctx.items, log);
 
@@ -424,7 +440,7 @@ export function saveItems(
         return rollback(null);
       }
     }
-    const written = writeItemRows(db, files, ctx, rows, baseHalfLifeDays);
+    const written = writeItemRows(db, { files, ctx, rows, baseHalfLifeDays });
     // Said again by another session is the same signal as being recalled; the same session carrying
     // it forward is not.
     const strengthen = {

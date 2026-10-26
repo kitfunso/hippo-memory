@@ -22,9 +22,9 @@ function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): n
   const conflicts = ctx.conflictPairs.get(pi.memoryId);
   for (let j = 0; j < particles.length; j++) {
     if (i === j) continue;
-    net = vecAdd(net, attractionForce(pi, particles[j], ctx.config.gMemory));
+    net = vecAdd(net, attractionForce({ pi, pj: particles[j], gMemory: ctx.config.gMemory }));
     if (conflicts?.has(particles[j].memoryId)) {
-      net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.kRepulsion));
+      net = vecAdd(net, repulsionForce({ pi, pj: particles[j], kRepulsion: ctx.config.kRepulsion }));
     }
   }
   return vecAdd(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));

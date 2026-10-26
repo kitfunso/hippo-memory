@@ -104,14 +104,16 @@ function putInt8(unit: Float32Array, out: Int8Array): void {
   for (let i = 0; i < unit.length; i++) out[i] = Math.round(unit[i] * scale);
 }
 
+interface WriteUpperLinksOptions {
+  readonly view: DataView;
+  readonly base: number;
+  readonly links: readonly number[][];
+  readonly at: ArrayLike<number>;
+  readonly m: number;
+}
+
 /** The links of levels 1 and up of one node, level by level from `base`. */
-function writeUpperLinks(
-  view: DataView,
-  base: number,
-  links: readonly number[][],
-  at: ArrayLike<number>,
-  m: number,
-) {
+function writeUpperLinks({ view, base, links, at, m }: WriteUpperLinksOptions) {
   for (let level = 1; level < links.length; level++) {
     const from = base + (level - 1) * upperLevelBytes(m);
     view.setUint32(from, links[level].length, true);
@@ -188,7 +190,7 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     view.setUint32(off + RECORD_AT.upperOffset, upperOf[node], true);
     data.links[0].forEach((to, j) => view.setUint32(off + RECORD_HEAD + 4 * j, at[to], true));
     putInt8(unit, new Int8Array(bytes.buffer, off + RECORD_HEAD + 8 * m, dim));
-    writeUpperLinks(view, upperAt + upperOf[node], data.links, at, m);
+    writeUpperLinks({ view, base: upperAt + upperOf[node], links: data.links, at, m });
     if (i % ENCODE_TURN_NODES === ENCODE_TURN_NODES - 1) yield;
   }
   view.setUint32(HEADER_AT.live, live, true);

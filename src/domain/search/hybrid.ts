@@ -287,6 +287,11 @@ async function orderHybrid(
     ? applyMmrWindow(scored, arm.embeddingIndex, mmrLambda, options.explain ?? false)
     : scored;
   return options.reranker
-    ? applyReranker(query, ordered, options.reranker, options.rerankerOptions)
+    ? applyReranker({
+        query,
+        ordered,
+        reranker: options.reranker,
+        rerankerOptions: options.rerankerOptions,
+      })
     : ordered;
 }

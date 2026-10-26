@@ -36,16 +36,20 @@ function readPilotArm(
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 
+interface EnsurePilotArmOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly rateBp: number;
+  readonly opts?: { ownTenantOnly?: boolean; now?: string };
+}
+
 /** The stored arm, else the hash arm written once; on any error the hash arm comes back
  * unrecorded. */
 // The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a
 // handle opened in that scope.
 function ensurePilotArm(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  rateBp: number,
-  opts: { ownTenantOnly?: boolean; now?: string } = {},
+  { tenantId, sessionId, rateBp, opts = {} }: EnsurePilotArmOptions,
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
   // On one machine a session has one arm, so any tenant's row counts unless the caller holds only
@@ -195,7 +199,7 @@ function pilotArm(
 ): PilotArm {
   const { ownTenantOnly } = opts;
   return opts.write
-    ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
+    ? ensurePilotArm(db, { tenantId, sessionId, rateBp, opts: { ownTenantOnly } })
     : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ??
         hashArm(sessionId, rateBp));
 }

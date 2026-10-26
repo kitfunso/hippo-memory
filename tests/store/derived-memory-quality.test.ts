@@ -66,10 +66,9 @@ describe('quality at automatic derivation boundaries', () => {
   it('writes complete extracted facts while refusing returned fragments per fact', async () => {
     const source = createMemory('A discussion about the production migration deployment ordering.');
     writeEntry(root, source);
-    const facts = await storeExtractedFacts(
-      sqliteStore(root),
+    const facts = await storeExtractedFacts(sqliteStore(root), {
       source,
-      [
+      facts: [
         { content: 'Found local migration files to be', tags: [], valence: 'neutral' },
         {
           content:
@@ -79,9 +78,9 @@ describe('quality at automatic derivation boundaries', () => {
         },
         { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },
       ],
-      DEFAULT_HALF_LIFE_DAYS,
-      new Date(),
-    );
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: new Date(),
+    });
     expect(facts).toHaveLength(1);
     expect(facts[0].content).toContain('must exclude test schema setup');
     expect(loadAllEntries(root, 'default')).toHaveLength(2);

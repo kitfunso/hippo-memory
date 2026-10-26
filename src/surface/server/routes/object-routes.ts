@@ -121,7 +121,10 @@ async function supersedeRoute<K extends SavableKind>(
 ): Promise<void> {
   const { ctx } = rr;
   const successor = cfg.revise(await parseJsonBody(rr.req, ctx));
-  const saved = await objectSupersede(ctx, cfg.kind, id, (existing) => successor(existing, id));
+  const saved = await objectSupersede(ctx, cfg.kind, {
+    id,
+    next: (existing) => successor(existing, id),
+  });
   if (saved === null) throw notFound(cfg, id);
   sendJson(rr.res, 200, { [cfg.field]: saved });
 }

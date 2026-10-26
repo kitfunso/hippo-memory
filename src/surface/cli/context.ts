@@ -104,14 +104,22 @@ interface ContextGate {
   readonly budget: number;
 }
 
+interface ContextGateOptions {
+  readonly hippoRoot: string;
+  readonly resolvedTenant: string;
+  readonly flags: CliFlags;
+  readonly stdinText: string | undefined;
+  readonly rec: DeliveryRecorder | null;
+}
+
 /** Null when this call renders nothing: the pilot holdout arm, or a budget of zero. */
-async function contextGate(
-  hippoRoot: string,
-  resolvedTenant: string,
-  flags: CliFlags,
-  stdinText: string | undefined,
-  rec: DeliveryRecorder | null,
-): Promise<ContextGate | null> {
+async function contextGate({
+  hippoRoot,
+  resolvedTenant,
+  flags,
+  stdinText,
+  rec,
+}: ContextGateOptions): Promise<ContextGate | null> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.contextGet falls back to global-only.
   const pinnedOnly = boolFlag(flags, 'pinned-only');
@@ -152,7 +160,7 @@ interface RenderContextOptions {
 
 async function renderContext(options: RenderContextOptions): Promise<void> {
   const { hippoRoot, tenantId: resolvedTenant, args, flags, stdinText, rec } = options;
-  const gate = await contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
+  const gate = await contextGate({ hippoRoot, resolvedTenant, flags, stdinText, rec });
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;
 

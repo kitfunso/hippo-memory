@@ -83,7 +83,9 @@ async function explainQuery({
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const now = ctx.infra.clock();
   const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, scope.origin.isGlobal(r), now));
+    printedTokens(
+      recallEntryText({ r, query, showWhy: false, isGlobal: scope.origin.isGlobal(r), now }),
+    );
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const rank = await inspectRanking(ctx, query, {
@@ -99,7 +101,7 @@ async function explainQuery({
     },
     sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
   });
-  printExplainResults(rank, engine.usePhysics, query, asJson, now);
+  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now });
 }
 
 interface ExplainScope {
@@ -151,13 +153,21 @@ async function inspectRanking(
   return rank;
 }
 
-function printExplainResults(
-  rank: RankRecallResult,
-  usePhysics: boolean,
-  query: string,
-  asJson: boolean,
-  now: Date,
-): void {
+interface PrintExplainResultsOptions {
+  readonly rank: RankRecallResult;
+  readonly usePhysics: boolean;
+  readonly query: string;
+  readonly asJson: boolean;
+  readonly now: Date;
+}
+
+function printExplainResults({
+  rank,
+  usePhysics,
+  query,
+  asJson,
+  now,
+}: PrintExplainResultsOptions): void {
   const hasGlobal = rank.globalEntries.length > 0;
   const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
     usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
@@ -166,7 +176,7 @@ function printExplainResults(
   const candidates = rank.localEntries.length + rank.globalEntries.length;
 
   if (asJson) {
-    printExplainJson(results, query, modeUsed, candidates, now);
+    printExplainJson({ results, query, modeUsed, candidates, now });
     return;
   }
 
@@ -181,13 +191,21 @@ function printExplainResults(
   console.log('Note: explain does not mark memories as retrieved (read-only).');
 }
 
-function printExplainJson(
-  results: SearchResult[],
-  query: string,
-  modeUsed: string,
-  candidates: number,
-  now: Date,
-): void {
+interface PrintExplainJsonOptions {
+  readonly results: SearchResult[];
+  readonly query: string;
+  readonly modeUsed: string;
+  readonly candidates: number;
+  readonly now: Date;
+}
+
+function printExplainJson({
+  results,
+  query,
+  modeUsed,
+  candidates,
+  now,
+}: PrintExplainJsonOptions): void {
   const output = results.map((r, rank) => ({
     rank: rank + 1,
     id: r.entry.id,

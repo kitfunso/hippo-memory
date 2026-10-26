@@ -525,7 +525,7 @@ describe('resetAllPhysicsState', () => {
         mem_r2: [0.1, 0.2, 0.3],
       } satisfies Record<string, number[]>;
 
-      const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
+      const count = resetAllPhysicsState(db, entries, embeddingIndex, { now: NOW });
       expect(count).toBe(2);
 
       const loaded = loadAllPhysicsState(db);
@@ -552,7 +552,7 @@ describe('resetAllPhysicsState', () => {
         // mem_no_emb intentionally missing
       } satisfies Record<string, number[]>;
 
-      const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
+      const count = resetAllPhysicsState(db, entries, embeddingIndex, { now: NOW });
       expect(count).toBe(1);
 
       const loaded = loadAllPhysicsState(db);
@@ -573,7 +573,7 @@ describe('resetAllPhysicsState', () => {
         mem_empty_emb: [],
       } satisfies Record<string, number[]>;
 
-      const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
+      const count = resetAllPhysicsState(db, entries, embeddingIndex, { now: NOW });
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -583,7 +583,7 @@ describe('resetAllPhysicsState', () => {
   it('handles empty entries list', () => {
     const db = openHippoDb(tmpDir);
     try {
-      const count = resetAllPhysicsState(db, [], {}, NOW);
+      const count = resetAllPhysicsState(db, [], {}, { now: NOW });
       expect(count).toBe(0);
       expect(loadAllPhysicsState(db).size).toBe(0);
     } finally {
