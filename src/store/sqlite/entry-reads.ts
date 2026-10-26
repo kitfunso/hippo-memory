@@ -3,7 +3,7 @@ import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } 
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { bareTextSql, scopeAdmitSql } from './rule-sql.js';
+import { scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
@@ -497,32 +497,54 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
 
 const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
 
-// Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
-const SPACELESS_CONTENT = bareTextSql('content');
+// Keys per page of the duplicate read; each page reads its keys' rows by idx_memories_duplicate_key.
+const DUPLICATE_KEYS_PAGE = 500;
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
   // One read transaction, so the partition keys describe the rows read.
   return withReadSnapshot(db, () => {
-    const rows = cachedStatement(
-      db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT id FROM (SELECT id, COUNT(*) OVER ` +
-        `(PARTITION BY ${SPACELESS_CONTENT}) AS n FROM memories WHERE ${CURRENT_DISTILLED}) WHERE n > 1) ` +
-        `ORDER BY created ASC, id ASC`,
-    ).all() as MemoryRow[];
-    // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
-    const firsts = cachedStatement(
-      db,
-      `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
-        `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
-    ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
-    const firstSeen = firsts.map((f) => ({
-      tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
-      scope: f.scope,
-      originProject: f.origin_project,
-    }));
-    return { rows: rows.map(rowToEntry), firstSeen };
+    const rows: MemoryRow[] = [];
+    for (let after = ''; ;) {
+      // duplicate_key is the spaceless text of a current distilled row and NULL on every other, so a key held twice is
+      // a group; the partial index walks only those rows, in key order.
+      const keys = cachedStatement(
+        db,
+        `SELECT duplicate_key AS k FROM memories WHERE duplicate_key IS NOT NULL AND duplicate_key > ? ` +
+          `GROUP BY duplicate_key HAVING COUNT(*) > 1 ORDER BY duplicate_key LIMIT ?`,
+      ).all(after, DUPLICATE_KEYS_PAGE) as Array<{ k: string }>;
+      if (keys.length === 0) break;
+      rows.push(
+        ...(cachedStatement(
+          db,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE duplicate_key IN (SELECT value FROM json_each(?))`,
+        ).all(JSON.stringify(keys.map((key) => key.k))) as MemoryRow[]),
+      );
+      if (keys.length < DUPLICATE_KEYS_PAGE) break;
+      after = keys[keys.length - 1]!.k;
+    }
+    // Pages come in key order; the port's order is created then id, as SQLite compares the ASCII stamps and ids.
+    rows.sort(byCreatedThenId);
+    return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
   });
+}
+
+const byCreatedThenId = (a: MemoryRow, b: MemoryRow): number =>
+  a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1;
+
+/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears by created then id. */
+function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSeen'] {
+  // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
+  const firsts = cachedStatement(
+    db,
+    `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
+      `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
+  ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
+  return firsts.map((f) => ({
+    tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
+    scope: f.scope,
+    originProject: f.origin_project,
+  }));
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers re-check each row. */

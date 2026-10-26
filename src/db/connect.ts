@@ -6,49 +6,63 @@ import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
 import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
+import { currentStoreRuntime, storeKey } from './store-runtime.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
 
-// Per store file, what this process has already done to it; a store file created anew starts over.
-const settledSteps = new Map<string, Set<string>>();
-const sweptThrough = new Map<string, number>();
-
-function storeKey(hippoRoot: string): string {
-  return path.resolve(getHippoDbPath(hippoRoot));
-}
-
-/** Runs `step` on this store unless it already ran to the end in this process; a throw leaves it due. */
+/** Runs `step` on this store unless it already ran to the end under the current store runtime; a throw leaves it due,
+ * and outside every runtime it always runs. */
 export function oncePerStore(hippoRoot: string, name: string, step: () => void): void {
+  const runtime = currentStoreRuntime();
   const key = storeKey(hippoRoot);
-  const settled = settledSteps.get(key) ?? new Set<string>();
-  if (settled.has(name)) return;
+  if (runtime?.hasRun(key, name)) return;
   step();
-  settledSteps.set(key, settled.add(name));
+  runtime?.markRun(key, name);
 }
 
-// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs.
+// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs, with one warning.
 function createStoreFilesOwnerOnly(hippoRoot: string): void {
   // A stat, not a failed exclusive open, is what an existing store costs on every connection.
-  if (fs.existsSync(getHippoDbPath(hippoRoot))) return;
+  if (fs.existsSync(getHippoDbPath(hippoRoot))) {
+    oncePerStore(hippoRoot, 'mode-check', () => warnWideModes(hippoRoot));
+    return;
+  }
   fs.mkdirSync(hippoRoot, { recursive: true, mode: 0o700 });
   try {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
-    settledSteps.delete(storeKey(hippoRoot));
-    sweptThrough.delete(storeKey(hippoRoot));
+    currentStoreRuntime()?.forget(storeKey(hippoRoot));
   } catch (err) {
     if (errorCode(err) !== 'EEXIST') throw err;
   }
 }
 
-// The archive only grows and its ids never repeat, so an unchanged top id means no row this process has not swept; a
-// failed sweep stays due.
+// Windows reports no owner-only bits, so only a POSIX mode can be too wide.
+function warnWideModes(hippoRoot: string): void {
+  if (process.platform === 'win32') return;
+  const wide = [
+    { file: hippoRoot, limit: 0o700 },
+    { file: getHippoDbPath(hippoRoot), limit: 0o600 },
+  ].filter(({ file, limit }) => (fs.statSync(file).mode & 0o777 & ~limit) !== 0);
+  for (const { file, limit } of wide) {
+    const mode = (fs.statSync(file).mode & 0o777).toString(8);
+    log.once(
+      `store-mode:${file}`,
+      'warn',
+      `${file} has mode ${mode}, wider than ${limit.toString(8)}; run chmod ${limit.toString(8)} ${file}`,
+    );
+  }
+}
+
+// The archive only grows and its ids never repeat, so an empty archive or an unchanged top id means no row this runtime
+// has not swept; a failed sweep stays due.
 function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, probedTop: number | undefined): void {
+  const runtime = currentStoreRuntime();
   const top = probedTop ?? archiveTop(db);
   const key = storeKey(hippoRoot);
-  if (sweptThrough.get(key) === top) return;
-  if (cleanupArchivedMirrors(hippoRoot, db)) sweptThrough.set(key, top);
+  if (top === 0 || runtime?.sweptTop(key) === top) return;
+  if (cleanupArchivedMirrors(hippoRoot, db)) runtime?.markSwept(key, top);
 }
 
 function archiveTop(db: DatabaseSyncLike): number {
@@ -61,13 +75,13 @@ const SCHEMA_STEP = 'schema';
 /** Makes the next connection to this store prove its schema again; `hippo init` calls it because it is the explicit ask
  * to set a store up. */
 export function reproveStoreSchema(hippoRoot: string): void {
-  settledSteps.get(storeKey(hippoRoot))?.delete(SCHEMA_STEP);
+  currentStoreRuntime()?.forget(storeKey(hippoRoot), SCHEMA_STEP);
 }
 
-// Once this process has proven a store's schema, a new connection re-reads only the two version stamps and the binary
+// Once the runtime has proven a store's schema, a new connection re-reads only the two version stamps and the binary
 // floor: a migration by another process moves a stamp and sends the open down the full path.
 function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: number): OpenFacts | null {
-  if (settledSteps.get(storeKey(hippoRoot))?.has(SCHEMA_STEP)) {
+  if (currentStoreRuntime()?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
     const settled = settledStoreFacts(db);
     if (settled) {
       // An older binary can still write embeddings.json beside a store this process has proven.
@@ -87,6 +101,8 @@ function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: numbe
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
   readonly facts: OpenFacts | null;
+  /** The request's own handle again: its first open already ran the once-per-open steps. */
+  readonly reused?: boolean;
 }
 
 /**

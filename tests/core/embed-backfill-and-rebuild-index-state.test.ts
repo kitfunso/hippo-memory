@@ -6,7 +6,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../sr
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
@@ -124,7 +124,7 @@ function indexOn(root: string): IndexState {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid')
         .all() as VectorRow[],
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
+      particles: [...loadAllPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);

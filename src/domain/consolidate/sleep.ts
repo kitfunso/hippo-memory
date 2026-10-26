@@ -21,7 +21,7 @@ import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
-import type { FlushComponent, SleepBegin, SleepStart } from '../../base/ports/store/consolidation.js';
+import type { FlushComponent, SleepBegin, SleepStart, UntracedSession } from '../../base/ports/store/consolidation.js';
 import { SleepRows, Survivors } from './survivors.js';
 import { tombstoneChecks } from './tombstones.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -83,7 +83,11 @@ export async function runConsolidation(
   return result;
 }
 
-async function runAndFlush(run: SleepRun, options: ConsolidateOptions, sessions: readonly string[]): Promise<void> {
+async function runAndFlush(
+  run: SleepRun,
+  options: ConsolidateOptions,
+  sessions: readonly UntracedSession[],
+): Promise<void> {
   const decay = await decayPass(run);
   await runPassesAfterDecay(run, options.llm, sessions);
 
@@ -112,7 +116,11 @@ function sessionDecayOptions(start: SleepStart, config: SleepRun['config']): Dec
   };
 }
 
-async function runPassesAfterDecay(run: SleepRun, llm: Llm | undefined, sessions: readonly string[]): Promise<void> {
+async function runPassesAfterDecay(
+  run: SleepRun,
+  llm: Llm | undefined,
+  sessions: readonly UntracedSession[],
+): Promise<void> {
   await promoteSessionTraces(run, sessions);
   await replayPass(run);
   await llmPasses(run, llm);

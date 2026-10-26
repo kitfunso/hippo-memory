@@ -9,6 +9,7 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { recordStatements } from '../_helpers/count-statements.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -136,16 +137,42 @@ describe('loadSearchEntries paths', () => {
         db.exec('BEGIN');
         for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
         db.exec('COMMIT');
-        lowered = 0;
-        expect(listRecallEntries(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' })).toHaveLength(
-          200,
-        );
-        // The LIKE predicate lowers content and tags once per term for each row it tests.
-        return lowered / 2;
+        const tested = (query: string): number => {
+          lowered = 0;
+          expect(listRecallEntries(db, query, { limit: 200, tenantId: 'default' })).toHaveLength(200);
+          // The LIKE predicate lowers content and tags once per term for each row it tests.
+          return lowered / 2;
+        };
+        // A 3-character term goes to the trigram index and LIKE tests no row; a 2-character one tests the window.
+        expect(tested('zzzznonexistenttokenxxxxxx')).toBe(0);
+        return tested('zq');
       });
-      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/search-rows.ts).
+      // Both stores outgrow the 2,000-row window LIKE tests (LIKE_WINDOW_ROWS in src/store/rules/windows.ts).
       expect(rowsTested[0]).toBe(2000);
       expect(rowsTested[1]).toBe(rowsTested[0]);
+    } finally {
+      closeHippoDb(db);
+    }
+  }, 30_000);
+
+  it('substring path: a part-word finds a row older than the 2,000 newest, through the trigram index', () => {
+    const db = openHippoDb(root);
+    try {
+      db.exec('BEGIN');
+      writeEntryDbOnly(db, makeRaw('the quillwortledger entry'));
+      for (let i = 0; i < 2500; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
+      db.exec('COMMIT');
+      const { result, statements } = recordStatements(() =>
+        listRecallEntries(db, 'wortledg', { limit: 200, tenantId: 'default' }),
+      );
+      expect(result.map((e) => e.content)).toEqual(['the quillwortledger entry']);
+
+      const sql = statements.find((text) => text.includes('memories_trigram MATCH'));
+      expect(sql).toBeDefined();
+      // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail);
+      expect(plan).toContainEqual(expect.stringMatching(/^SCAN t VIRTUAL TABLE INDEX \d+:/));
+      expect(plan).toContainEqual(expect.stringMatching(/^SEARCH m USING INTEGER PRIMARY KEY \(rowid=\?\)/));
     } finally {
       closeHippoDb(db);
     }

@@ -1,9 +1,10 @@
 // One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed
 // with it.
-import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
-import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
+import { connectWithFacts, type OpenedDb } from './connect.js';
+import { settledStoreFacts } from './migrate.js';
+import { currentStoreRuntime, storeKey, type StoreRuntime } from './store-runtime.js';
 import {
   currentDeadline,
   currentRequestId,
@@ -30,21 +31,6 @@ export interface RequestStoresOptions {
 // Handles a scope owns, so closeHippoDb leaves them open for the rest of the request.
 const scopedHandles = new WeakSet<DatabaseSyncLike>();
 
-// process.exit skips every finally, so one exit listener closes the handles of scopes still open.
-const liveScopes = new Set<RequestStores>();
-let exitListenerInstalled = false;
-
-function closeLiveScopes(): void {
-  for (const scope of liveScopes) scope.close();
-}
-
-function trackLive(scope: RequestStores): void {
-  liveScopes.add(scope);
-  if (exitListenerInstalled) return;
-  process.on('exit', closeLiveScopes);
-  exitListenerInstalled = true;
-}
-
 /** The handles one request opened, keyed by resolved store path and lock wait. */
 export class RequestStores implements RequestScope {
   readonly busyWaitMs: number | undefined;
@@ -55,6 +41,8 @@ export class RequestStores implements RequestScope {
   readonly setupDoneFor: string | undefined;
   readonly #failFastWhenBusy: boolean;
   readonly #handles = new Map<string, DatabaseSyncLike>();
+  // The runtime the scope opened under: its exit closes the scope, and its pool lends and takes back the handles.
+  readonly #runtime: StoreRuntime | undefined = currentStoreRuntime();
   #closed = false;
 
   constructor(opts: RequestStoresOptions = {}) {
@@ -77,16 +65,47 @@ export class RequestStores implements RequestScope {
     const busyWaitMs = opts?.busyWaitMs ?? this.busyWaitMs;
     // A listener or timer that outlives its request still sees this scope, so it gets a connection of its own.
     if (this.#closed) return connectWithFacts(hippoRoot, busyWaitMs);
-    const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
+    const key = `${storeKey(hippoRoot)}\0${busyWaitMs ?? ''}`;
     const cached = this.#handles.get(key);
-    if (cached?.isOpen && !cached.isTransaction) return { db: cached, facts: null };
-    const opened = connectWithFacts(hippoRoot, busyWaitMs);
+    if (cached?.isOpen && !cached.isTransaction) return { db: cached, facts: null, reused: true };
     // An open nested inside a transaction gets its own connection, which its caller closes.
-    if (cached?.isOpen) return opened;
+    if (cached?.isOpen) return connectWithFacts(hippoRoot, busyWaitMs);
+    const opened = this.#borrowed(key) ?? connectWithFacts(hippoRoot, busyWaitMs);
     this.#handles.set(key, opened.db);
     scopedHandles.add(opened.db);
-    trackLive(this);
+    this.#runtime?.track(this);
     return opened;
+  }
+
+  // A hook scope may cut its handles' lock wait to 0, so only other scopes borrow and return pooled handles.
+  #pooled(): boolean {
+    return !this.#failFastWhenBusy;
+  }
+
+  // A pooled handle answers the settled check an open of a proven store runs, so a migration or a raised binary floor
+  // since it was returned still sends the request down a fresh open.
+  #borrowed(key: string): OpenedDb | undefined {
+    const db = this.#pooled() ? this.#runtime?.takeIdle(key) : undefined;
+    if (db === undefined) return undefined;
+    try {
+      const facts = settledStoreFacts(db);
+      if (facts) return { db, facts };
+    } catch (err) {
+      db.close();
+      throw err;
+    }
+    db.close();
+    return undefined;
+  }
+
+  // A handle at rest goes back to the runtime's pool, so the next request skips the open's pragmas and prepares.
+  #returned(key: string, db: DatabaseSyncLike): boolean {
+    const runtime = this.#runtime;
+    if (!runtime || !this.#pooled() || db.isOpen === false || db.isTransaction) return false;
+    scopedHandles.delete(db);
+    if (runtime.giveIdle(key, db)) return true;
+    scopedHandles.add(db);
+    return false;
   }
 
   /** A lock held past one full wait belongs to a long transaction, so a hook scope's later writes skip at once. */
@@ -99,11 +118,11 @@ export class RequestStores implements RequestScope {
 
   close(): void {
     this.#closed = true;
-    liveScopes.delete(this);
+    this.#runtime?.untrack(this);
     const failures: Error[] = [];
     for (const [key, db] of this.#handles) {
       try {
-        if (db.isOpen !== false) db.close();
+        if (!this.#returned(key, db) && db.isOpen !== false) db.close();
       } catch (err) {
         log.error(`request store ${key} did not close: ${errorMessage(err)}`, errorFields(err));
         failures.push(err instanceof Error ? err : new Error(errorMessage(err)));

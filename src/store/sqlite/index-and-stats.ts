@@ -12,6 +12,7 @@ import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { currentStoreRuntime } from '../../db/store-runtime.js';
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
@@ -25,9 +26,6 @@ export function saveIndex(db: DatabaseSyncLike, index: Pick<HippoIndex, 'last_re
 
 type StatsDelta = { remembered?: number; recalled?: number; forgotten?: number };
 
-// Increments a busy store refused, one entry per root, folded into the next update that lands.
-const pendingStats = new Map<string, Required<StatsDelta>>();
-
 function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
   return {
     remembered: (a.remembered ?? 0) + (b.remembered ?? 0),
@@ -38,9 +36,15 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  const total = addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta);
-  updateStatsOn(db, files.hippoRoot, total);
-  pendingStats.delete(files.hippoRoot);
+  // Increments a busy store refused, held by the runtime and folded into the next update that lands.
+  const runtime = currentStoreRuntime();
+  const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
+  try {
+    updateStatsOn(db, files.hippoRoot, total);
+  } catch (err) {
+    runtime?.holdStats(files.hippoRoot, total);
+    throw err;
+  }
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {
@@ -77,7 +81,6 @@ export function updateStatsUnlessBusy(
     updateStats(db, files, delta);
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
-    pendingStats.set(files.hippoRoot, addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta));
     log.warnThenDebug(
       'stats-busy',
       `${committed}, but the store was busy; the stats wait for the next update`,

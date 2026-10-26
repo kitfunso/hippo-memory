@@ -23,6 +23,7 @@ import { writeOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writ
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace];
@@ -164,8 +165,13 @@ describe('outcome over 200 ids', () => {
     const before = seeded('outcome-pin-old', entries);
     const after = seeded('outcome-pin-new', entries);
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
-    const got = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
-    flushHeldMirrors(after.root);
+    // A runtime holds the outcome's mirror rewrite until the flush, as the CLI's does.
+    const runtime = new StoreRuntime();
+    const got = runtime.run(() => {
+      const written = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
+      flushHeldMirrors(after.root);
+      return written;
+    });
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
     const want = snapshot(before.root, before.db);

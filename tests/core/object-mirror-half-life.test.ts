@@ -109,7 +109,7 @@ function mirrorRows(root: string): Record<string, Column>[] {
   try {
     // SAFETY: a memories row holds only text, numbers and NULL.
     const rows = db.prepare(`SELECT * FROM memories ORDER BY source`).all() as Record<string, Column>[];
-    return rows.map(({ id: _id, updated_at: _stamped, ...columns }) => columns);
+    return rows.map(({ id: _id, updated_at: _stamped, duplicate_key: _derived, ...columns }) => columns);
   } finally {
     closeHippoDb(db);
   }

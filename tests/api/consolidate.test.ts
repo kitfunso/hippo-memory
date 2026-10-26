@@ -12,7 +12,7 @@ import {
 } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
 import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -469,7 +469,7 @@ describe('Physics pass', () => {
   function storedParticles(): PhysicsParticle[] {
     const db = openHippoDb(tmpDir);
     try {
-      return Array.from(loadPhysicsState(db).values());
+      return Array.from(loadAllPhysicsState(db).values());
     } finally {
       closeHippoDb(db);
     }

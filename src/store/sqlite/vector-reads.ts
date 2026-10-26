@@ -38,7 +38,7 @@ export function sqliteVectorReads(
   const reads = bound(on, rowReadsBodies);
   return {
     ...reads,
-    // An empty list opens no handle, and loadPhysicsState would read every row for one.
+    // An empty list needs no handle.
     stored: (part, ids) => (ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids)),
     // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
     nearestEntries: (queryVector, spec) =>

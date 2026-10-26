@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   listSessionEvents,
-  findPromotableSessions,
+  findUntracedSessions,
   loadLatestHandoff,
   loadHandoffById,
   appendSessionEvent,
@@ -44,7 +44,7 @@ describe('session_events tenant isolation', () => {
     expect(bEvents[0].content).toBe('B says hi');
   });
 
-  it('findPromotableSessions only sees the calling tenant', async () => {
+  it('findUntracedSessions only sees the calling tenant', async () => {
     initTestStore(tmpDir);
 
     await appendSessionEvent(tmpDir, 'tenantA', {
@@ -60,11 +60,11 @@ describe('session_events tenant isolation', () => {
       source: 'test',
     });
 
-    const aPromotable = findPromotableSessions(tmpDir, 'tenantA', Date.now() - 60_000);
-    const bPromotable = findPromotableSessions(tmpDir, 'tenantB', Date.now() - 60_000);
+    const aPromotable = findUntracedSessions(tmpDir, 'tenantA', Date.now() - 60_000);
+    const bPromotable = findUntracedSessions(tmpDir, 'tenantB', Date.now() - 60_000);
 
-    expect(aPromotable.map((p) => p.session_id)).toEqual(['sess-a']);
-    expect(bPromotable.map((p) => p.session_id)).toEqual(['sess-b']);
+    expect(aPromotable.map((p) => p.sessionId)).toEqual(['sess-a']);
+    expect(bPromotable.map((p) => p.sessionId)).toEqual(['sess-b']);
   });
 });
 

@@ -8,7 +8,7 @@ import { errorFields, log } from '../../base/util/log.js';
 import { requestScopes } from '../../base/util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
-import { flushHeldMirrors } from './mirrors.js';
+import { StoreRuntime } from '../../db/store-runtime.js';
 import { encodeError } from './error-codec.js';
 import { sqliteStoreOn } from './store.js';
 import { restoreAllTenants } from './tenant-wire.js';
@@ -109,16 +109,24 @@ function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   return run(...args);
 }
 
-async function answer(ops: Ops, stores: WorkerStores, hippoRoot: string, job: Job): Promise<Reply> {
+/** The thread's store runtime and its one scope, which every job runs in. */
+interface Thread {
+  readonly runtime: StoreRuntime;
+  readonly stores: WorkerStores;
+}
+
+async function answer(ops: Ops, { runtime, stores }: Thread, hippoRoot: string, job: Job): Promise<Reply> {
   const failuresBefore = auditWriteFailureCount();
   stores.requestId = job.requestId;
   stores.walPages = job.walPages;
   stores.jobId = job.id;
   try {
-    const value = await requestScopes.run(stores, () =>
-      job.op === STORE_SETUP_OP
-        ? initStore(hippoRoot)
-        : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
+    const value = await runtime.run(() =>
+      requestScopes.run(stores, () =>
+        job.op === STORE_SETUP_OP
+          ? initStore(hippoRoot)
+          : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
+      ),
     );
     return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };
   } catch (err) {
@@ -147,14 +155,18 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
     ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold, maxVectors: init.vectorGraphMaxVectors })
     : undefined;
   const ops = workerOps(init, graphs);
-  const stores = new WorkerStores(init);
+  // A thread is its own composition root: its runtime holds its mirror writes and closes its connection at stop.
+  const runtime = new StoreRuntime();
+  const thread: Thread = { runtime, stores: runtime.run(() => new WorkerStores(init)) };
   // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
+  // Held writes run first, then the thread's scope closes, and dispose finds no scope left to close twice.
   const closeThread = (): void => {
     try {
-      flushHeldMirrors(init.hippoRoot);
+      runtime.held.flush();
+      thread.stores.close();
     } finally {
       try {
-        stores.close();
+        runtime.dispose();
       } finally {
         port.close();
       }
@@ -172,7 +184,7 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
       return;
     }
     // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop above.
-    last = answer(ops, stores, init.hippoRoot, message)
+    last = answer(ops, thread, init.hippoRoot, message)
       .then((reply) => post(port, reply))
       .catch((err) => log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)));
   });

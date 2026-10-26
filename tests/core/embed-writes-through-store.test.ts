@@ -11,7 +11,7 @@ import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/se
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { loadPhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -89,7 +89,7 @@ function indexOn(root: string): HippoDbIndex {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY memory_id')
         .all(),
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
+      particles: [...loadAllPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);

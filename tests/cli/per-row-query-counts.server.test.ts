@@ -17,6 +17,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import {
   ROW_READ,
   SIZES,
@@ -294,13 +295,18 @@ describe('an id-list read of one tenant', () => {
     const entries = rows(10, 'plan');
     seed(ctxFor(root), entries);
     const ids = entries.map((e) => e.id);
-    const { result, statements } = await recordStatementsAsync(async () => {
-      await outcome(ctxFor(root), ids, true);
-      return {
-        held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
-        listed: loadEntriesByIds(root, ids, 'default').length,
-      };
-    });
+    // Inside a runtime, as the CLI runs it, the outcome's mirror rewrite stays held until dispose.
+    const runtime = new StoreRuntime();
+    const { result, statements } = await runtime.run(() =>
+      recordStatementsAsync(async () => {
+        await outcome(ctxFor(root), ids, true);
+        return {
+          held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
+          listed: loadEntriesByIds(root, ids, 'default').length,
+        };
+      }),
+    );
+    runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
