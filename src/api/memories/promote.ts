@@ -137,36 +137,29 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   return row;
 }
 
-/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one
- * archive_raw audit row, under the caller's subject. */
-export interface ArchiveRawOptions {
-  /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery
-   * finds it logged. */
-  event?: ConnectorEvent;
-}
-
 export interface ArchiveRawResult {
   ok: true;
   archivedAt: string;
 }
-export async function rawArchive(
-  ctx: Context,
+
+function archiveOf(ctx: Context, id: string, reason: string) {
+  return { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor), id, reason };
+}
+
+/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one
+ * archive_raw audit row, under the caller's subject. */
+export async function rawArchive(ctx: Context, id: string, reason: string): Promise<ArchiveRawResult> {
+  return { ok: true, archivedAt: await ctx.store.entryWrites.archiveRaw(archiveOf(ctx, id, reason)) };
+}
+
+/** rawArchive for a connector's delete: the store logs `event` in the archive's own transaction, so a redelivery
+ * finds it logged. */
+export async function rawArchiveForEvent(
+  ctx: ContextWith<'connectorWrites'>,
   id: string,
   reason: string,
-  opts: ArchiveRawOptions = {},
+  event: ConnectorEvent,
 ): Promise<ArchiveRawResult> {
-  const store = ctx.store;
-  const entryWrites = store.entryWrites;
-  const archive = {
-    tenantId: ctx.tenantId,
-    actor: ctx.actor.subject,
-    ...scopeReaderOf(ctx.actor),
-    id,
-    reason,
-  };
-  const { event } = opts;
-  const archivedAt = event
-    ? await store.connectorWrites.archiveConnectorEntry({ ...archive, event })
-    : await entryWrites.archiveRaw(archive);
+  const archivedAt = await ctx.store.connectorWrites.archiveConnectorEntry({ ...archiveOf(ctx, id, reason), event });
   return { ok: true, archivedAt };
 }

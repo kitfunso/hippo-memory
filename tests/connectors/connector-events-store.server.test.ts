@@ -5,7 +5,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Actor, Context } from '../../src/api/index.js';
+import type { Actor } from '../../src/api/index.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
 import { ingestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { handleMessageDeleted } from '../../src/surface/connectors/slack/deletion.js';
@@ -18,6 +18,7 @@ import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.j
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { CONNECTOR_GROUPS, type ConnectorContext } from '../../src/surface/connectors/ingest.js';
 import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -98,15 +99,15 @@ describe('the connector entry points on a store with connectorEvents', () => {
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const served = copyOf();
-    const side = sqliteConnectorEventsSide(served, portOnlyStore(served));
-    const slack: Context = {
+    const side = sqliteConnectorEventsSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
+    const slack: ConnectorContext = {
       tenantId: TENANT_A,
       actor: slackActor,
       store: side.store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
-    const github: Context = { ...slack, actor: githubActor };
+    const github: ConnectorContext = { ...slack, actor: githubActor };
     const message = (eventId: string, text: string, ts: string) =>
       ingestMessage(slack, {
         teamId: 'T1',
@@ -288,7 +289,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.stubEnv('SLACK_SIGNING_SECRET', secrets.slack);
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', secrets.github);
     const folder = await copyWithRoutes();
-    side = sqliteConnectorEventsSide(folder, portOnlyStore(folder));
+    side = sqliteConnectorEventsSide(folder, portOnlyStore(folder, CONNECTOR_GROUPS));
     served = await serveOn(side.store);
     baseline = side.auditRows().length;
   });

@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
@@ -113,7 +113,7 @@ describe('a request with no credential', () => {
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'github-test-secret');
     root = makeRoot('route-auth-gate');
     initTestStore(root);
-    handle = await serve({ hippoRoot: root, port: 0 });
+    handle = await serve({ hippoRoot: root, port: 0, keep: ROUTE_GROUPS });
   });
 
   afterAll(async () => {

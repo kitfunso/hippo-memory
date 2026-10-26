@@ -8,7 +8,7 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -48,7 +48,7 @@ beforeAll(async () => {
   // Seventy requests from one IP would trip the per-IP and per-caller limiters; both are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
   vi.unstubAllEnvs();
   ids.decision = await created('/v1/decisions', { text: 'use sqlite for the store' }, 'decision');
   ids.process = await created('/v1/processes', { processName: 'release', steps: ['tag', 'publish'] }, 'process');

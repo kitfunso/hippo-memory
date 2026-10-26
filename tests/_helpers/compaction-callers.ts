@@ -6,14 +6,14 @@ import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike 
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { ContextReach } from '../../src/api/types.js';
+import type { ContextReach, ContextWith, EntryContext } from '../../src/api/types.js';
+import type { OptionalGroup } from '../../src/base/ports/store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
   type CallerFailureRequest,
-  type Context,
 } from '../../src/server.js';
 import { makeRoot } from './make-root.js';
 import { writeEntry } from './root-forms.js';
@@ -105,7 +105,10 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
     .all(TENANT, source) as WrittenRow[];
 }
 
-export function owned(owner: string): Context {
+/** A caller's Context on hippo.db, whose store sets every group the callers write through. */
+export type CallerContext = EntryContext<ContextWith<OptionalGroup>>;
+
+export function owned(owner: string): CallerContext {
   return {
     store: sqliteStore(root),
     config: loadConfig(root),
@@ -214,11 +217,11 @@ export function failure(over: Partial<CallerFailureRequest> = {}): CallerFailure
   };
 }
 
-export const preCompact = (ctx: Context, workingState: typeof STATE | null = STATE) =>
+export const preCompact = (ctx: CallerContext, workingState: typeof STATE | null = STATE) =>
   preCompactForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', workingState });
-export const postCompact = (ctx: Context, requestId = 'cmp-1') =>
+export const postCompact = (ctx: CallerContext, requestId = 'cmp-1') =>
   saveCompactionItemsForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ITEMS, requestId });
-export const sessionEnd = (ctx: Context) =>
+export const sessionEnd = (ctx: CallerContext) =>
   sessionEndHandoffForCaller(ctx, {
     sessionId: 'sA',
     project: PROJECT,

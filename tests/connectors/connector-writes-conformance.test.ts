@@ -19,6 +19,7 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
+  type FixtureStore,
 } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
@@ -85,7 +86,7 @@ function copyOfFixture(): string {
   return root;
 }
 
-async function runSide(side: ConnectorSide, calls: readonly Call[]): Promise<Side> {
+async function runSide(side: ConnectorSide<FixtureStore>, calls: readonly Call[]): Promise<Side> {
   const group = side.store.connectorWrites;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => call(group, side.store)));

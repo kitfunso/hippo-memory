@@ -4,6 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
@@ -208,7 +209,7 @@ describe('server lifecycle', () => {
 
   it('answers an upload still streaming past 1 MB with its 413, then closes the connection', async () => {
     const home = makeRoot();
-    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0, keep: CONNECTOR_GROUPS });
     try {
       // The cap lives in readBody, shared by every route: the generic /v1 route reads a keyed caller's body, and a
       // webhook route reads one once a secret and a signature header are there.

@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { loadConfig } from '../../src/host/config-file.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
-import { mcpActor } from '../../src/surface/mcp/protocol.js';
+import { mcpActor, mcpApiContext } from '../../src/surface/mcp/protocol.js';
 import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -132,23 +132,26 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
   });
 
   it('learns for stdio, the local operator, as before', async () => {
+    const store = sqliteStore(hippoRoot);
+    const ctx: McpContext = {
+      hippoRoot,
+      tenantId: 'default',
+      actor: 'mcp',
+      role: 'admin',
+      hostAdmin: true,
+      stdio: true,
+      store,
+      config: loadConfig(hippoRoot),
+      infra: testInfra(),
+    };
     const text = await runLearnTool({
       args: { days: 3650 },
-      ctx: {
-        hippoRoot,
-        tenantId: 'default',
-        actor: 'mcp',
-        role: 'admin',
-        hostAdmin: true,
-        stdio: true,
-        store: sqliteStore(hippoRoot),
-        config: loadConfig(hippoRoot),
-        infra: testInfra(),
-      },
+      ctx,
       hippoRoot,
       config: loadConfig(hippoRoot),
       tenantId: 'default',
-      store: sqliteStore(hippoRoot),
+      store,
+      api: { ...mcpApiContext(ctx), store },
     });
     expect(text).toMatch(/^Git learn: 1 new/);
     expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);

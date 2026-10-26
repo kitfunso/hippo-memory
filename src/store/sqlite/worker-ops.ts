@@ -14,8 +14,8 @@ export type OpRoute = OpMode | 'pinned-read';
 export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
 
 /** Every store method but hippo.db's local files, so a served store runs no SQLite on the server thread.
- * Tagged by effect: predictionBaserate (audit row) and bumpRecallStats (stats.json) write; an `openStore` read is a
- * read, as the writer runs that open's setup before any reader serves. */
+ * Tagged by effect: predictionBaserate (audit row), bumpRecallStats and bumpRemembered (stats.json) write; an
+ * `openStore` read is a read, as the writer runs that open's setup before any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',
@@ -28,6 +28,7 @@ export const WORKER_OPS = {
     appendAuditEvents: 'write',
     finishRecall: 'write',
     bumpRecallStats: 'write',
+    bumpRemembered: 'write',
     recordTokens: 'write',
   },
   vectors: {
@@ -119,7 +120,6 @@ export const WORKER_OPS = {
     contentsWithTag: 'read',
     writeSkippingRejected: 'write',
     writeTogether: 'write',
-    bumpRemembered: 'write',
   },
   // A snapshot load rewrites the active-task mirror file, so it runs on the one writer.
   sessions: {

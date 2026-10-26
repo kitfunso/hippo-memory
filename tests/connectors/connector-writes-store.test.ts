@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { rawArchive, remember, type Actor, type RememberOptions } from '../../src/api/index.js';
+import {
+  rawArchiveForEvent,
+  rememberUntrusted,
+  type Actor,
+  type ConnectorRememberOptions,
+  type RememberOptions,
+} from '../../src/api/index.js';
 import {
   issueCommentEventToRememberOpts,
   issueEventToRememberOpts,
@@ -17,6 +23,7 @@ import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 import { rowsOf, sqliteConnectorSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -44,10 +51,10 @@ function markedFolder(): string {
   return root;
 }
 
-/** What a connector hands to remember: its transform's fields, marked untrusted, with the event it answers. */
-function ingestOpts(opts: RememberOptions | null, event: ConnectorEvent): RememberOptions {
+/** What a connector hands to rememberUntrusted: its transform's fields, with the event it answers. */
+function ingestOpts(opts: RememberOptions | null, event: ConnectorEvent): ConnectorRememberOptions {
   if (!opts) throw new Error('the transform kept nothing of this event');
-  return { ...opts, untrusted: true, event };
+  return { ...opts, event };
 }
 
 beforeAll(() => {
@@ -73,7 +80,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
   it('stores one Slack message and one GitHub event and archives on one Slack deletion, with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const served = copyOf();
-    const side = sqliteConnectorSide(served, portOnlyStore(served));
+    const side = sqliteConnectorSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
@@ -110,13 +117,20 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       eventName: 'issues',
     };
     const ids = await withSqliteBlocked('port-only', async () => {
-      const message = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
-      const redelivered = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
+      const message = await rememberUntrusted(
+        ctx,
+        ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }),
+      );
+      const redelivered = await rememberUntrusted(
+        ctx,
+        ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }),
+      );
       expect(redelivered.duplicate).toEqual({ memoryId: message.id });
-      const opened = await remember(ctx, ingestOpts(issue, issueEvent));
+      const opened = await rememberUntrusted(ctx, ingestOpts(issue, issueEvent));
       expect([message.duplicate, opened.duplicate, opened.quarantined]).toEqual([undefined, undefined, undefined]);
-      const deleted = await rawArchive(ctx, message.id, 'source_deleted:slack:T1:C1:1700.000001', {
-        event: { connector: 'slack', eventId: 'Ev_deleted' },
+      const deleted = await rawArchiveForEvent(ctx, message.id, 'source_deleted:slack:T1:C1:1700.000001', {
+        connector: 'slack',
+        eventId: 'Ev_deleted',
       });
       expect(deleted).toEqual({ ok: true, archivedAt: NOW });
       const rows = await side.store.entriesByIds([message.id, redelivered.id, opened.id], TENANT_A);
@@ -145,7 +159,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
 
   it('holds a flagged GitHub comment for review: quarantine scope on the entry, one pending record, the quarantine row ahead of the remember row', async () => {
     const served = copyOf();
-    const side = sqliteConnectorSide(served, portOnlyStore(served));
+    const side = sqliteConnectorSide(served, portOnlyStore(served, CONNECTOR_GROUPS));
     const ctx = {
       hippoRoot: markedFolder(),
       tenantId: TENANT_A,
@@ -171,7 +185,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       eventName: 'issue_comment',
     };
     const held = await withSqliteBlocked('port-only', async () => {
-      const result = await remember(ctx, ingestOpts(comment, event));
+      const result = await rememberUntrusted(ctx, ingestOpts(comment, event));
       expect((await side.store.entriesByIds([result.id], TENANT_A)).map((r) => r.scope)).toEqual([
         'quarantine:private:github:public:acme/demo',
       ]);

@@ -25,7 +25,12 @@ export function useObjectsServer() {
     } finally {
       closeHippoDb(db);
     }
-    handle = await serve({ hippoRoot: home, port: 0, rateLimits: { perCaller: 'off', perAddress: 'off' } });
+    handle = await serve({
+      hippoRoot: home,
+      port: 0,
+      rateLimits: { perCaller: 'off', perAddress: 'off' },
+      keep: ['objects'],
+    });
   });
 
   afterAll(async () => {

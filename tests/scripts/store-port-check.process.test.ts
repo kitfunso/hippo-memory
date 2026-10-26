@@ -362,21 +362,30 @@ describe('check-store-port.mjs', () => {
     }
   });
 
-  it('reads a spread of built kind rows as needing no hippo.db, unless kind-routes.ts names a status', () => {
+  it('reads a spread of built kind rows as needing no hippo.db, unless kind-routes.ts names a hippo.db status', () => {
     const table =
       "const V1_ROUTES = [\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  ...kindRows(PREDICTIONS),\n  ...versionedRoutes(POLICIES),\n];\n";
     const rows = (builder: string) => ({
       'src/surface/server/route-table.ts': table,
       'src/surface/server/routes/kind-routes.ts': builder,
     });
-    withFixture(rows('export function kindRows(kind) {\n  return [];\n}\n'), null, ({ run }) => {
-      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', hippoDbOnlyRoutes: '0' });
-    });
-    withFixture(rows("export const row = { storeReady: 'localFiles' };\n"), null, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('kind-routes.ts builds rows that name a storeReady or hippoDbOnly');
-    });
+    for (const builder of [
+      'export function kindRows(kind) {\n  return [];\n}\n',
+      "export const row = { storeReady: 'objects' };\n",
+    ]) {
+      withFixture(rows(builder), null, ({ run }) => {
+        expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', hippoDbOnlyRoutes: '0' });
+      });
+    }
+    for (const status of ["storeReady: 'localFiles'", "hippoDbOnly: 'local only'"]) {
+      withFixture(rows(`export const row = { ${status} };\n`), null, ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain(
+          "kind-routes.ts builds rows that name a hippoDbOnly or a storeReady other than 'objects'",
+        );
+      });
+    }
   });
 
   it('fails and names a hippoDbOnly route the baseline does not list, and --update will not add it', () => {

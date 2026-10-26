@@ -102,7 +102,7 @@ export async function rememberLocally(ctx: Context, input: LocalRememberInput): 
   if ('skipped' in written) return { status: 'skipped', ...written.skipped };
   const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
-  await ctx.store.lessonWrites.bumpRemembered(1);
+  await ctx.store.bumpRemembered(1);
   const embedding = indexInBackground(ctx, entry);
   return startedWeak
     ? { status: 'stored', entry, embedding, warnings, startedWeak }

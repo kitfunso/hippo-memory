@@ -360,7 +360,7 @@ async function shareCandidates(
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles' | 'reports'> },
-  global: ConfiguredFolder<StoreWith<'sharing' | 'folderFiles' | 'captures'>>,
+  global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
   options: {
     minScore?: number;
     dryRun?: boolean;

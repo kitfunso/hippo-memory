@@ -12,8 +12,8 @@ export const API_WRITES = {
   'src/api/auth/auth.ts': ['authCreate', 'authCreateSelf', 'authListRows', 'authRevoke'],
   'src/api/memories/forget.ts': ['forget'],
   'src/api/memories/outcome.ts': ['outcome', 'outcomeForLastRecall'],
-  'src/api/memories/promote.ts': ['supersede', 'rawArchive'],
-  'src/api/memories/remember.ts': ['remember'],
+  'src/api/memories/promote.ts': ['supersede', 'rawArchive', 'rawArchiveForEvent'],
+  'src/api/memories/remember.ts': ['remember', 'rememberUntrusted'],
   'src/api/memories/remember-local.ts': ['rememberLocally'],
   'src/surface/importers/vault.ts': ['importVaultInto'],
 };

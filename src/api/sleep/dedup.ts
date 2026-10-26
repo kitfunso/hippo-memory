@@ -8,7 +8,7 @@ export type { DedupResult };
 /** Removes the weaker copy of each same-text distilled row, tenant by tenant across the whole store, so only a host
  * admin may. */
 export async function dedupWholeStore(
-  ctx: ContextWith<'consolidation'>,
+  ctx: ContextWith<'consolidation' | 'auditMaintenance'>,
   opts: { readonly dryRun: boolean },
 ): Promise<DedupResult> {
   requireHostAdmin(ctx, 'Deduplicating the store');

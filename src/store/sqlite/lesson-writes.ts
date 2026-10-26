@@ -2,7 +2,6 @@
 import { listTextsHolding } from './candidates.js';
 import { contentsWithTag } from './entry-reads.js';
 import { writeEntriesSkippingRejected, writeEntriesTogether } from './entry-writes.js';
-import { updateStats } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -42,7 +41,6 @@ function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'texts
     writeTogether: (db, entries) => {
       writeEntriesTogether(db, files, entries);
     },
-    bumpRemembered: (db, count) => updateStats(db, files, { remembered: count }),
   };
 }
 

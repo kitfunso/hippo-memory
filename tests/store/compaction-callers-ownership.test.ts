@@ -7,8 +7,8 @@ import {
   compactResumeForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
-  type Context,
 } from '../../src/server.js';
+import type { CallerContext } from '../_helpers/compaction-callers.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { snapshotFields } from '../../src/base/session/working-state.js';
 import {
@@ -103,7 +103,7 @@ describe('sessionEndHandoffForCaller', () => {
 });
 
 describe('a second owner on the same session', () => {
-  const calls: Array<[string, (ctx: Context) => object]> = [
+  const calls: Array<[string, (ctx: CallerContext) => object]> = [
     ['pre-compact', (ctx) => preCompact(ctx)],
     ['compact-resume', (ctx) => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source: 'compact' })],
     ['post-compact', (ctx) => postCompact(ctx)],

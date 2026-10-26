@@ -10,7 +10,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { withoutFolderGroups, portOnlySide } from '../_helpers/port-only-store.js';
+import { withoutFolderGroups, portOnlySide, portOnlyStore } from '../_helpers/port-only-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
@@ -93,6 +93,22 @@ describe('store-ready MCP tools', () => {
     }
     expect(readdirSync(root)).toEqual([]);
   });
+
+  it('the smallest store binds no tool that needs a feature group: a list hides each, a call answers store_not_ported', async () => {
+    const smallest: McpContext = { ...ctxOn('port-only'), store: portOnlyStore(root) };
+    const featured = ['hippo_predict_baserate', 'hippo_learn', 'hippo_conflicts', 'hippo_resolve'];
+    const unbound = [...featured, 'hippo_share', 'hippo_peers'];
+    const list = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, smallest);
+    expect(listedNames(list)).toEqual(declared.filter((name) => !unbound.includes(name)));
+    for (const name of featured) {
+      const res = await handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },
+        smallest,
+      );
+      expect(res).toEqual(notPorted);
+    }
+    expect(readdirSync(root)).toEqual([]);
+  });
 });
 
 const PROJECT = 'proj';
@@ -144,7 +160,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
   }
 
   it("hippo_predict_baserate reads the store's closed rows inside the caller's tenant and leaves its audit row there", async () => {
-    const side = portOnlySide(fixture.dir);
+    const side = portOnlySide(fixture.dir, ['objects']);
     const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
     const saved = await side.store.objects.saveObject(TENANT_A, 'prediction', {
       ...claim,

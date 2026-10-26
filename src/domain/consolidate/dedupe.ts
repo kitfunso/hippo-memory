@@ -151,7 +151,10 @@ async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<P
   return new Map([...(await partitionRows([rows]))].sort(([a], [b]) => at(a) - at(b)));
 }
 
-async function scanPairs(store: StoreWith<'consolidation'>, partitions: Partitions): Promise<DedupPair[]> {
+async function scanPairs(
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
+  partitions: Partitions,
+): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
   const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
@@ -160,7 +163,7 @@ async function scanPairs(store: StoreWith<'consolidation'>, partitions: Partitio
 /** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never across (isolation).
  * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of the candidates read. */
 export async function deduplicateStore(
-  store: StoreWith<'consolidation'>,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
@@ -173,7 +176,7 @@ export async function deduplicateStore(
 
 /** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
 async function deletePairs(
-  store: StoreWith<'consolidation'>,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   pairs: readonly DedupPair[],
   actor: string | undefined,
 ): Promise<DedupPair[]> {

@@ -4,6 +4,7 @@ import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
+import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const SECRET = 'raw-bytes-secret';
@@ -22,7 +23,7 @@ let handle: ServerHandle;
 beforeEach(async () => {
   vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
   vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
-  handle = await serve({ hippoRoot: makeRoot('webhook-bytes'), host: '127.0.0.1', port: 0 });
+  handle = await serve({ hippoRoot: makeRoot('webhook-bytes'), host: '127.0.0.1', port: 0, keep: CONNECTOR_GROUPS });
 });
 
 afterEach(async () => {
