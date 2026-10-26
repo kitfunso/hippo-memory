@@ -1,7 +1,7 @@
 // Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { closeHippoDb } from '../../src/db/index.js';
 import type {
   CustomerNote,
   Decision,
@@ -20,32 +20,25 @@ import { openIncident, INCIDENT } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { deleteEntry } from '../_helpers/root-forms.js';
 
-oneRequestPerTest();
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, objectsAt, sessionDb } = sessionPerTest();
 
 let home: string;
 beforeEach(() => {
   home = makeRoot('typed-object-store');
 });
-afterEach(() => {
-  try {
-    removeAfterRequest(home);
-  } catch {
-    /* best-effort */
-  }
-});
 
 function countRows(table: string): number {
-  const db = openHippoDb(home);
+  const db = sessionDb(home);
   try {
     // SAFETY: `SELECT COUNT(*) as c` always returns exactly one row shaped { c: number }.
     return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
@@ -55,7 +48,7 @@ function countRows(table: string): number {
 }
 
 function auditRows(op: string, targetId: number): Array<{ metadata_json: string }> {
-  const db = openHippoDb(home);
+  const db = sessionDb(home);
   try {
     // SAFETY: the SELECT projects exactly one TEXT column, metadata_json.
     return db
@@ -129,7 +122,7 @@ describe.each([
   it('INSERT trigger aborts a row whose tenant differs from its memory', () => {
     const mem = mirrorOf(source, 'tenant-a');
     writeEntry(home, mem);
-    const db = openHippoDb(home);
+    const db = sessionDb(home);
     try {
       expect(() => db.prepare(crossTenantInsert).run(mem.id, new Date().toISOString())).toThrow(
         /tenant_id must match memories\.tenant_id/,
@@ -386,7 +379,7 @@ describe.each(LINEAGES)('$kind supersede and close', (k) => {
   it('supersede trigger aborts a successor from another tenant', async () => {
     const a = await k.save('tenant-a', 'alpha one');
     const b = await k.save('tenant-b', 'beta two');
-    const db = openHippoDb(home);
+    const db = sessionDb(home);
     try {
       expect(() => db.prepare(`UPDATE ${k.table} SET superseded_by = ? WHERE id = ?`).run(b.id, a.id)).toThrow(
         new RegExp(`superseded_by must reference a ${k.kind} in the same tenant`),

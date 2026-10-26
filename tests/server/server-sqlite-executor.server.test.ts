@@ -7,7 +7,6 @@ import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
-import { sqliteObjects } from '../../src/store/sqlite/objects.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import {
@@ -26,9 +25,9 @@ import {
   seen,
   start,
   undoAll,
+  serverThreadPart,
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
@@ -259,9 +258,9 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
   it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, send) => {
     const root = newRoot();
     const info = vi.spyOn(log, 'info');
-    // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
+    // The worker-backed store with one group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), {
-      objects: sqliteObjects(handlesOf(root)),
+      objects: serverThreadPart(root).objects,
     });
     const server = await start(root, store);
 

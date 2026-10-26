@@ -5,7 +5,6 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   listProjects,
   mergeProjects,
@@ -16,9 +15,9 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { sqliteStore } = sessionPerTest();
 
 const T = 'default';
 const HEADER = '[Consolidated from 2 related memories, newest first]';

@@ -12,6 +12,8 @@ import * as entryReads from './entry-reads.js';
 import * as entryWrites from './entry-writes.js';
 import type { WriteEntryOptions } from './entry-writes.js';
 import { onHandle, openStore, storeFilesOf } from './handles.js';
+import type { StoreFiles } from './open.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 import { listRecallEntries } from './search-rows.js';
 import * as vectorIndex from './vector-index.js';
 
@@ -25,17 +27,35 @@ export { recordTokenUse, tokensBySession } from './token-ledger.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(hippoRoot, (db) => entryWrites.writeEntryOn(db, storeFilesOf(hippoRoot), entry, opts), openStore);
+  writeEntryIn(storeFilesOf(hippoRoot), entry, opts);
 }
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
 export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => [...entryReads.iterateEveryTenantEntries(db)], openStore);
+  return loadAllEntriesIn(storeFilesOf(hippoRoot));
 }
 
 /** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries does. */
 export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
-  return onHandle(hippoRoot, (db) => entryReads.readEntry(db, id, ALL_TENANTS), openStore);
+  return readEntryIn(storeFilesOf(hippoRoot), id);
+}
+
+// The forms on `files`: an eval that builds them with a session runs its calls on one handle per store.
+const openOn =
+  (files: StoreFiles) =>
+  (hippoRoot: string): DatabaseSyncLike =>
+    openStore(hippoRoot, files.opens);
+
+export function writeEntryIn(files: StoreFiles, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+  onHandle(files.hippoRoot, (db) => entryWrites.writeEntryOn(db, files, entry, opts), openOn(files));
+}
+
+export function loadAllEntriesIn(files: StoreFiles): MemoryEntry[] {
+  return onHandle(files.hippoRoot, (db) => [...entryReads.iterateEveryTenantEntries(db)], openOn(files));
+}
+
+export function readEntryIn(files: StoreFiles, id: string): MemoryEntry | null {
+  return onHandle(files.hippoRoot, (db) => entryReads.readEntry(db, id, ALL_TENANTS), openOn(files));
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. */

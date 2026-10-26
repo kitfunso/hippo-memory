@@ -17,11 +17,9 @@ import { CUSTOMER_NOTE, loadCustomerNotes } from '../../src/domain/objects/custo
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveCustomerNote } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 function memTags(home: string, memoryId: string): string[] {
   const db = openHippoDb(home);
@@ -42,7 +40,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('customer-notes');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
     const n = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

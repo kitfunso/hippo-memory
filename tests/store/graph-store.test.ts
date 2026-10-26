@@ -7,7 +7,7 @@
  * src/graph.ts helper API.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -22,13 +22,12 @@ import {
   markPendingProcessedUpTo,
   markGraphDirty,
   loadEntitiesByIds,
-  writeEntry,
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry } = sessionPerTest();
 
 /** Write a memory and force its kind (default writes are 'distilled'). Setting kind
  *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
@@ -67,7 +66,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
   beforeEach(() => {
     home = makeRoot('graph');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', async () => {
     const md = addMemory(home, 'default', 'distilled');

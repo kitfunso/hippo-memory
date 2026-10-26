@@ -91,6 +91,8 @@ export interface McpContext {
   /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
    * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
   clientKey?: string;
+  /** Aborts when the call passes its deadline, so a tool stops starting work nobody waits for. */
+  signal?: AbortSignal;
 }
 
 /** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator, host admin. Any context
@@ -119,6 +121,7 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
     callers: ctx.callers,
     clientKey: mcpClientKey(ctx),
     infra: ctx.infra,
+    signal: ctx.signal,
   };
 }
 
@@ -136,11 +139,13 @@ export function ownsServerCwd(ctx: McpContext | undefined): boolean {
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
-/** What the stdio transport takes from its composition root: the context for a folder, and the scope each frame runs
- * in. The root names the store adapter and the scope plumbing, so src/surface/mcp names neither. */
+/** The context of a tool call on a folder, built by the frame's composition root. */
+export type McpContextFor = (hippoRoot: string, tenantId: string) => McpContext;
+
+/** What the stdio transport takes from its composition root: one frame's run, whose contexts share the frame's store
+ * handles and carry `signal`. The root names the store adapter, so src/surface/mcp does not. */
 export interface McpHost {
-  contextFor(hippoRoot: string, tenantId: string): McpContext;
-  runRequest<T>(run: () => Promise<T>): Promise<T>;
+  runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor) => Promise<T>): Promise<T>;
 }
 
 /** One tool call after the store, config and tenant are resolved; every handler reads the same five. */

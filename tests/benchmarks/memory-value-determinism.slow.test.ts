@@ -34,10 +34,8 @@ import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../../benchmarks/memory-value/evaluate.mjs';
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../../benchmarks/memory-value/common.mjs';
 
-import { benchmarkStores, clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest(benchmarkStores);
+import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -126,8 +124,8 @@ describe('cross-ingest determinism', () => {
       // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
       // reads the env var, which is already cleared above), so a plain
       // removal is correct here: safeRemoveScratchDir would refuse them.
-      removeAfterRequest(rootA, benchmarkStores);
-      removeAfterRequest(rootB, benchmarkStores);
+      removeDir(rootA);
+      removeDir(rootB);
     }
   });
 });

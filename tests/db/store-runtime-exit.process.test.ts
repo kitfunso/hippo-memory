@@ -10,22 +10,25 @@ import { makeRoot } from '../_helpers/make-root.js';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const built = (file: string): string => JSON.stringify(pathToFileURL(resolve(REPO_ROOT, 'dist', file)).href);
 
-describe('process.exit inside the root store runtime', () => {
+describe('process.exit inside a command store runtime', () => {
   it('runs the held mirror write and closes the open request handle', () => {
     const root = makeRoot('store-runtime-exit');
     const marker = join(root, 'held-write.txt');
     const script = [
       `import * as fs from 'node:fs';`,
-      `import { withRootStoreRuntime } from ${built('surface/open-store.js')};`,
+      `import { withStoreRuntime } from ${built('surface/open-store.js')};`,
       `import { deferMirrorWrite } from ${built('store/sqlite/mirrors.js')};`,
-      `import { openHippoDb, runWithRequestStores } from ${built('db/index.js')};`,
+      `import { grantFor } from ${built('store/sqlite/grant.js')};`,
+      `import { openHippoDb, withSharedStoreHandles } from ${built('db/index.js')};`,
       `const root = ${JSON.stringify(root)};`,
-      'await withRootStoreRuntime(() => runWithRequestStores(() => {',
-      `  openHippoDb(root).exec("INSERT INTO meta(key, value) VALUES ('exit-probe', '1')");`,
-      `  deferMirrorWrite(root, 'probe', () => fs.writeFileSync(${JSON.stringify(marker)}, 'flushed'));`,
+      'await withStoreRuntime((runtime) => withSharedStoreHandles((session) => {',
+      `  const db = openHippoDb(root, { grant: grantFor({ session }) });`,
+      `  db.exec("INSERT INTO meta(key, value) VALUES ('exit-probe', '1')");`,
+      `  const at = { hippoRoot: root, runtime };`,
+      `  deferMirrorWrite(at, 'probe', () => fs.writeFileSync(${JSON.stringify(marker)}, 'flushed'));`,
       "  console.log('exiting');",
       '  process.exit(0);',
-      '}));',
+      '}, { runtime }));',
     ].join('\n');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       encoding: 'utf-8',

@@ -7,7 +7,6 @@ import { postScoring } from '../../src/infra/rerankers/endpoint.js';
 import { createOutageWarning } from '../../src/domain/rerankers/outage-warning.js';
 import { processHttp } from '../../src/infra/http.js';
 import { log } from '../../src/base/util/log.js';
-import { runWithRequestId } from '../../src/base/util/request-scope.js';
 
 const HANDED = {
   cloudflareAccountId: '0123456789abcdef0123456789abcdef',
@@ -48,18 +47,13 @@ describe('postScoring and the request signal', () => {
     const seen: Seen = {};
     vi.spyOn(globalThis, 'fetch').mockImplementation(hangingFetch(seen));
     const request = new AbortController();
-    const post = runWithRequestId(
-      'req-abort',
-      () =>
-        postScoring(processHttp, {
-          url: 'https://rerank.example.com/run',
-          token: undefined,
-          body: {},
-          budgetMs: 60_000,
-        }),
-      undefined,
-      request.signal,
-    );
+    const post = postScoring(processHttp, {
+      url: 'https://rerank.example.com/run',
+      token: undefined,
+      body: {},
+      budgetMs: 60_000,
+      signal: request.signal,
+    });
     const outcome = expect(post).rejects.toThrow('aborted');
     await vi.waitFor(() => expect(seen.signal).toBeDefined());
     request.abort();
@@ -73,12 +67,12 @@ describe('the outage warning', () => {
     const request = new AbortController();
     request.abort();
     const outage = createOutageWarning('clef', 'keeping the native order');
-    runWithRequestId('req-abort', () => outage.failed('aborted'), undefined, request.signal);
+    outage.failed('aborted', { signal: request.signal });
     expect(warn).not.toHaveBeenCalled();
   });
 
   it('records the outage when the request is still live', () => {
-    createOutageWarning('clef', 'keeping the native order').failed('no answer', { errorClass: 'Error' });
+    createOutageWarning('clef', 'keeping the native order').failed('no answer', { fields: { errorClass: 'Error' } });
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][1]).toEqual({ errorClass: 'Error' });
   });
@@ -99,12 +93,7 @@ describe('the CLEF reranker', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(hangingFetch(seen));
     const request = new AbortController();
     const rerank = createClefReranker('clef-flash', processHttp);
-    const done = runWithRequestId(
-      'req-abort',
-      () => rerank('q', inputs(), { clef: HANDED }),
-      undefined,
-      request.signal,
-    );
+    const done = rerank('q', inputs(), { clef: HANDED, signal: request.signal });
     await vi.waitFor(() => expect(seen.signal).toBeDefined());
     request.abort();
     await done;

@@ -4,9 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 interface Noun {
   readonly noun: string;
@@ -118,7 +116,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  removeAfterRequest(env.cwd);
+  removeDir(env.cwd);
 });
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

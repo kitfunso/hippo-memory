@@ -26,13 +26,9 @@ function isCorePath(method: string, path: string): boolean {
  */
 export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
-  for (const { path, loop } of routes) {
+  for (const { path } of routes) {
     if (!isPlainV1Path(path)) {
       throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
-    }
-    // A typo must not quietly run the handler on the server thread.
-    if (loop !== undefined && loop !== 'off') {
-      throw new Error(`add-on route '${path}' has loop '${String(loop)}'; set 'off' or leave it unset`);
     }
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
     if (isCorePath('POST', path)) throw new Error(`add-on route '${path}' is already served by core`);

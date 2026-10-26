@@ -1,11 +1,11 @@
 // The built-in SQLite adapter behind the store port.
 import { countAmbient } from './ambient.js';
-import type { StoreRules } from '../../base/ports/infra.js';
+import type { SqliteStoreOptions } from './grant.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvents, listAuditEvents } from './audit.js';
-import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../../db/index.js';
+import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { recordTokenUse } from './token-ledger.js';
@@ -46,7 +46,7 @@ import { sqliteQuarantine } from './quarantine.js';
 import { sqliteVectorReads } from './vector-reads.js';
 import { readLatestHandoff } from './handoffs.js';
 import { updateStats } from './index-and-stats.js';
-import { flushHeldMirrors } from './mirrors.js';
+
 import { sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
@@ -75,6 +75,7 @@ import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
+import { asViewOf } from '../../base/util/store-view.js';
 
 /** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's and capture's. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
@@ -126,14 +127,14 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     reports: sqliteReports(handles),
     rejections: sqliteRejections(handles),
     ...sqliteFolderGroups(handles),
-    close: () => answered(() => flushHeldMirrors(files.hippoRoot)),
+    close: () => answered(() => files.runtime?.held.flush(files.hippoRoot)),
   };
 }
 
 /** The groups only a store kept as files in a folder serves: its ledger, own index, promote copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
-    ledger: sqliteLedger(handles.on),
+    ledger: sqliteLedger(handles.on, handles.files.opens.grant?.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),
     promotion: sqlitePromotion(handles),
     folderFiles: sqliteFolderFiles(handles),
@@ -245,9 +246,23 @@ export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'di
   };
 }
 
-/** The built-in store on hippo.db under `hippoRoot`, scored by `rules`. */
-export function sqliteStore(hippoRoot: string, rules: StoreRules = {}): HippoStore & StoreGroups {
-  return asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, rules)));
+// Each store sqliteStore built, with how to build it again on one session's handles.
+const reopeners = new WeakMap<HippoStore, (session: RequestStores) => HippoStore & StoreGroups>();
+
+/** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its runtime and
+ * session. */
+export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): HippoStore & StoreGroups {
+  const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
+  reopeners.set(store, (session) => sqliteStore(hippoRoot, { ...opts, session }));
+  return store;
+}
+
+/** `store` on `session`'s handles when sqliteStore built it, so a pass of many calls opens hippo.db once; any other
+ * store, a caller's copy of one included, as it is. */
+export function inSqliteSession<S extends HippoStore>(store: S, session: RequestStores): S {
+  const reopen = reopeners.get(store);
+  // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on another session.
+  return reopen === undefined ? store : asViewOf(reopen(session) as S, store);
 }
 
 const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextCandidates'>> = {

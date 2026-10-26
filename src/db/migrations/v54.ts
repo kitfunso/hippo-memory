@@ -1,4 +1,3 @@
-import { SESSION_OWNERS_DDL } from '../continuity.js';
 import { tableHasColumn, tableExists } from '../tables.js';
 import type { Migration } from './types.js';
 
@@ -13,6 +12,42 @@ const OWNER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['failure_log', 'request_id'],
 ];
 
+// A session id belongs to the first owner that binds it.
+const SESSION_OWNERS_DDL = `
+    CREATE TABLE IF NOT EXISTS session_owners (
+      tenant_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      owner_subject TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, session_id)
+    )
+  `;
+
+// Same text the open re-asserted before 3.0, so a store that has them keeps an identical sqlite_master row.
+const OWNER_INDEX_DDL: ReadonlyArray<readonly [string, string]> = [
+  [
+    'task_snapshots',
+    `CREATE INDEX IF NOT EXISTS idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, ` +
+      `status, updated_at DESC)`,
+  ],
+  [
+    'session_handoffs',
+    `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, ` +
+      `origin_project, created_at DESC)`,
+  ],
+  // A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
+  [
+    'compactions',
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) ` +
+      `WHERE request_id IS NOT NULL`,
+  ],
+  [
+    'failure_log',
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_failure_log_request ON failure_log(tenant_id, request_id) ` +
+      `WHERE request_id IS NOT NULL`,
+  ],
+];
+
 export const v54: Migration = {
   version: 54,
   up: (db) => {
@@ -23,5 +58,6 @@ export const v54: Migration = {
       if (tableExists(db, t) && !tableHasColumn(db, t, c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
     }
     db.exec(SESSION_OWNERS_DDL);
+    for (const [t, ddl] of OWNER_INDEX_DDL) if (tableExists(db, t)) db.exec(ddl);
   },
 };

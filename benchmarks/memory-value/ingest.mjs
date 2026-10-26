@@ -46,7 +46,10 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMemory, computeSchemaFit } from '../../dist/entry/memory.js';
-import { initStore, writeEntry } from '../../dist/entry/testing.js';
+import { initStore } from '../../dist/entry/testing.js';
+import { writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
+import { RequestStores } from '../../dist/db/index.js';
 import {
   parseLmeDate,
   setFakeNow,
@@ -83,6 +86,9 @@ export function ingestQuestion(question) {
   const tEvalIso = sessionDateIso.reduce((a, b) => (b > a ? b : a), questionDateIso);
   const goldRecords = [];
   let skippedEmpty = 0;
+  // One handle for the whole haystack, as simulate.mjs keeps: an open per turn would checkpoint the WAL at each close.
+  const session = new RequestStores();
+  const files = storeFilesOf(hippoRoot, { session });
 
   try {
     let currentSessionIdx = -1;
@@ -113,7 +119,7 @@ export function ingestQuestion(question) {
         source_session_id: t.sessionId,
         schema_fit: schemaFit,
       });
-      writeEntry(hippoRoot, entry);
+      writeEntryIn(files, entry);
       entriesSoFar.push(entry);
       goldRecords.push({
         id: entry.id,
@@ -127,6 +133,7 @@ export function ingestQuestion(question) {
     }
   } finally {
     clearFakeNow();
+    session.close();
   }
 
   const goldCount = goldRecords.filter((r) => r.isGold).length;

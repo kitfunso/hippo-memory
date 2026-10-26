@@ -28,11 +28,11 @@ import { hybridSearch } from '../../src/entry/folder-search.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry } = sessionPerTest();
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise

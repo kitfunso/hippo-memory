@@ -17,12 +17,10 @@ import {
   auditList,
 } from '../../src/api/index.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, readEntry, apiCtx } = sessionPerTest();
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;

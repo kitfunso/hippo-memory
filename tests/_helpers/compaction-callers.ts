@@ -2,13 +2,19 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
-import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+  type RequestStores,
+} from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { ContextReach, ContextWith, EntryContext } from '../../src/api/types.js';
 import type { OptionalGroup } from '../../src/base/ports/store.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { onHandle, sqliteStore } from './test-session.js';
 import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
@@ -61,12 +67,7 @@ export function useCallerStore(): void {
 }
 
 export function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(root);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(root, fn);
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
@@ -108,9 +109,9 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
 /** A caller's Context on hippo.db, whose store sets every group the callers write through. */
 export type CallerContext = EntryContext<ContextWith<OptionalGroup>>;
 
-export function owned(owner: string): CallerContext {
+export function owned(owner: string, session?: RequestStores): CallerContext {
   return {
-    store: sqliteStore(root),
+    store: sqliteStore(root, { session }),
     config: loadConfig(root),
     tenantId: TENANT,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
@@ -135,12 +136,12 @@ export function failOn(table: string, when: 'INSERT' | 'UPDATE', message: string
   return () => withDb((db) => db.exec(`DROP TRIGGER ${name}`));
 }
 
-/** Runs `fn` while another connection holds the write lock, with a 50 ms wait so busy shows fast. */
-export async function whileLocked<T>(fn: () => T): Promise<T> {
+/** Runs `fn` on a session with a 50 ms wait, so busy shows fast, while another connection holds the write lock. */
+export async function whileLocked<T>(fn: (session: RequestStores) => T): Promise<T> {
   const holder = openHippoDb(root);
   holder.exec('BEGIN IMMEDIATE');
   try {
-    return await runWithRequestStores(fn, { busyWaitMs: 50 });
+    return await withSharedStoreHandles(fn, { busyWaitMs: 50 });
   } finally {
     holder.exec('ROLLBACK');
     closeHippoDb(holder);

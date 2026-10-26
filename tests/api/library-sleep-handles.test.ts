@@ -3,12 +3,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { consolidate, sleep } from '../../src/index.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { apiCtx } = sessionPerTest();
 
 /** Distinct connections that ran a statement while `run` ran. */
 async function connectionsDuring(run: () => Promise<object>): Promise<number> {

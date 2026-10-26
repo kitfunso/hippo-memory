@@ -18,16 +18,13 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve, RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 // The settings a root reads per request, so each case's stubbed variable reaches recall as it does in production.
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -52,9 +49,6 @@ describe('fresh-tail policy', () => {
   beforeEach(() => {
     root = makeRoot('f5');
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
-  });
-  afterEach(() => {
-    removeAfterRequest(root);
   });
 
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {

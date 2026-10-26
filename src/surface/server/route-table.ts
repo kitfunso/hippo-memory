@@ -279,14 +279,18 @@ function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundR
   return route.hippoDbOnly === undefined || onHippoDb ? route : { ...route, unported: true };
 }
 
-/** A group row's handler gets the request's context on the store boot proved; without the group it answers 501. */
+/** A group row's handler gets the request's context on the store boot proved, bound to the request's session and
+ * deadline; without the group it answers 501. */
 function boundGroupRoute<G extends OptionalGroup>(route: GroupRouteOf<G>, store: HippoStore): BoundRoute {
   const { method, auth } = route;
   if (!hasGroup(store, route.storeReady)) {
     return { method, auth, ...endpointOf(route), unported: true, handler: notPorted };
   }
   const proved: StoreWith<G> = store;
-  const onProved = (r: AuthedRouteRequest): GroupRequest<G> => ({ ...r, ctx: { ...r.ctx, store: proved } });
+  const onProved = (r: AuthedRouteRequest): GroupRequest<G> => ({
+    ...r,
+    ctx: { ...r.ctx, store: r.opts.storeFor(proved) },
+  });
   if ('path' in route) {
     const { path, handler } = route;
     return { method, auth, path, handler: (r: AuthedRouteRequest) => handler(onProved(r)) };
@@ -301,10 +305,10 @@ function boundWebhook(route: WebhookRoute, store: HippoStore): BoundRoute {
   if (!hasGroups(store, CONNECTOR_GROUPS)) return { method, auth, ...endpointOf(route), handler: webhookNotPorted };
   if ('path' in route) {
     const { path, handler } = route;
-    return { method, auth, path, handler: (r: RouteRequest) => handler({ ...r, store }) };
+    return { method, auth, path, handler: (r: RouteRequest) => handler({ ...r, store: r.opts.storeFor(store) }) };
   }
   const { pattern, handler } = route;
-  return { method, auth, pattern, handler: (r, params) => handler({ ...r, store }, params) };
+  return { method, auth, pattern, handler: (r, params) => handler({ ...r, store: r.opts.storeFor(store) }, params) };
 }
 
 /** A webhook's 501 drops the body it never reads, as its 404 and 401 do, so no caller holds the socket open. */
@@ -332,9 +336,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
-  // Only a store with worker threads has moved the route's hippo.db work; under any other the handler still opens
-  // hippo.db itself.
-  await r.opts.offLoop(() => run(r));
+  await run(r);
   return true;
 }
 
@@ -369,25 +371,21 @@ export async function dispatchAddonRoute(
   if (!bound) return false;
   const { route, ported } = bound;
   noteAccess(req, { route: route.path });
-  const answer = async (): Promise<void> => {
-    const ctx = await buildContextWithAuth(req, opts);
-    if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
-    noteAccess(req, { tenant: ctx.tenantId });
-    const body = await parseJsonBody(req, ctx);
-    sendJson(res, 200, await route.handler({ ctx, body }));
-  };
-  // The add-on, not core, knows whether its handler reaches hippo.db only through the store's worker-backed methods.
-  await (route.loop === 'off' ? opts.offLoop(answer) : answer());
+  const ctx = await buildContextWithAuth(req, opts);
+  if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+  noteAccess(req, { tenant: ctx.tenantId });
+  const body = await parseJsonBody(req, ctx);
+  sendJson(res, 200, await route.handler({ ctx, body }));
   return true;
 }
 
-/** A route outside /v1 and the add-ons; its store work runs off the server thread as a V1 row's does. */
+/** A route outside /v1 and the add-ons. */
 export interface HostRoute {
   readonly method: string;
   readonly path: string;
 }
 
-/** Each runs where boot.ts places it around the rate limit and the request scope. */
+/** Each runs where boot.ts places it around the rate limit. */
 export const HOST_ROUTES = {
   health: { method: 'GET', path: '/health' },
   ready: { method: 'GET', path: '/ready' },
@@ -395,16 +393,16 @@ export const HOST_ROUTES = {
   mcpStream: { method: 'GET', path: '/mcp/stream' },
 } as const satisfies Readonly<Record<string, HostRoute>>;
 
-/** Runs `handle` off the server thread when the request is `route`'s; false when it is another route. */
+/** Runs `handle` when the request is `route`'s; false when it is another route. */
 export async function dispatchHostRoute(
-  { req, opts }: RouteRequest,
+  { req }: RouteRequest,
   request: { readonly method: string; readonly path: string },
   route: HostRoute,
   handle: () => Promise<void>,
 ): Promise<boolean> {
   if (request.method !== route.method || request.path !== route.path) return false;
   noteAccess(req, { route: route.path });
-  await opts.offLoop(handle);
+  await handle();
   return true;
 }
 

@@ -12,11 +12,9 @@ import { remember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-oneRequestPerTest();
 
 const roots: string[] = [];
 const FAKE_AWS_KEY = 'AKIA' + 'X'.repeat(16);
@@ -44,7 +42,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 describe('the sleep LLM gate', () => {

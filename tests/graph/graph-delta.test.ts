@@ -5,16 +5,15 @@ import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/gr
 import { entityKey } from '../../src/store/rules/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const T = 'default';
+const { sqliteStore, objectsAt } = sessionPerTest();
 
 function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
   const db = openHippoDb(home);
@@ -322,7 +321,6 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
 
 describe('graph delta', () => {
   let home: string;
-  oneRequestPerTest();
   beforeEach(() => {
     home = makeRoot('graph-delta');
   });
@@ -330,7 +328,7 @@ describe('graph delta', () => {
   it.each(CROSS_OBJECT_FIXTURES)(
     'deriveGraph gives, by natural key, the rows the rebuild writes: %s',
     async (_, setup) => {
-      await withSharedStoreHandles(() => setup(home));
+      await setup(home);
       for (const tenant of [T, 'tenantA', 'tenantB']) {
         await extractGraph(sqliteStore(home), tenant);
         expect(await derivedByKey(home, tenant)).toEqual(storedByKey(home, tenant));

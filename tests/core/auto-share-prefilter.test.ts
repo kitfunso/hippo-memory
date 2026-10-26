@@ -11,18 +11,16 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry } = sessionPerTest();
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
@@ -57,10 +55,6 @@ function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [
 
 /** One row per score signal and per skip rule, each labelled with the transfer score it should get. */
 function seedSignalRows(): Map<string, string> {
-  return withRequestStoresSync(seedSignalRowsIn);
-}
-
-function seedSignalRowsIn(): Map<string, string> {
   const ids = new Map<string, string>();
   ids.set('plain 0.5', put('plain'));
   ids.set('negative 0.55', put('negative', { emotionalValence: 'negative' }));
@@ -168,10 +162,8 @@ describe('autoShare prefilter', () => {
   });
 
   it('reads only the rows that can clear a score above neutral', async () => {
-    const errorId = withRequestStoresSync(() => {
-      for (let i = 0; i < 60; i++) put(`plain ${i}`);
-      return put('error', {}, ['error']);
-    });
+    for (let i = 0; i < 60; i++) put(`plain ${i}`);
+    const errorId = put('error', {}, ['error']);
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = await recordStatementsAsync(() =>
         autoShare(...sharingStores(root), { embed: TEST_RUN, dryRun: true, tenantId }),

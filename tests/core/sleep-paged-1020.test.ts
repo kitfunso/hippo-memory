@@ -3,24 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
+import { type FullContext } from '../_helpers/api-ctx.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { auditMemoryQuality } from '../../src/api/auth/audit.js';
 import { deduplicateStore, type DedupPair } from '../../src/domain/consolidate/dedupe.js';
 import { auditMemories, type AuditIssue } from '../../src/base/memory/memory-audit.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const PAGE = 4;
 const roots: string[] = [];
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
+const { apiCtx } = sessionPerTest();
 
 const ctxFor = (root: string): FullContext => apiCtx(root, 'default', { subject: 'paged-test', role: 'admin' });
 

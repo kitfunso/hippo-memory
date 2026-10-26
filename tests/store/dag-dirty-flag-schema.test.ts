@@ -17,9 +17,6 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 async function dirtyFor(root: string, tenantId: string): Promise<MemoryEntry[]> {

@@ -1,15 +1,22 @@
 // A session id belongs to the first owner that binds it; a second owner gets 409 so its client sets the record aside.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+  type RequestStores,
+} from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { bindSessionOwner, type Context } from '../../src/server.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore, sessionDb } = sessionPerTest();
 
 interface StatementProto {
   readonly sourceSQL: string;
@@ -23,7 +30,7 @@ const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
 let home: string;
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(home);
+  const db = sessionDb(home);
   try {
     return fn(db);
   } finally {
@@ -31,9 +38,9 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function ctx(owner: string, tenantId = 'default'): Context {
+function ctx(owner: string, tenantId = 'default', session?: RequestStores): Context {
   return {
-    store: sqliteStore(home),
+    store: sqliteStore(home, { session }),
     config: loadConfig(home),
     tenantId,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
@@ -70,10 +77,6 @@ beforeEach(() => {
   home = makeRoot('session-owners');
 });
 
-afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
-});
-
 describe('bindSessionOwner', () => {
   it('first writer wins, a second owner gets a 409 ConflictError', async () => {
     await bindSessionOwner(ctx('alice'), 's1');
@@ -89,13 +92,14 @@ describe('bindSessionOwner', () => {
     const holder = openHippoDb(home);
     holder.exec('BEGIN IMMEDIATE');
     try {
-      // Another connection holds the write lock, so a rebind that asked for it would fail after the short wait.
-      await expect(
-        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's1'), { busyWaitMs: 50 }),
-      ).resolves.toBeUndefined();
-      await expect(
-        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's2'), { busyWaitMs: 50 }),
-      ).rejects.toThrow();
+      // Another connection holds the write lock, so a rebind that asked for it would fail after the request's short wait.
+      await withSharedStoreHandles(
+        async (request) => {
+          await expect(bindSessionOwner(ctx('alice', 'default', request), 's1')).resolves.toBeUndefined();
+          await expect(bindSessionOwner(ctx('alice', 'default', request), 's2')).rejects.toThrow();
+        },
+        { busyWaitMs: 50 },
+      );
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

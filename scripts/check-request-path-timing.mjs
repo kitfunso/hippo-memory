@@ -39,7 +39,7 @@ const { contextReach } = await load('api/types.js');
 const { loadConfig } = await load('host/config-file.js');
 const { rootInfra } = await load('infra/ports.js');
 const { handleMcpRequest } = await load('surface/mcp/server.js');
-const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/index.js');
+const { inSqliteSession, runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/index.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
 const { readLocalKey } = await load('surface/server/local-key.js');
@@ -126,7 +126,6 @@ const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const localStore = sqliteStore(localRoot);
-const reach = contextReach(sqliteReach(localRoot, localStore), loadConfig);
 const config = loadConfig(localRoot);
 // The script is its own composition root, so it hands the api the real ports as the CLI does.
 const infra = rootInfra()();
@@ -135,7 +134,6 @@ const ctx = {
   tenantId: 'default',
   actor: adminActor('ci:timing'),
   store: localStore,
-  reach,
   config,
   infra,
 };
@@ -146,27 +144,36 @@ const mcpCtx = {
   role: 'admin',
   hostAdmin: true,
   store: localStore,
-  reach,
   config,
   infra,
 };
-// A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
+// A root builds a request's store, and each global store its reach opens, on the request's session.
+const onSession = (session) => {
+  const store = inSqliteSession(localStore, session);
+  const openGlobal = (root) => sqliteStore(root, { session });
+  return { store, reach: contextReach(sqliteReach(localRoot, store, undefined, openGlobal), loadConfig) };
+};
+
+// A transport runs each tool call on its host's session (the server per request, stdio per frame).
 const tool =
   (name, args = {}) =>
   async () => {
     const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
-    const res = await runSqliteRequest(() => handleMcpRequest(call, mcpCtx), 'server');
+    const res = await runSqliteRequest(
+      (session) => handleMcpRequest(call, { ...mcpCtx, ...onSession(session) }),
+      'server',
+    );
     if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
   };
 
-// As the CLI and the prompt hook run it: one request scope, so each store opens and is set up once.
-const inHook = (run) => () => runSqliteRequest(run, 'hook');
+// As the CLI and the prompt hook run it: one session, so each store opens and is set up once.
+const inHook = (run) => () => runSqliteRequest((session) => run({ ...ctx, ...onSession(session) }), 'hook');
 
 // With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
   try {
-    await run({ ...ctx, reach: contextReach(sqliteReach(localRoot, localStore), loadConfig) });
+    await run();
   } finally {
     process.env.HIPPO_HOME = globalRoot;
   }
@@ -242,16 +249,16 @@ const dashboardRead = (pathAndQuery) => async () => {
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
-  ['contextGet, no query', inHook(() => contextGet(ctx, { currentProject: 'proj' })), [59, 917, 3]],
-  ['contextGet, query', inHook(() => contextGet(ctx, { q: 'kafka redis', currentProject: 'proj' })), [69, 661, 3]],
+  ['contextGet, no query', inHook((c) => contextGet(c, { currentProject: 'proj' })), [59, 917, 3]],
+  ['contextGet, query', inHook((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' })), [69, 661, 3]],
   [
     'contextGet, pinned only',
-    inHook(() => contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })),
+    inHook((c) => contextGet(c, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })),
     [29, 141, 3],
   ],
   [
     'contextGet, local query',
-    inHook(withoutGlobal((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' }))),
+    withoutGlobal(inHook((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' }))),
     [46, 393, 2],
   ],
   [

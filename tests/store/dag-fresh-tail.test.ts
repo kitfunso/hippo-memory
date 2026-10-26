@@ -8,18 +8,16 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, apiCtx } = sessionPerTest();
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:fresh-tail', role: 'admin' });
@@ -42,7 +40,6 @@ describe('fresh-tail recall', () => {
   beforeEach(() => {
     root = makeRoot('fresh-tail');
   });
-  afterEach(() => removeAfterRequest(root));
 
   it('1. freshTailCount=0 (default): no fresh-tail rows surfaced', async () => {
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`alpha event ${i}`));

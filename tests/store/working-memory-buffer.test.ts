@@ -1,16 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getSchemaVersion,
-  getCurrentSchemaVersion,
-  withSharedStoreHandles,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { wmPush, wmRead, wmClear } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+sessionPerTest();
 
 // The store's per-scope cap; a literal here so a change to it fails these tests on purpose.
 const WM_MAX_ENTRIES = 20;
@@ -77,15 +71,13 @@ describe('wmPush', () => {
 describe('bounded buffer eviction', () => {
   it('evicts entries when exceeding WM_MAX_ENTRIES per scope', async () => {
     // Push WM_MAX_ENTRIES + 5 entries
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < WM_MAX_ENTRIES + 5; i++) {
-        await wmPush(tmpDir, {
-          scope: 'evict-test',
-          content: `entry ${i}`,
-          importance: 0.5,
-        });
-      }
-    });
+    for (let i = 0; i < WM_MAX_ENTRIES + 5; i++) {
+      await wmPush(tmpDir, {
+        scope: 'evict-test',
+        content: `entry ${i}`,
+        importance: 0.5,
+      });
+    }
 
     const items = await wmRead(tmpDir, { scope: 'evict-test', limit: 100 });
     expect(items).toHaveLength(WM_MAX_ENTRIES);
@@ -94,15 +86,13 @@ describe('bounded buffer eviction', () => {
   it('evicts the lowest-importance entries first', async () => {
     // Push entries with varying importance
     // Low importance entries that should be evicted
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-        await wmPush(tmpDir, {
-          scope: 'priority',
-          content: `low-${i}`,
-          importance: 0.1,
-        });
-      }
-    });
+    for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+      await wmPush(tmpDir, {
+        scope: 'priority',
+        content: `low-${i}`,
+        importance: 0.1,
+      });
+    }
 
     // Push one high-importance entry — should evict the oldest low-importance one
     await wmPush(tmpDir, {
@@ -124,11 +114,10 @@ describe('bounded buffer eviction', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
     try {
-      await withSharedStoreHandles(async () => {
-        for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-          await wmPush(tmpDir, { scope: 'tie-break', content: `entry-${i}`, importance: 0.5 });
-        }
-      });
+      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+        await wmPush(tmpDir, { scope: 'tie-break', content: `entry-${i}`, importance: 0.5 });
+      }
+
       await wmPush(tmpDir, { scope: 'tie-break', content: 'newest', importance: 0.5 });
     } finally {
       vi.useRealTimers();
@@ -144,11 +133,9 @@ describe('bounded buffer eviction', () => {
 
   it('does not evict across different scopes', async () => {
     // Fill scope A to the max
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < WM_MAX_ENTRIES; i++) {
-        await wmPush(tmpDir, { scope: 'scope-a', content: `a-${i}` });
-      }
-    });
+    for (let i = 0; i < WM_MAX_ENTRIES; i++) {
+      await wmPush(tmpDir, { scope: 'scope-a', content: `a-${i}` });
+    }
 
     // Push to scope B — should not affect scope A
     await wmPush(tmpDir, { scope: 'scope-b', content: 'b-entry' });
@@ -250,11 +237,9 @@ describe('wmClear', () => {
 describe('tenant scoping', () => {
   it("keeps one tenant from reading, clearing or evicting another tenant's rows", async () => {
     await wmPush(tmpDir, { scope: 'shared', content: 'acme note', tenantId: 'acme' });
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) {
-        await wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
-      }
-    });
+    for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) {
+      await wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
+    }
 
     expect((await wmRead(tmpDir, { tenantId: 'acme' })).map((i) => i.content)).toEqual(['acme note']);
     expect(await wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);

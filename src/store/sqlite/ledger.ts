@@ -1,11 +1,12 @@
 // hippo.db's Ledger group: a turn's token-ledger rows, the pilot arm and delivery events.
 import {
   HOOK_DB_WAIT_MS,
-  scopedBusyWait,
+  sessionOf,
   withWriteScope,
   type DatabaseSyncLike,
   isSqliteBusy,
   noteStoreBusy,
+  type RequestStores,
 } from '../../db/index.js';
 import { errorMessage, expectedErrorText, log, errorFields } from '../../base/util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
@@ -67,7 +68,7 @@ function ensurePilotArm(
         }
         return stored ?? hashed;
       },
-      { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
+      { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
     );
   } catch (err) {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
@@ -95,10 +96,10 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
 
 /** Says why a ledger row did not land, at the level its class earns: busy warns once through noteStoreBusy, absent is
  * debug with no stack, unexpected warns once with the error class and stack. */
-function noteLedgerRowSkipped<E>(error: E): void {
+function noteLedgerRowSkipped<E>(error: E, session: RequestStores | undefined): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {
-    noteStoreBusy('token ledger row skipped');
+    noteStoreBusy('token ledger row skipped', session);
     return;
   }
   if (skip === 'absent') {
@@ -109,7 +110,7 @@ function noteLedgerRowSkipped<E>(error: E): void {
 }
 
 /** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
-function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
+function recordRows(db: DatabaseSyncLike, turn: LedgerTurn, session: RequestStores | undefined): void {
   try {
     for (const use of turn.uses) {
       if (turn.perRow !== true) {
@@ -119,11 +120,11 @@ function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
       try {
         recordTokenUse(db, use);
       } catch (error) {
-        noteLedgerRowSkipped(error);
+        noteLedgerRowSkipped(error, session);
       }
     }
   } catch (error) {
-    noteLedgerRowSkipped(error);
+    noteLedgerRowSkipped(error, session);
   }
 }
 
@@ -136,29 +137,36 @@ function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: 
   }
 }
 
+/** The opener a ledger writes through, the session its busy skips tell, and its delivery prune schedule. */
+interface LedgerWiring {
+  readonly on: OnHandle;
+  readonly session: RequestStores | undefined;
+  readonly prune: DeliveryPruneSchedule;
+}
+
 /** Books a turn's rows, then its delivery event; a store that will not open still gets the event tried on its own. */
-function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSchedule): void {
+function recordTurnVia({ on, session, prune }: LedgerWiring, turn: LedgerTurn): void {
   const { delivery } = turn;
   let opened = false;
   try {
     on((db) => {
       opened = true;
-      recordRows(db, turn);
+      recordRows(db, turn, session);
       if (delivery !== undefined) recordDelivery(db, delivery, prune);
     });
   } catch (error) {
     // With no rows tried, the event's own failure line is the only one true.
-    if (turn.uses.length > 0) noteLedgerRowSkipped(error);
+    if (turn.uses.length > 0) noteLedgerRowSkipped(error, session);
     if (!opened && delivery !== undefined) writeDeliveryEventVia(on, delivery, prune);
   }
 }
 
-/** `read`, or `fallback` once the failure is noted, so a hook never fails on its ledger. */
-function noting<T>(read: () => T, fallback: () => T): T {
+/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on its ledger. */
+function noting<T>(session: RequestStores | undefined, read: () => T, fallback: () => T): T {
   try {
     return read();
   } catch (error) {
-    noteLedgerRowSkipped(error);
+    noteLedgerRowSkipped(error, session);
     return fallback();
   }
 }
@@ -178,15 +186,16 @@ function pilotArm(
 }
 
 /** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since its delivery event is
- * tried again on its own when the open fails. */
-export function sqliteLedger(on: OnHandle): Ledger {
+ * tried again on its own when the open fails; a busy skip tells `session`, so a hook's later writes skip at once. */
+export function sqliteLedger(on: OnHandle, session?: RequestStores): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
-  const prune = deliveryPruneSchedule();
+  const wiring: LedgerWiring = { on, session, prune: deliveryPruneSchedule() };
   return {
-    recordTurn: (turn) => answered(() => recordTurnVia(on, turn, prune)),
+    recordTurn: (turn) => answered(() => recordTurnVia(wiring, turn)),
     lastSent: (tenantId, sessionId, surface) =>
       answered(() =>
         noting(
+          session,
           () => on((db) => lastSentState(db, tenantId, sessionId, surface)),
           () => null,
         ),
@@ -194,6 +203,7 @@ export function sqliteLedger(on: OnHandle): Ledger {
     pilotArm: (tenantId, sessionId, rateBp, opts) =>
       answered(() =>
         noting(
+          session,
           () => on((db) => pilotArm(db, tenantId, sessionId, rateBp, opts)),
           () => hashArm(sessionId, rateBp),
         ),

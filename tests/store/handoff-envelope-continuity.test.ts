@@ -1,9 +1,8 @@
 // W1 handoff envelope: the ambient handoff pop-off, scope filtering on the continuity reads, and the carry-forward fixes.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { contextGet, adminActor } from '../../src/api/index.js';
-import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
+import { cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   closeTaskSnapshotsForSession,
   loadLatestHandoff,
@@ -14,10 +13,12 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { apiCtx } = sessionPerTest();
 
 let root: string;
 
-oneRequestPerTest();
 beforeEach(() => {
   root = makeRoot('w1-handoff', { init: false });
 });

@@ -1,13 +1,9 @@
 // hippo.db's own refusals: each is a StoreBlockedError, so the layers above map it to 501 by the base class alone.
 import { StoreBlockedError } from '../base/util/store-blocked.js';
 
-/** A hippo.db open inside a request another store serves: the code path is not ported to the store port yet. */
+/** A hippo.db open refused: a folder marked for another store, or a store whose SQLite work runs on worker threads. */
 export class SqliteBlockedError extends StoreBlockedError {
-  constructor(
-    storeKind: string,
-    message = `hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ` +
-      `ported to the store yet`,
-  ) {
+  constructor(storeKind: string, message: string) {
     super(storeKind, message);
     this.name = 'SqliteBlockedError';
   }

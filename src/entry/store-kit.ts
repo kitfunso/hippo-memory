@@ -55,7 +55,7 @@ export type {
 // An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names hippo.db's, which
 // the composition roots open as their default store.
 export {
-  defaultStore as sqliteStore,
+  publishedDefaultStore as sqliteStore,
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,

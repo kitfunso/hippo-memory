@@ -6,14 +6,13 @@ import { remember as apiRemember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/surface/mcp/server.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import { apiCtx, testReach } from '../_helpers/api-ctx.js';
+import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { sqliteStore, apiCtx } = sessionPerTest();
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
@@ -51,8 +50,6 @@ describe('mcp tenant + client-key isolation', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(home);
-    removeAfterRequest(globalHome);
   });
 
   // ---- Test 1: last-shown list keyed by clientKey --------------------------

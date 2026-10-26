@@ -19,12 +19,11 @@ import {
   type GitHubFetcher,
   type GitHubBackfillPage,
 } from '../../src/surface/connectors/github/octokit-client.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { apiCtx } = sessionPerTest();
 
 const REPO = 'acme/demo';
 const TENANT = 'default';

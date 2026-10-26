@@ -1,8 +1,6 @@
 // Root-keyed goals and predictions forms tests call; production code goes through the port or the handle-first forms.
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
-import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';
 import * as goalsSql from '../../../src/store/sqlite/goals.js';
@@ -17,6 +15,7 @@ import type {
 } from '../../../src/base/ports/store/types.js';
 import type { Prediction, PredictionClose } from '../../../src/base/ports/store/objects.js';
 import type { ClosureState } from '../../../src/base/records/prediction.js';
+import { onHandle, sqliteStore } from '../test-session.js';
 
 export async function pushGoal(hippoRoot: string, opts: PushGoalOptions): Promise<Goal> {
   return await sqliteStore(hippoRoot).goals.push(opts.tenantId, opts);

@@ -7,10 +7,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -27,7 +25,7 @@ function makeTmpStore(): string {
 
 function cleanUp(...dirs: string[]): void {
   for (const d of dirs) {
-    removeAfterRequest(d);
+    removeDir(d);
   }
 }
 

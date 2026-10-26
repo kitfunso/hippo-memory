@@ -9,7 +9,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
@@ -27,22 +26,22 @@ import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import * as api from '../../src/api/index.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
-import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
-import { objectsAt } from '../_helpers/objects-at.js';
+import { type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx, objectsAt } = sessionPerTest();
 
 pinClock();
-oneRequestPerTest();
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
 const DORMANT_OFF = { replay: { count: 0 }, dormant: { enabled: false } };
 

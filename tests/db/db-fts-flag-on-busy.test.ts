@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { getMeta } from '../../src/db/meta.js';
-import { MEMORIES_FTS_DDL } from '../../src/db/continuity.js';
+import { MEMORIES_FTS_DDL } from '../../src/db/fts-index.js';
 import { runMigrations } from '../../src/db/migrate.js';
 import type { DatabaseSyncLike } from '../../src/db/sqlite.js';
 

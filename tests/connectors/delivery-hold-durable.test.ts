@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const TTL = 1000;
 let root: string;
@@ -15,7 +13,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 const claimOn = async (store: ReturnType<typeof sqliteStore>, key: string, nowMs: number) =>

@@ -187,11 +187,10 @@ describe('replies the stdio loop writes', () => {
     });
     let ran = false;
     const slow: McpHost = {
-      contextFor: (hippoRoot, tenantId) => real.contextFor(hippoRoot, tenantId),
-      runRequest: async (run) => {
+      runFrame: async (signal, run) => {
         await held;
         ran = true;
-        return run();
+        return real.runFrame(signal, run);
       },
     };
     startStdioLoop(slow);

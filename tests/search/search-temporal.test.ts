@@ -4,10 +4,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 describe('temporal-aware search', () => {
   let hippoRoot: string;

@@ -15,19 +15,17 @@ import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/
 import { briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../../src/base/scope/recall-scope.js';
 import { placeholders } from '../../src/db/sql.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, objectsAt } = sessionPerTest();
 
 pinClock();
-
-oneRequestPerTest();
 
 function makeOkFetcher(content: string) {
   return vi.fn<typeof fetch>(

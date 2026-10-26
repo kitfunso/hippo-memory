@@ -5,7 +5,7 @@ import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from './test-session.js';
 import { createMemory } from './default-half-life-memory.js';
 import type { MovedReadsSeed } from './moved-reads-seed.js';
 import { TENANT } from './recall-golden-seed.js';

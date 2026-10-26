@@ -10,13 +10,11 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadContextCandidates } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -107,7 +105,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  removeAfterRequest(home);
+  removeDir(home);
 });
 
 // Ten-day half-life rows, aged in half-lives: a boosted row the unscaled key would leave out must still outrank a plain one.

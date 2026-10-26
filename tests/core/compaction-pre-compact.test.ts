@@ -13,9 +13,7 @@ import {
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =
@@ -48,6 +46,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => removeScratch(s));
+sessionPerTest();
 
 function payloadFor(session: string | null, transcriptPath: string, trigger: string): string {
   // JSON.stringify leaves out an undefined session_id.

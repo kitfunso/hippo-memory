@@ -458,7 +458,7 @@ export function writeOutcome(
       memoryIds,
     });
   }
-  if (memoryIds.length > 0) deferDueMirrors(files.hippoRoot);
+  if (memoryIds.length > 0) deferDueMirrors(files);
   return memoryIds;
 }
 

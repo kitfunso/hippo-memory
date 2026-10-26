@@ -10,7 +10,7 @@ import { handleCommentDeleted } from '../../src/surface/connectors/github/deleti
 import { ingestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { handleMessageDeleted } from '../../src/surface/connectors/slack/deletion.js';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -139,7 +139,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
         eventName: 'issue_comment',
       });
 
-    const ids = await withSqliteBlocked('port-only', async () => {
+    const ids = await (async () => {
       const stored = await message('Ev_message', 'the release is frozen until friday', '1700.000001');
       expect(stored).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await message('Ev_message', 'the release is frozen until friday', '1700.000001')).toEqual({
@@ -167,7 +167,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
       expect(await commentDeleted('d-4')).toEqual({ status: 'duplicate', archivedCount: 0 });
       expect(await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A)).toEqual([]);
       return { message: stored.memoryId, comment: noted.memoryId };
-    });
+    })();
 
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(slackRows(side)).toEqual([

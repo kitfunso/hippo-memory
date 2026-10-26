@@ -2,8 +2,8 @@
 
 import type { Card, CardComment, CardRun } from '../../../src/base/records/card.js';
 import type { HandoffOutcome } from '../../../src/base/session/handoff.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { assertTenantId } from '../../../src/base/scope/tenant-id.js';
+import { sqliteStore } from '../test-session.js';
 
 export async function createCard(
   hippoRoot: string,

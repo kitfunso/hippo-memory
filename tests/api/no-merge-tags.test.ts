@@ -6,12 +6,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 const PROBE = 'no-merge-probe';
 const BASE = 'Fixed the server crash due to memory overflow in the worker process `pool.ts`';

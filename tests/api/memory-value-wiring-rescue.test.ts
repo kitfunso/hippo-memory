@@ -7,7 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { rescueSet, validateWeights } from '../../src/domain/consolidate/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
-import { loadEveryTenantEntries, listMemoryConflicts, writeEntry } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, listMemoryConflicts } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
   dir,
@@ -18,10 +18,10 @@ import {
   condemnedEntry,
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry } = sessionPerTest();
 
 useMemoryValueScratch();
 

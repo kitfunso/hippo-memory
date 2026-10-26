@@ -1,9 +1,8 @@
 // Two developers in one tenant and one project: each keyed store call sees and changes only its own owner's task state.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { SessionHandoff } from '../../src/base/session/handoff.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -17,9 +16,9 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { sqliteStore } = sessionPerTest();
 
 const T = 'default';
 const A: ContinuityKey = { owner: 'alice', project: ['p'] };
@@ -72,10 +71,6 @@ const mirror = (): string => join(home, 'buffer', 'active-task.md');
 
 beforeEach(() => {
   home = makeRoot('owner-task-state');
-});
-
-afterEach(() => {
-  removeAfterRequest(home);
 });
 
 describe('task snapshots keyed by owner and project', () => {
@@ -137,7 +132,6 @@ describe('task snapshots keyed by owner and project', () => {
   });
 
   it("on a shared store an unkeyed save or clear throws and every owner's snapshot stays active", async () => {
-    removeAfterRequest(home);
     home = makeRoot('owner-task-state-shared', { config: { sharedStore: true } });
     const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
     const b = saveActiveTaskSnapshot(home, T, snap('b'), B);

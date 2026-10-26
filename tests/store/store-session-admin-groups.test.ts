@@ -4,22 +4,21 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { ConflictListQuery } from '../../src/base/ports/store/conflicts.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const T = 'default';
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 function root(): string {
   const made = makeRoot('session-admin-groups');

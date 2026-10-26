@@ -1,17 +1,17 @@
-// A request scope owns one handle per store; code that outlives the scope, or runs beside it, never gets or closes that handle.
+// A request session owns one handle per store; code that outlives the session, or runs beside it, never gets or closes
+// that handle.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   openHippoDb,
   closeHippoDb,
   noteStoreBusy,
   RequestStores,
-  runWithRequestStores,
-  currentRequestStores,
-  outsideRequestStores,
+  withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 let root: string;
 
@@ -22,18 +22,21 @@ beforeEach(() => {
 const busyTimeout = (db: DatabaseSyncLike): number =>
   Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
-describe('runWithRequestStores', () => {
-  it('work that outlives its scope gets a connection of its own, which closeHippoDb closes', async () => {
+/** An open on `session`, as a store built with it makes. */
+const openIn = (session: RequestStores): DatabaseSyncLike => openHippoDb(root, { grant: grantFor({ session }) });
+
+describe('withSharedStoreHandles', () => {
+  it('work that outlives its session gets a connection of its own, which closeHippoDb closes', async () => {
     let late: Promise<DatabaseSyncLike> | undefined;
-    // Released only once the scope has closed, so the late open runs after it in the scope's async context.
+    // Released only once the session has closed, so the late open runs after it.
     let release = (): void => undefined;
-    const scopeClosed = new Promise<void>((resolve) => {
+    const sessionClosed = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const scoped = await runWithRequestStores(
-      () => {
-        late = scopeClosed.then(() => openHippoDb(root));
-        return openHippoDb(root);
+    const scoped = await withSharedStoreHandles(
+      (session) => {
+        late = sessionClosed.then(() => openIn(session));
+        return openIn(session);
       },
       { busyWaitMs: 250 },
     );
@@ -51,11 +54,8 @@ describe('runWithRequestStores', () => {
     expect(db.isOpen).toBe(false);
   });
 
-  it('an open outside the scope survives the scope closing', async () => {
-    const [held, scoped] = await runWithRequestStores(() => [
-      outsideRequestStores(() => openHippoDb(root)),
-      openHippoDb(root),
-    ]);
+  it('an open without the session survives the session closing', async () => {
+    const [held, scoped] = await withSharedStoreHandles((session) => [openHippoDb(root), openIn(session)]);
     try {
       expect(held === scoped).toBe(false);
       expect(scoped.isOpen).toBe(false);
@@ -65,71 +65,57 @@ describe('runWithRequestStores', () => {
     }
   });
 
-  it("interleaved scopes never share or close each other's handles", async () => {
+  it("interleaved sessions never share or close each other's handles", async () => {
     let first: DatabaseSyncLike | undefined;
-    // Scope a stays open until b has opened its own handle beside it.
+    // Session a stays open until b has opened its own handle beside it.
     let release = (): void => undefined;
     const bOpened = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const a = runWithRequestStores(async () => {
-      first = openHippoDb(root);
+    const a = withSharedStoreHandles(async (session) => {
+      first = openIn(session);
       await bOpened;
-      expect(openHippoDb(root)).toBe(first);
+      expect(openIn(session)).toBe(first);
     });
-    const b = runWithRequestStores(async () => {
-      const own = openHippoDb(root);
+    const b = withSharedStoreHandles(async (session) => {
+      const own = openIn(session);
       expect(own === first).toBe(false);
       expect(first?.isOpen).toBe(true);
       release();
       await a;
       expect(first?.isOpen).toBe(false);
       expect(own.isOpen).toBe(true);
-      expect(openHippoDb(root) === own).toBe(true);
+      expect(openIn(session) === own).toBe(true);
     });
     await b;
   });
 
-  it('a nested scope joins the open one', async () => {
-    await runWithRequestStores(async () => {
-      const outer = currentRequestStores();
-      const db = openHippoDb(root);
-      await runWithRequestStores(
-        () => {
-          expect(currentRequestStores()).toBe(outer);
-          expect(openHippoDb(root)).toBe(db);
-        },
-        { busyWaitMs: 1 },
-      );
-      expect(db.isOpen).toBe(true);
-    });
-  });
-
-  it('installs no process listener however many scopes open stores', async () => {
+  it('installs no process listener however many sessions open stores', async () => {
     const before = process.listenerCount('exit');
-    for (let i = 0; i < 5; i++) await runWithRequestStores(() => openHippoDb(root));
+    for (let i = 0; i < 5; i++) await withSharedStoreHandles(openIn);
     expect(process.listenerCount('exit')).toBe(before);
   });
 
-  it("inside a runtime, a closed scope's handle serves the next scope, and dispose closes it", async () => {
+  it("with a runtime, a closed session's handle serves the next session, and dispose closes it", async () => {
     const runtime = new StoreRuntime();
-    const first = await runtime.run(() => runWithRequestStores(() => openHippoDb(root)));
+    const first = await withSharedStoreHandles(openIn, { runtime });
     expect(first.isOpen).toBe(true);
-    const second = await runtime.run(() => runWithRequestStores(() => openHippoDb(root)));
+    const second = await withSharedStoreHandles(openIn, { runtime });
     expect(second).toBe(first);
     runtime.dispose();
     expect(first.isOpen).toBe(false);
   });
 
-  it('dispose closes a scope still open when the process leaves', async () => {
+  it('dispose closes a session still open when the process leaves', async () => {
     const runtime = new StoreRuntime();
     let held: DatabaseSyncLike | undefined;
     let release = (): void => undefined;
-    const done = runtime.run(() =>
-      runWithRequestStores(async () => {
-        held = openHippoDb(root);
+    const done = withSharedStoreHandles(
+      async (session) => {
+        held = openIn(session);
         await new Promise<void>((resolve) => (release = resolve));
-      }),
+      },
+      { runtime },
     );
     await vi.waitFor(() => expect(held).toBeDefined());
     runtime.dispose();
@@ -138,17 +124,17 @@ describe('runWithRequestStores', () => {
     await done;
   });
 
-  it('outside a runtime a closed scope closes its handle', async () => {
-    const db = await runWithRequestStores(() => openHippoDb(root));
+  it('without a runtime a closed session closes its handle', async () => {
+    const db = await withSharedStoreHandles(openIn);
     expect(db.isOpen).toBe(false);
   });
 
-  it('a busy store drops the lock wait only in a fail-fast scope', async () => {
+  it('a busy store drops the lock wait only in a fail-fast session', async () => {
     const waits = async (failFastWhenBusy: boolean) =>
-      runWithRequestStores(
-        () => {
-          const db = openHippoDb(root);
-          noteStoreBusy('test write skipped');
+      withSharedStoreHandles(
+        (session) => {
+          const db = openIn(session);
+          noteStoreBusy('test write skipped', session);
           return busyTimeout(db);
         },
         { busyWaitMs: 1000, failFastWhenBusy },

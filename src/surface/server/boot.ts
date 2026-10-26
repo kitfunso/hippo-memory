@@ -13,7 +13,13 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
+import {
+  defaultServerRuntime,
+  tenantOfApiKey,
+  type ResolveOptions,
+  type ServerRuntime,
+  type StoreSession,
+} from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -31,6 +37,7 @@ import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../../base/scope/project-identity.js';
 import { parseRequest, rejectEncodedSlash } from './request.js';
 import { loopbackBindHosts } from './loopback.js';
+import type { RequestLimits } from '../../base/util/request-scope.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { answerRequest } from './failure-replies.js';
@@ -61,6 +68,8 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
+  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's view. */
+  readonly servedStore: HippoStore;
 }
 
 async function handleRequest(
@@ -83,14 +92,13 @@ async function handleRequest(
   const request = { method, path };
   const { health, ready, mcpStream } = HOST_ROUTES;
   if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, options))) return;
-  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store))) return;
+  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, options.servedStore))) return;
 
   enforceRateLimit(req, path, limiter);
 
-  if (await dispatchScopedRoute(routeRequest, method, path)) return;
+  if (await dispatchLimitedRoute(routeRequest, method, path)) return;
 
-  // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
-  // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
+  // Store-ready: the stream only authenticates, through the port.
   if (await dispatchHostRoute(routeRequest, request, mcpStream, () => handleMcpStream(req, res, opts, streamSlots))) {
     return;
   }
@@ -99,9 +107,8 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
- * JSON, add-on routes and POST /mcp. */
-async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+/** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes and POST /mcp. */
+async function dispatchLimitedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
@@ -245,7 +252,14 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 
   const inflight = new Set<ServerResponse>();
   const { workerCounts } = runtime;
-  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts, workerCounts };
+  const options = {
+    startedAt,
+    streamSlots,
+    limiter: limiters.perAddress,
+    counts: served.counts,
+    workerCounts,
+    servedStore: served.store,
+  };
   const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);
@@ -274,13 +288,8 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 function frozenAddonRoutes(addonRoutes: ServeOptions['routes']): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
-    (addonRoutes ?? []).map(({ path, handler, storeReady, loop }) =>
-      Object.freeze({
-        path,
-        handler,
-        ...(storeReady !== undefined && { storeReady }),
-        ...(loop !== undefined && { loop }),
-      }),
+    (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
+      Object.freeze({ path, handler, ...(storeReady !== undefined && { storeReady }) }),
     ),
   );
   assertAddonRoutes(routes);
@@ -311,12 +320,11 @@ function servedOptsFor(
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     store,
     onHippoDb: runtime.onHippoDb,
-    reachOf: runtime.reachOf,
+    reachOf: (shared) => runtime.reachOf(shared, {}),
+    storeFor: (own) => own,
     configAt: configReader(envRuntimeSettings),
-    offLoop: runtime.offLoop,
     callerLimiter,
     failedAuthLimiter,
-    authResolver: runtime.outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
     infra: rootInfra(runtime.host),
     sleeps,
@@ -334,11 +342,31 @@ function acceptingServer(
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => handleRequest(req, res, served, options)), {
+    const answer = (limits: RequestLimits): Promise<void> =>
+      runtime.runRequest((session) =>
+        handleRequest(req, res, servedFor(served, runtime, { limits, session }), options),
+      );
+    answerRequest(req, res, answer, {
       slowWarnMs: served.slowRequestWarnMs,
       counts: options.counts,
     });
   });
+}
+
+/** `served` as one request reads it: each store call to a worker waits on the request's deadline, an in-process store
+ * opens on the request's session, and its Context carries the abort signal. */
+function servedFor(
+  served: ResolvedServeOptions,
+  runtime: ServerRuntime,
+  { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
+): ResolvedServeOptions {
+  return {
+    ...served,
+    store: runtime.storeFor(served.store, limits, session),
+    reachOf: (shared) => runtime.reachOf(shared, limits, session),
+    storeFor: (own) => runtime.storeFor(own, limits, session),
+    signal: limits.signal,
+  };
 }
 
 async function listenAndDescribe(

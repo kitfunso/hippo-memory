@@ -1,6 +1,6 @@
 // Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the store it is given.
 
-import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
+import { closeHippoDb, type DatabaseSyncLike, openHippoDb, type OpenOptions } from '../../db/index.js';
 import { reproveStoreSchema } from '../../db/connect.js';
 import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -8,38 +8,42 @@ import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
 import {
   bootstrapLegacyStore,
+  type HandleOpener,
   type Handles,
   holdsMemory,
   recordHalfLifeBaseForNewStore,
   type StoreFiles,
 } from './open.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../../base/memory/strength.js';
-import type { StoreRules } from '../../base/ports/infra.js';
 import { hostClock } from '../../host/clock.js';
 import { bindHandleClock } from './handle-clock.js';
 import { createHost } from '../../host/host.js';
+import { grantFor, type HandleOptions } from './grant.js';
 
-export function initStore(hippoRoot: string): void {
-  reproveStoreSchema(hippoRoot);
-  closeHippoDb(openStore(hippoRoot));
+/** Creates the store, or finishes one partly made; `opts` is what the store that asks opens with. */
+export function initStore(hippoRoot: string, opts?: OpenOptions): void {
+  reproveStoreSchema({ hippoRoot, runtime: opts?.grant?.runtime });
+  closeHippoDb(openStore(hippoRoot, opts));
 }
 
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
-export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+export function openStore(hippoRoot: string, opts?: OpenOptions): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
   const { db, facts, reused } = openHippoDbWithFacts(hippoRoot, opts);
+  const session = opts?.grant?.session;
   // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection
   // cannot write them.
-  if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
+  if (session?.setupDoneFor === hippoRoot) return db;
+  const at = { hippoRoot, runtime: opts?.grant?.runtime };
   try {
-    ensureMirrorDirectories(hippoRoot);
-    if (!reused) recoverDueMirrors(hippoRoot, db, facts?.mirrorsDue);
+    ensureMirrorDirectories(at);
+    if (!reused) recoverDueMirrors(at, db, facts?.mirrorsDue);
     // Both steps act only on a store with no memory row. A cached request handle has no probe facts, so it asks once
     // for both; a store emptied on that handle is still set up again.
     if (facts?.hasMemories ?? holdsMemory(db)) return db;
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
-      syncMirrorFiles(hippoRoot, db);
+      syncMirrorFiles(at, db);
     }
     recordHalfLifeBaseForNewStore(db);
     return db;
@@ -57,7 +61,7 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   }
 }
 
-/** One call on a handle of its own, closed after (a request scope's handle stays open); pass openStore where the call
+/** One call on a handle of its own, closed after (a session's handle stays open); pass openStore where the call
  *  also sets up mirror folders and legacy rows. */
 export function onHandle<T>(
   hippoRoot: string,
@@ -87,18 +91,29 @@ export async function onHandleAsync<T>(
 }
 
 /** The files of the store under `hippoRoot`, with a Host of their own: a store object keeps its folder's walk. */
-export function storeFilesOf(hippoRoot: string, rules: StoreRules = {}): StoreFiles {
-  const strength = withLossAversion(rules.strength ?? PRODUCTION_STRENGTH, rules.lossAversionRatio);
-  return { hippoRoot, strength, clock: hostClock(rules.fakeNowMs ?? null), host: createHost() };
+export function storeFilesOf(hippoRoot: string, opts: HandleOptions = {}): StoreFiles {
+  const strength = withLossAversion(opts.strength ?? PRODUCTION_STRENGTH, opts.lossAversionRatio);
+  const grant = grantFor(opts);
+  return {
+    hippoRoot,
+    runtime: grant.runtime,
+    opens: { grant, busyWaitMs: opts.busyWaitMs },
+    strength,
+    clock: hostClock(opts.fakeNowMs ?? null),
+    host: createHost(),
+  };
 }
 
 /** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
-export function handlesOf(hippoRoot: string, rules: StoreRules = {}): Handles {
-  const files = storeFilesOf(hippoRoot, rules);
+export function handlesOf(hippoRoot: string, opts: HandleOptions = {}): Handles {
+  const files = storeFilesOf(hippoRoot, opts);
+  const opener = (open: HandleOpener) => (root: string) => open(root, files.opens);
   return {
-    on: (fn, open) => onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
-    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
-    open: () => bindHandleClock(openHippoDb(hippoRoot), files.clock),
+    on: (fn, open = openHippoDb) =>
+      onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), opener(open)),
+    onAsync: (fn, open = openHippoDb) =>
+      onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), opener(open)),
+    open: () => bindHandleClock(openHippoDb(hippoRoot, files.opens), files.clock),
     files,
   };
 }

@@ -13,7 +13,6 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   BULK_TENANT,
   HELD_SCOPE,
@@ -23,8 +22,6 @@ import {
   SOLO_TENANT,
   type SeededGraph,
 } from '../_helpers/graph-reads-seed.js';
-
-oneRequestPerTest();
 
 type Call<R = GraphRows> = GroupCall<'graphReads', R>;
 type Edge = readonly [from: number, to: number];

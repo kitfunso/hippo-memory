@@ -17,7 +17,7 @@ import { redactSecretsStrict } from '../base/util/secret-detect.js';
 import type { JsonValue } from '../base/util/json.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
 import { parseOutboundUrl } from '../base/util/net.js';
-import { withRequestSignal } from '../base/util/request-scope.js';
+
 import { ZERO_NORM, norm } from '../base/rank/cosine.js';
 import { fetchWithRetry } from './http-retry.js';
 import {
@@ -63,7 +63,7 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
   async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
     // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared
     // pipeline.
-    if (texts.length > 0) await this.embedder.requirePipeline(this.model, withRequestSignal(call.signal));
+    if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await this.embedder.embed(text, this.model, role));
@@ -212,7 +212,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += this.batchSize) {
       const chunk = texts.slice(i, i + this.batchSize);
-      const vecs = await this.embedChunk(chunk, key, role, withRequestSignal(call.signal));
+      const vecs = await this.embedChunk(chunk, key, role, call.signal);
       for (const v of vecs) out.push(v.length > 0 ? l2normalize(v) : v);
     }
     return out;

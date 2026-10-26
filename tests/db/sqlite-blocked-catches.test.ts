@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqliteBlockedError, withSqliteBlocked } from '../../src/db/index.js';
+import { OTHER_STORE_MARKER, SqliteBlockedError } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
 import { embeddingModelRequiresReindex } from '../../src/store/sqlite/vector-index.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
@@ -112,7 +112,9 @@ afterEach(() => {
 
 describe('best-effort catches around a hippo.db open', () => {
   it.each(ROWS)('%s rethrows SqliteBlockedError under another store', async (_site, reach, run) => {
-    const err = await withSqliteBlocked('stub', () => run(root)).then(
+    // As a store-kit adapter marks its folder, so every hippo.db open on it throws.
+    writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
+    const err = await run(root).then(
       () => null,
       <E>(e: E) => e,
     );

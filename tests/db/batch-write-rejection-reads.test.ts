@@ -10,15 +10,15 @@ import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   batchWriteAndDeleteInFolder,
   commitInChunks,
   readEntry,
   writeEntriesTogether,
 } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+sessionPerTest();
 
 const TENANTS = ['tenant-a', 'tenant-b'] as const;
 const LIVE_ROWS = /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)$/;

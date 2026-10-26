@@ -15,6 +15,7 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -24,13 +25,12 @@ import {
   getMeta,
   HOOK_DB_WAIT_MS,
   openHippoDb,
-  runWithRequestStores,
   withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../src/base/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -360,9 +360,8 @@ describe('chunked consolidation flush', () => {
       await once(holder, 'message');
     });
 
-    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), {
-      busyWaitMs: 250,
-    });
+    const store = sqliteStore(fx.root, { busyWaitMs: 250 });
+    const result = await consolidate(store, { now: NOW, budget: holdsOnFirstPause, config: loadConfig(fx.root) });
 
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);
@@ -400,12 +399,14 @@ describe('chunked consolidation flush', () => {
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
     const fx = seed({ clusters: 2, dormant: 0, filler: 0 });
+    const atNow: typeof runConsolidation = (store, opts) =>
+      runConsolidation(store, { ...opts, now: NOW, budget: budget(0) });
     const timeout = await withSharedStoreHandles(
-      async () => {
-        await consolidate(fx.root, { now: NOW, budget: budget(0) });
-        const db = openHippoDb(fx.root);
+      async (session) => {
+        const ctx = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
+        await runSleep(onSession(ctx, session), { noShare: true }, { consolidate: atNow });
         // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
-        return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+        return (session.get(fx.root).prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
       },
       { busyWaitMs: HOOK_DB_WAIT_MS },
     );

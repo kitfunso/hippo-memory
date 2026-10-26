@@ -6,7 +6,7 @@ type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot:
 import { loadConfig } from '../../src/host/config-file.js';
 import { createSuccessor } from '../../src/base/memory/entry.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from './test-session.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

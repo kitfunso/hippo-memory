@@ -22,9 +22,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { computePredictionBaserate, closePrediction } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function countPredictBaserateAudits(root: string): number {
   const db = openHippoDb(root);
@@ -43,7 +41,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
   beforeEach(() => {
     root = makeRoot('emitaudit');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('default emitAudit=true on n=0 path: emits exactly one predict_baserate audit', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);

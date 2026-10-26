@@ -33,10 +33,7 @@ import {
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'The staging database moved to the eu-central region.';

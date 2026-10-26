@@ -5,10 +5,8 @@ import * as path from 'node:path';
 import { calculateStrength, confidenceFacets, createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { runWithRequestStores, withRequestStoresSync } from '../../src/db/request-stores.js';
-import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
+import { listMemoryConflicts, updateStats } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { handleStatus } from '../../src/surface/cli/status.js';
 import { runCli } from '../../src/cli.js';
@@ -22,9 +20,9 @@ import {
   saveStoredVectors,
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 let home: string;
@@ -164,10 +162,6 @@ function row(lastRetrieved: string, fields: Partial<MemoryEntry> = {}): string {
 }
 
 async function seedEveryCase(): Promise<void> {
-  await runWithRequestStores(seedEveryCaseIn);
-}
-
-async function seedEveryCaseIn(): Promise<void> {
   seq = 0;
   const fresh = row(daysAgo(1), { layer: Layer.Buffer, confidence: 'verified' });
   const aged = row(daysAgo(31));
@@ -280,9 +274,7 @@ describe('reports.statusCounts', () => {
   it('equals a tally over every loaded entry, to the last bit of the average', async () => {
     await seedEveryCase();
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
-    withRequestStoresSync(() => {
-      for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
-    });
+    for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));

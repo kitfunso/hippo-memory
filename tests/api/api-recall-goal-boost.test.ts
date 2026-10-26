@@ -13,12 +13,11 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { remember, retrieve } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { apiCtx } = sessionPerTest();
 
 function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
   const row = db.prepare(sql).get(...params);

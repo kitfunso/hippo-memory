@@ -4,17 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/base/memory/ambient.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { escapeRegex } from '../../src/base/util/escape.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
 // An every-tenant page is one statement that picks each tenant's rows off its own index; `(1)` is no filter.
@@ -31,12 +30,13 @@ function newRoot(): string {
 }
 
 const ctxFor = (hippoRoot: string): FullContext =>
-  apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' });
+  onSession(apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' }), session());
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
+const { session } = sessionPerTest();
 
 describe('sleep after consolidation', () => {
   it('gives the ambient summary of the rows the audit left', async () => {

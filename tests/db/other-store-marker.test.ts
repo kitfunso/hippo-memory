@@ -11,7 +11,6 @@ import {
   openHippoDbReadOnly,
   SqliteBlockedError,
   withSharedStoreHandles,
-  withSqliteAllowed,
 } from '../../src/db/index.js';
 import { PROTECTED_ROWS as repairProtection } from '../../src/base/memory/memory-audit.js';
 import * as serverEntry from '../../src/server.js';
@@ -20,6 +19,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { repairAutomaticMemories } from '../_helpers/root-forms.js';
 import { initStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 let root: string;
 let marker: string;
@@ -64,18 +64,6 @@ describe('the other-store marker', () => {
     expect(refusal(() => openHippoDbReadOnly(root)).storeKind).toBe('postgres');
   });
 
-  it('withSqliteAllowed waives it, across an await as well', async () => {
-    writeFileSync(marker, 'postgres');
-    closeHippoDb(withSqliteAllowed(() => openHippoDb(root)));
-    expect(existsSync(join(root, 'hippo.db'))).toBe(true);
-    const db = await withSqliteAllowed(async () => {
-      await new Promise((resolve) => setImmediate(resolve));
-      return openHippoDbReadOnly(root);
-    });
-    closeHippoDb(db);
-    expect(refusal(() => openHippoDb(root)).storeKind).toBe('postgres');
-  });
-
   it.each([
     ['an empty marker', () => writeFileSync(marker, '  \n')],
     ['an unreadable marker', () => mkdirSync(marker)],
@@ -106,10 +94,11 @@ describe('the other-store marker', () => {
   });
 
   it('is checked on every open, so a marker written while a scope holds a handle refuses the next open', async () => {
-    await withSharedStoreHandles(() => {
-      closeHippoDb(openHippoDb(root));
+    await withSharedStoreHandles((session) => {
+      const opts = { grant: grantFor({ session }) };
+      closeHippoDb(openHippoDb(root, opts));
       writeFileSync(marker, 'postgres');
-      expect(refusal(() => openHippoDb(root)).storeKind).toBe('postgres');
+      expect(refusal(() => openHippoDb(root, opts)).storeKind).toBe('postgres');
     });
   });
 
@@ -123,7 +112,6 @@ describe('the other-store marker', () => {
     expect(storeKit.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
     for (const entry of [serverEntry, storeKit]) {
       expect('OtherStoreFolderError' in entry).toBe(false);
-      expect('withSqliteAllowed' in entry).toBe(false);
     }
   });
 

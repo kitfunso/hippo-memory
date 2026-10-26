@@ -9,9 +9,10 @@ import { errorFields, log } from '../../base/util/log.js';
 import type { HippoIndex } from './rows.js';
 import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
+import type { StoreAt } from '../../db/connect.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { currentStoreRuntime } from '../../db/store-runtime.js';
+
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
@@ -37,17 +38,17 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
   // Increments a busy store refused, held by the runtime and folded into the next update that lands.
-  const runtime = currentStoreRuntime();
+  const { runtime } = files;
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {
-    updateStatsOn(db, files.hippoRoot, total);
+    updateStatsOn(db, files, total);
   } catch (err) {
     runtime?.holdStats(files.hippoRoot, total);
     throw err;
   }
 }
 
-export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {
+export function updateStatsOn(db: DatabaseSyncLike, at: StoreAt, delta: StatsDelta): void {
   // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
   // over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
@@ -68,7 +69,7 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
     ).run(key, String(amount), String(amount));
   }
 
-  writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+  writeStatsMirror(at, buildStatsFromDb(db));
 }
 
 export function updateStatsUnlessBusy(
@@ -101,7 +102,7 @@ export function appendConsolidationRun(
     run.removed,
   );
   pruneConsolidationRuns(db);
-  writeStatsMirror(files.hippoRoot, buildStatsFromDb(db));
+  writeStatsMirror(files, buildStatsFromDb(db));
 }
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */

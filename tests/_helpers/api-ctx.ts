@@ -4,7 +4,8 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import type { HippoStore, OptionalGroup } from '../../src/base/ports/store.js';
-import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
+import { inSqliteSession, sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
+import type { RequestStores } from '../../src/db/request-stores.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from './infra.js';
 import { evalStoreRules } from '../../src/infra/eval-switches.js';
@@ -23,6 +24,11 @@ export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = a
   const store = sqliteStore(hippoRoot, evalStoreRules(undefined));
   const reach = testReach(hippoRoot, store);
   return { hippoRoot, tenantId, actor, store, reach, config: loadConfig(hippoRoot), infra: testInfra() };
+}
+
+/** `ctx` with its store on `session`, so a run of calls shares one handle per store, as a CLI command's do. */
+export function onSession<C extends { readonly store: HippoStore }>(ctx: C, session: RequestStores): C {
+  return { ...ctx, store: inSqliteSession(ctx.store, session) };
 }
 
 /** The project this test process runs in, which contextGet read for itself before the surface named it. */

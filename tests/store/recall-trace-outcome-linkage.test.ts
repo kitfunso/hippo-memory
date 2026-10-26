@@ -13,7 +13,7 @@
 
 import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, onTestFinished } from 'vitest';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -25,15 +25,16 @@ import {
 } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { onSession } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeOutcome } from '../../src/store/sqlite/entry-writes.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { apiCtx } = sessionPerTest();
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
@@ -53,7 +54,7 @@ type RecallTraceOutcomeRow = { outcome: string; memory_ids_json: string };
 
 function tmpHome() {
   const home = makeRoot('recall-trace-outcome');
-  return { home, restore: () => removeAfterRequest(home) };
+  return { home, restore: () => onTestFinished(() => removeDir(home)) };
 }
 
 describe('outcome linkage E2E (CLI recall -> outcome)', () => {
@@ -213,9 +214,10 @@ describe('storage overhead smoke (success criterion 3)', () => {
 
       const before = dbSizeBytes();
       // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
-      await withSharedStoreHandles(async () => {
+      await withSharedStoreHandles(async (session) => {
+        const shared = onSession(ctx, session);
         for (let i = 0; i < 100; i++) {
-          await retrieve(ctx, { query: 'storage-smoke-target', window: { limit: 10 } });
+          await retrieve(shared, { query: 'storage-smoke-target', window: { limit: 10 } });
         }
       });
       const after = dbSizeBytes();

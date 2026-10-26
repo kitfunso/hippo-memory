@@ -15,12 +15,10 @@ import { describe, it, expect } from 'vitest';
 import { remember, outcomeForLastRecall } from '../../src/api/index.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function tmpHome(): string {
   const home = makeRoot('api-ofr');
@@ -28,7 +26,7 @@ function tmpHome(): string {
 }
 
 function cleanup(home: string): void {
-  removeAfterRequest(home);
+  removeDir(home);
 }
 
 async function seedMemory(home: string, content: string, tenantId = 'default'): Promise<string> {
@@ -135,8 +133,13 @@ describe('api.outcomeForLastRecall reads', () => {
     const home = tmpHome();
     try {
       const ids: string[] = [];
-      await withSharedStoreHandles(async () => {
-        for (let i = 0; i < 40; i++) ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
+      await withSharedStoreHandles(async (session) => {
+        const ctx = onSession(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), session);
+        for (let i = 0; i < 40; i++) {
+          ids.push(
+            (await remember(ctx, { content: `bystander or recalled memory number ${i}`, kind: 'distilled' })).id,
+          );
+        }
       });
       const recalled = [ids[3], ids[17]];
       seedLastRetrievalIds(home, recalled);

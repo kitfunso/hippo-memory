@@ -9,7 +9,7 @@
  * composition against a second, non-requested private scope. Real SQLite stores,
  * no mocks (repo law).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,14 +20,13 @@ import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { graphExpandRecall } from '../../src/domain/graph/recall.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 function safeRmSync(p: string): void {
   try {
@@ -77,7 +76,6 @@ describe('graph-recall scope parity', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall-scope');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('core: a graph-reached private-scoped memory is default-denied (no recallScope = fail-closed)', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
@@ -236,7 +234,9 @@ describe('graph-recall scope parity: CLI e2e', () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (cliHome) removeAfterRequest(cliHome);
+    // Removed once the test is done, after its session has closed its handles.
+    const dir = cliHome;
+    onTestFinished(() => removeDir(dir));
   });
 
   it('`hippo recall <q> --hops 1` denies the private neighbour; `--scope slack:private:dm1 --hops 1` surfaces it', async () => {

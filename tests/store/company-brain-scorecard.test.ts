@@ -5,23 +5,21 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadActiveTaskSnapshot,
   listSessionEvents,
   loadLatestHandoff,
-  writeEntry,
   loadAllEntries,
   saveActiveTaskSnapshot,
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { correctionLinksOfRows, rawProvenanceAt } from '../_helpers/report-reads.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, apiCtx } = sessionPerTest();
 
 let tmpDir: string;
 

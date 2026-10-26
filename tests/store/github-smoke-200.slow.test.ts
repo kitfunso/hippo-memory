@@ -13,7 +13,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
@@ -29,12 +29,11 @@ import type {
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
@@ -246,28 +245,28 @@ describe('GitHub connector — 200-event smoke test', () => {
     root = makeRoot('gh-smoke-200');
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
+  const { session } = sessionPerTest();
 
   // Ingests 200 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
-    const ctx = ctxFor(root);
+    const ctx = onSession(ctxFor(root), session());
     const deliveries = buildDeliveryStream();
     expect(deliveries).toHaveLength(200);
 
     // ---- Stream 1: ingest all 200 -----------------------------------------
     const results: IngestResult[] = [];
-    await withSharedStoreHandles(async () => {
-      for (const d of deliveries) {
-        results.push(
-          await ingestEvent(ctx, {
-            event: d.event,
-            rawBody: d.rawBody,
-            deliveryId: d.deliveryId,
-          }),
-        );
-      }
-    });
+    for (const d of deliveries) {
+      results.push(
+        await ingestEvent(ctx, {
+          event: d.event,
+          rawBody: d.rawBody,
+          deliveryId: d.deliveryId,
+        }),
+      );
+    }
+
     const ingested = results.filter((r) => r.status === 'ingested').length;
     expect(ingested).toBe(200);
     expect(rawCount(root)).toBe(200);
@@ -325,21 +324,20 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (5) Re-running the same stream produces 0 new ingests -----------
     const beforeReplay = rawCount(root);
     let duplicateCount = 0;
-    await withSharedStoreHandles(async () => {
-      for (const d of deliveries) {
-        const r = await ingestEvent(ctx, {
-          event: d.event,
-          rawBody: d.rawBody,
-          deliveryId: d.deliveryId,
-        });
-        // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
-        // the 5 archived rows (their event_log row still exists -> 'duplicate').
-        expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
-        if (r.status === 'duplicate' || r.status === 'skipped_duplicate') {
-          duplicateCount++;
-        }
+    for (const d of deliveries) {
+      const r = await ingestEvent(ctx, {
+        event: d.event,
+        rawBody: d.rawBody,
+        deliveryId: d.deliveryId,
+      });
+      // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
+      // the 5 archived rows (their event_log row still exists -> 'duplicate').
+      expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
+      if (r.status === 'duplicate' || r.status === 'skipped_duplicate') {
+        duplicateCount++;
       }
-    });
+    }
+
     expect(rawCount(root)).toBe(beforeReplay);
     expect(duplicateCount).toBe(200);
 

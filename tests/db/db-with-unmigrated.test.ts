@@ -13,7 +13,7 @@ beforeEach(() => {
 
 describe('withUnmigratedDb', () => {
   it('throws the missing-store message when hippo.db does not exist', () => {
-    expect(() => withUnmigratedDb(root, false, () => 1)).toThrow(
+    expect(() => withUnmigratedDb(root, { readOnly: false }, () => 1)).toThrow(
       `No existing Hippo database at ${join(root, 'hippo.db')}`,
     );
   });
@@ -21,7 +21,7 @@ describe('withUnmigratedDb', () => {
   it('refuses a folder with the other-store marker', () => {
     initStore(root);
     writeFileSync(join(root, OTHER_STORE_MARKER), 'postgres');
-    expect(() => withUnmigratedDb(root, false, () => 1)).toThrow(OtherStoreFolderError);
+    expect(() => withUnmigratedDb(root, { readOnly: false }, () => 1)).toThrow(OtherStoreFolderError);
   });
 
   it('refuses a write on a read-only open and allows it on a writable one', () => {
@@ -30,12 +30,12 @@ describe('withUnmigratedDb', () => {
     const hasProbe = (): boolean =>
       withUnmigratedDb(
         root,
-        true,
+        { readOnly: true },
         (db) => db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'probe'").get() !== undefined,
       );
-    expect(() => withUnmigratedDb(root, true, write)).toThrow(/readonly/i);
+    expect(() => withUnmigratedDb(root, { readOnly: true }, write)).toThrow(/readonly/i);
     expect(hasProbe()).toBe(false);
-    withUnmigratedDb(root, false, write);
+    withUnmigratedDb(root, { readOnly: false }, write);
     expect(hasProbe()).toBe(true);
   });
 });

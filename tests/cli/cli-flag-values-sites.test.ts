@@ -16,9 +16,7 @@ import { handleCapture } from '../../src/surface/cli/hooks/capture.js';
 import { handleExport, handleImport } from '../../src/surface/cli/transfer.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed' }]);
 
@@ -47,7 +45,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 type Row = readonly [label: string, flag: string, run: () => void | Promise<void>];

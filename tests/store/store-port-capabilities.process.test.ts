@@ -15,7 +15,7 @@ import {
   memoryQualityRepair,
   memoryQualityRepairOnce,
 } from '../../src/api/index.js';
-import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, OTHER_STORE_MARKER, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -143,9 +143,10 @@ describe('serve() under a store without local files', () => {
     expect(res.status).toBe(501);
   });
 
-  it('still fences hippo.db inside a request', async () => {
+  it('still fences hippo.db inside a request on a folder marked for another store', async () => {
     const root = newRoot('capability-fence');
     const { plaintext } = keyFor(root, 'default');
+    writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only');
     const blocked: unknown[] = [];
     const store: HippoStore = {
       ...portOnlyStore(root),

@@ -15,16 +15,15 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
-oneRequestPerTest();
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 const dirs: string[] = [];
 afterEach(() => {
-  while (dirs.length) removeAfterRequest(dirs.pop()!);
+  while (dirs.length) removeDir(dirs.pop()!);
 });
 function store(config: Partial<HippoConfig> | undefined): string {
   const root = path.join(makeRoot('typed-hl', { init: false }), '.hippo');

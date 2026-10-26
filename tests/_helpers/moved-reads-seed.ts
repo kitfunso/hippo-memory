@@ -13,7 +13,7 @@ import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templat
 import { keyFor, onDb } from './store-worker-server.js';
 import { apiCtx } from './api-ctx.js';
 import { objectsAt } from './objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from './test-session.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadEntriesByIds } from './root-forms.js';
 import { saveDecision, savePolicy } from '../../src/entry/testing.js';

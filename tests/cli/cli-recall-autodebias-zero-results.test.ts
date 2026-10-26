@@ -8,11 +8,9 @@ import { forget } from '../../src/api/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { cliRequest } from '../../src/surface/cli/api-context.js';
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';
@@ -24,6 +22,8 @@ interface ZeroRecallJson {
 }
 
 let root: string;
+// makeRoot removes each folder after the file, once this session has closed its handles.
+const { apiCtx } = sessionPerTest();
 
 /** Three closed migration-effort predictions (actual twice the estimate), then every memory they wrote forgotten. */
 async function seedBaserateWithNoMemories(): Promise<void> {
@@ -45,7 +45,9 @@ async function seedBaserateWithNoMemories(): Promise<void> {
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {
-  const run = await runInProcess(() => handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags }));
+  const run = await runInProcess(() =>
+    cliRequest(() => handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags })),
+  );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }
@@ -65,7 +67,6 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(root);
   });
 
   it('--json returns no results and still carries planningFallacyHint', async () => {

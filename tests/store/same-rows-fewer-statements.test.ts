@@ -11,10 +11,7 @@ import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const SOURCES = [
   'agent-memory:claude-code:p-a/one.md',

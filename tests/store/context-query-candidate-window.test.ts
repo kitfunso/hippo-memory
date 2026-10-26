@@ -14,9 +14,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // Each store holds several windows of matches (DEFAULT_SEARCH_CANDIDATE_LIMIT is 200), enough for a cap to show.
 const ROWS = 2_000;
@@ -186,7 +184,7 @@ describe('contextGet with a query labels each result local or global', () => {
       expect(labels.get(synced.id)).toBe(false);
       expect(labels.get(globalOnly.id)).toBe(true);
     } finally {
-      removeAfterRequest(small);
+      removeDir(small);
     }
   });
 });

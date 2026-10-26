@@ -17,11 +17,9 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { SKILL, skillsMarkdown } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
   // SAFETY: every call site below passes a SELECT whose column list is
@@ -47,7 +45,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('skills');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
     const s = await cliSave(home, 'default', SKILL, {

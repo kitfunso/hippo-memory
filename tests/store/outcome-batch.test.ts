@@ -22,7 +22,6 @@ import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -168,11 +167,8 @@ describe('outcome over 200 ids', () => {
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
     // A runtime holds the outcome's mirror rewrite until the flush, as the CLI's does.
     const runtime = new StoreRuntime();
-    const got = runtime.run(() => {
-      const written = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
-      flushHeldMirrors(after.root);
-      return written;
-    });
+    const got = writeOutcome(after.db, storeFilesOf(after.root, { runtime }), outcomeOf(ids, good));
+    runtime.held.flush(after.root);
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
     const want = snapshot(before.root, before.db);

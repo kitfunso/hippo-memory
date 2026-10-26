@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadAmbientCandidates, writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
@@ -87,12 +87,11 @@ describe('the ambient recent read with legacy stamps still in the store', () => 
 
   beforeEach(async () => {
     root = makeStore('drift-ambient').root;
-    await withSharedStoreHandles(() => {
-      writeEntriesTogether(root, [
-        ...Array.from({ length: 40 }, (_, i) => row(`r${String(i).padStart(2, '0')}`, i)),
-        ...Object.keys(legacy).map((id) => row(id, -500)),
-      ]);
-    });
+    writeEntriesTogether(root, [
+      ...Array.from({ length: 40 }, (_, i) => row(`r${String(i).padStart(2, '0')}`, i)),
+      ...Object.keys(legacy).map((id) => row(id, -500)),
+    ]);
+
     plant(root, legacy);
   });
 
@@ -112,12 +111,11 @@ describe('the ambient recent read with legacy stamps still in the store', () => 
   it('reads the same rows when the store holds five times more older rows', async () => {
     const all = () => true;
     const before = recordStatements(() => loadAmbientCandidates(root, 'default', 5, all));
-    await withSharedStoreHandles(() => {
-      writeEntriesTogether(
-        root,
-        Array.from({ length: 200 }, (_, i) => row(`old${i}`, -1000 - i)),
-      );
-    });
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 200 }, (_, i) => row(`old${i}`, -1000 - i)),
+    );
+
     const after = recordStatements(() => loadAmbientCandidates(root, 'default', 5, all));
     expect(ids(after.result.entries)).toEqual(ids(before.result.entries));
     expect(after.rowsRead).toBe(before.rowsRead);

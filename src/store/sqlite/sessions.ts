@@ -1,6 +1,6 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
-import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { HOOK_DB_WAIT_MS, sessionOf, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
@@ -285,7 +285,7 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
       // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
-    { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
+    { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
   );
   // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
   return readSessionOwner(db, tenantId, sessionId);

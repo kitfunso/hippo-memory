@@ -5,12 +5,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { remember } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const savedCwd = process.cwd();
 
@@ -52,8 +50,9 @@ describe('cli recall + active goal stack', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    removeAfterRequest(env.cwd);
+    removeDir(env.cwd);
   });
+  const { apiCtx } = sessionPerTest();
 
   it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', async () => {
     const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });

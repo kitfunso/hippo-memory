@@ -14,7 +14,7 @@ import { listEntriesWhere } from '../../../src/store/sqlite/entry-filter.js';
 import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
 import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
 import { waitingOpener } from '../../../src/store/sqlite/open.js';
-import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
+import { openStore } from '../../../src/store/sqlite/handles.js';
 import type { SqlFragment } from '../../../src/db/sql.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { HeldText, EntryCursor } from '../../../src/base/ports/store/types.js';
@@ -28,6 +28,7 @@ import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../.
 import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
+import { handlesOf, onHandle, storeFilesOf } from '../test-session.js';
 
 export {
   batchWriteAndDeleteInFolder,

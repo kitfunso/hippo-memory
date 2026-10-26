@@ -5,9 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
-import { closeHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { learn, CLI_LEARN } from '../../src/api/sleep/learn.js';
 import { importEntries, importVault } from '../../src/entry/importers.js';
 import { invalidateMatching, detectChurnStale } from '../../src/domain/learn/invalidation.js';
@@ -33,6 +32,7 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { onSession } from '../_helpers/api-ctx.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -229,8 +229,9 @@ describe('learn', () => {
       memory('the quuxlib client retries twice'),
       memory('quuxlib client timeouts are 30s'),
     ]);
+    const opts = { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows, git: processGit };
     const { result, statements } = await recordStatementsAsync(() =>
-      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows, git: processGit })),
+      withSharedStoreHandles((session) => learn(onSession(ctxFor(root), session), opts)),
     );
     return {
       root,

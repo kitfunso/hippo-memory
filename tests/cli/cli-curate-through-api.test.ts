@@ -9,9 +9,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 let root: string;
 const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminActor('cli'));
@@ -19,7 +17,7 @@ const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminA
 beforeEach(() => {
   root = makeRoot('cli-curate-api', { config: { embeddings: { enabled: false } } });
 });
-afterEach(() => removeAfterRequest(root));
+afterEach(() => removeDir(root));
 
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {

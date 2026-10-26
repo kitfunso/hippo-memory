@@ -16,7 +16,16 @@ import {
   seedMovedReads,
 } from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, SESSION } from '../_helpers/recall-golden-seed.js';
-import { auditRows, get, holdWriteLock, mirrorFiles, post, seen, undoAll } from '../_helpers/store-worker-server.js';
+import {
+  auditRows,
+  get,
+  holdWriteLock,
+  mirrorFiles,
+  post,
+  seen,
+  serverThreadPart,
+  undoAll,
+} from '../_helpers/store-worker-server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 type InProcess = HippoStore & StoreGroups;
@@ -301,8 +310,8 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
       const before = left(root);
       const info = vi.spyOn(log, 'info');
-      // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-      const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+      // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
+      const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 
       const res = await onServer(root, store, (server) => send({ server, seed }));
 
