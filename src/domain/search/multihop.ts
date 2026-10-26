@@ -23,8 +23,7 @@ function newEntitiesOf(topK: SearchResult[], query: string): string[] {
 export function rankMultihop(query: string, entries: MemoryEntry[], options: SearchOptions & RankTime): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.
-  const fit = (ordered: SearchResult[]): SearchResult[] =>
-    fitBudget(ordered, budget, options.minResults ?? 1, options.cost);
+  const fit = (ordered: SearchResult[]): SearchResult[] => fitBudget(ordered, budget, options.minResults, options.cost);
   const pass1 = rankBm25(query, entries, { ...options, budget: budget * 2 });
   const topK = pass1.slice(0, PASS1_TOP_K);
 

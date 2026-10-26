@@ -23,7 +23,6 @@ import { pickWrites } from './memory-writes.js';
 import {
   cliApiContext,
   cliBatch,
-  cliImportFiles,
   cliInitGlobal,
   cliInfra,
   cliRequest,
@@ -32,6 +31,7 @@ import {
   type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
+import { defaultImportFiles } from '../open-store.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requireInit, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
@@ -188,7 +188,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, files: cliImportFiles(targetRoot), batch: cliBatch, clock: cliInfra().clock },
+    target: { root: targetRoot, files: defaultImportFiles(targetRoot), batch: cliBatch, clock: cliInfra().clock },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through

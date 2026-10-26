@@ -10,6 +10,7 @@ import {
   envMcpSseHeartbeatMs,
   envMcpSseMaxAgeSec,
   envModelCache,
+  envRequestDeadlineMs,
   envRequireServer,
   envRuntimeSettings,
   envTypesafeApiKey,
@@ -34,6 +35,26 @@ describe('timeouts', () => {
     }
     vi.stubEnv(name, '250');
     expect(read()).toBe(250);
+  });
+
+  // One rule for every whole-number variable: a unit or a fraction is a typo, never the number in front of it.
+  it.each([...readers, ['HIPPO_REQUEST_DEADLINE_MS', envRequestDeadlineMs] as const])(
+    '%s reads only a whole number',
+    (name, read) => {
+      for (const bad of ['15s', '1.5', '2 000']) {
+        vi.stubEnv(name, bad);
+        expect(read(), `${name}=${bad}`).toBeUndefined();
+      }
+      vi.stubEnv(name, ' 15 ');
+      expect(read()).toBe(15);
+    },
+  );
+
+  it('HIPPO_REQUEST_DEADLINE_MS keeps 0, which turns the deadline off', () => {
+    vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '0');
+    expect(envRequestDeadlineMs()).toBe(0);
+    vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '');
+    expect(envRequestDeadlineMs()).toBeUndefined();
   });
 });
 

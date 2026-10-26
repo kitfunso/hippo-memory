@@ -3,9 +3,9 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOptions, type SleepResult, type Context } from '../../api/index.js';
-import { StoreBusyError } from '../../base/ports/store.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
+import { replyError, type FailureReply } from './failure-reply.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
@@ -25,9 +25,7 @@ export type SleepJob =
  * first. */
 export type SleepMessage = SleepJob & { readonly deadline: number };
 
-export type SleepReply<R = SleepResult> =
-  | { readonly ok: true; readonly result: R }
-  | { readonly ok: false; readonly busy: boolean; readonly message: string; readonly stack?: string };
+export type SleepReply<R = SleepResult> = { readonly ok: true; readonly result: R } | FailureReply;
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
 const CHILD_ENTRY = fileURLToPath(new URL('../../../dist/surface/server/sleep-child.js', import.meta.url));
@@ -47,11 +45,7 @@ export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
 
 function failureOf<R>(reply: SleepReply<R> | undefined, code: number | null, signal: NodeJS.Signals | null): Error {
   if (!reply || reply.ok) return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
-  // A lock the child could not get is the same retryable 503 an in-process sleep gave.
-  if (reply.busy) return new StoreBusyError(reply.message);
-  const failure = new Error(reply.message);
-  if (reply.stack) failure.stack = reply.stack;
-  return failure;
+  return replyError(reply);
 }
 
 /** A child's answer, settled by its reply, and its end, which comes after the work it does once it has replied. */

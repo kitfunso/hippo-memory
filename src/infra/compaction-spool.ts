@@ -69,11 +69,10 @@ type Settled = 'done' | 'gone' | 'busy';
 type BadCause = 'unreadable' | 'failed' | 'interrupted';
 type FileOutcome = 'imported' | 'skipped' | 'stop';
 
-interface SettledStep {
-  settled: Settled;
-  /** The error code that ended the step, '' when it ran. */
-  code: string;
-}
+/** One fs step's outcome: the value it returned once it ran, else the error code that ended it. */
+type SettledStep<T> =
+  | { readonly settled: 'done'; readonly code: ''; readonly value: T }
+  | { readonly settled: 'gone' | 'busy'; readonly code: string; readonly value?: undefined };
 
 interface Waiting {
   name: string;
@@ -106,18 +105,17 @@ const isTime = <T>(value: T): value is T & number => typeof value === 'number' &
 const idle = new Int32Array(new SharedArrayBuffer(4));
 
 /**
- * Runs one fs step, retrying a busy code briefly; '' when it ran, else the busy code it kept hitting. Any other error
- * throws.
+ * Runs one fs step, retrying a busy code briefly: its value once it ran, else the busy code it kept hitting. Any other
+ * error throws.
  */
-function retryBusy(step: () => void): string {
+function retryBusy<T>(step: () => T): { readonly value: T } | { readonly busyCode: string } {
   for (let retry = 0; ; retry++) {
     try {
-      step();
-      return '';
+      return { value: step() };
     } catch (err) {
       const code = errorCode(err);
       if (!BUSY_CODES.has(code)) throw err;
-      if (retry === BUSY_RETRIES) return code;
+      if (retry === BUSY_RETRIES) return { busyCode: code };
       Atomics.wait(idle, 0, 0, BUSY_WAIT_MS);
     }
   }
@@ -127,16 +125,21 @@ function retryBusy(step: () => void): string {
  * Runs one fs step: ENOENT means gone, a busy code is retried briefly, and any other error is logged and counted busy,
  * so a replay never throws.
  */
-function settleCode(step: () => void, log: Log, what: string): SettledStep {
+function settleCode<T>(step: () => T, log: Log, what: string): SettledStep<T> {
   try {
-    const code = retryBusy(step);
-    return { settled: code === '' ? 'done' : 'busy', code };
+    const ran = retryBusy(step);
+    return 'value' in ran ? done(ran.value) : { settled: 'busy', code: ran.busyCode };
   } catch (err) {
     const code = errorCode(err);
     if (code === 'ENOENT') return { settled: 'gone', code };
     log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`);
     return { settled: 'busy', code };
   }
+}
+
+/** A step that needed no fs call, as one that ran. */
+function done<T>(value: T): SettledStep<T> {
+  return { settled: 'done', code: '', value };
 }
 
 /** {@link settleCode} for a caller that needs only the outcome. */
@@ -243,26 +246,12 @@ function parseLock(text: string): LockBody | null {
 
 /** The lock's body; its mtime stands in for the time when the body does not parse. */
 function readLock(fsx: SpoolFs, lock: string, log: Log): LockBody | 'gone' | 'busy' {
-  let text = '';
-  const read = settle(
-    () => {
-      text = fsx.readFileSync(lock, 'utf8');
-    },
-    log,
-    'spool lock not read',
-  );
-  if (read !== 'done') return read;
-  const body = parseLock(text);
+  const read = settleCode(() => fsx.readFileSync(lock, 'utf8'), log, 'spool lock not read');
+  if (read.settled !== 'done') return read.settled;
+  const body = parseLock(read.value);
   if (body !== null) return body;
-  let mtime = 0;
-  const stat = settle(
-    () => {
-      mtime = fsx.statSync(lock).mtimeMs;
-    },
-    log,
-    'spool lock not read',
-  );
-  return stat === 'done' ? { pid: null, at: mtime, token: null } : stat;
+  const stat = settleCode(() => fsx.statSync(lock).mtimeMs, log, 'spool lock not read');
+  return stat.settled === 'done' ? { pid: null, at: stat.value, token: null } : stat.settled;
 }
 
 function createLock(fsx: SpoolFs, lock: string, body: string, log: Log): 'taken' | 'exists' | 'skip' {
@@ -336,20 +325,9 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
   for (const claim of names.flatMap((name) => claimOf(name) ?? [])) {
     const file = path.join(dir, claim.name);
     const what = `spool file ${claim.name} not recovered`;
-    let at = claim.claimedAt ?? 0;
-    if (
-      claim.claimedAt === null &&
-      settle(
-        () => {
-          at = fsx.statSync(file).mtimeMs;
-        },
-        log,
-        what,
-      ) !== 'done'
-    ) {
-      continue;
-    }
-    if (Math.abs(now - at) <= STALE_MS) continue;
+    const at =
+      claim.claimedAt === null ? settleCode(() => fsx.statSync(file).mtimeMs, log, what) : done(claim.claimedAt);
+    if (at.settled !== 'done' || Math.abs(now - at.value) <= STALE_MS) continue;
     const next = claim.attempt + 1;
     if (setAside.has(claim.stem)) {
       settle(() => fsx.unlinkSync(file), log, what);
@@ -429,20 +407,9 @@ interface MoveBadOptions {
 function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptions): boolean {
   const { stem, attempt, cause, log, raw } = options;
   const what = `spool file ${path.basename(claim)} not set aside`;
-  let text = raw ?? '';
-  if (
-    raw === undefined &&
-    settle(
-      () => {
-        text = fsx.readFileSync(claim, 'utf8');
-      },
-      log,
-      what,
-    ) !== 'done'
-  ) {
-    return false;
-  }
-  if (!writeBad(fsx, dir, { stem, cause, text, log, what })) {
+  const read = raw === undefined ? settleCode(() => fsx.readFileSync(claim, 'utf8'), log, what) : done(raw);
+  if (read.settled !== 'done') return false;
+  if (!writeBad(fsx, dir, { stem, cause, text: read.value, log, what })) {
     putBack({ fsx, dir, claim, stem, attempt, log });
     return false;
   }
@@ -462,36 +429,16 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
     if (m === null && !BAD_TMP.test(name)) continue;
     const file = path.join(dir, name);
     const what = `spool file ${name} not promoted`;
-    let mtime = 0;
-    let text = '';
-    if (
-      settle(
-        () => {
-          mtime = fsx.statSync(file).mtimeMs;
-        },
-        log,
-        what,
-      ) !== 'done' ||
-      Math.abs(now - mtime) <= STALE_MS
-    ) {
-      continue;
-    }
+    const stat = settleCode(() => fsx.statSync(file).mtimeMs, log, what);
+    if (stat.settled !== 'done' || Math.abs(now - stat.value) <= STALE_MS) continue;
     if (m === null) {
       // A `.bad` write cut off before its rename: its source goes only after that rename lands, so this copy is spare.
       settle(() => fsx.unlinkSync(file), log, `spool file ${name} not removed`);
       continue;
     }
-    if (
-      settle(
-        () => {
-          text = fsx.readFileSync(file, 'utf8');
-        },
-        log,
-        what,
-      ) !== 'done'
-    ) {
-      continue;
-    }
+    const read = settleCode(() => fsx.readFileSync(file, 'utf8'), log, what);
+    if (read.settled !== 'done') continue;
+    const text = read.value;
     if (parseSpooled(text, tenantId) !== null) {
       if (settle(() => fsx.renameSync(file, file.slice(0, -'.tmp'.length)), log, what) === 'done') {
         log(`spool file ${name} was never renamed into place, promoted`);
@@ -575,17 +522,11 @@ async function importFile(options: ImportFileOptions): Promise<FileOutcome> {
   const taken = settleCode(() => fsx.renameSync(path.join(dir, name), claim), log, `spool file ${name} not claimed`);
   if (BUSY_CODES.has(taken.code)) log(`spool file ${name} is locked by another program, left for the next run`);
   if (taken.settled !== 'done') return 'skipped';
-  let text = '';
-  const read = settle(
-    () => {
-      text = fsx.readFileSync(claim, 'utf8');
-    },
-    log,
-    `spool file ${name} not read`,
-  );
-  if (read === 'gone') log(`spool file ${name} vanished`);
-  if (read === 'busy') putBack({ fsx, dir, claim, stem: entry.stem, attempt: entry.attempt, log });
-  if (read !== 'done') return 'skipped';
+  const read = settleCode(() => fsx.readFileSync(claim, 'utf8'), log, `spool file ${name} not read`);
+  if (read.settled === 'gone') log(`spool file ${name} vanished`);
+  if (read.settled === 'busy') putBack({ fsx, dir, claim, stem: entry.stem, attempt: entry.attempt, log });
+  if (read.settled !== 'done') return 'skipped';
+  const text = read.value;
   const spooled = parseSpooled(text, tenantId);
   if (spooled === null) {
     if (moveBad(fsx, dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'unreadable', log, raw: text })) {

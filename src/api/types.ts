@@ -7,6 +7,7 @@ import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '..
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
+import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { StrengthModel } from '../base/memory/strength.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
@@ -71,7 +72,10 @@ export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthMode
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */
-export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & { readonly infra?: InfraPorts };
+export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & { readonly infra?: EntryInfraPorts };
+
+/** The ports a published entry's caller may hand in; without `failureNotices` the entry warns through its own. */
+export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & { readonly failureNotices?: FailureNotices };
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader, and a promote
  * embeds its copy with `embedderFor`. */

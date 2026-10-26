@@ -1,6 +1,6 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { BadRequestError, ConflictError, memoryNotFoundText, NotFoundError } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
@@ -25,7 +25,7 @@ export interface PromoteResult {
 export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Promise<PromoteResult> {
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) throw new NotFoundError(`memory not found: ${id}`);
+  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) throw new NotFoundError(memoryNotFoundText(id));
   // A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
   const target = globalTargetOf(ctx);
   if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');

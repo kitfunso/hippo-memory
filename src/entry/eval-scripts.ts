@@ -3,7 +3,7 @@
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
-import { evalNow, evalRun, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
+import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
 // Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the recall-boost switch here.
 export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
@@ -26,7 +26,7 @@ import type {
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
 import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
-import { withEntryInfra } from '../surface/entry-infra.js';
+import { entryInfra, withEntryInfra } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
@@ -37,7 +37,7 @@ export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
 export function folderIndex(folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>): EmbedTarget {
-  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, evalRun());
+  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, entryInfra());
 }
 
 /** The domain hybridSearch under the environment's eval switches and clock, with no folder defaults filled. */

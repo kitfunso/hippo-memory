@@ -8,7 +8,12 @@ import type {
   GetActiveGoalsOptions,
 } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
-import type { CompleteGoalOptions, PushGoalOptions, Goals } from '../../base/ports/store/goals.js';
+import {
+  DEFAULT_GOAL_LEVEL,
+  type CompleteGoalOptions,
+  type PushGoalOptions,
+  type Goals,
+} from '../../base/ports/store/goals.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -63,7 +68,7 @@ function pushedGoal(id: string, opts: PushGoalOptions, createdAt: string, policy
     sessionId: opts.sessionId,
     tenantId: opts.tenantId,
     goalName: opts.goalName,
-    level: opts.level ?? 0,
+    level: opts.level ?? DEFAULT_GOAL_LEVEL,
     parentGoalId: opts.parentGoalId,
     status: 'active',
     successCondition: opts.successCondition,
@@ -170,7 +175,7 @@ function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpt
       opts.sessionId,
       opts.tenantId,
       opts.goalName,
-      opts.level ?? 0,
+      opts.level ?? DEFAULT_GOAL_LEVEL,
       opts.parentGoalId ?? null,
       opts.successCondition ?? null,
       createdAt,

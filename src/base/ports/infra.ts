@@ -6,6 +6,7 @@ import type { RerankerLookup } from './reranker.js';
 import type { ReadApiCalls } from '../session/transcript-calls.js';
 import type { EvalSwitches } from '../memory/eval-switches.js';
 import type { StrengthModel } from '../memory/strength.js';
+import type { FailureNotices } from '../util/failure-notices.js';
 
 export interface InfraPorts {
   /** The disk the agent-memory and project-repair reads look at, with its git. */
@@ -22,6 +23,8 @@ export interface InfraPorts {
   readonly evalSwitches?: EvalSwitches;
   /** The time every api and domain step reads: the root's wall clock, or the fixed instant an eval set. */
   readonly clock: Clock;
+  /** The failures this root has warned about, so one that repeats on every write warns once and then counts. */
+  readonly failureNotices: FailureNotices;
 }
 
 /** The current time as a root defines it; code below a root takes one, never the wall clock. */

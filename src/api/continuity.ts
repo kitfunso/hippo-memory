@@ -3,6 +3,9 @@
 import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { Context } from './types.js';
 
+/** Session events the continuity block carries beside the snapshot and handoff, the newest kept. */
+export const CONTINUITY_EVENT_LIMIT = 5;
+
 export interface LatestContinuity {
   snapshot: TaskSnapshot | null;
   events: SessionEvent[];

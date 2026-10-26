@@ -7,6 +7,7 @@ import type { MemoryQuery } from '../../api/dashboard/queries.js';
 import type { MemoryDetail, MemoryPage, Overview, ProjectDetail, SearchResult } from '../../api/dashboard/types.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { errorFields, log } from '../../base/util/log.js';
+import { replyError, type FailureReply } from './failure-reply.js';
 
 /** What the dashboard routes read; each call is dated by the dashboard's clocks when it is sent. */
 export interface DashboardReader {
@@ -38,13 +39,7 @@ export type ReaderValue = Overview | ProjectDetail | MemoryPage | SearchResult |
 
 export type ReaderReply =
   | { readonly id: number; readonly ok: true; readonly value: ReaderValue }
-  | {
-      readonly id: number;
-      readonly ok: false;
-      readonly busy: boolean;
-      readonly message: string;
-      readonly stack?: string;
-    };
+  | (FailureReply & { readonly id: number });
 
 /** What the thread starts with. */
 export interface ReaderInit {
@@ -69,14 +64,6 @@ interface Pending {
   readonly reject: (err: Error) => void;
 }
 
-function failureOf(reply: Extract<ReaderReply, { ok: false }>): Error {
-  // A lock the thread could not get is the same retryable 503 a served route gives.
-  if (reply.busy) return new StoreBusyError(reply.message);
-  const failure = new Error(reply.message);
-  if (reply.stack) failure.stack = reply.stack;
-  return failure;
-}
-
 /** The thread's calls in flight, and why it stopped once it has. */
 interface ReaderState {
   readonly pending: Map<number, Pending>;
@@ -89,7 +76,7 @@ function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
     const waiting = state.pending.get(reply.id);
     state.pending.delete(reply.id);
     if (reply.ok) waiting?.resolve(reply.value);
-    else waiting?.reject(failureOf(reply));
+    else waiting?.reject(replyError(reply));
   });
   worker.on('error', (err) => {
     log.error(`dashboard: the reader thread failed: ${err.message}`, errorFields(err));

@@ -76,27 +76,27 @@ function trimmedText(name: string): () => string | undefined {
   return () => raw(name)?.trim() || undefined;
 }
 
-/** parseInt, kept only when above zero; the caller supplies its own default. */
+/** The value as a whole number, unset when empty or not one: parseInt would read "15s" as 15 and "1e3" as 1. */
+function wholeNumber(name: string): number | undefined {
+  const value = raw(name)?.trim();
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : undefined;
+}
+
+/** A whole number above zero; the caller supplies its own default. */
 function posInt(name: string): () => number | undefined {
   return () => {
-    const parsed = Number.parseInt(raw(name) ?? '', 10);
-    return parsed > 0 ? parsed : undefined;
+    const parsed = wholeNumber(name);
+    return parsed !== undefined && parsed > 0 ? parsed : undefined;
   };
 }
 
-/** parseInt, kept from zero up, for a setting whose 0 means off. */
+/** A whole number from zero up, for a setting whose 0 means off. */
 function nonNegInt(name: string): () => number | undefined {
   return () => {
-    const parsed = Number.parseInt(raw(name) ?? '', 10);
-    return parsed >= 0 ? parsed : undefined;
-  };
-}
-
-/** Number(), kept only for a whole number above zero: parseInt would read "15s" as 15 and "1e3" as 1. */
-function strictPosInt(name: string): () => number | undefined {
-  return () => {
-    const parsed = Number(raw(name));
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+    const parsed = wholeNumber(name);
+    return parsed !== undefined && parsed >= 0 ? parsed : undefined;
   };
 }
 
@@ -279,7 +279,7 @@ export const envLlmRerankerModel = text('HIPPO_LLM_RERANKER_MODEL');
 export const envLlmRerankerTimeoutMs = posInt('HIPPO_LLM_RERANKER_TIMEOUT_MS');
 const envClefEndpoint = trimmedText('HIPPO_CLEF_ENDPOINT');
 const envClefEndpointToken = trimmedText('HIPPO_CLEF_ENDPOINT_TOKEN');
-const envClefTimeoutMs = strictPosInt('HIPPO_CLEF_TIMEOUT_MS');
+const envClefTimeoutMs = posInt('HIPPO_CLEF_TIMEOUT_MS');
 const cloudflareAccountId = trimmedText('CLOUDFLARE_ACCOUNT_ID');
 const cloudflareApiToken = trimmedText('CLOUDFLARE_API_TOKEN');
 export function envCloudflareAccountId(): string {

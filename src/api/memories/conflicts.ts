@@ -20,7 +20,8 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type ContextWith } from '../types.js';
 import type { TenantReach } from './memories.js';
 
-/** A page of a conflict list: `limit` (default 100, at most 1000) and the position the previous page ended on. */
+/** A page of a conflict list: `limit` (default DEFAULT_LIST_LIMIT, at most MAX_LIST_LIMIT) and the position the
+ * previous page ended on. */
 export interface ConflictPageOptions {
   limit?: number;
   after?: KeysetPosition;

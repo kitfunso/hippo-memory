@@ -1,5 +1,6 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
+import { knownOption } from '../../base/util/json.js';
 import { resolveListLimit } from '../../base/util/limits.js';
 import type { CallerState } from '../../api/callers.js';
 import type { RecallSearchOptions } from '../../api/recall/pipeline.js';
@@ -139,7 +140,7 @@ export function repeatedFlag(flags: CliFlags, name: string): string[] {
 }
 
 export function isOneOf<T extends string>(allowed: readonly T[], value: string): value is T {
-  return allowed.some((a) => a === value);
+  return knownOption(allowed, value) !== undefined;
 }
 
 // A junk value exits instead of becoming NaN, which would pass every `<` gate.

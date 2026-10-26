@@ -259,6 +259,8 @@ function applyPlan(
   });
 }
 
+/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
+ * `db` is opened without running migrations, read-only for a preview. */
 function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): QualityRepairResult {
   const root = files.hippoRoot;
   const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, run));
@@ -273,16 +275,6 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
     warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
   }
   return { ...result, warnings };
-}
-
-/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
- * `db` is opened without running migrations, read-only for a preview. */
-function repairAutomaticMemories(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
-): QualityRepairResult {
-  return repairOn(db, files, opts);
 }
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
@@ -323,9 +315,7 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
       answered(() =>
-        withUnmigratedDb(files.hippoRoot, !apply, (db) =>
-          repairAutomaticMemories(db, files, { tenantId, apply, protect }),
-        ),
+        withUnmigratedDb(files.hippoRoot, !apply, (db) => repairOn(db, files, { tenantId, apply, protect })),
       ),
     repairQualityOnce: (tenantId, protect) =>
       answered(() => withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnce(db, files, tenantId, protect))),

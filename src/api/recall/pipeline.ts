@@ -18,7 +18,7 @@ import {
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { currentEntries } from '../../domain/search/as-of.js';
 import { outcomeNudge, rankStrength, STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
-import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
+import { hybridSearch, vectorSourceOf, type HybridRankOptions } from '../../domain/search/hybrid.js';
 import { applyReranker } from '../../domain/search/rerank.js';
 import { searchByEngine } from '../../domain/search/engine.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -33,6 +33,7 @@ import {
   VALUE_MULT_MAX,
   VALUE_MULT_MIN,
   VALUE_MULT_SLOPE,
+  type RankTime,
   type RerankStep,
   type ResultCost,
   type SearchResult,
@@ -323,14 +324,34 @@ interface PoolSearch {
   readonly scope: string | null | undefined;
 }
 
+type EngineOptions = RankTime &
+  Pick<
+    HybridRankOptions,
+    'budget' | 'cost' | 'minResults' | 'includeSuperseded' | 'asOf' | 'runtime' | 'cwd' | 'switches'
+  >;
+
+/** What every engine ranks under, built once so a new ranking input reaches all three search modes. */
+function engineOptions(ctx: RankRecallCtx, opts: SettledOptions): EngineOptions {
+  return {
+    budget: opts.budget,
+    cost: opts.cost,
+    minResults: opts.search.minResults,
+    includeSuperseded: opts.includeSuperseded,
+    asOf: opts.asOf,
+    runtime: ctx.config.runtime,
+    cwd: ctx.cwd,
+    switches: ctx.switches,
+    now: ctx.now,
+  };
+}
+
 function graphStreamSearch(
   ctx: RankRecallCtx,
   opts: SettledOptions,
   graphStream: RecallGraphStream,
   { pool, scope }: PoolSearch,
 ): Promise<SearchResult[]> {
-  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
-  const { mmr, mmrLambda, minResults } = search;
+  const { mmr, mmrLambda } = opts.search;
   // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
   if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
     ctx.note?.(
@@ -342,20 +363,12 @@ function graphStreamSearch(
     ctx.note?.('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
   }
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
-  return hybridSearch(query, pool.local, {
-    budget,
-    cost,
-    runtime: ctx.config.runtime,
-    cwd: ctx.cwd,
-    switches: ctx.switches,
-    now: ctx.now,
+  return hybridSearch(opts.query, pool.local, {
+    ...engineOptions(ctx, opts),
     source: vectorSourceOf(ctx),
     mmr,
     mmrLambda,
-    minResults,
     scope,
-    includeSuperseded,
-    asOf,
     scoring: 'rrf',
     graphStream: {
       weight: DEFAULT_GRAPH_STREAM_WEIGHT,
@@ -367,25 +380,17 @@ function graphStreamSearch(
 }
 
 function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: RecallPool): SearchResult[] {
-  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
-  const { minResults } = search;
+  const { cost } = opts;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
   const strength = rankStrength({ switches: ctx.switches, runtime: ctx.config.runtime });
   const allEntries = oneCopyPerMemory(pool.local, pool.global, ctx.now, strength).flat();
   const globalIds = new Set(pool.global.map((e) => e.id));
   const localIds = new Set(pool.local.map((e) => e.id));
   const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
-  const results = rankMultihop(query, allEntries, {
-    budget,
+  const results = rankMultihop(opts.query, allEntries, {
+    ...engineOptions(ctx, opts),
     cost: cost && ((r) => cost({ ...r, isGlobal: fromGlobal(r.entry.id) })),
-    minResults,
-    includeSuperseded,
-    asOf,
     scope: ctx.config.runtime?.activeScope ?? null,
-    runtime: ctx.config.runtime,
-    cwd: ctx.cwd,
-    switches: ctx.switches,
-    now: ctx.now,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -424,35 +429,20 @@ async function searchPool(
   }));
 }
 
-/** The tuning each engine takes: physics takes no MMR, and an explain run takes only asOf so its output stays
- * steady. */
-function engineTuning<T extends { minResults: unknown; includeSuperseded: unknown; asOf: unknown }>(
-  physicsOn: boolean,
-  explain: boolean,
-  all: T,
-): T | Pick<T, 'asOf'> | Pick<T, 'minResults' | 'includeSuperseded' | 'asOf'> {
-  if (!physicsOn) return all;
-  if (explain) return { asOf: all.asOf };
-  return { minResults: all.minResults, includeSuperseded: all.includeSuperseded, asOf: all.asOf };
+/** Physics takes no MMR. An explain run under it also drops the result floor and superseded rows, so its output stays
+ * steady; asOf always stays, or later rows leak. */
+function physicsOptions(engine: EngineOptions, explain: boolean): EngineOptions {
+  return explain ? { ...engine, minResults: undefined, includeSuperseded: undefined } : engine;
 }
 
 async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch: PoolSearch): Promise<SearchResult[]> {
   const { pool, scope } = poolSearch;
-  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
-  const { mmr, mmrLambda, minResults, explain } = search;
+  const { query, search } = opts;
+  const { mmr, mmrLambda, explain } = search;
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
   if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
-  const shared = {
-    budget,
-    cost,
-    explain,
-    scope,
-    runtime: ctx.config.runtime,
-    cwd: ctx.cwd,
-    switches: ctx.switches,
-    now: ctx.now,
-  };
+  const engine = engineOptions(ctx, opts);
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
     // stores again.
@@ -461,13 +451,17 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
       { local: vectorSourceOf(ctx), global: vectorSourceOf({ ...ctx.global, embedderFor: ctx.embedderFor }) },
       { local: pool.local, global: pool.global },
       vectorCandidates,
-      { ...shared, mmr, mmrLambda, localBump: search.localBump, minResults, includeSuperseded, asOf },
+      { ...engine, explain, scope, mmr, mmrLambda, localBump: search.localBump },
     );
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
-  // asOf must reach physics, or later rows leak.
-  const tuning = engineTuning(physics !== null, explain, { mmr, mmrLambda, minResults, includeSuperseded, asOf });
-  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, { ...shared, vectorCandidates, ...tuning });
+  const tuned = physics ? physicsOptions(engine, explain) : { ...engine, mmr, mmrLambda };
+  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, {
+    ...tuned,
+    explain,
+    scope,
+    vectorCandidates,
+  });
 }
 
 /** `first`, then the rows of `second` that `first` does not hold. */
@@ -497,7 +491,7 @@ async function expandGraph(
     asOf: opts.asOf,
     budget: opts.budget,
     cost: opts.cost,
-    minResults: opts.search.minResults ?? 1,
+    minResults: opts.search.minResults,
     recallScope: requested ? { requested, additive: true } : {},
   });
   for (const r of state.results) {
