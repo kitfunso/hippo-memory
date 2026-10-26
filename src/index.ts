@@ -47,6 +47,8 @@ export {
   ConsolidationResult,
   type SleepOpts,
   type SleepResult,
+  type SleepEvent,
+  type RescueRank,
   type SleepContext,
   type SleepStore,
   sleep,

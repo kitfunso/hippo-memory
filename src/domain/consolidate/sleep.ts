@@ -19,7 +19,6 @@ import { promoteSessionTraces, replayPass, traceWindow } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
-import { plural } from '../../base/util/format.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import type { FlushComponent, SleepBegin, SleepStart, UntracedSession } from '../../base/ports/store/consolidation.js';
 import { SleepRows, Survivors } from './survivors.js';
@@ -50,7 +49,7 @@ export async function runConsolidation(
   const result = newConsolidationResult(dryRun);
   const traces = traceWindow({ tenantId, now, dryRun, config });
   const { halfLives, start } = await migrateHalfLives(store, config.defaultHalfLifeDays, { dryRun, traces }, result);
-  reportFtsDrift(start.fts, dryRun, result);
+  reportFtsDrift(start.fts, result);
 
   // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
@@ -97,12 +96,9 @@ async function runAndFlush(
 }
 
 /** A store open that is already current no longer counts the two. */
-function reportFtsDrift(fts: SleepStart['fts'], dryRun: boolean, result: ConsolidationResult): void {
+function reportFtsDrift(fts: SleepStart['fts'], result: ConsolidationResult): void {
   if (fts === null) return;
-  result.details.push(
-    `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${fts.fts} indexed rows for ` +
-      `${fts.memories} memories)`,
-  );
+  result.events.push({ kind: 'ftsResynced', indexedRows: fts.fts, memories: fts.memories });
 }
 
 function sessionDecayOptions(start: SleepStart, config: SleepRun['config']): DecayOptions {
@@ -143,16 +139,10 @@ async function migrateHalfLives(
 ): ReturnType<typeof migrateDefaultHalfLife> {
   const halfLife = await migrateDefaultHalfLife(store, to, { dryRun, traces });
   if (halfLife.rescaled > 0) {
-    result.details.push(
-      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ` +
-        `${halfLife.to}-day half-life`,
-    );
+    result.events.push({ kind: 'halfLifeRescaled', count: halfLife.rescaled, from: halfLife.from, to: halfLife.to });
   }
   if (halfLife.typed > 0) {
-    result.details.push(
-      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects ` +
-        `from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`,
-    );
+    result.events.push({ kind: 'halfLifeTyped', count: halfLife.typed, from: LEGACY_TYPED_HALF_LIFE, to: halfLife.to });
   }
   return halfLife;
 }
@@ -191,7 +181,7 @@ async function commitPending(run: SleepRun, holdMs: number): Promise<void> {
 function reportFlush(run: SleepRun, left: ReadonlySet<string>): void {
   const { result, pendingDeletes, pendingDormant } = run;
   for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
-    if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
+    if (!left.has(id)) result.events.push({ kind: 'notRemoved', id });
   }
   result.removedIds = pendingDeletes.filter((id) => left.has(id));
   result.removed = result.removedIds.length;
@@ -199,14 +189,14 @@ function reportFlush(run: SleepRun, left: ReadonlySet<string>): void {
 }
 
 function reportExpiry(run: SleepRun, expired: number): void {
-  const { config, result, dryRun } = run;
+  const { config, result } = run;
   result.dormantExpired = expired;
   if (result.dormantExpired > 0) {
-    result.details.push(
-      `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant ` +
-        `memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
-        `older than ${config.dormant.retentionDays} days`,
-    );
+    result.events.push({
+      kind: 'dormantExpired',
+      count: result.dormantExpired,
+      retentionDays: config.dormant.retentionDays,
+    });
   }
 }
 
@@ -219,7 +209,7 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
   });
 
   if (detectedConflicts.length > 0) {
-    result.details.push(`  ⚠️ detected ${plural(detectedConflicts.length, 'memory conflict')}`);
+    result.events.push({ kind: 'conflictsDetected', count: detectedConflicts.length });
   }
 
   await run.store.consolidation.recordSleep({
@@ -252,17 +242,11 @@ async function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOu
     // Row by row: one failed audit write must not silently drop every remaining row.
     const auditFailures = await run.store.consolidation.auditEachRow(rescuedEntries.map(rescueEvent));
     if (auditFailures > 0) {
-      result.details.push(
-        `  ⚠️ memory-value: ${plural(auditFailures, 'mv_rescue audit row')} ` +
-          `failed to write (the rescue itself still landed)`,
-      );
+      result.events.push({ kind: 'rescueAuditFailed', failures: auditFailures });
     }
   } catch (err) {
     // An audit store that will not open must never crash the mutation it records.
     log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, errorFields(err));
-    result.details.push(
-      `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
-        `(${plural(rescuedEntries.length, 'rescue')} not audited)`,
-    );
+    result.events.push({ kind: 'rescueAuditUnavailable', rescues: rescuedEntries.length });
   }
 }

@@ -4,7 +4,7 @@ import { exitAfterFlush, installCrashHandlers } from '../../base/util/crash-hand
 import { envRequestDeadlineMs, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requestDeadlineMs } from '../../base/util/request-scope.js';
-import { MAX_BODY_BYTES } from '../../base/util/http-util.js';
+import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import {
   callName,

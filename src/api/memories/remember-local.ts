@@ -6,6 +6,7 @@
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
 import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../../domain/search/embed-memories.js';
 import { captureError } from '../../domain/learn/autolearn.js';
+import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
@@ -135,8 +136,6 @@ export async function extractRememberedFacts(
   const failures: string[] = [];
   let facts = 0;
   try {
-    // Loaded on demand, so a write that extracts nothing does not pay for the module.
-    const { extractFacts, storeExtractedFacts } = await import('../../domain/learn/extract.js');
     const found = await extractFacts(entry.content, {
       llm,
       model: extraction.model,

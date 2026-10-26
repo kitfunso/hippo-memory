@@ -4,7 +4,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { STORE_BUSY_MESSAGE } from '../../src/base/ports/store.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import type { ServerHandle } from '../../src/server.js';

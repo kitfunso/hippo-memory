@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { TLSSocket } from 'node:tls';
-import { isCrossSite } from '../../src/base/util/http-util.js';
+import { isCrossSite } from '../../src/surface/http/http-util.js';
 
 const req = (headers: Record<string, string>): IncomingMessage =>
   Object.assign(new IncomingMessage(new Socket()), { headers });

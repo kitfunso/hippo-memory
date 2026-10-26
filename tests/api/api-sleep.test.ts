@@ -25,6 +25,7 @@ import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -111,7 +112,7 @@ describe('api.sleep', () => {
       expect(Number.isInteger(result.removed)).toBe(true);
       expect(Number.isInteger(result.mergedEpisodic)).toBe(true);
       expect(Number.isInteger(result.newSemantic)).toBe(true);
-      expect(Array.isArray(result.details)).toBe(true);
+      expect(Array.isArray(detailLines(result))).toBe(true);
     } finally {
       restore();
     }

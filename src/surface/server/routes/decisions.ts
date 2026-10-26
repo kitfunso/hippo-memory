@@ -1,6 +1,7 @@
 // /v1/decisions routes.
 import { objectCreate } from '../../../api/objects/objects.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import { type JsonValue, isJsonNumber } from '../../../base/util/json.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody, getString, requiredString, type RequiredStringRule } from '../validation.js';

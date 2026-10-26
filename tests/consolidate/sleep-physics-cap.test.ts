@@ -16,6 +16,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -103,7 +104,9 @@ describe('sleep physics cap', () => {
     await physicsPass(run, CAP);
 
     expect(run.result.physicsSimulated).toBe(CAP);
-    expect(run.result.details.some((d) => d.includes(`the ${CAP} most recently recalled of ${STORED}`))).toBe(true);
+    expect(detailLines(run.result).some((d) => d.includes(`the ${CAP} most recently recalled of ${STORED}`))).toBe(
+      true,
+    );
     const after = storedParticles(root);
     for (const id of leftOut) expect(after.get(id)).toEqual(seeded.get(id));
     const moved = entries.filter((e) => !leftOut.has(e.id)).map((e) => after.get(e.id)?.lastSimulation);

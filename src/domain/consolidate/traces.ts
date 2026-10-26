@@ -10,7 +10,6 @@ import { log } from '../../base/util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { DAY_MS } from '../../base/util/time.js';
-import { plural } from '../../base/util/format.js';
 
 /** The sessions whose traces this sleep promotes: the caller's tenant's, completed within the window, with no trace
  * yet; none under dryRun or with auto-trace off. */
@@ -41,14 +40,11 @@ export async function promoteSessionTraces(run: SleepRun, sessions: readonly Unt
     run.pendingWrites.push(trace);
     run.survivors.push(trace);
     result.promotedTraces++;
-    result.details.push(`  🧬 promoted trace ${trace.id} from session ${sessionId} (${outcome})`);
+    result.events.push({ kind: 'tracePromoted', id: trace.id, sessionId, outcome });
   }
 
   if (result.promotedTraces > 0) {
-    result.details.push(
-      `  🧬 promoted ${plural(result.promotedTraces, 'trace')} from completed ` +
-        `session${result.promotedTraces === 1 ? '' : 's'}`,
-    );
+    result.events.push({ kind: 'tracesPromoted', count: result.promotedTraces });
   }
   if (tracesSkippedRejected > 0) {
     log.warn(
@@ -69,7 +65,7 @@ function sessionTrace(
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
   if (!sessionScope.ok) {
     run.result.tracesSkippedMixedScope++;
-    run.result.details.push(`  ⏭  skipped session ${sessionId}: events span mixed scopes`);
+    run.result.events.push({ kind: 'sessionSkippedMixedScope', sessionId });
     return null;
   }
 
@@ -144,9 +140,7 @@ export async function replayPass(run: SleepRun): Promise<void> {
   // Update survivors in place so downstream passes see rehearsed state.
   await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;
-  run.result.details.push(
-    `  💭 replayed ${plural(rehearsed.length, 'memory', 'memories')}: ` + rehearsed.map((e) => e.id).join(', '),
-  );
+  run.result.events.push({ kind: 'replayed', ids: rehearsed.map((e) => e.id) });
   if (!run.dryRun) {
     for (const r of rehearsed) run.pendingWrites.push(r);
   }
