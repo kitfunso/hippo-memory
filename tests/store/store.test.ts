@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   loadSearchEntries,
-  writeEntry,
-  readEntry,
   loadAllEntries,
   updateStats,
   saveActiveTaskSnapshot,
@@ -16,8 +14,6 @@ import {
   clearActiveTaskSnapshot,
   listSessionEvents,
 } from '../_helpers/root-forms.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -30,9 +26,9 @@ import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, readEntry, sqliteStore } = sessionPerTest();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, '..', 'fixtures', 'legacy-markdown-store');
@@ -187,7 +183,6 @@ describe('stats tracking', () => {
     initTestStore(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     updateStats(tmpDir, { recalled: 1 });
-    flushHeldMirrors(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     // SAFETY: stats.json holds the LegacyStats mirror, which always carries total_recalled.
     const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8')) as { total_recalled: number };
@@ -212,7 +207,6 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
-    flushHeldMirrors(tmpDir);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });

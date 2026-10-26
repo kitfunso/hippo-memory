@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
@@ -22,13 +21,13 @@ import {
   type RecallStoreSetting,
 } from '../../src/api/recall/rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 let home: string;
 let hippoRoot: string;

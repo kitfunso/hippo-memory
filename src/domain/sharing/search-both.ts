@@ -304,6 +304,6 @@ function sharedRanking(
     runtime: options.runtime,
     cwd: options.cwd,
     vectorCandidates,
-    queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
+    queryEmbedDeadline: startQueryEmbedDeadline(options),
   };
 }

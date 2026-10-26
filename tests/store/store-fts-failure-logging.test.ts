@@ -1,13 +1,10 @@
 // A broken full-text index never fails a write or a search, but it says so: warn once per kind of failure, then stay quiet.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { createRequire } from 'node:module';
-import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
+import { getHippoDbPath, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -62,27 +59,25 @@ describe('FTS failure logging', () => {
     const b = createMemory('second row to forget');
     writeEntry(root, a);
     writeEntry(root, b);
-    await withSharedStoreHandles(() => {
-      expect(deleteEntry(root, a.id)).toBe(true);
-      expect(deleteEntry(root, b.id)).toBe(true);
-    });
+    expect(deleteEntry(root, a.id)).toBe(true);
+    expect(deleteEntry(root, b.id)).toBe(true);
+
     const warnings = linesWith('FTS index delete failed');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('fts delete refused');
   });
 
   it('warns once when an FTS insert fails, then logs later failures only at debug', async () => {
-    await withSharedStoreHandles(() => {
-      writeEntry(root, createMemory('poison one'));
-      writeEntry(root, createMemory('poison two'));
-      expect(linesWith('FTS index update failed')).toHaveLength(1);
-      vi.stubEnv('HIPPO_LOG', 'debug');
-      try {
-        writeEntry(root, createMemory('poison three'));
-      } finally {
-        vi.stubEnv('HIPPO_LOG', undefined);
-      }
-    });
+    writeEntry(root, createMemory('poison one'));
+    writeEntry(root, createMemory('poison two'));
+    expect(linesWith('FTS index update failed')).toHaveLength(1);
+    vi.stubEnv('HIPPO_LOG', 'debug');
+    try {
+      writeEntry(root, createMemory('poison three'));
+    } finally {
+      vi.stubEnv('HIPPO_LOG', undefined);
+    }
+
     const all = linesWith('FTS index update failed');
     expect(all).toHaveLength(2);
     expect(all[1]).toMatch(/^\[hippo\] debug: /);

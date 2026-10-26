@@ -14,12 +14,10 @@ import { duplicateHash } from '../../src/base/util/same-text.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { META_KEY } from '../../src/db/meta.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');
 const TENANT = 'acme';
@@ -30,7 +28,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  for (const root of roots.splice(0)) removeAfterRequest(root);
+  for (const root of roots.splice(0)) removeDir(root);
 });
 
 /** A fresh store has the typed migration marked done; `migrated: false` takes the mark away, as a store made before the migration has it. */

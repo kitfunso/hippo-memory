@@ -18,12 +18,15 @@ import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { loadAllEntries } from '../../src/entry/testing.js';
 import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { RequestStores } from '../../src/db/request-stores.js';
 import { loadConfig } from '../../src/host/config-file.js';
 
 export interface SmokeOptions {
   hippoRoot: string;
   count: number;
   replay: number;
+  /** The test's session, so its calls share one handle; the CLI opens per call, as a connector does. */
+  session?: RequestStores;
 }
 
 export interface SmokeResult {
@@ -38,7 +41,7 @@ export async function runSlackSmoke(opts: SmokeOptions): Promise<SmokeResult> {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
     actor: adminActor('connector:slack'),
-    store: sqliteStore(opts.hippoRoot),
+    store: sqliteStore(opts.hippoRoot, { session: opts.session }),
     config: loadConfig(opts.hippoRoot),
   };
   const start = Date.now();

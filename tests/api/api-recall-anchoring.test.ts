@@ -24,9 +24,7 @@ import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } fr
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -73,7 +71,7 @@ describe('api.recall anchoringHint', () => {
     vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('populates anchoringHint on R2 (memory_dominance) when snapshot has 2 prior wins for same memory', async () => {

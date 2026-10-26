@@ -14,6 +14,7 @@ import {
   callName,
   findHippoRoot,
   mcpErrorResponse,
+  type McpContextFor,
   type McpHost,
   type McpRequest,
   type McpResponse,
@@ -23,7 +24,6 @@ import { handleMcpRequest } from './request.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
-import { AsyncResource } from 'node:async_hooks';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
@@ -193,9 +193,12 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global
  * store instead of failing every tool call, and say so on stderr (stdout carries the protocol).
  * A later `hippo init` project store wins. */
-async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Promise<string> {
+async function createGlobalStoreOnFirstRun(
+  contextFor: McpContextFor,
+  tenantId: string,
+): Promise<string> {
   const root = hippoHomeDir();
-  const target = host.contextFor(root, tenantId).reach?.globalTarget;
+  const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
   if (target === undefined) return root;
   await target.store.folderFiles.ensure();
@@ -205,14 +208,18 @@ async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Pro
   return root;
 }
 
-/** Runs one frame in the host's scope; only a tool call builds a context, so tools/list never
+/** Runs one frame on the host's stores; only a tool call builds a context, so tools/list never
  * creates a store. */
-function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
-  return host.runRequest(async () => {
+function handleFrame(
+  req: McpRequest,
+  host: McpHost,
+  signal: AbortSignal,
+): Promise<McpResponse | null> {
+  return host.runFrame(signal, async (contextFor) => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
     const tenantId = envTenant();
-    const root = findHippoRoot() ?? (await createGlobalStoreOnFirstRun(host, tenantId));
-    return handleMcpRequest(req, host.contextFor(root, tenantId));
+    const root = findHippoRoot() ?? (await createGlobalStoreOnFirstRun(contextFor, tenantId));
+    return handleMcpRequest(req, contextFor(root, tenantId));
   });
 }
 
@@ -238,7 +245,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
   track(
     req.method,
-    handleFrame(req, host)
+    handleFrame(req, host, abort.signal)
       .then((resp) => {
         if (!timedOut() && resp) send(resp);
       })
@@ -259,7 +266,7 @@ function dispatchNotification(req: McpRequest, abort: AbortController, host: Mcp
   const stopWatching = watchDeadline(req, false, abort);
   track(
     req.method,
-    handleFrame(req, host)
+    handleFrame(req, host, abort.signal)
       .then(() => {})
       .catch((err) => {
         log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
@@ -273,18 +280,14 @@ function dispatchNotification(req: McpRequest, abort: AbortController, host: Mcp
  * does not steal stdin or exit when its parent closes a pipe. The caller picks the host, so
  * src/surface/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
-  // Bound to the loop's start, so every frame runs inside the root's store runtime, whatever
-  // context stdin was made in.
   process.stdin.on(
     'data',
-    AsyncResource.bind(
-      frameReader((body) => {
-        // One id per frame, so the error reply and every line logged for the call name the same
-        // request.
-        const abort = new AbortController();
-        runWithRequestId(randomUUID(), () => dispatch(body, abort, host), undefined, abort.signal);
-      }),
-    ),
+    frameReader((body) => {
+      // One id per frame, so the error reply and every line logged for the call name the same
+      // request.
+      const abort = new AbortController();
+      runWithRequestId(randomUUID(), () => dispatch(body, abort, host));
+    }),
   );
 
   process.stdin.on('end', () => {

@@ -1,7 +1,6 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method
 // switch.
 
-import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import {
   hasGroup,
@@ -176,18 +175,18 @@ function invalidArgs(
   });
 }
 
-/** The tool and its ledger row run in the caller's request scope, which the host (server or
- * stdio) opens. The request signal reaches store calls, embeddings, rerankers and LLM fetches
- * through the request scope. */
+/** The tool and its ledger row run on the stores of the caller's context, which the host (server
+ * or stdio) builds; the context's signal reaches store calls, embeddings, rerankers and LLM
+ * fetches through the api Context. */
 async function runTool(
   toolName: string,
   run: ToolRun,
   args: Record<string, JsonValue>,
   ctx: McpContext,
 ): Promise<string> {
-  currentSignal()?.throwIfAborted();
+  ctx.signal?.throwIfAborted();
   const text = await run(args);
-  currentSignal()?.throwIfAborted();
+  ctx.signal?.throwIfAborted();
   await recordMcpTokens(toolName, text, ctx);
   return text;
 }

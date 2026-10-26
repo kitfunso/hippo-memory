@@ -7,6 +7,8 @@ export interface LlmRequest {
   readonly model?: string;
   readonly maxTokens: number;
   readonly prompt: string;
+  /** The request's abort signal; the call stops when it fires. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 // `cause` is the thrown value behind a message, kept so the site that logs the failure can write

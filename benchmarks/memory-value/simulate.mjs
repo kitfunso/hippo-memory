@@ -59,12 +59,12 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/entry/memory.js';
-import { writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
-import { readEntryInFolder as readEntry } from '../../dist/store/sqlite/fixtures.js';
+import { loadAllEntriesIn, readEntryIn, writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
 import { hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
 import { markRetrieved } from '../../dist/entry/memory.js';
-import { withSharedStoreHandles } from '../../dist/db/open.js';
+import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';
 
@@ -74,8 +74,8 @@ import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFo
  *  (content/tags never change post-ingest, only the fields
  *  markRetrieved/applyOutcome touch do), and so this order is reproducible
  *  across re-ingests of the same dataset+seed. */
-function loadSortedByProvenance(hippoRoot, provenanceByMemoryId) {
-  return loadAllEntries(hippoRoot).sort((a, b) => {
+function loadSortedByProvenance(files, provenanceByMemoryId) {
+  return loadAllEntriesIn(files).sort((a, b) => {
     const pa = provenanceByMemoryId.get(a.id);
     const pb = provenanceByMemoryId.get(b.id);
     if (!pa || !pb) {
@@ -123,7 +123,7 @@ function stableReorderByProvenance(results, provenanceByMemoryId) {
  */
 export function simulateQuestion(questionId, questionDateIso, opts = {}) {
   // One store handle for the whole run: a fresh open per read or write repeats the pragmas, migration check and mirror sweep 12 times a round.
-  return withSharedStoreHandles(() => simulateOnSharedHandle(questionId, questionDateIso, opts));
+  return withSharedStoreHandles((session) => simulateOnSharedHandle(questionId, questionDateIso, { ...opts, session }));
 }
 
 async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
@@ -131,6 +131,7 @@ async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
   const topK = opts.topK ?? CONFIG.SIM_TOP_K;
   const seed = opts.seed ?? CONFIG.GLOBAL_SEED;
   const hippoRoot = hippoRootFor(questionId);
+  const files = storeFilesOf(hippoRoot, { session: opts.session });
   const meta = readJson(metaPathFor(questionId));
   const turnsProvenance = meta.turns; // [{sessionIndex, turnIdx, memoryId}], dataset-fixed order (ingest.mjs)
   const provenanceByMemoryId = new Map(turnsProvenance.map((t) => [t.memoryId, t]));
@@ -144,7 +145,7 @@ async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
     if (turnsProvenance.length === 0) {
       return { rounds: 0, roundLog: [] };
     }
-    const buildEntries = loadSortedByProvenance(hippoRoot, provenanceByMemoryId);
+    const buildEntries = loadSortedByProvenance(files, provenanceByMemoryId);
     const corpus = buildCorpus(buildEntries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 
     for (let r = 0; r < rounds; r++) {
@@ -155,7 +156,7 @@ async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
       // its content fresh from the store. Leakage rule: no access to the
       // eval question/answer text anywhere in this function.
       const picked = pickUniform(rand, turnsProvenance);
-      const queryEntry = readEntry(hippoRoot, picked.memoryId);
+      const queryEntry = readEntryIn(files, picked.memoryId);
       if (!queryEntry) {
         throw new Error(
           `simulateQuestion: provenance drift — memory ${picked.memoryId} ` +
@@ -164,7 +165,7 @@ async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
       }
       const query = queryEntry.content.slice(0, CONFIG.QUERY_MAX_CHARS);
 
-      const entriesNow = loadSortedByProvenance(hippoRoot, provenanceByMemoryId);
+      const entriesNow = loadSortedByProvenance(files, provenanceByMemoryId);
       const results = await hybridSearch(query, entriesNow, {
         budget: CONFIG.SIM_SEARCH_BUDGET,
         minResults: topK,
@@ -176,12 +177,12 @@ async function simulateOnSharedHandle(questionId, questionDateIso, opts) {
       const stableResults = stableReorderByProvenance(results, provenanceByMemoryId);
       const topEntries = stableResults.slice(0, topK).map((x) => x.entry);
       const updated = markRetrieved(topEntries); // now = evalNow() (fake, question_date)
-      for (const u of updated) writeEntry(hippoRoot, u);
+      for (const u of updated) writeEntryIn(files, u);
 
       const good = r % CONFIG.SIM_NEGATIVE_EVERY !== 2;
       for (const u of updated) {
         const withOutcome = applyOutcome(u, good);
-        writeEntry(hippoRoot, withOutcome);
+        writeEntryIn(files, withOutcome);
       }
 
       if (opts.recordRounds) {

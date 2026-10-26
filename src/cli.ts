@@ -30,7 +30,7 @@ import {
 import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
-import { withRootStoreRuntime } from './surface/open-store.js';
+import { runCliCommand } from './surface/cli/cli-runtime.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(
@@ -300,7 +300,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
   try {
-    await withRootStoreRuntime(() => main(command, args, flags, getHippoRoot(process.cwd())));
+    await runCliCommand(() => main(command, args, flags, getHippoRoot(process.cwd())));
   } catch (err) {
     // The verb printed its own message. The process ends as a success does, never by process.exit,
     // which on Windows aborts Node (libuv async.c) while a fetch still has work in flight.

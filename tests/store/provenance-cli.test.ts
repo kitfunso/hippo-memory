@@ -3,8 +3,10 @@ import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 let tmpDir: string;
 let hippoDir: string;

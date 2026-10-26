@@ -11,12 +11,9 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const TENANTS = ['acme', 'default', 'globex'] as const;

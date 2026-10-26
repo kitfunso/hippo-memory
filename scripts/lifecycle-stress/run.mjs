@@ -42,13 +42,15 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory } from '../../dist/entry/memory.js';
-import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
+import { initStore, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
 import { consolidate } from '../../dist/index.js';
 import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
+import { writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/base/rank/physics-config.js';
 
 import { injectStream, writeLabelSidecar } from './inject.mjs';
@@ -134,10 +136,11 @@ async function buildStore(memories) {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }, null, 2));
   const createdOrder = [];
   // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-  await withSharedStoreHandles(() => {
+  await withSharedStoreHandles((session) => {
+    const files = storeFilesOf(root, { session });
     for (const m of memories) {
       const e = createMemory(m.content, { tags: m.tags, source: 'lse' });
-      writeEntry(root, e);
+      writeEntryIn(files, e);
       createdOrder.push(e.id);
     }
   });

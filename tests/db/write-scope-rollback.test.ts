@@ -17,9 +17,7 @@ import {
   saveActiveTaskSnapshot,
   writeEntry,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 let root: string;
 
@@ -27,7 +25,7 @@ beforeEach(() => {
   root = makeRoot('write-scope');
 });
 afterEach(() => {
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 function run(sql: string): void {

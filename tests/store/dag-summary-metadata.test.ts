@@ -21,16 +21,14 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 describe('schema v25 — DAG summary metadata', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('v25-meta');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('fresh init brings DB to v25 with the three new columns', () => {
     const db = openHippoDb(root);

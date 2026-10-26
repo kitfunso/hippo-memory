@@ -20,7 +20,6 @@ import {
   openHippoDb,
   closeHippoDb,
   getHippoDbPath,
-  runWithRequestStores,
   withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
@@ -370,17 +369,18 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       policyText: 'retry 3x',
     });
     let prev: number | undefined;
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(async () => {
+    await withSharedStoreHandles(async (session) => {
+      const objects = objectsAt(home, session);
       for (let i = 0; i < 40; i++) {
         prev = (
-          await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+          await saveDecision(objects, loadConfig(home).defaultHalfLifeDays, 'default', {
             decisionText: `Call ${i} adopts RetryPolicy`,
             supersedesDecisionId: i % 10 === 9 ? prev : undefined,
           })
         ).id;
       }
     });
+
     const copy = `${home}-copy`;
     copyTree(home, copy);
     try {
@@ -471,10 +471,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       await once(holder, 'message');
     });
 
-    const r = await runWithRequestStores(
-      async () => await extractGraphChunked(sqliteStore(home), 'default', holdsOnFirstPause),
-      { busyWaitMs: 250 },
-    );
+    const r = await extractGraphChunked(sqliteStore(home, { busyWaitMs: 250 }), 'default', holdsOnFirstPause);
 
     expect(await exited).toEqual([0]);
     expect(r.entities).toBe(11);

@@ -38,13 +38,14 @@ export function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[
 }
 
 /**
- * Force-mark a summary dirty by direct SQL (bypasses E2 hook timing).
+ * Force-mark summaries dirty by direct SQL (bypasses E2 hook timing).
  * Used to set up tests that need a known dirty starting state.
  */
-export function forceMarkDirty(hippoRoot: string, summaryId: string): void {
+export function forceMarkDirty(hippoRoot: string, ...summaryIds: string[]): void {
   const db = openHippoDb(hippoRoot);
   try {
-    db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`).run(summaryId);
+    const mark = db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`);
+    for (const id of summaryIds) mark.run(id);
   } finally {
     closeHippoDb(db);
   }

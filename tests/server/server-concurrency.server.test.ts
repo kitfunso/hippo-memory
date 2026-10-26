@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember as apiRemember } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -117,14 +117,13 @@ describe('server concurrency — recall + write under single-writer', () => {
     // Pre-seed 100 memories spanning a small pool of search terms so
     // recall queries land hits.
     const seedTerms = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < 100; i++) {
-        const term = seedTerms[i % seedTerms.length]!;
-        await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
-          content: `seed-${term}-doc-${i} reference content for recall test`,
-        });
-      }
-    });
+    for (let i = 0; i < 100; i++) {
+      const term = seedTerms[i % seedTerms.length]!;
+      await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
+        content: `seed-${term}-doc-${i} reference content for recall test`,
+      });
+    }
+
     vi.stubEnv('HIPPO_V1_RPS', '0');
     // The count below is the rows this test wrote; a sleep a REST write starts would add its own.
     const handle = await serveKeyed({ hippoRoot: home, port: 0, autoSleep: false });

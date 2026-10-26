@@ -12,7 +12,6 @@ import { loadEveryTenantEntries, loadSessionDecayContext, writeEntriesTogether }
 import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   dir,
   useMemoryValueScratch,
@@ -25,7 +24,6 @@ import {
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 useMemoryValueScratch();
-oneRequestPerTest();
 
 /** The rows on hippo.db alone, in one transaction: no test here reads a markdown mirror, and a mirror file per seeded
  *  row was most of this file's disk writes. */

@@ -18,11 +18,15 @@ import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/domain/consolidate/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
-import { loadEveryTenantEntries, loadSessionDecayContext, writeEntry } from '../_helpers/root-forms.js';
+import {
+  loadEveryTenantEntries,
+  loadSessionDecayContext,
+  writeEntriesTogether,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
   createMemory7,
@@ -34,10 +38,7 @@ import {
   condemnedEntry,
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 useMemoryValueScratch();
 
@@ -241,10 +242,7 @@ describe('(d) flag-off byte-identical', () => {
     }
     expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
 
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (const e of built) writeEntry(dir, e);
-    });
+    writeEntriesTogether(dir, built);
 
     // Predicate expectation, computed from the SAME order consolidate()
     // will load (loadAllEntries's `ORDER BY created ASC, id ASC`) -- NOT

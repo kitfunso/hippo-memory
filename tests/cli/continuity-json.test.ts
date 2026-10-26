@@ -6,9 +6,7 @@ import type { CliFlags, CommandContext } from '../../src/surface/cli/flag-values
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const SNAPSHOT_JSON =
   '{"id":1,"task":"pin the wire","summary":"s","next_step":"n","status":"active","source":"test",' +
@@ -48,7 +46,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 describe('continuity --json keeps snake_case keys', () => {

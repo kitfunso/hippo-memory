@@ -11,14 +11,14 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { isJsonNumber } from '../../src/base/util/json.js';
-import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
+import { type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
-import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
+import { loadEntriesByIds, loadLastRecall } from '../_helpers/root-forms.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, apiCtx } = sessionPerTest();
 
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),
@@ -139,7 +139,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
 });
 
 describe('retrieve paths: order and writes', () => {

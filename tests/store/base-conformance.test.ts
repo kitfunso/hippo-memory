@@ -19,10 +19,7 @@ import {
   valueAt,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const ALICE = 'personal:private:alice';

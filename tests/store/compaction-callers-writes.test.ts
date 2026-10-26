@@ -138,7 +138,7 @@ describe('saveCompactionItemsForCaller', () => {
 
   it('busy throws, no spool file', async () => {
     await bindSessionOwner(owned('alice'), 'sA');
-    const err = await whileLocked(() => caught(() => postCompact(owned('alice'))));
+    const err = await whileLocked((session) => caught(() => postCompact(owned('alice', session))));
     expect(isStoreBusy(err)).toBe(true);
     expect(fs.existsSync(path.join(root, 'compactions-spool'))).toBe(false);
     expect(rowCounts()).toMatchObject({ compactions: 0, memories: 0 });

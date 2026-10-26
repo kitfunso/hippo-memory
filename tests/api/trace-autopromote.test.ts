@@ -5,13 +5,10 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 let tmpDir: string;
 

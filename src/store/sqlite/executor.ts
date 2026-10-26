@@ -14,7 +14,7 @@ import { decodeError } from './error-codec.js';
 import { portError } from './port-errors.js';
 import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';
-import { currentStoreRuntime } from '../../db/store-runtime.js';
+import type { StoreRuntime } from '../../db/store-runtime.js';
 import {
   type Job,
   type OpMode,
@@ -77,6 +77,9 @@ export interface ExecutorOptions extends StoreRules {
   /** Stored vectors past which the pinned reader keeps no graph; the server passes config
    * vectorGraph.maxVectors. */
   readonly vectorGraphMaxVectors?: number;
+  /** The server's runtime: a store it checkpoints in the background gets each thread's
+   * connection the larger limit. */
+  readonly runtime?: StoreRuntime | undefined;
 }
 
 export interface SqliteExecutor {
@@ -170,9 +173,7 @@ class WorkerPool implements SqliteExecutor {
   readonly #vectorGraphThreshold: number | undefined;
   readonly #vectorGraphMaxVectors: number | undefined;
   readonly #rules: StoreRules;
-  // Captured at construction: a queued job starts from another job's reply, outside the runtime's
-  // context.
-  readonly #runtime = currentStoreRuntime();
+  readonly #runtime: StoreRuntime | undefined;
   #nextId = 1;
   #closed = false;
   // 'done' once the writer has run the store's open-time setup, which a reader's connection could
@@ -187,6 +188,7 @@ class WorkerPool implements SqliteExecutor {
     this.#vectorGraphThreshold = opts.vectorGraphThreshold;
     this.#vectorGraphMaxVectors = opts.vectorGraphMaxVectors;
     this.#rules = { strength: opts.strength, fakeNowMs: opts.fakeNowMs };
+    this.#runtime = opts.runtime;
   }
 
   call<T>(

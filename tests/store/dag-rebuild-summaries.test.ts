@@ -8,21 +8,19 @@
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
+import { loadAllDirtySummaries, applyRebuildResult, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 describe('sleep-cycle rebuildDirtySummaries', () => {
   let hippoRoot: string;
@@ -188,20 +186,13 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('cap enforcement: 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
-    // One connection for the seed loop and the rebuild: a close per write checkpoints the WAL, which is slow on Windows.
-    const result = await withSharedStoreHandles(async () => {
-      for (let i = 0; i < 25; i++) {
-        const sum = makeSummary(`sum-${i}`);
-        writeEntry(hippoRoot, sum);
-        const child = makeChild(sum.id, `fact-${i}`);
-        writeEntry(hippoRoot, child);
-        forceMarkDirty(hippoRoot, sum.id);
-      }
-      return rebuildDirtySummaries(sqliteStore(hippoRoot), {
-        now: evalNow(),
-        llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
-        cap: 20,
-      });
+    const sums = Array.from({ length: 25 }, (_, i) => makeSummary(`sum-${i}`));
+    writeEntriesTogether(hippoRoot, [...sums, ...sums.map((sum, i) => makeChild(sum.id, `fact-${i}`))]);
+    forceMarkDirty(hippoRoot, ...sums.map((sum) => sum.id));
+    const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
+      llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
+      cap: 20,
     });
 
     expect(result.attempted).toBe(20);

@@ -18,20 +18,20 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
-import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
+import { cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { apiCtx } = sessionPerTest();
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api/index.ts --
@@ -46,9 +46,7 @@ function tmpHome() {
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
-    restore: () => {
-      removeAfterRequest(home);
-    },
+    restore: () => onTestFinished(() => removeDir(home)),
   };
 }
 

@@ -12,10 +12,8 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
@@ -31,7 +29,7 @@ describe('autoShare batching', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(tmp);
+    removeDir(tmp);
   });
 
   async function shareFrom(topics: readonly string[]) {

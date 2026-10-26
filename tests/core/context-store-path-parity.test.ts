@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
@@ -30,11 +30,8 @@ import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { contextReach } from '../../src/api/types.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from '../_helpers/infra.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
@@ -389,10 +386,7 @@ async function runPass(
     infra: testInfra(),
   };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
-  const result =
-    store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, async () => contextGet(ctx, opts))
-      : await contextGet(ctx, opts);
+  const result = await contextGet(ctx, opts);
   await store?.close();
   return {
     result,

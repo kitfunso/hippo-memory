@@ -190,7 +190,9 @@ describe('preCompactForCaller', () => {
 
   it('a busy store at startCompaction still returns the instruction', async () => {
     await bindSessionOwner(owned('alice'), 'sA');
-    expect(await whileLocked(() => preCompact(owned('alice')))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await whileLocked((session) => preCompact(owned('alice', session)))).toEqual({
+      stdout: PRE_COMPACT_INSTRUCTION,
+    });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 

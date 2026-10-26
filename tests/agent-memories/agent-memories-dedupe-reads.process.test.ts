@@ -21,10 +21,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 const HELD = 'Run the schema check before this service deploys.';
 const MERGED = 'Pin the node version in the CI workflow file.';

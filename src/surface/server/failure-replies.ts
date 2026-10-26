@@ -14,7 +14,7 @@ import {
   errorMessage,
   log,
 } from '../../base/util/log.js';
-import { runWithRequestId } from '../../base/util/request-scope.js';
+import { runWithRequestId, type RequestLimits } from '../../base/util/request-scope.js';
 import { answerAtDeadline, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { closeAfterReply, sendJson } from '../http/http-util.js';
 import {
@@ -122,13 +122,13 @@ function replyOrClose<E>(
 }
 
 /**
- * Runs `handle` under the request's id and deadline; a failure becomes the reply, unless the
- * deadline has already answered.
+ * Runs `handle` under the request's id with its deadline and abort signal; a failure becomes the
+ * reply, unless the deadline has already answered.
  */
 export function answerRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  handle: () => Promise<void>,
+  handle: (limits: RequestLimits) => Promise<void>,
   {
     slowWarnMs,
     counts,
@@ -138,32 +138,27 @@ export function answerRequest(
   const deadline = requestDeadlineFor(req);
   const abort = deadline ? new AbortController() : undefined;
   // Inside the scope, so the failure reply's log line carries the id too.
-  runWithRequestId(
-    requestId,
-    () => {
-      if (deadline) {
-        answerAtDeadline(
-          res,
-          deadline,
-          () => {
-            counts.handlerDeadlines += 1;
-            replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId);
-          },
-          () => abort?.abort(new DeadlineExceededError(HANDLER_LATE)),
-        );
-      }
-      handle().then(
+  runWithRequestId(requestId, () => {
+    if (deadline) {
+      answerAtDeadline(
+        res,
+        deadline,
         () => {
-          if (isAbandoned(res)) logLateFinish(req, requestId);
+          counts.handlerDeadlines += 1;
+          replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId);
         },
-        <E>(err: E) => {
-          if (!isAbandoned(res)) replyOrClose(req, res, err, requestId);
-          else if (isDroppedLateReply(err)) logLateFinish(req, requestId);
-          else logLateFailure(req, err, requestId);
-        },
+        () => abort?.abort(new DeadlineExceededError(HANDLER_LATE)),
       );
-    },
-    deadline,
-    abort?.signal,
-  );
+    }
+    handle({ deadline, signal: abort?.signal }).then(
+      () => {
+        if (isAbandoned(res)) logLateFinish(req, requestId);
+      },
+      <E>(err: E) => {
+        if (!isAbandoned(res)) replyOrClose(req, res, err, requestId);
+        else if (isDroppedLateReply(err)) logLateFinish(req, requestId);
+        else logLateFailure(req, err, requestId);
+      },
+    );
+  });
 }

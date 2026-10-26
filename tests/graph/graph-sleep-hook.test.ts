@@ -27,9 +27,6 @@ import type { EntityType } from '../../src/base/ports/store/graph.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import {
@@ -39,38 +36,30 @@ import {
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { sqliteStore, apiCtx, objectsAt } = sessionPerTest();
 
 const T = 'default';
 
 interface TestCtx {
   hippoRoot: string;
   ctx: FullContext;
-  restore: () => void;
 }
 
 function newCtx(): TestCtx {
-  const { base: tmpDir, root: hippoRoot } = makeStore('sleep-hook');
+  const { root: hippoRoot } = makeStore('sleep-hook');
   // Per-test HIPPO_HOME isolation (autoShare phase calls initGlobal()).
   const globalTmp = makeRoot('sleep-hook-global', { init: false });
   vi.stubEnv('HIPPO_HOME', globalTmp);
   const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
-  return {
-    hippoRoot,
-    ctx,
-    restore: () => {
-      removeAfterRequest(tmpDir);
-    },
-  };
+  return { hippoRoot, ctx };
 }
 
 function pending(hippoRoot: string, tenant: string = T) {
@@ -84,9 +73,6 @@ describe('sleep enqueue-hook', () => {
   let tc: TestCtx;
   beforeEach(() => {
     tc = newCtx();
-  });
-  afterEach(() => {
-    tc.restore();
   });
 
   // -- Producer --------------------------------------------------------------

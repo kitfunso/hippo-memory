@@ -13,18 +13,16 @@
  * rank>seedCount TAIL (seeds are excluded), so these fixtures pass an explicit small
  * seedCount; the CLI/library default (10) targets realistic large pools.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { rrfFuse } from '../../src/domain/search/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../../src/domain/graph/stream.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const m = createMemory(text, {
@@ -58,7 +56,6 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
   beforeEach(() => {
     home = makeRoot('gstream-rrf');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', async () => {
     // 8-entry pool. strong=0 is a top lexical hit; weak=7 is the answer: lexically last

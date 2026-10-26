@@ -6,9 +6,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function withScratchEnv(dir: string) {
   return { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
@@ -18,7 +16,7 @@ let dir: string;
 
 afterEach(() => {
   try {
-    removeAfterRequest(dir);
+    removeDir(dir);
   } catch {
     // best-effort cleanup only
   }

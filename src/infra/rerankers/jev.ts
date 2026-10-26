@@ -68,9 +68,13 @@ export function buildRelevanceRequest(
   return { state, questions };
 }
 
-/** One batched request for the whole candidate list. Rejects with the reason when there are no
- * usable scores. */
-async function requestScores(http: Http, query: string, head: SearchResult[]): Promise<number[]> {
+/** One batched request for the whole candidate list, sent over `http` and stopped by `signal`.
+ * Rejects with the reason when there are no usable scores. */
+async function requestScores(
+  { http, signal }: { readonly http: Http; readonly signal: AbortSignal | undefined },
+  query: string,
+  head: SearchResult[],
+): Promise<number[]> {
   const key = envTypesafeApiKey();
   if (!key) throw new Error('TYPESAFE_API_KEY not set');
 
@@ -81,6 +85,7 @@ async function requestScores(http: Http, query: string, head: SearchResult[]): P
     token: key,
     body: { state, model: envJevModel() ?? JEV_MODEL, questions },
     budgetMs: envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+    signal,
   });
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
@@ -106,12 +111,12 @@ export function createJevReranker(localFallback: RerankerFn, http: Http): Rerank
 
     let scores: readonly number[];
     try {
-      scores = await requestScores(http, query, head);
+      scores = await requestScores({ http, signal: options?.signal }, query, head);
       outage.answered();
     } catch (err) {
       // A read path never throws, and never hands back the unranked order without saying so: warn,
       // then use the free local reranker.
-      outage.failed(errorMessage(err));
+      outage.failed(errorMessage(err), { signal: options?.signal });
       return localFallback(query, head, options);
     }
 

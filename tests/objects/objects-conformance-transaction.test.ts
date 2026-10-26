@@ -1,7 +1,6 @@
 // On hippo.db a write whose audit row fails keeps nothing.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { TENANT_A } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
@@ -21,10 +20,10 @@ import {
   incidentOf,
   useObjectsConformance,
 } from '../_helpers/objects-conformance.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { sqliteStore } = sessionPerTest();
 
 useObjectsConformance();
 

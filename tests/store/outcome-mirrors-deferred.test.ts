@@ -12,7 +12,6 @@ import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { writeOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -62,19 +61,17 @@ describe('outcome mirrors', () => {
     const before = entries.map((entry) => mirrorText(root, entry));
     const ids = entries.map((entry) => entry.id);
     const runtime = new StoreRuntime();
-    runtime.run(() => {
-      writeOutcome(db, storeFilesOf(root), {
-        tenantId: 'default',
-        actor: 'test',
-        ownScope: null,
-        role: 'admin',
-        ids,
-        good: true,
-      });
-      expect(entries.map((entry) => mirrorText(root, entry))).toEqual(before);
-      expect(dueKeys(db)).toEqual(ids.map((id) => `mirror_due:${id}`).sort());
-      flushHeldMirrors(root);
+    writeOutcome(db, storeFilesOf(root, { runtime }), {
+      tenantId: 'default',
+      actor: 'test',
+      ownScope: null,
+      role: 'admin',
+      ids,
+      good: true,
     });
+    expect(entries.map((entry) => mirrorText(root, entry))).toEqual(before);
+    expect(dueKeys(db)).toEqual(ids.map((id) => `mirror_due:${id}`).sort());
+    runtime.held.flush(root);
     const after = entries.map((entry) => mirrorText(root, entry));
     expect(after).not.toEqual(before);
     expect(after).toEqual(rowTexts(db, entries));

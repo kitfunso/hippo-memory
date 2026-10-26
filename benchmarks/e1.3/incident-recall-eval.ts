@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { retrieve, adminActor, type Context } from '../../src/entry/eval-scripts.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import type { RequestStores } from '../../src/db/request-stores.js';
 import { loadConfig } from '../../src/host/config-file.js';
 
 interface TranscriptMessage {
@@ -53,6 +54,8 @@ export interface IncidentRecallEvalResult {
 
 export async function runIncidentRecallEval(opts: {
   hippoRoot: string;
+  /** The test's session, so its calls share one handle per store. */
+  session?: RequestStores;
 }): Promise<IncidentRecallEvalResult> {
   const here = dirname(fileURLToPath(import.meta.url));
   // SAFETY: scenarios.json is a static, version-controlled fixture checked
@@ -65,7 +68,7 @@ export async function runIncidentRecallEval(opts: {
   const ctx: Context = {
     tenantId: 'default',
     actor: adminActor('eval:slack'),
-    store: sqliteStore(opts.hippoRoot), config: loadConfig(opts.hippoRoot),
+    store: sqliteStore(opts.hippoRoot, { session: opts.session }), config: loadConfig(opts.hippoRoot),
   };
   const results: ScenarioResult[] = [];
 

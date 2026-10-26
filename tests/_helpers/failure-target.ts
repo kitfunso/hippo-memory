@@ -1,5 +1,5 @@
 import type { FailureTarget } from '../../src/surface/capture/capture-error.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from './test-session.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

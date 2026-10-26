@@ -392,13 +392,13 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
       answered(() =>
-        withUnmigratedDb(files.hippoRoot, !apply, (db) =>
+        withUnmigratedDb(files.hippoRoot, { readOnly: !apply, grant: files.opens.grant }, (db) =>
           repairOn(db, files, { tenantId, apply, protect }),
         ),
       ),
     repairQualityOnce: (tenantId, protect) =>
       answered(() =>
-        withUnmigratedDb(files.hippoRoot, false, (db) =>
+        withUnmigratedDb(files.hippoRoot, { readOnly: false, grant: files.opens.grant }, (db) =>
           repairQualityOnce(db, files, tenantId, protect),
         ),
       ),

@@ -1,4 +1,4 @@
-import { CURRENT_DISTILLED } from '../../db/continuity.js';
+import { CURRENT_DISTILLED } from '../../db/sql-predicates.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {

@@ -99,7 +99,7 @@ type AuthOptions = Pick<
 
 type ContextOptions = AuthOptions &
   Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
-  Partial<Pick<ResolvedServeOptions, 'callers'>>;
+  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
 // `clinton@corp`.
@@ -390,16 +390,8 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const callers = opts.callers;
   const infra = opts.infra();
   const actor = bearerActor(id);
-  return {
-    tenantId: id.tenantId,
-    actor,
-    store: opts.store,
-    reach,
-    config,
-    callers,
-    clientKey,
-    infra,
-  };
+  const { store, signal } = opts;
+  return { tenantId: id.tenantId, actor, store, reach, config, callers, clientKey, infra, signal };
 }
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its

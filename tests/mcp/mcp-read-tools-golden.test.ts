@@ -18,9 +18,7 @@ import {
   type Store,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
@@ -33,9 +31,11 @@ let templates: Templates;
 const NO_PROJECT = { name: '', legacyName: '' };
 
 async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
-  const res: McpResponse | null = await handleMcpRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { ...host.contextFor(s.root, TENANT), project: NO_PROJECT },
+  const res: McpResponse | null = await host.runFrame(new AbortController().signal, (contextFor) =>
+    handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+      { ...contextFor(s.root, TENANT), project: NO_PROJECT },
+    ),
   );
   // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
   const result = res?.result as { content?: { text: string }[] } | undefined;
@@ -48,7 +48,7 @@ async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<strin
   try {
     return normalize(await run(s), s);
   } finally {
-    removeAfterRequest(s.home);
+    removeDir(s.home);
   }
 }
 

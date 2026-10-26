@@ -5,14 +5,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { listRecallEntries } from '../../src/store/sqlite/search-rows.js';
 import { loadSearchEntries, writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -32,7 +30,7 @@ describe('loadSearchEntries paths', () => {
   beforeEach(() => {
     root = makeRoot('f1');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('FTS path: a match in a shorter row ranks first, and no row carries a score', () => {
     // Written first and sorting later by content, so only bm25 can put it first.
@@ -61,9 +59,8 @@ describe('loadSearchEntries paths', () => {
     // Self-review found the no-terms path was uncapped pre-v1.7.0 (codex
     // diff-pass only flagged the bottom-of-function full-store fallback).
     // Insert 50 raws, request limit=10, assert exactly 10 returned.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 50; i++) writeEntry(root, makeRaw(`row ${i}`));
-    });
+    for (let i = 0; i < 50; i++) writeEntry(root, makeRaw(`row ${i}`));
+
     const results = loadSearchEntries(root, '', 10, 'default');
     expect(results.length).toBe(10);
   });
@@ -87,15 +84,14 @@ describe('loadSearchEntries paths', () => {
     // `ORDER BY created ASC, id ASC LIMIT ?`. Existing test asserts row
     // count but not order. Pin chronological ordering.
     const created: string[] = [];
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 50; i++) {
-        const e = makeRaw(`row-${i.toString().padStart(2, '0')}`);
-        // Spaced 1s apart so byte-cmp ordering is unambiguous.
-        e.created = new Date(Date.UTC(2026, 4, 6, 1, 0, i)).toISOString();
-        created.push(e.created);
-        writeEntry(root, e);
-      }
-    });
+    for (let i = 0; i < 50; i++) {
+      const e = makeRaw(`row-${i.toString().padStart(2, '0')}`);
+      // Spaced 1s apart so byte-cmp ordering is unambiguous.
+      e.created = new Date(Date.UTC(2026, 4, 6, 1, 0, i)).toISOString();
+      created.push(e.created);
+      writeEntry(root, e);
+    }
+
     const results = loadSearchEntries(root, '', 10, 'default');
     expect(results.length).toBe(10);
     // Earliest 10 by created ASC: the 'roundtrip probe' at 00:00:00Z is first,

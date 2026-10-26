@@ -20,14 +20,11 @@ import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/domain/con
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../src/api/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { isDagSummary } from '../../src/domain/search/boosts.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {

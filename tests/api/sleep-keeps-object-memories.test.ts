@@ -10,24 +10,18 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   deleteEntry,
   memoriesBackingAmong,
-  writeEntry,
   loadAllEntries,
-  readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const roots: string[] = [];
 
@@ -39,8 +33,9 @@ function newRoot(): string {
 }
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
+const { writeEntry, readEntry, sqliteStore, apiCtx, objectsAt } = sessionPerTest();
 
 const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' });

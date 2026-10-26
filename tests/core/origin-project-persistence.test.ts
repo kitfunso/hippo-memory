@@ -8,9 +8,12 @@ import { serializeEntry, deserializeEntry } from '../../src/base/memory/markdown
 import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
+import { loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -12,9 +12,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadStoredParticles } from '../_helpers/root-forms.js';
 import { norm } from '../../src/base/rank/cosine.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 let root: string;
 

@@ -12,7 +12,7 @@ export const onPortOnly = process.env.HIPPO_TEST_STORE === 'port-only';
 const NEEDS_HIPPO_DB = {
   db: {
     group: 'folder',
-    reason: 'reads or writes hippo.db itself while the server runs, which a port-only store blocks',
+    reason: 'reads or writes hippo.db itself while the server runs, past the store it serves',
   },
   team: {
     group: 'folder',
@@ -44,8 +44,8 @@ export const ROUTE_GROUPS: readonly OptionalGroup[] = [
 ].filter((group) => !FOLDER.has(group));
 
 /** serve() as the suites call it: on the port-only run, a test that names no store of its own gets hippo.db's store
- * through the port alone, with only the optional groups it keeps and under a kind that is not 'sqlite', so a path
- * that skips the port throws and a route or tool that reaches a group it did not name answers 501. */
+ * through the port alone, with only the optional groups it keeps and under a kind that is not 'sqlite', so a route or
+ * tool that reaches a group it did not name answers 501; server-no-direct-open.server.test.ts catches a direct open. */
 export function serve({ keep = [], ...opts }: SwitchedServeOptions): Promise<ServerHandle> {
   if (!onPortOnly || opts.store) return serveOn(opts);
   return serveOn({ ...opts, store: portOnlyStore(opts.hippoRoot, keep) });

@@ -12,7 +12,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { auditMemory } from '../../src/base/memory/memory-audit.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { forget, dormantList, sleepWholeStore, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -27,13 +27,11 @@ import {
   readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -63,7 +61,7 @@ const okFetcher = () =>
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string; kept: boolean }> = [
@@ -97,24 +95,24 @@ interface TableRow {
 
 async function seedTable(root: string): Promise<TableRow[]> {
   const rows: TableRow[] = [];
-  // One connection for the table: a close per write checkpoints the WAL, which is slow on Windows.
-  await withSharedStoreHandles(() => {
-    for (const c of KEEP_CASES) {
-      for (const pinned of [false, true]) {
-        for (const kind of ['distilled', 'raw'] as const) {
-          const entry = createMemory7(`table row ${rows.length}: ${c.label}`, {
-            tags: c.tags,
-            source: c.source,
-            pinned,
-            kind,
-            ...RAW_FIELDS,
-          });
-          writeEntry(root, entry);
-          rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
-        }
+  const entries: MemoryEntry[] = [];
+  for (const c of KEEP_CASES) {
+    for (const pinned of [false, true]) {
+      for (const kind of ['distilled', 'raw'] as const) {
+        const entry = createMemory7(`table row ${rows.length}: ${c.label}`, {
+          tags: c.tags,
+          source: c.source,
+          pinned,
+          kind,
+          ...RAW_FIELDS,
+        });
+        entries.push(entry);
+        rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
       }
     }
-  });
+  }
+  writeEntriesTogether(root, entries);
+
   return rows;
 }
 

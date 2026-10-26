@@ -4,8 +4,7 @@ import * as path from 'node:path';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { dumpFrontmatter } from '../../base/util/yaml.js';
 import { type DatabaseSyncLike, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
-import { oncePerStore } from '../../db/connect.js';
-import { currentStoreRuntime } from '../../db/store-runtime.js';
+import { oncePerStore, type StoreAt } from '../../db/connect.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   type HippoIndex,
@@ -46,8 +45,9 @@ export function layerDir(root: string, layer: Layer): string {
 
 /** Makes the mirror folders on a store's first open in this process; a writer makes its own
  * folder if one goes missing later. */
-export function ensureMirrorDirectories(hippoRoot: string): void {
-  oncePerStore(hippoRoot, 'mirror-folders', () => {
+export function ensureMirrorDirectories(at: StoreAt): void {
+  const { hippoRoot } = at;
+  oncePerStore(at, 'mirror-folders', () => {
     for (const sub of ['buffer', 'episodic', 'semantic', 'conflicts']) {
       fs.mkdirSync(path.join(hippoRoot, sub), PRIVATE_DIR);
     }
@@ -434,28 +434,24 @@ function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2));
 }
 
-/** Mirror `stats` to stats.json at once, or, inside a store runtime, hold it and write the
- * latest within a second of the last write; the database counters are always current. */
-export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
+/** Mirror `stats` to stats.json at once, or, under a store runtime, hold it and write the latest
+ * within a second of the last write; the database counters are always current. */
+export function writeStatsMirror({ hippoRoot, runtime }: StoreAt, stats: LegacyStats): void {
   const write = (): void => putStatsMirror(hippoRoot, stats);
-  const runtime = currentStoreRuntime();
   if (runtime) runtime.held.writeOrHold(hippoRoot, 'stats.json', write);
   else mirrorBestEffort('stats.json', write);
 }
 
 /** Runs `write` once the current job is done, off the writer's path, as the root's next `what`
- * mirror write; a later call before it runs replaces it. Outside a store runtime it runs on the
+ * mirror write; a later call before it runs replaces it. With no store runtime it runs on the
  * next turn of the event loop. */
-export function deferMirrorWrite(hippoRoot: string, what: string, write: () => void): void {
-  const runtime = currentStoreRuntime();
+export function deferMirrorWrite(
+  { hippoRoot, runtime }: StoreAt,
+  what: string,
+  write: () => void,
+): void {
   if (runtime) runtime.held.hold(hippoRoot, what, write);
   else setImmediate(() => mirrorBestEffort(what, write));
-}
-
-/** Runs the current store runtime's held mirror writes now, for one root or all; store close and
- * worker stop call it. */
-export function flushHeldMirrors(hippoRoot?: string): void {
-  currentStoreRuntime()?.held.flush(hippoRoot);
 }
 
 // A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall
@@ -500,7 +496,8 @@ function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
   }
 }
 
-export function syncMirrorFiles(hippoRoot: string, db: DatabaseSyncLike): void {
+export function syncMirrorFiles(at: StoreAt, db: DatabaseSyncLike): void {
+  const { hippoRoot } = at;
   writeMarkdownMirrors(hippoRoot, pagedMemoryRows(db));
   const open = cachedStatement(
     db,
@@ -509,17 +506,18 @@ export function syncMirrorFiles(hippoRoot: string, db: DatabaseSyncLike): void {
   mirrorBestEffort('conflict mirrors', () =>
     writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)),
   );
-  writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+  writeStatsMirror(at, buildStatsFromDb(db));
 }
 
 /** syncMirrorFiles for a pass that changed only `changed` and the conflicts it stamped
  * `conflictsAt`: every other mirror is already current. */
 export function syncChangedMirrors(
-  hippoRoot: string,
+  at: StoreAt,
   db: DatabaseSyncLike,
   changed: readonly MemoryEntry[],
   conflictsAt: string,
 ): void {
+  const { hippoRoot } = at;
   writeMarkdownMirrors(hippoRoot, changed);
   const conflicts = cachedStatement(
     db,
@@ -528,5 +526,5 @@ export function syncChangedMirrors(
   mirrorBestEffort('conflict mirrors', () =>
     writeChangedConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)),
   );
-  writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+  writeStatsMirror(at, buildStatsFromDb(db));
 }

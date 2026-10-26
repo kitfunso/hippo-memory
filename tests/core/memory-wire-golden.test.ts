@@ -15,12 +15,12 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { everyFieldEntry, GOLDEN_TENANT, recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';
-import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry } = sessionPerTest();
 
 const savedCwd = process.cwd();
 let base: string;
@@ -127,14 +127,16 @@ describe('memory wire goldens', () => {
   });
 
   it('MCP hippo_recall text', async () => {
-    const res = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
-      },
-      { ...cliStdioHost().contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
+    const res = await cliStdioHost().runFrame(new AbortController().signal, (contextFor) =>
+      handleMcpRequest(
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
+        },
+        { ...contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
+      ),
     );
     // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
     const result = res?.result as { content?: { text: string }[] } | undefined;

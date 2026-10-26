@@ -27,11 +27,11 @@ import type { InfraPorts } from '../../base/ports/infra.js';
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of
 // the old one; NEVER `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
-/** The store a vault import writes to and the batch a dry run's guard probes share; a
- * composition root builds it. */
+/** The store a vault import writes to, and the batch whose store a dry run's guard probes share;
+ * a composition root builds it. */
 export interface VaultTarget {
   readonly store: StoreWith<'rejections'>;
-  readonly batch: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly batch: <T>(run: (store: StoreWith<'rejections'>) => Promise<T>) => Promise<T>;
   readonly infra: InfraPorts;
 }
 
@@ -134,13 +134,13 @@ async function importVaultNotes(
   relpaths: string[],
   batch: VaultTarget['batch'],
 ): Promise<void> {
-  const importNotes = async (): Promise<void> => {
-    for (const relpath of relpaths) await importVaultNote(run, relpath);
+  const importNotes = async (into: VaultImportRun): Promise<void> => {
+    for (const relpath of relpaths) await importVaultNote(into, relpath);
   };
   // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
   // handle.
-  if (run.dryRun) await batch(importNotes);
-  else await importNotes();
+  if (run.dryRun) await batch((store) => importNotes({ ...run, ctx: { ...run.ctx, store } }));
+  else await importNotes(run);
 }
 
 async function archiveVanishedNotes({

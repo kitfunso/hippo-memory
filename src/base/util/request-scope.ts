@@ -1,16 +1,11 @@
-// The one ambient scope of a request. A leaf module, so the logger can read the request id without
-// importing the store layer.
+// A request's log id, and the deadline type its Context carries. A leaf module, so the logger can
+// read the request id without importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/** What every scope carries; the store layer's RequestStores is one, and adds its handles. */
-export interface RequestScope {
+/** What the one ambient scope carries. */
+interface RequestScope {
   /** Ties every log line written inside the scope to one request. */
   readonly requestId: string | undefined;
-  /** Set for a served request that must be answered by a given time. */
-  readonly deadline?: RequestDeadline | undefined;
-  /** Aborts when the request passes its deadline, so a handler that checks it stops starting
-   * work nobody waits for. */
-  readonly signal?: AbortSignal | undefined;
 }
 
 const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
@@ -57,6 +52,15 @@ export class RequestDeadline {
   }
 }
 
+/** What a root hands one request's calls: the deadline its reply waits on, and the signal that
+ * fires past it. */
+export interface RequestLimits {
+  readonly deadline?: RequestDeadline | undefined;
+  readonly signal?: AbortSignal | undefined;
+}
+
+// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on its
+// Context.
 export const requestScopes = new AsyncLocalStorage<RequestScope>();
 
 /** The id of the request this code runs for, if any. */
@@ -64,35 +68,8 @@ export function currentRequestId(): string | undefined {
   return requestScopes.getStore()?.requestId;
 }
 
-/** The deadline of the request this code runs for, if it has one. */
-export function currentDeadline(): RequestDeadline | undefined {
-  return requestScopes.getStore()?.deadline;
-}
-
-/** The abort signal of the request this code runs for, if it has one. */
-export function currentSignal(): AbortSignal | undefined {
-  return requestScopes.getStore()?.signal;
-}
-
-/** `own` ended by the current request's abort as well, so an outbound call stops when its caller
- * has gone. */
-export function withRequestSignal(own: AbortSignal): AbortSignal;
-export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined;
-export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined {
-  const request = currentSignal();
-  if (request === undefined) return own;
-  return own === undefined ? request : AbortSignal.any([own, request]);
-}
-
 /** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and
- * promises it starts. `deadline` reaches every store call made inside, and `signal` every check of
- * `currentSignal`.
- */
-export function runWithRequestId<T>(
-  requestId: string,
-  fn: () => T,
-  deadline?: RequestDeadline,
-  signal?: AbortSignal,
-): T {
-  return requestScopes.run({ requestId, deadline, signal }, fn);
+ * promises it starts. */
+export function runWithRequestId<T>(requestId: string | undefined, fn: () => T): T {
+  return requestScopes.run({ requestId }, fn);
 }

@@ -35,6 +35,8 @@ export interface ExtractOptions {
    * fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
+  /** The request's abort signal; the model call stops when it fires. */
+  signal?: AbortSignal;
 }
 
 const EXTRACTION_PROMPT =
@@ -61,6 +63,7 @@ export async function extractFacts(text: string, opts: ExtractOptions): Promise<
     model: opts.model,
     maxTokens: EXTRACTION_MAX_TOKENS,
     prompt: EXTRACTION_PROMPT + redactSecretsStrict(text),
+    signal: opts.signal,
   });
   if (!reply.ok) {
     const msg = describeLlmFailure(reply.failure);

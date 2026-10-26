@@ -20,7 +20,7 @@ import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { initTestStore } from './store-template.js';
-import { removeAfterRequest } from './one-request-per-test.js';
+import { removeDir } from './remove-dir.js';
 import { REAL_IO } from './real-io.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
@@ -54,7 +54,7 @@ export function openWorld(): World {
 }
 
 export function closeWorld(w: World): void {
-  removeAfterRequest(w.dir);
+  removeDir(w.dir);
 }
 
 export function note(dir: string, file: string, body: string, yaml = 'type: feedback'): string {

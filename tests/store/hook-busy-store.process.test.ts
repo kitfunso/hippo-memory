@@ -102,16 +102,10 @@ describe('lock wait per command kind', () => {
   const busyTimeout = (db: DatabaseSyncLike): number =>
     Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
-  it('a hook scope opens with the short hook wait', async () => {
-    const wait = await withSharedStoreHandles(
-      () => {
-        const db = openHippoDb(localRoot);
-        const ms = busyTimeout(db);
-        closeHippoDb(db);
-        return ms;
-      },
-      { busyWaitMs: HOOK_DB_WAIT_MS },
-    );
+  it('a hook session opens with the short hook wait', async () => {
+    const wait = await withSharedStoreHandles((session) => busyTimeout(session.get(localRoot)), {
+      busyWaitMs: HOOK_DB_WAIT_MS,
+    });
     expect(wait).toBe(HOOK_DB_WAIT_MS);
   });
 

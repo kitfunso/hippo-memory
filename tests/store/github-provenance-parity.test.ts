@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/surface/connectors/github/types.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { rawProvenanceAt } from '../_helpers/report-reads.js';
@@ -59,31 +59,30 @@ function makeIssueComment(i: number): IngestEvent {
 
 describe('GitHub connector — provenance coverage parity', () => {
   let root: string;
+  const { session } = sessionPerTest();
   beforeEach(() => {
     root = makeRoot('gh-prov');
   });
 
   it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', async () => {
-    const ctx = ctxFor(root);
+    const ctx = onSession(ctxFor(root), session());
     // 25 issues + 25 comments = 50 raw rows, all distinct artifact_refs.
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < 25; i++) {
-        const ev = makeIssue(i);
-        await ingestEvent(ctx, {
-          event: ev,
-          rawBody: JSON.stringify(ev.payload),
-          deliveryId: `iss-${i}`,
-        });
-      }
-      for (let i = 0; i < 25; i++) {
-        const ev = makeIssueComment(i);
-        await ingestEvent(ctx, {
-          event: ev,
-          rawBody: JSON.stringify(ev.payload),
-          deliveryId: `com-${i}`,
-        });
-      }
-    });
+    for (let i = 0; i < 25; i++) {
+      const ev = makeIssue(i);
+      await ingestEvent(ctx, {
+        event: ev,
+        rawBody: JSON.stringify(ev.payload),
+        deliveryId: `iss-${i}`,
+      });
+    }
+    for (let i = 0; i < 25; i++) {
+      const ev = makeIssueComment(i);
+      await ingestEvent(ctx, {
+        event: ev,
+        rawBody: JSON.stringify(ev.payload),
+        deliveryId: `com-${i}`,
+      });
+    }
 
     const entries = loadAllEntries(root, 'default');
     const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));

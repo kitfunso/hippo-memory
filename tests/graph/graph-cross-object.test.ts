@@ -6,18 +6,17 @@
  * contains another extracted entity's name (conservative: word-boundary, length-bounded,
  * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph } from '../../src/domain/graph/extract.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { sqliteStore } = sessionPerTest();
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
@@ -32,13 +31,6 @@ describe('cross-object references (Pass 3 name-match)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('graph-xobj');
-  });
-  afterEach(() => {
-    try {
-      removeAfterRequest(home);
-    } catch {
-      /* ignore */
-    }
   });
 
   it('a decision whose text names a policy emits one references edge (decision -> policy), sourced from the decision memory', async () => {
@@ -126,12 +118,13 @@ describe('cross-object references (Pass 3 name-match)', () => {
 
   it('per-source cap: a decision naming many policies is capped at 25', async () => {
     const names = Array.from({ length: 30 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(async () => {
+    await withSharedStoreHandles(async (session) => {
+      const objects = objectsAt(home, session);
       for (const n of names) {
-        await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: n, policyText: 'x' });
+        await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: n, policyText: 'x' });
       }
     });
+
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: `a decision that mentions ${names.join(' and ')}`,
     });

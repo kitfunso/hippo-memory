@@ -4,14 +4,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { StoreRules } from '../../base/ports/infra.js';
-import { outsideRequestStores } from '../../db/index.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { isStoreBusy, type StoreWith } from '../../base/ports/store.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
+import { grantFor, type SqliteStoreOptions } from './grant.js';
 
 type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'>;
 
@@ -23,27 +22,27 @@ interface SqliteImportStores {
   isBusy<E>(err: E): boolean;
 }
 
-/** The opener a CLI verb hands the sync; `rules` are the invoking root's, which every store it
- * opens scores by. */
-export function sqliteImportStores(rules: StoreRules): SqliteImportStores {
+/** The opener a CLI verb hands the sync; `opts` are the invoking root's rules, runtime and
+ * session, which every store it opens takes. */
+export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores {
   return {
     open: (root, { busyWaitMs }) => ({
-      ...sqliteStore(root, rules),
-      agentImport: sqliteAgentImport(handlesOf(root, rules), busyWaitMs),
+      ...sqliteStore(root, opts),
+      agentImport: sqliteAgentImport(handlesOf(root, opts), busyWaitMs),
     }),
     exists: isInitialized,
-    create: async (root) => inPortTerms(() => initStore(root)),
-    standIn: () => standIn(rules),
+    create: async (root) => inPortTerms(() => initStore(root, { grant: grantFor(opts) })),
+    // Its folder is deleted at close, so no session of the caller's may keep one of its handles
+    // open past that.
+    standIn: () => standIn({ ...opts, session: undefined }),
     isBusy: isStoreBusy,
   };
 }
 
-function standIn(rules: StoreRules): SqliteImportStore {
+function standIn(opts: SqliteStoreOptions): SqliteImportStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  // Its folder is deleted at close, so a request scope must not keep one of its handles open past
-  // that.
-  outsideRequestStores(() => initStore(root));
-  const store = unscoped(sqliteStore(root, rules));
+  initStore(root, { grant: grantFor(opts) });
+  const store = sqliteStore(root, opts);
   return {
     ...store,
     close: async () => {
@@ -51,30 +50,4 @@ function standIn(rules: StoreRules): SqliteImportStore {
       fs.rmSync(root, { recursive: true, force: true });
     },
   };
-}
-
-/** `obj` with each method, its groups' too, opening its handles outside any request scope. */
-function unscoped<T extends object>(obj: T): T {
-  const out: Partial<T> = {};
-  // SAFETY: Object.keys lists the object's own keys, which are keys of T.
-  for (const key of Object.keys(obj) as (keyof T)[]) {
-    const value = obj[key];
-    // SAFETY: a wrapped method takes and answers what the method does, and a wrapped group has the
-    // group's keys.
-    out[key] = (
-      value instanceof Function
-        ? (...args: never[]) => outsideRequestStores(() => value.apply(obj, args))
-        : isPlainObject(value)
-          ? unscoped(value)
-          : value
-    ) as T[keyof T];
-  }
-  // SAFETY: every own key of obj was copied or wrapped above.
-  return out as T;
-}
-
-function isPlainObject<V>(value: V): value is V & object {
-  return (
-    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
-  );
 }

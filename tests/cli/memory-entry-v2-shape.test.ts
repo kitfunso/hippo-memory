@@ -9,9 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 let root: string;
 
@@ -19,7 +17,7 @@ beforeEach(() => {
   root = makeStore('entry-shape').root;
 });
 
-afterEach(() => removeAfterRequest(join(root, '..')));
+afterEach(() => removeDir(join(root, '..')));
 
 describe('MemoryEntry 3.0 shape', () => {
   it('round-trips tenantId and a boolean summaryDirty', () => {

@@ -2,14 +2,14 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import * as conflictsSql from '../../../src/store/sqlite/conflicts.js';
-import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
+import { openStore } from '../../../src/store/sqlite/handles.js';
 import type { MemoryConflict } from '../../../src/base/ports/store/conflicts.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { MAX_LIST_LIMIT } from '../../../src/base/util/limits.js';
 import type { DetectedConflict } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
+import { onHandle, sqliteStore, storeFilesOf } from '../test-session.js';
 
 export function replaceDetectedConflicts(
   hippoRoot: string,

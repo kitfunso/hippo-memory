@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
+import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
@@ -10,10 +11,9 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry } = sessionPerTest();
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [
@@ -46,7 +46,7 @@ function seed(tenantId: string): string {
 async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Promise<string> {
   // Dispatch resolves the tenant per call, so a test that switches HIPPO_TENANT midway sees the switch.
   const run = await runInProcess(() =>
-    handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags, callers }),
+    cliRequest(() => handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags, callers })),
   );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
@@ -73,7 +73,6 @@ describe('hippo recall anchoring hint', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(root);
   });
 
   it('prints the anchored_on line above the results on the third distinct query one memory tops, and not again on the fourth', async () => {

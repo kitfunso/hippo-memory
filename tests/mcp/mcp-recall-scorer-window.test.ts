@@ -19,10 +19,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 function callTool(
   name: string,
@@ -73,7 +71,7 @@ describe('MCP hippo_recall scorer_window', () => {
     );
   });
 
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   // 'abc' is Number-coerced by the transport so recall() rejects it like HTTP does.
   it.each([0, 'abc'])('scorer_window=%s throws RecallContractError with code=invalid_scorer_window', async (value) => {

@@ -132,6 +132,7 @@ interface ClefCall {
   readonly model: ClefModel;
   readonly route: ClefRoute;
   readonly requestedTimeoutMs: number | undefined;
+  readonly signal: AbortSignal | undefined;
 }
 
 async function requestScores(
@@ -139,7 +140,7 @@ async function requestScores(
   query: string,
   head: SearchResult[],
 ): Promise<ClefScores> {
-  const { http, model, route, requestedTimeoutMs: requested } = call;
+  const { http, model, route, requestedTimeoutMs: requested, signal } = call;
   const { state, questions } = buildRelevanceRequest(query, head);
   // Node clamps a delay past 2^31-1 to 1 ms.
   const timeoutMs =
@@ -150,6 +151,7 @@ async function requestScores(
     token: route.token,
     body,
     budgetMs: timeoutMs,
+    signal,
   });
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
@@ -193,15 +195,16 @@ export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
     try {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
       route = resolveClefRoute(model, options?.clef);
+      const requestedTimeoutMs = options?.clef?.timeoutMs;
       got = await requestScores(
-        { http, model, route, requestedTimeoutMs: options?.clef?.timeoutMs },
+        { http, model, route, requestedTimeoutMs, signal: options?.signal },
         query,
         head,
       );
       outage.answered();
     } catch (err) {
       const reason = errorMessage(err);
-      outage.failed(reason, errorFields(err));
+      outage.failed(reason, { fields: errorFields(err), signal: options?.signal });
       return nativeOrder(head, {
         backend: 'native',
         requestedModel: model,

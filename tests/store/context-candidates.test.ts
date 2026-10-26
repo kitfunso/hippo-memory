@@ -1,22 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { join } from 'node:path';
 import { calculateStrength } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { calculateStrength as strengthUnder } from '../../src/base/memory/strength.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { loadContextCandidates, tallySources, loadTextsHolding } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-oneRequestPerTest();
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry } = sessionPerTest();
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 
@@ -39,26 +36,22 @@ describe('loadContextCandidates over the cap', () => {
 
   beforeEach(async () => {
     root = makeStore('ctx-candidates').root;
-    await withSharedStoreHandles(() => {
-      for (const e of [
-        row('a-old-pin', 90, { pinned: true }),
-        row('b-fresh', 1),
-        row('c-stale', 60),
-        row('d-rewarded', 25, { outcomePositive: 8 }),
-        row('e-mid', 20),
-        row('f-private', 0, { scope: 'slack:private:c1' }),
-        row('g-other', 0, { originProject: 'other' }),
-        row('h-global', 2, { originProject: '' }),
-        row('i-superseded', 0, { supersededBy: 'b-fresh' }),
-        row('j-acme', 0, { tenantId: 'acme' }),
-        row('k-team', 0, { scope: 'team:x' }),
-      ]) {
-        writeEntry(root, e);
-      }
-    });
+    for (const e of [
+      row('a-old-pin', 90, { pinned: true }),
+      row('b-fresh', 1),
+      row('c-stale', 60),
+      row('d-rewarded', 25, { outcomePositive: 8 }),
+      row('e-mid', 20),
+      row('f-private', 0, { scope: 'slack:private:c1' }),
+      row('g-other', 0, { originProject: 'other' }),
+      row('h-global', 2, { originProject: '' }),
+      row('i-superseded', 0, { supersededBy: 'b-fresh' }),
+      row('j-acme', 0, { tenantId: 'acme' }),
+      row('k-team', 0, { scope: 'team:x' }),
+    ]) {
+      writeEntry(root, e);
+    }
   });
-
-  afterEach(() => removeAfterRequest(join(root, '..')));
 
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
     const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
@@ -122,15 +115,10 @@ describe('loadContextCandidates reward factor', () => {
     root = makeStore('ctx-reward').root;
   });
 
-  afterEach(() => {
-    removeAfterRequest(join(root, '..'));
-  });
-
   // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.
   async function survivor(rows: MemoryEntry[]): Promise<{ id: string; strongest: string }> {
-    await withSharedStoreHandles(() => {
-      for (const e of rows) writeEntry(root, e);
-    });
+    for (const e of rows) writeEntry(root, e);
+
     const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
     const model = evalSwitches().strength;
     const strongest = [...rows].sort((a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model))[0].id;

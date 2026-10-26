@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
-import { currentStoreRuntime } from './store-runtime.js';
+import type { StoreRuntime } from './store-runtime.js';
 
 // WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long
 // write pays the checkpoint's two flushes once per 1,000 pages, not once per 100.
@@ -62,7 +62,7 @@ export interface WalCheckpointer {
 }
 
 /** The wal_autocheckpoint value for a new connection to `dbPath` under `runtime`. */
-export function autoCheckpointPages(dbPath: string, runtime = currentStoreRuntime()): number {
+export function autoCheckpointPages(dbPath: string, runtime: StoreRuntime | undefined): number {
   return runtime?.checkpointsInBackground(path.resolve(dbPath))
     ? BACKSTOP_CHECKPOINT_PAGES
     : INLINE_CHECKPOINT_PAGES;
@@ -129,7 +129,7 @@ function spawnCheckpointWorker(key: string, state: CheckpointerState, end: () =>
  */
 export function startWalCheckpointer(
   dbPath: string,
-  runtime = currentStoreRuntime(),
+  runtime: StoreRuntime | undefined,
 ): WalCheckpointer {
   const key = path.resolve(dbPath);
   const state: CheckpointerState = {

@@ -6,6 +6,7 @@ import { GraphFileIndex } from '../../db/vector-graph-reader.js';
 import type { VectorIndex } from '../../db/vector-store.js';
 import type { Handles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
+import type { SqliteStoreOptions } from './grant.js';
 import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
@@ -54,16 +55,23 @@ export function sqliteVectorReads(
   };
 }
 
-/** `store` with its nearest-row read asking `ask` first while hippo.db under `hippoRoot` holds
- * enough vectors, and no more than `maxVectors`, for a served store to answer from its graph; a
- * smaller store scans as fast as it hops. */
+/** Where a served store's graph may answer a nearest-row read: hippo.db under `hippoRoot`,
+ * opened as `opts` say. */
+export interface NearestAsking {
+  readonly hippoRoot: string;
+  readonly ask: NearestIdsAsk;
+  readonly maxVectors: number;
+  readonly opts?: SqliteStoreOptions;
+}
+
+/** `store` with its nearest-row read asking `ask` first while the store holds enough vectors,
+ * and no more than `maxVectors`, for a served store to answer from its graph; a smaller store
+ * scans as fast as it hops. */
 export function askingNearestFirst<S extends { readonly vectors: VectorReads }>(
-  hippoRoot: string,
   store: S,
-  ask: NearestIdsAsk,
-  maxVectors: number,
+  { hippoRoot, ask, maxVectors, opts }: NearestAsking,
 ): S {
-  const { on } = handlesOf(hippoRoot);
+  const { on } = handlesOf(hippoRoot, opts);
   const local = store.vectors;
   const nearestEntries: VectorReads['nearestEntries'] = async (queryVector, spec) => {
     const ids = on((db) => graphServesStore(db, maxVectors))

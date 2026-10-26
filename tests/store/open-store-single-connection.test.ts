@@ -10,6 +10,7 @@ import { closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAmbientCandidates, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db/db-open-write-free.test.ts.
@@ -63,12 +64,15 @@ describe('loaders use one connection, not two', () => {
 describe('openStore makes the mirror folders once per store', () => {
   it('makes them on the first open only, and again for a store made anew at the same path', () => {
     const mirrorFolders = ['buffer', 'episodic', 'semantic', 'conflicts'];
+    // The runtime remembers the step for the process, as a CLI or server root's does; its first open runs it.
+    const runtime = new StoreRuntime();
+    const opts = { grant: grantFor({ runtime }) };
     const foldersMadeBy = (opens: number): number => {
       const spy = vi.spyOn(fs, 'mkdirSync');
       // The store imports fs by name, and a named import sees the spy only after this sync.
       syncBuiltinESMExports();
       try {
-        for (let i = 0; i < opens; i++) closeHippoDb(openStore(root));
+        for (let i = 0; i < opens; i++) closeHippoDb(openStore(root, opts));
         return spy.mock.calls.filter(([dir]) => mirrorFolders.includes(path.basename(String(dir)))).length;
       } finally {
         spy.mockRestore();
@@ -76,14 +80,12 @@ describe('openStore makes the mirror folders once per store', () => {
       }
     };
 
-    // The runtime remembers the step for the process, as a CLI or server root's does; its first open runs it.
-    new StoreRuntime().run(() => {
-      closeHippoDb(openStore(root));
-      expect(foldersMadeBy(3)).toBe(0);
+    closeHippoDb(openStore(root, opts));
+    expect(foldersMadeBy(3)).toBe(0);
 
-      fs.rmSync(root, { recursive: true, force: true });
-      expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
-    });
+    fs.rmSync(root, { recursive: true, force: true });
+    expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
+    runtime.dispose();
     expect(mirrorFolders.filter((folder) => fs.existsSync(path.join(root, folder)))).toEqual(mirrorFolders);
   });
 });

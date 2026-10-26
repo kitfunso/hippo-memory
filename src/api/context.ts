@@ -58,6 +58,7 @@ import type {
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
 import { CONTINUITY_EVENT_LIMIT } from './continuity.js';
+import { storeBehind } from '../base/util/store-view.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -342,7 +343,7 @@ function readsCrossProject(ctx: Context, opts: ContextOptions, sharedStore: bool
   if (sharedStore && projectId(opts.currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
-  if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.store);
+  if (sharedStore && !isolationEnabled) warnIsolationIgnored(storeBehind(ctx.store));
   return opts.crossProject === true || (!isolationEnabled && !sharedStore);
 }
 

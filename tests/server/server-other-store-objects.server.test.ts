@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
+import { RequestStores } from '../../src/db/index.js';
 import { serve } from '../_helpers/store-switch.js';
 import { OBJECT_ROW, V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -12,6 +13,8 @@ describe('serve() under a store that has the objects group', () => {
   let fixture: TwoTenantFixture;
   let side: PortOnlySide<'objects'>;
   let handle: ServerHandle;
+  // One handle for the file's requests, as an add-on store would hold; each fresh hippo.db open costs a WAL checkpoint.
+  const session = new RequestStores();
 
   type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
 
@@ -80,12 +83,13 @@ describe('serve() under a store that has the objects group', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    side = portOnlySide(fixture.dir, ['objects']);
+    side = portOnlySide(fixture.dir, ['objects'], session);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
   afterAll(async () => {
     await handle.stop();
+    session.close();
     vi.unstubAllEnvs();
     rmSync(fixture.dir, { recursive: true, force: true });
   });

@@ -3,13 +3,14 @@
 import {
   importEntriesInto,
   importRoot,
+  type ImportFiles,
   type ImportOptions,
   type ImportResult,
   type TargetedImport,
 } from '../surface/importers/core.js';
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdownInto } from '../surface/importers/markdown.js';
-import { importVaultInto } from '../surface/importers/vault.js';
+import { importVaultInto, type VaultTarget } from '../surface/importers/vault.js';
 import {
   defaultImportFiles,
   defaultStore,
@@ -21,10 +22,9 @@ import { evalClock } from '../infra/eval-switches.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return {
-    ...options,
-    target: { root, files: defaultImportFiles(root), batch: runStoreBatch, clock: evalClock() },
-  };
+  const batch = <T>(run: (files: ImportFiles) => T): T =>
+    runStoreBatch((session) => run(defaultImportFiles(root, { session })));
+  return { ...options, target: { root, batch, clock: evalClock() } };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
@@ -63,7 +63,8 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
  * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
  * double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
-  const batch = <T>(run: () => Promise<T>): Promise<T> => runStoreRequest(run, 'cli');
+  const batch: VaultTarget['batch'] = (run) =>
+    runStoreRequest((session) => run(defaultStore(options.hippoRoot, { session })), 'cli');
   return importVaultInto(folderPath, options, {
     store: defaultStore(options.hippoRoot),
     batch,

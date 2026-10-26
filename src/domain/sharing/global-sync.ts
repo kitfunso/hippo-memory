@@ -16,8 +16,8 @@ import { textKeyPages, type SharingStore } from './text-keys.js';
 
 /**
  * Copy all global memories into the local store, skipping entries that already exist locally by
- * ID or text (promote and share copy under a new ID). The caller's request scope keeps it to one
- * open per store. Returns the count of newly copied entries. */
+ * ID or text (promote and share copy under a new ID). Stores built on the caller's session open
+ * each store once. Returns the count of newly copied entries. */
 export async function syncGlobalToLocal(
   into: ConfiguredFolder<SharingStore>,
   global: { readonly store: SharingStore },

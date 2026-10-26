@@ -23,7 +23,6 @@ import {
 } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   BULK_RECORDS,
   BULK_TENANT,
@@ -34,8 +33,6 @@ import {
   seedQuarantineRecords,
 } from '../_helpers/quarantine-seed.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';

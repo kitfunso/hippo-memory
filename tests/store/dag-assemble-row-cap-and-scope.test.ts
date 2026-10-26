@@ -15,9 +15,7 @@ import { assemble } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:assemble-v161', role: 'admin' });
@@ -41,7 +39,7 @@ describe('loadSessionRawMemories row cap', () => {
   beforeEach(() => {
     root = makeRoot('v161-cap');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('cap=undefined returns every row (legacy behaviour)', () => {
     for (let i = 0; i < 12; i++) {
@@ -58,7 +56,7 @@ describe('totalRaw is post-scope', () => {
   beforeEach(() => {
     root = makeRoot('v161-total');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('all-private session: totalRaw=0, items=[], no false positive', async () => {
     for (let i = 0; i < 4; i++) {
@@ -90,7 +88,7 @@ describe('assemble scope opt parity with recall', () => {
   beforeEach(() => {
     root = makeRoot('v161-scope');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('explicit scope match unlocks a private session', async () => {
     for (let i = 0; i < 3; i++) {

@@ -23,9 +23,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -87,7 +85,7 @@ describe('transcript mining', () => {
       expect(contents.some((c) => c.includes('deploy token [REDACTED]'))).toBe(true);
       expect(contents.join('\n')).not.toContain(token);
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 
@@ -151,7 +149,7 @@ describe('transcript mining', () => {
       expect(snapshot!.task).not.toMatch(/restart the server|local commands|Never mind this output/i);
       expect(snapshot!.summary).not.toMatch(/restart the server|local commands|Never mind this output/i);
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 
@@ -223,7 +221,7 @@ describe('transcript mining', () => {
         '',
       );
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 
@@ -263,7 +261,7 @@ describe('transcript mining', () => {
       );
       expect(resume.stdout).toContain('Fix the flaky login test');
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 
@@ -387,7 +385,7 @@ describe('failed-tool capture', () => {
       expect(rows[0]!.confidence).toBe('observed');
       expect(failureSignature('line 12 at 0xdeadbeef')).toBe(failureSignature('line 40 at 0x1234567'));
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 
@@ -417,7 +415,7 @@ describe('failed-tool capture', () => {
       expect(r.status).toBe(0);
       expect(r.stderr).toMatch(/\[hippo\] warn: failure capture skipped: \S/);
     } finally {
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 });
@@ -430,7 +428,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     vi.stubEnv('USERPROFILE', dir);
   });
   afterEach(() => {
-    removeAfterRequest(dir);
+    removeDir(dir);
   });
 
   it('hippo hook install adds PreCompact and PostToolUseFailure, idempotently', () => {

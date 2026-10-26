@@ -4,15 +4,9 @@ import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { portError } from '../../src/store/sqlite/port-errors.js';
-import {
-  openHippoDb,
-  closeHippoDb,
-  getHippoDbPath,
-  isSqliteBusy,
-  runWithRequestStores,
-  type DatabaseSyncLike,
-} from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, type DatabaseSyncLike } from '../../src/db/index.js';
 import * as client from '../../src/surface/cli/client.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
@@ -195,9 +189,7 @@ describe('routed writes under a busy store', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, async () => {
-        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), {
-          busyWaitMs: 50,
-        });
+        updateStatsUnlessBusy(storeFilesOf(home, { busyWaitMs: 50 }), { forgotten: 1 }, 'removed m1');
       });
       expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(
         /warn: removed m1, but the store was busy.* errorClass=Error/,
@@ -212,24 +204,20 @@ describe('routed writes under a busy store', () => {
     // The store runtime holds the refused increment, as a CLI or server process's does.
     const runtime = new StoreRuntime();
     try {
-      await runtime.run(async () => {
-        const before = await forgottenTotal(home);
-        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-        try {
-          await withLockHeld(home, async () => {
-            await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
-              busyWaitMs: 50,
-            });
-          });
-        } finally {
-          stderr.mockRestore();
-        }
-        expect(await forgottenTotal(home)).toBe(before);
-        updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m3');
-        expect(await forgottenTotal(home)).toBe(before + 3);
-        updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m4');
-        expect(await forgottenTotal(home)).toBe(before + 4);
-      });
+      const before = await forgottenTotal(home);
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        await withLockHeld(home, async () => {
+          updateStatsUnlessBusy(storeFilesOf(home, { runtime, busyWaitMs: 50 }), { forgotten: 2 }, 'removed m2');
+        });
+      } finally {
+        stderr.mockRestore();
+      }
+      expect(await forgottenTotal(home)).toBe(before);
+      updateStatsUnlessBusy(storeFilesOf(home, { runtime }), { forgotten: 1 }, 'removed m3');
+      expect(await forgottenTotal(home)).toBe(before + 3);
+      updateStatsUnlessBusy(storeFilesOf(home, { runtime }), { forgotten: 1 }, 'removed m4');
+      expect(await forgottenTotal(home)).toBe(before + 4);
     } finally {
       runtime.dispose();
     }

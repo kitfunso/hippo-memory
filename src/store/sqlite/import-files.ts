@@ -6,6 +6,7 @@ import type { RejectionCheck } from '../../base/ports/store/rejections.js';
 import type { EntryTextKey } from '../../base/ports/store/sharing.js';
 import { listTextKeysHolding } from './copy-rows.js';
 import { writeEntryRow } from './entry-writes.js';
+import type { SqliteStoreOptions } from './grant.js';
 import { handlesOf, openStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';
 import { refusedAmong } from './rejections.js';
@@ -21,8 +22,11 @@ interface SqliteImportFiles {
 
 /** hippo.db under `hippoRoot` as an import reaches it, each call on its own short-lived handle
  * and each throw in the port's terms, as a store's rejection would be. */
-export function sqliteImportFiles(hippoRoot: string): SqliteImportFiles {
-  const { on, files } = handlesOf(hippoRoot);
+export function sqliteImportFiles(
+  hippoRoot: string,
+  opts: SqliteStoreOptions = {},
+): SqliteImportFiles {
+  const { on, files } = handlesOf(hippoRoot, opts);
   return {
     ensure: () => inPortTerms(() => on(() => undefined, openStore)),
     writeEntry: (write) =>

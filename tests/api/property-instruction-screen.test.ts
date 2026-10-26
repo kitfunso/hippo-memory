@@ -4,11 +4,10 @@ import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
 import { detectInstruction } from '../../src/api/instruction-detect.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from '../_helpers/property.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { readEntry } from '../_helpers/root-forms.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
+import { withSharedStoreHandles } from '../../src/db/index.js';
 
 // Built from code points, so no invisible character sits in this file.
 const ZWSP = String.fromCodePoint(0x200b);
@@ -132,18 +131,20 @@ describe('injection screening leaves the stored text alone', () => {
   });
 
   it('untrusted content is stored as it was sent, flagged or not', async () => {
-    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('test'));
+    const base: FullContext = apiCtx(root, 'default', api.adminActor('test'));
     // A visible word at each end: the store trims what it is given.
     const sent = map(
       arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3),
       (bodies) => `note ${bodies.join('\n')} end`,
     );
-    // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.
-    await withSharedStoreHandles(() =>
-      forAll(0x570e, 100, sent, async (content) => {
+    // Each run is a real write and read, so this one property runs fewer times than the others, on one session.
+    await withSharedStoreHandles(async (session) => {
+      const ctx = onSession(base, session);
+      await forAll(0x570e, 100, sent, async (content) => {
         const { id } = await api.rememberUntrusted(ctx, { content });
-        expect(readEntry(root, id, 'default')?.content).toBe(content);
-      }),
-    );
+        const [stored] = await ctx.store.entriesByIds([id], 'default');
+        expect(stored?.content).toBe(content);
+      });
+    });
   });
 });

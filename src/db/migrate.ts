@@ -12,15 +12,14 @@ import {
   setSchemaVersion,
   META_KEY,
 } from './meta.js';
+import { ensureContinuityIndexes, ensureContinuityTables } from './continuity-tables.js';
 import {
   MEMORIES_FTS_DDL,
-  REQUIRED_SCHEMA_OBJECTS,
-  ensureContinuityIndexes,
-  ensureContinuityTables,
   ensureTrigramIndex,
   isFtsMissing,
   rebuildTrigramIndex,
-} from './continuity.js';
+} from './fts-index.js';
+import { REQUIRED_SCHEMA_OBJECTS } from './required-objects.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
 import { placeholders } from './sql.js';
 import { cachedStatement } from './statement-cache.js';

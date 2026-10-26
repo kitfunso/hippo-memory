@@ -10,9 +10,7 @@ import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, completeGoal } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const savedCwd = process.cwd();
 
@@ -66,7 +64,7 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    removeAfterRequest(env.cwd);
+    removeDir(env.cwd);
   });
 
   it('positive outcome boosts strength of memories actually recalled during goal life, and only once', async () => {

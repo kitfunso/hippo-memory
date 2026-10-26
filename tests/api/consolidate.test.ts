@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
-import { listMemoryConflicts, writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import { listMemoryConflicts, loadAllEntries } from '../_helpers/root-forms.js';
 import { createMemory, calculateStrength, resolveConfidence } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -13,13 +13,13 @@ import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.
 import { simulate, type PhysicsParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, readEntry } = sessionPerTest();
 
 pinClock();
-
-oneRequestPerTest();
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>

@@ -115,7 +115,7 @@ export async function rankPhysics(
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a
   // second time.
-  const queryEmbedDeadline = startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs);
+  const queryEmbedDeadline = startQueryEmbedDeadline(options);
   const queryVector = await physicsQueryVector(
     query,
     source,

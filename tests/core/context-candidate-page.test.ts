@@ -9,10 +9,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-oneRequestPerTest();
 
 const ROWS = 2300;
 /** The statement that returns the candidate rows: the decay-key subset, or the ranked scan beneath it. */
@@ -61,7 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 describe('contextGet with no query', () => {

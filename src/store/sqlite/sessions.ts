@@ -3,7 +3,7 @@
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import {
   HOOK_DB_WAIT_MS,
-  scopedBusyWait,
+  sessionOf,
   withWriteScope,
   type DatabaseSyncLike,
 } from '../../db/index.js';
@@ -323,7 +323,7 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
       // knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
-    { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
+    { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
   );
   // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
   return readSessionOwner(db, tenantId, sessionId);

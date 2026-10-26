@@ -7,7 +7,7 @@
  * re-applied (superseded-drop / asOf — NOT lexical gating), budget bound, no-op gate,
  * tenant isolation, base-dedup) and the new graph.ts read helpers.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -16,17 +16,11 @@ import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { graphExpandRecall } from '../../src/domain/graph/recall.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  loadEntitiesByMemoryId,
-  loadNeighborRelations,
-  loadEntitiesByIds,
-  writeEntry,
-} from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { loadEntitiesByMemoryId, loadNeighborRelations, loadEntitiesByIds } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 function safeRmSync(p: string): void {
   try {
@@ -64,7 +58,6 @@ describe('graph-recall engine', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('1-hop surfaces a graph-linked neighbour the lexical search missed (loaded by id, not lexically gated)', async () => {
     const a = mem(home, T, 'decision alpha about cache invalidation strategy');
@@ -379,7 +372,6 @@ describe('graph.ts read helpers', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('loadEntitiesByMemoryId maps source memory ids to entities (hit + miss)', async () => {
     const a = mem(home, T, 'a');

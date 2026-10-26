@@ -1,13 +1,20 @@
 // One way for a reranker to report that it stopped working, without a line per recall.
 import { MINUTE_MS } from '../../base/util/time.js';
 import { log, type LogFields } from '../../base/util/log.js';
-import { currentSignal } from '../../base/util/request-scope.js';
 
 const REPEAT_MS = 5 * MINUTE_MS;
 
+/** What a failed call reports beside its reason. */
+export interface OutageDetail {
+  /** The error's class and stack, for the warning line. */
+  readonly fields?: LogFields | undefined;
+  /** The request's abort signal; once it fired, the client hung up and the reranker did not
+   * fail. */
+  readonly signal?: AbortSignal | undefined;
+}
+
 export interface OutageWarning {
-  /** `fields` carries the error's class and stack onto the warning line. */
-  failed(reason: string, fields?: LogFields): void;
+  failed(reason: string, detail?: OutageDetail): void;
   answered(): void;
 }
 
@@ -18,9 +25,8 @@ export function createOutageWarning(name: string, fallback: string): OutageWarni
   let unreported = 0;
   let warnedAt = 0;
   return {
-    failed(reason: string, fields?: LogFields): void {
-      // A client that hung up aborted the call; the reranker did not fail.
-      if (currentSignal()?.aborted) return;
+    failed(reason: string, { fields, signal }: OutageDetail = {}): void {
+      if (signal?.aborted) return;
       failures++;
       if (failures > 1 && Date.now() - warnedAt < REPEAT_MS) {
         unreported++;

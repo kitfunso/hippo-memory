@@ -7,14 +7,14 @@ import { join } from 'node:path';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runStoreConformance } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
-import { removeAfterRequest } from './one-request-per-test.js';
+import { removeDir } from './remove-dir.js';
 import { copyTree } from './copy-tree.js';
 
 export const TENANT_A = 'acme';
@@ -142,14 +142,17 @@ export async function runOnFixture<G extends ConformanceGroup, R>(
   try {
     const root = join(home, 'sqlite');
     copyTree(fixture.dir, root);
-    const store = sqliteStore(root);
-    const methods = groupOf(store, group);
-    const outcomes: Outcome<R>[] = [];
-    for (const call of calls) outcomes.push(await outcomeOf(() => call(methods, store)));
-    await store.close();
+    const outcomes = await withSharedStoreHandles(async (session) => {
+      const store = sqliteStore(root, { session });
+      const methods = groupOf(store, group);
+      const done: Outcome<R>[] = [];
+      for (const call of calls) done.push(await outcomeOf(() => call(methods, store)));
+      await store.close();
+      return done;
+    });
     return { outcomes, audit: auditRowsAt(root) };
   } finally {
-    removeAfterRequest(home);
+    removeDir(home);
   }
 }
 
@@ -163,7 +166,7 @@ export function runPackagedConformance(): void {
     return home;
   };
   afterAll(() => {
-    for (const home of homes) removeAfterRequest(home);
+    for (const home of homes) removeDir(home);
   });
   describe.each([
     ['sqliteStore', (): HippoStore => sqliteStore(folder())],

@@ -71,7 +71,7 @@ export class DashboardListenError extends Error {
  * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
-  { store, offLoop, host }: ServerRuntime,
+  { store, storeFor, host }: ServerRuntime,
 ): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
@@ -86,17 +86,17 @@ function servingFor(
       { hippoRoot, tenantId },
       { now, cacheClock: opts.cacheClock ?? Date.now },
     ),
-    context: () => ({
+    context: (limits) => ({
       hippoRoot,
       tenantId,
       actor: adminActor(DASHBOARD_ACTOR),
-      store: dashboardStore,
+      store: storeFor(dashboardStore, limits),
       config: configAt(hippoRoot),
       infra: infra(),
+      signal: limits.signal,
     }),
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     staticFiles: loadStaticFiles(),
-    offLoop,
   };
 }
 
@@ -150,7 +150,7 @@ function dashboardListener(
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => answerDashboard(serving, req, res)), {
+    answerRequest(req, res, (limits) => answerDashboard(serving, { req, res, limits }), {
       slowWarnMs: undefined,
       counts,
     });

@@ -7,9 +7,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 describe('api key scrypt parameters', () => {
   let root: string;
@@ -22,7 +20,7 @@ describe('api key scrypt parameters', () => {
   });
   afterEach(() => {
     closeHippoDb(db);
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   function seed(keyHash: string, keyId: string): void {

@@ -6,10 +6,10 @@ import * as os from 'node:os';
 import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+sessionPerTest();
 
 useVaultImport();
 

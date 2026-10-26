@@ -3,7 +3,6 @@
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
 import type { EntryCursor } from '../../../src/base/ports/store/types.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
 import {
@@ -25,7 +24,7 @@ import {
 } from '../../../src/store/sqlite/graph-rows.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
 import type { Entity, EntityType, Relation } from '../../../src/base/ports/store/graph.js';
-import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
+import { openStore } from '../../../src/store/sqlite/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
 import * as tokenLedgerSql from '../../../src/store/sqlite/token-ledger.js';
@@ -35,6 +34,7 @@ import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate
 import { loadEveryTenantEntries } from './entries.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
 import { evalNow, evalSwitches } from '../../../src/infra/eval-switches.js';
+import { handlesOf, onHandle, sqliteStore } from '../test-session.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
 export function loadEntities(

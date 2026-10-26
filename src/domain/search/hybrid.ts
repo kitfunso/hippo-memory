@@ -105,6 +105,8 @@ export interface HybridInputs {
   /** The deadline a caller already started for this recall's query embedding; a fresh budget
    * when unset. */
   queryEmbedDeadline?: AbortSignal;
+  /** The request's abort signal; a fresh query-embedding budget ends with it too. */
+  signal?: AbortSignal;
 }
 
 /** The clock and the root's environment settings. */

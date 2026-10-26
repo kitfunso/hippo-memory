@@ -4,16 +4,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { Rejection } from '../../src/base/ports/store/rejections.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
-import { readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, readEntry, sqliteStore } = sessionPerTest();
 
 let root: string;
 // Another person's personal scope, which a rejection with no personal scope of its own leaves alone.

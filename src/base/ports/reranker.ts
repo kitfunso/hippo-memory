@@ -34,6 +34,9 @@ export interface RerankerOptions {
   config?: Record<string, RerankerConfigValue>;
   /** The CLEF rerankers' transport, from the root's config; the other rerankers ignore it. */
   clef?: ClefSettings;
+  /** The request's abort signal: a hosted scorer stops its call, and no outage is reported, once
+   * it fires. */
+  signal?: AbortSignal;
 }
 
 /** Which backend and model produced a rerank, or why it fell back. */

@@ -1,5 +1,5 @@
 // MCP and the CLI resolve a conflict through one api function, so each refuses the same bad input the dashboard refuses.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
 import { handleResolve } from '../../src/surface/cli/curate.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -8,13 +8,12 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-oneRequestPerTest();
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 const TENANT = 'default';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -23,10 +22,6 @@ let root: string;
 
 beforeEach(() => {
   root = makeRoot('api-resolve-conflict', { config: { embeddings: { enabled: false } } });
-});
-
-afterEach(() => {
-  removeAfterRequest(root);
 });
 
 interface Pair {

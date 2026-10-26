@@ -14,10 +14,10 @@
  *     refreshed metadata, dry-run assemble does NOT write
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../../src/base/memory/entry.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   loadProjectBriefs,
   briefFromReceipts,
@@ -25,16 +25,16 @@ import {
   PROJECT_BRIEF,
 } from '../../src/domain/objects/project-briefs.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
-oneRequestPerTest();
 import { closeObject, objectById } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, objectsAt } = sessionPerTest();
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;
@@ -54,15 +54,19 @@ function countRows(home: string, table: string): number {
     closeHippoDb(db);
   }
 }
-/** Write a non-brief memory tagged path:<repo> so it counts as a receipt. */
-function addReceipt(home: string, tenant: string, repo: string, content: string, source = 'manual'): string {
-  const mem = createMemory(content, {
+/** A non-brief memory tagged path:<repo>, so it counts as a receipt. */
+function receiptFor(repo: string, content: string, opts: { tenant: string; source?: string }): MemoryEntry {
+  return createMemory(content, {
     tags: [`path:${repo.toLowerCase()}`, 'note'],
     layer: Layer.Semantic,
     confidence: 'verified',
-    source,
-    tenantId: tenant,
+    source: opts.source ?? 'manual',
+    tenantId: opts.tenant,
   });
+}
+
+function addReceipt(home: string, tenant: string, repo: string, content: string, source = 'manual'): string {
+  const mem = receiptFor(repo, content, { tenant, source });
   writeEntry(home, mem, { actor: 'test' });
   return mem.id;
 }
@@ -81,7 +85,6 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   beforeEach(() => {
     home = makeRoot('project-briefs');
   });
-  afterEach(() => removeAfterRequest(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
@@ -342,12 +345,11 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     // 50 receipts (the MAX_BRIEF_RECEIPTS scan cap) with long headlines would build
     // an ~11KB digest if rendered naively, exceeding MAX_BRIEF_SUMMARY_LEN (8192) and
     // making saveProjectBrief reject it. Budget-aware assembly must keep it bounded.
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 50; i++) {
-        addReceipt(home, 'default', 'big', `receipt ${i} ` + 'x'.repeat(300));
-      }
-    });
+    writeEntriesTogether(
+      home,
+      Array.from({ length: 50 }, (_, i) => receiptFor('big', `receipt ${i} ` + 'x'.repeat(300), { tenant: 'default' })),
+    );
+
     const assembled = await briefFromReceipts(objectsAt(home), 'default', 'big');
     expect(assembled.receiptCount).toBe(50);
     expect(assembled.markdown.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);

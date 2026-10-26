@@ -29,10 +29,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -311,7 +309,7 @@ describe('first-class DAG recall (scoring layer)', () => {
       // time; sourceBump (1.2) is the only post-hybridSearch multiplier.
       expect(br!.final / sResult!.score).toBeCloseTo(1.0, 5);
     } finally {
-      removeAfterRequest(globalRoot);
+      removeDir(globalRoot);
     }
   });
 

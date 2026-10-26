@@ -1,8 +1,8 @@
-// hippo.db as serve() runs it by default: the methods in the op table answer from worker threads,
-// the rest still run on the calling thread.
+// hippo.db as serve() runs it by default: every method in the op table answers from a worker
+// thread, and the server thread's own part of the store refuses to open hippo.db.
 import { existsSync } from 'node:fs';
-import { getHippoDbPath } from '../../db/index.js';
-import { currentDeadline, currentRequestId, currentSignal } from '../../base/util/request-scope.js';
+import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
+import { currentRequestId, type RequestLimits } from '../../base/util/request-scope.js';
 import type {
   HippoStore,
   Readiness,
@@ -12,8 +12,9 @@ import type {
   VectorReads,
 } from '../../base/ports/store.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
-import { sqliteStore } from './store.js';
+import { sqliteStore, sqliteStoreOn } from './store.js';
 import type { StoreRules } from '../../base/ports/infra.js';
+import type { StoreRuntime } from '../../db/store-runtime.js';
 import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
   type OpPlaces,
@@ -23,43 +24,54 @@ import {
   WORKER_OPS,
 } from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
+import { handlesOf } from './handles.js';
+import { asViewOf } from '../../base/util/store-view.js';
+
+/** The worker a call goes to and the request it answers. */
+interface Sender {
+  readonly executor: SqliteExecutor;
+  readonly limits: RequestLimits;
+}
 
 const offLoopStores = new WeakSet<HippoStore>();
 
-/** Whether `store` answers its `loop: 'off'` routes from worker threads, so a hippo.db open on
- * the server thread inside one is a defect. */
+// Each method that answers from a worker, with how to make it again for another request's limits.
+const rebinders = new WeakMap<Function, (limits: RequestLimits) => Function>();
+
+/** Whether `store` answers its methods from worker threads. */
 export function runsOffLoop(store: HippoStore): boolean {
   return offLoopStores.has(store);
 }
 
 function send<T>(
-  executor: SqliteExecutor,
+  { executor, limits }: Sender,
   op: string,
   args: readonly unknown[],
   mode: OpRoute,
 ): Promise<T> {
-  const deadline = currentDeadline();
+  const { deadline, signal } = limits;
   const call = executor.call<T>(op, args, {
     mode,
     requestId: currentRequestId(),
     deadlineAt: deadline?.at,
-    signal: currentSignal(),
+    signal,
   });
   // The request's own timer then waits for this call's answer, which names what became of a write.
   return deadline ? deadline.track(call) : call;
 }
 
+function workerCall(sender: Sender, op: string, mode: OpRoute): Function {
+  const call = (...args: unknown[]) => send(sender, op, args, mode);
+  rebinders.set(call, (limits) => workerCall({ ...sender, limits }, op, mode));
+  return call;
+}
+
 /** `inProcess` with each method the op table places on a worker answered from one, so a new
  * method of a group needs its tag and no body here. */
-function onWorkers<G>(
-  executor: SqliteExecutor,
-  group: WorkerGroup,
-  places: OpPlaces<G>,
-  inProcess: G,
-): G {
+function onWorkers<G>(sender: Sender, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
   const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
     method,
-    (...args: unknown[]) => send(executor, `${group}.${method}`, args, place),
+    workerCall(sender, `${group}.${method}`, place),
   ]);
   return { ...inProcess, ...Object.fromEntries(moved) };
 }
@@ -70,22 +82,24 @@ type SentParts = {
 
 // Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids
 // reads nothing, as in process.
-function vectorGroups(
-  executor: SqliteExecutor,
-  inProcess: VectorReads,
-): Pick<StoreGroups, 'vectors'> {
-  const { vectors } = WORKER_OPS;
+function storedOnWorkers(sender: Sender): VectorReads['stored'] {
+  const mode = WORKER_OPS.vectors.stored;
   const sent: SentParts = {
     vectors: async (ids) =>
-      vectorViewsOf(
-        await send<VectorPack>(executor, 'vectors.stored', ['vectors', ids], vectors.stored),
-      ),
-    particles: (ids) => send(executor, 'vectors.stored', ['particles', ids], vectors.stored),
+      vectorViewsOf(await send<VectorPack>(sender, 'vectors.stored', ['vectors', ids], mode)),
+    particles: (ids) => send(sender, 'vectors.stored', ['particles', ids], mode),
   };
+  const stored: VectorReads['stored'] = async (part, ids) =>
+    ids.length === 0 ? new Map() : sent[part](ids);
+  rebinders.set(stored, (limits) => storedOnWorkers({ ...sender, limits }));
+  return stored;
+}
+
+function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
   return {
     vectors: {
-      ...onWorkers(executor, 'vectors', vectors, inProcess),
-      stored: async (part, ids) => (ids.length === 0 ? new Map() : sent[part](ids)),
+      ...onWorkers(sender, 'vectors', WORKER_OPS.vectors, inProcess),
+      stored: storedOnWorkers(sender),
     },
   };
 }
@@ -113,41 +127,78 @@ const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGr
 
 /** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
  * misses a compile error. */
-function plainGroups(
-  executor: SqliteExecutor,
-  inProcess: StoreGroups,
-): Pick<StoreGroups, PlainGroup> {
+function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
   const wrapped = PLAIN_GROUPS.map((group) => [
     group,
-    onWorkers(executor, group, WORKER_OPS[group], inProcess[group]),
+    onWorkers(sender, group, WORKER_OPS[group], inProcess[group]),
   ]);
   // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has
   // every PlainGroup key.
   return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
 }
 
+/** The rules a worker store's threads open with, and the server's runtime its checkpoints run
+ * under. */
+export interface WorkerStoreOptions extends StoreRules {
+  readonly runtime?: StoreRuntime | undefined;
+}
+
 /** `sqliteStore` with every method the op table places on a worker answered from one; close()
  * closes `executor` and resolves once its threads have exited. `executor` defaults to threads of
- * the store's own, with the server's lock wait; `rules` must be the ones it was built with. */
+ * the store's own, with the server's lock wait; `opts` must hold the rules it was built with. */
 export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
-  rules: StoreRules = {},
+  { runtime, ...rules }: WorkerStoreOptions = {},
 ): HippoStore & StoreGroups {
-  const inProcess = sqliteStore(hippoRoot, rules);
+  // A method the op table missed would run here, on the server thread, where every open of this
+  // part refuses.
+  const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
+  const sender: Sender = { executor, limits: {} };
   const store: HippoStore & StoreGroups = {
     ...inProcess,
-    ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
-    ...vectorGroups(executor, inProcess.vectors),
-    ...plainGroups(executor, inProcess),
+    ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
+    ...vectorGroups(sender, inProcess.vectors),
+    ...plainGroups(sender, inProcess),
     readiness: probing(
       hippoRoot,
-      onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
+      onWorkers(sender, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
     ),
     close: () => executor.close(),
   };
   offLoopStores.add(store);
   return asHippoDb(store);
+}
+
+function rebound<V>(value: V, limits: RequestLimits): V {
+  const rebind = value instanceof Function ? rebinders.get(value) : undefined;
+  // SAFETY: a rebinder makes the same worker call again, so the new function has the old one's
+  // signature.
+  return rebind === undefined ? value : (rebind(limits) as V);
+}
+
+function isPlainObject<V>(value: V): value is V & object {
+  return value instanceof Object && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+/** `store` with each worker call, its groups' too, bound to one request's `limits`; any other
+ * member stays as it is, so a store a caller patched keeps its patches. */
+export function storeForRequest<S extends HippoStore>(store: S, limits: RequestLimits): S {
+  if (!runsOffLoop(store)) return store;
+  const bound: Partial<S> = { ...store };
+  // SAFETY: Object.keys lists the store's own string keys, which are keys of S.
+  for (const key of Object.keys(store) as (keyof S)[]) {
+    const value = store[key];
+    const group = isPlainObject(value)
+      ? Object.fromEntries(Object.entries(value).map(([k, m]) => [k, rebound(m, limits)]))
+      : undefined;
+    // SAFETY: a group keeps its keys, each method rebound to the same signature.
+    bound[key] = (group ?? rebound(value, limits)) as S[keyof S];
+  }
+  // SAFETY: every own key of `store` was copied above, and its symbols with the spread.
+  const view = bound as S;
+  offLoopStores.add(view);
+  return asViewOf(view, store);
 }
 
 /** The operator's global stores a server opens beside its own, closed with it. */
@@ -156,22 +207,27 @@ interface GlobalStores {
   readonly close: () => Promise<void>;
 }
 
-/** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never
- * opens one on the server thread; each is built at first use, since the global store can appear
- * while the server runs. */
+/** On threads of their own when `served` answers from workers; each is built at first use, since
+ * the global store can appear while the server runs. Beside any other store, a global one opens
+ * on the server thread at the server's wait. */
 export function globalStoresFor(
   served: HippoStore,
   executorOpts: ExecutorOptions = {},
 ): GlobalStores {
+  const { runtime, strength, lossAversionRatio, fakeNowMs } = executorOpts;
+  const rules = { runtime, strength, lossAversionRatio, fakeNowMs };
   if (!runsOffLoop(served)) {
-    return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
+    return {
+      open: (root) => sqliteStore(root, { ...rules, busyWaitMs: SERVER_DB_WAIT_MS }),
+      close: async () => {},
+    };
   }
   const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {
       const known = opened.get(root);
       if (known !== undefined) return known;
-      const made = workerSqliteStore(root, createSqliteExecutor(root, executorOpts), executorOpts);
+      const made = workerSqliteStore(root, createSqliteExecutor(root, executorOpts), rules);
       opened.set(root, made);
       return made;
     },

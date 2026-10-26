@@ -75,9 +75,9 @@ export interface ImportFiles {
 /** The folder an import writes to and its store's calls; a composition root builds it. */
 export interface ImportTarget {
   readonly root: string;
-  readonly files: ImportFiles;
-  /** Runs the import's writes as one batch on the store, which for hippo.db opens it once. */
-  readonly batch: <T>(run: () => T) => T;
+  /** Runs the import's writes as one batch on the store's calls it hands `run`, which for
+   * hippo.db open it once. */
+  readonly batch: <T>(run: (files: ImportFiles) => T) => T;
   /** The root's clock, which stamps each imported memory. */
   readonly clock: Clock;
 }
@@ -98,15 +98,16 @@ export function importEntriesInto(
   tags: string[],
   options: TargetedImport,
 ): ImportResult {
-  const target = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
-  const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(options.target.root).defaultHalfLifeDays;
   const newEntry = (chunk: string): MemoryEntry =>
     createImportEntry({ chunk, source, allTags, options, baseHalfLifeDays });
 
   // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
   // probe, shares its handle.
-  return options.target.batch(() => importChunks(chunks, target, options, newEntry));
+  return options.target.batch((files) =>
+    importChunks(chunks, openImportTarget(options, files), options, newEntry),
+  );
 }
 
 function importChunks(
@@ -158,8 +159,10 @@ interface OpenImport {
 }
 
 /** The store the import writes to, made ready. */
-function openImportTarget({ global, tenantId, target }: TargetedImport): OpenImport {
-  const { files } = target;
+function openImportTarget(
+  { global, tenantId, target }: TargetedImport,
+  files: ImportFiles,
+): OpenImport {
   if (global) files.ensure();
   const scope = global ? ALL_TENANTS : (tenantId ?? DEFAULT_TENANT_ID);
   return { targetRoot: target.root, files, tenantId: scope, written: new Set() };

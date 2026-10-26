@@ -41,6 +41,7 @@ import {
   start,
   undoAll,
   watched,
+  serverThreadPart,
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
@@ -534,8 +535,8 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     const spare = keyFor(root, 'default');
     const before = [auditRows(root, []), storedRows(root, [])];
     const info = vi.spyOn(log, 'info');
-    // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+    // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
+    const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
     const server = await start(root, store);
 
     const res = await send(server, { memoryId, keyId: spare.keyId, token: caller.plaintext });
@@ -665,12 +666,12 @@ function checkpointedPredictions(root: string): number {
 describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
-    const inlineLimit = autoCheckpointPages(getHippoDbPath(root));
+    const inlineLimit = autoCheckpointPages(getHippoDbPath(root), undefined);
     // The checkpointer and the store share one runtime, as a server's do.
     const runtime = new StoreRuntime();
     const checkpointer = startWalCheckpointer(getHippoDbPath(root), runtime);
     cleanups.push(() => checkpointer.stop());
-    const store = runtime.run(() => workerSqliteStore(root));
+    const store = workerSqliteStore(root, createSqliteExecutor(root, { runtime }), { runtime });
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };

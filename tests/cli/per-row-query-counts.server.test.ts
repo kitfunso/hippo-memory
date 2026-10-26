@@ -14,7 +14,7 @@ import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { dashboardOf } from '../_helpers/dashboard-fixture.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
@@ -304,15 +304,13 @@ describe('an id-list read of one tenant', () => {
     const ids = entries.map((e) => e.id);
     // Inside a runtime, as the CLI runs it, the outcome's mirror rewrite stays held until dispose.
     const runtime = new StoreRuntime();
-    const { result, statements } = await runtime.run(() =>
-      recordStatementsAsync(async () => {
-        await outcome(ctxFor(root), ids, true);
-        return {
-          held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
-          listed: loadEntriesByIds(root, ids, 'default').length,
-        };
-      }),
-    );
+    const ctx = { ...ctxFor(root), store: sqliteStore(root, { runtime }) };
+    const { result, statements } = await recordStatementsAsync(async () => {
+      await outcome(ctx, ids, true);
+      // Read through the runtime's store: an open without it would run the held rewrite now, inside the recording.
+      const listed = await ctx.store.entriesByIds(ids, 'default');
+      return { held: listed.some((e) => e.id === ids[0]), listed: listed.length };
+    });
     runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 

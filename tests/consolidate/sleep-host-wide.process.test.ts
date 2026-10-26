@@ -11,7 +11,14 @@ import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/bas
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
-import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getMeta,
+  openHippoDb,
+  setMeta,
+  type DatabaseSyncLike,
+  withSharedStoreHandles,
+} from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -21,13 +28,10 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { META_KEY } from '../../src/db/meta.js';
-
-oneRequestPerTest();
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const TENANTS = ['default', 'acme', 'globex'] as const;
@@ -244,15 +248,16 @@ function hostState(root: string) {
 }
 
 async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: number } = {}) {
-  const local = sqliteStore(root);
-  const result = await withCountedIds(() =>
-    runConsolidation(local, {
-      strength: PRODUCTION_STRENGTH,
-      ...opts,
-      now: NOW,
-      config: loadConfig(root),
-      tenantId: 'default',
-    }),
+  const result = await withSharedStoreHandles((session) =>
+    withCountedIds(() =>
+      runConsolidation(sqliteStore(root, { session }), {
+        strength: PRODUCTION_STRENGTH,
+        ...opts,
+        now: NOW,
+        config: loadConfig(root),
+        tenantId: 'default',
+      }),
+    ),
   );
   return { result, state: hostState(root) };
 }

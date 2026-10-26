@@ -41,7 +41,7 @@ describe('syncMirrorFiles', () => {
 
     const db = openHippoDb(root);
     try {
-      syncMirrorFiles(root, db);
+      syncMirrorFiles({ hippoRoot: root, runtime: undefined }, db);
     } finally {
       closeHippoDb(db);
     }
