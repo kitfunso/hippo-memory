@@ -6,7 +6,8 @@ const MAX_DIFF_TERMS = 10;
 
 const SKIPPED_PATH_TERMS = ['src', 'dist', 'test', 'tests', 'node_modules', 'index'];
 
-// stderr is dropped because git's warnings (line-ending notices, for one) would otherwise become query terms.
+// stderr is dropped because git's warnings (line-ending notices, for one) would otherwise become
+// query terms.
 const GIT_READ = { timeoutMs: GIT_PROMPT_TIMEOUT_MS, stderr: 'drop' } as const;
 
 function noQuery(error: Error): string {
@@ -23,8 +24,8 @@ function diffTerms(diff: string): string[] {
     .slice(0, MAX_DIFF_TERMS);
 }
 
-/** A context query from the cwd's git state ('' means `contextGet` lists by strength); the caller's `git` runs the
- * reads, since the api layer never starts a process. */
+/** A context query from the cwd's git state ('' means `contextGet` lists by strength); the
+ * caller's `git` runs the reads, since the api layer never starts a process. */
 export function autoDetectContext(git: GitRunner): string {
   const diff = git.run(['diff', '--name-only', 'HEAD'], GIT_READ);
   if (!diff.ok) return noQuery(diff.error);

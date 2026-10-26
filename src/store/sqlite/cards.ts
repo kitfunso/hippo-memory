@@ -38,8 +38,8 @@ import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { handleStamp } from './handle-clock.js';
 
-// The card board's argument checks, run lookup and lease, shared by every card write so a bad call fails with one
-// message.
+// The card board's argument checks, run lookup and lease, shared by every card write so a bad call
+// fails with one message.
 
 /** The lease a move to running or a heartbeat at `now` sets. */
 const leaseUntilFrom = (now: string): string =>
@@ -72,8 +72,8 @@ function assertCardOutcome(outcome: HandoffOutcome): void {
   if (!isHandoffOutcome(outcome)) throw new Error(`invalid card outcome: ${String(outcome)}`);
 }
 
-/** Whether `runId` is the card's run that has not ended. A second such run means a corrupt store, so this throws
- * rather than guess which run the caller means. */
+/** Whether `runId` is the card's run that has not ended. A second such run means a corrupt
+ * store, so this throws rather than guess which run the caller means. */
 function isLiveRun(cardId: string, liveRunIds: readonly number[], runId: number): boolean {
   if (liveRunIds.length > 1)
     throw new Error(`card ${cardId} has ${liveRunIds.length} runs that have not ended`);
@@ -220,8 +220,8 @@ function closeLiveRun(
   ).run(now, outcome, now, cardId, tenantId);
 }
 
-// Every card status change goes through this one function. CARD_TRANSITIONS is the only source of allowed moves, so a
-// hand-copied wrong `from` list fails fast here.
+// Every card status change goes through this one function. CARD_TRANSITIONS is the only source of
+// allowed moves, so a hand-copied wrong `from` list fails fast here.
 interface TransitionCardOptions {
   readonly from: CardStatus[];
   readonly to: CardStatus;
@@ -237,7 +237,8 @@ function transitionCard(
   return transitionCards(db, tenantId, [cardId], options);
 }
 
-/** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how many moved. */
+/** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how
+ * many moved. */
 function transitionCards(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -247,8 +248,8 @@ function transitionCards(
   const { from, to, extra } = options;
   assertCardTransition(from, to);
   const now = handleStamp(db);
-  // Lease columns follow status: set on the move to running, cleared on every other move, so the lease never outlives
-  // the status.
+  // Lease columns follow status: set on the move to running, cleared on every other move, so the
+  // lease never outlives the status.
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
   const fromPlaceholders = placeholders(from.length);
   const sql = `
@@ -279,8 +280,8 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
   let id = '';
 
   withWriteScope(db, 'create_card', () => {
-    // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent completing between an outside-the-lock
-    // read and the INSERT would strand the child.
+    // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent completing between
+    // an outside-the-lock read and the INSERT would strand the child.
     const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
     id = generateId('card');
@@ -315,8 +316,8 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
   return readCardRow(db, tenantId, id)!;
 }
 
-/** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the
- * write scope. */
+/** Whether every dependsOn card is done, true for none; throws on an id that is no card of the
+ * tenant. Call inside the write scope. */
 function everyParentDone(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -422,9 +423,9 @@ function readLatestHandoffForCard(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown
- * card id; returns null for a card not ready/blocked or already claimed. Sets a CARD_LEASE_MS lease and returns the new
- * run's id as runId. */
+/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race.
+ * Throws on an unknown card id; returns null for a card not ready/blocked or already claimed.
+ * Sets a CARD_LEASE_MS lease and returns the new run's id as runId. */
 function claimCard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -463,9 +464,9 @@ function claimCard(
   return runId === null ? null : { ...readCardRow(db, tenantId, id)!, runId };
 }
 
-/** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws
- * on an unknown card id or a run id that is not a positive integer; returns null unless the card is running and runId
- * is its live run. */
+/** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at
+ * is left alone. Throws on an unknown card id or a run id that is not a positive integer;
+ * returns null unless the card is running and runId is its live run. */
 function heartbeatCard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -492,8 +493,9 @@ function heartbeatCard(
   return beat ? readCardRow(db, tenantId, id) : null;
 }
 
-/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown
- * card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
+/** Requires the card be running; closes the live run as blocked and files reason as a comment.
+ * Throws on an unknown card id; returns null for a card not running. When runId is given,
+ * returns null unless it is the card's live run. */
 function blockCard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -520,7 +522,8 @@ function blockCard(
       return rollback(false);
     }
     const now = handleStamp(db);
-    // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the live run.
+    // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the
+    // live run.
     closeLiveRun(db, tenantId, id, 'blocked', now);
     insertCardComment(db, tenantId, id, 'system', reason);
     return true;
@@ -528,9 +531,9 @@ function blockCard(
   return blocked ? readCardRow(db, tenantId, id) : null;
 }
 
-/** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When
- * runId is given, returns null unless it is the card's live run. Throws on an unknown card id; returns null for a card
- * not running. */
+/** Requires the card be running; moves it to review, clearing its lease and heartbeat and
+ * keeping its live run. When runId is given, returns null unless it is the card's live run.
+ * Throws on an unknown card id; returns null for a card not running. */
 function reviewCard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -555,9 +558,10 @@ function reviewCard(
   return moved ? readCardRow(db, tenantId, id) : null;
 }
 
-/** Closes the live run of a card in review: 'success' moves it to done and promotes children whose parents are all
- * done; 'failure'/'partial' shelves it. Throws on an unknown card id; returns null for a card not in review, or when
- * `runId` is given and is not the card's live run. */
+/** Closes the live run of a card in review: 'success' moves it to done and promotes children
+ * whose parents are all done; 'failure'/'partial' shelves it. Throws on an unknown card id;
+ * returns null for a card not in review, or when `runId` is given and is not the card's live
+ * run. */
 function completeCard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -583,8 +587,8 @@ function completeCard(
     const now = handleStamp(db);
     closeLiveRun(db, tenantId, id, outcome, now);
 
-    // Not best-effort: promotion runs in this same transaction, so a card can never be `done` with an
-    // un-evaluated child.
+    // Not best-effort: promotion runs in this same transaction, so a card can never be `done` with
+    // an un-evaluated child.
     return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
   });
   return promoted === null
@@ -592,15 +596,15 @@ function completeCard(
     : { card: readCardRow(db, tenantId, id)!, promotedChildren: promoted };
 }
 
-/** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the
- * write scope. */
+/** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their
+ * ids. Call inside the write scope. */
 function promoteUnblockedChildren(
   db: DatabaseSyncLike,
   tenantId: string,
   parentId: string,
 ): string[] {
-  // The child's status and its open parents are result columns, not joins, so the rows keep the order of a plain read
-  // of the parent's children.
+  // The child's status and its open parents are result columns, not joins, so the rows keep the
+  // order of a plain read of the parent's children.
   const children = cachedStatement(
     db,
     `
@@ -624,9 +628,9 @@ function promoteUnblockedChildren(
   return unblocked;
 }
 
-/** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes
- * its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card
- * ids in id order. */
+/** Returns to ready every running card of the tenant whose lease has expired or is missing:
+ * clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in
+ * one write transaction. Returns the reclaimed card ids in id order. */
 function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
   return withWriteScope(db, 'reclaim_expired_cards', () => {
@@ -654,7 +658,8 @@ function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
   });
 }
 
-/** Appends a comment to cardId in any card status; throws if cardId is not a card of this tenant. */
+/** Appends a comment to cardId in any card status; throws if cardId is not a card of this
+ * tenant. */
 function addCardComment(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -667,8 +672,8 @@ function addCardComment(
   return insertCardComment(db, tenantId, cardId, author, body);
 }
 
-/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card), the five
- * reads on one snapshot. */
+/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has
+ * no such card), the five reads on one snapshot. */
 function readCardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
   assertTenantId('readCardDetail', tenantId);
   return withReadSnapshot(db, () => cardDetail(db, tenantId, id));

@@ -21,8 +21,9 @@ function isCorePath(method: string, path: string): boolean {
 }
 
 /**
- * Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or
- * hides from dispatch.
+ * Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on
+ * shadows a core route or hides from dispatch.
+ *
  */
 export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
@@ -47,7 +48,8 @@ export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
 
 const PUBLIC_JSON_MAX_BYTES = 64 * 1024;
 
-/** Boot-time check and serialization: a public path that a core GET route serves would open that route to anyone. */
+/** Boot-time check and serialization: a public path that a core GET route serves would open that
+ * route to anyone. */
 export function assertPublicJson(
   publicJson: Readonly<Record<string, JsonValue>>,
 ): ReadonlyMap<string, string> {

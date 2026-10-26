@@ -15,8 +15,9 @@ import { currentStoreRuntime } from '../../db/store-runtime.js';
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
-/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
- * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
+/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and
+ * `last_trace_id` commit in one transaction, as callers rely on both moving together. No hippo
+ * path writes index.json. */
 export function saveIndex(
   db: DatabaseSyncLike,
   index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>,
@@ -39,7 +40,8 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  // Increments a busy store refused, held by the runtime and folded into the next update that lands.
+  // Increments a busy store refused, held by the runtime and folded into the next update that
+  // lands.
   const runtime = currentStoreRuntime();
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {
@@ -51,8 +53,8 @@ export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: Stat
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {
-  // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
-  // over the untouched two.
+  // One atomic statement per named counter: a read-modify-write loses concurrent increments and
+  // stamps stale values over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
     [META_KEY.totalRemembered, delta.remembered ?? 0],
     [META_KEY.totalRecalled, delta.recalled ?? 0],
@@ -60,8 +62,8 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: St
   ];
   for (const [key, amount] of increments) {
     if (amount === 0) continue;
-    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store "1.0" into this TEXT
-    // column instead of "1".
+    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store
+    // "1.0" into this TEXT column instead of "1".
     cachedStatement(
       db,
       `
@@ -105,7 +107,8 @@ export function appendConsolidationRun(
   writeStatsMirror(files.hippoRoot, buildStatsFromDb(db));
 }
 
-/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
+/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24
+ * hours. */
 export function createdSinceLastSleep(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const row = cachedStatement(

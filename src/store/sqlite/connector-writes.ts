@@ -1,5 +1,5 @@
-// hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its companion rows, in one
-// transaction on one handle.
+// hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its
+// companion rows, in one transaction on one handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { logEvent, loggedMemory } from './connectors/events.js';
 import type { Handles, StoreFiles } from './open.js';
@@ -15,11 +15,12 @@ import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from './entry-writes.js';
 
-/** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */
+/** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
+ * sees it. */
 class EventAlreadyLogged extends Error {}
 
-/** The record, then the log row, go in after the memory row and ahead of its remember row, as a second store must order
- * them. */
+/** The record, then the log row, go in after the memory row and ahead of its remember row, as a
+ * second store must order them. */
 function writeWithCompanions(
   db: DatabaseSyncLike,
   { entry, actor, event, quarantine }: ConnectorWrite,
@@ -49,8 +50,8 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
   }
 }
 
-/** archiveRaw with the event logged in its write; the log write's answer is unread: a key logged before keeps its row
- * and the archive stands. */
+/** archiveRaw with the event logged in its write; the log write's answer is unread: a key logged
+ * before keeps its row and the archive stands. */
 function archiveConnectorEntry(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -61,7 +62,8 @@ function archiveConnectorEntry(
   });
 }
 
-/** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back write leaves none. */
+/** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back
+ * write leaves none. */
 export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
   return {
     ...bound<Pick<ConnectorWrites, 'writeConnectorEntry'>>(

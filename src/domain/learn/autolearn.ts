@@ -13,8 +13,8 @@ const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
 const MAX_LESSON_CHARS = 500;
 
-/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and tags
- * through remember. */
+/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch`
+ * stores its text and tags through remember. */
 export function captureError(
   exitCode: number,
   stderr: string,
@@ -79,7 +79,8 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
       continue;
     }
 
-    // Strip leading git hash if present (real hashes are hex, but be lenient with alphanumeric prefixes)
+    // Strip leading git hash if present (real hashes are hex, but be lenient with alphanumeric
+    // prefixes)
     const subject = trimmed.replace(/^[a-z0-9]{6,40}\s+/i, '');
 
     for (const pat of patterns) {
@@ -98,9 +99,9 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   return [...new Set(lessons)];
 }
 
-/** Split parsed lessons into ones worth storing and low-information ones; kept out of `extractLessons` so that
- * published parser's output cannot change.
- * Order is preserved in both arrays, and both hold lessons with secret shapes redacted. */
+/** Split parsed lessons into ones worth storing and low-information ones; kept out of
+ * `extractLessons` so that published parser's output cannot change. Order is preserved in both
+ * arrays, and both hold lessons with secret shapes redacted. */
 export function partitionLessons(lessons: string[]) {
   const kept: string[] = [];
   const dropped: string[] = [];

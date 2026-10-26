@@ -1,6 +1,7 @@
 // Cuts stored text without splitting a surrogate pair.
 
-/** Cut to `maxChars` UTF-16 units, backing off one unit rather than leave half a surrogate pair in a stored field. */
+/** Cut to `maxChars` UTF-16 units, backing off one unit rather than leave half a surrogate pair
+ * in a stored field. */
 export function truncateCodePointSafe(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   let end = maxChars;

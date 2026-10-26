@@ -1,5 +1,5 @@
-// Handwritten HNSW graph (Malkov and Yashunin) over plain data: no database, no I/O. Same seed and insert order give
-// the same graph.
+// Handwritten HNSW graph (Malkov and Yashunin) over plain data: no database, no I/O. Same seed and
+// insert order give the same graph.
 
 import { stepMulberry32 } from '../base/util/prng.js';
 import { ZERO_NORM, cosineToQuery, dot, norm } from '../base/rank/cosine.js';
@@ -42,7 +42,8 @@ export interface GraphView {
 export interface SearchOptions {
   k: number;
   ef: number;
-  /** Checked for every candidate before it can enter the result; a rejected node is still walked through. */
+  /** Checked for every candidate before it can enter the result; a rejected node is still walked
+   * through. */
   admit?: (node: number) => boolean;
   /** Most vectors the walk may score; past it the search stops with `aborted`. */
   visitBudget?: number;
@@ -55,14 +56,16 @@ export interface GraphHit {
   score: number;
 }
 
-/** `visited` counts the nodes the bottom layer's walk reached, so a caller can tell a walk that reached every node. */
+/** `visited` counts the nodes the bottom layer's walk reached, so a caller can tell a walk that
+ * reached every node. */
 export type SearchResult =
   | { aborted: false; hits: GraphHit[]; visited: number }
   | { aborted: true };
 
 type VectorLookup = (node: number) => Float32Array;
 
-// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
+// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has
+// the bench.
 export const GRAPH_M = 16;
 export const GRAPH_EF_CONSTRUCTION = 100;
 const MAX_LEVEL = 15;
@@ -154,13 +157,15 @@ interface WalkContext {
   graph: GraphView;
   score: (node: number) => number;
   admit?: (node: number) => boolean;
-  /** Vectors still allowed to be scored, shared by every layer of one search; negative means no budget. */
+  /** Vectors still allowed to be scored, shared by every layer of one search; negative means no
+   * budget. */
   budget: { left: number };
   /** Nodes the last layer's walk reached. */
   visited: number;
 }
 
-/** Best-first walk of one layer: the ef best admitted candidates, best first, or null when the budget ran out. */
+/** Best-first walk of one layer: the ef best admitted candidates, best first, or null when the
+ * budget ran out. */
 function searchLayer(
   ctx: WalkContext,
   entries: GraphHit[],
@@ -201,7 +206,8 @@ function searchLayer(
   return out.reverse();
 }
 
-/** Walk down from the entry through the upper layers (ef 1, no filter) and return the entries for layer `stop`. */
+/** Walk down from the entry through the upper layers (ef 1, no filter) and return the entries
+ * for layer `stop`. */
 function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
   const { graph } = ctx;
   let cur: GraphHit[] = [{ node: graph.entry, score: ctx.score(graph.entry) }];
@@ -282,7 +288,8 @@ function unitOf(graph: VectorGraph, node: number): Float32Array {
   return unit;
 }
 
-/** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted best first. */
+/** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted best
+ * first. */
 function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): number[] {
   const kept: number[] = [];
   for (const c of cands) {
@@ -319,7 +326,8 @@ function unreachable(): never {
   throw new Error('vector graph: insert walk ran out of budget');
 }
 
-/** Add one node. A vector already of unit length is kept as given, not copied, so the caller must not change it. */
+/** Add one node. A vector already of unit length is kept as given, not copied, so the caller
+ * must not change it. */
 export function insertNode(graph: VectorGraph, node: number, vector: Float32Array): void {
   if (vector.length !== graph.dim)
     throw new Error(`vector graph: expected dim ${graph.dim}, got ${vector.length}`);

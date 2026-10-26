@@ -1,4 +1,5 @@
-// Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
+// Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor
+// and support bundle.
 
 import { envHomeDir } from '../../base/util/env.js';
 import * as path from 'node:path';
@@ -122,8 +123,8 @@ async function printEmbeddingStatus(
       `Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`,
     );
   }
-  // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed), so the user still
-  // sees what is already indexed.
+  // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed),
+  // so the user still sees what is already indexed.
   const { vectors, dims } = await vectorSummary(ctx);
   if (!embAvail && vectors === 0) return;
   const orphaned = vectors - counts.embedded;
@@ -131,7 +132,8 @@ async function printEmbeddingStatus(
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
-  // No index argument: the check then asks hippo.db whether any vector exists instead of loading them.
+  // No index argument: the check then asks hippo.db whether any vector exists instead of loading
+  // them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
@@ -214,8 +216,9 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   console.log(entry.content);
 }
 
-/** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved by skipped unchanged
- * blocks, and re-read hook tokens. Counts are estimates (characters / 4), the same estimate every budget uses. */
+/** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved
+ * by skipped unchanged blocks, and re-read hook tokens. Counts are estimates (characters / 4),
+ * the same estimate every budget uses. */
 export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -267,7 +270,8 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
   );
 }
 
-/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
+/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats
+ * across sessions. */
 export async function handleFailures({
   hippoRoot,
   tenantId,

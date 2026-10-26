@@ -140,7 +140,8 @@ function planItem(
   else draft.fresh.push({ key: item.key, hash: item.hash, supersedes: legacy });
 }
 
-/** A single-file store keys items by text, so an edit reads as one key gone and one new under the same heading. */
+/** A single-file store keys items by text, so an edit reads as one key gone and one new under
+ * the same heading. */
 function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   const goneBy = groupBy([...gone.keys()], headingOf);
   const freshBy = groupBy(
@@ -202,9 +203,11 @@ export interface LegacyTarget {
 }
 
 export interface LegacyMatch {
-  /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a renamed note too). */
+  /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a
+   * renamed note too). */
   readonly adopt: ReadonlyMap<string, string>;
-  /** Target ref to the legacy row a new row of that target replaces (different text, one legacy row of that file). */
+  /** Target ref to the legacy row a new row of that target replaces (different text, one legacy
+   * row of that file). */
   readonly replace: ReadonlyMap<string, string>;
 }
 

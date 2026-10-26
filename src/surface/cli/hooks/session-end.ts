@@ -1,4 +1,5 @@
-// The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker before the host exits.
+// The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker
+// before the host exits.
 import * as fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
@@ -18,16 +19,18 @@ import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../fla
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 import { handleSessionEndWorker } from './session-end-worker.js';
 
-/** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would need escaping for each
- * shell. Copilot's log goes where its hook table used to point, OpenCode's where its plugin's last-sleep reads. */
+/** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would
+ * need escaping for each shell. Copilot's log goes where its hook table used to point,
+ * OpenCode's where its plugin's last-sleep reads. */
 function runtimeLogFile(flags: CliFlags): string | null {
   const runtime = stringFlag(flags, 'runtime');
   if (runtime === 'copilot') return resolveJsonHookPaths('copilot').logFile;
   return runtime === 'opencode' ? defaultSleepLogPath() : null;
 }
 
-/** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a detached child that runs
- * sleep then capture, and exit. The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
+/** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a
+ * detached child that runs sleep then capture, and exit. The child logs to a file that the next
+ * SessionStart reads via `hippo last-sleep`. */
 export async function handleSessionEnd({
   hippoRoot,
   tenantId,
@@ -39,23 +42,24 @@ export async function handleSessionEnd({
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   const raw = await readStdinBounded();
-  // Read before normalizing: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS
-  // Code's.
+  // Read before normalizing: the Copilot CLI's agentStop shares this hook line, and camelCase keys
+  // would pass as VS Code's.
   const stop = turn ? vscodeStopInput(raw) : null;
   if (turn && !stop) return;
   const stdinText = normalizeHookPayload(raw.text);
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
-  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not boundaries.
+  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not
+  // boundaries.
   const rec =
     !turn && input !== null && !input.manual
       ? await startSessionEndRecorder(root, tenantId, stdinText, runtime)
       : null;
   const sessionId = input?.sessionId ?? null;
-  // Resolved here because only this process saw the payload; the worker captures just the path it is handed. Always a
-  // hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so
-  // its log is found by id.
+  // Resolved here because only this process saw the payload; the worker captures just the path it
+  // is handed. Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot
+  // CLI's sessionEnd names no transcript, so its log is found by id.
   const named = input?.transcriptPath ?? null;
   const transcriptPath =
     (named !== null && fs.existsSync(named) ? named : null) ??
@@ -100,8 +104,8 @@ async function startSessionEndRecorder(
   });
 }
 
-/** What the session-end payload named; null for one hippo refuses or one that never arrived, and the worker then runs
- * with neither value. */
+/** What the session-end payload named; null for one hippo refuses or one that never arrived, and
+ * the worker then runs with neither value. */
 function sessionEndInput(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -130,8 +134,8 @@ type SessionEndWorkerInput = {
   turn: boolean;
 };
 
-/** The flags the detached worker would parse from its argv, so the inline run sees what the child would have; the
- * hook's own flags fill the gaps. */
+/** The flags the detached worker would parse from its argv, so the inline run sees what the
+ * child would have; the hook's own flags fill the gaps. */
 function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags {
   const out: CliFlags = {};
   const keep = (name: string, value: CliFlags[string] | null | undefined): void => {
@@ -153,15 +157,16 @@ function spawnSessionEndWorker(workerArgs: readonly string[]): void {
     stdio: 'ignore',
     windowsHide: true,
   });
-  // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught exception.
+  // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught
+  // exception.
   child.on('error', (err) =>
     log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
   );
   child.unref();
 }
 
-/** The input of a VS Code Stop payload with a session id that can name the lock file; null makes turn mode a silent
- * no-op. */
+/** The input of a VS Code Stop payload with a session id that can name the lock file; null makes
+ * turn mode a silent no-op. */
 function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
   const receipt = readVscodeStop(raw.text, raw.timedOut);
   return receipt.status === 'received' &&

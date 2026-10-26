@@ -73,7 +73,8 @@ function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry
 }
 
 function printDagTree(entries: readonly MemoryEntry[]): void {
-  // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
+  // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at
+  // top level.
   const profiles = entries.filter((e) => e.dagLevel === DAG_LEVEL.entity);
   const l2List = entries.filter((e) => e.dagLevel === DAG_LEVEL.topic);
   const orphanL2 = l2List.filter((e) => !e.dagParentId);
@@ -160,7 +161,8 @@ async function assembleSession(
   );
 }
 
-// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
+// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently
+// clamped.
 function drillDepthFlag(flags: CliFlags): number | undefined {
   const depth = numberFlag(flags, 'depth');
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 10)) {
@@ -192,8 +194,8 @@ async function drillIntoSummary(
   opts.cost = drillCost;
   const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) {
-    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked and missing on
-    // purpose: telling scope_blocked apart would leak that the row exists.
+    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
+    // and missing on purpose: telling scope_blocked apart would leak that the row exists.
     if (r.failure === 'not_drillable') {
       printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
     } else {

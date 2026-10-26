@@ -52,8 +52,8 @@ const MAX_MISSED_SHOWN = 4;
 const QUERY_PREVIEW_CHARS = 60;
 const MAX_DELTAS_SHOWN = 5;
 
-/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus
- * file. */
+/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else
+ * it scores a corpus file. */
 async function evaluateCorpus(
   hippoRoot: string,
   tenantId: string,
@@ -167,7 +167,8 @@ export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
   ) {
     return null;
   }
-  // SAFETY: every present feature entry is checked above; detectRegressions skips a category the file lacks.
+  // SAFETY: every present feature entry is checked above; detectRegressions skips a category the
+  // file lacks.
   return {
     version: value['version'],
     timestamp: value['timestamp'],
@@ -190,7 +191,8 @@ async function runEvalSuite(
   try {
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used
+    // warns.
     if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
@@ -231,7 +233,8 @@ async function runEvalSuite(
   }
 }
 
-/** Loads the corpus file, exiting with the usage line or the read error when there is none to score. */
+/** Loads the corpus file, exiting with the usage line or the read error when there is none to
+ * score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
     fail(
@@ -344,7 +347,8 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   const cmp = compareSummaries(baseline, summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so both can be captured independently.
+    // The main JSON output already emitted; append comparison to stderr so both can be captured
+    // independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }

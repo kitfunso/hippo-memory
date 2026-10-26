@@ -23,8 +23,9 @@ import type { OnHandle } from './open.js';
 import { answered, bound } from './bound.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
-// One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
-// `items`; readers outside this repo depend on these rows, so their shape is fixed.
+// One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate
+// in basis points in `items`; readers outside this repo depend on these rows, so their shape is
+// fixed.
 /** The session's first stored arm, or null; never writes. */
 function readPilotArm(
   db: DatabaseSyncLike,
@@ -35,9 +36,10 @@ function readPilotArm(
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 
-/** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
-// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a handle opened in
-// that scope.
+/** The stored arm, else the hash arm written once; on any error the hash arm comes back
+ * unrecorded. */
+// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a
+// handle opened in that scope.
 function ensurePilotArm(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -46,7 +48,8 @@ function ensurePilotArm(
   opts: { ownTenantOnly?: boolean; now?: string } = {},
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
-  // On one machine a session has one arm, so any tenant's row counts unless the caller holds only its own.
+  // On one machine a session has one arm, so any tenant's row counts unless the caller holds only
+  // its own.
   const readTenant = opts.ownTenantOnly ? tenantId : ALL_TENANTS;
   try {
     // A stored row is the common case after the first prompt, so it must not take the write lock.
@@ -74,22 +77,25 @@ function ensurePilotArm(
       { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
     );
   } catch (err) {
-    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
+    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash
+    // arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`, errorFields(err));
     return hashed;
   }
 }
 
-// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.
+// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no
+// database.
 const SQLITE_CORRUPT = 11;
 const SQLITE_NOTADB = 26;
 
-/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`), or the write failed for
- * a reason nobody planned for (`unexpected`). */
+/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`),
+ * or the write failed for a reason nobody planned for (`unexpected`). */
 type LedgerSkip = 'busy' | 'absent' | 'unexpected';
 
-/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a hippo.db
- * SQLite cannot read; the command that owns the store reports that, and a hook must stay quiet about it. */
+/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a
+ * hippo.db SQLite cannot read; the command that owns the store reports that, and a hook must
+ * stay quiet about it. */
 function ledgerSkipClass<E>(error: E): LedgerSkip {
   if (isSqliteBusy(error)) return 'busy';
   const code = error instanceof Error && 'errcode' in error ? error.errcode : undefined;
@@ -97,8 +103,9 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
   return errorMessage(error).includes('no such table: token_ledger') ? 'absent' : 'unexpected';
 }
 
-/** Says why a ledger row did not land, at the level its class earns: busy warns once through noteStoreBusy, absent is
- * debug with no stack, unexpected warns once with the error class and stack. */
+/** Says why a ledger row did not land, at the level its class earns: busy warns once through
+ * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and
+ * stack. */
 function noteLedgerRowSkipped<E>(error: E): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {
@@ -135,7 +142,8 @@ function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
   }
 }
 
-/** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
+/** The delivery event on the rows' own handle, so it costs no second open; a failed write is
+ * logged. */
 function recordDelivery(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -148,7 +156,8 @@ function recordDelivery(
   }
 }
 
-/** Books a turn's rows, then its delivery event; a store that will not open still gets the event tried on its own. */
+/** Books a turn's rows, then its delivery event; a store that will not open still gets the event
+ * tried on its own. */
 function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSchedule): void {
   const { delivery } = turn;
   let opened = false;
@@ -175,7 +184,8 @@ function noting<T>(read: () => T, fallback: () => T): T {
   }
 }
 
-/** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
+/** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the
+ * hash arm. */
 function pilotArm(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -190,10 +200,11 @@ function pilotArm(
         hashArm(sessionId, rateBp));
 }
 
-/** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since its delivery event is
- * tried again on its own when the open fails. */
+/** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since
+ * its delivery event is tried again on its own when the open fails. */
 export function sqliteLedger(on: OnHandle): Ledger {
-  // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
+  // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on
+  // every event.
   const prune = deliveryPruneSchedule();
   return {
     recordTurn: (turn) => answered(() => recordTurnVia(on, turn, prune)),

@@ -1,6 +1,7 @@
-// The root entry's memory model: the entry and its strength, session and card records, salience and the ambient state.
-// Each function keeps its optional `now` (HIPPO_FAKE_NOW, else the wall clock, read here) and its DecayOptions, from
-// which this entry builds the StrengthModel the base functions take.
+// The root entry's memory model: the entry and its strength, session and card records, salience and
+// the ambient state. Each function keeps its optional `now` (HIPPO_FAKE_NOW, else the wall clock,
+// read here) and its DecayOptions, from which this entry builds the StrengthModel the base
+// functions take.
 import {
   createMemory as createMemoryAt,
   markRetrieved as markRetrievedAt,
@@ -43,7 +44,8 @@ export {
 } from '../base/memory/entry.js';
 export type { ConfidenceFacets } from '../base/memory/strength.js';
 
-/** calculateStrength's options: the decay basis, an eval's cut mechanisms and the root's loss-aversion ratio. */
+/** calculateStrength's options: the decay basis, an eval's cut mechanisms and the root's
+ * loss-aversion ratio. */
 export interface DecayOptions extends DecayBasis {
   /** EVAL-ONLY: the mechanisms an eval cuts; absent, production scoring. */
   ablation?: StrengthAblation;

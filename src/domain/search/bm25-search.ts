@@ -39,14 +39,15 @@ export interface SearchOptions {
   runtime?: RuntimeSettings;
   /** The strength model and rank switches the caller runs under; absent, production ranking. */
   switches?: EvalSwitches;
-  /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
+  /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent,
+   * no path boost. */
   cwd?: string;
 }
 
 type Corpus = ReturnType<typeof buildCorpus>;
 
-// Keyed on the caller's array so multihop's two passes share one build; the pool identity check keeps a mutated array
-// honest.
+// Keyed on the caller's array so multihop's two passes share one build; the pool identity check
+// keeps a mutated array honest.
 const corpusCache = new WeakMap<MemoryEntry[], { pool: MemoryEntry[]; corpus: Corpus }>();
 
 function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
@@ -59,7 +60,9 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
 }
 
 /**
- * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
+ * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings
+ * or the outcome nudge.
+ *
  */
 export function rankBm25(
   query: string,

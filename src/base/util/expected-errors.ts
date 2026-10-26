@@ -1,12 +1,14 @@
-// Leaf module: the named best-effort probes. Each absorbs the one failure its parser or system call documents and
-// throws every other error on, so no catch in src swallows a failure it did not name.
+// Leaf module: the named best-effort probes. Each absorbs the one failure its parser or system call
+// documents and throws every other error on, so no catch in src swallows a failure it did not name.
 
 import { errorCode } from './log.js';
 
-/** The errors that mean a path holds nothing to read: absent, not a directory entry, or closed to this user. */
+/** The errors that mean a path holds nothing to read: absent, not a directory entry, or closed
+ * to this user. */
 export const PATH_UNREADABLE = ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR'] as const;
 
-/** `fn()`, or undefined when it throws an error whose errno name is in `codes`; any other error is thrown on. */
+/** `fn()`, or undefined when it throws an error whose errno name is in `codes`; any other error
+ * is thrown on. */
 export function ignoringCodes<T>(codes: readonly string[], fn: () => T): T | undefined {
   try {
     return fn();
@@ -16,7 +18,8 @@ export function ignoringCodes<T>(codes: readonly string[], fn: () => T): T | und
   }
 }
 
-/** The decoded text, or undefined for a malformed percent escape (the URIError decodeURIComponent documents). */
+/** The decoded text, or undefined for a malformed percent escape (the URIError
+ * decodeURIComponent documents). */
 export function tryDecodeUri(text: string): string | undefined {
   try {
     return decodeURIComponent(text);

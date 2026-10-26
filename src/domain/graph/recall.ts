@@ -1,10 +1,10 @@
 /**
- * Multi-hop graph recall: a READ-ONLY walk of the relations graph from the lexical seeds, surfacing reached entities'
- * memories the lexical search missed.
- * Reached rows load by id (not intersected with the lexically prefiltered candidates), then the recall hard filters are
- * re-applied.
- * Hits inherit their seed's score minus a per-hop discount; both stores are expanded; no writes, so check-graph-writes
- * permits it outside graph.ts.
+ * Multi-hop graph recall: a READ-ONLY walk of the relations graph from the lexical seeds, surfacing
+ * reached entities' memories the lexical search missed. Reached rows load by id (not intersected
+ * with the lexically prefiltered candidates), then the recall hard filters are re-applied. Hits
+ * inherit their seed's score minus a per-hop discount; both stores are expanded; no writes, so
+ * check-graph-writes permits it outside graph.ts.
+ *
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
@@ -57,11 +57,12 @@ export interface GraphExpandOptions {
    *  violates the floor. Defaults to 1. */
   minResults?: number;
   /**
-   * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the caller), mirroring
-   * HybridSearchOptions.recallScope.
-   * Omitted = default-deny (private and quarantine excluded, NULL passes), the fail-closed default for SDK callers.
-   * { requested, additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
+   * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the
+   * caller), mirroring HybridSearchOptions.recallScope. Omitted = default-deny (private and
+   * quarantine excluded, NULL passes), the fail-closed default for SDK callers. { requested,
+   * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
    * (passesScopeFilterForRecall).
+   *
    */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
@@ -80,7 +81,8 @@ interface RelationWalk {
   originMemByEntityId: Map<number, string | null>;
 }
 
-/** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it descends from. */
+/** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it
+ * descends from. */
 async function walkRelations(
   store: GraphStore,
   tenantId: string,
@@ -88,12 +90,12 @@ async function walkRelations(
   hops: number,
   maxNeighbors: number,
 ): Promise<RelationWalk> {
-  // `visited` makes expansion cycle-safe; `originMemByEntityId` carries each node's base-result memory id for adjacency
-  // placement and score inheritance.
+  // `visited` makes expansion cycle-safe; `originMemByEntityId` carries each node's base-result
+  // memory id for adjacency placement and score inheritance.
   const visitedEntityIds = new Set<number>(seedEntities.map((e) => e.id));
   const reached = new Map<number, GraphVia>();
-  // A seed/reached entity whose mirror was forgotten or pruned has a null memoryId; traversal still propagates origin
-  // and the null is dropped before any load.
+  // A seed/reached entity whose mirror was forgotten or pruned has a null memoryId; traversal still
+  // propagates origin and the null is dropped before any load.
   const originMemByEntityId = new Map<number, string | null>();
   for (const se of seedEntities) originMemByEntityId.set(se.id, se.memoryId);
   let frontier: number[] = seedEntities.map((e) => e.id);
@@ -135,7 +137,8 @@ async function walkRelations(
   return { reached, originMemByEntityId };
 }
 
-/** The recall hard filters (as-of, superseded, scope) re-applied to a directly loaded graph-reached row. */
+/** The recall hard filters (as-of, superseded, scope) re-applied to a directly loaded
+ * graph-reached row. */
 function passesRecallFilters(
   mem: MemoryEntry,
   via: GraphVia,
@@ -143,9 +146,9 @@ function passesRecallFilters(
   opts: HitOptions,
 ): boolean {
   const { includeSuperseded, asOfDate, recallScope } = opts;
-  // The `to` endpoint of a `supersedes` edge IS the superseded version; the graph is authoritative because `hippo
-  // decide` does not set `superseded_by`.
-  // Drop it unless --include-superseded; the newer `from` endpoint is always kept.
+  // The `to` endpoint of a `supersedes` edge IS the superseded version; the graph is authoritative
+  // because `hippo decide` does not set `superseded_by`. Drop it unless --include-superseded; the
+  // newer `from` endpoint is always kept.
   const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
   if (asOfDate) {
     if (new Date(mem.validFrom) > asOfDate) return false; // not yet valid at asOf
@@ -239,8 +242,8 @@ function buildGraphHit(
   };
 }
 
-// Reached entities -> source memory ids -> load by id. A mirror-less entity (memoryId === null) has no memory to
-// surface, so drop its null id before the read.
+// Reached entities -> source memory ids -> load by id. A mirror-less entity (memoryId === null) has
+// no memory to surface, so drop its null id before the read.
 async function loadReachedMemories(
   store: GraphStore,
   tenantId: string,
@@ -257,8 +260,8 @@ async function loadReachedMemories(
   return new Map((await store.entriesByIds(needLoad, tenantId)).map((m) => [m.id, m]));
 }
 
-// For the bi-temporal as-of rule on a superseded reached row we need its successor's valid_from. Batch-load the
-// successors referenced by the loaded rows.
+// For the bi-temporal as-of rule on a superseded reached row we need its successor's valid_from.
+// Batch-load the successors referenced by the loaded rows.
 async function loadSuccessorValidFrom(
   store: GraphStore,
   tenantId: string,
@@ -275,10 +278,10 @@ async function loadSuccessorValidFrom(
 }
 
 /**
- * Augment `baseResults` with memories reached by walking `hops` graph edges from the seeds across local AND global
- * stores, each placed after its seed.
- * Returns `baseResults` unchanged when `hops <= 0`, there are no base results, or nothing new survives the filters and
- * the token budget.
+ * Augment `baseResults` with memories reached by walking `hops` graph edges from the seeds across
+ * local AND global stores, each placed after its seed. Returns `baseResults` unchanged when `hops
+ * <= 0`, there are no base results, or nothing new survives the filters and the token budget.
+ *
  */
 export async function graphExpandRecall(
   baseResults: SearchResult[],
@@ -323,8 +326,8 @@ export async function graphExpandRecall(
 }
 
 function sortHitsWithinOrigin(hitsByOrigin: Map<string, GraphHit[]>): void {
-  // Closer hops first within each origin group, then by inherited score; compareEntryIdentity only breaks same-hop,
-  // same-score ties.
+  // Closer hops first within each origin group, then by inherited score; compareEntryIdentity only
+  // breaks same-hop, same-score ties.
   for (const hits of hitsByOrigin.values()) {
     hits.sort((a, b) => {
       const byHops = a.graphVia.hops - b.graphVia.hops;
@@ -342,15 +345,15 @@ function selectWithinBudget(
 ): Set<SearchResult> {
   const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const minResults = opts.minResults ?? 1;
-  // Budget selection is by score, not position, so a high-value graph hit can beat a low-score lexical distractor; the
-  // greedy pack uses `continue`, so the DISPLAY loop emits a hit only under a kept seed. The top --min-results base
-  // rows are never evicted; at least one result is kept.
+  // Budget selection is by score, not position, so a high-value graph hit can beat a low-score
+  // lexical distractor; the greedy pack uses `continue`, so the DISPLAY loop emits a hit only under
+  // a kept seed. The top --min-results base rows are never evicted; at least one result is kept.
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
   const price = opts.cost ?? ((r: SearchResult) => r.tokens);
   let usedTokens = [...keep].reduce((s, r) => s + price(r), 0);
-  // PLAIN stable score sort on purpose: both input lists are already deterministically ordered, and a base-vs-graph-hit
-  // tie keeps the BASE result first (the concat order).
+  // PLAIN stable score sort on purpose: both input lists are already deterministically ordered, and
+  // a base-vs-graph-hit tie keeps the BASE result first (the concat order).
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) =>
     compareScoresDesc(a.score, b.score),
   )) {
@@ -367,8 +370,8 @@ function mergeKeptHits(
   hitsByOrigin: Map<string, GraphHit[]>,
   keep: Set<SearchResult>,
 ): SearchResult[] {
-  // DISPLAY order: base order preserved (it may be MMR-diversified); each kept new hit placed directly after the seed
-  // it descends from. Hits emit ONLY under a kept seed.
+  // DISPLAY order: base order preserved (it may be MMR-diversified); each kept new hit placed
+  // directly after the seed it descends from. Hits emit ONLY under a kept seed.
   const merged: SearchResult[] = [];
   let emittedHit = false;
   for (const r of baseResults) {

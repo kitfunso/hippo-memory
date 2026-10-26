@@ -91,9 +91,10 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
   };
 }
 
-/** The built-in store on `handles`: hippo.db under the port's own method names, each call run to its end on its own
- * short-lived handle before its Promise settles, so no write scope spans an await. The caller passes the handles, so a
- * store built over this one opens a single set, and a store worker's opens all reach its thread's one connection. */
+/** The built-in store on `handles`: hippo.db under the port's own method names, each call run to
+ * its end on its own short-lived handle before its Promise settles, so no write scope spans an
+ * await. The caller passes the handles, so a store built over this one opens a single set, and a
+ * store worker's opens all reach its thread's one connection. */
 export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
   const { on, files } = handles;
   return {
@@ -130,7 +131,8 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
   };
 }
 
-/** The groups only a store kept as files in a folder serves: its ledger, own index, promote copies and sharing. */
+/** The groups only a store kept as files in a folder serves: its ledger, own index, promote
+ * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
     ledger: sqliteLedger(handles.on),
@@ -203,7 +205,8 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   return {
     ping: () =>
       answered(() => {
-        // A probe must not create the store; the first write does, so a root with none yet is ready.
+        // A probe must not create the store; the first write does, so a root with none yet is
+        // ready.
         if (!existsSync(getHippoDbPath(hippoRoot))) return;
         on((db) => {
           db.prepare('SELECT 1').get();
@@ -212,9 +215,10 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   };
 }
 
-/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
- * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. A root that
- * probes per request passes its own `host`, so a store once shared stays shared for it. */
+/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the
+ * transport's flag); `openGlobal` builds the global store, read and written, which a server
+ * keeps on threads of its own. A root that probes per request passes its own `host`, so a store
+ * once shared stays shared for it. */
 export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
@@ -239,8 +243,9 @@ export function sqliteReach(
   return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
 }
 
-/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
- * handles, so a check never creates or migrates the store it inspects. */
+/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the
+ * project-tag reads on read-only handles, so a check never creates or migrates the store it
+ * inspects. */
 export function sqliteDiagnosticsStore(
   hippoRoot: string,
 ): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {

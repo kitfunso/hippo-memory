@@ -1,4 +1,5 @@
-// The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
+// The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the
+// command table.
 
 import { envActiveScope } from '../../base/util/env.js';
 import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
@@ -108,8 +109,8 @@ async function contextGate(
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
 ): Promise<ContextGate | null> {
-  // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit and api.contextGet
-  // falls back to global-only.
+  // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
+  // and api.contextGet falls back to global-only.
   const pinnedOnly = boolFlag(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
@@ -118,7 +119,8 @@ async function contextGate(
   const session = resolveContextSession(stdinText);
   const { currentSessionId, payloadSessionId } = session;
 
-  // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
+  // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no
+  // budget or content branch.
   if (
     await inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, {
       write: payloadSessionId !== undefined,
@@ -152,7 +154,8 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const { pinnedOnly, session, budget } = gate;
   const { ledgerSessionId, payloadSessionId } = session;
 
-  // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls back to '*'.
+  // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls
+  // back to '*'.
   const query = contextQuery(args, flags);
 
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
@@ -218,12 +221,13 @@ interface ContextSession {
 }
 
 function resolveContextSession(stdinText: string | undefined): ContextSession {
-  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then hostSessionId(); absent
-  // both, api.contextGet applies the pure freshness bound.
+  // The session id bounds the active-task-snapshot read: the stdin hook payload wins, then
+  // hostSessionId(); absent both, api.contextGet applies the pure freshness bound.
   const payload = readHookPayload(stdinText);
   let payloadSessionId = payload.sessionId;
   const currentSessionId = payloadSessionId ?? hostSessionId();
-  // A sub-agent's payload and env both carry its parent's session id, so it books no session and never skips a block.
+  // A sub-agent's payload and env both carry its parent's session id, so it books no session and
+  // never skips a block.
   const subagent = isSubagentPayload(stdinText);
   const ledgerSessionId = subagent ? undefined : currentSessionId;
   if (subagent) payloadSessionId = undefined;
@@ -258,7 +262,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     currentProject: resolveProjectIdentity(process.cwd()),
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
-    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
+    // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in
+    // every format.
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot'
         ? 'additional-context'
@@ -270,7 +275,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   };
 }
 
-/** Books one inject turn: the JSON and markdown renders differ only in the item count and the token figure. */
+/** Books one inject turn: the JSON and markdown renders differ only in the item count and the
+ * token figure. */
 async function bookContextInject(view: ContextView, items: number, tokens: number): Promise<void> {
   const uses = [
     {
@@ -311,7 +317,8 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
   await bookContextInject(view, output.length, estimateTokens(jsonText));
 }
 
-/** The default format; the header figure counts the whole block, sections included, as the ledger does. */
+/** The default format; the header figure counts the whole block, sections included, as the
+ * ledger does. */
 async function renderContextMarkdown(view: ContextView): Promise<void> {
   const { result, rec, framing } = view;
   // Cross-project inclusions get their own section so they never masquerade as project memory.

@@ -55,7 +55,9 @@ export function readEntry(
 }
 
 /**
- * Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map.
+ * Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is
+ * absent from the map.
+ *
  */
 export function readEntriesByIds(
   db: DatabaseSyncLike,
@@ -74,7 +76,8 @@ export function readEntriesByIds(
   return byId;
 }
 
-/** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC` order. */
+/** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC`
+ * order. */
 export function readChildrenByParent(
   db: DatabaseSyncLike,
   parentIds: readonly string[],
@@ -99,7 +102,8 @@ export function readChildrenByParent(
   return byParent;
 }
 
-/** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot be sorted in SQL. */
+/** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot
+ * be sorted in SQL. */
 export function readEntriesInIdOrder(
   db: DatabaseSyncLike,
   ids: readonly string[],
@@ -110,7 +114,8 @@ export function readEntriesInIdOrder(
 
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
 
-// One JSON param for the list keeps a cached statement's text the same however many origins a caller names.
+// One JSON param for the list keeps a cached statement's text the same however many origins a
+// caller names.
 export function originAnd(origins: readonly string[] | null | undefined): SqlFragment {
   if (origins == null) return { sql: '', params: [] };
   return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, params: [JSON.stringify(origins)] };
@@ -119,7 +124,8 @@ export function originAnd(origins: readonly string[] | null | undefined): SqlFra
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
 type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
 
-/** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant and origins. */
+/** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant
+ * and origins. */
 function sessionRawWhere({
   sessionId,
   tenantId,
@@ -133,9 +139,9 @@ function sessionRawWhere({
   };
 }
 
-/** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
- * could not load. Mirrors `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only
- * `ownScope`. */
+/** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without
+ * leaking rows the caller could not load. Mirrors `passesScopeFilterForRecall`'s default-deny:
+ * explicit scope matches exactly, none admits only `ownScope`. */
 export function countSessionRawMemories(
   db: DatabaseSyncLike,
   query: SessionRows<SessionRawCount>,
@@ -154,9 +160,10 @@ export function countSessionRawMemories(
   return Number(row?.c ?? 0);
 }
 
-/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show
- * up in each other's fresh tail. The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it
- * when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or
+ * concurrent sessions show up in each other's fresh tail. The tenant-wide shape is discouraged:
+ * `api.recall` throws `RecallContractError` for it when
+ * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function listFreshRawMemories(
   db: DatabaseSyncLike,
   count: number,
@@ -205,7 +212,8 @@ export function listEntryIdsPage(
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type EntryKeyRow = EntryCursor;
 
-/** Up to `page.limit` memory ids of every tenant in id order after `page.afterId`, off the primary key. */
+/** Up to `page.limit` memory ids of every tenant in id order after `page.afterId`, off the
+ * primary key. */
 export function listEveryTenantEntryIds(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
   const rows = cachedStatement(
@@ -223,23 +231,25 @@ export function countAllEntries(db: DatabaseSyncLike): number {
   return Number(row?.c ?? 0);
 }
 
-// The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding cannot see.
+// The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding
+// cannot see.
 const FOLDS_TO_ASCII = ['İ', 'K'];
 
 // Chars or bytes differ only when a non-ASCII char is present; the check never decodes the value.
 const hasNonAscii = (column: string): string =>
   `length(${column}) != length(CAST(${column} AS BLOB))`;
 
-/** The FTS5 phrase for `text`: its ASCII alphanumeric runs in order, which is how unicode61 splits it; null when it
- * holds none (the phrase would be empty) or any non-ASCII char. */
+/** The FTS5 phrase for `text`: its ASCII alphanumeric runs in order, which is how unicode61
+ * splits it; null when it holds none (the phrase would be empty) or any non-ASCII char. */
 function ftsPhrase(text: string): string | null {
   if (!/^[ -~]*$/.test(text)) return null;
   const pieces = text.match(/[A-Za-z0-9]+/g);
   return pieces === null ? null : `"${pieces.join(' ')}"`;
 }
 
-/** MATCH expression whose hits include every row the LIKE path would keep, or null when some token or the tag has no
- * FTS form. Rows with non-ASCII text are added by the caller: JS tokenizers drop those chars, unicode61 keeps them. */
+/** MATCH expression whose hits include every row the LIKE path would keep, or null when some
+ * token or the tag has no FTS form. Rows with non-ASCII text are added by the caller: JS
+ * tokenizers drop those chars, unicode61 keeps them. */
 function ftsMentionQuery(tokens: readonly string[], tag: string | null): string | null {
   const parts: string[] = [];
   for (const t of new Set(tokens)) {
@@ -255,9 +265,10 @@ function ftsMentionQuery(tokens: readonly string[], tag: string | null): string 
   return parts.length === 0 ? null : parts.join(' OR ');
 }
 
-/** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose
- * lowercased tags hold `tag`; `next` is where the following page starts.
- * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
+/** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds
+ * any of `tokens` or whose lowercased tags hold `tag`; `next` is where the following page
+ * starts. The caller re-checks each row exactly; this only spares decoding rows that cannot
+ * match. */
 export function listEntriesMentioning(
   db: DatabaseSyncLike,
   tokens: readonly string[],
@@ -265,8 +276,8 @@ export function listEntriesMentioning(
   tenantId: TenantId,
   page: EntryPageRequest,
 ): EntryPage {
-  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row
-  // stays in.
+  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json,
+  // so every tagged row stays in.
   const plainTag = /^[ -~]*$/.test(tag) && !/["\\]/.test(tag);
   const ftsQuery =
     plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
@@ -287,7 +298,8 @@ export function listEntriesMentioning(
   );
 }
 
-/** The LIKE and instr terms that keep every row a mention may match, for a store whose FTS cannot answer. */
+/** The LIKE and instr terms that keep every row a mention may match, for a store whose FTS
+ * cannot answer. */
 function likeMentionFilter(tokens: readonly string[], tag: string, plainTag: boolean): SqlFragment {
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
   const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
@@ -303,12 +315,13 @@ function likeMentionFilter(tokens: readonly string[], tag: string, plainTag: boo
   return { sql: clauses.join(' OR '), params };
 }
 
-// The plus keeps SQLite on the tenant's created index: on the id key it would fetch and sort every hit for each page.
+// The plus keeps SQLite on the tenant's created index: on the id key it would fetch and sort every
+// hit for each page.
 const FTS_HITS = '+id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 const NON_ASCII_ROWS = `(${hasNonAscii('content')} OR ${hasNonAscii('tags_json')})`;
 
-// Two reads, not one OR, so only the non-ASCII read decodes each row's text, and with a full page of hits it stops at
-// the last hit, past which no row can make the page.
+// Two reads, not one OR, so only the non-ASCII read decodes each row's text, and with a full page
+// of hits it stops at the last hit, past which no row can make the page.
 function ftsMentionRows(
   db: DatabaseSyncLike,
   ftsQuery: string,
@@ -343,7 +356,8 @@ function entriesPage(
   return { entries: rows.map(rowToEntry), next };
 }
 
-/** A page of rows in loadAllEntries' order, with only the columns that say whether another store already holds each. */
+/** A page of rows in loadAllEntries' order, with only the columns that say whether another store
+ * already holds each. */
 export function listEntryTextKeysPage(
   db: DatabaseSyncLike,
   tenantId: TenantId,
@@ -398,8 +412,8 @@ interface TenantTextPage {
   readonly next: EntryCursor | null;
 }
 
-/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows only
- * for the ids that match. */
+/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs:
+ * callers read whole rows only for the ids that match. */
 export function listTenantTextsPage(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -420,13 +434,15 @@ export function listTenantTextsPage(
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type OriginTallyDbRow = OriginTally;
 
-/** Each project name's live rows in one grouped read, in the order its first row comes in loadAllEntries' order. */
+/** Each project name's live rows in one grouped read, in the order its first row comes in
+ * loadAllEntries' order. */
 export function countByOrigin(
   db: DatabaseSyncLike,
   tenantId: string,
   sourcePrefix: string,
 ): OriginTally[] {
-  // The unit separator sorts below every character of a time or an id, so the joined string orders as (created, id).
+  // The unit separator sorts below every character of a time or an id, so the joined string orders
+  // as (created, id).
   return cachedStatement(
     db,
     `SELECT origin_project AS origin, COUNT(*) AS live, SUM(substr(source, 1, ?) = ?) AS prefixed, ` +
@@ -448,9 +464,9 @@ export function readTakenIds(db: DatabaseSyncLike, ids: readonly string[]): stri
   return taken;
 }
 
-// Content of every team-visible tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one
-// project's rows and user-global ones.
-// No owner: a personal or connector-private row must never answer `duplicate` for, or stop, a team copy. `instr`
+// Content of every team-visible tenant row tagged `tag`, without reading the rest of the store;
+// `origins` keeps one project's rows and user-global ones. No owner: a personal or
+// connector-private row must never answer `duplicate` for, or stop, a team copy. `instr`
 // prefilters; `includes` re-checks.
 export function contentsWithTag(
   db: DatabaseSyncLike,
@@ -482,8 +498,8 @@ export interface PreviewRow {
   tags_json: string | null;
 }
 
-/** A page of memories, by rowid, from a store whose schema may predate some columns; `columns` is the table's real
- * column set, and every schema has a rowid. */
+/** A page of memories, by rowid, from a store whose schema may predate some columns; `columns`
+ * is the table's real column set, and every schema has a rowid. */
 export function listPreviewRowsPage(
   db: DatabaseSyncLike,
   columns: ReadonlySet<string>,
@@ -501,7 +517,8 @@ export function listPreviewRowsPage(
       `WHERE rowid > ?${tenant} ORDER BY rowid LIMIT ?`,
   );
   const args = tenant ? [page.afterRowid, tenantId, page.limit] : [page.afterRowid, page.limit];
-  // SAFETY: the SELECT names the rowid and every PreviewRow field, each a literal fallback when its column is missing.
+  // SAFETY: the SELECT names the rowid and every PreviewRow field, each a literal fallback when its
+  // column is missing.
   return statement.all(...args) as Array<PreviewRow & { row_id: number }>;
 }
 
@@ -544,7 +561,8 @@ const OBJECT_LINK_SQL =
 // SAFETY: every read cast to this row selects MEMORY_SELECT_COLUMNS and object_link.
 type ObjectLinkedRow = MemoryRow & { object_link: ObjectLink };
 
-/** Every tenant's rows in loadAllEntries' order through one cursor, each with the typed object it backs. */
+/** Every tenant's rows in loadAllEntries' order through one cursor, each with the typed object
+ * it backs. */
 export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLifeRow> {
   const rows = cachedStatement(
     db,
@@ -553,16 +571,18 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
   for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
 }
 
-// Hashes per page of the duplicate read; each page reads its hashes' rows by idx_memories_duplicate_hash.
+// Hashes per page of the duplicate read; each page reads its hashes' rows by
+// idx_memories_duplicate_hash.
 const DUPLICATE_KEYS_PAGE = 500;
 
-/** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
+/** The current distilled rows that may be another's duplicate, and the partitions in the order
+ * they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
   // One read transaction, so the partition keys describe the rows read.
   return withReadSnapshot(db, () => {
-    // An older binary's rows carry no hash: hash them here, and read the hashed rows that share one. The caller
-    // regroups by duplicateKey, so a hash two different texts share costs only a row read.
-    // SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
+    // An older binary's rows carry no hash: hash them here, and read the hashed rows that share
+    // one. The caller regroups by duplicateKey, so a hash two different texts share costs only a
+    // row read. SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
     const rows = cachedStatement(
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash IS NULL`,
@@ -587,7 +607,8 @@ export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
     }
     for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE))
       rows.push(...rowsWithHashes(db, hashes));
-    // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII stamps and ids.
+    // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII
+    // stamps and ids.
     rows.sort(byCreatedThenId);
     return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
   });
@@ -606,9 +627,11 @@ function rowsWithHashes(db: DatabaseSyncLike, hashes: readonly number[]): Memory
 const byCreatedThenId = (a: MemoryRow, b: MemoryRow): number =>
   a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1;
 
-/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears by created then id. */
+/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears
+ * by created then id. */
 function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSeen'] {
-  // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
+  // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order
+  // the rows sort in.
   const firsts = cachedStatement(
     db,
     `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
@@ -625,15 +648,16 @@ function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSe
   }));
 }
 
-/** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers re-check each row. */
+/** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers
+ * re-check each row. */
 export function listEntriesWithSignals(
   db: DatabaseSyncLike,
   signals: EntrySignals,
   tenantId: TenantId,
   page: EntryPageRequest,
 ): EntryPage {
-  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is
-  // wider than startsWith.
+  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so
+  // the prefix match is wider than startsWith.
   const anyOf = [
     'pinned != 0',
     'retrieval_count >= ?',

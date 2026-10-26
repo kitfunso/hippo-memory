@@ -1,10 +1,11 @@
-// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide,
-// incident, predict) share.
+// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief,
+// note, decide, incident, predict) share.
 
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
 
-/** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
+/** The member of `states` named by `status`, or exit 1 with the message that lists every allowed
+ * value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {
   const found = [...states].find((s) => s === status);
   if (found === undefined) {
@@ -60,7 +61,8 @@ export function foundOrExit<O>(found: O | null | undefined, noun: string, id: nu
   return found;
 }
 
-/** How a kind is named in usage lines (`cmd`), in messages (`noun`) and in the invalid-id error (`idLabel`). */
+/** How a kind is named in usage lines (`cmd`), in messages (`noun`) and in the invalid-id error
+ * (`idLabel`). */
 export interface ObjectNames {
   readonly cmd: string;
   readonly noun: string;

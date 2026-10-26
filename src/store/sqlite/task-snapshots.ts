@@ -1,4 +1,5 @@
-// The active task snapshot rows and the continuity key that scopes them, for the Sessions group and the handoffs.
+// The active task snapshot rows and the continuity key that scopes them, for the Sessions group and
+// the handoffs.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { originInSql } from './rule-sql.js';
@@ -33,7 +34,8 @@ export function continuityWhere(key: ContinuityKey): SqlFragment {
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
 }
 
-// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
+// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong
+// to other owners.
 export function assertKeyedOnSharedStore(
   fn: string,
   { host, hippoRoot }: StoreFiles,
@@ -96,7 +98,8 @@ export function saveActiveTaskSnapshot(
         `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
     const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
-    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
+    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner
+    // row shuts it out.
     if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
     return inserted;
   });

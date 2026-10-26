@@ -1,4 +1,5 @@
-// What the hook commands share: session id, store choice, delivery recorder, session-end log and store-busy handling.
+// What the hook commands share: session id, store choice, delivery recorder, session-end log and
+// store-busy handling.
 
 import { envClaudeCodeSessionId, envHippoSessionId } from '../../base/util/env.js';
 import * as path from 'node:path';
@@ -26,11 +27,14 @@ import { type CliFlags, stringFlag } from './flag-values.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /**
- * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does
- * not block the other.
+ * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one
+ * stage failing does not block the other.
+ *
  */
 /**
- * A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here.
+ * A folder without its own store never sleeps at session end, so its project's agent notes go to
+ * the global store here.
+ *
  */
 export async function logSessionEndImport(
   logFile: string | null,
@@ -50,9 +54,9 @@ export async function logSessionEndImport(
 }
 
 /**
- * Best-effort log line for the handleSessionEndWorker snapshot-close step: sleepStore/runCapture restore their
- * console tee before this runs, so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file
- * directly. */
+ * Best-effort log line for the handleSessionEndWorker snapshot-close step: sleepStore/runCapture
+ * restore their console tee before this runs, so console.log would be lost under the worker's
+ * `stdio: 'ignore'`; write to the file directly. */
 export function appendSessionEndCloseLog(
   logFile: string | null,
   message: string,
@@ -61,8 +65,8 @@ export function appendSessionEndCloseLog(
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-    // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same log-forgery guard
-    // appendPreCompactLog applies.
+    // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same
+    // log-forgery guard appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {
@@ -71,7 +75,8 @@ export function appendSessionEndCloseLog(
   }
 }
 
-/** Runs `run` with the held lines written on exit too, as sleep may end the process before the run writes them. */
+/** Runs `run` with the held lines written on exit too, as sleep may end the process before the
+ * run writes them. */
 export async function flushingOnExit(held: HeldLog, run: () => Promise<void>): Promise<void> {
   process.once('exit', held.flush);
   try {
@@ -82,8 +87,9 @@ export async function flushingOnExit(held: HeldLog, run: () => Promise<void>): P
 }
 
 /**
- * A session-end step that failed: one warn line, and the same text in the session log, the only place a detached
- * worker's output survives.
+ * A session-end step that failed: one warn line, and the same text in the session log, the only
+ * place a detached worker's output survives.
+ *
  */
 export function reportSessionEndFailure<E>(logFile: string | null, step: string, err: E): void {
   const line = `${step} failed: ${errorMessage(err)}`;
@@ -91,15 +97,16 @@ export function reportSessionEndFailure<E>(logFile: string | null, step: string,
   appendSessionEndCloseLog(logFile, line);
 }
 
-// Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
+// Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace
+// with no session.
 export function hostSessionId(): string | undefined {
   return envHippoSessionId() ?? envClaudeCodeSessionId();
 }
 
 /**
- * Compaction drops the pinned blocks the per-prompt hook injected, so record a `reset` for the payload's session and
- * the next prompt injects again.
- * `requiredSource` limits it to payloads with that `source`; best-effort and silent on a malformed payload. */
+ * Compaction drops the pinned blocks the per-prompt hook injected, so record a `reset` for the
+ * payload's session and the next prompt injects again. `requiredSource` limits it to payloads
+ * with that `source`; best-effort and silent on a malformed payload. */
 export async function resetHookInjection(
   hippoRoot: string,
   tenantId: string,
@@ -123,9 +130,9 @@ export async function resetHookInjection(
 }
 
 /**
- * Store a hook writes to: the project store, else an existing global one, else the project path (skipped: hooks must
- * not create a store).
- * Pre-compact and compact-resume must agree, or a snapshot is looked for in the other store. */
+ * Store a hook writes to: the project store, else an existing global one, else the project path
+ * (skipped: hooks must not create a store). Pre-compact and compact-resume must agree, or a
+ * snapshot is looked for in the other store. */
 export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
   const globalRoot = hippoHomeDir();
@@ -133,8 +140,9 @@ export function hookStoreRoot(hippoRoot: string): string {
 }
 
 /**
- * `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the
- * payload.
+ * `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag
+ * decides, never the payload.
+ *
  */
 export function hookRuntime(flags: CliFlags): HookRuntime {
   return stringFlag(flags, 'runtime') === 'copilot' || stringFlag(flags, 'format') === 'copilot'
@@ -143,8 +151,9 @@ export function hookRuntime(flags: CliFlags): HookRuntime {
 }
 
 /**
- * A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder;
- * other runtimes keep `hippoRoot`.
+ * A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in
+ * the home folder; other runtimes keep `hippoRoot`.
+ *
  */
 export function payloadCwdRoot(
   hippoRoot: string,
@@ -154,8 +163,8 @@ export function payloadCwdRoot(
   const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
   if (cwd === null || cwd.trim() === '') return hippoRoot;
   try {
-    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the session-end worker on that
-    // folder too.
+    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the
+    // session-end worker on that folder too.
     process.chdir(cwd);
   } catch (err) {
     log.warn(
@@ -178,7 +187,8 @@ export async function inPilotHoldout(
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
-/** What capture writes into for a store folder: its port, its config and what embeds the new rows. */
+/** What capture writes into for a store folder: its port, its config and what embeds the new
+ * rows. */
 export function captureTarget(root: string): CaptureTarget {
   const folder = cliFolder(root);
   return {

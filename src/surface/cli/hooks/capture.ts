@@ -32,8 +32,8 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     );
   }
 
-  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own blocking read in
-  // src/surface/capture/ by design.
+  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own
+  // blocking read in src/surface/capture/ by design.
   const bounded =
     captureSource === 'last-session' && !transcriptPath
       ? await readHookStdin()

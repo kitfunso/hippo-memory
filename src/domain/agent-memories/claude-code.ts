@@ -1,5 +1,5 @@
-// Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user
-// folder.
+// Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the
+// `autoMemoryDirectory` user folder.
 import path from 'node:path';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
@@ -24,8 +24,9 @@ const NAME_SLUG_MAX_CHARS = 200;
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
- * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself
- * outside a repository.
+ * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or
+ * the folder itself outside a repository.
+ *
  */
 function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<string> {
   const roots = [projectRoot, ctx.files.realPath(projectRoot)];
@@ -35,8 +36,9 @@ function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<
   return new Set(roots.map((root) => fold(claudeFolderName(root))));
 }
 
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside
- * a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
+/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's
+ * when that sits outside a checkout (a bare repository, or --separate-git-dir); any other
+ * checkout, a submodule included, keeps its own. */
 function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayout): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);
@@ -44,8 +46,9 @@ function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayou
 }
 
 /**
- * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters cut to 200 plus a
- * base-36 hash of the whole path.
+ * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters
+ * cut to 200 plus a base-36 hash of the whole path.
+ *
  */
 export function claudeFolderName(root: string): string {
   const full = path.resolve(root);
@@ -73,8 +76,9 @@ export const claudeCodeAdapter: Adapter = {
 };
 
 /**
- * A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time
- * limit.
+ * A session's own notes folder and nothing else, with no git call, so post-compact can read it
+ * inside the hook's time limit.
+ *
  */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
   const config = claudeConfigDir(ctx.home, ctx.env);
@@ -87,8 +91,8 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   };
 }
 
-/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder,
- * else cwd or a parent; null when none matches. */
+/** The project a session folder's notes belong to: the one Claude named the folder for, the
+ * session's start folder, else cwd or a parent; null when none matches. */
 export function transcriptNotesProject(
   transcriptPath: string,
   cwd: string | null,
@@ -109,7 +113,8 @@ export function transcriptNotesProject(
       dir !== null;
       dir = path.dirname(dir) === dir ? null : path.dirname(dir)
     ) {
-      // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
+      // A folder gone from disk resolves to its bare name, never the project it was in, so it
+      // decides nothing.
       if ([dir, machine.files.realPath(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
         return machine.files.exists(dir) ? machine.projectIdentity(dir) : null;
       }
@@ -118,12 +123,14 @@ export function transcriptNotesProject(
   return null;
 }
 
-// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with room to spare.
+// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with
+// room to spare.
 const START_SCAN_BYTES = 64 * 1024;
 
 /**
- * The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder
- * name alone cannot give back.
+ * The cwd on the transcript's first line that has one: the folder Claude named the session folder
+ * for, which a folder name alone cannot give back.
+ *
  */
 function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string | null {
   // A transcript that is not there names no start folder; any other failure is the caller's to see.
@@ -132,7 +139,8 @@ function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string |
   for (const line of head.split('\n')) {
     const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
     if (cwd === undefined) continue;
-    // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad escape skips the line.
+    // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad
+    // escape skips the line.
     const decoded = tryParseJson(`"${cwd}"`);
     if (isJsonString(decoded)) return decoded;
   }
@@ -161,7 +169,8 @@ function userFolders(ctx: AdapterContext, config: string, warnings: string[]): s
   return dir === null ? [] : [dir];
 }
 
-// User settings only: a cloned repository's own settings must not point the import at another project's notes.
+// User settings only: a cloned repository's own settings must not point the import at another
+// project's notes.
 function autoMemoryDirectory(
   ctx: AdapterContext,
   settings: string,

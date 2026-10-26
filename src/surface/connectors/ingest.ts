@@ -21,8 +21,8 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory, so a
- * redelivery acks instead of retrying. */
+/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are
+ * logged with no memory, so a redelivery acks instead of retrying. */
 export async function rememberWithEventLog(
   ctx: Context,
   event: ConnectorEvent,
@@ -32,7 +32,8 @@ export async function rememberWithEventLog(
   try {
     // No actor fallback: every caller builds ctx with its connector subject.
     const result = await remember(ctx, { ...opts, untrusted: true, event });
-    // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
+    // Another worker logged this key between the pre-check and the write: its memory stands and
+    // ours was not stored.
     if (result.duplicate)
       return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
     return { status: 'ingested', memoryId: result.id };

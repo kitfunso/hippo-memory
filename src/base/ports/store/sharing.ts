@@ -1,4 +1,5 @@
-// What share, auto-share, sync down and the two-store search read on a store; their writes go through lessonWrites.
+// What share, auto-share, sync down and the two-store search read on a store; their writes go
+// through lessonWrites.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
 import type { EntryFilter, PageRequest } from './reports.js';
@@ -13,8 +14,9 @@ export interface Sharing {
   ): Promise<EntryPage>;
   /** A page of the id, tenant, source and text of the memories of `tenantId`, in store order. */
   textKeysPage(tenantId: TenantId, page: PageRequest): Promise<EntryTextKeyPage>;
-  /** The id, tenant, source and text of the memories `filter` keeps that may hold one of `texts` word for word, spacing
-   * aside, in no set order: a superset the caller checks again. The full-text index finds them, so no page walks. */
+  /** The id, tenant, source and text of the memories `filter` keeps that may hold one of `texts`
+   * word for word, spacing aside, in no set order: a superset the caller checks again. The
+   * full-text index finds them, so no page walks. */
   textKeysHolding(filter: EntryFilter, texts: readonly string[]): Promise<EntryTextKey[]>;
   /** The ids among `ids` that a memory of any tenant holds. */
   takenIds(ids: readonly string[]): Promise<string[]>;
@@ -70,15 +72,18 @@ export interface RecallSearchEntriesOptions {
 }
 
 // The global write behind `promote`: a promoted copy written into the operator's global store.
-/** How a promoted copy is written: the actor its `remember` row names and the local row it copies. */
+/** How a promoted copy is written: the actor its `remember` row names and the local row it
+ * copies. */
 export interface PromotedCopy {
   readonly actor?: string;
   readonly sourceId: string;
-  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
+  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own
+   * transaction. */
   readonly auditAs?: { readonly tenantId: string; readonly actor: string };
 }
 
 export interface Promotion {
-  /** Writes `copy` into this store, the global one; the caller has already vetted, labelled and embeds it. */
+  /** Writes `copy` into this store, the global one; the caller has already vetted, labelled and
+   * embeds it. */
   writeCopy(copy: MemoryEntry, opts: PromotedCopy): Promise<void>;
 }

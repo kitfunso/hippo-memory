@@ -21,7 +21,8 @@ export async function goalList(
   return (await ctx.store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId })).goals;
 }
 
-/** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal. Host admin only. */
+/** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal.
+ * Host admin only. */
 export async function goalComplete(
   ctx: Context,
   goalId: string,
@@ -37,7 +38,8 @@ export async function goalSuspend(ctx: Context, goalId: string): Promise<void> {
   await ctx.store.goals.suspend(ctx.tenantId, goalId);
 }
 
-/** Resume a suspended goal by id, suspending the oldest active one past the depth cap. Host admin only. */
+/** Resume a suspended goal by id, suspending the oldest active one past the depth cap. Host
+ * admin only. */
 export async function goalResume(ctx: Context, goalId: string): Promise<void> {
   requireHostAdmin(ctx, 'Resuming a goal by id');
   await ctx.store.goals.resume(ctx.tenantId, goalId);

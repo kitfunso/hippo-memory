@@ -13,11 +13,12 @@ import {
 } from '../../base/util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
-// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is
-// the one place the `as T` assertion lives and callers narrow via the `value is T` return.
+// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no
+// narrowing, so this is the one place the `as T` assertion lives and callers narrow via the `value
+// is T` return.
 export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
-  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T`
-  // return type does the narrowing.
+  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms
+  // membership; the `value is T` return type does the narrowing.
   return set.has(value as T);
 }
 
@@ -36,7 +37,8 @@ export function parseLimitParam(
   return limit;
 }
 
-/** An optional query number that must be above zero, or from zero when `allowZero`; absent is undefined. */
+/** An optional query number that must be above zero, or from zero when `allowZero`; absent is
+ * undefined. */
 export function parseNumberParam(
   raw: string | null,
   name: string,
@@ -65,8 +67,8 @@ export function parseIntParam(
   return value;
 }
 
-/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key
- * mint reads under its own small cap. */
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for an
+ * authenticated caller; the key mint reads under its own small cap. */
 export async function parseJsonBody(
   req: IncomingMessage,
   _authed: Context,
@@ -90,7 +92,8 @@ export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   }
 }
 
-/** Absent (undefined or null) is undefined; a present value of the wrong type or over `max` characters is a 400. */
+/** Absent (undefined or null) is undefined; a present value of the wrong type or over `max`
+ * characters is a 400. */
 export function getString(
   obj: Record<string, JsonValue>,
   key: string,
@@ -129,7 +132,8 @@ export function requiredString(
   return value;
 }
 
-/** Which items a string array refuses and what each refusal says; a route with published text passes its own. */
+/** Which items a string array refuses and what each refusal says; a route with published text
+ * passes its own. */
 export interface StringArrayRule {
   /** Refuse an item that is empty (after trim when `trimmed`). */
   readonly nonEmpty?: 'raw' | 'trimmed';
@@ -177,7 +181,9 @@ export function getStringArray(
 }
 
 /**
- * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin.
+ * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never
+ * become a row's origin.
+ *
  */
 export function getCallerProject(body: Record<string, JsonValue>): RememberOptions['project'] {
   const v = body.project;
@@ -196,10 +202,11 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
 }
 
 /**
- * Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a
- * 400, not "not found".
- * Allows every production id notArray (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since
- * `rejectEncodedSlash` stops `%2F` smuggling.
+ * Charset + length validation for `:id` captures, called right after `matchPath` so
+ * empty/overlong/illegal ids get a 400, not "not found". Allows every production id notArray
+ * (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops
+ * `%2F` smuggling.
+ *
  */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {

@@ -21,7 +21,8 @@ export async function predictionSave(
   });
 }
 
-/** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
+/** A claim saved with its recall mirror, built under the store root's half-life as the HTTP
+ * create route builds it. */
 export async function predictionRecord(
   ctx: Context,
   claim: SavePredictionOptions,

@@ -1,5 +1,6 @@
-// The async store interface and its groups: every method answers a Promise and takes only data, so any backend can
-// serve it from any thread, and hippo.db is one adapter. Type-only apart from the group probes and the store errors.
+// The async store interface and its groups: every method answers a Promise and takes only data, so
+// any backend can serve it from any thread, and hippo.db is one adapter. Type-only apart from the
+// group probes and the store errors.
 import { StoreNotPortedError } from '../util/store-blocked.js';
 import type { SessionAndAdminGroups } from './store-groups.js';
 import type { MemoryEntry } from '../memory/entry.js';
@@ -35,8 +36,9 @@ import type {
   AppendAuditOptions,
 } from './store/types.js';
 
-/** Every group a store has: the required ones, then five optional capabilities, each a set of groups a store sets or
- * leaves unset together. `RequiredStore` is the smallest store, and `runStoreConformance` from store-kit checks one. */
+/** Every group a store has: the required ones, then five optional capabilities, each a set of
+ * groups a store sets or leaves unset together. `RequiredStore` is the smallest store, and
+ * `runStoreConformance` from store-kit checks one. */
 export interface StoreGroups
   extends
     RequiredGroups,
@@ -56,14 +58,15 @@ export type OptionalGroup = keyof (FallbackGroups &
 /** The groups a sleep runs on. */
 export type SleepGroup = keyof SleepGroups;
 
-/** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and context writes no last
- * recall for the CLI's no-ids outcome to read. */
+/** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
+ * context writes no last recall for the CLI's no-ids outcome to read. */
 interface FallbackGroups {
   readonly readiness: Readiness;
   readonly lastRecall: LastRecall;
 }
 
-/** A store kept as files in a folder; without these, init, share, sync down and promote answer 501. */
+/** A store kept as files in a folder; without these, init, share, sync down and promote answer
+ * 501. */
 export interface FolderGroups {
   readonly folderFiles: FolderFiles;
   /** The rows a folder store shares with the operator's global store. */
@@ -129,7 +132,8 @@ export type SleepStore = StoreWith<SleepGroup>;
 
 export type StoreGroup = 'base' | keyof StoreGroups;
 
-/** True when the store sets `group`; for an optional group the store is narrowed to one that does. */
+/** True when the store sets `group`; for an optional group the store is narrowed to one that
+ * does. */
 export function hasGroup<G extends OptionalGroup>(
   store: HippoStore,
   group: G,
@@ -156,23 +160,29 @@ export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, 
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 
-/** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since a lock wait
- * blocks the event loop; a lock timeout throws `StoreBusyError`. */
+/** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
+ * await, since a lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
 export interface HippoStore
   extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
-  /** A name for logs and errors; what a store can do beyond the required groups is the optional ones it sets. */
+  /** A name for logs and errors; what a store can do beyond the required groups is the optional
+   * ones it sets. */
   readonly kind: string;
-  /** The API key record for `keyId` with its scope grants, revoked or not; null when none matches. */
+  /** The API key record for `keyId` with its scope grants, revoked or not; null when none
+   * matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;
-  /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every row in scope. */
+  /** Recall candidates for `query`: whole-word matches first, then part-word matches, then every
+   * row in scope. */
   searchRecallEntries(query: string, args: RecallSearchArgs): Promise<MemoryEntry[]>;
-  /** The rows of `tenantId` among `ids`, any number of them, ordered by created, then content, then id, all
-   * ascending; the input order is ignored. */
+  /** The rows of `tenantId` among `ids`, any number of them, ordered by created, then content,
+   * then id, all ascending; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
-  /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
+  /** The session's active goals and their policies, read together so a goal and its policy never
+   * disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session id and non-null
-   * `origins` (those projects and user-global rows) must narrow, by created descending, then content and id ascending.
+  /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session
+   * id and non-null `origins` (those projects and user-global rows) must narrow, by created
+   * descending, then content and id ascending.
+   *
    */
   freshRawEntries(
     count: number,
@@ -180,23 +190,27 @@ export interface HippoStore
     sessionId: string | undefined,
     origins: readonly string[] | null,
   ): Promise<MemoryEntry[]>;
-  /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only on an unshared store),
-   * then for its session the newest handoff (same key) and `eventLimit` newest events returned oldest first, each tie
-   * broken by the larger id; the caller applies scope. */
+  /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only
+   * on an unshared store), then for its session the newest handoff (same key) and `eventLimit`
+   * newest events returned oldest first, each tie broken by the larger id; the caller applies
+   * scope. */
   continuity(
     tenantId: string,
     eventLimit: number,
     key: ContinuityKey | null,
   ): Promise<ContinuityBlock>;
-  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
+  /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit
+   * row. */
   planningFallacyEvidence(
     tenantId: string,
     classQueryTokens: readonly string[],
   ): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
   appendAuditEvents(events: readonly AppendAuditOptions[]): Promise<void>;
-  /** Writes the goal log and audit rows in one transaction and rejects with none written if it fails. Then the trace
-   * and the strengthen, each on its own: a failure there logs and still resolves, since the reply is already decided.
+  /** Writes the goal log and audit rows in one transaction and rejects with none written if it
+   * fails. Then the trace and the strengthen, each on its own: a failure there logs and still
+   * resolves, since the reply is already decided.
+   *
    */
   finishRecall(writes: RecallWrites): Promise<void>;
   /** Adds `recalled` to the one store-wide total_recalled counter, no tenant. */

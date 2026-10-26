@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Hippo Memory MCP server: exposes hippo memory as MCP tools over stdio via the programmatic API (no child process).
- * Usage: hippo mcp (or npx hippo-memory mcp). */
+ * Hippo Memory MCP server: exposes hippo memory as MCP tools over stdio via the programmatic API
+ * (no child process). Usage: hippo mcp (or npx hippo-memory mcp). */
 
 export {
   findHippoRoot,
@@ -28,7 +28,8 @@ const isMainModule = (() => {
 })();
 
 if (isMainModule) {
-  // The CLI owns the store build, so running this file directly opens the same store `hippo mcp` does.
+  // The CLI owns the store build, so running this file directly opens the same store `hippo mcp`
+  // does.
   const { cliStdioHost } = await import('../cli/api-context.js');
   const { openRootStoreRuntime } = await import('../open-store.js');
   openRootStoreRuntime().run(() => startStdioLoop(cliStdioHost()));

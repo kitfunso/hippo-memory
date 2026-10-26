@@ -1,20 +1,23 @@
-// All-pairs overlap join through an inverted index over rare-first token prefixes (prefix filtering, Chaudhuri et al.
-// 2006).
+// All-pairs overlap join through an inverted index over rare-first token prefixes (prefix
+// filtering, Chaudhuri et al. 2006).
 
-/** Smallest number of shared tokens any qualifying pair can have, given either side's token count. */
+/** Smallest number of shared tokens any qualifying pair can have, given either side's token
+ * count. */
 export type MinShared = (size: number) => number;
 
 /**
- * Shared >= threshold * union >= threshold * size; one token of slack covers float rounding in the caller's Jaccard
- * check.
+ * Shared >= threshold * union >= threshold * size; one token of slack covers float rounding in the
+ * caller's Jaccard check.
+ *
  */
 export function jaccardMinShared(threshold: number, atLeast = 1): MinShared {
   return (size) => Math.max(atLeast, Math.ceil(threshold * size) - 1);
 }
 
 /**
- * Maps i to each j > i, ascending, that may share `minShared` tokens with set i; a superset the caller checks exactly,
- * never a pair sharing no token.
+ * Maps i to each j > i, ascending, that may share `minShared` tokens with set i; a superset the
+ * caller checks exactly, never a pair sharing no token.
+ *
  */
 export function overlapPartners(
   sets: readonly ReadonlySet<string>[],
@@ -25,7 +28,8 @@ export function overlapPartners(
   const rareFirst = (a: string, b: string): number =>
     (docFreq.get(a) ?? 0) - (docFreq.get(b) ?? 0) || (a < b ? -1 : a > b ? 1 : 0);
 
-  // Under one total order the first token two sets share lies in both sets' first size - minShared + 1 tokens.
+  // Under one total order the first token two sets share lies in both sets' first size - minShared
+  // + 1 tokens.
   const prefixes = sets.map((set) => {
     const keep = set.size - Math.max(1, minShared(set.size)) + 1;
     return keep > 0 ? [...set].sort(rareFirst).slice(0, keep) : [];

@@ -1,5 +1,5 @@
-// POST /v1/vectors/nearest: the ids nearest a query vector, from the served store's vector graph, so a CLI on this host
-// asks the daemon instead of scanning every stored vector itself.
+// POST /v1/vectors/nearest: the ids nearest a query vector, from the served store's vector graph,
+// so a CLI on this host asks the daemon instead of scanning every stored vector itself.
 import { nearestMemoryIds } from '../../../api/recall/nearest.js';
 import type { RecallScopeFilter } from '../../../base/scope/recall-scope.js';
 import { HttpError } from '../../../base/errors/http-errors.js';

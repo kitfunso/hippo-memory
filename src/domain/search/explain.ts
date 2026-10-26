@@ -26,7 +26,8 @@ export interface MatchExplanation {
   };
 }
 
-/** Why a result matched: the overlapping query terms and whether BM25 and/or embedding similarity contributed. */
+/** Why a result matched: the overlapping query terms and whether BM25 and/or embedding
+ * similarity contributed. */
 export function explainMatch(query: string, result: SearchResult): MatchExplanation {
   const matchedTerms = matchedQueryTerms(new Set(tokenize(query)), result.entry);
   const hasBm25 = result.bm25 > 0;

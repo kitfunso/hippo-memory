@@ -1,5 +1,7 @@
 /**
- * Splits one markdown memory file into items (a top-level bullet or a paragraph), each tagged with its heading. Pure.
+ * Splits one markdown memory file into items (a top-level bullet or a paragraph), each tagged with
+ * its heading. Pure.
+ *
  */
 
 export interface MarkdownItem {
@@ -96,7 +98,8 @@ function skipFence(lines: readonly string[], start: number, fence: string): numb
   return lines.length;
 }
 
-// A line opening a fence carries its whole body with it, so body lines never start a heading or bullet.
+// A line opening a fence carries its whole body with it, so body lines never start a heading or
+// bullet.
 function afterLine(lines: readonly string[], i: number): number {
   const fence = fenceOf(lines[i]);
   return fence === null ? i + 1 : skipFence(lines, i, fence);

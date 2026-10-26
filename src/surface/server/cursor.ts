@@ -1,9 +1,11 @@
-// Pages of the /v1 list routes: the rows a page keeps, its next cursor, and the header a bare-array route sends it in.
+// Pages of the /v1 list routes: the rows a page keeps, its next cursor, and the header a bare-array
+// route sends it in.
 import type { ServerResponse } from 'node:http';
 import { encodeCursor } from '../../api/cursor.js';
 import { keysetPage, type KeysetPosition } from '../../base/util/keyset.js';
 
-/** Bare-array routes cannot grow a body field without breaking clients, so their next cursor rides this header. */
+/** Bare-array routes cannot grow a body field without breaking clients, so their next cursor
+ * rides this header. */
 export const NEXT_CURSOR_HEADER = 'X-Next-Cursor';
 
 export interface Page<T> {
@@ -12,7 +14,9 @@ export interface Page<T> {
 }
 
 /**
- * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null on the last page.
+ * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null
+ * on the last page.
+ *
  */
 export function pageOf<T>(
   rows: readonly T[],
@@ -24,8 +28,9 @@ export function pageOf<T>(
 }
 
 /**
- * Rows ordered by (created_at DESC, id DESC): the decision, incident, process, policy, skill, brief, note and
- * prediction tables.
+ * Rows ordered by (created_at DESC, id DESC): the decision, incident, process, policy, skill,
+ * brief, note and prediction tables.
+ *
  */
 export function byCreatedAt(row: { createdAt: string; id: number }): KeysetPosition {
   return { key: row.createdAt, id: row.id };

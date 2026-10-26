@@ -43,9 +43,9 @@ const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
   project: 'project_briefs',
 };
 
-/** Resolve `source_kind` for a graph row from AT LEAST ONE valid provenance path, mirroring the DB trigger guard; raw
- * is rejected. MEMORY path: exists, same-tenant, consolidated. OBJECT path (`memoryId` null): same-tenant,
- * active|superseded, yields 'distilled'. All-null is rejected. */
+/** Resolve `source_kind` for a graph row from AT LEAST ONE valid provenance path, mirroring the
+ * DB trigger guard; raw is rejected. MEMORY path: exists, same-tenant, consolidated. OBJECT path
+ * (`memoryId` null): same-tenant, active|superseded, yields 'distilled'. All-null is rejected. */
 interface ResolvedGraphSource {
   sourceKind: SourceKind;
   memoryId: string | null;
@@ -66,8 +66,8 @@ export function resolveConsolidatedSource(
   );
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
 
-  // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (objects are
-  // consolidated by construction). All-null is rejected.
+  // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only
+  // row (objects are consolidated by construction). All-null is rejected.
   if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
   if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
   throw new Error(`${label}: graph row needs a memory or a source object`);
@@ -92,8 +92,9 @@ function checkSourceMemory(
       memoryId,
     ) as { kind: string; tenant_id: string } | undefined;
     if (!row) {
-      // Stale/forgotten mirror: tolerate it IFF a valid source object gives provenance, so a mirror pruned mid
-      // graph-extract does not roll back the tenant rebuild; anchor to the object and drop the dead memory pointer.
+      // Stale/forgotten mirror: tolerate it IFF a valid source object gives provenance, so a mirror
+      // pruned mid graph-extract does not roll back the tenant rebuild; anchor to the object and
+      // drop the dead memory pointer.
       if (sourceObject == null) {
         throw new Error(`${label}: source memory ${memoryId} not found`);
       }
@@ -119,15 +120,15 @@ function assertSourceObjectUsable(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): void {
-  // Validate the object pointer WHENEVER provided: a dual-set row with a bad object would become the provenance after
-  // ON DELETE SET NULL and could block the memory delete.
+  // Validate the object pointer WHENEVER provided: a dual-set row with a bad object would become
+  // the provenance after ON DELETE SET NULL and could block the memory delete.
   if (sourceObject != null) {
     const table = SOURCE_OBJECT_TABLE[sourceObject.type];
     if (!table) {
       throw new Error(`${label}: unsupported source_object_type '${sourceObject.type}'`);
     }
-    // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe; `id`/`tenant_id`
-    // stay parametrized.
+    // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe;
+    // `id`/`tenant_id` stay parametrized.
     const row = cachedStatement(
       db,
       `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
@@ -146,8 +147,8 @@ function assertSourceObjectUsable(
   }
 }
 
-/** Insert a graph entity on the caller's handle; throws if the source memory is missing / cross-tenant / raw (the DB
- * trigger is the backstop). */
+/** Insert a graph entity on the caller's handle; throws if the source memory is missing /
+ * cross-tenant / raw (the DB trigger is the backstop). */
 export function insertEntityRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -204,8 +205,9 @@ function checkedName(label: string, raw: string | undefined): string {
   return name;
 }
 
-/** Renames an entity or moves its memory provenance in place on the caller's handle, keeping id and created_at; null
- * when the row is gone. A delete plus an insert would cascade away every relation that points at it. */
+/** Renames an entity or moves its memory provenance in place on the caller's handle, keeping id
+ * and created_at; null when the row is gone. A delete plus an insert would cascade away every
+ * relation that points at it. */
 export function updateEntityRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -259,8 +261,9 @@ function assertEndpointsInTenant(
   }
 }
 
-/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated memory.
- * The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
+/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from
+ * a consolidated memory. The schema trigger checks each endpoint once; only a refused insert
+ * reads them, to say which one failed. */
 export function insertRelationRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -324,7 +327,9 @@ function relationSource(
 }
 
 /**
- * The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row.
+ * The source object still holds the loader's rule (active or superseded); a closed or gone one gets
+ * no new graph row.
+ *
  */
 export function objectInForce(
   db: DatabaseSyncLike,
@@ -340,7 +345,8 @@ export function objectInForce(
   return row?.status === 'active' || row?.status === 'superseded';
 }
 
-/** The lowest-id entity of this type anchored to the source object, which is the row a rebuild keeps. */
+/** The lowest-id entity of this type anchored to the source object, which is the row a rebuild
+ * keeps. */
 export function entityIdBySource(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -378,8 +384,10 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
   cachedStatement(db, `DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 }
 
-/** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
- * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a transaction.
+/** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds
+ * serialize instead of interleaving and a throw rolls back the whole chunk. The sole sanctioned
+ * place to wrap graph writes in a transaction.
+ *
  */
 export function runGraphRebuildTransaction<T>(
   db: DatabaseSyncLike,
@@ -390,9 +398,9 @@ export function runGraphRebuildTransaction<T>(
   return withWriteScope(db, 'graph_rebuild', () => fn(db));
 }
 
-/** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty`
- * cannot enqueue a rebuild. Fail-soft like `markGraphDirty`; the explicit relations DELETE also covers a relation whose
- * OWN provenance is this object. */
+/** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror
+ * memory `markGraphDirty` cannot enqueue a rebuild. Fail-soft like `markGraphDirty`; the
+ * explicit relations DELETE also covers a relation whose OWN provenance is this object. */
 export function removeGraphEntitiesForObject(
   db: DatabaseSyncLike,
   tenantId: string,

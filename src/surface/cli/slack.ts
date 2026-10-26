@@ -38,7 +38,8 @@ async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlag
     );
     throw new CliExit(2);
   }
-  // The slack_cursors row drives resume, so the loop always continues where it left off (keeps idempotency clean).
+  // The slack_cursors row drives resume, so the loop always continues where it left off (keeps
+  // idempotency clean).
   if (stringFlag(flags, 'since'))
     printError('note: --since is ignored; the backfill resumes from the saved cursor.');
   const fetcher = slackHistoryFetcher(token);

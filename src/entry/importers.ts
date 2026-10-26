@@ -1,4 +1,5 @@
-// The published importers take a folder in their options, so this entry builds the hippo.db store each one writes to.
+// The published importers take a folder in their options, so this entry builds the hippo.db store
+// each one writes to.
 import {
   importEntriesInto,
   importRoot,
@@ -58,8 +59,9 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
   return importMarkdownInto(filePath, targeted(options));
 }
 
-/** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
- * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
+/** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on
+ * the in-memory `existing` Map loaded once, so two concurrent runs over one vault can
+ * double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const batch = <T>(run: () => Promise<T>): Promise<T> => runStoreRequest(run, 'cli');
   return importVaultInto(folderPath, options, {

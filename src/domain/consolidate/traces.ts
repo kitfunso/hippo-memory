@@ -10,20 +10,22 @@ import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { DAY_MS } from '../../base/util/time.js';
 
-/** The sessions whose traces this sleep promotes: the caller's tenant's, completed within the window, with no trace
- * yet; none under dryRun or with auto-trace off. */
+/** The sessions whose traces this sleep promotes: the caller's tenant's, completed within the
+ * window, with no trace yet; none under dryRun or with auto-trace off. */
 export function traceWindow(
   run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 'config'>,
 ): SleepBegin['traces'] {
   if (run.dryRun || run.config.autoTraceCapture === false) return undefined;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
-  // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant loop on top of this.
+  // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant
+  // loop on top of this.
   return { tenantId: run.tenantId, sinceMs: run.now.getTime() - windowDays * DAY_MS };
 }
 
-// 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via source_session_id)
-// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics. The
-// store read the sessions with their events at sleep begin, and one tombstone read covers every trace.
+// 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via
+// source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which inherits
+// decay, search, replay and physics. The store read the sessions with their events at sleep begin,
+// and one tombstone read covers every trace.
 export async function promoteSessionTraces(
   run: SleepRun,
   sessions: readonly UntracedSession[],
@@ -90,7 +92,8 @@ function sessionTrace(
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,
-      // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates every sleep.
+      // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates
+      // every sleep.
       tenantId: consolidationTenant,
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
     },
@@ -99,7 +102,8 @@ function sessionTrace(
   return { trace, outcome, sessionId };
 }
 
-/** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
+/** The outcome and title a session's terminal event carries, or null when it has none or the
+ * event is malformed. */
 function sessionEnding(
   events: readonly SessionEvent[],
 ): { outcome: TraceOutcome; summary: string } | null {
@@ -112,14 +116,15 @@ function sessionEnding(
     return null;
   }
 
-  // SAFETY: session event metadata is a free-form Record<string, unknown> bag; summary is optional and is only trusted
-  // once isJsonString below confirms it is actually a string.
+  // SAFETY: session event metadata is a free-form Record<string, unknown> bag; summary is optional
+  // and is only trusted once isJsonString below confirms it is actually a string.
   const summaryValue = completeEvent.metadata.summary as JsonValue;
   const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
   return { outcome: outcomeRaw, summary };
 }
 
-// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused under.
+// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused
+// under.
 async function auditRejectedTrace(
   run: SleepRun,
   trace: MemoryEntry,
@@ -139,13 +144,15 @@ async function auditRejectedTrace(
   });
 }
 
-// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal
-// and idle time, then applying the `markRetrieved` strengthening, so important memories don't fade.
+// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome,
+// valence, under-rehearsal and idle time, then applying the `markRetrieved` strengthening, so
+// important memories don't fade.
 export async function replayPass(run: SleepRun): Promise<void> {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
-  // the whole pass; persisting unmutated entries anyway would still refresh updated_at and mirrors.
+  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the
+  // strengthen-off arm silences the whole pass; persisting unmutated entries anyway would still
+  // refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.size > 0 && run.strength.recallStrengthens)) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = await survivors.get(

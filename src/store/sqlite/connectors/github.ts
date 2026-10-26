@@ -38,7 +38,8 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
   return eventMemory(db, GITHUB_LOG, idempotencyKey);
 }
 
-/** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
+/** False when the key was already logged, so a caller inside a write scope can roll its own row
+ * back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
   return markEventSeen(
     db,
@@ -75,8 +76,9 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
 
-/** The installation's tenant when one is named, else the one tenant that registered the repository; with no match, or
- * a repository two tenants registered, how many rows it could have come from. */
+/** The installation's tenant when one is named, else the one tenant that registered the
+ * repository; with no match, or a repository two tenants registered, how many rows it could have
+ * come from. */
 export function githubRoute(
   db: DatabaseSyncLike,
   {
@@ -95,7 +97,8 @@ export function githubRoute(
   }
   const tenants = repoFullName ? repoTenants(db, repoFullName) : [];
   if (tenants.length === 1) return { tenantId: tenants[0]! };
-  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes to neither.
+  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes
+  // to neither.
   if (tenants.length > 1) {
     log.warn('github webhook: two tenants registered this repository; refusing the route', {
       repo: repoFullName ?? undefined,
@@ -105,7 +108,8 @@ export function githubRoute(
   return { tenantId: null, routes: rowCount(db, 'installations') + rowCount(db, 'repositories') };
 }
 
-/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner from a shared name. */
+/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner
+ * from a shared name. */
 function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
   const sql = `SELECT DISTINCT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY tenant_id LIMIT 2`;
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.

@@ -6,10 +6,10 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 const LAYERS = ['episodic', 'buffer', 'semantic'] as const;
 const MAX_WARN_LOGS = 5;
 
-/** Path A backfill cleanup: delete markdown mirrors (<hippoRoot>/<layer>/<id>.md) of rows archived before redaction, so
- * RTBF holds for historical archives.
- * Tracked by raw_archive.mirror_cleaned_at: set only on success, so a failed unlink retries next connection. Returns
- * whether all pending rows were cleaned. */
+/** Path A backfill cleanup: delete markdown mirrors (<hippoRoot>/<layer>/<id>.md) of rows
+ * archived before redaction, so RTBF holds for historical archives. Tracked by
+ * raw_archive.mirror_cleaned_at: set only on success, so a failed unlink retries next
+ * connection. Returns whether all pending rows were cleaned. */
 export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
   // SAFETY: raw_archive.memory_id is NOT NULL TEXT.
   const rows = db

@@ -1,4 +1,5 @@
-// The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
+// The Conflicts group's types: a conflict read with both members' columns, and the keyset page that
+// carries them.
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { TenantId } from '../../util/tenant.js';
 import type { MemoryConflict } from '../../memory/conflict-wire.js';
@@ -13,7 +14,8 @@ export interface ConflictMember {
   readonly origin_project: string | null;
 }
 
-/** A conflict and its two members from one read; a member is null only on an every-tenant read whose row is gone. */
+/** A conflict and its two members from one read; a member is null only on an every-tenant read
+ * whose row is gone. */
 export interface ConflictRow {
   readonly conflict: MemoryConflict;
   readonly a: ConflictMember | null;
@@ -42,8 +44,9 @@ export interface ConflictSide {
   readonly scope: string | null;
 }
 
-/** The domain's decision, applied as given: `weaken` scales the half-life by `halfLifeFactor`, never under
- * `minHalfLifeDays`; `reject` also tombstones the value and sweeps rows `ownScopeTouches(ownScope, scope)` admits. */
+/** The domain's decision, applied as given: `weaken` scales the half-life by `halfLifeFactor`,
+ * never under `minHalfLifeDays`; `reject` also tombstones the value and sweeps rows
+ * `ownScopeTouches(ownScope, scope)` admits. */
 export type LoserFate =
   | { readonly kind: 'weaken'; readonly halfLifeFactor: number; readonly minHalfLifeDays: number }
   | { readonly kind: 'remove' }
@@ -58,7 +61,8 @@ export interface ConflictResolution {
   readonly actor: string;
   /** Kept on the tombstone and a raw loser's archive row. */
   readonly reason: string;
-  /** Core's clock, as `toISOString` gives it: the conflict's updatedAt and a rejected loser's tombstone time. */
+  /** Core's clock, as `toISOString` gives it: the conflict's updatedAt and a rejected loser's
+   * tombstone time. */
   readonly at: string;
 }
 
@@ -67,7 +71,7 @@ export interface Conflicts {
   list(query: ConflictListQuery): Promise<ConflictRowPage>;
   /** Conflict `conflictId`, any status, when both its members are in the tenant; else null. */
   get(tenantId: string, conflictId: number): Promise<ConflictRow | null>;
-  /** Writes what the api decided, in one transaction, while the conflict is still open and each side still holds the
-   * scope in `resolution`; false, with nothing written, otherwise. */
+  /** Writes what the api decided, in one transaction, while the conflict is still open and each
+   * side still holds the scope in `resolution`; false, with nothing written, otherwise. */
   resolve(tenantId: string, resolution: ConflictResolution): Promise<boolean>;
 }

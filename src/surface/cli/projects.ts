@@ -1,5 +1,5 @@
-// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo, repair old tags in
-// one pass.
+// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo,
+// repair old tags in one pass.
 
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -12,7 +12,8 @@ import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.j
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
-/** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
+/** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name;
+ * empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
     const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
@@ -27,7 +28,8 @@ function worktreeNames(): Map<string, string> {
       .map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
   } catch (err) {
-    // Outside a git checkout (git exits 128) or no git on PATH (ENOENT): the list just has no worktree hints.
+    // Outside a git checkout (git exits 128) or no git on PATH (ENOENT): the list just has no
+    // worktree hints.
     const expected =
       errorCode(err) === 'ENOENT' ||
       (err instanceof Error && 'status' in err && err.status === 128);

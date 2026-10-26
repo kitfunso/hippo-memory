@@ -75,7 +75,8 @@ const TRANSFERABLE_TAGS = new Set([
   'best-practice',
 ]);
 
-/** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
+/** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows
+ * inherit them. */
 export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
   'git-learned',
   'session-digest',
@@ -86,8 +87,8 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
 
-/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own
- * list. */
+/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict
+ * detection keeps its own list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   EXTRACTED_TAG,
   'session-digest',
@@ -95,13 +96,15 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   ...AGENT_MEMORY_TAGS,
 ]);
 
-/** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the global store. */
+/** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the
+ * global store. */
 export const AUTO_SHARE_MIN_SCORE = 0.6;
 
 /** Below this transfer score a hand-run share copies a row only when forced. */
 const SHARE_MIN_SCORE = 0.3;
 
-/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes away. */
+/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes
+ * away. */
 const TRANSFER_WEIGHTS = {
   neutral: 0.5,
   perTransferableTag: 0.1,
@@ -114,7 +117,8 @@ const TRANSFER_WEIGHTS = {
 /** Recalls after which a memory counts as reused and earns TRANSFER_WEIGHTS.retrieved. */
 const REUSED_AFTER_RETRIEVALS = 3;
 
-/** Every trait that lifts transferScore above neutral or makes autoShare skip a row before scoring it. */
+/** Every trait that lifts transferScore above neutral or makes autoShare skip a row before
+ * scoring it. */
 const AUTO_SHARE_SIGNALS: EntrySignals = {
   tags: [...TRANSFERABLE_TAGS, ...NEVER_AUTO_SHARE_TAGS],
   sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
@@ -169,8 +173,8 @@ export async function shareMemory(
 
   await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
 
-  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
-  // the whole index per call.
+  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since
+  // embedMemory rewrites the whole index per call.
   if (!options.skipEmbed) {
     const target = {
       store: global.store,
@@ -185,8 +189,8 @@ export async function shareMemory(
   return globalEntry;
 }
 
-/** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row
- * may not be shared. */
+/** The global copy of a local row, or null when its transfer score is too low and `force` is
+ * off; throws when the row may not be shared. */
 function toGlobalEntry(
   local: StoreHome,
   entry: MemoryEntry,
@@ -198,8 +202,8 @@ function toGlobalEntry(
   const score = transferScore(entry);
   if (score < SHARE_MIN_SCORE && !force) return null;
 
-  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as
-  // no project.
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which
+  // originFromSource reads as no project.
   const fallbackName = local.folderName;
   const originName = entry.originProject ?? (local.shared ? null : local.project.name);
   const label = originName === '' ? fallbackName : (originName ?? '');
@@ -212,8 +216,8 @@ function toGlobalEntry(
 }
 
 function assertShareable(entry: MemoryEntry, id: string): void {
-  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a silent null reads as
-  // "low transfer score" and invites retries.
+  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a
+  // silent null reads as "low transfer score" and invites retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
     throw new BadRequestError(
@@ -236,8 +240,8 @@ function assertShareable(entry: MemoryEntry, id: string): void {
   }
 }
 
-/** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or
- * 'promoted:<path>' sources; ALL_TENANTS is the host-wide view. */
+/** List all projects that contributed memories to the global store, parsed from
+ * 'shared:<project>:' or 'promoted:<path>' sources; ALL_TENANTS is the host-wide view. */
 export async function listPeers(
   global: { readonly store: SharingStore },
   tenantId: TenantId,
@@ -282,13 +286,15 @@ type AutoShareStats = {
   neverAutoShareSkipped?: number;
 };
 
-/** The rules a row must clear before autoShare asks the global store whether it already holds the text. */
+/** The rules a row must clear before autoShare asks the global store whether it already holds
+ * the text. */
 function clearsShareRules(
   entry: MemoryEntry,
   minScore: number,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on
+  // one.
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
@@ -296,7 +302,8 @@ function clearsShareRules(
   ) {
     return false;
   }
-  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the
+  // bar.
   if (
     entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
     entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
@@ -307,7 +314,8 @@ function clearsShareRules(
   return transferScore(entry) >= minScore;
 }
 
-/** A row that cleared the rules shares unless the global store holds its text or it carries a secret. */
+/** A row that cleared the rules shares unless the global store holds its text or it carries a
+ * secret. */
 function isNewAndClean(
   entry: MemoryEntry,
   globalKeys: ReadonlySet<string>,
@@ -316,9 +324,9 @@ function isNewAndClean(
   // Skip if already shared (same text apart from spacing)
   if (globalKeys.has(duplicateKey(entry.content))) return false;
 
-  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the score or dedupe gate
-  // was never going to share).
-  // shareMemory would throw here; filtering keeps the sleep pipeline fail-safe.
+  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the
+  // score or dedupe gate was never going to share). shareMemory would throw here; filtering keeps
+  // the sleep pipeline fail-safe.
   if (detectSecret(entry).flagged) {
     if (stats) stats.secretSkipped++;
     return false;
@@ -327,8 +335,8 @@ function isNewAndClean(
   return true;
 }
 
-/** The local rows a page at a time: above the neutral score only a row carrying a signal can share or count as a
- * never-auto-share skip, so only those are read. */
+/** The local rows a page at a time: above the neutral score only a row carrying a signal can
+ * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
   { sharing, reports }: Pick<StoreGroups, 'sharing' | 'reports'>,
   minScore: number,
@@ -346,8 +354,8 @@ async function* autoSharePages(
   } while (after !== null);
 }
 
-/** The page's rows that share. The global store, the union of every tenant, is asked only for the rows that may hold a
- * page row's text. */
+/** The page's rows that share. The global store, the union of every tenant, is asked only for
+ * the rows that may hold a page row's text. */
 async function pageCandidates(
   to: Captures,
   page: readonly MemoryEntry[],
@@ -363,7 +371,8 @@ async function pageCandidates(
   return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
 }
 
-/** Writes one page of candidates in one transaction; returns the copies written and how many a tombstone refused. */
+/** Writes one page of candidates in one transaction; returns the copies written and how many a
+ * tombstone refused. */
 async function sharePage(
   local: StoreHome,
   to: SharingStore,
@@ -376,8 +385,8 @@ async function sharePage(
   return { shared, refused: copies.length - shared.length };
 }
 
-// A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort the autoShare sleep
-// phase. The caller embeds once via embedAll() afterwards.
+// A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort
+// the autoShare sleep phase. The caller embeds once via embedAll() afterwards.
 async function shareCandidates(
   local: StoreHome,
   to: SharingStore,
@@ -402,9 +411,9 @@ async function shareCandidates(
   return shared;
 }
 
-/** Auto-share local memories with high transfer scores, not already global and without a NEVER_AUTO_SHARE_TAGS tag;
- * `options.tenantId` scopes the LOCAL read.
- * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
+/** Auto-share local memories with high transfer scores, not already global and without a
+ * NEVER_AUTO_SHARE_TAGS tag; `options.tenantId` scopes the LOCAL read. `options.stats` is an
+ * opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles' | 'reports'> },
@@ -421,7 +430,8 @@ export async function autoShare(
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
   await to.folderFiles.ensure();
-  // Every page is judged before any is written, so a copy written early cannot hide a later row's twin.
+  // Every page is judged before any is written, so a copy written early cannot hide a later row's
+  // twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
     candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));

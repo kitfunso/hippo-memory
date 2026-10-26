@@ -41,7 +41,8 @@ import { CliExit, fail } from './exit.js';
 const PARENT_PREVIEW_CHARS = 70;
 const DETAIL_CONTENT_CHARS = 160;
 
-// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
+// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and
+// env.
 interface RememberTags {
   requested: string[];
   all: string[];
@@ -78,9 +79,9 @@ type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
 function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts
-  // forget/consolidate on raw rows, so exposing --kind raw would create unforgettable memories. 'archived' is an
-  // internal sentinel set only in that transaction.
+  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the
+  // append-only trigger aborts forget/consolidate on raw rows, so exposing --kind raw would create
+  // unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(
       `Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`,
@@ -126,7 +127,8 @@ function rememberRequest(content: string, flags: CliFlags, useGlobal: boolean): 
   };
 }
 
-/** The switches only a write on the store honours (with --layer), so a command that sets one never goes to a server. */
+/** The switches only a write on the store honours (with --layer), so a command that sets one
+ * never goes to a server. */
 const STORE_ONLY_SWITCHES = [
   'pin',
   'extract',
@@ -192,7 +194,8 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
   return stringListFlag(flags, 'tag');
 }
 
-/** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
+/** The api's conflict text differs by which writer lost; the row itself names its successor
+ * either way. */
 async function alreadySupersededLine(
   hippoRoot: string,
   oldId: string,

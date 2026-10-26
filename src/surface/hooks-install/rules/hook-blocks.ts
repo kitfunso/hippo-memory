@@ -1,4 +1,5 @@
-// The hippo block each agent's instruction file carries, and how init recognises one it wrote earlier.
+// The hippo block each agent's instruction file carries, and how init recognises one it wrote
+// earlier.
 import { createHash } from 'node:crypto';
 import { escapeRegex } from '../../../base/util/escape.js';
 
@@ -18,7 +19,8 @@ export interface HookTable {
   [agent: string]: HookSpec;
 }
 
-// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a footer.
+// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a
+// footer.
 const PI_FOOTER =
   'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
 const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
@@ -112,8 +114,8 @@ ends, so there is nothing to run before you finish.
   },
 };
 
-// sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash
-// when a block changes.
+// sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited.
+// Add the old hash when a block changes.
 const SHIPPED_HOOK_HASHES = new Map([
   ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
   ['e6b12bd8983c032e5ca8e95a97aeff4178a5a05026d10acad5b2e1b25d5656dd', 'claude-code'],
@@ -138,8 +140,9 @@ const SHIPPED_HOOK_HASHES = new Map([
 ]);
 
 /**
- * The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is undefined for an edited
- * block.
+ * The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is
+ * undefined for an edited block.
+ *
  */
 export function hippoBlock(
   text: string,
@@ -148,7 +151,8 @@ export function hippoBlock(
   const start = at + HOOK_MARKERS.start.length;
   const end = text.indexOf(HOOK_MARKERS.end, start);
   if (at < 0 || end < 0) return null;
-  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own ending.
+  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own
+  // ending.
   const raw = text.slice(start, end);
   const inner = raw.replace(/\r\n/g, '\n').trim();
   const owner =

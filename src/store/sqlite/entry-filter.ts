@@ -1,5 +1,6 @@
-// hippo.db's half of the entry filter (port/reports.ts): each field one WHERE term with bound parameters, over the
-// memories columns or the same fields of a dormant snapshot's JSON. memory/entry-filter.ts is the predicate half.
+// hippo.db's half of the entry filter (port/reports.ts): each field one WHERE term with bound
+// parameters, over the memories columns or the same fields of a dormant snapshot's JSON.
+// memory/entry-filter.ts is the predicate half.
 import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
@@ -11,7 +12,8 @@ import { entryPage, entryPageOrder, entryRange, type EntryPageRequest } from './
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
 
-/** A memories column a filter reads; a dormant snapshot answers each from its JSON field of the same name. */
+/** A memories column a filter reads; a dormant snapshot answers each from its JSON field of the
+ * same name. */
 export type FilterColumn =
   | 'id'
   | 'origin_project'
@@ -23,14 +25,16 @@ export type FilterColumn =
   | 'source_session_id';
 
 type ColumnOf = (column: FilterColumn) => string;
-// An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a generic key.
+// An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a generic
+// key.
 type Field = keyof EntryNarrowing;
 type Term<K extends Field> = (
   value: NonNullable<EntryNarrowing[K]>,
   column: ColumnOf,
 ) => SqlFragment;
 
-/** The least string above every string that starts with `prefix` in byte order, or null when none is. */
+/** The least string above every string that starts with `prefix` in byte order, or null when
+ * none is. */
 export function prefixUpperBound(prefix: string): string | null {
   const points = Array.from(prefix);
   while (points.at(-1) === '\u{10FFFF}') points.pop();
@@ -41,15 +45,16 @@ export function prefixUpperBound(prefix: string): string | null {
   return points.join('') + String.fromCodePoint(next === 0xd800 ? 0xe000 : next);
 }
 
-// One value binds `=`, which the tenant and origin index can seek; a list binds one JSON param, so the statement text
-// stays the same however long it is.
+// One value binds `=`, which the tenant and origin index can seek; a list binds one JSON param, so
+// the statement text stays the same however long it is.
 function inList(column: string, values: readonly string[]): SqlFragment {
   return values.length === 1
     ? { sql: `${column} = ?`, params: [values[0]!] }
     : { sql: `${column} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(values)] };
 }
 
-// A BINARY range is startsWith in byte order, and it is what idx_memories_source_tenant_created seeks.
+// A BINARY range is startsWith in byte order, and it is what idx_memories_source_tenant_created
+// seeks.
 function startsWith(column: string, prefix: string): SqlFragment {
   const upper = prefixUpperBound(prefix);
   return upper === null
@@ -86,8 +91,8 @@ function term<K extends Field>(narrowing: EntryNarrowing, key: K, column: Column
   return value === undefined ? [] : [TERMS[key](value, column)];
 }
 
-/** The terms the fields of `narrowing` compile to, each ` AND ...`, empty when it sets none; `column` names each
- * field's column. */
+/** The terms the fields of `narrowing` compile to, each ` AND ...`, empty when it sets none;
+ * `column` names each field's column. */
 export function narrowingAnd(
   narrowing: EntryNarrowing,
   column: ColumnOf = (name) => name,
@@ -100,7 +105,8 @@ export function narrowingAnd(
   };
 }
 
-/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`, newest first. */
+/** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`, newest
+ * first. */
 export function listEntriesWhere(
   db: DatabaseSyncLike,
   filter: EntryFilter,
@@ -126,7 +132,8 @@ export function listEntriesWhere(
   return { entries: rows.map(rowToEntry), next };
 }
 
-// An id list reads off the primary key: the plus keeps SQLite off the tenant index, and no tenant is walked.
+// An id list reads off the primary key: the plus keeps SQLite off the tenant index, and no tenant
+// is walked.
 function idsPage(
   db: DatabaseSyncLike,
   filter: EntryFilter,

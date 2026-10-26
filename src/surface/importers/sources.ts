@@ -15,8 +15,8 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or
- * plain text with one memory per line. */
+/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects,
+ * `{"memories": [...]}`, or plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
@@ -74,7 +74,9 @@ function splitMarkdown(content: string): string[] {
 }
 
 /**
- * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open.
+ * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the
+ * chunk still open.
+ *
  */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
@@ -212,7 +214,9 @@ export function importCursorInto(sourcePath: string, options: TargetedImport): I
 }
 
 /**
- * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line.
+ * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines
+ * or one per line.
+ *
  */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');

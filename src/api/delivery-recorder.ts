@@ -1,6 +1,7 @@
-// In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
-// each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
-// src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never text.
+// In-memory observer for one call (a context call, a compaction boundary or a session end): what
+// was considered, why each was rejected, what reached stdout. No DB access (the caller hands
+// build()'s output to src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never
+// text.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
 import {
@@ -24,7 +25,8 @@ import type {
   DeliveryStage,
   DeliveryWriteStore,
 } from '../base/session/delivery.js';
-/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
+/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a
+ * prompt. */
 const carriesPrompt = (type: DeliveryEventType): boolean =>
   type === 'prompt-submit' || type === 'pinned-manual';
 
@@ -56,7 +58,8 @@ export interface DeliverySelected {
   promptRecall?: boolean;
 }
 
-/** What contextGet reports while it selects. Every method only reads; none changes what is selected. */
+/** What contextGet reports while it selects. Every method only reads; none changes what is
+ * selected. */
 export interface DeliveryObserver {
   facts(facts: DeliveryFacts): void;
   sections(shown: number, dropped: number): void;
@@ -65,7 +68,9 @@ export interface DeliveryObserver {
   /** A store's ambient load refused the row with this id under the admission it was sent. */
   filtered(id: string): void;
   /**
-   * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it instead.
+   * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility
+   * reports it instead.
+   *
    */
   qualityDropped(id: string, isGlobal: boolean): void;
   disabled(): void;
@@ -93,7 +98,8 @@ export interface DeliveryObserver {
   selected(items: readonly DeliverySelected[]): void;
   /** A searching call's query, `*` for none; kept as its hash, the one the recall trace stores. */
   queried(query: string): void;
-  /** The recall trace a call that returned rows wrote; null when the write failed or the store answers no id. */
+  /** The recall trace a call that returned rows wrote; null when the write failed or the store
+   * answers no id. */
   traced(traceId: number | null): void;
 }
 
@@ -102,7 +108,8 @@ export interface DeliveryOutcomeInput {
   state: DeliveryBlockState;
   staticHash?: string | null;
   recallHash?: string | null;
-  /** The exact text the agent receives: the hook's additionalContext, or every stdout byte, newline included. */
+  /** The exact text the agent receives: the hook's additionalContext, or every stdout byte,
+   * newline included. */
   emittedText?: string | null;
   /** The static block was skipped as unchanged, so its entries are reused, not sent. */
   staticReused?: boolean;
@@ -113,7 +120,8 @@ export interface DeliveryRecorder extends DeliveryObserver {
   delivered(outcome: DeliveryOutcomeInput): void;
   /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
   logged(failureId: number | null): void;
-  /** The event, built on the first call only; null after that or once broken. Throws on an injected fault. */
+  /** The event, built on the first call only; null after that or once broken. Throws on an
+   * injected fault. */
   takeEvent(): DeliveryEventInput | null;
 }
 
@@ -126,12 +134,16 @@ export interface DeliveryRecorderInit {
   stdinText?: string;
   envSessionId?: string;
   /**
-   * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code.
+   * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference
+   * would say claude-code.
+   *
    */
   runtime?: DeliveryRuntime;
-  /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
+  /** Set by hooks that are not prompt or context calls; without it the payload's hook event
+   * decides. */
   eventType?: DeliveryEventType;
-  /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment variable reaches it. */
+  /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment
+   * variable reaches it. */
   fault?: DeliveryFault;
   /** The instant the event is stamped with. */
   now: Date;
@@ -335,7 +347,8 @@ function buildEvent(
   const eventType =
     init.eventType ??
     (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
-  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by its prompt.
+  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by
+  // its prompt.
   const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
     ts,
@@ -555,7 +568,8 @@ function stateMethods(state: RecorderState, guard: Guard): StateMethods {
   };
 }
 
-/** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
+/** A recorder for one call; every observer method is guarded, and a throw marks it broken
+ * instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
   const ts = init.now.toISOString();

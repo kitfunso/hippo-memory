@@ -1,5 +1,5 @@
-// /v1/project-briefs routes; the store validates and throws, and the boundary maps validation to 400, not-found to 404
-// and not-active to 409.
+// /v1/project-briefs routes; the store validates and throws, and the boundary maps validation to
+// 400, not-found to 404 and not-active to 409.
 import { briefDigest, briefRefresh, OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../http/http-util.js';

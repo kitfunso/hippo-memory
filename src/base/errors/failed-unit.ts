@@ -1,5 +1,6 @@
-// A flush tags the error it stopped on with the unit it would have committed next, so the partial sleep audit row can
-// name it; an own field, since a store worker's error reaches the sleep as a copy rebuilt from its fields.
+// A flush tags the error it stopped on with the unit it would have committed next, so the partial
+// sleep audit row can name it; an own field, since a store worker's error reaches the sleep as a
+// copy rebuilt from its fields.
 interface FailedUnit {
   failedUnitIds?: unknown;
 }

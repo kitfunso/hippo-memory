@@ -1,6 +1,7 @@
 /**
- * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB
- * columns for 384-dim vectors.
+ * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in
+ * SQLite, with BLOB columns for 384-dim vectors.
+ *
  */
 
 import type { DatabaseSyncLike } from './index.js';
@@ -33,7 +34,8 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
   `);
 }
 
-// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 interface PhysicsRow {
   memory_id: string;
   position_blob: Uint8Array;
@@ -88,7 +90,8 @@ function particlesOf(rows: readonly PhysicsRow[]): Map<string, PhysicsParticle> 
   return map;
 }
 
-/** How many particles are stored and the sum of their speeds, in loadAllPhysicsState's order, reading one column. */
+/** How many particles are stored and the sum of their speeds, in loadAllPhysicsState's order,
+ * reading one column. */
 export function physicsSpeedSum(db: DatabaseSyncLike) {
   let count = 0;
   let speedSum = 0;
@@ -151,7 +154,8 @@ export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
-  // Kept for the frozen lifecycle-stress scripts, which pass no clock on a raw handle; the wall clock stands in.
+  // Kept for the frozen lifecycle-stress scripts, which pass no clock on a raw handle; the wall
+  // clock stands in.
   now: Date = new Date(),
   model: StrengthModel = PRODUCTION_STRENGTH,
 ): number {
@@ -171,7 +175,8 @@ function* seedsOf(
 /** A memory and the vector its fresh particle starts at. */
 export type ParticleSeed = readonly [MemoryEntry, number[]];
 
-/** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch at a time. */
+/** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch
+ * at a time. */
 export function resetPhysicsFromSeeds(
   db: DatabaseSyncLike,
   seeds: Iterable<ParticleSeed>,

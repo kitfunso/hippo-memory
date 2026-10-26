@@ -1,5 +1,5 @@
-// The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts maps each path
-// here.
+// The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts
+// maps each path here.
 import type * as http from 'node:http';
 import type { Context } from '../../api/index.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
@@ -57,7 +57,8 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
   sendOrNotFound(r.res, await r.reader.search(parseSearchText(r.query), freshOf(r)));
 }
 
-// next_cursor rides only a page with more after it, so a board that fits one page gets its old reply byte for byte.
+// next_cursor rides only a page with more after it, so a board that fits one page gets its old
+// reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
   const after = parseCursor(r.query.get('cursor'), 'string', 'string');
   const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, {
@@ -77,7 +78,8 @@ export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promi
 
 type Action = (ctx: Context, body: ActionBody) => Promise<ActionResult>;
 
-// Nothing runs until the content type and the body pass; a committed write then moves the snapshot id before the reply.
+// Nothing runs until the content type and the body pass; a committed write then moves the snapshot
+// id before the reply.
 async function runAction(r: DashboardRouteRequest, action: Action): Promise<void> {
   const { req, res } = r;
   if (!JSON_CONTENT_TYPE.test(req.headers['content-type'] ?? '')) {

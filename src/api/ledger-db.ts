@@ -1,4 +1,5 @@
-// The store the token ledger writes to for a caller; context, recall and the session hooks share it.
+// The store the token ledger writes to for a caller; context, recall and the session hooks share
+// it.
 import type { HippoConfig } from '../base/config/config.js';
 import type { FolderFiles, HippoStore, Ledger, LedgerTurn } from '../base/ports/store.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
@@ -13,7 +14,8 @@ export interface LedgerHome {
   readonly config: HippoConfig;
 }
 
-/** Where a call's ledger can sit: its own store, else the operator's global one; a shared store has no `global`. */
+/** Where a call's ledger can sit: its own store, else the operator's global one; a shared store
+ * has no `global`. */
 export interface LedgerReach {
   readonly local?: LedgerHome;
   readonly global?: GlobalInReach;
@@ -26,7 +28,8 @@ function homeOf(store: HippoStore, config: HippoConfig): LedgerHome | undefined 
     : { ledger, folderFiles, config };
 }
 
-/** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller has a store. */
+/** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller
+ * has a store. */
 export function ledgerReachOf(
   ctx: Pick<Context, 'reach' | 'store' | 'config'>,
   shared?: boolean,
@@ -35,7 +38,8 @@ export function ledgerReachOf(
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
 
-/** The call's own store, else the global store (the prompt hook fires where none is); null with neither. */
+/** The call's own store, else the global store (the prompt hook fires where none is); null with
+ * neither. */
 export function ledgerHome(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
   const { global } = reach;
@@ -47,12 +51,14 @@ export async function bookTokenUse(use: TokenUse, reach: LedgerReach): Promise<v
   await ledgerHome(reach)?.ledger.recordTurn({ uses: [use] });
 }
 
-/** Books a turn's rows and then its delivery event on one connection of ledgerHome's store, best-effort. */
+/** Books a turn's rows and then its delivery event on one connection of ledgerHome's store,
+ * best-effort. */
 export async function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): Promise<void> {
   await ledgerHome(reach)?.ledger.recordTurn(turn);
 }
 
-/** bookLedgerTurn where each row is its own attempt: a row that fails is noted and the rest still land. */
+/** bookLedgerTurn where each row is its own attempt: a row that fails is noted and the rest
+ * still land. */
 export async function bookLedgerTurnPerRow(
   turn: Omit<LedgerTurn, 'perRow'>,
   reach: LedgerReach,
@@ -60,7 +66,8 @@ export async function bookLedgerTurnPerRow(
   await ledgerHome(reach)?.ledger.recordTurn({ ...turn, perRow: true });
 }
 
-/** What the session last sent on `surface` in ledgerHome's store; null with no ledger, no row or a failed read. */
+/** What the session last sent on `surface` in ledgerHome's store; null with no ledger, no row or
+ * a failed read. */
 export async function ledgerLastSent(
   tenantId: string,
   sessionId: string | null | undefined,

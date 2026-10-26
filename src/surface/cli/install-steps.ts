@@ -1,4 +1,5 @@
-// The init and setup steps that touch the machine: Codex hooks, the settings.json warning and the daily schedule.
+// The init and setup steps that touch the machine: Codex hooks, the settings.json warning and the
+// daily schedule.
 
 import * as path from 'node:path';
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
@@ -16,8 +17,9 @@ import {
 } from './scheduler.js';
 
 /**
- * Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an
- * untrusted hook.
+ * Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder,
+ * since Codex skips an untrusted hook.
+ *
  */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
@@ -41,8 +43,8 @@ export function installCodexMemoryHooks(indent: string): void {
 }
 
 /**
- * The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo
- * can edit and so was left unchanged; true when it printed. */
+ * The one line init, hook install, hook uninstall and setup print when Claude Code's
+ * settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
 export function warnClaudeSettingsUnusable(
   result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
   indent: string,
@@ -57,15 +59,18 @@ export function warnClaudeSettingsUnusable(
 }
 
 /**
- * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a scheduled task on
- * Windows; skips if installed.
+ * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a
+ * scheduled task on Windows; skips if installed.
+ *
  */
 /**
- * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`.
+ * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo
+ * init` or `hippo setup`.
+ *
  */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
-// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the scheduler's complaints off
-// the terminal.
+// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the
+// scheduler's complaints off the terminal.
 const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
   encoding: 'utf-8',
   stdio: 'pipe',
@@ -73,7 +78,8 @@ const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
   timeout: SCHEDULER_CALL_TIMEOUT_MS,
 };
 
-/** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real schtasks or crontab runs. */
+/** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real
+ * schtasks or crontab runs. */
 type RunScheduler = (
   file: string,
   args: readonly string[],
@@ -81,8 +87,9 @@ type RunScheduler = (
 ) => string;
 
 /**
- * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is
- * missing.
+ * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the
+ * scheduler refused or is missing.
+ *
  */
 function schedulerTimedOut<E>(err: E): boolean {
   return errorCode(err) === 'ETIMEDOUT';
@@ -106,7 +113,8 @@ export function setupDailySchedule(
     return;
   }
   const isWindows = platform === 'win32';
-  // The path rules follow the platform being scheduled for, so a Windows root is never judged by POSIX rules.
+  // The path rules follow the platform being scheduled for, so a Windows root is never judged by
+  // POSIX rules.
   const runnerDir = (isWindows ? path.win32 : path.posix).resolve(globalRoot);
   if (hasUnsafeRunnerPathChars(runnerDir, platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);

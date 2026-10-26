@@ -1,5 +1,5 @@
-// The delivery event a store writes: the shape of one row the ledger group books, and the two facts about it the
-// recorder and the store share.
+// The delivery event a store writes: the shape of one row the ledger group books, and the two facts
+// about it the recorder and the store share.
 
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 
@@ -47,7 +47,8 @@ export interface DeliveryCandidateInput {
   tokens: number | null;
 }
 
-/** One event as the writer stores it; the writer adds `turn_seq`, `duplicate_of` and the format version. */
+/** One event as the writer stores it; the writer adds `turn_seq`, `duplicate_of` and the format
+ * version. */
 export interface DeliveryEventInput {
   ts: string;
   tenantId: string;
@@ -92,6 +93,6 @@ export interface DeliveryEventInput {
 export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
   type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
 
-/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows
- * and hashes the store's resolved root. */
+/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can
+ * write `tool-failure` rows and hashes the store's resolved root. */
 export const DELIVERY_LEDGER_VERSION = 4;

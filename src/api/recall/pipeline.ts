@@ -1,5 +1,6 @@
-// The one recall ranker: every recall loads, searches, expands, re-ranks and filters here under the profile its caller
-// picks, with no writes and no direct output. Callers own parsing, printing, budget fitting and persistence.
+// The one recall ranker: every recall loads, searches, expands, re-ranks and filters here under the
+// profile its caller picks, with no writes and no direct output. Callers own parsing, printing,
+// budget fitting and persistence.
 
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { oneCopyPerMemory } from '../context-select.js';
@@ -64,8 +65,8 @@ export interface RankSource {
 
 /** Stores rankRecall reads and where it sends operator notes. */
 export interface RankRecallCtx extends RankSource {
-  /** A second store searched beside `store`; leave undefined when there is none. Passing `store` itself reads it twice
-   * but walks its graph once. */
+  /** A second store searched beside `store`; leave undefined when there is none. Passing `store`
+   * itself reads it twice but walks its graph once. */
   global?: RankSource;
   tenantId: string;
   /** Builds the provider that embeds the query for each store's vector arm. */
@@ -76,25 +77,28 @@ export interface RankRecallCtx extends RankSource {
   switches?: EvalSwitches;
   /** The instant every memory is scored at. */
   now: Date;
-  /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
+  /** Receives each operator note when the pipeline reaches it, so it interleaves with other
+   * stderr in order. */
   note?: (line: string) => void;
 }
 
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
 export interface RecallSearchOptions {
   usePhysics: boolean;
-  /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a 'position' profile keeps the
-   * load order. */
+  /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a
+   * 'position' profile keeps the load order. */
   engineNamed?: boolean;
   physicsConfig: PhysicsConfig;
   multihop: boolean;
-  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine defaults. */
+  /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine
+   * defaults. */
   graphStream?: RecallGraphStream;
   mmr?: boolean;
   mmrLambda?: number;
   localBump?: number;
   minResults?: number;
-  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and includeSuperseded. */
+  /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and
+   * includeSuperseded. */
   explain: boolean;
 }
 
@@ -120,17 +124,18 @@ export interface RecallReranker {
 export interface RankRecallFilters {
   includeSuperseded: boolean;
   asOf?: string;
-  /** `--scope` unlocks that envelope scope on top of the default-admitted set. Under `scopeMode: 'exact'` it is the
-   * only scope read. */
+  /** `--scope` unlocks that envelope scope on top of the default-admitted set. Under `scopeMode:
+   * 'exact'` it is the only scope read. */
   explicitScope: string | null;
-  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API caller. */
+  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API
+   * caller. */
   scopeMode?: 'additive' | 'exact';
   /** The API caller's own personal scope, which the default deny still admits. */
   ownScope?: string;
   /** The caller's project names: other projects' rows stay out, user-global ones stay in. */
   originProjects?: readonly string[];
-  /** Scope used for boosting only, never for filtering. Without it, the engine boosts the store's runtime active
-   * scope. */
+  /** Scope used for boosting only, never for filtering. Without it, the engine boosts the
+   * store's runtime active scope. */
   activeScope?: string | null;
 }
 
@@ -155,7 +160,8 @@ export interface RankRecallOptions extends RankRecallFilters, RankRecallStages {
   budget?: number;
   /** Price of one result, usually the tokens its printed line takes. */
   cost?: ResultCost;
-  /** `limit` stops a 'budget' profile's list; `scorerWindow` sizes the lexical load, 200 rows when unset. */
+  /** `limit` stops a 'budget' profile's list; `scorerWindow` sizes the lexical load, 200 rows
+   * when unset. */
   window: Pick<RecallWindowOptions, 'limit' | 'scorerWindow'>;
   /** Record a rerank trace step for each score change. */
   why?: boolean;
@@ -176,8 +182,8 @@ export interface RankRecallResult {
   graphAdded: number;
   /** goal_recall_log rows the session goal boost earned; the caller writes them. */
   goalRecallLog: GoalRecallLogRow[];
-  /** The goals the ranked goal pass read, so a band pass need not read them again. It is null when the pass had no
-   * session to read for, and absent when the profile runs no ranked pass. */
+  /** The goals the ranked goal pass read, so a band pass need not read them again. It is null
+   * when the pass had no session to read for, and absent when the profile runs no ranked pass. */
   goals?: ActiveGoals | null;
 }
 
@@ -214,7 +220,8 @@ function settle(request: RankRecallOptions, profile: RecallProfile): SettledOpti
   };
 }
 
-/** The ranker's reads through an api Context: its store, the embedding model its config names, and its folder. */
+/** The ranker's reads through an api Context: its store, the embedding model its config names,
+ * and its folder. */
 export function rankCtxOf(ctx: Context): RankRecallCtx {
   return {
     store: ctx.store,
@@ -228,8 +235,9 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
   };
 }
 
-/** Ranks memories for a query under the caller's `profile`; notes go to `ctx.note`, and the caller supplies the cost
- * function and reranker in `request` and writes the returned goal-log rows. */
+/** Ranks memories for a query under the caller's `profile`; notes go to `ctx.note`, and the
+ * caller supplies the cost function and reranker in `request` and writes the returned goal-log
+ * rows. */
 export async function rankRecall(
   ctx: RankRecallCtx,
   request: RankRecallOptions,
@@ -261,8 +269,8 @@ export async function rankRecall(
   };
 }
 
-/** The stages after the search, in order: graph expansion, re-rank, goal boost, salience, then the outcome and layer
- * filters. */
+/** The stages after the search, in order: graph expansion, re-rank, goal boost, salience, then
+ * the outcome and layer filters. */
 async function rankStages(
   ctx: RankRecallCtx,
   opts: SettledOptions,
@@ -283,8 +291,8 @@ async function rankStages(
 }
 
 interface PoolScope {
-  /** An explicit --scope unlocks that envelope scope. The regex-only `<source>:private:*` deny is the JS half of the
-   * rule. */
+  /** An explicit --scope unlocks that envelope scope. The regex-only `<source>:private:*` deny
+   * is the JS half of the rule. */
   requested: string | undefined;
   /** An as-of read needs the rows a later write superseded. */
   loadSuperseded: boolean;
@@ -297,7 +305,8 @@ function poolScope(opts: RankRecallOptions): PoolScope {
   };
 }
 
-/** The JS half of the load's scope rule: the CLI's additive unlock, or an API caller's exact scope and own scope. */
+/** The JS half of the load's scope rule: the CLI's additive unlock, or an API caller's exact
+ * scope and own scope. */
 function poolAdmits(opts: RankRecallOptions): (e: MemoryEntry) => boolean {
   const { requested } = poolScope(opts);
   return opts.scopeMode === 'exact'
@@ -323,13 +332,15 @@ async function loadRecallPool(
     originProjects: opts.originProjects,
     ownScope: opts.ownScope,
   };
-  // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global order.
+  // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global
+  // order.
   const reads = await Promise.all([
     ctx.store.searchRecallEntries(opts.query, load),
     ctx.global ? ctx.global.store.searchRecallEntries(opts.query, load) : Promise.resolve([]),
   ]);
   let [local, global] = reads;
-  // The SQL load already left out some rows, so the total is taken before the JS filters, which normally drop nothing.
+  // The SQL load already left out some rows, so the total is taken before the JS filters, which
+  // normally drop nothing.
   const total = local.length + global.length;
   const passes = poolAdmits(opts);
   local = local.filter(passes);
@@ -342,7 +353,8 @@ async function loadRecallPool(
 
 interface PoolSearch {
   readonly pool: RecallPool;
-  /** The scope the engines boost, by the profile's `scopeBoost`; undefined leaves the engine its runtime scope. */
+  /** The scope the engines boost, by the profile's `scopeBoost`; undefined leaves the engine its
+   * runtime scope. */
   readonly scope: string | null | undefined;
 }
 
@@ -354,7 +366,8 @@ function graphStreamSearch(
 ): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { mmr, mmrLambda, minResults } = search;
-  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
+  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather
+  // than no-op.
   if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
     ctx.note?.(
       '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
@@ -366,7 +379,8 @@ function graphStreamSearch(
       '[note] --graph-stream searches the local store only; global graph fusion is a follow-up.',
     );
   }
-  // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
+  // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
+  // fusion.
   return hybridSearch(query, pool.local, {
     budget,
     cost,
@@ -398,7 +412,8 @@ function multihopPoolSearch(
 ): SearchResult[] {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
-  // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
+  // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies
+  // both compete.
   const strength = rankStrength({ switches: ctx.switches, runtime: ctx.config.runtime });
   const allEntries = oneCopyPerMemory(pool.local, pool.global, ctx.now, strength).flat();
   const globalIds = new Set(pool.global.map((e) => e.id));
@@ -438,7 +453,8 @@ async function searchPool(
 ): Promise<SearchResult[]> {
   const scope = profile.scopeBoost === 'filter' ? opts.explicitScope : opts.activeScope;
   if (profile.scoreForm === 'engine') return engineSearch(ctx, opts, { pool, scope });
-  // Every loaded row stays, in the order of an engine the request names; rows it leaves out keep their load order.
+  // Every loaded row stays, in the order of an engine the request names; rows it leaves out keep
+  // their load order.
   const ranked = opts.search.engineNamed ? await engineSearch(ctx, opts, { pool, scope }) : [];
   const order = withMissing(
     ranked.map((r) => r.entry),
@@ -453,8 +469,8 @@ async function searchPool(
   }));
 }
 
-/** The tuning each engine takes: physics takes no MMR, and an explain run takes only asOf so its output stays
- * steady. */
+/** The tuning each engine takes: physics takes no MMR, and an explain run takes only asOf so its
+ * output stays steady. */
 function engineTuning<T extends { minResults: unknown; includeSuperseded: unknown; asOf: unknown }>(
   physicsOn: boolean,
   explain: boolean,
@@ -487,8 +503,8 @@ async function engineSearch(
     now: ctx.now,
   };
   if (ctx.global && pool.global.length > 0) {
-    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
-    // stores again.
+    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it
+    // rather than read both stores again.
     return rankBothStores(
       query,
       {
@@ -539,7 +555,8 @@ async function expandGraph(
 ): Promise<void> {
   if (graph.hops <= 0) return;
   const { requested } = poolScope(opts);
-  // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would hide both.
+  // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
+  // hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
   state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,
@@ -570,12 +587,14 @@ function traced<R extends SearchResult>(
   return next;
 }
 
-/** Re-sort after a score change. Plain and stable on purpose: ties keep the prior rank, not a content order. */
+/** Re-sort after a score change. Plain and stable on purpose: ties keep the prior rank, not a
+ * content order. */
 function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
-/** Multiplies each row's score by `multiplier(row)` (undefined leaves the row alone), traces the step and re-sorts. */
+/** Multiplies each row's score by `multiplier(row)` (undefined leaves the row alone), traces the
+ * step and re-sorts. */
 function rescore(
   opts: RankRecallOptions,
   results: SearchResult[],
@@ -595,7 +614,8 @@ function rescore(
 }
 
 function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
-  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
+  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never
+  // delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = rescore(opts, state.results, 'interference', (r) =>
     (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId))
@@ -635,16 +655,19 @@ function reorderResults(opts: RankRecallOptions, state: RankState): void {
   if (opts.rerankUtility) applyUtilityRank(opts, state);
 }
 
-// newestOnTopicFirst acts when the top hits overlap this much; it keeps rows near the best score or covering the query.
+// newestOnTopicFirst acts when the top hits overlap this much; it keeps rows near the best score or
+// covering the query.
 const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
-// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at least 9.
+// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at
+// least 9.
 const NEAR_DUPLICATE_WINDOW = 3;
 const NEAR_DUPLICATE_POOL_MIN = 9;
 
-/** When the top hits are near-duplicates (same topic, different facts), surface the newest on-topic row first. */
+/** When the top hits are near-duplicates (same topic, different facts), surface the newest
+ * on-topic row first. */
 function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResult[] {
   const slice = results.slice(0, Math.min(NEAR_DUPLICATE_WINDOW, results.length));
   let pairs = 0;

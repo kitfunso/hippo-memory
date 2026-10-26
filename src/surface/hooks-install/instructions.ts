@@ -1,5 +1,5 @@
-// Writes hippo's block into an agent's instruction file (CLAUDE.md, AGENTS.md and the like). The block's text, and how
-// init recognises one it wrote earlier, are rules/hook-blocks.ts.
+// Writes hippo's block into an agent's instruction file (CLAUDE.md, AGENTS.md and the like). The
+// block's text, and how init recognises one it wrote earlier, are rules/hook-blocks.ts.
 
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { HOOK_MARKERS, type HookSpec } from './rules/hook-blocks.js';

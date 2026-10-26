@@ -1,6 +1,7 @@
 /**
- * Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge pass (semantic
- * summaries of overlapping episodics), stats.
+ * Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge
+ * pass (semantic summaries of overlapping episodics), stats.
+ *
  */
 
 import { MemoryEntry } from '../../base/memory/entry.js';
@@ -45,11 +46,13 @@ export type ConsolidateOptions = {
   now?: Date;
   /** The model the LLM phases call; absent, they are skipped as when no key is set. */
   llm?: Llm;
-  /** How long one flush transaction may hold the write lock; a WriteBudget fits, and only its hold is read. */
+  /** How long one flush transaction may hold the write lock; a WriteBudget fits, and only its
+   * hold is read. */
   budget?: Pick<WriteBudget, 'holdMs'>;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
-  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the default tenant. */
+  /** The tenant whose completed sessions become traces; absent, `consolidate` uses the default
+   * tenant. */
   tenantId?: string;
 };
 
@@ -78,10 +81,12 @@ export async function runConsolidation(
   );
   reportFtsDrift(start.fts, result);
 
-  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
+  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read
+  // a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
-  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
+  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class
+  // object.
   const retirable = (entry: MemoryEntry): boolean =>
     canAutoDelete(entry) && !rows.backsObject(entry.id);
 
@@ -158,8 +163,8 @@ async function runPassesAfterDecay(
   }
 }
 
-// A changed default half-life moves memories still on the old base first, so this pass decays them at the new one
-// (src/domain/consolidate/half-life-migration.ts).
+// A changed default half-life moves memories still on the old base first, so this pass decays them
+// at the new one (src/domain/consolidate/half-life-migration.ts).
 async function migrateHalfLives(
   store: ConsolidationStore,
   to: number,
@@ -198,8 +203,9 @@ function flushComponents(run: SleepRun): FlushComponent[] {
   return groupFlush(ops, units);
 }
 
-// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for good (0 keeps
-// forever); runs even when dormant.enabled is off, so turning it off still ages out what earlier sleeps kept.
+// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for
+// good (0 keeps forever); runs even when dormant.enabled is off, so turning it off still ages out
+// what earlier sleeps kept.
 function dormantCutoff({ config, now }: SleepRun): string | null {
   if (!(config.dormant.retentionDays > 0)) return null;
   return new Date(now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
@@ -262,8 +268,8 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
   if (decay.rescuedEntries.length > 0) await auditRescues(run, decay);
 }
 
-// One audit row per rescue, written only after the last flush chunk commits, so a run stopped mid-flush asserts no
-// rescue.
+// One audit row per rescue, written only after the last flush chunk commits, so a run stopped
+// mid-flush asserts no rescue.
 async function auditRescues(
   run: SleepRun,
   { rescuedEntries, rankById }: DecayOutcome,

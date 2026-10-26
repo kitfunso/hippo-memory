@@ -1,4 +1,5 @@
-// First-class object verbs for predictions: record a claim, close it against the actual, and read the class base rate.
+// First-class object verbs for predictions: record a claim, close it against the actual, and read
+// the class base rate.
 
 import * as predictionsApi from '../../api/objects/predictions.js';
 import type { Context } from '../../api/types.js';
@@ -61,7 +62,8 @@ async function loadPredictionList(
   }
   const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
-    // status filter without class: scan all classes is more complex; v1 requires --class for non-default status
+    // status filter without class: scan all classes is more complex; v1 requires --class for
+    // non-default status
     fail('--status filter (non-open) requires --class to be set.');
   }
   return predictionsApi.predictionList(ctx, {

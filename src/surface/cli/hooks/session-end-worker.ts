@@ -1,4 +1,5 @@
-// The detached session-end worker (`__session-end-worker`): sleep, capture, digest and the handoff, each step logged.
+// The detached session-end worker (`__session-end-worker`): sleep, capture, digest and the handoff,
+// each step logged.
 import {
   readSessionScan,
   recordSessionDigest,
@@ -93,7 +94,8 @@ function runSessionEndWork(
   });
 }
 
-/** Sleeps the folder's own store; a failure goes to the session log, and capture runs regardless. */
+/** Sleeps the folder's own store; a failure goes to the session log, and capture runs
+ * regardless. */
 async function sleepFolderStore(
   hippoRoot: string,
   tenantId: string,

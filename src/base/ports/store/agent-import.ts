@@ -1,10 +1,12 @@
-// The agent-memories import's one write per container: the sync plans a container's writes as data from entry pages,
-// and applyContainer runs them in one transaction once the rows they were planned on still stand.
+// The agent-memories import's one write per container: the sync plans a container's writes as data
+// from entry pages, and applyContainer runs them in one transaction once the rows they were planned
+// on still stand.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
 
 export interface AgentImport {
-  /** The steps in order in one write scope, or a trial scope that rolls back on `dryRun`; mirrors follow the commit. */
+  /** The steps in order in one write scope, or a trial scope that rolls back on `dryRun`;
+   * mirrors follow the commit. */
   applyContainer(plan: ContainerApply): Promise<ContainerApplied>;
 }
 
@@ -28,7 +30,8 @@ export interface ContainerApply {
   readonly steps: readonly ImportStep[];
 }
 
-/** A legacy row outside the prefixes takes a note's source; the apply refuses unless it is still live at `from`. */
+/** A legacy row outside the prefixes takes a note's source; the apply refuses unless it is still
+ * live at `from`. */
 export interface AdoptStep {
   readonly kind: 'adopt';
   readonly id: string;
@@ -71,7 +74,8 @@ interface WriteStep {
   readonly supersedes: readonly string[];
 }
 
-/** The dormant row returns as `revived`; when it is gone or its id is taken, `fresh` is written instead. */
+/** The dormant row returns as `revived`; when it is gone or its id is taken, `fresh` is written
+ * instead. */
 export interface RestoreStep {
   readonly kind: 'restore';
   readonly dormantId: string;
@@ -95,8 +99,9 @@ export type ImportStep =
   | RestoreStep
   | SetAsideStep;
 
-/** Per step: 'done', 'skipped' (a supersede another writer did first), a write's gate result, 'restored' or which way
- * a set-aside went. A restore whose row was gone answers its fresh write's result. */
+/** Per step: 'done', 'skipped' (a supersede another writer did first), a write's gate result,
+ * 'restored' or which way a set-aside went. A restore whose row was gone answers its fresh
+ * write's result. */
 export type StepOutcome =
   | 'done'
   | 'skipped'

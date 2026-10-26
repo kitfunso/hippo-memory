@@ -1,7 +1,8 @@
 /**
- * Decision object: the `decisions` table is the source of truth, so an in-force decision stays `active` despite memory
- * decay. The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only; saveDecision commits both in
- * one `objects` transaction.
+ * Decision object: the `decisions` table is the source of truth, so an in-force decision stays
+ * `active` despite memory decay. The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
+ * recall only; saveDecision commits both in one `objects` transaction.
+ *
  */
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -31,7 +32,8 @@ export interface SaveDecisionOptions {
   /** Table id of an ACTIVE decision this one supersedes; the CLI resolves a `--supersedes <memory-id>` via
    *  resolveActiveDecisionIdByMemory, HTTP/SDK pass the table id. */
   supersedesDecisionId?: number;
-  /** Extra memory tags merged after ['decision'] (the CLI passes path-context tags; HTTP/SDK pass none). */
+  /** Extra memory tags merged after ['decision'] (the CLI passes path-context tags; HTTP/SDK
+   * pass none). */
   extraTags?: string[];
 }
 
@@ -61,8 +63,9 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
 };
 
 /**
- * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked
- * stale, tagged `superseded`.
+ * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day
+ * at least, marked stale, tagged `superseded`.
+ *
  */
 export function weakenSupersededMemory(
   writes: EntryWrites,

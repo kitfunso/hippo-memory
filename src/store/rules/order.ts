@@ -1,9 +1,10 @@
-// The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS callers with the
-// comparator built from the same keys.
+// The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS
+// callers with the comparator built from the same keys.
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 
-/** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
+/** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic
+ * plane. */
 export const byBytes = (a: string, b: string): number =>
   Buffer.compare(Buffer.from(a), Buffer.from(b));
 
@@ -74,7 +75,8 @@ export const REJECTED_ORDER: readonly OrderKey<{
   textKey('digest', (r) => r.digest),
 ];
 
-/** A list walked by (key, id) descending, as keysetAfter pages it in SQL; an id is a text or an integer column. */
+/** A list walked by (key, id) descending, as keysetAfter pages it in SQL; an id is a text or an
+ * integer column. */
 export type DescendingKeyset<R> =
   | { readonly key: (row: R) => string; readonly textId: (row: R) => string }
   | { readonly key: (row: R) => string; readonly intId: (row: R) => number };

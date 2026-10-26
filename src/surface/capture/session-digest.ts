@@ -1,4 +1,5 @@
-// One memory per ended session, built without a model call from the agent's final message and the files it changed.
+// One memory per ended session, built without a model call from the agent's final message and the
+// files it changed.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './transcript.js';
@@ -20,7 +21,8 @@ import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
 import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
-/** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses nothing. */
+/** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses
+ * nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
 
 export interface DigestEdit {
@@ -119,8 +121,8 @@ function readClaudeAssistant(record: TranscriptRecord, state: ScanState): void {
     const target = editTarget(block);
     if (target) state.pending.push({ callId: block.id, filePath: target, base: state.cwd });
   }
-  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message, nor is Claude Code's
-  // own notice.
+  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message,
+  // nor is Claude Code's own notice.
   if (record.isMeta === true || record.isSidechain === true || isSynthetic(record)) return;
   for (let i = blocks.length - 1; i >= 0; i--) {
     const text = blocks[i].type === 'text' ? blocks[i].text : undefined;
@@ -278,8 +280,9 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
 }
 
 /**
- * One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message, and the edits that
- * landed.
+ * One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message,
+ * and the edits that landed.
+ *
  */
 export function scanSessionTranscript(jsonl: string): SessionScan {
   const state: ScanState = {
@@ -296,7 +299,8 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     turns,
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
-    // An unanswered call may never have run, so an edit counts only once its result says it applied.
+    // An unanswered call may never have run, so an edit counts only once its result says it
+    // applied.
     edits: state.pending
       .filter((e) => state.landed.has(e.callId))
       .map(({ filePath, base }) => ({ filePath, base })),
@@ -331,14 +335,16 @@ export function readSessionScan(
   }
 }
 
-/** A \\host or //host path would make existsSync open an SMB connection to a host named in transcript text. */
+/** A \\host or //host path would make existsSync open an SMB connection to a host named in
+ * transcript text. */
 function isNetworkPath(p: string): boolean {
   return /^[\\/]{2}(?:(?![?.][\\/])|[?.][\\/]UNC[\\/])/i.test(p);
 }
 
 /**
- * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. Null for a
- * network path.
+ * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its
+ * own. Null for a network path.
+ *
  */
 function realFsPath(p: string): string | null {
   if (isNetworkPath(p)) return null;
@@ -356,8 +362,9 @@ function realFsPath(p: string): string | null {
 }
 
 /**
- * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the path cannot be
- * resolved.
+ * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the
+ * path cannot be resolved.
+ *
  */
 function repoRelative(p: string, repoRoot: string): string | null {
   let real: string | null;
@@ -434,14 +441,16 @@ export interface DigestRunOptions extends SessionDigestOptions {
   log: (message: string) => void;
 }
 
-/** Never throws: a digest failure must not block the handoff or the snapshot close. Logs carry no digest text. */
+/** Never throws: a digest failure must not block the handoff or the snapshot close. Logs carry
+ * no digest text. */
 export async function recordSessionDigest(
   hippoRoot: string,
   store: DigestStore,
   scan: SessionScan | null,
   opts: DigestRunOptions,
 ): Promise<void> {
-  // The digest names this repo's files, so it goes only to the repo's own store, never the global one.
+  // The digest names this repo's files, so it goes only to the repo's own store, never the global
+  // one.
   if (!isInitialized(hippoRoot)) {
     opts.log('digest: skip: this folder has no store of its own');
     return;

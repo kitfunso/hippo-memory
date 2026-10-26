@@ -1,4 +1,5 @@
-// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
+// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search
+// branch.
 
 import { recallScopeFilter } from '../base/scope/recall-scope.js';
 import { calculateStrength, type StrengthModel } from '../base/memory/strength.js';
@@ -87,8 +88,9 @@ export interface ContextPools {
   global: AmbientLoadResult;
 }
 
-// Share and promote copy a memory to the global store under a new id, so equal content is the only link.
-// A pinned copy wins, then the stronger one after the ranking's own global discount; a tie keeps the local copy.
+// Share and promote copy a memory to the global store under a new id, so equal content is the only
+// link. A pinned copy wins, then the stronger one after the ranking's own global discount; a tie
+// keeps the local copy.
 export function oneCopyPerMemory(
   local: readonly MemoryEntry[],
   global: readonly MemoryEntry[],
@@ -121,8 +123,9 @@ interface PromptCandidate {
 }
 
 /**
- * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out
- * too.
+ * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so
+ * task state stays out too.
+ *
  */
 export function selectPinned(
   opts: ContextOptions,
@@ -156,8 +159,9 @@ export function selectPinned(
   );
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent
-  // loop runs first, so pins are ranked here and reserve their share before it can spend.
+  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE
+  // budget and the recent loop runs first, so pins are ranked here and reserve their share before
+  // it can spend.
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
@@ -358,7 +362,8 @@ export function selectStrongest(
   return strongestWithin(localRanked, globalRanked, left);
 }
 
-/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the 'recall' audit row. */
+/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the
+ * 'recall' audit row. */
 export async function selectBySearch(
   ctx: Context,
   plan: ContextPlan,
@@ -385,8 +390,8 @@ export async function selectBySearch(
   return results;
 }
 
-// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an excluded row fill the
-// budget or shadow its admitted duplicate.
+// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an
+// excluded row fill the budget or shadow its admitted duplicate.
 interface SearchBothStoresOptions {
   readonly left: number;
   readonly minResults: number | undefined;
@@ -401,8 +406,8 @@ async function searchBothStores(
 ): Promise<ContextResultEntry[]> {
   const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is
-  // looked up.
+  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so
+  // the global pool is looked up.
   const poolIds = (pool: AmbientLoadResult): string[] =>
     [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
   const localIds = new Set(poolIds(pools.local));
@@ -419,7 +424,8 @@ async function searchBothStores(
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm runs.
+    // Its own config.json names the global store's embedding model, read only when the vector arm
+    // runs.
     global: globalVectorSource(ctx),
   };
   const merged = await rankBothStores(
@@ -508,7 +514,8 @@ async function searchLocalRows(
   }));
 }
 
-// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they never emit.
+// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they
+// never emit.
 async function auditContextRecall(
   ctx: Context,
   plan: ContextPlan,

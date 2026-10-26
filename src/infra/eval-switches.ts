@@ -1,5 +1,6 @@
-// The eval-only switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS) and the HIPPO_FAKE_NOW clock as the environment
-// holds them, read when a root builds its ports; each strength switch becomes a StrengthModel value, never a branch.
+// The eval-only switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS) and the HIPPO_FAKE_NOW clock as
+// the environment holds them, read when a root builds its ports; each strength switch becomes a
+// StrengthModel value, never a branch.
 import { type EvalSwitches, type RankAblation } from '../base/memory/eval-switches.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
 import type { Clock, InfraPorts, StoreRules } from '../base/ports/infra.js';
@@ -22,8 +23,8 @@ export interface StrengthAblation {
   readonly outcomeSlow: boolean;
 }
 
-/** `base` with each cut mechanism off: decay also drops the wrong-mark halvings (amendment A1), and the slow outcome
- * channel is the reward slope and the wrong marks together. */
+/** `base` with each cut mechanism off: decay also drops the wrong-mark halvings (amendment A1),
+ * and the slow outcome channel is the reward slope and the wrong marks together. */
 export function strengthModelUnder(
   ablation: StrengthAblation,
   base: StrengthModel = PRODUCTION_STRENGTH,
@@ -64,17 +65,20 @@ function rankAblation(): RankAblation {
   };
 }
 
-/** The strength model and rank switches as the environment holds them, for a root to hand its rankings. */
+/** The strength model and rank switches as the environment holds them, for a root to hand its
+ * rankings. */
 export function evalSwitches(): EvalSwitches {
   return { strength: strengthModelUnder(strengthAblation()), rank: rankAblation() };
 }
 
-/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the wall clock. */
+/** The clock a root's Context reads: fixed at HIPPO_FAKE_NOW as it stands now, else the wall
+ * clock. */
 export function evalClock(): Clock {
   return hostClock(envFakeNowMs());
 }
 
-/** What a root opens its store with: the eval strength model at its HIPPO_LOSS_AVERSION_RATIO, and HIPPO_FAKE_NOW. */
+/** What a root opens its store with: the eval strength model at its HIPPO_LOSS_AVERSION_RATIO,
+ * and HIPPO_FAKE_NOW. */
 export function evalStoreRules(lossAversionRatio: number | undefined): StoreRules {
   return { strength: evalSwitches().strength, lossAversionRatio, fakeNowMs: envFakeNowMs() };
 }
@@ -84,7 +88,8 @@ export function evalRun(): Pick<InfraPorts, 'evalSwitches' | 'clock'> {
   return { evalSwitches: evalSwitches(), clock: evalClock() };
 }
 
-/** HIPPO_FAKE_NOW when set and parseable, else the wall clock, read at each call: the entry layer's default `now`. */
+/** HIPPO_FAKE_NOW when set and parseable, else the wall clock, read at each call: the entry
+ * layer's default `now`. */
 export function evalNow(): Date {
   return evalClock()();
 }

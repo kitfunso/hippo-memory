@@ -55,7 +55,8 @@ export function normalizePolicyDate(input: string, label: string = 'date'): stri
   return d.toISOString();
 }
 
-/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to > valid_from. */
+/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to >
+ * valid_from. */
 export function validatePolicyDates(
   validFromRaw: string | undefined,
   validToRaw: string | undefined,
@@ -96,8 +97,9 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
     const policyName = requireText(opts.policyName, MAX_SHORT_FIELD_LEN, 'policyName');
     const policyText = requireText(opts.policyText, MAX_SHORT_FIELD_LEN, 'policyText');
     const at = now.toISOString();
-    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side, because
-    // backdating valid_from to midnight would report the policy in force earlier that day.
+    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on
+    // the read side, because backdating valid_from to midnight would report the policy in force
+    // earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
       fields: { policyName, policyText, validFrom, validTo },
@@ -137,7 +139,8 @@ function inForceQuery(
   opts: { name?: string; limit?: number },
 ): PoliciesInForceQuery {
   assertTenantId('policiesAsOf', tenantId);
-  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is used as given.
+  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is
+  // used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')
     : normalizePolicyDate(asOfDate, 'asOfDate');

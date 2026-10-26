@@ -30,9 +30,9 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
-/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values so a crafted value
- * cannot inject fake `[hippo]` log lines. Exported as the one shared guard for every `[hippo]`-prefixed log writer that
- * interpolates payload values. */
+/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values
+ * so a crafted value cannot inject fake `[hippo]` log lines. Exported as the one shared guard
+ * for every `[hippo]`-prefixed log writer that interpolates payload values. */
 export function sanitizeLogMessage(message: string): string {
   // eslint-disable-next-line no-control-regex
   return message.replace(/[\x00-\x1f]/g, '');
@@ -41,8 +41,8 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one
-    // diagnostic line, which this log accepts.
+    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant
+    // can overwrite one diagnostic line, which this log accepts.
     const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
     try {
       const size = fs.fstatSync(fd).size;
@@ -54,7 +54,8 @@ function appendPreCompactLog(logFile: string, message: string): void {
       fs.closeSync(fd);
     }
   } catch (err) {
-    // A log write failure must never affect the exit-0 contract, but a log that never fills is told.
+    // A log write failure must never affect the exit-0 contract, but a log that never fills is
+    // told.
     logger.warn(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
@@ -65,7 +66,8 @@ function isReadableFile(filePath: string): boolean {
     fs.accessSync(filePath, fs.constants.R_OK);
     return true;
   } catch (err) {
-    // A missing file is the expected miss; a permission or I/O fault is told, then the caller still skips the file.
+    // A missing file is the expected miss; a permission or I/O fault is told, then the caller still
+    // skips the file.
     if (errorCode(err) !== 'ENOENT') {
       logger.warn(`cannot read ${filePath}: ${errorMessage(err)}`, errorFields(err));
     }
@@ -73,8 +75,9 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** PreCompact stdout is the summarizer's instructions; sent before the snapshot work because a locked store can run the
- * hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
+/** PreCompact stdout is the summarizer's instructions; sent before the snapshot work because a
+ * locked store can run the hook past its 30 s limit, and via writeSync because process.exit
+ * drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): string | null {
   const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
@@ -86,7 +89,8 @@ function printPreCompactInstruction(logFile: string): string | null {
   }
 }
 
-/** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice for one compaction. */
+/** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice
+ * for one compaction. */
 const TWIN_FIRE_MS = 10_000;
 
 /** The folder's store as a compaction hook reaches it, built by the CLI root. */
@@ -106,8 +110,8 @@ async function snapshotJustSaved(
   );
 }
 
-/** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state
- * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
+/** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves
+ * a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 async function runPreCompact(
   hippoRoot: string,
   store: CompactionStore,
@@ -115,8 +119,8 @@ async function runPreCompact(
   logFile: string,
 ): Promise<void> {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
-  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call
-  // that would create a store.
+  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate
+  // before any call that would create a store.
   if (!isInitialized(hippoRoot)) {
     appendPreCompactLog(logFile, 'skip: store not initialized');
     return;
@@ -128,8 +132,8 @@ async function runPreCompact(
     return;
   }
   const { sessionId, transcriptPath: payloadTranscriptPath } = receipt.input;
-  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record,
-  // nor reads the summarizer text.
+  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact
+  // to close a record, nor reads the summarizer text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
   if (vscode && fs.existsSync(vscodeUserHooksFile(processHomes()))) {
     appendPreCompactLog(
@@ -166,7 +170,8 @@ async function runPreCompact(
   );
   if (!transcriptPath) return;
 
-  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
+  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with
+  // junk.
   const derived = transcriptWorkingState(transcriptPath, (message) =>
     appendPreCompactLog(logFile, message),
   );
@@ -175,8 +180,8 @@ async function runPreCompact(
   await saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
 }
 
-/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
- * the record id, or null without a record. */
+/** Starts the compaction record when the host will close one (`closable`), then tells
+ * `onBoundary` what was printed; the record id, or null without a record. */
 async function markCompactionBoundary(
   hooks: CompactionHooks,
   options: PreCompactOptions,
@@ -185,8 +190,9 @@ async function markCompactionBoundary(
   closable: boolean,
 ): Promise<string | null> {
   const { sessionId } = input;
-  // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable later.
-  // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
+  // The record is the "something saved before every compaction", so it lands even when no snapshot
+  // is derivable later. Copilot has no PostCompact hook to close a record, so its compactions get
+  // the snapshot alone.
   let recordId: string | null = null;
   let printed: string | null = null;
   if (closable && sessionId !== null && sessionId !== '') {
@@ -207,7 +213,8 @@ async function markCompactionBoundary(
   return recordId;
 }
 
-/** Best effort, never throws: a compaction must not fail because its record could not be written. */
+/** Best effort, never throws: a compaction must not fail because its record could not be
+ * written. */
 async function startRecord(
   hooks: CompactionHooks,
   tenantId: string,
@@ -246,8 +253,9 @@ function resolvePreCompactTranscript(
   logFile: string,
   runtime: HookRuntime,
 ): string | null {
-  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's transcript under THIS
-  // payload's session_id, so it runs only on a manual invocation (no payload).
+  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
+  // transcript under THIS payload's session_id, so it runs only on a manual invocation (no
+  // payload).
   let transcriptPath: string | null;
   if (payloadTranscriptPath !== null) {
     if (isReadableFile(payloadTranscriptPath)) {
@@ -260,7 +268,8 @@ function resolvePreCompactTranscript(
       return null;
     }
   } else if (runtime === 'copilot') {
-    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a Claude session.
+    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a Claude
+    // session.
     transcriptPath = null;
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
@@ -290,8 +299,8 @@ async function saveDerivedSnapshot(
     );
   }
 
-  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every
-  // field.
+  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped;
+  // saveActiveTaskSnapshot scrubs every field.
   const merged = mergeWorkingState(derived, existing, sessionId);
   if (merged === null) {
     appendPreCompactLog(
@@ -321,13 +330,14 @@ export interface PreCompactOptions {
   stdinTimedOut?: boolean;
   logFile?: string;
   runtime?: HookRuntime;
-  /** Called once when the hook accepts a compaction, with the text it printed or null when it printed none. */
+  /** Called once when the hook accepts a compaction, with the text it printed or null when it
+   * printed none. */
   onBoundary?: (printed: string | null) => void;
 }
 
-/** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store
- * error) must exit 0 as a logged no-op. Callers must not wrap this in anything that turns a caught-and-logged failure
- * into a non-zero exit. */
+/** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing
+ * transcript, store error) must exit 0 as a logged no-op. Callers must not wrap this in anything
+ * that turns a caught-and-logged failure into a non-zero exit. */
 export async function preCompactHook(
   hippoRoot: string,
   store: CompactionStore,
@@ -360,8 +370,8 @@ export interface PostCompactOptions {
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
 const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
-/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show.
- * Never throws, so the hook exits 0. */
+/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns
+ * the one line to show. Never throws, so the hook exits 0. */
 export async function postCompactHook(
   hippoRoot: string,
   store: CompactionStore,

@@ -1,4 +1,5 @@
-// The agent-memory adapters' disk reads: size, binary and failure checks live here, behind the AgentFiles port.
+// The agent-memory adapters' disk reads: size, binary and failure checks live here, behind the
+// AgentFiles port.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentFiles, DirListing, TextFile } from '../base/util/agent-files.js';
@@ -10,8 +11,8 @@ const MAX_DEPTH = 8;
 
 function readText(file: string): TextFile {
   try {
-    // O_NONBLOCK opens a FIFO at once, for the file check to turn away; Windows has no such flag and the OR adds
-    // nothing.
+    // O_NONBLOCK opens a FIFO at once, for the file check to turn away; Windows has no such flag
+    // and the OR adds nothing.
     const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
     try {
       return readOpenTextFile(file, fd);
@@ -27,7 +28,8 @@ function readText(file: string): TextFile {
 function readOpenTextFile(file: string, fd: number): TextFile {
   const stat = fs.fstatSync(fd);
   if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
-  // A tool rewriting a file truncates it first; read as holding no notes, every row would be set aside.
+  // A tool rewriting a file truncates it first; read as holding no notes, every row would be set
+  // aside.
   if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
   if (stat.size > MAX_ITEM_BYTES)
     return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };

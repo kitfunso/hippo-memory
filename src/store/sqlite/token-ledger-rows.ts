@@ -1,4 +1,5 @@
-// SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction and the arithmetic.
+// SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction
+// and the arithmetic.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import { placeholders } from '../../db/sql.js';
@@ -113,7 +114,8 @@ interface SessionTotalsRow {
   tokens: number | null;
 }
 
-/** Window-wide session counts; `rereadSurfaces` are the hook surfaces whose sessions count as hook sessions. */
+/** Window-wide session counts; `rereadSurfaces` are the hook surfaces whose sessions count as
+ * hook sessions. */
 export function sessionTotals(
   db: DatabaseSyncLike,
   tenantId: string,

@@ -1,6 +1,6 @@
-// The dashboard's rules as SQL functions on one connection. Each calls src/base's own rule, so a count SQLite makes
-// and a row the dashboard lists judge one memory the same way. Aggregate state is a fixed Float64Array, never a
-// row list.
+// The dashboard's rules as SQL functions on one connection. Each calls src/base's own rule, so a
+// count SQLite makes and a row the dashboard lists judge one memory the same way. Aggregate state
+// is a fixed Float64Array, never a row list.
 import type { DatabaseSyncLike, SqlValue } from '../../db/index.js';
 import type { StoreModel } from './open.js';
 import {
@@ -68,7 +68,8 @@ export function factInputs(row: FactRow): FactInputs {
 }
 
 function factsOf(v: readonly SqlValue[]): FactInputs {
-  // SAFETY: every call site passes FACT_COLUMNS first, in order, and each column holds its MemoryRow type.
+  // SAFETY: every call site passes FACT_COLUMNS first, in order, and each column holds its
+  // MemoryRow type.
   const row = {
     pinned: v[0],
     created: v[1],
@@ -105,22 +106,23 @@ const ASCII_LOWERED = [
   [0x212a, 'k'],
 ] as const;
 
-// SQLite's lower() folds ASCII only, so these two letters fold first: every ASCII run in the JavaScript lower-casing
-// of `column` then appears in this one.
+// SQLite's lower() folds ASCII only, so these two letters fold first: every ASCII run in the
+// JavaScript lower-casing of `column` then appears in this one.
 const asciiFolded = (column: string): string =>
   `lower(${ASCII_LOWERED.reduce((sql, [code, ascii]) => `replace(${sql}, char(${code}), '${ascii}')`, column)})`;
 
 const NOT_ASCII = (column: string): string =>
   `length(CAST(${column} AS BLOB)) <> length(${column})`;
 
-// A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded; for a needle with no
-// ASCII, those with a letter past ASCII; else every row.
+// A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded;
+// for a needle with no ASCII, those with a letter past ASCII; else every row.
 const TEXT_ADMITS =
   `CASE WHEN :probe IS NOT NULL THEN instr(${asciiFolded('content')}, :probe) > 0 ` +
   `OR instr(${asciiFolded('tags_json')}, :probe) > 0 OR ${TAGS_NOT_AS_WRITTEN} ` +
   `WHEN :wide THEN ${NOT_ASCII('content')} OR ${NOT_ASCII('tags_json')} OR instr(tags_json, '\\') > 0 ELSE 1 END`;
 
-/** True when :text is null or the row's content or tags hold it, by hippo_holds_text on the rows native SQL admits. */
+/** True when :text is null or the row's content or tags hold it, by hippo_holds_text on the rows
+ * native SQL admits. */
 const HOLDS_TEXT =
   `CASE WHEN :text IS NULL THEN 1 WHEN ${TEXT_ADMITS} ` +
   `THEN hippo_holds_text(id, content, tags_json, :text) ELSE 0 END`;
@@ -140,7 +142,8 @@ interface TextBinds {
 
 function holdsTextBinds(text: string | null): TextBinds {
   if (text === null) return { text, probe: null, wide: 0 };
-  // node:sqlite hands a function text only up to its first NUL, so that is all of the needle the rule tests.
+  // node:sqlite hands a function text only up to its first NUL, so that is all of the needle the
+  // rule tests.
   const seen = text.split('\0', 1)[0];
   const probe = seen
     .split(PROBE_BREAK)
@@ -148,11 +151,12 @@ function holdsTextBinds(text: string | null): TextBinds {
   return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
 }
 
-// FTS5 cannot look up fewer than 3 characters, so a shorter probe leaves the needle to HOLDS_TEXT over every row.
+// FTS5 cannot look up fewer than 3 characters, so a shorter probe leaves the needle to HOLDS_TEXT
+// over every row.
 const MIN_PROBE_CHARS = 3;
 
-// Every row TEXT_ADMITS can admit for a probe: the trigram index's matches, and the rows it may miss, read by the
-// partial index v64 made for them.
+// Every row TEXT_ADMITS can admit for a probe: the trigram index's matches, and the rows it may
+// miss, read by the partial index v64 made for them.
 const TEXT_CANDIDATES =
   `SELECT rowid FROM memories_trigram WHERE memories_trigram MATCH :phrase UNION ALL ` +
   `SELECT rowid FROM memories WHERE tenant_id = :tenant AND (${TEXT_OUTSIDE_TRIGRAMS})`;
@@ -163,8 +167,8 @@ export interface TextFilter {
   readonly binds: Readonly<Record<string, SqlValue>>;
 }
 
-/** HOLDS_TEXT and its parameters, a statement's text filter; it tests only the trigram index's candidates when the
- * needle has a probe long enough to look up. */
+/** HOLDS_TEXT and its parameters, a statement's text filter; it tests only the trigram index's
+ * candidates when the needle has a probe long enough to look up. */
 export function textFilter(db: DatabaseSyncLike, text: string | null): TextFilter {
   const { probe, wide } = holdsTextBinds(text);
   const binds = { text, probe, wide };
@@ -183,8 +187,8 @@ function utf16Key(value: SqlValue): Uint8Array {
   return bytes.swap16();
 }
 
-// Project tally slots: live, 4 bands, 4 layers, pinned, embedded, weak now, fewest days since retrieval, most days of
-// age, first created time, then a count per series day.
+// Project tally slots: live, 4 bands, 4 layers, pinned, embedded, weak now, fewest days since
+// retrieval, most days of age, first created time, then a count per series day.
 const P_LIVE = 0;
 const P_BANDS = 1;
 const P_LAYERS = 5;
@@ -222,7 +226,8 @@ function addProjectRow(t: Float64Array, v: readonly SqlValue[], rules: StoreMode
   return t;
 }
 
-// Filter tally slots: chip counts all, risk, pinned, conflict, then three buckets each for now, 7 days and 30 days.
+// Filter tally slots: chip counts all, risk, pinned, conflict, then three buckets each for now, 7
+// days and 30 days.
 const F_ALL = 0;
 const F_RISK = 1;
 const F_PINNED = 2;

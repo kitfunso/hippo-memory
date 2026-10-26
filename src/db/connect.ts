@@ -18,8 +18,8 @@ export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
 
-/** Runs `step` on this store unless it already ran to the end under the current store runtime; a throw leaves it due,
- * and outside every runtime it always runs. */
+/** Runs `step` on this store unless it already ran to the end under the current store runtime; a
+ * throw leaves it due, and outside every runtime it always runs. */
 export function oncePerStore(hippoRoot: string, name: string, step: () => void): void {
   const runtime = currentStoreRuntime();
   const key = storeKey(hippoRoot);
@@ -28,7 +28,8 @@ export function oncePerStore(hippoRoot: string, name: string, step: () => void):
   runtime?.markRun(key, name);
 }
 
-// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs, with one warning.
+// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep
+// theirs, with one warning.
 function createStoreFilesOwnerOnly(hippoRoot: string): void {
   // A stat, not a failed exclusive open, is what an existing store costs on every connection.
   if (fs.existsSync(getHippoDbPath(hippoRoot))) {
@@ -61,8 +62,8 @@ function warnWideModes(hippoRoot: string): void {
   }
 }
 
-// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no scan; a failed
-// unlink leaves its row uncleaned, and the next open retries it.
+// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no
+// scan; a failed unlink leaves its row uncleaned, and the next open retries it.
 function sweepArchivedMirrorsIfDue(
   hippoRoot: string,
   db: DatabaseSyncLike,
@@ -73,14 +74,15 @@ function sweepArchivedMirrorsIfDue(
 
 const SCHEMA_STEP = 'schema';
 
-/** Makes the next connection to this store prove its schema again; `hippo init` calls it because it is the explicit ask
- * to set a store up. */
+/** Makes the next connection to this store prove its schema again; `hippo init` calls it because
+ * it is the explicit ask to set a store up. */
 export function reproveStoreSchema(hippoRoot: string): void {
   currentStoreRuntime()?.forget(storeKey(hippoRoot), SCHEMA_STEP);
 }
 
-// Once the runtime has proven a store's schema, a new connection re-reads only the two version stamps and the binary
-// floor: a migration by another process moves a stamp and sends the open down the full path.
+// Once the runtime has proven a store's schema, a new connection re-reads only the two version
+// stamps and the binary floor: a migration by another process moves a stamp and sends the open down
+// the full path.
 function settleSchema(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -100,8 +102,9 @@ function settleSchema(
 }
 
 /**
- * A connection with what its own open's probe read; facts go stale with the next statement, so a handle made by an
- * earlier call carries null.
+ * A connection with what its own open's probe read; facts go stale with the next statement, so a
+ * handle made by an earlier call carries null.
+ *
  */
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
@@ -111,10 +114,10 @@ export interface OpenedDb {
 }
 
 /**
- * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the
- * caller owns and closes it.
- * Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's
- * when one exists.
+ * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when
+ * it is due; the caller owns and closes it. Outside any request scope (CLI start-up, timers) this
+ * is the only handle there is; openHippoDb reuses the scope's when one exists.
+ *
  */
 export function connectWithFacts(
   hippoRoot: string,

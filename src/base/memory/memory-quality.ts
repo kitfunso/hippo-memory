@@ -17,7 +17,8 @@ export type AutomaticMemoryDefect =
   | 'too-vague'
   | 'no-specificity';
 
-/** `reason` names a defect even when `accepted`: a possible fragment is stored and listed for review. */
+/** `reason` names a defect even when `accepted`: a possible fragment is stored and listed for
+ * review. */
 export interface AutomaticMemoryAssessment {
   readonly accepted: boolean;
   readonly reason: AutomaticMemoryDefect | null;
@@ -96,13 +97,15 @@ function isRoutineReleaseActivity(text: string): boolean {
 }
 
 const TRAILING_MARK = /[.!?,;:\s]/;
-// One pass from the end: /[.!?,;:\s]+$/ restarts at every mark of a long run, so it is quadratic on stored text.
+// One pass from the end: /[.!?,;:\s]+$/ restarts at every mark of a long run, so it is quadratic on
+// stored text.
 function bareText(text: string): string {
   let end = text.length;
   while (end > 0 && TRAILING_MARK.test(text[end - 1])) end--;
   return text.slice(0, end);
 }
-// These endings close whole sentences too ("the branch you push to"), so they are only a possible cut.
+// These endings close whole sentences too ("the branch you push to"), so they are only a possible
+// cut.
 const POSSIBLE_CUT_ENDING = new RegExp(
   String.raw`\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|` +
     String.raw`must|should|could|would|might)$`,
@@ -118,8 +121,8 @@ function isDanglingAssertion(text: string): boolean {
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < 50) return true;
-  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only cut-off endings
-  // count.
+  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only
+  // cut-off endings count.
   if (
     /\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(
       bare,
@@ -131,7 +134,8 @@ function isDanglingAssertion(text: string): boolean {
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
 
-/** A capitalised short condition may carry its rule with no comma: "When CI fails we retry once". */
+/** A capitalised short condition may carry its rule with no comma: "When CI fails we retry
+ * once". */
 function isPossibleFragment(text: string): boolean {
   const bare = bareText(text);
   return (
@@ -151,7 +155,8 @@ const OUTCOME_DETAIL = new RegExp(
   'i',
 );
 
-/** Each "(...)" up to the first ")" becomes one space, as text.replace(/\([^)]*\)/g, ' ') does, in one pass. */
+/** Each "(...)" up to the first ")" becomes one space, as text.replace(/\([^)]*\)/g, ' ') does,
+ * in one pass. */
 function blankAsides(text: string): string {
   let out = '';
   let from = 0;
@@ -168,12 +173,13 @@ function blankAsides(text: string): string {
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
   if (lead === null || RELATION_WORD.test(text)) return false;
-  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned 3 matching rows"
-  // does not.
+  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned
+  // 3 matching rows" does not.
   return !OUTCOME_DETAIL.test(blankAsides(text.slice(lead[0].length)));
 }
 
-// `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces (no ReDoS).
+// `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces
+// (no ReDoS).
 const OUTPUT_LINE = new RegExp(
   String.raw`^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"](?:.*\S)?\s+failed\b|` +
     String.raw`Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)`,
@@ -181,8 +187,8 @@ const OUTPUT_LINE = new RegExp(
 );
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
-// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying
-// never merge.
+// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a
+// dated freeze saying never merge.
 const LOG_LEADS = [
   /^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-][\d:]+)?\s+(?:\[?\w+\]?\s+)?/,
   /^\[(?:info|warn|error|debug)\]/i,
@@ -217,7 +223,8 @@ export function assessAutomaticMemory(content: string): AutomaticMemoryAssessmen
   return { accepted: reason === null || reason === 'possible-fragment', reason };
 }
 
-/** Reasons the heuristics can get wrong: repair only lists them for review and derivation still admits them. */
+/** Reasons the heuristics can get wrong: repair only lists them for review and derivation still
+ * admits them. */
 const UNCERTAIN_REASONS: ReadonlySet<AutomaticMemoryDefect> = new Set([
   'too-short',
   'possible-fragment',
@@ -229,17 +236,18 @@ export function isCertainReason(reason: AutomaticMemoryDefect | null): boolean {
   return reason !== null && !UNCERTAIN_REASONS.has(reason);
 }
 
-/** The bar for sleep's derived memories and for repair: a defect the checks are sure of, else null. */
+/** The bar for sleep's derived memories and for repair: a defect the checks are sure of, else
+ * null. */
 export function certainDefect(content: string): AutomaticMemoryDefect | null {
   const { reason } = assessAutomaticMemory(content);
   return isCertainReason(reason) ? reason : null;
 }
 
-// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by design, so they are not
-// judged.
+// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by
+// design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
-// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy; elsewhere a person
-// may set it.
+// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy;
+// elsewhere a person may set it.
 const AUTOMATIC_TAGS = new Set(['captured', COMPACTION_MEMORY_TAG, 'git-learned']);
 const COPY_SOURCE = /^(?:promoted|shared):/;
 export const BUNDLE_HEADER =
@@ -251,8 +259,9 @@ type Provenance = Pick<
 >;
 
 /**
- * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a person's edit or restore
- * verified.
+ * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a
+ * person's edit or restore verified.
+ *
  */
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
@@ -267,7 +276,9 @@ export function isAutomaticEntry(entry: Provenance): boolean {
 }
 
 /**
- * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only when every part is.
+ * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only
+ * when every part is.
+ *
  */
 function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
   return BUNDLE_HEADER.test(entry.content)
@@ -281,8 +292,9 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
 }
 
 /**
- * The audit's check: a person's row is never judged, and a bundle is flagged only when every part is, as reuse and
- * recent context judge it.
+ * The audit's check: a person's row is never judged, and a bundle is flagged only when every part
+ * is, as reuse and recent context judge it.
+ *
  */
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
@@ -294,8 +306,9 @@ export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null
 }
 
 /**
- * Whether sleep may derive from a row or share it: a person's text and watch failures always, hippo's own text only
- * without a certain defect.
+ * Whether sleep may derive from a row or share it: a person's text and watch failures always,
+ * hippo's own text only without a certain defect.
+ *
  */
 export function isReusable(entry: Provenance): boolean {
   return !isAutomaticEntry(entry) || !hasCertainDefect(entry);
@@ -311,7 +324,8 @@ export function isContentWorthStoring(content: string): boolean {
   return assessAutomaticMemory(content).accepted;
 }
 
-/** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
+/** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the
+ * older, looser floor. */
 export function isWorthSurfacing(entry: MemoryEntry): boolean {
   if (isAutomaticEntry(entry)) {
     return bundleParts(entry).length > 0

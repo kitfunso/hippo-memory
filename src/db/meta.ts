@@ -87,8 +87,9 @@ export function setMeta(db: DatabaseSyncLike, key: string, value: string): void 
 }
 
 /**
- * Raise min_compatible_binary to `version`; never lowers it, since an older floor would let back in a binary a newer
- * write already shut out.
+ * Raise min_compatible_binary to `version`; never lowers it, since an older floor would let back in
+ * a binary a newer write already shut out.
+ *
  */
 export function raiseMinBinary(db: DatabaseSyncLike, version: string): void {
   const existing = getMeta(db, META_KEY.minCompatibleBinary);

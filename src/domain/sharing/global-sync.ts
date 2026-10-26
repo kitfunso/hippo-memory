@@ -15,9 +15,9 @@ import { logEmbedAllFailure } from './search-both.js';
 import { textKeyPages, type SharingStore } from './text-keys.js';
 
 /**
- * Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and
- * share copy under a new ID). The caller's request scope keeps it to one open per store.
- * Returns the count of newly copied entries. */
+ * Copy all global memories into the local store, skipping entries that already exist locally by
+ * ID or text (promote and share copy under a new ID). The caller's request scope keeps it to one
+ * open per store. Returns the count of newly copied entries. */
 export async function syncGlobalToLocal(
   into: ConfiguredFolder<SharingStore>,
   global: { readonly store: SharingStore },
@@ -38,13 +38,14 @@ export async function syncGlobalToLocal(
 
 const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
 
-/** Global rows of every tenant that the local store holds by neither id nor tenant and text, oldest first; each page
- * asks the local store about its own ids and texts only. */
+/** Global rows of every tenant that the local store holds by neither id nor tenant and text,
+ * oldest first; each page asks the local store about its own ids and texts only. */
 async function missingRows(local: Sharing, from: Sharing): Promise<EntryTextKey[]> {
   const missing: EntryTextKey[] = [];
   for await (const page of textKeyPages(from, ALL_TENANTS)) {
     const taken = new Set(await local.takenIds(page.map((k) => k.id)));
-    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive
+    // the note.
     const open = page.filter(
       (k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX),
     );
@@ -71,7 +72,8 @@ interface Copies {
   readonly twins: Set<string>;
 }
 
-/** The rows to copy, in order: one per text, never a secret, and another project's only when asked. */
+/** The rows to copy, in order: one per text, never a secret, and another project's only when
+ * asked. */
 function copiesOf(
   candidates: readonly EntryTextKey[],
   byId: ReadonlyMap<string, MemoryEntry>,
@@ -112,8 +114,8 @@ async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Pro
   return new Set(firsts.filter((_, i) => refused[i]).map(textKey));
 }
 
-/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together; each copy
- * keeps its own tenant. */
+/** One transaction: id, tenant and text decide which rows to read whole, and the copies commit
+ * together; each copy keeps its own tenant. */
 async function copyMissingRows(
   into: ConfiguredFolder<SharingStore>,
   from: SharingStore,
@@ -126,14 +128,16 @@ async function copyMissingRows(
   const wanted = candidates.map((k) => k.id);
   for (const entry of await from.entriesByIds(wanted, ALL_TENANTS)) byId.set(entry.id, entry);
 
-  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret
-  // rows never copied. origin_project is preserved on the copy (the write stamps it only when missing).
+  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped
+  // by default and secret rows never copied. origin_project is preserved on the copy (the write
+  // stamps it only when missing).
   const first = copiesOf(candidates, byId, rules);
   const { copies } =
     first.twins.size === 0
       ? first
       : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
-  // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
+  // A locally rejected value must not come back through sync down: skipped per item, printed as one
+  // line.
   const written =
     copies.length === 0
       ? []
@@ -154,8 +158,8 @@ function finishSyncDown(
     );
   }
 
-  // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
-  // invariant as autoShare).
+  // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row
+  // (same batching invariant as autoShare).
   if (count > 0) {
     void embedAll(folderEmbedTarget(into, embed)).catch((err) =>
       logEmbedAllFailure('syncGlobalToLocal', err),

@@ -1,4 +1,5 @@
-// Verbs that move memories in and out: watch, learn, import, export, promote, sync, share and peers.
+// Verbs that move memories in and out: watch, learn, import, export, promote, sync, share and
+// peers.
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -65,7 +66,8 @@ function watchedCommand(args: readonly string[]): string[] {
   if (args.length === 0) {
     fail(WATCH_USAGE);
   }
-  // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
+  // A quoted 1.x command line would now run as one program name, so it is refused rather than
+  // guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
     fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\`.`);
   }
@@ -87,8 +89,8 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
     throw new CliExit(exitCode);
   }
 
-  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with the message below and
-  // still exit with the wrapped command's real exit code.
+  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with
+  // the message below and still exit with the wrapped command's real exit code.
   try {
     await rememberFailedCommand(cliApiContext(hippoRoot, tenantId), { command, exitCode, stderr });
 
@@ -144,8 +146,8 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
   }
 }
 
-/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
- * that finishes them. */
+/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how
+ * many wait and the command that finishes them. */
 async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): Promise<void> {
   let waiting: string;
   try {
@@ -161,8 +163,9 @@ async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err:
   );
 }
 
-/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
- * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
+/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the
+ * process alive until it settles, and awaiting would block the CLI on model load; `hippo embed`
+ * is the backstop if interrupted. */
 function backfillVectors(ctx: CliContext, embedCommand: string): void {
   void memoryEmbedMissing(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
@@ -211,9 +214,9 @@ export async function handleImport({
     },
   };
 
-  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
-  // tenant-scoped api calls, so the tenant is resolved and passed through. --global is unsupported (the connector
-  // raw-archive path is tenant-local).
+  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it
+  // writes through tenant-scoped api calls, so the tenant is resolved and passed through. --global
+  // is unsupported (the connector raw-archive path is tenant-local).
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) {
     return await importVaultFolder({
@@ -357,7 +360,8 @@ async function importAgentMemories(
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
   const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
-  // A folder without a store of its own imports as session end would there, so its notes are not hidden.
+  // A folder without a store of its own imports as session end would there, so its notes are not
+  // hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
       ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)
@@ -400,15 +404,17 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
   if (!stringFlag(flags, 'name')?.trim()) {
-    // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
-    // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
+    // --name keys the destructive source-deletion sync; a folder-basename default lets
+    // same-basename vaults clobber each other, and a valueless `--name` (boolean true) would
+    // silently import under vault:true:*.
     fail(
       'hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).',
     );
   }
   if (hasFlag(flags, 'scope') && !stringFlag(flags, 'scope')?.trim()) {
-    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed
-    // private form, since a bare `private` scope is not treated as private by recall and importVault rejects it.
+    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the
+    // source-prefixed private form, since a bare `private` scope is not treated as private by
+    // recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
   }
 }
@@ -433,7 +439,8 @@ function printVaultSummary(
     `  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`,
   );
   console.log(`  Store:                 ${ctx.hippoRoot}`);
-  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file import does.
+  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file
+  // import does.
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
@@ -522,7 +529,8 @@ export async function handleShare({
 }
 
 export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
+  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer
+  // discovery.
   const allTenants = boolFlag(flags, 'all-tenants');
   const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {

@@ -28,19 +28,21 @@ import type { AuditOp } from '../../../base/records/audit-ops.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
-// A key mint is a few short fields, so even an authenticated caller gets a small cap and a short wait.
-// ServeOptions.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not sit through it.
+// A key mint is a few short fields, so even an authenticated caller gets a small cap and a short
+// wait. ServeOptions.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not
+// sit through it.
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 
-// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees no change.
+// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees
+// no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
-// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the
-// "store this somewhere safe" warning).
+// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this
+// layer, carries the "store this somewhere safe" warning).
 export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest): Promise<void> {
-  // The dispatch gate authenticated before the body, so an unknown caller costs no read; this recheck runs the resolver
-  // right before the mint.
+  // The dispatch gate authenticated before the body, so an unknown caller costs no read; this
+  // recheck runs the resolver right before the mint.
   const raw = await readBody(req, {
     maxBytes: MINT_BODY_MAX_BYTES,
     deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
@@ -58,7 +60,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
     }
     role = roleRaw;
   }
-  // A null is a 400 too: a client that serialises an unset field as null must not get a key that never expires.
+  // A null is a 400 too: a client that serialises an unset field as null must not get a key that
+  // never expires.
   const ttlDays = body['ttlDays'];
   if (ttlDays !== undefined && !isJsonNumber(ttlDays)) {
     throw new HttpError(400, 'ttlDays must be a number');
@@ -67,8 +70,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   if (noExpiry !== undefined && !isJsonBoolean(noExpiry)) {
     throw new HttpError(400, 'noExpiry must be true or false');
   }
-  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated tenant, or tenant A could
-  // mint a key for tenant B (see authCreate).
+  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated
+  // tenant, or tenant A could mint a key for tenant B (see authCreate).
   const result = await authCreate(ctx, {
     label: labelRaw,
     role,
@@ -81,8 +84,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   return;
 }
 
-// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active` defaults to true,
-// ?active=false includes revoked and expired rows.
+// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active`
+// defaults to true, ?active=false includes revoked and expired rows.
 export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const activeRaw = query.get('active');
   let active = true;
@@ -106,9 +109,9 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
   return;
 }
 
-// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but
-// its own or, via the resolver, those it minted. Returns 200 with the body rather than 204 so the caller sees
-// revokedAt.
+// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is
+// 403 on any key but its own or, via the resolver, those it minted. Returns 200 with the body
+// rather than 204 so the caller sees revokedAt.
 export async function handleRevokeAuthKey(
   { res, ctx }: AuthedRouteRequest,
   { keyId }: RouteParams,
@@ -119,8 +122,8 @@ export async function handleRevokeAuthKey(
   return;
 }
 
-// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no role gate itself, so
-// its row's admin gate is the check.
+// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no
+// role gate itself, so its row's admin gate is the check.
 export async function handleListQuarantine({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
@@ -171,8 +174,8 @@ export async function handleRejectQuarantine(
   return;
 }
 
-// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so an invalid value is
-// a 400 before the DB is hit.
+// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so
+// an invalid value is a 400 before the DB is hit.
 export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const opRaw = query.get('op');
   let op: AuditOp | undefined;

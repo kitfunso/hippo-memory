@@ -1,5 +1,6 @@
-// What a recall remembers and records: the anchoring detector and query history, the session rings and audit rows, then
-// the write around one recall (history, ring, recalled counter, token ledger row and the client's shown list).
+// What a recall remembers and records: the anchoring detector and query history, the session rings
+// and audit rows, then the write around one recall (history, ring, recalled counter, token ledger
+// row and the client's shown list).
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
@@ -13,10 +14,11 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
 /**
- * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns
- * the same topMemoryId) and `memory_dominance` (the same topMemoryId across >= minDominance distinct queryHashes). Each
- * pipeline keeps its OWN ring Map keyed by (tenant, session), because its top-1 ranking differs. AnchoringHint and
- * PlanningFallacyHint are independent signals. */
+ * Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked
+ * within the window returns the same topMemoryId) and `memory_dominance` (the same topMemoryId
+ * across >= minDominance distinct queryHashes). Each pipeline keeps its OWN ring Map keyed by
+ * (tenant, session), because its top-1 ranking differs. AnchoringHint and PlanningFallacyHint
+ * are independent signals. */
 
 export type AnchoringReason = 'query_repeat' | 'memory_dominance';
 
@@ -41,8 +43,8 @@ export interface RecallHistoryEntry {
   /** ISO-8601 timestamp; advisory, not used by the detection rules. */
   ts: string;
   /**
-   * Memory id of the AnchoringHint that fired on this recall, if any; the caller writes it after detectAnchoring
-   * returns, and the cooldown reads it next time. */
+   * Memory id of the AnchoringHint that fired on this recall, if any; the caller writes it after
+   * detectAnchoring returns, and the cooldown reads it next time. */
   anchoredOn?: string;
 }
 
@@ -56,8 +58,9 @@ export interface DetectAnchoringOptions {
    *  Default 5. */
   recentRepeatWindow?: number;
   /**
-   * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within this many history
-   * entries. Default 3.
+   * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within
+   * this many history entries. Default 3.
+   *
    */
   cooldown?: number;
 }
@@ -67,24 +70,24 @@ const DEFAULT_RECENT_REPEAT_WINDOW = 5;
 const DEFAULT_COOLDOWN = 3;
 
 /**
- * Normalizes a query (lowercase, strip non-alphanumerics, drop short tokens, sort, dedup, join) and hashes it with
- * 32-bit FNV-1a.
- * Reordered words collide intentionally; deterministic across processes and V8 versions. */
+ * Normalizes a query (lowercase, strip non-alphanumerics, drop short tokens, sort, dedup, join)
+ * and hashes it with 32-bit FNV-1a. Reordered words collide intentionally; deterministic across
+ * processes and V8 versions. */
 export function hashQueryText(query: string): number {
   if (!query) return 0;
-  // Tokens are deduped before join so `foo foo bar` and `foo bar` count as one query for memory_dominance.
-  // Unicode classes (\p{L}, \p{N}, \p{M}; need /u) keep non-Latin queries from collapsing to an empty token set and
-  // colliding at hash 0.
+  // Tokens are deduped before join so `foo foo bar` and `foo bar` count as one query for
+  // memory_dominance. Unicode classes (\p{L}, \p{N}, \p{M}; need /u) keep non-Latin queries from
+  // collapsing to an empty token set and colliding at hash 0.
   const normalized = query
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 0);
-  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash alike; matches the >=3 filter in
-  // src/domain/learn/forward-claim-detector.ts.
+  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash alike; matches
+  // the >=3 filter in src/domain/learn/forward-claim-detector.ts.
   const filtered = normalized.filter((t) => t.length >= 3);
-  // Fall back to all tokens when the filter empties the query (CJK 2-char words, acronyms like `AI`) so distinct short
-  // queries do not all hash to fnv1a32('').
+  // Fall back to all tokens when the filter empties the query (CJK 2-char words, acronyms like
+  // `AI`) so distinct short queries do not all hash to fnv1a32('').
   const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
@@ -103,10 +106,10 @@ function fnv1a32(text: string): number {
 }
 
 /**
- * Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both rules fire, since it
- * spans DIFFERENT queries.
- * Cooldown is per memory: a hint on the SAME topMemoryId within `cooldown=3` history entries is suppressed. Returns an
- * AnchoringHint or null.
+ * Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both
+ * rules fire, since it spans DIFFERENT queries. Cooldown is per memory: a hint on the SAME
+ * topMemoryId within `cooldown=3` history entries is suppressed. Returns an AnchoringHint or null.
+ *
  */
 export function detectAnchoring(
   history: RecallHistorySnapshot,
@@ -119,8 +122,8 @@ export function detectAnchoring(
   const recentRepeatWindow = opts.recentRepeatWindow ?? DEFAULT_RECENT_REPEAT_WINDOW;
   const cooldown = opts.cooldown ?? DEFAULT_COOLDOWN;
 
-  // Cooldown gate: was the most-recent hint (across the last `cooldown` entries) for THIS memory? If yes, suppress
-  // regardless of rule.
+  // Cooldown gate: was the most-recent hint (across the last `cooldown` entries) for THIS memory?
+  // If yes, suppress regardless of rule.
   const cooldownSlice = history.slice(-cooldown);
   for (const entry of cooldownSlice) {
     if (entry.anchoredOn === currentTopMemoryId) {
@@ -156,8 +159,8 @@ export function detectAnchoring(
   return null;
 }
 
-// Count distinct queryHashes in history where topMemoryId === the current top (excluding null tops), plus the current
-// query itself.
+// Count distinct queryHashes in history where topMemoryId === the current top (excluding null
+// tops), plus the current query itself.
 function countDistinctQueries(
   history: RecallHistorySnapshot,
   currentQueryHash: number,
@@ -173,8 +176,8 @@ function countDistinctQueries(
   return matchingQueryHashes.size;
 }
 
-// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow` entries AND was that entry's
-// topMemoryId === currentTopMemoryId?
+// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow` entries AND was
+// that entry's topMemoryId === currentTopMemoryId?
 function isRecentRepeat(
   history: RecallHistorySnapshot,
   recentRepeatWindow: number,
@@ -192,8 +195,9 @@ const MAX_HISTORY = 10;
 const DEFAULT_MAX_SESSIONS = 1000;
 
 /**
- * Bounded FIFO ring of RecallHistoryEntry (oldest evicted when full); a thin array wrapper so snapshotRing returns a
- * readonly view without copying.
+ * Bounded FIFO ring of RecallHistoryEntry (oldest evicted when full); a thin array wrapper so
+ * snapshotRing returns a readonly view without copying.
+ *
  */
 export class RingBuffer {
   private entries: RecallHistoryEntry[] = [];
@@ -214,15 +218,16 @@ export class RingBuffer {
   }
 }
 
-/** Builds the (tenant, session) key with a NUL delimiter: tenant and session ids are validated elsewhere to reject NUL,
- * so concatenation cannot collide even though API-key-derived subjects can contain `:`. */
+/** Builds the (tenant, session) key with a NUL delimiter: tenant and session ids are validated
+ * elsewhere to reject NUL, so concatenation cannot collide even though API-key-derived subjects
+ * can contain `:`. */
 export function buildSessionKey(tenantId: string, sessionId: string): string {
   return `${tenantId}\x00${sessionId}`;
 }
 
 /**
- * Get-or-create a RingBuffer per session key, capped at `maxSessions` (default 1000); at the cap the oldest-inserted
- * key (first from Map.keys()) is evicted. */
+ * Get-or-create a RingBuffer per session key, capped at `maxSessions` (default 1000); at the cap
+ * the oldest-inserted key (first from Map.keys()) is evicted. */
 export function getOrCreateRing(
   map: Map<string, RingBuffer>,
   key: string,
@@ -245,8 +250,9 @@ export function getOrCreateRing(
 }
 
 /**
- * Appends a recall to a ring; `anchoredOn` is the memoryId of the hint that fired on THIS recall (or undefined), read
- * by detectAnchoring for cooldown.
+ * Appends a recall to a ring; `anchoredOn` is the memoryId of the hint that fired on THIS recall
+ * (or undefined), read by detectAnchoring for cooldown.
+ *
  */
 export function appendRecall(
   ring: RingBuffer,
@@ -272,8 +278,8 @@ export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
 /** The part of a config the hint switches read. */
 export type HintConfig = Pick<HippoConfig, 'runtime'>;
 
-/** Whether a recall bias hint is on: `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off`, as the root read it into the
- * config, turns off only that kind. */
+/** Whether a recall bias hint is on: `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off`, as the
+ * root read it into the config, turns off only that kind. */
 export function biasHintEnabled(config: HintConfig, kind: 'anchoring' | 'availability'): boolean {
   const on =
     kind === 'anchoring' ? config.runtime?.anchoringHint : config.runtime?.availabilityHint;
@@ -300,8 +306,8 @@ export interface RingOwner {
   readonly callers?: CallerState;
 }
 
-/** The session's ring, created on first use; null when anchoring is off, the call has no session, or the root keeps no
- * callers. */
+/** The session's ring, created on first use; null when anchoring is off, the call has no
+ * session, or the root keeps no callers. */
 export function sessionRing(
   owner: RingOwner,
   surface: RecallSurface,
@@ -313,8 +319,9 @@ export function sessionRing(
 }
 
 /**
- * The session's history, read without creating or touching its ring, so a request that then fails evicts no live
- * session.
+ * The session's history, read without creating or touching its ring, so a request that then fails
+ * evicts no live session.
+ *
  */
 function peekSessionRing(
   owner: RingOwner,
@@ -346,7 +353,8 @@ export function callerOf(ctx: Context): RecallAuditCaller {
   return { tenantId: ctx.tenantId, actor: ctx.actor.subject };
 }
 
-/** The strengthen every ranker of `retrieve` hands to the recall's write: the shown ids, in the caller's tenant. */
+/** The strengthen every ranker of `retrieve` hands to the recall's write: the shown ids, in the
+ * caller's tenant. */
 export function strengthenOf(
   ctx: Context,
   ids: readonly string[],
@@ -368,14 +376,16 @@ export function recallAuditRow(
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
 }
 
-// The row stores a hash of the query, never its text, so an archived memory's words cannot persist there.
+// The row stores a hash of the query, never its text, so an archived memory's words cannot persist
+// there.
 export function recallAuditMetadata(query: string, results: number) {
   return { ...auditQueryFields(query), results };
 }
 
 /**
- * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy to reverse on short
- * queries.
+ * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy
+ * to reverse on short queries.
+ *
  */
 export function anchorSkippedRows(
   config: HintConfig,
@@ -434,7 +444,9 @@ export interface ShownRecall {
 }
 
 /**
- * The hint rows for a list a surface showed, so a surface on the store port can hand them to the recall's one write.
+ * The hint rows for a list a surface showed, so a surface on the store port can hand them to the
+ * recall's one write.
+ *
  */
 export function shownRecallRows(
   config: HintConfig,
@@ -448,15 +460,15 @@ export function shownRecallRows(
   ];
 }
 
-/** How one surface's recall is recorded. The surfaces differ in these three values and in the list they hand over,
- * nowhere else. */
+/** How one surface's recall is recorded. The surfaces differ in these three values and in the
+ * list they hand over, nowhere else. */
 export interface RecallRecording {
   /** Whose session rings the recall reads and feeds. */
   readonly ring: RecallSurface;
   /** The label of its token ledger row. */
   readonly ledger: TokenSurface;
-  /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json; 'shown': an empty list
-   * skips it; 'none': no stats write, and the ledger row books 0 items. */
+  /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json;
+   * 'shown': an empty list skips it; 'none': no stats write, and the ledger row books 0 items. */
   readonly counts: 'every' | 'shown' | 'none';
 }
 
@@ -473,7 +485,8 @@ export interface RecallLead {
   readonly leadingAudit: readonly AppendAuditOptions[];
 }
 
-/** For a surface whose hint `retrieve` judges: the session's history, or the row saying the recall named no session. */
+/** For a surface whose hint `retrieve` judges: the session's history, or the row saying the
+ * recall named no session. */
 export function recallLead(
   ctx: Context,
   how: RecallRecording,
@@ -501,21 +514,23 @@ export interface ShownList {
   /** The memory this recall's anchoring hint named; the next recall's cooldown reads it. */
   readonly anchoredOn: string | undefined;
   readonly tokens: number;
-  /** The session the ledger row names: the recall's own on HTTP, the host agent's on the CLI, none on MCP. */
+  /** The session the ledger row names: the recall's own on HTTP, the host agent's on the CLI,
+   * none on MCP. */
   readonly ledgerSessionId: string | null;
   /** False when the audit rows could not be written and the caller answers anyway. */
   readonly written: boolean;
 }
 
-/** Runs after the recall's own write, in order: the ring, the counter, the ledger, then the client's shown list. */
+/** Runs after the recall's own write, in order: the ring, the counter, the ledger, then the
+ * client's shown list. */
 export async function recordShownRecall(
   ctx: Context,
   store: HippoStore,
   how: RecallRecording,
   shown: ShownList,
 ): Promise<void> {
-  // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a
-  // live session.
+  // A surface that only peeked has its ring created here, after the write, so a recall that fails
+  // cannot LRU-evict a live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
   if (ring)
     noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn, ctx.infra.clock());

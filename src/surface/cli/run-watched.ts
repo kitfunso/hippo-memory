@@ -19,8 +19,8 @@ export class RunWatchedTimeoutError extends Error {
   }
 }
 
-/** Runs argv with no shell, so `;`, `&` and `$()` reach it literally; stderr streams live and only its last 64 KiB
- * comes back. Rejects with RunWatchedTimeoutError past `deadlineMs`. */
+/** Runs argv with no shell, so `;`, `&` and `$()` reach it literally; stderr streams live and
+ * only its last 64 KiB comes back. Rejects with RunWatchedTimeoutError past `deadlineMs`. */
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
@@ -46,8 +46,8 @@ function watchChild(
       process.stderr.write(chunk);
     });
 
-    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one), so on Windows a grandchild can
-    // outlive it; a process-tree kill is the upgrade path.
+    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one), so on Windows
+    // a grandchild can outlive it; a process-tree kill is the upgrade path.
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));

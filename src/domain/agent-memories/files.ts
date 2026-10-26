@@ -1,4 +1,5 @@
-// Text rules shared by the adapters: frontmatter, item times and home-relative paths. The reads are Machine.files.
+// Text rules shared by the adapters: frontmatter, item times and home-relative paths. The reads are
+// Machine.files.
 import path from 'node:path';
 
 export interface Frontmatter {
@@ -14,7 +15,8 @@ export function splitFrontmatter(raw: string): Frontmatter {
   return m ? { yaml: m[1], body: m[2] } : { yaml: null, body: raw };
 }
 
-/** One top-level scalar from frontmatter YAML, quotes removed; enough for `modified`, no YAML parser needed. */
+/** One top-level scalar from frontmatter YAML, quotes removed; enough for `modified`, no YAML
+ * parser needed. */
 export function frontmatterField(yaml: string, field: string): string | null {
   const m = yaml.match(new RegExp(`^${field}:[ \\t]*(.+?)[ \\t]*$`, 'm'));
   if (!m) return null;

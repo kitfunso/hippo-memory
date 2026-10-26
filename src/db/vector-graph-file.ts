@@ -1,5 +1,6 @@
-// A store's vector graph saved beside hippo.db, so a process with no store worker searches a graph instead of
-// scanning. Node records have one size and sit in rowid order, so a search reads only the records it reaches.
+// A store's vector graph saved beside hippo.db, so a process with no store worker searches a graph
+// instead of scanning. Node records have one size and sit in rowid order, so a search reads only
+// the records it reaches.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../host/atomic-write.js';
@@ -14,7 +15,8 @@ const VERSION = 1;
 const HEADER_BYTES = 64;
 // rowid f64, id hash u32, level u8, flags u8, layer-0 link count u16, upper-links offset u32.
 const RECORD_HEAD = 20;
-/** Where each header field sits, in bytes from the file start; the fields from `magic` to `jsonBytes` are uint32. */
+/** Where each header field sits, in bytes from the file start; the fields from `magic` to
+ * `jsonBytes` are uint32. */
 const HEADER_AT = {
   magic: 0,
   version: 4,
@@ -45,7 +47,8 @@ export function graphFilePath(hippoRoot: string, dim: number): string {
   return path.join(hippoRoot, `vector-graph-${dim}.bin`);
 }
 
-/** FNV-1a over the id's UTF-16 units: the intact walk compares a row's memory id with its node's by this. */
+/** FNV-1a over the id's UTF-16 units: the intact walk compares a row's memory id with its node's
+ * by this. */
 export function idHash(id: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
@@ -80,7 +83,8 @@ interface FileOrder {
   readonly at: Int32Array;
 }
 
-/** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a reused rowid stays. */
+/** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a
+ * reused rowid stays. */
 function fileOrder(rows: GraphRows): FileOrder {
   const order = rows.ids
     .map((_, node) => node)
@@ -144,7 +148,8 @@ function writeHeader(
   view.setFloat64(HEADER_AT.highRowid, sizes.highRowid, true);
 }
 
-/** The file's bytes for `rows`, yielding every ENCODE_TURN_NODES nodes so the caller can give a turn back. */
+/** The file's bytes for `rows`, yielding every ENCODE_TURN_NODES nodes so the caller can give a
+ * turn back. */
 export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   const { graph, ids, rowids, nodeOf } = rows;
   const { dim, m } = graph;
@@ -190,8 +195,8 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   return bytes;
 }
 
-/** Saves `bytes` as the graph file of length `dim` with hippo.db's mode bits; false, with one info line, when another
- * process holds the old file open, so a later save tries again. */
+/** Saves `bytes` as the graph file of length `dim` with hippo.db's mode bits; false, with one
+ * info line, when another process holds the old file open, so a later save tries again. */
 export function saveGraphFile(hippoRoot: string, dim: number, bytes: Uint8Array): boolean {
   const file = graphFilePath(hippoRoot, dim);
   const mode = fs.statSync(getHippoDbPath(hippoRoot)).mode & 0o777;
@@ -212,7 +217,8 @@ export function saveGraphFile(hippoRoot: string, dim: number, bytes: Uint8Array)
   }
 }
 
-/** A file that cannot be trusted: short, a bad stamp, or a value out of its bounds. The read scans instead. */
+/** A file that cannot be trusted: short, a bad stamp, or a value out of its bounds. The read
+ * scans instead. */
 export class GraphFileError extends Error {
   override readonly name = 'GraphFileError';
 }
@@ -224,7 +230,8 @@ export function badGraphFile(file: string, what: string, cause?: unknown): Graph
   );
 }
 
-/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it cannot trust. */
+/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it
+ * cannot trust. */
 export function readStamp(fd: number, file: string, size: number): GraphStamp {
   const head = Buffer.alloc(HEADER_BYTES);
   if (size < HEADER_BYTES || fs.readSync(fd, head, 0, HEADER_BYTES, 0) < HEADER_BYTES) {

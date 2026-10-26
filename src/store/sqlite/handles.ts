@@ -1,4 +1,5 @@
-// Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the store it is given.
+// Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the
+// store it is given.
 
 import {
   closeHippoDb,
@@ -29,18 +30,19 @@ export function initStore(hippoRoot: string): void {
   closeHippoDb(openStore(hippoRoot));
 }
 
-/** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
+/** One open connection with init done on it, for callers who used to pay for `initStore` + a
+ * second `openHippoDb`. */
 export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
   const { db, facts, reused } = openHippoDbWithFacts(hippoRoot, opts);
-  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection
-  // cannot write them.
+  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and
+  // this connection cannot write them.
   if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
   try {
     ensureMirrorDirectories(hippoRoot);
     if (!reused) recoverDueMirrors(hippoRoot, db, facts?.mirrorsDue);
-    // Both steps act only on a store with no memory row. A cached request handle has no probe facts, so it asks once
-    // for both; a store emptied on that handle is still set up again.
+    // Both steps act only on a store with no memory row. A cached request handle has no probe
+    // facts, so it asks once for both; a store emptied on that handle is still set up again.
     if (facts?.hasMemories ?? holdsMemory(db)) return db;
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
@@ -91,7 +93,8 @@ export async function onHandleAsync<T>(
   }
 }
 
-/** The files of the store under `hippoRoot`, with a Host of their own: a store object keeps its folder's walk. */
+/** The files of the store under `hippoRoot`, with a Host of their own: a store object keeps its
+ * folder's walk. */
 export function storeFilesOf(hippoRoot: string, rules: StoreRules = {}): StoreFiles {
   const strength = withLossAversion(rules.strength ?? PRODUCTION_STRENGTH, rules.lossAversionRatio);
   return { hippoRoot, strength, clock: hostClock(rules.fakeNowMs ?? null), host: createHost() };

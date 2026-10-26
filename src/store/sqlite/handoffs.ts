@@ -24,8 +24,8 @@ import type {
 import { cachedStatement } from '../../db/statement-cache.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
-// What a session end writes: the snapshot or transcript read it writes from, and the handoff it builds; the store
-// loads the rows these read and stores the result.
+// What a session end writes: the snapshot or transcript read it writes from, and the handoff it
+// builds; the store loads the rows these read and stores the result.
 
 type Derived = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
 
@@ -42,7 +42,8 @@ function transcriptSource(
   derived: Derived | null,
   evidence: HandoffEvidence | null,
 ): SessionEndSource | null {
-  // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs keep winning.
+  // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs
+  // keep winning.
   if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
   // A retried session end reads the same transcript, so it must not add a second revision.
   const same =
@@ -54,16 +55,16 @@ function transcriptSource(
   return { snapshot, evidence: { ...evidence, derivedFrom: 'transcript' }, fromTranscript: true };
 }
 
-/** The source given the key's active snapshot and the session's newest handoff; null when that handoff already covers
- * the session or no source is the session's. */
+/** The source given the key's active snapshot and the session's newest handoff; null when that
+ * handoff already covers the session or no source is the session's. */
 function sessionEndSource(
   active: TaskSnapshot | null,
   existing: SessionHandoff | null,
   request: Pick<SessionEndHandoffRequest, 'sessionId' | 'evidence' | 'derived' | 'inPlace'>,
 ): SessionEndSource | null {
   const { sessionId, evidence, derived = null, inPlace } = request;
-  // After every reply the transcript is newer than the last compaction's snapshot, which the open chat keeps for the
-  // next one.
+  // After every reply the transcript is newer than the last compaction's snapshot, which the open
+  // chat keeps for the next one.
   const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
   if (active && active.sessionId === sessionId && !snapshotGivesWay) {
     // Strict '>': a same-millisecond tie must not swallow the session's only write.
@@ -73,8 +74,9 @@ function sessionEndSource(
   return transcriptSource(existing, derived, evidence);
 }
 
-/** The handoff `source` writes. A same-task refresh carries forward the envelope fields nobody cleared; a scope
- * mismatch carries none, so private metadata never leaks into an unscoped envelope. */
+/** The handoff `source` writes. A same-task refresh carries forward the envelope fields nobody
+ * cleared; a scope mismatch carries none, so private metadata never leaks into an unscoped
+ * envelope. */
 function sessionEndHandoff(
   sessionId: string,
   source: SessionEndSource,
@@ -103,16 +105,19 @@ function sessionEndHandoff(
   };
 }
 
-/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
+/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff
+ * lookup. */
 export const HANDOFF_COLUMNS =
   'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
   'evidence_json, outcome, target_runtime, card_id';
-// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 export type SessionHandoffDbRow = SessionHandoffRow;
 
 type HandoffColumn = readonly [column: string, value: string | null];
 
-/** The columns an insert and a transcript rewrite both write, so the two statements cannot drift apart. */
+/** The columns an insert and a transcript rewrite both write, so the two statements cannot drift
+ * apart. */
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
     ['repo_root', handoff.repoRoot ?? null],
@@ -201,9 +206,9 @@ function handoffConditions(
     params.push(opts.excludeSessionId);
   }
   if (opts.unfinishedOnly) {
-    // Restrict to each session's newest revision first: stampHandoffOutcome only stamps the newest row, so an older
-    // null-outcome revision must not resurrect. Keyed, the newest is the owner's own, so another owner's newer revision
-    // cannot hide it.
+    // Restrict to each session's newest revision first: stampHandoffOutcome only stamps the newest
+    // row, so an older null-outcome revision must not resurrect. Keyed, the newest is the owner's
+    // own, so another owner's newer revision cannot hide it.
     conditions.push(
       `id IN (SELECT MAX(id) FROM session_handoffs WHERE tenant_id = ?${owned ? ` AND ${owned.sql}` : ''} GROUP BY ` +
         `session_id)`,
@@ -267,7 +272,8 @@ export function readHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
+/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows
+ * changed. */
 export function stampHandoffOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -290,8 +296,8 @@ export function stampHandoffOutcome(
   return Number(result.changes ?? 0);
 }
 
-/** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written
- * meanwhile is never overwritten; null when none was rewritten. */
+/** Rewrites the session's newest handoff when it is still a transcript read, in one statement so
+ * a handoff written meanwhile is never overwritten; null when none was rewritten. */
 function replaceTranscriptHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -326,9 +332,10 @@ function replaceTranscriptHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier
- * transcript read instead of adding a revision. Returns null when no source is the session's, a newer handoff covers
- * it, or the latest one is not transcript-derived or already holds `derived`. */
+/** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace`
+ * rewrites an earlier transcript read instead of adding a revision. Returns null when no source
+ * is the session's, a newer handoff covers it, or the latest one is not transcript-derived or
+ * already holds `derived`. */
 export function writeSessionEndHandoff(
   db: DatabaseSyncLike,
   files: StoreFiles,

@@ -1,4 +1,5 @@
-// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
+// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
+// binding.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import {
   HOOK_DB_WAIT_MS,
@@ -76,8 +77,9 @@ function clearActiveTaskSnapshot(
   return 1;
 }
 
-/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
- * ending session can never close a newer session's snapshot. Returns the number of rows closed. */
+/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on
+ * `session_id` too so an ending session can never close a newer session's snapshot. Returns the
+ * number of rows closed. */
 function closeTaskSnapshotsForSession(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -213,8 +215,8 @@ export function listSessionEvents(
   return rows.map(rowToSessionEvent).reverse();
 }
 
-/** The tenant's sessions completed since `sinceMs` with no trace yet, each with its newest TRACE_EVENT_ROWS events
- * oldest first: two statements for any number of sessions. */
+/** The tenant's sessions completed since `sinceMs` with no trace yet, each with its newest
+ * TRACE_EVENT_ROWS events oldest first: two statements for any number of sessions. */
 export function listUntracedSessions(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -272,7 +274,8 @@ function insertOwnerRow(
   return Number(result.changes ?? 0);
 }
 
-// SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
+// SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred
+// thousand rows.
 /** Drops bindings created before `cutoffIso`. */
 function deleteSessionOwnersBefore(db: DatabaseSyncLike, cutoffIso: string): void {
   cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
@@ -287,7 +290,8 @@ interface SessionOwnerBinding {
   readonly retentionMs: number;
 }
 
-/** Binds under the write lock and returns the stored owner, which is not `owner` when a concurrent first bind won. */
+/** Binds under the write lock and returns the stored owner, which is not `owner` when a
+ * concurrent first bind won. */
 function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
   const { tenantId, sessionId, owner, retentionMs } = binding;
   withWriteScope(
@@ -295,9 +299,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     'bind_session_owner',
     () => {
       const bound = insertOwnerRow(db, tenantId, sessionId, owner, handleStamp(db));
-      // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
+      // An older binary supersedes across owners, so the first binding shuts it out in the same
+      // transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
+      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
+      // knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
@@ -321,8 +327,8 @@ function sessionOwnerOrBind(
   );
 }
 
-/** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked,
- * evicted past WM_MAX_ENTRIES per scope. */
+/** Working Memory: bounded buffer for current-state notes, separate from long-term memory;
+ * scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface WorkingMemoryRow {
@@ -357,8 +363,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   };
 }
 
-/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
- * the oldest, by created_at then id). Returns the new row ID. */
+/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
+ * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
@@ -416,7 +422,8 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
   }
 }
 
-/** The WHERE clause and arguments that narrow working memory to one tenant and, when set, a scope and a session. */
+/** The WHERE clause and arguments that narrow working memory to one tenant and, when set, a
+ * scope and a session. */
 function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
   const clauses = ['tenant_id = ?'];
   const params = [tenantId];
@@ -518,7 +525,7 @@ export function sqliteSessions({ on, files }: Handles): Sessions {
     ...bound(on, sessionBodies(files), openStore),
     ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
   };
-  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the port's overloads name,
-  // so every overload gets the answer its kind declares.
+  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the
+  // port's overloads name, so every overload gets the answer its kind declares.
   return sessions as Sessions;
 }

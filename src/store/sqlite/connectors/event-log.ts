@@ -1,4 +1,5 @@
-// The event-log statements both connectors share; each connector names its table, key column and extra columns.
+// The event-log statements both connectors share; each connector names its table, key column and
+// extra columns.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
@@ -24,8 +25,8 @@ export function eventMemory(db: DatabaseSyncLike, log: EventLogSpec, key: string
   return row?.memory_id ?? null;
 }
 
-/** Records the key unless a row holds it already; false means another writer got there first. `extra` pairs
- * connector-only columns with values. */
+/** Records the key unless a row holds it already; false means another writer got there first.
+ * `extra` pairs connector-only columns with values. */
 export function markEventSeen(
   db: DatabaseSyncLike,
   log: EventLogSpec,

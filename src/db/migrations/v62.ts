@@ -13,7 +13,8 @@ const UNCLEANED_MIRRORS =
 export const v62: Migration = {
   version: 62,
   up: (db) => {
-    // Each WHERE names the rare rows, and repeats the read's own terms so SQLite can prove the index covers it.
+    // Each WHERE names the rare rows, and repeats the read's own terms so SQLite can prove the
+    // index covers it.
     db.exec(`CREATE INDEX IF NOT EXISTS ${DIRTY_SUMMARIES}`);
     db.exec(`CREATE INDEX IF NOT EXISTS ${OPEN_L2}`);
     db.exec(`CREATE INDEX IF NOT EXISTS ${CONFLICT_AUDIT}`);

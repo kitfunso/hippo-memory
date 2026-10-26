@@ -29,7 +29,8 @@ export interface AssembleOptions {
   /** Exact scope match when set, so an authorised caller can assemble a private session.
    * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
   scope?: string;
-  /** Hard row cap on the SELECT that loads session raws (default 5000); `truncated` is set when it is hit. */
+  /** Hard row cap on the SELECT that loads session raws (default 5000); `truncated` is set when
+   * it is hit. */
   rowCap?: number;
   cost?: AssembleCost;
   project?: CallerProject;
@@ -44,7 +45,8 @@ export interface AssembleCost {
 export interface AssembledContextItem {
   id: string;
   content: string;
-  /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted summaries). */
+  /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted
+   * summaries). */
   createdAt: string;
   /** Fresh-tail protected window (last freshTailCount raws). */
   isFreshTail?: boolean;
@@ -52,7 +54,8 @@ export interface AssembledContextItem {
   isSummary?: boolean;
   /** When isSummary, the raw ids this summary covers. drillDown recovers the originals. */
   substitutedFor?: string[];
-  /** Decay × retrieval × emotional. Lets callers render a confidence hint without re-deriving from MemoryEntry. */
+  /** Decay × retrieval × emotional. Lets callers render a confidence hint without re-deriving
+   * from MemoryEntry. */
   strength: number;
 }
 
@@ -60,12 +63,13 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed
-   * items[]. */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays
+   * accurate for a windowed items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;
-  /** True when `rowCap` truncated the window; the cap keeps the NEWEST rows, so older rows beyond it are absent. */
+  /** True when `rowCap` truncated the window; the cap keeps the NEWEST rows, so older rows
+   * beyond it are absent. */
   truncated: boolean;
 }
 
@@ -125,7 +129,8 @@ export async function assemble(
   return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
 }
 
-/** The session's raw rows the caller may see, newest `rowCap` at most, with the uncapped count of them. */
+/** The session's raw rows the caller may see, newest `rowCap` at most, with the uncapped count
+ * of them. */
 interface ScopedRaws {
   scoped: MemoryEntry[];
   totalRaw: number;
@@ -147,8 +152,8 @@ async function loadScopedRaws(
   const scoped = rows.filter((r) => passesScopeFilterForRecall(r.scope ?? null, opts.scope, own));
   let totalRaw: number;
   if (truncated) {
-    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope caller cannot infer private rows by
-    // comparing totalRaw to items.length.
+    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope caller cannot infer
+    // private rows by comparing totalRaw to items.length.
     totalRaw = await dag.sessionRawCount({
       tenantId: ctx.tenantId,
       sessionId,
@@ -162,7 +167,8 @@ async function loadScopedRaws(
   return { scoped, totalRaw, truncated };
 }
 
-/** The session's live raw rows oldest first, only the newest `cap` when it is positive; none for an empty id. */
+/** The session's live raw rows oldest first, only the newest `cap` when it is positive; none for
+ * an empty id. */
 async function sessionRawRows(
   ctx: Context,
   sessionId: string,
@@ -204,7 +210,8 @@ function freshTailItem(r: MemoryEntry): AssembledContextItem {
   };
 }
 
-/** Older rows with every level-2 parent shared by two or more of them standing in for those rows. */
+/** Older rows with every level-2 parent shared by two or more of them standing in for those
+ * rows. */
 interface SubstitutedOlder {
   olderItems: AssembledContextItem[];
   summarized: number;
@@ -259,7 +266,8 @@ async function substituteSummaries(
   return { olderItems, summarized };
 }
 
-/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never evicted. */
+/** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never
+ * evicted. */
 interface BudgetFit {
   items: AssembledContextItem[];
   tokens: number;

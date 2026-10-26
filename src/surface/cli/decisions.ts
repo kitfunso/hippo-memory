@@ -1,4 +1,5 @@
-// First-class object verbs for decisions: record one (optionally superseding an older one's memory), list, get, close.
+// First-class object verbs for decisions: record one (optionally superseding an older one's
+// memory), list, get, close.
 
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { Decision } from '../../base/records/object-types.js';
@@ -85,15 +86,16 @@ export async function handleDecide({
 async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags): Promise<void> {
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
-  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
-  // non-superseding decision.
+  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than
+  // silently creating a non-superseding decision.
   if (flagValueless(flags, 'supersedes')) {
     fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // Commit the table create+supersede first (inside the save's SAVEPOINT) and weaken the old memory last,
-  // best-effort, so a memory-write failure cannot leave the memory stale while the table shows the supersession.
+  // Commit the table create+supersede first (inside the save's SAVEPOINT) and weaken the old memory
+  // last, best-effort, so a memory-write failure cannot leave the memory stale while the table
+  // shows the supersession.
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
@@ -126,8 +128,8 @@ async function weakenOrWarn(
   oldEntry: MemoryEntry,
   supersedesMemId: string | null,
 ): Promise<void> {
-  // Best-effort and last: the decision already committed. Failing here would make a retry find no active decision for
-  // the old memory and create a duplicate active successor, so warn instead.
+  // Best-effort and last: the decision already committed. Failing here would make a retry find no
+  // active decision for the old memory and create a duplicate active successor, so warn instead.
   try {
     await decisionMemoryWeaken(ctx, oldEntry);
   } catch (e) {

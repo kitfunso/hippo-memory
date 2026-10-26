@@ -32,8 +32,8 @@ export interface AuditResult {
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only
-  // warn.
+  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never
+  // auto-removed, so it can only warn.
   if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
     const why = entry.pinned
       ? 'pinned'
@@ -122,8 +122,8 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
   };
 }
 
-/** Which rows quality repair keeps whatever their defect; data, so a store on a worker thread applies it in its own
- * write. */
+/** Which rows quality repair keeps whatever their defect; data, so a store on a worker thread
+ * applies it in its own write. */
 export interface RepairProtection {
   /** A person's pin, kept as 'pinned'. */
   readonly pinned: boolean;
@@ -135,8 +135,8 @@ export interface RepairProtection {
   readonly objectBacked: boolean;
 }
 
-/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted imported note, and a row an
- * object names, since the object's link could not be restored. */
+/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted
+ * imported note, and a row an object names, since the object's link could not be restored. */
 export const PROTECTED_ROWS: RepairProtection = {
   pinned: true,
   raw: true,
@@ -157,7 +157,8 @@ export function repairKeeps(
   return undefined;
 }
 
-/** A defect quality repair acts on: a certain one sets the row aside, any other asks a person to review it. */
+/** A defect quality repair acts on: a certain one sets the row aside, any other asks a person to
+ * review it. */
 export interface RepairDefect {
   readonly reason: string;
   readonly disposition: 'set-aside' | 'review';
@@ -190,8 +191,8 @@ function fromAutomaticParents(
   );
 }
 
-/** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents the store still has,
- * live or dormant. */
+/** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents
+ * the store still has, live or dormant. */
 export function repairDefect(
   entry: MemoryEntry,
   parents: ReadonlyMap<string, MemoryEntry>,
@@ -221,7 +222,8 @@ export function repairDefect(
   };
 }
 
-/** The defect a store too old to repair can only report: an automatic row's text alone, for a person to review. */
+/** The defect a store too old to repair can only report: an automatic row's text alone, for a
+ * person to review. */
 export function previewDefect(
   row: Parameters<typeof isAutomaticEntry>[0],
 ): AutomaticMemoryDefect | null {

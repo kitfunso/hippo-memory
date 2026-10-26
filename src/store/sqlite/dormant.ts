@@ -30,10 +30,11 @@ import {
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-/** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;
- * `retentionDays` bounds how long one is kept). Content stays in `dormant_memories` (schema v44) and the `memories` row
- * goes, so every reader of `memories` stops seeing it, as if deleted. Not the raw archive (`raw_archive`,
- * `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
+/** Dormant memories: what sleep does with a faded memory instead of deleting it (config
+ * `dormant.enabled`; `retentionDays` bounds how long one is kept). Content stays in
+ * `dormant_memories` (schema v44) and the `memories` row goes, so every reader of `memories`
+ * stops seeing it, as if deleted. Not the raw archive (`raw_archive`, `archiveRawMemory`), which
+ * keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface DormantKey {
@@ -51,7 +52,8 @@ function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIs
   return Number(cachedStatement(db, sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }
 
-/** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between; returns how many went. */
+/** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between;
+ * returns how many went. */
 async function expireInChunks(
   db: DatabaseSyncLike,
   keys: readonly DormantKey[],
@@ -73,8 +75,8 @@ async function expireInChunks(
   return gone;
 }
 
-/** Deletes for good every memory that went dormant before `cutoffIso`, on one handle; returns how many went, or under
- * `dryRun` how many would. */
+/** Deletes for good every memory that went dormant before `cutoffIso`, on one handle; returns
+ * how many went, or under `dryRun` how many would. */
 export async function expireDormantBefore(
   db: DatabaseSyncLike,
   cutoffIso: string,
@@ -128,16 +130,17 @@ function restoreInWriteScope(
       const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
       writeEntryDbOnly(db, entry, { actor: restore.actor });
       deleteDormantRow(db, restore.tenantId, restore.id);
-      // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
-      // Same write scope as the restore, so the label exists exactly when the restore does.
+      // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle
+      // trains on. Same write scope as the restore, so the label exists exactly when the restore
+      // does.
       auditDormantRestore(db, restore, snapshot, now);
       return { status: 'restored', entry };
     },
   );
 }
 
-/** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit
- * together, then its mirrors are written. */
+/** Brings one dormant memory back on a single handle: the live row, the dormant delete and the
+ * audit row commit together, then its mirrors are written. */
 function restoreDormantMemory(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -167,8 +170,8 @@ interface DormantForget {
   readonly admit: SqlFragment;
 }
 
-/** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single handle; false when it
- * holds none `admit` passes. */
+/** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single
+ * handle; false when it holds none `admit` passes. */
 function forgetDormantMemory(db: DatabaseSyncLike, forget: DormantForget): boolean {
   const { tenantId, id, actor, admit } = forget;
   if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;

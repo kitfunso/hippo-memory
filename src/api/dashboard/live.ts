@@ -10,7 +10,8 @@ export const BANDS: readonly Band[] = ['pinned', 'strong', 'fading', 'atRisk'];
 
 export type Chip = DashboardChip;
 
-/** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
+/** The one predicate for "shown on the dashboard": not superseded, not archived, not
+ * quarantined. */
 export function isLiveMemory(entry: Pick<MemoryEntry, 'supersededBy' | 'kind' | 'scope'>): boolean {
   return (
     !entry.supersededBy &&

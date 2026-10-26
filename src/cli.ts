@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Hippo CLI entry point: parses argv and dispatches each verb through the table in surface/cli/verbs.ts.
-// `hippo help` prints the verb list from that table, so no list is kept here.
+// Hippo CLI entry point: parses argv and dispatches each verb through the table in
+// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'node:fs';
@@ -51,7 +51,8 @@ function dryRunRefusal(
 
 function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
-    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array member.
+    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array
+    // member.
     (flags[key] as string[]).push(value);
   } else {
     flags[key] = [value];
@@ -59,8 +60,8 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its own branch here instead of the swallow-avoidance
-  // short-circuit in setSeparatedFlag.
+  // Glued form has no following token to swallow, so a switch gets its own branch here instead of
+  // the swallow-avoidance short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {
@@ -114,7 +115,8 @@ export function parseArgs(argv: string[]) {
         i += setSeparatedFlag(flags, key, rest[i + 1], flagKind(declared, key));
       }
     } else if (part === '-h') {
-      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
+      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still
+      // passes one.
       flags['help'] = true;
       i++;
     } else {
@@ -133,8 +135,8 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   return true;
 }
 
-// Repair-only: never first-installs, because silently swapping the codex binary on routine commands is a consent
-// violation and reads as binary hijacking to supply-chain scanners.
+// Repair-only: never first-installs, because silently swapping the codex binary on routine commands
+// is a consent violation and reads as binary hijacking to supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -198,8 +200,8 @@ function rejectEmptyScope(flags: CliFlags): void {
   }
 }
 
-// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard because each
-// comparison against it is false.
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard
+// because each comparison against it is false.
 function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
@@ -209,8 +211,8 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   }
 }
 
-// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single coercion of an
-// inline value would be correct for every one of them.
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single
+// coercion of an inline value would be correct for every one of them.
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
@@ -233,7 +235,8 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
+  // ignored.
   const ignored = declared
     ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
     : unknown;
@@ -283,7 +286,8 @@ async function main(
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
+ * side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
@@ -296,8 +300,8 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await withRootStoreRuntime(() => main(command, args, flags, getHippoRoot(process.cwd())));
   } catch (err) {
-    // The verb printed its own message. The process ends as a success does, never by process.exit, which on Windows
-    // aborts Node (libuv async.c) while a fetch still has work in flight.
+    // The verb printed its own message. The process ends as a success does, never by process.exit,
+    // which on Windows aborts Node (libuv async.c) while a fetch still has work in flight.
     if (err instanceof CliExit) {
       process.exitCode = err.code;
       return;
@@ -324,7 +328,8 @@ if (
   fs.existsSync(entryPath) &&
   fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)
 ) {
-  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the store root) lands here.
+  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the
+  // store root) lands here.
   runCli().catch((err) => {
     log.error('hippo: the command could not start', errorFields(err));
     process.exitCode = 1;

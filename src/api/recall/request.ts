@@ -1,5 +1,6 @@
-// The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
-// retrieveWithCliCore ranks with rankRecall under BUDGET_RANKED, then records the list shown once.
+// The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the
+// same messages. retrieveWithCliCore ranks with rankRecall under BUDGET_RANKED, then records the
+// list shown once.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
@@ -41,13 +42,15 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
-// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote cost.
+// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote
+// cost.
 const MAX_SCORER_WINDOW = 1000;
 // Bounds BM25 tokenisation cost while covering pasted error messages.
 const MAX_CONTEXT_QUERY_LEN = 1024;
 const RECALL_MODES = ['bm25', 'hybrid', 'physics'] as const;
 
-/** A recall or context input the caller must fix; MCP answers it with an isError result, HTTP with a 400. */
+/** A recall or context input the caller must fix; MCP answers it with an isError result, HTTP
+ * with a 400. */
 export class RecallRequestError extends BadRequestError {
   constructor(message: string) {
     super(message);
@@ -71,7 +74,8 @@ export function toolParams(args: Readonly<Record<string, JsonValue>>): RequestPa
   return { get: (name) => args[name], queryName: 'query' };
 }
 
-/** The recall options every surface passes through to retrieve(); each surface adds its own window limit. */
+/** The recall options every surface passes through to retrieve(); each surface adds its own
+ * window limit. */
 export interface SharedRecallOptions {
   readonly query: string;
   readonly window: Omit<RecallWindowOptions, 'limit'> & { readonly includeContinuity: boolean };
@@ -104,7 +108,8 @@ function nonNegativeParam(params: RequestParams, name: string): number | undefin
   return n;
 }
 
-// Only `true`, "1" and "true" turn a flag on, so `?summarize_overflow=banana` or an empty value stays off.
+// Only `true`, "1" and "true" turn a flag on, so `?summarize_overflow=banana` or an empty value
+// stays off.
 function flagParam(params: RequestParams, name: string): boolean {
   const value = params.get(name);
   return value === true || value === '1' || value === 'true';
@@ -214,14 +219,16 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
-/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host admin only. */
+/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host admin
+ * only. */
 export async function retrieveWithCliCore(
   ctx: Context,
   opts: CliCoreQuery,
   core: CliCoreRanker,
 ): Promise<RecallResult> {
-  // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to check here.
-  // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
+  // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to
+  // check here. This ranker applies the operator's scope rule and may search a second store, so no
+  // bearer client may reach it.
   if (!ctx.actor.hostAdmin)
     throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const store = ctx.store;
@@ -279,8 +286,8 @@ interface ShownRanking {
   readonly planningAudit: AppendAuditOptions | undefined;
 }
 
-/** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or count, as under the
- * other rankers. */
+/** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or
+ * count, as under the other rankers. */
 async function recordShown(
   ctx: Context,
   store: HippoStore,
@@ -308,7 +315,8 @@ async function recordShown(
     finishShown(store, core.lastRecall, writes, ids.length > 0),
   );
   if (audited) {
-    // The second store logs that it was searched, and strengthens only the rows the first does not hold.
+    // The second store logs that it was searched, and strengthens only the rows the first does not
+    // hold.
     if (second !== undefined) {
       await finishOrReport(() =>
         second.finishRecall({
@@ -319,8 +327,8 @@ async function recordShown(
       );
     }
   }
-  // The caller prints whether or not the record was written, so the ring and the ledger still take this list; `written`
-  // holds back the count.
+  // The caller prints whether or not the record was written, so the ring and the ledger still take
+  // this list; `written` holds back the count.
   await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
     query: opts.query,
     sessionId: opts.boost?.sessionId,
@@ -332,7 +340,8 @@ async function recordShown(
   });
 }
 
-/** The second store ranked, as the caller's own store when that is the global one, so its graph walks once. */
+/** The second store ranked, as the caller's own store when that is the global one, so its graph
+ * walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
   if (ctx.reach?.isGlobal === true)
@@ -340,13 +349,15 @@ function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource
   return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 
-/** The second store takes its own recall rows, unless the caller's store is the global one already. */
+/** The second store takes its own recall rows, unless the caller's store is the global one
+ * already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
   const sources = core.sources;
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
 
-// The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.
+// The caller has ranked and is about to print, so a failed audit write is logged and counted, never
+// thrown.
 async function finishOrReport(finish: () => Promise<number | null | void>): Promise<boolean> {
   try {
     await finish();
@@ -387,8 +398,8 @@ function traceOf(
   };
 }
 
-// A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs these ids with an
-// older trace; an empty one leaves the marker on the previous recall.
+// A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs
+// these ids with an older trace; an empty one leaves the marker on the previous recall.
 function finishShown(
   store: HippoStore,
   lastRecall: LastRecall,

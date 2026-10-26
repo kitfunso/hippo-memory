@@ -57,7 +57,8 @@ function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
       workspaces: [...new Set(strings.map(normalizeWorkspace).filter(Boolean))].sort(),
     };
   } catch (err) {
-    // The next registration rewrites the file, so keep the bad copy for the user to recover entries from.
+    // The next registration rewrites the file, so keep the bad copy for the user to recover entries
+    // from.
     setAsideCorruptRegistry(registryPath, err);
     return defaultRegistry();
   }
@@ -110,10 +111,12 @@ export function listRegisteredWorkspaces(globalRoot: string): string[] {
   return loadWorkspaceRegistry(globalRoot).workspaces;
 }
 
-// Crontab reads % as a newline and both shells expand $ and backtick; a backslash is a path separator on Windows only.
+// Crontab reads % as a newline and both shells expand $ and backtick; a backslash is a path
+// separator on Windows only.
 const UNSAFE_RUNNER_PATH_CHARS = /["`$%\n\r]/;
 
-/** True when a runner path holds a character that would break the quoted command or split the crontab line. */
+/** True when a runner path holds a character that would break the quoted command or split the
+ * crontab line. */
 export function hasUnsafeRunnerPathChars(runnerDir: string, platform: NodeJS.Platform): boolean {
   return (
     UNSAFE_RUNNER_PATH_CHARS.test(runnerDir) || (platform !== 'win32' && runnerDir.includes('\\'))
@@ -138,14 +141,16 @@ export function buildWindowsTaskRun(cmd: string): string {
 }
 
 /**
- * `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or the end doubles, so no
- * quote ends the argument early.
+ * `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or
+ * the end doubles, so no quote ends the argument early.
+ *
  */
 export function quoteInsideWindowsArg(text: string): string {
   return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');
 }
 
-/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the command. */
+/** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the
+ * command. */
 export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
   return [
     '/create',
@@ -176,7 +181,8 @@ export function runDailyMaintenance(
     const store = path.join(resolved, HIPPO_DIR);
     if (!fs.existsSync(store)) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
-    // The home folder is registered and its .hippo is the global store, which the runner already sleeps.
+    // The home folder is registered and its .hippo is the global store, which the runner already
+    // sleeps.
     if (globalReal !== undefined && realpathOrSelf(store) === globalReal) continue;
     runCommand(resolved, ['sleep']);
   }

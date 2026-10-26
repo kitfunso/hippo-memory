@@ -70,7 +70,8 @@ export interface ToolReport {
   readonly homes: string[];
   readonly containers: ContainerSeen[];
   readonly tally: Tally;
-  /** Dry run only: kept rows in containers this run did not list, such as a moved project's old folder. */
+  /** Dry run only: kept rows in containers this run did not list, such as a moved project's old
+   * folder. */
   unlisted: number;
 }
 
@@ -137,7 +138,8 @@ const TALLY_WORDS = {
   busy: 'busy folders',
 } as const satisfies Record<keyof Tally, string>;
 
-/** `hippo import --agents`: each tool's home, its folders and what moved; in a dry run, what would have. */
+/** `hippo import --agents`: each tool's home, its folders and what moved; in a dry run, what
+ * would have. */
 export function detailLines(report: ImportReport, dryRun: boolean): string[] {
   const lines = [dryRun ? 'Agent memories (dry run, nothing written):' : 'Agent memories:'];
   for (const t of report.tools) {
@@ -163,8 +165,9 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
 }
 
 /**
- * "Imported 12 agent memories (Claude Code 10, Codex 2); 1 replaced, 1 set aside, 1 skipped for a secret.", or null
- * when nothing moved.
+ * "Imported 12 agent memories (Claude Code 10, Codex 2); 1 replaced, 1 set aside, 1 skipped for a
+ * secret.", or null when nothing moved.
+ *
  */
 export function summaryLine(report: ImportReport): string | null {
   const total = totalTally(report);

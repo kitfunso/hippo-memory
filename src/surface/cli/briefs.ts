@@ -1,4 +1,5 @@
-// The project brief verbs: one repo's brief, versioned by supersession and refreshable from the repo's receipts.
+// The project brief verbs: one repo's brief, versioned by supersession and refreshable from the
+// repo's receipts.
 
 import { briefDigest, briefRefresh } from '../../api/objects/object-kinds.js';
 import type { Context } from '../../api/types.js';

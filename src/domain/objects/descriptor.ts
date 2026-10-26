@@ -1,6 +1,6 @@
-// The words and rules that differ between the typed objects (decision, project brief and the rest), held as data so one
-// lifecycle serves every kind.
-// A kind's table, columns and audit keys sit behind the `objects` store group.
+// The words and rules that differ between the typed objects (decision, project brief and the rest),
+// held as data so one lifecycle serves every kind. A kind's table, columns and audit keys sit
+// behind the `objects` store group.
 
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type {
@@ -18,7 +18,8 @@ export interface ObjectDescriptor<K extends ObjectKind> {
   readonly states: ReadonlySet<ObjectByKind[K]['status']>;
   /** The statuses a close may start from. */
   readonly closableFrom: readonly ObjectByKind[K]['status'][];
-  /** Said in place of "not <closable statuses>" when a close is refused; incidents say "already closed". */
+  /** Said in place of "not <closable statuses>" when a close is refused; incidents say "already
+   * closed". */
   readonly closeRefusal?: string;
 }
 
@@ -36,7 +37,8 @@ export interface ObjectDraft<K extends SavableKind> {
   readonly at: string;
 }
 
-/** A kind the shared save writes: active rows, replaced by supersede. `W` is the options its module's save takes. */
+/** A kind the shared save writes: active rows, replaced by supersede. `W` is the options its
+ * module's save takes. */
 export interface SavableDescriptor<K extends SavableKind, W> extends ObjectDescriptor<K> {
   /** Throws BadRequestError for options the kind refuses. */
   readonly draft: (opts: W, now: Date) => ObjectDraft<K>;
@@ -44,7 +46,8 @@ export interface SavableDescriptor<K extends SavableKind, W> extends ObjectDescr
 
 export interface ObjectListOptions<K extends ObjectKind> {
   status?: ObjectByKind[K]['status'];
-  /** The value the kind's one filter column must equal: a customer note's customer, a project brief's repo. */
+  /** The value the kind's one filter column must equal: a customer note's customer, a project
+   * brief's repo. */
   filter?: string;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */

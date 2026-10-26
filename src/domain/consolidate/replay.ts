@@ -1,8 +1,9 @@
 /**
- * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and age, then apply the
- * `markRetrieved` strengthening.
- * A lightweight deterministic analog of hippocampal replay, so important memories stay strong without being queried;
- * distinct from decay, physics and merge.
+ * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and
+ * age, then apply the `markRetrieved` strengthening. A lightweight deterministic analog of
+ * hippocampal replay, so important memories stay strong without being queried; distinct from decay,
+ * physics and merge.
+ *
  */
 
 import { HOUR_MS } from '../../base/util/time.js';
@@ -29,14 +30,16 @@ const IDLE_BOOST_GAIN = 0.1;
 const STRENGTH_FLOOR = 0.1;
 
 /**
- * Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time.
+ * Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry
+ * and current time.
+ *
  */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still eligible, just
-  // unlikely).
-  // The clamp is required because sampleForReplay needs all weights positive.
+  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still
+  // eligible, just unlikely). The clamp is required because sampleForReplay needs all weights
+  // positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);
@@ -59,8 +62,9 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }
 
-/** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`, without replacement;
- * deterministic for a seed. Weighted, not greedy: always taking the top-N overfits. Holds ids, not rows. */
+/** The ids of `count` memories picked for replay in pick order, weighted by `replayPriority`,
+ * without replacement; deterministic for a seed. Weighted, not greedy: always taking the top-N
+ * overfits. Holds ids, not rows. */
 export async function sampleForReplay(
   survivors: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
   count: number,
@@ -73,8 +77,9 @@ export async function sampleForReplay(
   const ids: string[] = [];
   const weights: number[] = [];
   for await (const entry of survivors) {
-    // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive
-    // rather than trust the stored value (it no longer carries the age-out case).
+    // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats
+    // staleness, so derive rather than trust the stored value (it no longer carries the age-out
+    // case).
     if (resolveConfidence(entry, now) === 'stale') continue;
     ids.push(entry.id);
     weights.push(replayPriority(entry, now, outcomeAblated));

@@ -1,4 +1,5 @@
-// The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain computes.
+// The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain
+// computes.
 
 import { createHash } from 'node:crypto';
 import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../api/objects/graph.js';
@@ -53,7 +54,8 @@ const STYLE = [
 const sha256 = (text: string): string =>
   `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
 
-// Entity names come from memories, so the page runs only its own script and style block, each named by hash.
+// Entity names come from memories, so the page runs only its own script and style block, each named
+// by hash.
 const POLICY = [
   "default-src 'none'",
   `script-src ${sha256(GRAPH_CLIENT_SCRIPT)}`,
@@ -99,8 +101,8 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
     .join('');
 }
 
-// Safe inline JSON for the client: unicode-escape the HTML-significant chars so the content cannot terminate the
-// <script> block; JSON.parse restores them.
+// Safe inline JSON for the client: unicode-escape the HTML-significant chars so the content cannot
+// terminate the <script> block; JSON.parse restores them.
 function inlineModelJson(model: GraphModel): string {
   return JSON.stringify(model)
     .replace(/</g, '\\u003c')
@@ -114,10 +116,10 @@ function renderLegend(model: GraphModel): string {
 }
 
 /**
- * Render the model as a self-contained, offline interactive HTML node-link diagram with server-side deterministic
- * positions.
- * The model is inlined as `<script type="application/json">` with `<`, `>`, `&` unicode-escaped so a `</script>` in an
- * entity name cannot break out.
+ * Render the model as a self-contained, offline interactive HTML node-link diagram with server-side
+ * deterministic positions. The model is inlined as `<script type="application/json">` with `<`,
+ * `>`, `&` unicode-escaped so a `</script>` in an entity name cannot break out.
+ *
  */
 export function renderGraphHtml(model: GraphModel): string {
   const pos = layoutGraph(model);
@@ -147,8 +149,9 @@ export function renderGraphHtml(model: GraphModel): string {
 }
 
 /**
- * Render the model as a JSON Canvas (jsoncanvas.org) document: `text` nodes at the same deterministic layout positions,
- * `edges[]` linking them by id.
+ * Render the model as a JSON Canvas (jsoncanvas.org) document: `text` nodes at the same
+ * deterministic layout positions, `edges[]` linking them by id.
+ *
  */
 export function renderGraphCanvas(model: GraphModel): string {
   const pos = layoutGraph(model, { width: 2400, height: 1600 });

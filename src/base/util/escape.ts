@@ -1,4 +1,5 @@
-// Leaf module: literal-match escapes, kept in one place so every LIKE and RegExp caller escapes the same set.
+// Leaf module: literal-match escapes, kept in one place so every LIKE and RegExp caller escapes the
+// same set.
 
 /** Escape LIKE metacharacters for a query that declares `ESCAPE '\'`. */
 export function escapeLike(term: string): string {

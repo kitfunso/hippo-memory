@@ -14,15 +14,15 @@ import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
-// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
-// on stopword-filtered tokens only applies after a polarity signal, so it filters drive-by topic similarity, not
-// semantic drift.
+// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The
+// Jaccard threshold on stopword-filtered tokens only applies after a polarity signal, so it filters
+// drive-by topic similarity, not semantic drift.
 const CONFLICT_OVERLAP_THRESHOLD = 0.5;
-// Minimum distinctive shared tokens before we trust an overlap score. Filters out cases where two memories share only
-// common English + a project name.
+// Minimum distinctive shared tokens before we trust an overlap score. Filters out cases where two
+// memories share only common English + a project name.
 const CONFLICT_MIN_RARE_SHARED = 2;
-// Polarity is detected on the first N words only. A stray "not" in the middle of a long memory shouldn't flip the whole
-// thing negative.
+// Polarity is detected on the first N words only. A stray "not" in the middle of a long memory
+// shouldn't flip the whole thing negative.
 const POLARITY_WINDOW_WORDS = 40;
 
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
@@ -33,14 +33,15 @@ type PagesOf = (
 export interface DetectConflictsOptions {
   strength: StrengthModel;
   decayOpts?: DecayBasis;
-  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so without this bypass
-  // rescued entries would be silently re-excluded from conflict detection.
+  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
+  // without this bypass rescued entries would be silently re-excluded from conflict detection.
   rescuedIds?: Set<string>;
   pagesOf?: PagesOf;
 }
 
-/** Pairs of live non-semantic memories that contradict each other, in survivor order. With `pagesOf`, the rows are read
- * back one tenant at a time, as a pair never spans tenants, so only that tenant's profiles are held. */
+/** Pairs of live non-semantic memories that contradict each other, in survivor order. With
+ * `pagesOf`, the rows are read back one tenant at a time, as a pair never spans tenants, so only
+ * that tenant's profiles are held. */
 export async function detectConflicts(
   entries: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
   now: Date,
@@ -80,7 +81,8 @@ interface ConflictRow {
   id: string;
   trace: boolean;
   superseded: boolean;
-  /** Extracted facts and session digests restate other rows, so they are never one side of a conflict. */
+  /** Extracted facts and session digests restate other rows, so they are never one side of a
+   * conflict. */
   restated: boolean;
   scope: MemoryEntry['scope'];
   tenantId: string;
@@ -127,8 +129,9 @@ function tenantConflicts(
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid, and
-      // conflict detection is for stated-rule disagreement, not strategy diversity.
+      // Traces are variants of each other, not contradictions: two strategies for the same task can
+      // both be valid, and conflict detection is for stated-rule disagreement, not strategy
+      // diversity.
       if (
         (a.trace && b.trace) ||
         a.superseded ||
@@ -149,8 +152,8 @@ function tenantConflicts(
 
 type RecallFields = Pick<MemoryEntry, 'scope' | 'tenantId' | 'originProject'>;
 
-/** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a
- * project's. */
+/** One project's ambient context can show both: same tenant, and the same project or a
+ * user-global row beside a project's. */
 function recalledTogether(a: RecallFields, b: RecallFields): boolean {
   // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
@@ -170,9 +173,9 @@ interface ConflictProfile {
 
 function conflictProfile(text: string): ConflictProfile {
   const opening = openingWindow(text);
-  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a prose memory doesn't
-  // flip the intent.
-  // Pad with spaces so space-delimited patterns match words at the start/end.
+  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a
+  // prose memory doesn't flip the intent. Pad with spaces so space-delimited patterns match words
+  // at the start/end.
   return {
     distinct: distinctiveTokens(text),
     polarity: inferConflictPolarity(opening),
@@ -184,11 +187,12 @@ function describeConflict(
   a: ConflictProfile,
   b: ConflictProfile,
 ): { reason: string; score: number } | null {
-  // Jaccard on stopword-stripped tokens. Defer the threshold check until we know whether an explicit polarity pair is
-  // present (lower bar for those).
+  // Jaccard on stopword-stripped tokens. Defer the threshold check until we know whether an
+  // explicit polarity pair is present (lower bar for those).
   const overlapScore = jaccardSets(a.distinct, b.distinct);
 
-  // Require at least N shared distinctive tokens so two short memories sharing only "the project name" don't register.
+  // Require at least N shared distinctive tokens so two short memories sharing only "the project
+  // name" don't register.
   let shared = 0;
   for (const t of a.distinct) if (b.distinct.has(t)) shared++;
   if (shared < CONFLICT_MIN_RARE_SHARED) return null;
@@ -212,15 +216,16 @@ function openingWindow(text: string): string {
   return text.split(/\s+/).slice(0, POLARITY_WINDOW_WORDS).join(' ');
 }
 
-// Takes opening windows only, so " on " and " off " as prepositions deep in long prose don't read as enabled/disabled.
+// Takes opening windows only, so " on " and " off " as prepositions deep in long prose don't read
+// as enabled/disabled.
 function classifyConflictType(
   a: string,
   b: string,
   aPolarity: ConflictPolarity,
   bPolarity: ConflictPolarity,
 ): string | null {
-  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <-> `disabled` and explicit
-  // on/off in imperative context.
+  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <->
+  // `disabled` and explicit on/off in imperative context.
   const enabledDisabled =
     (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable '])) ||
     (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
@@ -294,17 +299,20 @@ function containsAny(text: string, needles: string[]): boolean {
 
 /** A weakened loser keeps this share of its half-life, so it fades faster than the kept side. */
 export const WEAKEN_HALF_LIFE_FACTOR = 0.5;
-/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it to zero. */
+/** A weakened loser's half-life never drops under this, so repeated resolves cannot drive it to
+ * zero. */
 export const WEAKEN_MIN_HALF_LIFE_DAYS = 1;
 
-/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones its value. */
+/** What the caller asked for the loser: forget deletes it, rejectLoser also tombstones its
+ * value. */
 export interface LoserChoice {
   readonly forget?: boolean;
   readonly rejectLoser?: boolean;
 }
 
-/** The loser's fate, every number in it: a store applies it as given. A rejection is a tenant-wide tombstone, so it
- * may not carry a personal row's value, and its sweep stays within `ownScope`, what the caller may touch. */
+/** The loser's fate, every number in it: a store applies it as given. A rejection is a
+ * tenant-wide tombstone, so it may not carry a personal row's value, and its sweep stays within
+ * `ownScope`, what the caller may touch. */
 export function conflictLoserFate(
   choice: LoserChoice,
   loser: ConflictSide,

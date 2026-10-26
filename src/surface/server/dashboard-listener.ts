@@ -1,5 +1,6 @@
-// `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits, error replies and the
-// drain come from boot.ts and lifecycle.ts; only the route table and its session are the dashboard's.
+// `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits,
+// error replies and the drain come from boot.ts and lifecycle.ts; only the route table and its
+// session are the dashboard's.
 import type { ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
@@ -64,7 +65,8 @@ export class DashboardListenError extends Error {
   }
 }
 
-/** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
+/** What every request shares: the reader thread on its own store connection, and a Context on
+ * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
   { store, offLoop, host }: ServerRuntime,
@@ -94,13 +96,14 @@ function servingFor(
   };
 }
 
-/** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never claims the API server's
- * pidfile, so both can serve one store. */
+/** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never
+ * claims the API server's pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
   const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
-  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.
+  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API
+  // server's.
   const counts = { handlerDeadlines: 0 };
   const server = createListener(undefined, (req, res) => {
     res.once('finish', runtime.afterResponse);
@@ -112,7 +115,8 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
     });
   });
   setKeepAliveTimeouts(server);
-  // The reader thread closes before the runtime, which closes its held connection last, so that close is the last.
+  // The reader thread closes before the runtime, which closes its held connection last, so that
+  // close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
     await runtime.close();

@@ -25,16 +25,17 @@ export interface ImportResult {
   imported: number; // actually imported (after dedup)
   skipped: number; // skipped as duplicates or too short
   /**
-   * Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned value is
-   * distinguishable in summaries.
-   * Optional because `ImportResult` is exported from the package root and a required field breaks existing consumers;
-   * read sites use `?? 0`.
+   * Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned
+   * value is distinguishable in summaries. Optional because `ImportResult` is exported from the
+   * package root and a required field breaks existing consumers; read sites use `?? 0`.
+   *
    */
   rejected?: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a dryRun this is the would-be count (a true
    *  deletion-sync preview). */
   archived?: number;
-  /** Entries stored with secret-shaped text redacted; optional for the same published-surface reason as `rejected`. */
+  /** Entries stored with secret-shaped text redacted; optional for the same published-surface
+   * reason as `rejected`. */
   redacted?: number;
   entries: MemoryEntry[];
 }
@@ -44,26 +45,29 @@ export interface ImportOptions {
   global?: boolean;
   extraTags?: string[];
   hippoRoot: string;
-  /** The tenant written as, DEFAULT_TENANT_ID when left out: the dedup read counts only its entries, except under
-   * `global`, which counts every tenant's. */
+  /** The tenant written as, DEFAULT_TENANT_ID when left out: the dedup read counts only its
+   * entries, except under `global`, which counts every tenant's. */
   tenantId?: string;
   /**
-   * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key. REQUIRED by importVault
-   * (throws if missing or blank), because it keys the destructive deletion sync and two vaults sharing a basename would
-   * clobber each other.
-   * LIKE-escaped by the loader.
+   * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key.
+   * REQUIRED by importVault (throws if missing or blank), because it keys the destructive deletion
+   * sync and two vaults sharing a basename would clobber each other. LIKE-escaped by the loader.
+   *
    */
   name?: string;
-  /** K1 vault import only. Memory scope stamped on every imported note. Defaults to null (unscoped) when unset. */
+  /** K1 vault import only. Memory scope stamped on every imported note. Defaults to null
+   * (unscoped) when unset. */
   scope?: string;
 }
 
 /** A port call answered at once: the published importers return their result, never a Promise. */
 type AtOnce<F> = F extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never;
 
-/** The port calls an import makes on its folder's store, answered at once; a composition root builds them. */
+/** The port calls an import makes on its folder's store, answered at once; a composition root
+ * builds them. */
 export interface ImportFiles {
-  /** Creates the store's files when they are missing, as a first import to the global store needs. */
+  /** Creates the store's files when they are missing, as a first import to the global store
+   * needs. */
   readonly ensure: () => void;
   readonly writeEntry: AtOnce<EntryWrites['writeEntry']>;
   readonly refusedAmong: AtOnce<Rejections['refusedAmong']>;
@@ -107,8 +111,8 @@ export function importEntriesInto(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its
-  // handle.
+  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
+  // probe, shares its handle.
   return options.target.batch(() => {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw);
@@ -160,7 +164,8 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
   return null;
 }
 
-/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
+/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those
+ * alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
   return files
@@ -186,10 +191,9 @@ function createImportEntry(
   options: TargetedImport,
   baseHalfLifeDays: number,
 ): MemoryEntry {
-  // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a system of record
-  // (see MEMORY_ENVELOPE.md).
-  // The write must use the same tenant as the scoped dedup read above: global=true writes host-wide, global=false
-  // writes to options.tenantId.
+  // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a
+  // system of record (see MEMORY_ENVELOPE.md). The write must use the same tenant as the scoped
+  // dedup read above: global=true writes host-wide, global=false writes to options.tenantId.
   return createMemory(
     chunk,
     {
@@ -204,7 +208,8 @@ function createImportEntry(
   );
 }
 
-/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
+/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses
+ * it. */
 function writeOrProbeImport(
   target: OpenImport,
   entry: MemoryEntry,

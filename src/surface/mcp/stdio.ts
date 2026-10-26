@@ -33,13 +33,15 @@ function send(msg: McpResponse): void {
 
 // ── Stdio transport ──
 
-/** Splits one stream's chunks into frame bodies; the stream owns its half-read frame, so no module holds one. */
+/** Splits one stream's chunks into frame bodies; the stream owns its half-read frame, so no
+ * module holds one. */
 function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
   let pending: Uint8Array[] = [];
   let pendingBytes = 0;
   // Set when the pending bytes hold a Content-Length header whose body has not fully arrived.
   let needs: number | undefined;
-  // The part of a refused frame still on its way, dropped as it arrives so it is never buffered or read as a new frame.
+  // The part of a refused frame still on its way, dropped as it arrives so it is never buffered or
+  // read as a new frame.
   let refused: FrameRemainder = 0;
 
   const withoutRefused = (chunk: Buffer): Buffer => {
@@ -58,7 +60,8 @@ function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
     const chunk = withoutRefused(raw);
     pending.push(chunk);
     pendingBytes += chunk.length;
-    // Joining on every chunk would copy the whole pending frame each time; wait until a frame can have ended.
+    // Joining on every chunk would copy the whole pending frame each time; wait until a frame can
+    // have ended.
     if (
       needs === undefined
         ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES
@@ -87,13 +90,14 @@ function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
   };
 }
 
-// Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP transport does.
+// Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP
+// transport does.
 function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
   return isJsonObject(v) && isJsonString(v.method);
 }
 
-/** A frame that parsed but names no method: with an id it is a request owed an answer; without one it is a
- * notification, which JSON-RPC forbids answering. */
+/** A frame that parsed but names no method: with an id it is a request owed an answer; without
+ * one it is a notification, which JSON-RPC forbids answering. */
 function answerUnroutable(frame: JsonValue): void {
   const id = isJsonObject(frame) ? frame.id : undefined;
   if (isJsonString(id) || isJsonNumber(id)) {
@@ -103,12 +107,13 @@ function answerUnroutable(frame: JsonValue): void {
   log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
 }
 
-/** How long stdin's end waits for calls still running, so a client that closes right after its last request still gets
- * the reply. */
+/** How long stdin's end waits for calls still running, so a client that closes right after its
+ * last request still gets the reply. */
 const STDIN_END_DRAIN_MS = 5000;
 const CRASH_DRAIN_SLACK_MS = 1000;
 
-// Calls dispatched and not yet answered, each with the method the drain names if it is still running at the bound.
+// Calls dispatched and not yet answered, each with the method the drain names if it is still
+// running at the bound.
 const inFlight = new Map<Promise<void>, string>();
 
 function track(method: string, call: Promise<void>): void {
@@ -140,8 +145,8 @@ async function exitWhenDrained(): Promise<void> {
   exitAfterFlush(0);
 }
 
-/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
- * says whether that answer went out, so a later reply is dropped. */
+/** Answers `req` with one timeout error at the deadline a served request has. The returned
+ * function stops the timer and says whether that answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
   const ms = requestDeadlineMs(envRequestDeadlineMs());
   if (ms === 0) return () => false;
@@ -176,8 +181,9 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   };
 }
 
-/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
- * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
+/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global
+ * store instead of failing every tool call, and say so on stderr (stdout carries the protocol).
+ * A later `hippo init` project store wins. */
 async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Promise<string> {
   const root = hippoHomeDir();
   const target = host.contextFor(root, tenantId).reach?.globalTarget;
@@ -190,7 +196,8 @@ async function createGlobalStoreOnFirstRun(host: McpHost, tenantId: string): Pro
   return root;
 }
 
-/** Runs one frame in the host's scope; only a tool call builds a context, so tools/list never creates a store. */
+/** Runs one frame in the host's scope; only a tool call builds a context, so tools/list never
+ * creates a store. */
 function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
   return host.runRequest(async () => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
@@ -251,16 +258,19 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   );
 }
 
-/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run
- * directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`) does not steal stdin or exit when its
- * parent closes a pipe. The caller picks the host, so src/surface/mcp names no store adapter and no scope plumbing. */
+/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or
+ * this file run directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`)
+ * does not steal stdin or exit when its parent closes a pipe. The caller picks the host, so
+ * src/surface/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
-  // Bound to the loop's start, so every frame runs inside the root's store runtime, whatever context stdin was made in.
+  // Bound to the loop's start, so every frame runs inside the root's store runtime, whatever
+  // context stdin was made in.
   process.stdin.on(
     'data',
     AsyncResource.bind(
       frameReader((body) => {
-        // One id per frame, so the error reply and every line logged for the call name the same request.
+        // One id per frame, so the error reply and every line logged for the call name the same
+        // request.
         const abort = new AbortController();
         runWithRequestId(randomUUID(), () => dispatch(body, abort, host), undefined, abort.signal);
       }),
@@ -275,7 +285,8 @@ export function startStdioLoop(host: McpHost): void {
   });
 
   exitOnStreamError();
-  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its reply.
+  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its
+  // reply.
   installCrashHandlers('mcp', {
     run: drainInFlight,
     boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
@@ -283,7 +294,8 @@ export function startStdioLoop(host: McpHost): void {
 }
 
 function exitOnStreamError(): void {
-  // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would crash the server.
+  // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would
+  // crash the server.
   process.stdout.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
       log.debug('mcp: the client closed stdout; exiting', errorFields(err));
@@ -294,7 +306,8 @@ function exitOnStreamError(): void {
     exitAfterFlush(1);
   });
 
-  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit code.
+  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit
+  // code.
   process.stderr.on('error', (err: NodeJS.ErrnoException) => {
     exitAfterFlush(err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' ? 0 : 1);
   });

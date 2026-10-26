@@ -46,8 +46,9 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
   return;
 }
 
-// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered AssembledContextItem[] (fresh-tail
-// raws, summary substitutions, bio-aware budget fit). Tenant scope from the Bearer; default-deny on private rows.
+// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered
+// AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware budget fit). Tenant
+// scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession(
   { res, ctx, query }: AuthedRouteRequest,
   { id }: RouteParams,
@@ -80,9 +81,9 @@ export async function handleAssembleSession(
   return;
 }
 
-// GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary
-// (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer; default-deny on private scopes for
-// the summary and its children.
+// GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a
+// level-2 summary (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer;
+// default-deny on private scopes for the summary and its children.
 export async function handleDrillRecall(
   { res, ctx, query }: AuthedRouteRequest,
   { id }: RouteParams,
@@ -90,7 +91,8 @@ export async function handleDrillRecall(
   validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
   const limit = parseNumberParam(limitRaw, 'limit');
-  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route gives.
+  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route
+  // gives.
   if (limit !== undefined && limit > MAX_LIST_LIMIT) parseLimitParam(limitRaw);
   const budget = parseNumberParam(query.get('budget'), 'budget');
   // depth walks N levels (default 1, hard cap 10).
@@ -101,8 +103,8 @@ export async function handleDrillRecall(
   if (depth !== undefined) drillExtra.depth = depth;
   const result = await drillDown(ctx, id, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
-    // Leaf id maps to 422 (caller-actionable). Other cases stay as 404 to avoid leaking cross-tenant existence or scope
-    // grants.
+    // Leaf id maps to 422 (caller-actionable). Other cases stay as 404 to avoid leaking
+    // cross-tenant existence or scope grants.
     if (result.failure === 'not_drillable') {
       throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
     }
@@ -112,10 +114,9 @@ export async function handleDrillRecall(
   return;
 }
 
-// GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the
-// Bearer.
-// Pinned-only and '*' fallback skip the recall audit emit (as printContext does); a real-query hybrid search emits one
-// 'recall' row.
+// GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server;
+// tenant-scoped via the Bearer. Pinned-only and '*' fallback skip the recall audit emit (as
+// printContext does); a real-query hybrid search emits one 'recall' row.
 export async function handleGetContext({
   res,
   ctx,

@@ -12,8 +12,8 @@ export {
   type GraphModel,
 } from '../../domain/graph/view.js';
 
-/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256, so a long decision or
- * policy name stays focusable. */
+/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256,
+ * so a long decision or policy name stays focusable. */
 export function graphEntityOf(raw: string | null): string | undefined {
   if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) {
     throw new BadRequestError(`entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
@@ -21,7 +21,8 @@ export function graphEntityOf(raw: string | null): string | undefined {
   return raw ?? undefined;
 }
 
-/** The entity/relation graph behind GET /v1/graph, as the caller's role, scopes and owner may see it. */
+/** The entity/relation graph behind GET /v1/graph, as the caller's role, scopes and owner may
+ * see it. */
 export function graphView(
   ctx: Context,
   query: { entity?: string; limit: number },
@@ -33,7 +34,8 @@ export function graphView(
   });
 }
 
-/** The graph as its store holds it, personal rows included, which only the host's operator reads whole. */
+/** The graph as its store holds it, personal rows included, which only the host's operator reads
+ * whole. */
 export async function graphViewOnHost(
   ctx: Context,
   query: { entity?: string; limit: number },

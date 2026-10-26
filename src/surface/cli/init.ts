@@ -1,4 +1,5 @@
-// `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily runner.
+// `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily
+// runner.
 
 import { envSkipAutoIntegrations } from '../../base/util/env.js';
 import * as path from 'node:path';
@@ -123,7 +124,8 @@ async function learnScannedRepo(
 }
 
 function installScanHooks(repos: readonly string[]): void {
-  // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
+  // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff
+  // in every repo.
   const agents = detectAgentHooks(repos);
   if (agents.length === 0) {
     console.log(
@@ -283,8 +285,9 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
 }
 
 /**
- * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one
- * switch skips them all.
+ * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic
+ * integration, so one switch skips them all.
+ *
  */
 function initInstallsIntegrations(flags: CliFlags): boolean {
   if (boolFlag(flags, 'no-hooks')) return false;
@@ -295,7 +298,8 @@ function initInstallsIntegrations(flags: CliFlags): boolean {
   return false;
 }
 
-/** Plain init: patch the detected agents' instruction files in cwd, then install their user-level hooks. */
+/** Plain init: patch the detected agents' instruction files in cwd, then install their
+ * user-level hooks. */
 function autoInstallHooks(): void {
   const cwd = process.cwd();
   const agents = detectAgentHooks([cwd]);
@@ -333,8 +337,8 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
     if (!hookDef) continue;
 
     const targetPath = path.resolve(dir, hookDef.file);
-    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a new AGENTS.md or
-    // CLAUDE.md.
+    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a
+    // new AGENTS.md or CLAUDE.md.
     if (!fs.existsSync(targetPath) || seen.has(targetPath)) continue;
     seen.add(targetPath);
     const existing = fs.readFileSync(targetPath, 'utf8');
@@ -347,7 +351,8 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
   }
 }
 
-/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with a hint. */
+/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with
+ * a hint. */
 function refreshShippedBlock(filePath: string, text: string, hook: string): void {
   const block = hippoBlock(text);
   if (!block || (block.owner && HOOKS[block.owner].content === block.inner)) return;
@@ -426,8 +431,9 @@ function installOpencodeUserPlugin(): void {
 }
 
 /**
- * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so
- * re-running init adds newer hooks.
+ * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory;
+ * idempotent, so re-running init adds newer hooks.
+ *
  */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
@@ -438,8 +444,8 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep
-    // with `hippo hook install claude-code` and `hippo setup`.
+    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping
+    // `hippo init` in lockstep with `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

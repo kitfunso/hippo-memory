@@ -1,5 +1,5 @@
-// PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a
-// retried request id writes nothing twice.
+// PostCompact for a caller on another machine: the items it parsed become rows under its owner and
+// project, and a retried request id writes nothing twice.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { EntryContext } from '../../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../base/util/compaction-items.js';
@@ -23,7 +23,9 @@ export interface CallerItemsResult {
 }
 
 /**
- * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred here.
+ * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled
+ * or deferred here.
+ *
  */
 export async function saveCompactionItemsForCaller(
   given: EntryContext,
@@ -32,7 +34,8 @@ export async function saveCompactionItemsForCaller(
   const ctx = withEntryInfra(given);
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
-  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.
+  // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's
+  // growth.
   if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
     throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   }

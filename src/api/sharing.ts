@@ -1,5 +1,6 @@
-// Copying memories between a folder's store and the operator's global store: share one or the best by transfer score,
-// list the projects that shared, and sync the global rows down. The caller's tenant scopes each read of its own store.
+// Copying memories between a folder's store and the operator's global store: share one or the best
+// by transfer score, list the projects that shared, and sync the global rows down. The caller's
+// tenant scopes each read of its own store.
 
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
@@ -17,7 +18,8 @@ export interface SharePeer {
   readonly latest: string;
 }
 
-// A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
+// A root's reach sets it for a store kept in a folder, so only a context built without a reach
+// lacks it.
 function requireGlobalTarget(
   ctx: Context,
   action: string,
@@ -28,8 +30,8 @@ function requireGlobalTarget(
   return target;
 }
 
-/** Copies one of the caller's memories to the global store; null when its transfer score is too low and `force` is
- * off. */
+/** Copies one of the caller's memories to the global store; null when its transfer score is too
+ * low and `force` is off. */
 export async function shareToGlobal(
   ctx: ContextWith<'folderFiles'>,
   id: string,
@@ -39,7 +41,8 @@ export async function shareToGlobal(
   return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, options);
 }
 
-/** The caller's memories whose transfer score reaches `minScore`, copied to the global store unless `dryRun`. */
+/** The caller's memories whose transfer score reaches `minScore`, copied to the global store
+ * unless `dryRun`. */
 export async function autoShareToGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
@@ -51,7 +54,8 @@ export async function autoShareToGlobal(
   });
 }
 
-/** The projects that shared into the global store: the caller's tenant, or every tenant for the host's operator. */
+/** The projects that shared into the global store: the caller's tenant, or every tenant for the
+ * host's operator. */
 export async function sharePeers(
   ctx: Context,
   opts: { readonly allTenants?: boolean } = {},
@@ -63,7 +67,8 @@ export async function sharePeers(
   );
 }
 
-/** Copies the global rows the caller's store lacks into it; other projects' rows only with `includeCrossProject`. */
+/** Copies the global rows the caller's store lacks into it; other projects' rows only with
+ * `includeCrossProject`. */
 export async function syncFromGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly includeCrossProject: boolean },

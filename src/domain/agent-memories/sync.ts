@@ -1,4 +1,5 @@
-// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts picks the passes.
+// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts
+// picks the passes.
 import path from 'node:path';
 import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -54,7 +55,8 @@ export interface SyncOptions {
   readonly machine: Machine;
   /** Reads one store's config; the caller's, so this module never touches config.json. */
   readonly configAt: (hippoRoot: string) => HippoConfig;
-  /** Writes nothing: each container's transaction rolls back, and a missing store is stood in for by an empty one. */
+  /** Writes nothing: each container's transaction rolls back, and a missing store is stood in
+   * for by an empty one. */
   readonly dryRun?: boolean;
   /** How long a busy store is waited on before its containers are skipped. */
   readonly busyWaitMs?: number;
@@ -81,7 +83,9 @@ export interface Pass {
 }
 
 /**
- * The variable when set (empty or `none` is off); else the tools both the invoking and the target store's config allow.
+ * The variable when set (empty or `none` is off); else the tools both the invoking and the target
+ * store's config allow.
+ *
  */
 export function allowedTools(
   opts: Pick<SyncOptions, 'machine' | 'configAt'>,
@@ -142,7 +146,8 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
   return out;
 }
 
-/** Lists each allowed tool's containers for `pass` and syncs them into its target store; a failure is a warning. */
+/** Lists each allowed tool's containers for `pass` and syncs them into its target store; a
+ * failure is a warning. */
 export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
@@ -194,13 +199,14 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
 
 interface OpenStore {
   readonly store: ImportStore;
-  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its defaults. */
+  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its
+   * defaults. */
   readonly root: string;
   readonly global: boolean;
 }
 
-/** A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
- * empty stand-in. */
+/** A store that does not exist yet is created only when there is something to put in it; a dry
+ * run plans against an empty stand-in. */
 async function openTarget(
   target: string,
   hasItems: boolean,
@@ -242,7 +248,8 @@ interface PassStore {
   readonly legacy: LegacyWork | null;
   /** The project's earlier names; each container's rows under them move to its prefix. */
   readonly earlier: readonly string[];
-  /** A project's rows in the global store are parted by origin: a worktree and its main checkout share a folder. */
+  /** A project's rows in the global store are parted by origin: a worktree and its main checkout
+   * share a folder. */
   readonly partition: string | null;
   readonly machine: ContainerMachine;
   readonly isBusy: ImportStores['isBusy'];
@@ -321,7 +328,8 @@ async function syncListing(
   return synced;
 }
 
-/** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
+/** The legacy names plus every name a merge or repair folded into the project; the audit read
+ * runs once per pass. */
 async function earlierNames(
   store: ImportStore,
   tenantId: string,
@@ -359,8 +367,8 @@ function containerWork(
   };
 }
 
-/** Null when the container was skipped: a busy store, or one that changed under both plans, waits for the next sync;
- * any other failure is a warning and the sync goes on. */
+/** Null when the container was skipped: a busy store, or one that changed under both plans,
+ * waits for the next sync; any other failure is a warning and the sync goes on. */
 async function syncOne(
   session: StoreSession,
   work: ContainerWork,
@@ -410,8 +418,8 @@ async function bumpRemembered(
   }
 }
 
-/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder);
- * `partition` limits it to one project's names. */
+/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's
+ * old folder); `partition` limits it to one project's names. */
 interface UnlistedRowsOptions {
   readonly tool: AgentMemoryTool;
   readonly scope: Scope;

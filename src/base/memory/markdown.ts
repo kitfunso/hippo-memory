@@ -13,8 +13,9 @@ import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
 /**
- * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional so they stay absent
- * from the YAML when unset.
+ * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional
+ * so they stay absent from the YAML when unset.
+ *
  */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
@@ -79,7 +80,8 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
     scope: wire.scope ?? null,
     owner: wire.owner ?? null,
     artifact_ref: wire.artifact_ref ?? null,
-    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all five.
+    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all
+    // five.
     valid_from: wire.valid_from,
     superseded_by: wire.superseded_by,
     extracted_from: wire.extracted_from,
@@ -92,31 +94,33 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
 export function serializeEntry(entry: MemoryEntry): string {
   const wire = toWire(entry);
   const frontmatter = entryFrontmatter(wire);
-  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case (mirrors the plan's
-  // task 7 guidance).
+  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case
+  // (mirrors the plan's task 7 guidance).
   const tenantId = wire.tenant_id ?? DEFAULT_TENANT_ID;
   if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
-  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only undefined (unstamped) is
-  // omitted, so a rebuild stamps nothing it can read.
+  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only
+  // undefined (unstamped) is omitted, so a rebuild stamps nothing it can read.
   if (wire.origin_project !== undefined) {
     frontmatter['origin_project'] = wire.origin_project;
   }
-  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index signature, which the named
-  // interface does not structurally provide.
+  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index
+  // signature, which the named interface does not structurally provide.
   const fm = dumpFrontmatter({ ...frontmatter });
   return `${fm}\n\n${wire.content}\n`;
 }
 
-/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation time. */
+/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation
+ * time. */
 export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 
   if (!data['id'] || !data['layer']) return null;
 
-  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only written by
-  // serializeEntry, so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
+  // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
+  // accept (permissive parse).
   return fromWire({
     id: String(data['id']),
     created: String(data['created'] ?? now.toISOString()),

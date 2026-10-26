@@ -1,5 +1,6 @@
-// The vector side of a store for the embed and import verbs: embed what is missing, count coverage, re-seed physics.
-// Vectors and physics rows carry no tenant, so each op covers the whole store and needs the host admin.
+// The vector side of a store for the embed and import verbs: embed what is missing, count coverage,
+// re-seed physics. Vectors and physics rows carry no tenant, so each op covers the whole store and
+// needs the host admin.
 
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
@@ -14,8 +15,9 @@ import {
 import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
-/** Embeds each row a capture writes into `folder`'s index without holding the capture up; a failure is a warning. A
- * capture runs outside any Context, so its root hands the eval switches and clock as `run`. */
+/** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
+ * failure is a warning. A capture runs outside any Context, so its root hands the eval switches
+ * and clock as `run`. */
 export function detachedEmbedder(
   folder: ConfiguredFolder<HippoStore>,
   run: EmbedRun,

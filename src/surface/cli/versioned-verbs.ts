@@ -1,5 +1,5 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by its
-// kind's api calls.
+// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill),
+// each driven by its kind's api calls.
 
 import { errorMessage } from '../../base/util/log.js';
 import type { ObjectByKind } from '../../base/records/object-types.js';
@@ -41,7 +41,8 @@ export interface Succession {
   readonly changeSummary: string | undefined;
 }
 
-/** How one kind reads its flags and prints; `K` is its kind, `B` the body flags a version is saved from. */
+/** How one kind reads its flags and prints; `K` is its kind, `B` the body flags a version is
+ * saved from. */
 export interface VersionedKind<K extends VersionedKindName, B> {
   readonly kind: K;
   readonly names: ObjectNames;
@@ -162,7 +163,8 @@ export function shellFolder(): WriteOrigin {
   return { folder: process.cwd() };
 }
 
-/** Every save goes through here, so a refused write always prints the store's message and exits 1. */
+/** Every save goes through here, so a refused write always prints the store's message and exits
+ * 1. */
 async function refusalExits<T>(save: () => Promise<T>): Promise<T> {
   try {
     return await save();

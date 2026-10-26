@@ -1,5 +1,5 @@
-// /v1/customer-notes routes; the store validates and throws, and the boundary maps validation to 400, not-found to 404
-// and not-active to 409.
+// /v1/customer-notes routes; the store validates and throws, and the boundary maps validation to
+// 400, not-found to 404 and not-active to 409.
 import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { getString, requiredString } from '../validation.js';

@@ -21,7 +21,9 @@ const ERROR_TAG_SQL =
   `OR substr(value, 1, ${ERROR_TAG_PREFIX.length}) = '${ERROR_TAG_PREFIX}'`;
 
 /**
- * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.
+ * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows
+ * that cannot match.
+ *
  */
 function secretTaggedSql(): SqlFragment {
   const tags = [...SECRET_TAGS];
@@ -33,15 +35,15 @@ function secretTaggedSql(): SqlFragment {
   };
 }
 
-/** How many times each tag occurs across the rows `scope` admits, grouped in SQL and returned as one row in first-seen
- * order; an item reads as its String() form, as parseJsonArray maps it. */
+/** How many times each tag occurs across the rows `scope` admits, grouped in SQL and returned as
+ * one row in first-seen order; an item reads as its String() form, as parseJsonArray maps it. */
 function countTags(
   db: DatabaseSyncLike,
   scope: string,
   params: readonly (string | number)[],
 ): Map<string, number> {
-  // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
-  // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
+  // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder
+  // integer-like keys. The aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,

@@ -7,17 +7,18 @@ import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { strengthOf, type Context } from '../types.js';
 
 /**
- * A tenant's dormant memories (sqlite/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
- * on. Newest first; `opts.query` keeps rows containing every term (case-insensitive). */
+ * A tenant's dormant memories (sqlite/dormant.ts): what sleep moved out of active memory when
+ * `dormant.enabled` is on. Newest first; `opts.query` keeps rows containing every term
+ * (case-insensitive). */
 export function dormantList(ctx: Context, opts: ListDormantOptions = {}): Promise<DormantMemory[]> {
   return ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), opts);
 }
 
 /**
- * Restores a dormant memory as if just recalled, with a full half-life; a row set aside by audit repair returns
- * `verified`.
- * Throws if the tenant has no such dormant id or a live memory holds it, and RejectedValueError if the value was since
- * rejected (the dormant copy stays).
+ * Restores a dormant memory as if just recalled, with a full half-life; a row set aside by audit
+ * repair returns `verified`. Throws if the tenant has no such dormant id or a live memory holds it,
+ * and RejectedValueError if the value was since rejected (the dormant copy stays).
+ *
  */
 export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEntry> {
   const outcome = await ctx.store.dormant.restore(ctx.tenantId, {
@@ -36,8 +37,9 @@ export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEn
 }
 
 /**
- * Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory
- * with that id.
+ * Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant
+ * has no dormant memory with that id.
+ *
  */
 export async function dormantForget(ctx: Context, id: string): Promise<void> {
   const forgotten = await ctx.store.dormant.forget(
@@ -49,7 +51,8 @@ export async function dormantForget(ctx: Context, id: string): Promise<void> {
   if (!forgotten) throw new NotFoundError(`dormant memory not found: ${id}`);
 }
 
-/** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not found" hints). */
+/** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not
+ * found" hints). */
 export async function isDormant(ctx: Context, id: string): Promise<boolean> {
   return (
     (await ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), { id, limit: 1 }))

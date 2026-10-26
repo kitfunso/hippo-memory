@@ -1,4 +1,5 @@
-// A container plan as the store's steps, the rows each writes built here, and the tally read back from the outcomes.
+// A container plan as the store's steps, the rows each writes built here, and the tally read back
+// from the outcomes.
 import { Layer, createMemory, type MemoryEntry } from '../../base/memory/entry.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import type { ImportStep, StepOutcome } from '../../base/ports/store/agent-import.js';
@@ -9,7 +10,8 @@ import type { Tally } from '../../base/memory/agent-memory-report.js';
 import { itemSource, splitSource, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 
-/** What a plan's steps read beside the plan: the rows by id as they will stand, and the dormant snapshots by id. */
+/** What a plan's steps read beside the plan: the rows by id as they will stand, and the dormant
+ * snapshots by id. */
 export interface PlanRows {
   readonly live: ReadonlyMap<string, MemoryEntry>;
   readonly dormant: ReadonlyMap<string, DormantSnapshot>;
@@ -71,7 +73,8 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
     },
     s.now,
   );
-  // The note's own time when it is earlier than now; the loader reads any form but toISOString as drift.
+  // The note's own time when it is earlier than now; the loader reads any form but toISOString as
+  // drift.
   const created = Number.isFinite(item.updatedAt)
     ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
     : base.created;

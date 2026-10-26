@@ -86,7 +86,8 @@ export function sqliteConnectorEvents(on: OnHandle): ConnectorEvents {
             : GITHUB_DLQ.insert(db, letter),
         ),
       ),
-    // SAFETY: queueOf(connector) is the queue holding C's rows, so what it reads is DeadLetterRows[C].
+    // SAFETY: queueOf(connector) is the queue holding C's rows, so what it reads is
+    // DeadLetterRows[C].
     deadLetters: <C extends DeadLetterConnector>(
       connector: C,
       tenantId: string,

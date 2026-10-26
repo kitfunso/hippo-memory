@@ -24,7 +24,8 @@ export interface AuditListOptions {
   after?: KeysetPosition;
 }
 
-/** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
+/** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no
+ * audit emit. */
 export async function auditList(ctx: Context, opts: AuditListOptions): Promise<AuditEvent[]> {
   return ctx.store.auditLog.listAuditEvents({
     tenantId: ctx.tenantId,
@@ -42,8 +43,8 @@ function maintenanceOf(ctx: Context): AuditMaintenance {
   return ctx.store.auditMaintenance;
 }
 
-/** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned
- * or raw row stays. */
+/** Delete the memories an audit marked as errors, each with its own forget row, and answer the
+ * ids that went: a pinned or raw row stays. */
 export async function auditRemoveErrors(
   ctx: Context,
   pass: AuditPass,
@@ -56,8 +57,8 @@ export async function auditRemoveErrors(
   return maintenanceOf(ctx).deleteAutomatically(removals, ctx.actor.subject);
 }
 
-/** The caller's memories run through the quality audit a page at a time, as each row is judged alone; a memory that
- * backs an object is never marked for removal. */
+/** The caller's memories run through the quality audit a page at a time, as each row is judged
+ * alone; a memory that backs an object is never marked for removal. */
 export async function auditMemoryQuality(
   ctx: Context,
   opts: { pageSize?: number } = {},
@@ -73,8 +74,8 @@ export async function auditMemoryQuality(
   return audit;
 }
 
-/** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
- * behind a backup. */
+/** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects
+ * to dormant storage behind a backup. */
 export async function memoryQualityRepair(
   ctx: Context,
   apply: boolean,
@@ -82,7 +83,8 @@ export async function memoryQualityRepair(
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, PROTECTED_ROWS);
 }
 
-/** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
+/** The repair sleep and the daily runner apply once per store after an upgrade; null when it
+ * already ran there. */
 export async function memoryQualityRepairOnce(ctx: Context): Promise<QualityRepairResult | null> {
   return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId, PROTECTED_ROWS);
 }
@@ -109,9 +111,10 @@ export function computeCutoff(days: number, now: Date): string {
   return cutoff.toISOString();
 }
 
-/** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as
- * `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call
- * never prunes its own record. Throws on non-positive days or an empty tenant. */
+/** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an
+ * `audit_prune` row as `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The
+ * row is written after the DELETE, so a call never prunes its own record. Throws on non-positive
+ * days or an empty tenant. */
 export async function auditPrune(ctx: Context, opts: PruneAuditOptions): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(

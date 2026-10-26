@@ -1,12 +1,13 @@
-// The `hippo-memory/search` entry's rankers. The caller's working folder and the eval switches in the environment are
-// read here, at the entry, so the domain rankers take both as inputs.
+// The `hippo-memory/search` entry's rankers. The caller's working folder and the eval switches in
+// the environment are read here, at the entry, so the domain rankers take both as inputs.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import { rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
 import { rankMultihop } from '../domain/search/multihop.js';
 import { withEvalSwitches } from './folder-search.js';
 
-/** BM25 * strength * recency with the rank boosts; path tags come from `options.cwd`, else the process's folder. */
+/** BM25 * strength * recency with the rank boosts; path tags come from `options.cwd`, else the
+ * process's folder. */
 export function search(
   query: string,
   entries: MemoryEntry[],
@@ -19,7 +20,8 @@ export function search(
   );
 }
 
-/** Two BM25 passes, the second widened by the entities the first found; the working folder defaults as in search. */
+/** Two BM25 passes, the second widened by the entities the first found; the working folder
+ * defaults as in search. */
 export function multihopSearch(
   query: string,
   entries: MemoryEntry[],

@@ -1,6 +1,6 @@
-// The published hybridSearch and physicsSearch: each fills the hippo.db folder, working-folder and eval-switch
-// defaults, then calls the domain ranker of that name. The eval kit's embedMemory and loadRecallSearchEntries take a
-// folder the same way.
+// The published hybridSearch and physicsSearch: each fills the hippo.db folder, working-folder and
+// eval-switch defaults, then calls the domain ranker of that name. The eval kit's embedMemory and
+// loadRecallSearchEntries take a folder the same way.
 
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
@@ -25,7 +25,8 @@ import type { VectorSource } from '../domain/search/vector.js';
 import { evalNow, evalRun, evalSwitches } from '../infra/eval-switches.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
-/** A published ranker's options under the environment's eval switches and clock, unless the caller names its own. */
+/** A published ranker's options under the environment's eval switches and clock, unless the
+ * caller names its own. */
 export function withEvalSwitches<
   O extends { readonly switches?: EvalSwitches; readonly now?: Date },
 >(options: O): O & { now: Date } {
@@ -53,8 +54,10 @@ export function folderVectorSource({
 }
 
 /**
- * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency
- * otherwise. Reads hippo.db under `hippoRoot` when no `source` or `store` is passed.
+ * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 *
+ * strength * recency otherwise. Reads hippo.db under `hippoRoot` when no `source` or `store` is
+ * passed.
+ *
  */
 export async function hybridSearch(
   query: string,
@@ -73,8 +76,9 @@ export async function hybridSearch(
 }
 
 /**
- * Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through hybridSearch.
- * Reads hippo.db under `hippoRoot` when no store is passed.
+ * Scores memories by gravity, momentum and cluster amplification; rows without physics state rank
+ * through hybridSearch. Reads hippo.db under `hippoRoot` when no store is passed.
+ *
  */
 export async function physicsSearch(
   query: string,
@@ -116,8 +120,9 @@ type PositionalRecallArgs = [
   ownScope?: string,
 ];
 
-/** The eval kit's positional form of the recall loader, for frozen scripts written against it. It takes one rest
- * parameter, so the frozen q3b-ranker-floor call stays as written and src declares no long positional list. */
+/** The eval kit's positional form of the recall loader, for frozen scripts written against it.
+ * It takes one rest parameter, so the frozen q3b-ranker-floor call stays as written and src
+ * declares no long positional list. */
 export function loadRecallSearchEntries(...args: PositionalRecallArgs): MemoryEntry[] {
   const [
     hippoRoot,

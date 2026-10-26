@@ -1,4 +1,5 @@
-// The dashboard's route table and its dispatch: the /v1 rows' shape and lookup, behind the dashboard session.
+// The dashboard's route table and its dispatch: the /v1 rows' shape and lookup, behind the
+// dashboard session.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
 import {
@@ -28,7 +29,8 @@ import { routeLookup } from './route-lookup.js';
 import { bindPath, routeLabel } from './route-table.js';
 
 const SESSION = 'dashboard-session';
-// Every path outside the JSON API is the app's: it routes in the browser, so any of them may be a page load.
+// Every path outside the JSON API is the app's: it routes in the browser, so any of them may be a
+// page load.
 const PAGE = /^\/(?!api\/).*$/;
 
 export const DASHBOARD_ROUTES: readonly DashboardRoute[] = [
@@ -60,7 +62,8 @@ export interface DashboardServing {
   readonly context: () => Context;
   readonly bodyDeadlineMs: number;
   readonly staticFiles: StaticFiles | null;
-  /** Fences the handlers from hippo.db on the server thread: the store's workers and the reader thread answer. */
+  /** Fences the handlers from hippo.db on the server thread: the store's workers and the reader
+   * thread answer. */
   readonly offLoop: <T>(run: () => T) => T;
 }
 
@@ -82,7 +85,8 @@ function admitted(call: DashboardCall, session: DashboardSession): DashboardRout
   return { req, res, query, session, ctx: serving.context(), reader, bodyDeadlineMs, staticFiles };
 }
 
-/** The row's run, gate first, or null when method or path differ; the path matcher runs first, as for a /v1 row. */
+/** The row's run, gate first, or null when method or path differ; the path matcher runs first,
+ * as for a /v1 row. */
 function dashboardRouteMatches(
   route: DashboardRoute,
   method: string,
@@ -95,8 +99,8 @@ function dashboardRouteMatches(
 
 const findDashboardRoute = routeLookup(DASHBOARD_ROUTES, dashboardRouteMatches);
 
-/** One dashboard request: the security headers, then the first matching row; a path no row takes still passes the gate
- * before its 404, so only a signed-in browser learns which paths exist. */
+/** One dashboard request: the security headers, then the first matching row; a path no row takes
+ * still passes the gate before its 404, so only a signed-in browser learns which paths exist. */
 export async function answerDashboard(
   serving: DashboardServing,
   req: IncomingMessage,

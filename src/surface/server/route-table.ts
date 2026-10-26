@@ -70,8 +70,9 @@ function webhook(
   };
 }
 
-/** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. Each row's `auth`
- * is what the dispatch gate proves before its handler runs, so a handler never checks the caller itself. */
+/** The /v1 routes in dispatch order; the first entry whose method and path match handles the
+ * request. Each row's `auth` is what the dispatch gate proves before its handler runs, so a
+ * handler never checks the caller itself. */
 export const V1_ROUTES: readonly Route[] = [
   {
     method: 'POST',
@@ -119,7 +120,8 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'caller',
-    // The copy names its source folder and goes to the operator's global store, which only a folder store reaches.
+    // The copy names its source folder and goes to the operator's global store, which only a folder
+    // store reaches.
     storeReady: 'folderFiles',
     handler: handlePromoteMemory,
   },
@@ -232,13 +234,15 @@ export function bindPath<R>(
   return match ? (r) => route.handler(r, match) : null;
 }
 
-/** Whether a row serves this method and path, whatever its store; a malformed `%` escape throws as in routeMatches. */
+/** Whether a row serves this method and path, whatever its store; a malformed `%` escape throws
+ * as in routeMatches. */
 export function routeServes(route: Route, method: string, path: string): boolean {
   return bindPath<never>(route, path) !== null && method === route.method;
 }
 
-/** The route's run for this request, gate first, or null when method or path differ. The matcher runs before the method
- * check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
+/** The route's run for this request, gate first, or null when method or path differ. The matcher
+ * runs before the method check, as the inline route blocks did, so a malformed `%` escape still
+ * throws from matchPath on any method. */
 function routeMatches(
   route: BoundRoute,
   method: string,
@@ -253,14 +257,16 @@ function routeMatches(
   return async (r) => run({ ...r, ctx: await passAuthGate(route, r) });
 }
 
-/** The one caller check a gated route passes: sleep refuses a caller off this host before any key work, then one
- * charged auth, then 501 for an unported route, so a bad key is still a 401 there, and the row's role last. */
+/** The one caller check a gated route passes: sleep refuses a caller off this host before any
+ * key work, then one charged auth, then 501 for an unported route, so a bad key is still a 401
+ * there, and the row's role last. */
 async function passAuthGate(
   route: Exclude<BoundRoute, { auth: 'webhook-signature' }>,
   { req, opts }: RouteRequest,
 ): Promise<Context> {
   const label = routeLabel(route);
-  // Defence in depth, not the boundary: a proxy or a browser page on this host connects from loopback too.
+  // Defence in depth, not the boundary: a proxy or a browser page on this host connects from
+  // loopback too.
   if (route.auth === 'host-admin-local' && !isLocalCaller(req)) {
     throw new HttpError(
       403,
@@ -275,19 +281,22 @@ async function passAuthGate(
   return ctx;
 }
 
-/** The route as the access line names it: params by name without their type, so no line carries a caller's id. */
+/** The route as the access line names it: params by name without their type, so no line carries
+ * a caller's id. */
 export function routeLabel(route: RouteEndpoint<never>): string {
   if ('path' in route) return route.path;
   if ('pattern' in route) return route.pattern.replaceAll(INT_PARAM, '');
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/');
 }
 
-/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role check. */
+/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role
+ * check. */
 async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no request checks a group. */
+/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
+ * request checks a group. */
 function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
   if (route.storeReady === 'folderFiles') {
     const { handler } = route;
@@ -304,7 +313,8 @@ function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundR
   return meets ? route : { ...route, unported: true };
 }
 
-/** The /v1 lookup for one store: each row's store need is settled here, once, so a request checks no group. */
+/** The /v1 lookup for one store: each row's store need is settled here, once, so a request
+ * checks no group. */
 export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup<BoundRoute> {
   return routeLookup(
     V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb)),
@@ -322,8 +332,8 @@ export async function dispatchV1Route(
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
-  // Only a store with worker threads has moved the route's hippo.db work; under any other the handler still opens
-  // hippo.db itself.
+  // Only a store with worker threads has moved the route's hippo.db work; under any other the
+  // handler still opens hippo.db itself.
   await r.opts.offLoop(() => run(r));
   return true;
 }
@@ -348,8 +358,8 @@ export function bindAddonRoutes(
   );
 }
 
-/** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core
- * one. */
+/** Core authenticates and parses before the handler runs, so an add-on route gets the same 401,
+ * 400 and 501 as a core one. */
 export async function dispatchAddonRoute(
   { req, res, opts }: RouteRequest,
   method: string,
@@ -366,12 +376,14 @@ export async function dispatchAddonRoute(
     const body = await parseJsonBody(req, ctx);
     sendJson(res, 200, await route.handler({ ctx, body }));
   };
-  // The add-on, not core, knows whether its handler reaches hippo.db only through the store's worker-backed methods.
+  // The add-on, not core, knows whether its handler reaches hippo.db only through the store's
+  // worker-backed methods.
   await (route.loop === 'off' ? opts.offLoop(answer) : answer());
   return true;
 }
 
-/** A route outside /v1 and the add-ons; its store work runs off the server thread as a V1 row's does. */
+/** A route outside /v1 and the add-ons; its store work runs off the server thread as a V1 row's
+ * does. */
 export interface HostRoute {
   readonly method: string;
   readonly path: string;
@@ -385,7 +397,8 @@ export const HOST_ROUTES = {
   mcpStream: { method: 'GET', path: '/mcp/stream' },
 } as const satisfies Readonly<Record<string, HostRoute>>;
 
-/** Runs `handle` off the server thread when the request is `route`'s; false when it is another route. */
+/** Runs `handle` off the server thread when the request is `route`'s; false when it is another
+ * route. */
 export async function dispatchHostRoute(
   { req, opts }: RouteRequest,
   request: { readonly method: string; readonly path: string },

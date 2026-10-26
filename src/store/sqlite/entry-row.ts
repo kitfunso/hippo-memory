@@ -20,7 +20,8 @@ import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 
-/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a sound. */
+/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
+ * sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
   if (Object.hasOwn(entry, 'tenant_id') && entry.tenantId === undefined) {
     throw new TypeError('tenant_id was renamed to tenantId in 3.0');
@@ -33,9 +34,10 @@ export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
-/** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for `batchWriteAndDelete`, which
- * probes tombstones and indexes per batch. Throws CrossTenantIdError before writing when another tenant holds the id
- * (the existence probe reads the holder, so the hot path pays no extra read). Returns whether the row is new. */
+/** The row alone, with no rejection guard or full-text row, for `upsertEntryRow` and for
+ * `batchWriteAndDelete`, which probes tombstones and indexes per batch. Throws
+ * CrossTenantIdError before writing when another tenant holds the id (the existence probe reads
+ * the holder, so the hot path pays no extra read). Returns whether the row is new. */
 export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boolean {
   const holder = db.prepare(`SELECT tenant_id FROM memories WHERE id = ?`).get(entry.id) as
     | { tenant_id: string }
@@ -47,7 +49,8 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   return holder === undefined;
 }
 
-// The duplicate read's key goes with every row write; no read selects it, so it stays out of MEMORY_ROW_COLUMNS.
+// The duplicate read's key goes with every row write; no read selects it, so it stays out of
+// MEMORY_ROW_COLUMNS.
 const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash'] as const;
 const UPDATED_COLUMNS = WRITTEN_COLUMNS.slice(1);
 
@@ -57,8 +60,8 @@ const UPSERT_MEMORY_SQL =
   `ON CONFLICT(id) DO UPDATE SET ${UPDATED_COLUMNS.map((c) => `${c} = excluded.${c}`).join(', ')}, ` +
   `updated_at = datetime('now')`;
 
-/** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of rows. The caller owns
- * the transaction, the rejection guard and the full-text rows. */
+/** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of
+ * rows. The caller owns the transaction, the rejection guard and the full-text rows. */
 export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
   for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
@@ -72,7 +75,8 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
 
 /** Bind values for WRITTEN_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
-  // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by time in SQL.
+  // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
+  // time in SQL.
   const created = isoInstant(entry.created) ?? entry.created;
   return [
     entry.id,
@@ -116,7 +120,8 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
-// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts it.
+// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts
+// it.
 function markFtsDrifted(db: DatabaseSyncLike): void {
   try {
     setFtsInSync(db, false);
@@ -144,7 +149,8 @@ export function syncFtsRow(
     );
   } catch (err) {
     markFtsDrifted(db);
-    // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
+    // The memories table stays authoritative; a stale FTS row only costs recall quality, so the
+    // write goes on.
     log.warnThenSample(
       'fts-sync',
       `FTS index update failed for ${entry.id}; keyword recall may miss it: ${errorMessage(err)}`,
@@ -171,8 +177,8 @@ export function deleteFtsRow(db: DatabaseSyncLike, id: string): void {
   }
 }
 
-/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one
- * insert per row. */
+/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the
+ * whole index; then one insert per row. */
 export function replaceFtsRows(
   db: DatabaseSyncLike,
   rows: readonly MemoryEntry[],
@@ -186,7 +192,8 @@ export function replaceFtsRows(
         JSON.stringify(staleIds),
       );
     } catch (err) {
-      // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
+      // Their old rows are still indexed, so inserting them again would index an id twice; only new
+      // ids go in.
       kept = new Set(staleIds);
       markFtsDrifted(db);
       log.warnThenSample(
@@ -213,8 +220,8 @@ export function replaceFtsRows(
   }
 }
 
-/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when
- * the two agree or there is no index. */
+/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count
+ * when `repair`; null when the two agree or there is no index. */
 export function ftsDrift(
   db: DatabaseSyncLike,
   repair: boolean,
@@ -230,9 +237,9 @@ export function ftsDrift(
   return counts;
 }
 
-/** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' =
- * user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no known project and ambient context
- * denies it, so a writeback must not launder it. */
+/** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home
+ * store is '' = user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no
+ * known project and ambient context denies it, so a writeback must not launder it. */
 export function stampOriginProject(
   { host, hippoRoot }: StoreFiles,
   entry: MemoryEntry,
@@ -241,9 +248,9 @@ export function stampOriginProject(
   return { ...entry, originProject: fallbackOrigin(host, hippoRoot) };
 }
 
-/** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin
- * column. Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the
- * destination store's location. */
+/** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows
+ * predating the origin column. Like the v39 backfill, the provenance source (`shared:<project>:`
+ * / `promoted:<localRoot>`) wins over the destination store's location. */
 export function stampOriginProjectForImport(
   host: Host,
   hippoRoot: string,

@@ -7,8 +7,8 @@ import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 
-// HTTP-boundary validation for an untrusted process `steps` body; the save re-validates and trims, this is the
-// fail-fast 400 gate.
+// HTTP-boundary validation for an untrusted process `steps` body; the save re-validates and trims,
+// this is the fail-fast 400 gate.
 function validateProcessStepsBody(body: Record<string, JsonValue>): string[] {
   return (
     getStringArray(body, 'steps', OBJECT_CAPS.processSteps, OBJECT_CAPS.processStep, {

@@ -57,7 +57,8 @@ import {
 } from './consolidation-summaries.js';
 import { META_KEY } from '../../db/meta.js';
 
-// A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
+// A half-life move reads, writes, audits and records its base on one handle, so it commits whole or
+// not at all.
 function listHalfLifeRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
   return {
     from,
@@ -81,8 +82,8 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): voi
   for (const row of halfLifeAuditRows(move, actor)) appendAuditEvents(db, [row]);
 }
 
-/** Moves the store's half-lives to base `to` as planned from the rows read here, then records the base. `outcome` is
- * null when no move is due; a dry run plans and writes nothing. */
+/** Moves the store's half-lives to base `to` as planned from the rows read here, then records
+ * the base. `outcome` is null when no move is due; a dry run plans and writes nothing. */
 function moveHalfLives(
   db: DatabaseSyncLike,
   to: number,
@@ -101,7 +102,8 @@ function moveHalfLives(
     setMeta(db, META_KEY.typedHalfLife, '1');
     return { from, outcome };
   };
-  // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
+  // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep
+  // cannot interleave.
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
 }
 
@@ -133,8 +135,9 @@ async function commitSleep(
   return { removedIds, expired };
 }
 
-/** The chunked writes keep their handle until their Promise settles; a commit with nothing to write opens none, and
- * one that only expires opens a bare handle, so a dry run sets up no mirror folder. */
+/** The chunked writes keep their handle until their Promise settles; a commit with nothing to
+ * write opens none, and one that only expires opens a bare handle, so a dry run sets up no
+ * mirror folder. */
 function chunkedCommit({ onAsync }: Handles): Consolidation['commit'] {
   return (commit) => {
     const flush = commit.flush && commit.flush.components.length > 0 ? commit.flush : null;

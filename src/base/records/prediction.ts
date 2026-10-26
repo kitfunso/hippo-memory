@@ -9,7 +9,8 @@ export const VALID_CLOSURE_STATES: ReadonlySet<ClosureState> = new Set<ClosureSt
   'closed-unknown',
 ]);
 
-/** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */
+/** The memory row that mirrors a claim into recall, built here alone so every store keeps the
+ * same row for it. */
 export function predictionMirror(
   tenantId: string,
   claim: { readonly claimText: string; readonly classTag: string },

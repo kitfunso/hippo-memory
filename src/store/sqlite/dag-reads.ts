@@ -1,5 +1,5 @@
-// hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a summary's descendants a page
-// at a time.
+// hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a
+// summary's descendants a page at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
@@ -28,7 +28,8 @@ interface PagedWalk {
 }
 
 interface LevelRead {
-  /** Ids of every admitted row, in level order; empty for the last level, which has nothing under it to read. */
+  /** Ids of every admitted row, in level order; empty for the last level, which has nothing
+   * under it to read. */
   readonly ids: readonly string[];
   readonly size: number;
   readonly rows: MemoryEntry[];
@@ -46,8 +47,8 @@ interface ChildGroup extends DescendantOrigin {
   readonly n: number;
 }
 
-/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full count
- * in `sizes`. */
+/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and
+ * each level's full count in `sizes`. */
 function pagedDescendants(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -70,7 +71,8 @@ function pagedDescendants(
   return { summary: walk.summary, levels, sizes };
 }
 
-// Reads four short columns of every child, since the level below needs each admitted id as a parent.
+// Reads four short columns of every child, since the level below needs each admitted id as a
+// parent.
 function keyedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -105,9 +107,9 @@ function keyedLevel(
   return { ids, size: ids.length, rows: shown.flatMap((id) => whole.get(id) ?? []) };
 }
 
-/** The last level counted in SQL and read up to `room` rows; null when a row there is refused, which only the keyed
- * read can leave out. A row has one parent and a parent is read at one level, so the summary is the only row an earlier
- * level can already hold. */
+/** The last level counted in SQL and read up to `room` rows; null when a row there is refused,
+ * which only the keyed read can leave out. A row has one parent and a parent is read at one
+ * level, so the summary is the only row an earlier level can already hold. */
 function countedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -145,7 +147,8 @@ function countedLevel(
   };
 }
 
-// Every parent before the one the page ends in is read whole in one statement; that last one is read under a LIMIT.
+// Every parent before the one the page ends in is read whole in one statement; that last one is
+// read under a LIMIT.
 function firstRows(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -168,7 +171,8 @@ function firstRows(
   return childrenInOrder(db, walk, whole, -1);
 }
 
-/** Children parent by parent, each parent's by created then id; a negative `limit` reads them all. */
+/** Children parent by parent, each parent's by created then id; a negative `limit` reads them
+ * all. */
 function childrenInOrder(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -202,7 +206,8 @@ export function sqliteDagReads(on: OnHandle): DagReads {
   );
 }
 
-// dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.
+// dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or
+// walked in a loop.
 function summaryWithDescendants(
   db: DatabaseSyncLike,
   tenantId: string,

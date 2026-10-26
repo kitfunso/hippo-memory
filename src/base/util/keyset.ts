@@ -1,5 +1,5 @@
-// Keyset paging for list queries ordered by (sort key DESC, id DESC), so a page never skips or repeats a row when rows
-// arrive between requests.
+// Keyset paging for list queries ordered by (sort key DESC, id DESC), so a page never skips or
+// repeats a row when rows arrive between requests.
 
 /** The sort key and id of the last row a page returned. */
 export interface KeysetPosition {
@@ -13,7 +13,8 @@ export interface KeysetPage<T, C> {
   readonly next: C | null;
 }
 
-/** The first `limit` of `rows`, which a read fetched one row past `limit` only to say whether another page follows. */
+/** The first `limit` of `rows`, which a read fetched one row past `limit` only to say whether
+ * another page follows. */
 export function keysetPage<T, C>(
   rows: readonly T[],
   limit: number,

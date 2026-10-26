@@ -10,8 +10,8 @@ export interface KeyRevoke {
   readonly at: string;
 }
 
-/** One grant or ungrant on a key of `tenantId`, and the actor of its audit row; the api has already refused an open or
- * personal scope. */
+/** One grant or ungrant on a key of `tenantId`, and the actor of its audit row; the api has
+ * already refused an open or personal scope. */
 export interface ScopeGrantChange {
   readonly tenantId: string;
   readonly keyId: string;
@@ -20,8 +20,8 @@ export interface ScopeGrantChange {
   readonly actor: string;
 }
 
-/** A key to insert and the actor and metadata of its auth_create row, whose tenant and target are the key's. Neither
- * holds the plaintext. */
+/** A key to insert and the actor and metadata of its auth_create row, whose tenant and target
+ * are the key's. Neither holds the plaintext. */
 export interface KeyMint {
   readonly key: NewApiKey;
   readonly actor: string;
@@ -37,23 +37,26 @@ export interface SelfKeyMint extends KeyMint {
 /** `listApiKeyRows`'s filters; ALL_TENANTS is sent only by the host's `hippo auth list`. */
 export type KeyListQuery = ListApiKeysOptions;
 
-/** Every key write commits with its audit rows in one transaction, so with either one failing, neither is written. */
+/** Every key write commits with its audit rows in one transaction, so with either one failing,
+ * neither is written. */
 export interface KeyWrites {
-  /** Inserts the key and appends its auth_create row. A key id taken in any tenant rejects, since keys are looked up by
-   * id alone. */
+  /** Inserts the key and appends its auth_create row. A key id taken in any tenant rejects,
+   * since keys are looked up by id alone. */
   changeApiKey(change: 'create', mint: KeyMint): Promise<void>;
-  /** Serialized per (tenant, owner) before the count: revoke the owner's oldest live keys to `perSubject - 1`, then
-   * insert the key; append auth_revoke `{ replacedBy }` per revoked key, then auth_create. Live: unrevoked and not
-   * expired (NaN counts as expired). Resolves to the revoked ids. */
+  /** Serialized per (tenant, owner) before the count: revoke the owner's oldest live keys to
+   * `perSubject - 1`, then insert the key; append auth_revoke `{ replacedBy }` per revoked key,
+   * then auth_create. Live: unrevoked and not expired (NaN counts as expired). Resolves to the
+   * revoked ids. */
   changeApiKey(change: 'create_self', mint: SelfKeyMint): Promise<string[]>;
-  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id), then resolves to
-   * `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing from `tenantId` rejects with
-   * NotFoundError `Unknown key_id: <keyId>`. */
+  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key
+   * id), then resolves to `at`. A revoked key resolves to its own revoked_at and writes nothing;
+   * a key missing from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
   changeApiKey(change: 'revoke', revoke: KeyRevoke): Promise<string>;
-  /** Checks the key under the write lock, then grants or ungrants the scope with its auth_grant or auth_ungrant row. */
+  /** Checks the key under the write lock, then grants or ungrants the scope with its auth_grant
+   * or auth_ungrant row. */
   changeApiKey(change: 'scope', grant: ScopeGrantChange): Promise<void>;
-  /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an
-   * expires_at not above now's toISOString. */
+  /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops
+   * revoked rows and an expires_at not above now's toISOString. */
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
 }
 
@@ -89,7 +92,8 @@ export interface ApiKeyListItem {
   scopes: string[];
   /** ISO time the key stops working; null when it never expires. */
   expiresAt: string | null;
-  /** The auth-resolver subject that minted this key for itself; null for keys an admin or the CLI minted. */
+  /** The auth-resolver subject that minted this key for itself; null for keys an admin or the
+   * CLI minted. */
   ownerSubject: string | null;
 }
 
@@ -102,7 +106,8 @@ export interface ListApiKeysOptions {
   ownerSubject?: string;
   /** Only this one key. */
   keyId?: string;
-  /** Resume after this row: the position the previous page ended on (key and id are both the row id). */
+  /** Resume after this row: the position the previous page ended on (key and id are both the row
+   * id). */
   after?: KeysetPosition;
   limit?: number;
 }
@@ -115,7 +120,8 @@ export interface NewApiKey {
   readonly label: string | null;
   readonly role: 'admin' | 'member';
   readonly createdAt: string;
-  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI mints. */
+  /** The auth-resolver subject a self-service key belongs to; null for a key an admin or the CLI
+   * mints. */
   readonly ownerSubject: string | null;
   /** ISO time the key stops working; null means it never expires. */
   readonly expiresAt: string | null;

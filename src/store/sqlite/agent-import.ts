@@ -1,5 +1,5 @@
-// AgentImport on hippo.db: a container's steps in one scope on a handle opened with openStore, whose mirror folders the
-// commit's mirror files need.
+// AgentImport on hippo.db: a container's steps in one scope on a handle opened with openStore,
+// whose mirror folders the commit's mirror files need.
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { writeEntryMirrors } from './entry-writes.js';
@@ -40,7 +40,8 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
     try {
       removeEntryMirrors(hippoRoot, id);
     } catch (err) {
-      // A legacy-mirror import on an empty store would bring the row back live, and the next sync sets it aside again.
+      // A legacy-mirror import on an empty store would bring the row back live, and the next sync
+      // sets it aside again.
       log.debug(`agent import: ${id} failed`, errorFields(err));
       failed.push({ id, message: errorMessage(err) });
     }
@@ -48,7 +49,8 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
   return failed;
 }
 
-/** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's import asks. */
+/** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's
+ * import asks. */
 export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
   return bound<AgentImport>(
     on,

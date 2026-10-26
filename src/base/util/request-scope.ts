@@ -1,5 +1,5 @@
-// The one ambient scope of a request. A leaf module, so the logger can read the request id without importing the store
-// layer.
+// The one ambient scope of a request. A leaf module, so the logger can read the request id without
+// importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /** What every scope carries; the store layer's RequestStores is one, and adds its handles. */
@@ -8,20 +8,23 @@ export interface RequestScope {
   readonly requestId: string | undefined;
   /** Set for a served request that must be answered by a given time. */
   readonly deadline?: RequestDeadline | undefined;
-  /** Aborts when the request passes its deadline, so a handler that checks it stops starting work nobody waits for. */
+  /** Aborts when the request passes its deadline, so a handler that checks it stops starting
+   * work nobody waits for. */
   readonly signal?: AbortSignal | undefined;
 }
 
 const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
 
-/** How long a request may run: 120 s, or the HIPPO_REQUEST_DEADLINE_MS value the root read, where 0 turns it off. */
+/** How long a request may run: 120 s, or the HIPPO_REQUEST_DEADLINE_MS value the root read,
+ * where 0 turns it off. */
 export function requestDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_REQUEST_DEADLINE_MS;
 }
 
 /**
- * When a request must be answered, and the store calls it still waits on: the store ends each of those soon after `at`,
- * with the outcome only it knows.
+ * When a request must be answered, and the store calls it still waits on: the store ends each of
+ * those soon after `at`, with the outcome only it knows.
+ *
  */
 export class RequestDeadline {
   /** Epoch milliseconds. */
@@ -46,8 +49,9 @@ export class RequestDeadline {
   }
 
   /**
-   * Runs `fn` now, or once the last store call the request waits on has settled; every function registered meanwhile
-   * runs, in order.
+   * Runs `fn` now, or once the last store call the request waits on has settled; every function
+   * registered meanwhile runs, in order.
+   *
    */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
@@ -72,7 +76,8 @@ export function currentSignal(): AbortSignal | undefined {
   return requestScopes.getStore()?.signal;
 }
 
-/** `own` ended by the current request's abort as well, so an outbound call stops when its caller has gone. */
+/** `own` ended by the current request's abort as well, so an outbound call stops when its caller
+ * has gone. */
 export function withRequestSignal(own: AbortSignal): AbortSignal;
 export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined;
 export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined {
@@ -81,8 +86,10 @@ export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined {
   return own === undefined ? request : AbortSignal.any([own, request]);
 }
 
-/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and promises it starts.
- * `deadline` reaches every store call made inside, and `signal` every check of `currentSignal`.
+/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and
+ * promises it starts. `deadline` reaches every store call made inside, and `signal` every check of
+ * `currentSignal`.
+ *
  */
 export function runWithRequestId<T>(
   requestId: string,

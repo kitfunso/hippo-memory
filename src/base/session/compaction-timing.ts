@@ -1,4 +1,5 @@
-// Waits and windows shared by the compaction record's SQL (src/store) and the hooks and CLI that schedule it.
+// Waits and windows shared by the compaction record's SQL (src/store) and the hooks and CLI that
+// schedule it.
 import { DAY_MS, MINUTE_MS } from '../util/time.js';
 
 /** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */

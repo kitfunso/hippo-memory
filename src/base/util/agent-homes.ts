@@ -1,5 +1,6 @@
-// Where hippo and the agent tools keep their config and data, from a machine's home folder and environment: the rules
-// only. src/host/agent-homes.ts reads this process's home, and src/infra/machine.ts builds the real Machine.
+// Where hippo and the agent tools keep their config and data, from a machine's home folder and
+// environment: the rules only. src/host/agent-homes.ts reads this process's home, and
+// src/infra/machine.ts builds the real Machine.
 
 import * as path from 'node:path';
 import type { AgentFiles } from './agent-files.js';
@@ -11,8 +12,9 @@ export const HIPPO_DIR = '.hippo';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** Everything the agent-memory adapters and the hook installers may know about the machine, its disk and git included;
- * src/infra/machine.ts builds the real one and tests hand in a scratch one. */
+/** Everything the agent-memory adapters and the hook installers may know about the machine, its
+ * disk and git included; src/infra/machine.ts builds the real one and tests hand in a scratch
+ * one. */
 export interface Machine {
   readonly home: string;
   readonly env: Env;
@@ -32,7 +34,8 @@ export interface Machine {
 /** The home folder and environment the path rules below read. */
 export type Homes = Pick<Machine, 'home' | 'env'>;
 
-/** The home a HOME or USERPROFILE variable names, else the profile's; codex, opencode and hippo's logs live there. */
+/** The home a HOME or USERPROFILE variable names, else the profile's; codex, opencode and
+ * hippo's logs live there. */
 export function userHome({ home, env }: Homes): string {
   return env.HOME || env.USERPROFILE || home;
 }
@@ -49,13 +52,15 @@ export function codexHomeDir(home: string, env: Env): string {
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
-/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude
- * under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
+/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and
+ * non-empty, else ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from
+ * the profile must not move it). */
 export function claudeConfigDir(home: string, env: Env): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }
 
-/** VS Code's user-data resolution: portable install first, then the app-data override, then the platform default. */
+/** VS Code's user-data resolution: portable install first, then the app-data override, then the
+ * platform default. */
 export function vscodeDataFolders(ctx: {
   readonly env: Env;
   readonly home: string;

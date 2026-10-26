@@ -1,5 +1,6 @@
-// The shared shape every agent adapter turns a host payload into, so capture code is written once for all runtimes.
-// Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
+// The shared shape every agent adapter turns a host payload into, so capture code is written once
+// for all runtimes. Field meanings, statuses and how to add a runtime:
+// docs/integrations/agent-inventory.md.
 
 import { isJsonObject, isJsonString, tryParseJson, type JsonObject } from '../util/json.js';
 
@@ -27,12 +28,14 @@ export interface CaptureInput {
   readonly trigger: string | null;
 }
 
-/** The outcome of reading a payload: usable input, a payload hippo refuses, or no payload at all. */
+/** The outcome of reading a payload: usable input, a payload hippo refuses, or no payload at
+ * all. */
 export type CaptureReceipt<I extends CaptureInput = CaptureInput> =
   | { readonly status: 'received'; readonly input: I }
   | { readonly status: 'skipped' | 'unavailable'; readonly reason: string };
 
-/** What a PostCompact payload adds: it always names a session, and carries the summary Claude Code wrote. */
+/** What a PostCompact payload adds: it always names a session, and carries the summary Claude
+ * Code wrote. */
 export interface PostCompactInput extends CaptureInput {
   readonly event: 'post-compact';
   readonly sessionId: string;
@@ -40,7 +43,8 @@ export interface PostCompactInput extends CaptureInput {
   readonly compactSummary: string | null;
 }
 
-/** A PostCompact payload as the hook handler and the spool carry it, with every field the host may omit as null. */
+/** A PostCompact payload as the hook handler and the spool carry it, with every field the host
+ * may omit as null. */
 export interface PostCompactPayload {
   sessionId: string;
   trigger: string | null;
@@ -50,7 +54,8 @@ export interface PostCompactPayload {
   compactSummary: string | null;
 }
 
-/** Working state saved before the host drops context, so the session can resume; it is not a lesson. */
+/** Working state saved before the host drops context, so the session can resume; it is not a
+ * lesson. */
 export interface Checkpoint {
   readonly runtime: string;
   readonly sessionId: string | null;
@@ -60,7 +65,8 @@ export interface Checkpoint {
   readonly savedAt: string;
 }
 
-/** How far capture has read one session's source, so a retry resumes instead of re-reading or skipping. */
+/** How far capture has read one session's source, so a retry resumes instead of re-reading or
+ * skipping. */
 export interface ProgressCursor {
   readonly runtime: string;
   readonly sessionId: string;
@@ -94,7 +100,8 @@ function parseObject(stdinText: string | undefined): JsonObject | null {
   return isJsonObject(payload) ? payload : null;
 }
 
-/** A string field of a parsed payload; null when there is no payload, the key is absent or the value is no string. */
+/** A string field of a parsed payload; null when there is no payload, the key is absent or the
+ * value is no string. */
 function stringField(payload: JsonObject | null, key: string): string | null {
   const value = payload?.[key];
   return isJsonString(value) ? value : null;
@@ -120,8 +127,8 @@ function manualRun(runtime: string, event: CaptureEvent): CaptureReceipt {
   return { status: 'received', input };
 }
 
-/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only
- * an empty stdin counts as a manual run. */
+/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped it to the same
+ * snake_case keys; only an empty stdin counts as a manual run. */
 export function readClaudeCodePreCompact(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -132,15 +139,16 @@ export function readClaudeCodePreCompact(
   if (empty) return manualRun(runtime, 'pre-compact');
   const payload = parseObject(stdinText);
   const transcriptPath = stringField(payload, 'transcript_path');
-  // A bad payload is skipped, never treated as manual: discovery could pick up another session's transcript.
+  // A bad payload is skipped, never treated as manual: discovery could pick up another session's
+  // transcript.
   if (transcriptPath === null) {
     return {
       status: 'skipped',
       reason: 'malformed or incomplete PreCompact payload (missing string transcript_path)',
     };
   }
-  // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can already read every
-  // transcript.
+  // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can
+  // already read every transcript.
   if (!/\.jsonl$/i.test(transcriptPath)) {
     return {
       status: 'skipped',
@@ -162,8 +170,9 @@ export function readClaudeCodePreCompact(
 }
 
 /**
- * Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI agentStop the same
- * snake_case keys.
+ * Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI
+ * agentStop the same snake_case keys.
+ *
  */
 export function readVscodeStop(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
   if (isBlank(stdinText)) {
@@ -201,7 +210,8 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
   };
 }
 
-/** Reads a Claude Code PostCompact payload; it must name a session, but needs no transcript_path. */
+/** Reads a Claude Code PostCompact payload; it must name a session, but needs no
+ * transcript_path. */
 export function readClaudeCodePostCompact(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -225,8 +235,8 @@ export function readClaudeCodePostCompact(
   };
 }
 
-/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only
- * an empty stdin counts as a manual run. */
+/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped it to the same
+ * snake_case keys; only an empty stdin counts as a manual run. */
 export function readSessionEnd(
   stdinText: string | undefined,
   timedOut: boolean,

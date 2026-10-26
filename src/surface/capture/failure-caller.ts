@@ -1,5 +1,5 @@
-// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project,
-// and a retried request id gets the first answer.
+// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's
+// owner and project, and a retried request id gets the first answer.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { Context, EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
@@ -19,7 +19,8 @@ import { withEntryInfra } from '../entry-infra.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
 
-/** failureReport's reading of the payload, read on the caller's machine, plus the id its retries carry. */
+/** failureReport's reading of the payload, read on the caller's machine, plus the id its retries
+ * carry. */
 export interface CallerFailureRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
@@ -81,7 +82,8 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   if (text.length > FAILURE_TEXT_MAX_CHARS) {
     throw new BadRequestError(`text: at most ${FAILURE_TEXT_MAX_CHARS} characters`);
   }
-  // Scrubbed again, as the caller's scrub is not trusted, and cut after it, as a mask can be longer than what it hides.
+  // Scrubbed again, as the caller's scrub is not trusted, and cut after it, as a mask can be longer
+  // than what it hides.
   return { skip, text: truncateCodePointSafe(scrubForSharing(text), FAILURE_TEXT_MAX_CHARS) };
 }
 
@@ -97,7 +99,8 @@ export async function captureFailureForCaller(
     req.requestId,
     req.sessionId,
   );
-  // A retry after a lost reply gets the first answer and writes nothing; one whose store failed tries the store again.
+  // A retry after a lost reply gets the first answer and writes nothing; one whose store failed
+  // tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
   try {
@@ -112,7 +115,8 @@ export async function captureFailureForCaller(
   }
 }
 
-/** Runs after the outcome in its own try, so a log error never hides the store's error or its outcome. */
+/** Runs after the outcome in its own try, so a log error never hides the store's error or its
+ * outcome. */
 async function logOutcome(
   ctx: Context,
   req: CallerFailureRequest,

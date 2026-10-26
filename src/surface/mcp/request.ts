@@ -1,4 +1,5 @@
-// Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
+// Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method
+// switch.
 
 import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
@@ -42,8 +43,9 @@ import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json
 
 // ── Token ledger ──
 
-/** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the call). hippo_recall's
- * row is booked by the api with the rest of the recall, and other tools are not recorded. */
+/** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the
+ * call). hippo_recall's row is booked by the api with the rest of the recall, and other tools
+ * are not recorded. */
 async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
   if (toolName !== 'hippo_context' || !output) return;
   await recordTokens(mcpApiContext(ctx), 'mcp_context', {
@@ -66,7 +68,8 @@ function localTool(run: LocalToolHandler): ToolEntry {
 
 type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;
 
-/** A tool bound to one store: its run for a call, or undefined when the call's reach has no global store for it. */
+/** A tool bound to one store: its run for a call, or undefined when the call's reach has no
+ * global store for it. */
 type StoreTool = (ctx: McpContext) => ToolRun | undefined;
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
@@ -85,11 +88,12 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_peers', localTool(runPeersTool)],
 ]);
 
-// A store's groups are fixed for its life, so each tool's need is proven once per store, not on each call.
+// A store's groups are fixed for its life, so each tool's need is proven once per store, not on
+// each call.
 const toolsByStore = new WeakMap<HippoStore, ReadonlyMap<string, StoreTool>>();
 
-/** The tools `store` serves, bound to it the first time a transport hands it in; a tool it lacks the group for is left
- * out, so a list hides it and a call answers not ported. */
+/** The tools `store` serves, bound to it the first time a transport hands it in; a tool it lacks
+ * the group for is left out, so a list hides it and a call answers not ported. */
 function toolsOn(store: HippoStore): ReadonlyMap<string, StoreTool> {
   const known = toolsByStore.get(store);
   if (known !== undefined) return known;
@@ -117,8 +121,8 @@ function boundTool(entry: ToolEntry, store: HippoStore): StoreTool | undefined {
   };
 }
 
-/** The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host (the HTTP server's
- * Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
+/** The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host
+ * (the HTTP server's Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
 function toolCall(ctx: McpContext): Omit<ToolCall, 'args'> {
   const { hippoRoot, tenantId, config, store } = ctx;
   return { ctx, hippoRoot, store, config, tenantId };
@@ -131,7 +135,8 @@ function runsOn(store: HippoStore | undefined, toolName: string): boolean {
 
 /** The tool bound to `ctx`, or undefined when its store does not serve it. */
 function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
-  // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
+  // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
+  // drifted apart.
   if (!TOOL_HANDLERS.has(name))
     throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
   return toolsOn(ctx.store).get(name)?.(ctx);
@@ -139,7 +144,8 @@ function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
 
 // ── Request handling ──
 
-// The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
+// The MCP spec reports input validation as a tool result with isError, so the model can read it and
+// retry.
 function invalidArgs(
   id: McpResponse['id'],
   toolName: string,
@@ -151,8 +157,9 @@ function invalidArgs(
   });
 }
 
-/** The tool and its ledger row run in the caller's request scope, which the host (server or stdio) opens.
- * The request signal reaches store calls, embeddings, rerankers and LLM fetches through the request scope. */
+/** The tool and its ledger row run in the caller's request scope, which the host (server or
+ * stdio) opens. The request signal reaches store calls, embeddings, rerankers and LLM fetches
+ * through the request scope. */
 async function runTool(
   toolName: string,
   run: ToolRun,
@@ -201,9 +208,10 @@ async function callTool(
   return resultReply(id, { content: [{ type: 'text', text: output || 'Done.' }] });
 }
 
-/** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
- * it. Returns null for notifications. A tool's errors are the caller's problem: wrap with try/catch in the transport.
- * Only `tools/call` needs the context, so stdio builds one for that method alone. */
+/** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every
+ * JSON-RPC message through it. Returns null for notifications. A tool's errors are the caller's
+ * problem: wrap with try/catch in the transport. Only `tools/call` needs the context, so stdio
+ * builds one for that method alone. */
 export async function handleMcpRequest(
   req: McpRequest,
   ctx: McpContext | undefined,

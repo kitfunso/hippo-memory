@@ -41,8 +41,8 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     fail(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
   }
-  // SAFETY: the exit above rejects every non-empty opFlag outside VALID_AUDIT_OPS, and an empty one is returned as
-  // given.
+  // SAFETY: the exit above rejects every non-empty opFlag outside VALID_AUDIT_OPS, and an empty one
+  // is returned as given.
   return opFlag as AuditOp | undefined;
 }
 
@@ -219,8 +219,8 @@ export async function handleAudit({
     await auditRepair(hippoRoot, tenantId, flags);
     return;
   }
-  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality
-  // auditor.
+  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep
+  // the memory-quality auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
     await printAuditLog(hippoRoot, tenantId, args, flags);
     return;

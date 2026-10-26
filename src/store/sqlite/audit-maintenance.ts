@@ -1,5 +1,5 @@
-// hippo.db's AuditMaintenance group: the quality audit and repair, object-backed ids, automatic deletes and the audit
-// prune.
+// hippo.db's AuditMaintenance group: the quality audit and repair, object-backed ids, automatic
+// deletes and the audit prune.
 import { appendAuditEvents, pruneAuditRows } from './audit.js';
 import { withBackup } from '../../db/backup.js';
 import { withTrialScope, withWriteScope } from '../../db/busy.js';
@@ -223,9 +223,10 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun): Qual
   };
 }
 
-// No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also
-// refuse a person's copy.
-/** When a repair moves its rows, the backup it took first, and the ratio the store scores strength by. */
+// No rejection record, as in project repair: the writers refuse these defects themselves, and a
+// record would also refuse a person's copy.
+/** When a repair moves its rows, the backup it took first, and the ratio the store scores
+ * strength by. */
 interface RepairMove {
   readonly now: Date;
   readonly backup: string;
@@ -267,7 +268,8 @@ function setAsideIssue(
   return true;
 }
 
-/** The plan's set-aside rows read again and judged as they stand now, by id; a row gone or changed drops out. */
+/** The plan's set-aside rows read again and judged as they stand now, by id; a row gone or
+ * changed drops out. */
 function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRepairResult) {
   const ids = plan.issues
     .filter((issue) => issue.disposition === 'set-aside')
@@ -282,8 +284,9 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   return { ids: new Set(ids), rows, issues };
 }
 
-/** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock never spans the tenant;
- * a writer refuses these defects, so no new one can appear between the plan and the lock. */
+/** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock
+ * never spans the tenant; a writer refuses these defects, so no new one can appear between the
+ * plan and the lock. */
 function applyPlan(
   db: DatabaseSyncLike,
   run: RepairRun,
@@ -336,8 +339,8 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
   return { ...result, warnings };
 }
 
-/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
- * `db` is opened without running migrations, read-only for a preview. */
+/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go
+ * to dormant storage. `db` is opened without running migrations, read-only for a preview. */
 function repairAutomaticMemories(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -346,8 +349,8 @@ function repairAutomaticMemories(
   return repairOn(db, files, opts);
 }
 
-/** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
- * null once done. `db` is opened writable without running migrations. */
+/** Applies the repair once per store, so stores that predate the quality gate are cleaned on
+ * upgrade with no command; null once done. `db` is opened writable without running migrations. */
 function repairQualityOnce(
   db: DatabaseSyncLike,
   files: StoreFiles,

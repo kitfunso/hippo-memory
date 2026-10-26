@@ -1,5 +1,6 @@
-// Moves a store's memories still on an old default half-life base to a new one, once, audit-logged; the plan is
-// src/base/memory/half-life-plan.ts, which the store runs inside the move's own transaction as a sleep begins.
+// Moves a store's memories still on an old default half-life base to a new one, once, audit-logged;
+// the plan is src/base/memory/half-life-plan.ts, which the store runs inside the move's own
+// transaction as a sleep begins.
 import type { StoreWith } from '../../base/ports/store.js';
 import type { SleepBegin, SleepStart } from '../../base/ports/store/consolidation.js';
 
@@ -20,8 +21,8 @@ export interface HalfLifeMigrationResult {
   start: SleepStart;
 }
 
-/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once,
- * as the store's sleep upkeep begins; `dryRun` writes nothing. */
+/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded
+ * base to `to`, once, as the store's sleep upkeep begins; `dryRun` writes nothing. */
 export async function migrateDefaultHalfLife(
   store: StoreWith<'consolidation'>,
   to: number,

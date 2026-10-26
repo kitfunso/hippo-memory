@@ -6,8 +6,8 @@ import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
-// node:http header values are `string | string[] | undefined` (never a bare unknown), so this gets its own predicate
-// rather than reusing isJsonString.
+// node:http header values are `string | string[] | undefined` (never a bare unknown), so this gets
+// its own predicate rather than reusing isJsonString.
 export function isHeaderString(value: string | string[] | undefined): value is string {
   return typeof value === 'string';
 }
@@ -18,13 +18,14 @@ function sizeLabel(bytes: number): string {
     : `${Math.ceil(bytes / 1024)}KB`;
 }
 
-// How long a refused upload is still read and discarded after its reply, so a client that never stops cannot hold the
-// socket.
+// How long a refused upload is still read and discarded after its reply, so a client that never
+// stops cannot hold the socket.
 const REFUSED_UPLOAD_LINGER_MS = 2000;
 
 export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 
-/** Serialises before the head goes out, so a body that is not JSON still reaches the caller's error reply. */
+/** Serialises before the head goes out, so a body that is not JSON still reaches the caller's
+ * error reply. */
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
   const text = JSON.stringify(body);
   if (text === undefined) throw new Error('response body is not JSON');
@@ -37,8 +38,9 @@ export function sendJson<T>(res: ServerResponse, status: number, body: T): void 
 const DEFAULT_BODY_DEADLINE_MS = 30_000;
 
 /**
- * How long any route waits for a request body, so a client that sends headers and then stalls cannot hold a request
- * open: 30 s, or the HIPPO_BODY_TIMEOUT_MS value the root read.
+ * How long any route waits for a request body, so a client that sends headers and then stalls
+ * cannot hold a request open: 30 s, or the HIPPO_BODY_TIMEOUT_MS value the root read.
+ *
  */
 export function bodyDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_BODY_DEADLINE_MS;
@@ -60,8 +62,9 @@ export async function readBody(
 }
 
 /**
- * The body as sent, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow sender cannot tie up
- * the server.
+ * The body as sent, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow
+ * sender cannot tie up the server.
+ *
  */
 function readBodyBytes(
   req: IncomingMessage,
@@ -76,8 +79,8 @@ function readBodyBytes(
       chunks.length = 0;
       reject(err);
     };
-    // Not for-await: leaving that loop early destroys the request, so the socket stops reading and the 413 caller
-    // cannot close it cleanly.
+    // Not for-await: leaving that loop early destroys the request, so the socket stops reading and
+    // the 413 caller cannot close it cleanly.
     const onData = (chunk: Buffer): void => {
       total += chunk.length;
       if (total <= maxBytes) {
@@ -102,8 +105,8 @@ function readBodyBytes(
   });
 }
 
-// A full close with request bytes unread sends a TCP reset, which discards the reply before the client reads it (RFC
-// 9112 9.6).
+// A full close with request bytes unread sends a TCP reset, which discards the reply before the
+// client reads it (RFC 9112 9.6).
 export function closeAfterReply(req: IncomingMessage): void {
   const socket = req.socket;
   req.resume();
@@ -123,27 +126,30 @@ export function isCrossSite(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   if (origin === undefined) return false;
   const url = tryParseUrl(origin);
-  // The socket's own scheme, never a forwarded one: a page served over http must not drive an https listener.
+  // The socket's own scheme, never a forwarded one: a page served over http must not drive an https
+  // listener.
   return (
     url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') ||
     url.host !== req.headers.host
   );
 }
 
-/** Per-request values a connector webhook receiver reads; ServeOptions and the /v1 RouteRequest both satisfy it. */
+/** Per-request values a connector webhook receiver reads; ServeOptions and the /v1 RouteRequest
+ * both satisfy it. */
 export interface WebhookRequest {
   req: IncomingMessage;
   res: ServerResponse;
   opts: { hippoRoot: string; webhookBodyDeadlineMs?: number };
 }
 
-// A webhook route takes no key, so anyone holding a signature header could otherwise keep a socket open with a body
-// that never ends.
+// A webhook route takes no key, so anyone holding a signature header could otherwise keep a socket
+// open with a body that never ends.
 const WEBHOOK_BODY_DEADLINE_MS = 10_000;
 
 /**
- * Call before refusing a webhook unread: a caller still sending its body loses the socket once the reply is out, as it
- * does after a 413.
+ * Call before refusing a webhook unread: a caller still sending its body loses the socket once the
+ * reply is out, as it does after a 413.
+ *
  */
 export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
   res.once('finish', () => {
@@ -152,8 +158,9 @@ export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
 }
 
 /**
- * A webhook's raw bytes, exactly as sent, for the receiver's HMAC check; call it only once a secret is configured and
- * the signature headers are present.
+ * A webhook's raw bytes, exactly as sent, for the receiver's HMAC check; call it only once a secret
+ * is configured and the signature headers are present.
+ *
  */
 export function readWebhookBody({ req, opts }: WebhookRequest): Promise<Buffer> {
   return readBodyBytes(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });

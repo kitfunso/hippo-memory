@@ -1,4 +1,5 @@
-// The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id the client holds.
+// The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id
+// the client holds.
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
@@ -92,7 +93,8 @@ async function buildMemoryDetail(
   };
 }
 
-/** The detail of a live memory of the Context's tenant, or null when the tenant holds no live row with that id. */
+/** The detail of a live memory of the Context's tenant, or null when the tenant holds no live
+ * row with that id. */
 export async function dashboardMemoryDetail(
   ctx: Context,
   view: { readonly reads: DetailReads; readonly clock: SnapshotClock },
@@ -112,8 +114,9 @@ export interface DashboardWrite {
   readonly entry?: MemoryEntry;
 }
 
-/** Drops the held stamp after a committed write, then the detail of the entry it acted on, stamped with the last id so
- * the panels refetch on the next read; null when the write names no entry. */
+/** Drops the held stamp after a committed write, then the detail of the entry it acted on,
+ * stamped with the last id so the panels refetch on the next read; null when the write names no
+ * entry. */
 export async function dashboardDetailAfterWrite(
   ctx: Context,
   view: { readonly reads: DetailReads; readonly clock: SnapshotClock },

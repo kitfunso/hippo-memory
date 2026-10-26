@@ -1,4 +1,5 @@
-// Every CLI verb, one row each: dispatch, flags, help and the help listing's order all read this table.
+// Every CLI verb, one row each: dispatch, flags, help and the help listing's order all read this
+// table.
 
 import { MEMORY_VERBS } from './verbs/memory.js';
 import { HEALTH_VERBS } from './verbs/health.js';

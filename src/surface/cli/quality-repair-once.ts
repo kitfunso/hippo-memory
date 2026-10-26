@@ -1,4 +1,5 @@
-// Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no command.
+// Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no
+// command.
 
 import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -6,7 +7,8 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
-/** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
+/** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and
+ * runs again next time. */
 export async function repairQualityOnce(root: string, tenantId: string): Promise<void> {
   try {
     const result = await memoryQualityRepairOnce(cliApiContext(root, tenantId));

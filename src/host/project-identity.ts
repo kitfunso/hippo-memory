@@ -1,5 +1,6 @@
-// Resolves a folder's project by walking the disk for its markers, and finds hippo's stores; the types and the matching
-// rules live in src/base/scope/project-identity.ts. Each call walks: a root that walks often holds a Host (host.ts).
+// Resolves a folder's project by walking the disk for its markers, and finds hippo's stores; the
+// types and the matching rules live in src/base/scope/project-identity.ts. Each call walks: a root
+// that walks often holds a Host (host.ts).
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -17,14 +18,14 @@ import { HIPPO_DIR } from '../base/util/agent-homes.js';
 
 const MAX_WALK_DEPTH = 64;
 
-/** Whether the global store's config names projects by their origin remote. Only the global store's: a per-store
- * switch would stamp one checkout two ways. */
+/** Whether the global store's config names projects by their origin remote. Only the global
+ * store's: a per-store switch would stamp one checkout two ways. */
 export type RemoteRule = () => boolean;
 
 const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(hippoHomeDir());
 
-/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested
- * in another checkout keeps its folder name. */
+/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is
+ * read, so a store nested in another checkout keeps its folder name. */
 function namesAt(
   root: string,
   legacyName: string,
@@ -68,7 +69,8 @@ function isDirectoryAt(p: string): boolean {
   }
 }
 
-/** Resolves the project identity for a working directory (default process.cwd()), walking the disk on each call. */
+/** Resolves the project identity for a working directory (default process.cwd()), walking the
+ * disk on each call. */
 export function resolveProjectIdentity(
   cwd?: string,
   opts?: ResolveProjectIdentityOptions,
@@ -76,7 +78,8 @@ export function resolveProjectIdentity(
   return walkIdentity(path.resolve(cwd ?? process.cwd()), opts, globalRemoteRule).identity;
 }
 
-/** One walk's answer; `rooted` is false where no root made the remote rule count, so a cached answer outlives it. */
+/** One walk's answer; `rooted` is false where no root made the remote rule count, so a cached
+ * answer outlives it. */
 export interface IdentityWalk {
   readonly identity: ProjectIdentity;
   readonly rooted: boolean;
@@ -106,13 +109,13 @@ export function walkIdentity(
   if (reachedHome || isUnder(real, home)) {
     return { identity: { root: home, name: '', legacyName: '', isHome: true }, rooted: false };
   }
-  // No markers anywhere: not a project. Empty name keeps these memories user-global rather than fabricating an origin
-  // from a basename.
+  // No markers anywhere: not a project. Empty name keeps these memories user-global rather than
+  // fabricating an origin from a basename.
   return { identity: { root: real, name: '', legacyName: '', isHome: false }, rooted: false };
 }
 
-/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for a bare repo), so one
- * repo is one project; null for any other checkout. */
+/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for
+ * a bare repo), so one repo is one project; null for any other checkout. */
 function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
@@ -138,7 +141,8 @@ interface MarkerWalk {
   reachedHome: boolean;
 }
 
-/** Climb from start toward the root; home (never a project) and every stop dir end the walk unchecked. */
+/** Climb from start toward the root; home (never a project) and every stop dir end the walk
+ * unchecked. */
 function walkProjectMarkers(start: string, home: string, stopDirs: readonly string[]): MarkerWalk {
   let hippoRoot: string | null = null;
   let gitRoot: string | null = null;
@@ -178,7 +182,8 @@ export function findHippoStoreDir(
   return hippoRoot === null ? null : path.join(hippoRoot, HIPPO_DIR);
 }
 
-/** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
+/** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still
+ * creates `<cwd>/.hippo`. */
 export function getHippoRoot(
   cwd: string = process.cwd(),
   opts?: ResolveProjectIdentityOptions,
@@ -187,21 +192,23 @@ export function getHippoRoot(
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting that as initialized makes
-  // `hippo init` skip initStore, so only hippo.db counts.
+  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting that
+  // as initialized makes `hippo init` skip initStore, so only hippo.db counts.
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
-/** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed
- * HIPPO_HOME) still backfills as user-global ('') instead of being stamped with the surrounding repo's name, which
- * would hide the global corpus from every project. */
+/** True when `p` IS the global store root, so a global store whose parent chain contains
+ * `.git`/`.hippo` (git-managed HIPPO_HOME) still backfills as user-global ('') instead of being
+ * stamped with the surrounding repo's name, which would hide the global corpus from every
+ * project. */
 export function isGlobalStoreRoot(p: string): boolean {
   return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(hippoHomeDir()));
 }
 
-/** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the
- * owning project; the home dir basename maps to '' (user-global). Returns null without origin evidence. Pure string
- * logic, since recorded paths may no longer exist. */
+/** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and
+ * `promoted:<localRoot>` name the owning project; the home dir basename maps to ''
+ * (user-global). Returns null without origin evidence. Pure string logic, since recorded paths
+ * may no longer exist. */
 export function originFromSource(
   source: string | null | undefined,
   homeName?: string,
@@ -223,8 +230,9 @@ export function originFromSource(
   return null;
 }
 
-/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global) outside a project. NULL,
- * which ambient context denies, is a shared store's or a legacy row's, never derived here. */
+/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global)
+ * outside a project. NULL, which ambient context denies, is a shared store's or a legacy row's,
+ * never derived here. */
 export function deriveOriginProject(cwd?: string, opts?: ResolveProjectIdentityOptions): string {
   return resolveProjectIdentity(cwd, opts).name;
 }

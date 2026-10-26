@@ -1,5 +1,6 @@
-// The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store folder, and
-// benchmarks a handle they open themselves. The kit is synchronous and the port is not, so each seam runs on a handle.
+// The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store
+// folder, and benchmarks a handle they open themselves. The kit is synchronous and the port is not,
+// so each seam runs on a handle.
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -37,7 +38,8 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => [...entryReads.iterateEveryTenantEntries(db)], openStore);
 }
 
-/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries does. */
+/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries
+ * does. */
 export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
   return onHandle(hippoRoot, (db) => entryReads.readEntry(db, id, ALL_TENANTS), openStore);
 }
@@ -47,7 +49,8 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
   return onHandle(hippoRoot, (db) => vectorIndex.listAllVectors(db));
 }
 
-/** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor benchmark through this. */
+/** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor
+ * benchmark through this. */
 export function listRecallEntriesInFolder(
   hippoRoot: string,
   query: string,

@@ -1,8 +1,9 @@
 /**
- * Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the condemned set);
- * mirrors benchmarks/memory-value/*.mjs.
- * rescueSet rescues a condemned entry iff it ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set;
- * memory-value-wiring.test.ts guards parity.
+ * Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the
+ * condemned set); mirrors benchmarks/memory-value/*.mjs. rescueSet rescues a condemned entry iff it
+ * ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts
+ * guards parity.
+ *
  */
 
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
@@ -37,9 +38,9 @@ const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
 const RESCUE_BUDGET = 0.3;
 
 /**
- * Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and keepN=ceil(0.3*N) would rescue a
- * 1-entry tenant's entry every sleep forever.
- * A code constant tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
+ * Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and
+ * keepN=ceil(0.3*N) would rescue a 1-entry tenant's entry every sleep forever. A code constant
+ * tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
 const MIN_RESCUE_GROUP = 10;
 
 export interface MvFeatureVector {
@@ -54,10 +55,11 @@ export interface MvFeatureVector {
 }
 
 /**
- * Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry. `strength` is CLOCK-BASIS
- * `calculateStrength(entry, now)` with no
- * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the
- * frozen weights.
+ * Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry.
+ * `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no DecayOptions, as in the
+ * weights' training; passing the production decay basis would silently break parity with the frozen
+ * weights.
+ *
  */
 function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
@@ -85,9 +87,9 @@ function isNonEmptyDigestString(value: string): boolean {
 }
 
 /**
- * Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on with a broken constant
- * must throw, never act as flag-off.
- * Parameterized (default: the frozen singleton) so the throw paths are unit-testable. */
+ * Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on
+ * with a broken constant must throw, never act as flag-off. Parameterized (default: the frozen
+ * singleton) so the throw paths are unit-testable. */
 export function validateWeights(
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
   digest: string = SOURCE_ARTIFACT_SHA256,
@@ -110,10 +112,11 @@ export function validateWeights(
 }
 
 /**
- * Min-max normalize the 8 features over the given entries (constant -> 0), then score = dot(weights, normalized);
- * callers set the scope.
- * An entry with any non-finite feature (NaN from a malformed `created`) is excluded from normalization and scores
- * -Infinity, so it can never be rescued.
+ * Min-max normalize the 8 features over the given entries (constant -> 0), then score =
+ * dot(weights, normalized); callers set the scope. An entry with any non-finite feature (NaN from a
+ * malformed `created`) is excluded from normalization and scores -Infinity, so it can never be
+ * rescued.
+ *
  */
 export function scoreEntries(
   entries: MemoryEntry[],
@@ -173,8 +176,9 @@ function scoreFeatures(
 }
 
 /**
- * Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and the consolidate
- * audit-row metadata read.
+ * Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and
+ * the consolidate audit-row metadata read.
+ *
  */
 export interface MvRankInfo {
   tenantId: string;
@@ -188,8 +192,9 @@ export interface MvRankInfo {
 }
 
 /**
- * Group non-pinned entries by tenantId, score and rank each group independently, and return rank context for every
- * non-pinned entry; rescueSet and the consolidate audit rows share it so they never compute the ranking differently. */
+ * Group non-pinned entries by tenantId, score and rank each group independently, and return rank
+ * context for every non-pinned entry; rescueSet and the consolidate audit rows share it so they
+ * never compute the ranking differently. */
 export function rankNonPinnedByTenant(
   entries: MemoryEntry[],
   now: Date,
@@ -221,7 +226,8 @@ export interface MvCandidate {
 
 /** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
 export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthModel): MvCandidate {
-  // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
+  // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its
+  // own tenant.
   return {
     id: entry.id,
     tenantId: entry.tenantId ?? DEFAULT_TENANT_ID,
@@ -232,8 +238,8 @@ export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthModel)
 /** Pages of rows, read now or a page at a time from the store. */
 type TiePages = Iterable<readonly EntryIdentity[]> | AsyncIterable<readonly EntryIdentity[]>;
 
-/** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one; `read` returns the
- * rows of a score tie, which the shared tie-break orders by content. */
+/** rankNonPinnedByTenant over compact candidates, for the `wanted` ids and every non-finite one;
+ * `read` returns the rows of a score tie, which the shared tie-break orders by content. */
 export async function rankCandidates(
   candidates: readonly MvCandidate[],
   wanted: (id: string) => boolean,
@@ -259,7 +265,8 @@ interface TieGroup {
   readonly want: (id: string) => boolean;
 }
 
-/** Every tenant's score ties that hold a wanted id, so the sync and paged rankings share one scoring and order. */
+/** Every tenant's score ties that hold a wanted id, so the sync and paged rankings share one
+ * scoring and order. */
 function tieGroups(
   candidates: readonly MvCandidate[],
   wanted: (id: string) => boolean,
@@ -277,7 +284,8 @@ function tieGroups(
     const ids = group
       .map(([id]) => id)
       .sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
-    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc comment.
+    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc
+    // comment.
     const keepN =
       ids.length < MIN_RESCUE_GROUP
         ? 0
@@ -305,8 +313,9 @@ function placeTie(
   }
 }
 
-/** The place of each wanted id among `tied` by compareEntryIdentity, the shared tie-break of every score-primary sort
- * (src/base/rank/compare.ts); only the wanted rows are held, the rest are counted a page at a time. */
+/** The place of each wanted id among `tied` by compareEntryIdentity, the shared tie-break of
+ * every score-primary sort (src/base/rank/compare.ts); only the wanted rows are held, the rest
+ * are counted a page at a time. */
 async function tiePlaces(
   tied: readonly string[],
   wanted: (id: string) => boolean,
@@ -354,9 +363,10 @@ export interface RescueSetOptions {
 }
 
 /**
- * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned set by learned score.
- * Pass `precomputedRanks` to skip the internal ranking so the whole-store pass runs once per sleep; `weights`/`digest`
- * overrides exist for tests only.
+ * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned
+ * set by learned score. Pass `precomputedRanks` to skip the internal ranking so the whole-store
+ * pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
+ *
  */
 export function rescueSet(
   entries: MemoryEntry[],
@@ -375,8 +385,8 @@ export function rescueSet(
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);
-    // An explicit finite guard, not just -Infinity sorting last: when a whole tenant ties at -Infinity, rank alone
-    // could place one inside keepN.
+    // An explicit finite guard, not just -Infinity sorting last: when a whole tenant ties at
+    // -Infinity, rank alone could place one inside keepN.
     if (info && info.rank <= info.keepN && Number.isFinite(info.score)) rescued.add(id);
   }
   return rescued;

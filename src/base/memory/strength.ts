@@ -1,9 +1,11 @@
-// How strong a memory is at an instant: decay, the reward factor, the retrieval boost, the emotional weight and the
-// confidence facets, all under one StrengthModel the caller passes with the time.
+// How strong a memory is at an instant: decay, the reward factor, the retrieval boost, the
+// emotional weight and the confidence facets, all under one StrengthModel the caller passes with
+// the time.
 import type { ConfidenceLevel, EmotionalValence, MemoryEntry } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
-/** The slopes, bases and channels strength scoring runs on; an eval builds another value at its root. */
+/** The slopes, bases and channels strength scoring runs on; an eval builds another value at its
+ * root. */
 export interface StrengthModel {
   /** Strength left after one half-life; also what each wrong mark multiplies by. */
   readonly decayBase: number;
@@ -11,17 +13,21 @@ export interface StrengthModel {
   readonly rewardSlope: number;
   /** Strength each doubling of the retrieval count adds. */
   readonly retrievalBoostSlope: number;
-  /** The most halvings bad outcome marks apply; bad marks alone never push a memory under sleep's 0.05 retire line. */
+  /** The most halvings bad outcome marks apply; bad marks alone never push a memory under
+   * sleep's 0.05 retire line. */
   readonly maxWrongHalvings: number;
   /** Multiplies the `negative` valence weight, after parseLossAversionRatio's floor. */
   readonly lossAversionRatio: number;
-  /** Strength fades with time since the decay anchor; off, it holds at the boost and emotional weight. */
+  /** Strength fades with time since the decay anchor; off, it holds at the boost and emotional
+   * weight. */
   readonly decays: boolean;
-  /** A recall boosts strength, moves the decay anchor and lengthens the half-life; off, the anchor is `created`. */
+  /** A recall boosts strength, moves the decay anchor and lengthens the half-life; off, the
+   * anchor is `created`. */
   readonly recallStrengthens: boolean;
 }
 
-/** The model every production path scores with; strengthSql (src/store/sqlite/rule-sql.ts) reads the same fields. */
+/** The model every production path scores with; strengthSql (src/store/sqlite/rule-sql.ts) reads
+ * the same fields. */
 export const PRODUCTION_STRENGTH: StrengthModel = Object.freeze({
   decayBase: 0.5,
   rewardSlope: 0.5,
@@ -34,14 +40,16 @@ export const PRODUCTION_STRENGTH: StrengthModel = Object.freeze({
 
 export const FALLBACK_HALF_LIFE_DAYS = 7;
 
-/** Base half-life before deriveHalfLife's multipliers: 7 lost the current fact far more often and 730 did no better.
- * `hippo sleep` moves memories still on an older base (src/domain/consolidate/half-life-migration.ts). */
+/** Base half-life before deriveHalfLife's multipliers: 7 lost the current fact far more often
+ * and 730 did no better. `hippo sleep` moves memories still on an older base
+ * (src/domain/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
 
 /** The flat half-life the object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 
-// Losses weigh ~2x gains (Lovallo-Kahneman), so negative is 2.0; HIPPO_LOSS_AVERSION_RATIO scales it per process.
+// Losses weigh ~2x gains (Lovallo-Kahneman), so negative is 2.0; HIPPO_LOSS_AVERSION_RATIO scales
+// it per process.
 export const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
   positive: 1.0,
@@ -49,8 +57,8 @@ export const EMOTIONAL_MULTIPLIERS = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
-// A lower ratio can drop an error-tagged memory under sleep's DECAY_THRESHOLD (src/domain/consolidate/decay.ts), so
-// values below it fall back to 1.0.
+// A lower ratio can drop an error-tagged memory under sleep's DECAY_THRESHOLD
+// (src/domain/consolidate/decay.ts), so values below it fall back to 1.0.
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
 /** HIPPO_LOSS_AVERSION_RATIO as scoring reads it: unset, unparseable or below the floor is 1.0. */
@@ -59,7 +67,8 @@ export function parseLossAversionRatio(raw: string | number | undefined): number
   return Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
 }
 
-/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio floors it. */
+/** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio floors
+ * it. */
 export function withLossAversion(
   model: StrengthModel,
   ratio: string | number | undefined,
@@ -70,8 +79,8 @@ export function withLossAversion(
     : Object.freeze({ ...model, lossAversionRatio });
 }
 
-/** Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains
- * claim. */
+/** Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the
+ * losses-vs-gains claim. */
 export function applyLossAversionRatio(
   valence: EmotionalValence,
   baseMultiplier: number,
@@ -81,7 +90,8 @@ export function applyLossAversionRatio(
   return baseMultiplier * ratio;
 }
 
-/** 1 + rewardSlope * (pos - neg) / (pos + neg + 1), 1.0 with no outcomes; it scales the effective half-life. */
+/** 1 + rewardSlope * (pos - neg) / (pos + neg + 1), 1.0 with no outcomes; it scales the
+ * effective half-life. */
 export function calculateRewardFactor(
   entry: Pick<MemoryEntry, 'outcomePositive' | 'outcomeNegative'>,
   model: StrengthModel,
@@ -93,8 +103,8 @@ export function calculateRewardFactor(
   return 1 + model.rewardSlope * ratio;
 }
 
-/** Bad outcome marks past good ones, from zero up to maxWrongHalvings; each halves strength and stops recall
- * strengthening, so a correction outranks pinning. */
+/** Bad outcome marks past good ones, from zero up to maxWrongHalvings; each halves strength and
+ * stops recall strengthening, so a correction outranks pinning. */
 export function netWrong(
   entry: Pick<MemoryEntry, 'outcomePositive' | 'outcomeNegative'>,
   model: StrengthModel,
@@ -116,7 +126,8 @@ export type StrengthInputs = Pick<
   | 'outcomeNegative'
 >;
 
-/** clock = wall time, session = per sleep cycle (intermittent agents), adaptive = half-life scaled by session pace. */
+/** clock = wall time, session = per sleep cycle (intermittent agents), adaptive = half-life
+ * scaled by session pace. */
 export interface DecayBasis {
   decayBasis?: 'clock' | 'session' | 'adaptive';
   /** Average interval between sleep cycles, in days. Used by 'adaptive' and 'session' modes. */
@@ -125,8 +136,8 @@ export interface DecayBasis {
   sleepCount?: number;
 }
 
-/** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]. Pinned memories skip time
- * decay, but being marked wrong still fades them (netWrong). */
+/** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]. Pinned
+ * memories skip time decay, but being marked wrong still fades them (netWrong). */
 export function calculateStrength(
   entry: StrengthInputs,
   now: Date,
@@ -171,7 +182,8 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
   let effectiveHalfLife = halfLifeDays;
   const mode = basis.decayBasis ?? 'clock';
   if (mode === 'session') {
-    // Each sleep cycle counts as one "day"; sessions since last retrieval are estimated from the average interval.
+    // Each sleep cycle counts as one "day"; sessions since last retrieval are estimated from the
+    // average interval.
     const avgInterval = basis.avgSessionIntervalDays ?? 1;
     const sessionsSince = avgInterval > 0 ? Math.max(0, daysSince / avgInterval) : daysSince;
     return sessionsSince / effectiveHalfLife;
@@ -187,7 +199,8 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
   return daysSince / effectiveHalfLife;
 }
 
-/** What the confidence facets read, so a caller can derive them from a row it loaded only in part. */
+/** What the confidence facets read, so a caller can derive them from a row it loaded only in
+ * part. */
 export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'lastRetrieved'>;
 
 // Days without a retrieval before trust lapses; pinned and verified rows are exempt by policy.
@@ -218,8 +231,8 @@ export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
   };
 }
 
-/** The stored confidence, or 'stale' once aged out (no retrieval for AGED_OUT_AFTER_DAYS; pinned and verified
- * exempt). */
+/** The stored confidence, or 'stale' once aged out (no retrieval for AGED_OUT_AFTER_DAYS; pinned
+ * and verified exempt). */
 export function resolveConfidence(entry: ConfidenceInputs, now: Date): ConfidenceLevel {
   return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }

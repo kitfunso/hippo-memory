@@ -1,4 +1,5 @@
-// hippo.db's FolderFiles group: creating its files, and the facts about its folder that rows and labels record.
+// hippo.db's FolderFiles group: creating its files, and the facts about its folder that rows and
+// labels record.
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { resolveProjectIdentity } from '../../host/project-identity.js';
@@ -15,7 +16,8 @@ function homeOf({ host, hippoRoot }: StoreFiles): StoreHome {
   return {
     folder: hippoRoot,
     folderName: path.basename(path.resolve(hippoRoot, '..')),
-    // Before the store exists its own marker is missing, so that walk is not kept for the rows it will stamp.
+    // Before the store exists its own marker is missing, so that walk is not kept for the rows it
+    // will stamp.
     project: exists ? host.projectIdentity(folder) : resolveProjectIdentity(folder),
     shared: host.isSharedStore(hippoRoot),
     exists,

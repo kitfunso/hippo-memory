@@ -1,4 +1,5 @@
-// hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up the mirror folders.
+// hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up
+// the mirror folders.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
@@ -29,8 +30,9 @@ function heldKeys(
   return storedTextKeys(listTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
 }
 
-/** One outcome per entry, in order, in one transaction that reads the caller's dedup again first, so a text another
- * writer stored since that read is skipped; mirrors and stats follow the commit. */
+/** One outcome per entry, in order, in one transaction that reads the caller's dedup again
+ * first, so a text another writer stored since that read is skipped; mirrors and stats follow
+ * the commit. */
 function writeCapturedEntries(
   db: DatabaseSyncLike,
   files: StoreFiles,

@@ -1,5 +1,5 @@
-// The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep
-// drain marks them by.
+// The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the
+// watermark the sleep drain marks them by.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -8,8 +8,8 @@ import { resolveConsolidatedSource } from './graph-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { handleStamp } from './handle-clock.js';
 
-/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB
- * trigger is the backstop). */
+/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing /
+ * cross-tenant memory (the DB trigger is the backstop). */
 function enqueueExtraction(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -17,8 +17,8 @@ function enqueueExtraction(
 ): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
   const now = handleStamp(db);
-  // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you cannot enqueue a
-  // forgotten mirror); memoryId is non-null here by construction.
+  // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you
+  // cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(
     db,
     tenantId,
@@ -42,9 +42,10 @@ function enqueueExtraction(
   return rowToQueueItem(row);
 }
 
-/** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its consolidated mirror memory.
- * NEVER throws: a failed dirty signal must not abort an object write. Call POST-COMMIT from the graph-source save/close
- * mutations; a null memoryId (forgotten mirror) is a no-op. */
+/** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its
+ * consolidated mirror memory. NEVER throws: a failed dirty signal must not abort an object
+ * write. Call POST-COMMIT from the graph-source save/close mutations; a null memoryId (forgotten
+ * mirror) is a no-op. */
 export function markGraphDirty(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -54,8 +55,8 @@ export function markGraphDirty(
   try {
     enqueueExtraction(db, tenantId, memoryId);
   } catch (err) {
-    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but swallowed so the already-committed
-    // object write is never rolled back.
+    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but swallowed so the
+    // already-committed object write is never rolled back.
     log.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
       errorFields(err),
@@ -63,9 +64,9 @@ export function markGraphDirty(
   }
 }
 
-/** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE (status/processed_at only, so the
- * source guard trigger is not involved). The watermark excludes items enqueued after the drain snapshot. Returns the
- * count marked. */
+/** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE
+ * (status/processed_at only, so the source guard trigger is not involved). The watermark
+ * excludes items enqueued after the drain snapshot. Returns the count marked. */
 export function markPendingProcessedUpTo(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -84,9 +85,9 @@ export function markPendingProcessedUpTo(
   return Number(res.changes ?? 0);
 }
 
-/** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark);
- * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
- * the rebuild stay pending (no lost update). */
+/** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time
+ * (a watermark); host-wide, as sleep is cross-tenant. The drain marks only items at or below it
+ * processed, so items enqueued DURING the rebuild stay pending (no lost update). */
 export function listPendingExtractionTenants(
   db: DatabaseSyncLike,
 ): { tenantId: string; maxPendingId: number }[] {

@@ -1,6 +1,7 @@
-/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede chain) and optional
- * linked receipts. The `incidents` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET
- * NULL) is for recall. linked_memory_ids must all exist in the SAME tenant or save throws before the insert. */
+/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede
+ * chain) and optional linked receipts. The `incidents` table is the source of truth; the memory
+ * mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. linked_memory_ids must all
+ * exist in the SAME tenant or save throws before the insert. */
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
@@ -35,11 +36,13 @@ export interface SaveIncidentOptions {
   /** Memory ids (linked receipts) that are this incident's evidence. Each must exist in the same tenant;
    *  cross-tenant/nonexistent ids are rejected. */
   linkedMemoryIds?: string[];
-  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK pass none). */
+  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK
+   * pass none). */
   extraTags?: string[];
 }
 
-// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own save.
+// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own
+// save.
 export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',
@@ -49,7 +52,8 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   closeRefusal: 'already closed',
 };
 
-/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new mirror starts on. */
+/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new
+ * mirror starts on. */
 function incidentOpen(
   baseHalfLifeDays: number,
   tenantId: string,
@@ -86,8 +90,9 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
 }
 
 /** Opens an incident with its mirror memory (content "<text>
-
-Context: <context>" when context is given) in one write; a linked memory outside the tenant refuses the whole write. */
+ *
+ * Context: <context>" when context is given) in one write; a linked memory outside the tenant
+ * refuses the whole write. */
 export async function openIncident(
   objects: Objects,
   baseHalfLifeDays: number,
@@ -122,8 +127,8 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   );
 }
 
-/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is not open are told
- * apart. */
+/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is
+ * not open are told apart. */
 export async function resolveOpenIncident(
   objects: Objects,
   tenantId: string,

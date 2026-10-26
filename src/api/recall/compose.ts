@@ -1,4 +1,5 @@
-// Recall composition: from the loaded candidates and the plan's reads to the reply and its rows; touches no store.
+// Recall composition: from the loaded candidates and the plan's reads to the reply and its rows;
+// touches no store.
 
 import { estimateTokens } from '../../base/util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
@@ -62,7 +63,8 @@ interface CandidateWindow {
   droppedByBudget: number;
 }
 
-/** What a recall reads once its candidates are known, worked out first so the reads can go to hippo.db or the port. */
+/** What a recall reads once its candidates are known, worked out first so the reads can go to
+ * hippo.db or the port. */
 export interface RecallPlan {
   limit: number;
   window: CandidateWindow;
@@ -70,7 +72,8 @@ export interface RecallPlan {
   personalScope: string | undefined;
   /** Set when a session and no explicit goal tag ask for the goal-stack boost. */
   goalBoost: GoalStackBoostOptions | null;
-  /** Overflowed children by summary parent, for the parents that may stand in for them; read only when not empty. */
+  /** Overflowed children by summary parent, for the parents that may stand in for them; read
+   * only when not empty. */
   overflow: Map<string, MemoryEntry[]>;
   claim: ForwardClaimMatch | null;
 }
@@ -84,7 +87,8 @@ export interface RecallReads {
   planning: PlanningFallacyEvidence | null;
 }
 
-/** The bands recall returns, plus the counts the suppression summary reports and the goal log rows the boost earned. */
+/** The bands recall returns, plus the counts the suppression summary reports and the goal log
+ * rows the boost earned. */
 interface RankedBands {
   rankedOut: RecallResultItem[];
   baseSlice: MemoryEntry[];
@@ -156,7 +160,8 @@ export function composeRecall(
   const continuity = reads.continuity
     ? scopeContinuity(reads.continuity, opts.filter?.scope, plan.personalScope)
     : undefined;
-  // Query-derived, so MCP and CLI read this one hint instead of recomputing; HIPPO_AUTODEBIAS=off disables it.
+  // Query-derived, so MCP and CLI read this one hint instead of recomputing; HIPPO_AUTODEBIAS=off
+  // disables it.
   const planning =
     plan.claim && reads.planning
       ? decidePlanningFallacy(plan.claim, reads.planning, ctx.tenantId, ctx.actor.subject)
@@ -184,7 +189,8 @@ export function composeRecall(
       suppressedByInterference,
     } satisfies RecallSuppressionSummary,
   };
-  // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out as optional fields.
+  // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out
+  // as optional fields.
   if (planning?.output.hint) result.planningFallacyHint = planning.output.hint;
   if (planning?.output.watching) result.planningFallacyWatching = planning.output.watching;
   if (anchoringHint) result.anchoringHint = anchoringHint;
@@ -202,7 +208,8 @@ export function composeRecall(
   };
 }
 
-// The SQL load already applied tenant and scope; a recall candidate loader must go through store.searchRecallEntries.
+// The SQL load already applied tenant and scope; a recall candidate loader must go through
+// store.searchRecallEntries.
 function admitCandidates(
   opts: RecallOptions,
   all: MemoryEntry[],
@@ -216,7 +223,8 @@ function admitCandidates(
     // SQL already exact-matched; the JS filter is defense-in-depth against a SQL-clause regression.
     entries = current.filter((e) => e.scope === scope);
   } else {
-    // SQL pre-filtered ':private:' loosely before the window; this is the exact anchored `<source>:private:*` rule.
+    // SQL pre-filtered ':private:' loosely before the window; this is the exact anchored
+    // `<source>:private:*` rule.
     entries = current.filter((e) =>
       passesScopeFilterForRecall(e.scope ?? null, undefined, personalScope),
     );
@@ -231,7 +239,8 @@ function admitCandidates(
   return { entries, baseSlice, droppedPreRank, droppedByBudget: entries.length - baseSlice.length };
 }
 
-// The goal-stack boost touches the primary band only; the fresh-tail and summary bands keep their fixed placement.
+// The goal-stack boost touches the primary band only; the fresh-tail and summary bands keep their
+// fixed placement.
 function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): RankedBands {
   const { window, limit, personalScope } = plan;
   let baseScored: ScoredEntry[] = window.baseSlice.map((entry, idx) => ({
@@ -293,8 +302,9 @@ function withoutHeldCopies(base: ScoredEntry[], summaries: SummaryDecoration[]) 
   };
 }
 
-// When the overflow holds 2+ children of one level-2 summary, that summary stands in for them, capped at 30% of
-// `limit`. Each one is tenant-scoped and re-checked against the scope filter; drillDown recovers the children.
+// When the overflow holds 2+ children of one level-2 summary, that summary stands in for them,
+// capped at 30% of `limit`. Each one is tenant-scoped and re-checked against the scope filter;
+// drillDown recovers the children.
 interface SubstituteOverflowOptions {
   readonly overflowByParent: Map<string, MemoryEntry[]>;
   readonly parents: MemoryEntry[];
@@ -314,7 +324,8 @@ function substituteOverflow(
     opts.filter?.project,
   );
   const maxSub = Math.max(1, Math.ceil(limit * SUMMARY_SUB_FRACTION));
-  // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to scan order.
+  // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to
+  // scan order.
   eligibleParents.sort((a, b) => {
     const ac = overflowByParent.get(a.id)?.length ?? 0;
     const bc = overflowByParent.get(b.id)?.length ?? 0;
@@ -327,7 +338,9 @@ function substituteOverflow(
 }
 
 /**
- * Overflowed leaf rows by summary parent, kept only for a parent with 2+ of them that is not already in the base band.
+ * Overflowed leaf rows by summary parent, kept only for a parent with 2+ of them that is not
+ * already in the base band.
+ *
  */
 function overflowGroups(window: CandidateWindow, limit: number): Map<string, MemoryEntry[]> {
   // The goal boost only re-scores the base band, so its ids are known before the boost runs.
@@ -388,8 +401,9 @@ function summaryItem(s: SummaryDecoration, opts: RecallOptions): RecallResultIte
   return item;
 }
 
-// The last N raw rows, so "what did I just see" always covers the recent window. A recent row already in the BM25 band
-// is only tagged isFreshTail; new ones are prepended, so every recent row appears exactly once.
+// The last N raw rows, so "what did I just see" always covers the recent window. A recent row
+// already in the BM25 band is only tagged isFreshTail; new ones are prepended, so every recent row
+// appears exactly once.
 interface FreshTailBandOptions {
   readonly recent: MemoryEntry[];
   readonly baseRanked: RecallResultItem[];
@@ -430,7 +444,8 @@ function freshTailBand(opts: RecallOptions, options: FreshTailBandOptions): Reca
   return freshRanked;
 }
 
-// The trace is observability, not retrieval state; a caller that traces its own result set suppresses it.
+// The trace is observability, not retrieval state; a caller that traces its own result set
+// suppresses it.
 function recallTrace(
   ctx: Context,
   opts: RecallOptions,
@@ -451,7 +466,8 @@ function recallTrace(
   };
 }
 
-// The memory-recall scope rule: an explicit scope must match exactly; without one, private and legacy rows are denied.
+// The memory-recall scope rule: an explicit scope must match exactly; without one, private and
+// legacy rows are denied.
 function scopeContinuity(
   block: ContinuityBlock,
   scope: string | undefined,
@@ -497,8 +513,9 @@ function continuityTokensOf(c: ContinuityBlock): number {
   );
 }
 
-// A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
-// call; CLI paths pass no history (printRecall computes its own hint), so the hint stays absent there.
+// A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips
+// even the detect call; CLI paths pass no history (printRecall computes its own hint), so the hint
+// stays absent there.
 function detectRecallAnchoring(
   { config }: Context,
   opts: RecallOptions,
@@ -515,8 +532,9 @@ function detectRecallAnchoring(
   };
 }
 
-// Compares the returned top-K's ages with the scope-filtered pool it came from, never `all`, whose hidden rows would
-// leak pool shape. A soft warning only; HIPPO_AVAILABILITY=off or a caller computing its own hint skips it.
+// Compares the returned top-K's ages with the scope-filtered pool it came from, never `all`, whose
+// hidden rows would leak pool shape. A soft warning only; HIPPO_AVAILABILITY=off or a caller
+// computing its own hint skips it.
 function detectRecallAvailability(
   ctx: Context,
   opts: RecallOptions,

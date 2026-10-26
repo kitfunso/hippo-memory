@@ -1,4 +1,5 @@
-// One page of a project's memories and the cross-project search, each one bounded store read at the stamp's instant.
+// One page of a project's memories and the cross-project search, each one bounded store read at the
+// stamp's instant.
 import { round1 } from '../../base/util/format.js';
 import type {
   DashboardReads,
@@ -65,7 +66,8 @@ function toRow(row: ListedRow): MemoryRow {
   };
 }
 
-/** One page of a project's memories under the query's sort and filters, or null when the key is unknown. */
+/** One page of a project's memories under the query's sort and filters, or null when the key is
+ * unknown. */
 export async function buildMemoryPage(
   reads: Pick<DashboardReads, 'memoryPage'>,
   stamp: Stamp,
@@ -106,7 +108,8 @@ export async function buildMemoryPage(
   };
 }
 
-/** Substring search over content and tags across every project; it reads the store and never touches recall. */
+/** Substring search over content and tags across every project; it reads the store and never
+ * touches recall. */
 export async function buildSearch(
   reads: Pick<DashboardReads, 'search'>,
   stamp: Stamp,

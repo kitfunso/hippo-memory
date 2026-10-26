@@ -1,5 +1,5 @@
-// An API key: its shape, its scrypt cost, the mint and the checks a stored row passes, so only a hash of the plaintext
-// ever reaches a store.
+// An API key: its shape, its scrypt cost, the mint and the checks a stored row passes, so only a
+// hash of the plaintext ever reaches a store.
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
@@ -50,10 +50,12 @@ function hashKey(plaintext: string): string {
   return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
-/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
+/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by
+ * itself. */
 export const DEFAULT_KEY_TTL_DAYS = 90;
 
-/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its place. */
+/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its
+ * place. */
 export interface MintedApiKey {
   keyId: string;
   plaintext: string;
@@ -73,8 +75,8 @@ export function mintedKeyId(plaintext: string): string | null {
     : null;
 }
 
-/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
- * with the one compare the sync and the pooled check share. */
+/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value
+ * asks of a derivation, with the one compare the sync and the pooled check share. */
 export interface StoredScrypt {
   readonly salt: Buffer;
   readonly keylen: number;
@@ -138,8 +140,8 @@ interface KeyRowFacts {
   readonly ownerSubject?: string | null;
 }
 
-/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that
- * predates expiry) or a stamp that does not parse, so both fail closed. */
+/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing
+ * field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
 export function keyExpiryMs(expiresAt: string | null | undefined): number {
   if (expiresAt === null) return Infinity;
   if (expiresAt === undefined) return -Infinity;
@@ -149,8 +151,8 @@ export function keyExpiryMs(expiresAt: string | null | undefined): number {
 
 /** True for a record that is present, unrevoked and unexpired, before any secret check. */
 export function isUsableKey<R extends KeyRowFacts>(record: R | null, now: number): record is R {
-  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn
-  // CPU.
+  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and
+  // let junk tokens burn CPU.
   if (!record) return false;
   return !record.revokedAt && now < keyExpiryMs(record.expiresAt);
 }

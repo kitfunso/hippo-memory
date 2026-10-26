@@ -2,8 +2,8 @@
 const PATH_SEGMENTS_KEPT = 4;
 
 /**
- * Extracts meaningful path segments from a directory as tags like ['path:src', 'path:my-project']; filters noise
- * (node_modules, .git, Users, home dirs, drive letters). */
+ * Extracts meaningful path segments from a directory as tags like ['path:src',
+ * 'path:my-project']; filters noise (node_modules, .git, Users, home dirs, drive letters). */
 export function extractPathTags(dirPath: string): string[] {
   const normalized = dirPath.replace(/\\/g, '/');
   const segments = normalized.split('/').filter(Boolean);
@@ -45,9 +45,10 @@ export function pathTagsOf(cwd: string | undefined): string[] {
   return cwd === undefined ? [] : extractPathTags(cwd);
 }
 
-/** Path overlap score in 0..1 (1 = perfect match), normalized by the MORE SPECIFIC side (the larger tag set), so a
- * bare/generic path tag cannot score 1.0 against a deeply nested cwd just because its tiny tag set is contained in the
- * query's.
+/** Path overlap score in 0..1 (1 = perfect match), normalized by the MORE SPECIFIC side (the larger
+ * tag set), so a bare/generic path tag cannot score 1.0 against a deeply nested cwd just because
+ * its tiny tag set is contained in the query's.
+ *
  */
 export function pathOverlapScore(memoryPathTags: string[], currentPathTags: string[]): number {
   if (memoryPathTags.length === 0 || currentPathTags.length === 0) return 0;
@@ -55,8 +56,8 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
   const memSet = new Set(memoryPathTags);
   const matches = currentPathTags.filter((t) => memSet.has(t)).length;
 
-  // Normalize by the more specific side (the larger tag set), which kills the genericity reward a memory-count-only
-  // normalization gave bare path tags.
+  // Normalize by the more specific side (the larger tag set), which kills the genericity reward a
+  // memory-count-only normalization gave bare path tags.
   return matches / Math.max(memoryPathTags.length, currentPathTags.length);
 }
 
@@ -64,8 +65,9 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
 const PATH_BOOST_WEIGHT = 0.3;
 
 /**
- * Multiplier (1.0..1.3) applied to a composite recall score for path locality; filters the memory's tags to path:*
- * itself so call sites cannot drift.
+ * Multiplier (1.0..1.3) applied to a composite recall score for path locality; filters the memory's
+ * tags to path:* itself so call sites cannot drift.
+ *
  */
 export function pathBoostMultiplier(memoryTags: string[], currentPathTags: string[]): number {
   const memPathTags = memoryTags.filter((t) => t.startsWith('path:'));

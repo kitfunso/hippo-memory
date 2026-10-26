@@ -21,10 +21,11 @@ const DEFAULT_LLM_RERANK_TOP_K = 20;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on
- * HIPPO_LLM_RERANKER_URL against accidental cost.
- * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to
- * identity ordering, so recall never hangs.
+ * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible
+ * endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost. Timeout is 30s for the whole
+ * call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity
+ * ordering, so recall never hangs.
+ *
  */
 export function createLlmReranker(http: Http): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
@@ -63,7 +64,8 @@ function replyText(body: JsonValue): string {
   return isJsonString(content) ? content : '';
 }
 
-/** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
+/** One chat-completions call; rejects with the reason when the reply holds no usable
+ * permutation. */
 async function requestPermutation(
   http: Http,
   url: string,

@@ -45,24 +45,27 @@ import { createHost } from '../../host/host.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
-/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
- * config.json once. */
+/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
+ * parses an unchanged config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
-/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each shared flag once. */
+/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each
+ * shared flag once. */
 const cliHost = createHost();
 
-/** The CLI process's outside services: one reranker registry for every command and stdio MCP call it runs. */
+/** The CLI process's outside services: one reranker registry for every command and stdio MCP
+ * call it runs. */
 export const cliInfra = rootInfra(cliHost);
 
-/** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
- * recall. */
+/** A registry reranker with the CLEF transport this process's environment names, for a script
+ * that reranks outside a recall. */
 export function cliReranker(name: string | null | undefined): RerankerFn | null {
   return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
-/** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
- * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
+/** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never
+ * names the adapter. A `hippo serve` on the same store answers its nearest-row reads from the
+ * graph it holds. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   const store = defaultStore(hippoRoot, evalStoreRules(envLossAversionRatio()));
   return askingNearestFirst(
@@ -73,14 +76,16 @@ export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   );
 }
 
-/** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
+/** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found
+ * it. */
 export function cliDiagnostics(
   hippoRoot: string,
 ): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   return defaultDiagnostics(hippoRoot);
 }
 
-/** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
+/** A folder's hippo.db with its config, as sharing and sync take each side; the global one may
+ * not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
   return {
     store: cliStore(hippoRoot),
@@ -89,24 +94,27 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & Stor
   };
 }
 
-/** The folder's hippo.db as an import reaches it, answering at once: the published importers return their result. */
+/** The folder's hippo.db as an import reaches it, answering at once: the published importers
+ * return their result. */
 export function cliImportFiles(hippoRoot: string): ImportFiles {
   return defaultImportFiles(hippoRoot);
 }
 
-/** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
+/** Creates the global store, or finishes one that was partly made: what a first share needs of
+ * it. */
 export function cliInitGlobal(): void {
   cliImportFiles(hippoHomeDir()).ensure();
 }
 
-/** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
- * undefined. */
+/** One handle per store at the hook's lock wait; a store still busy after it skips the hook's
+ * work and answers undefined. */
 export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
   return runStoreHookRequest(run);
 }
 
-/** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the default
- * store, scored by this process's loss-aversion ratio as cliStore's stores are. */
+/** A CLI verb's agent-memory import options: each target reads its own config.json and opens
+ * through the default store, scored by this process's loss-aversion ratio as cliStore's stores
+ * are. */
 export function cliSyncOptions(
   tenantId: string,
   machine: Machine,
@@ -116,12 +124,14 @@ export function cliSyncOptions(
   return { tenantId, configAt: cliConfig, machine, stores, run: cliInfra(), ...extra };
 }
 
-/** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */
+/** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other
+ * surface opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runStoreRequest(run, 'cli');
 }
 
-/** One handle per store for a synchronous batch, such as an import's writes, that runs outside any request. */
+/** One handle per store for a synchronous batch, such as an import's writes, that runs outside
+ * any request. */
 export function cliBatch<T>(run: () => T): T {
   return runStoreBatch(run);
 }
@@ -139,9 +149,9 @@ function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
   );
 }
 
-// The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the
-// global store.
-// A command's callers start empty unless its caller holds a set; a CLI write starts no sleep.
+// The one place the CLI names its audit actor and builds its store; root is a parameter because
+// some verbs target the global store. A command's callers start empty unless its caller holds a
+// set; a CLI write starts no sleep.
 export function cliApiContext(
   hippoRoot: string,
   tenantId: string,
@@ -168,18 +178,20 @@ export function cliSecondStore(root: string): GlobalInReach {
   return { root, store: cliStore(root), config: cliConfig(root) };
 }
 
-/** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */
+/** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one,
+ * probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
   const store = cliStore(hippoRoot);
   return ledgerReachOf({ reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
 }
 
-/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. One
- * host per stdio loop, so its callers live as long as the loop. */
+/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep
+ * that runs in process. One host per stdio loop, so its callers live as long as the loop. */
 export function cliStdioHost(): McpHost {
   const hostTenantId = envTenant();
   const shared = createCallerState();
-  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context names no folder.
+  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context
+  // names no folder.
   const byRoot = new Map<string, CallerState>();
   const callersAt = (root: string): CallerState => {
     let callers = byRoot.get(root);

@@ -1,5 +1,6 @@
-// The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container writes wait the
-// caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at close.
+// The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container
+// writes wait the caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at
+// close.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,7 +23,8 @@ interface SqliteImportStores {
   isBusy<E>(err: E): boolean;
 }
 
-/** The opener a CLI verb hands the sync; `rules` are the invoking root's, which every store it opens scores by. */
+/** The opener a CLI verb hands the sync; `rules` are the invoking root's, which every store it
+ * opens scores by. */
 export function sqliteImportStores(rules: StoreRules): SqliteImportStores {
   return {
     open: (root, { busyWaitMs }) => ({
@@ -38,7 +40,8 @@ export function sqliteImportStores(rules: StoreRules): SqliteImportStores {
 
 function standIn(rules: StoreRules): SqliteImportStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  // Its folder is deleted at close, so a request scope must not keep one of its handles open past that.
+  // Its folder is deleted at close, so a request scope must not keep one of its handles open past
+  // that.
   outsideRequestStores(() => initStore(root));
   const store = unscoped(sqliteStore(root, rules));
   return {
@@ -56,7 +59,8 @@ function unscoped<T extends object>(obj: T): T {
   // SAFETY: Object.keys lists the object's own keys, which are keys of T.
   for (const key of Object.keys(obj) as (keyof T)[]) {
     const value = obj[key];
-    // SAFETY: a wrapped method takes and answers what the method does, and a wrapped group has the group's keys.
+    // SAFETY: a wrapped method takes and answers what the method does, and a wrapped group has the
+    // group's keys.
     out[key] = (
       value instanceof Function
         ? (...args: never[]) => outsideRequestStores(() => value.apply(obj, args))

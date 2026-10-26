@@ -1,6 +1,6 @@
-// Domain API layer: Context-taking functions that the CLI, the HTTP server and MCP all call, so the business logic
-// lives in one place. The code lives in src/api/, one module per domain; this barrel keeps every import path that
-// callers already use.
+// Domain API layer: Context-taking functions that the CLI, the HTTP server and MCP all call, so the
+// business logic lives in one place. The code lives in src/api/, one module per domain; this barrel
+// keeps every import path that callers already use.
 
 export {
   ApiError,
@@ -10,7 +10,8 @@ export {
   NotFoundError,
 } from '../base/errors/api-errors.js';
 
-// The recall-side scope predicates live in recall-scope.ts (leaf) so shared.ts can use them without an import cycle.
+// The recall-side scope predicates live in recall-scope.ts (leaf) so shared.ts can use them without
+// an import cycle.
 export {
   isPrivateScope,
   passesScopeFilterForRecall,

@@ -37,7 +37,8 @@ export const dormantTerms = (opts: ListDormantOptions): string[] =>
 export const dormantListCap = ({ limit }: ListDormantOptions): number =>
   limit !== undefined && Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 20;
 
-/** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory already holds the id. */
+/** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory
+ * already holds the id. */
 export type DormantRestoreOutcome =
   | { readonly status: 'restored'; readonly entry: MemoryEntry }
   | { readonly status: 'missing' }
@@ -52,15 +53,16 @@ export interface DormantRestoreRequest {
   readonly revival: DormantRevival;
 }
 
-/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
+/** `ownScope` is the caller's personal scope; the store builds its own scope test, so no
+ * predicate crosses the port. */
 export interface Dormant {
   list(
     tenantId: string,
     ownScope: string | null,
     opts: ListDormantOptions,
   ): Promise<DormantMemory[]>;
-  /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is filled as writeEntry
-   * fills one. */
+  /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is
+   * filled as writeEntry fills one. */
   restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;
   /** Deletes for good, writes the `forget` audit row and counts it; false when no row in reach. */
   forget(tenantId: string, ownScope: string | null, id: string, actor: string): Promise<boolean>;

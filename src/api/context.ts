@@ -60,7 +60,8 @@ import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
-/** Tokens a context block may use when the caller sets no budget; the hook command and the CLI default match it. */
+/** Tokens a context block may use when the caller sets no budget; the hook command and the CLI
+ * default match it. */
 export const DEFAULT_CONTEXT_BUDGET = 1500;
 
 // The plan's query when the caller gave none: context then ranks by strength instead of searching.
@@ -68,15 +69,17 @@ export const NO_QUERY = '*';
 
 /** Most rows per store a no-query context reads; past it, ranking sees the strongest by decay. */
 const CONTEXT_CANDIDATE_CAP = 2000;
-/** The page is sized from the rows the budget can pay for: a memory under this many tokens is rarer than the slack. */
+/** The page is sized from the rows the budget can pay for: a memory under this many tokens is
+ * rarer than the slack. */
 const CONTEXT_PAGE_ROW_TOKENS = 20;
-/** Strength also weighs recall count and valence, so the strongest rows by strength sit a few times deeper than their
- * decay rank; the page reads that many times the rows it can return. */
+/** Strength also weighs recall count and valence, so the strongest rows by strength sit a few
+ * times deeper than their decay rank; the page reads that many times the rows it can return. */
 const CONTEXT_PAGE_SLACK = 4;
 /** The smallest page, so a tiny budget or limit still ranks a real candidate set. */
 const CONTEXT_PAGE_MIN = 200;
 
-/** Rows per store a no-query context reads: the strongest by decay, enough to fill the budget and the limit. */
+/** Rows per store a no-query context reads: the strongest by decay, enough to fill the budget
+ * and the limit. */
 function contextCandidatePage(left: number, limit: number): number {
   const returnable = Math.min(Math.ceil(Math.max(0, left) / CONTEXT_PAGE_ROW_TOKENS), limit);
   return Math.min(
@@ -85,7 +88,8 @@ function contextCandidatePage(left: number, limit: number): number {
   );
 }
 
-/** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
+/** A query reads recall's FTS window from each store; the search's vector arm adds the nearest
+ * rows. */
 interface ContextQueryWindow {
   query: string;
   exactScope: string | undefined;
@@ -104,13 +108,14 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: store.contextReads };
 }
 
-/** What one store's ambient read is asked for. `recent`, `admission`, `recall` and `onRefused` apply to the pinned-only
- * branch alone. */
+/** What one store's ambient read is asked for. `recent`, `admission`, `recall` and `onRefused`
+ * apply to the pinned-only branch alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
   readonly admit: (e: MemoryEntry) => boolean;
-  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger. */
+  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the
+   * ledger. */
   readonly recheck: (e: MemoryEntry) => boolean;
   /** `recheck` as data, which the store applies in the pinned-only load. */
   readonly admission: AmbientAdmission;
@@ -142,7 +147,8 @@ async function loadAmbientEntries(
         : await source.reads.contextCandidates(tenantId, window);
     return { entries: rows.filter((e) => ownTenant(e) && admit(e)) };
   }
-  // The store applies the quality floor too, or its recent-N load stops short of a store whose newest rows are junk.
+  // The store applies the quality floor too, or its recent-N load stops short of a store whose
+  // newest rows are junk.
   const loaded = await source.reads.ambientCandidates(tenantId, {
     recentNeeded: recent.needed,
     admit: admission,
@@ -150,13 +156,14 @@ async function loadAmbientEntries(
     origins: recent.origins,
   });
   if (onRefused) for (const refusal of loaded.refused) onRefused(refusal);
-  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the
-  // tenant.
+  // Pins and recent rows reach core only through the store's own call to admit, so core applies it
+  // again with the tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
   return loaded.recall ? { entries, recall: loaded.recall.filter(ownTenant) } : { entries };
 }
 
-/** The task-state sections printed ahead of the memories, and the budget left once they are paid. */
+/** The task-state sections printed ahead of the memories, and the budget left once they are
+ * paid. */
 interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
@@ -165,7 +172,8 @@ interface TaskSections {
   left: number;
 }
 
-/** Assembles a budget-bounded, tenant-scoped context bundle and keeps its ids as the client's last shown list. */
+/** Assembles a budget-bounded, tenant-scoped context bundle and keeps its ids as the client's
+ * last shown list. */
 export async function contextGet(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const result = await assembleContext(ctx, opts);
   keepShownIds(
@@ -175,9 +183,10 @@ export async function contextGet(ctx: Context, opts: ContextOptions): Promise<Co
   return result;
 }
 
-/** contextGet without the shown list, for the prompt hook, whose block is no answer an outcome should land on;
- * mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries. Returns an empty result
- * when there are no memories, snapshot, handoff or recent events. */
+/** contextGet without the shown list, for the prompt hook, whose block is no answer an outcome
+ * should land on; mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned,
+ * non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or
+ * recent events. */
 export async function assembleContext(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
@@ -212,13 +221,14 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
 
   const { items, tokens } = finalizeSelection(picked, plan);
   if (items.length === 0 && noSections) {
-    // A query that found nothing is the coverage-gap signal, so it still gets a trace; pinned-only stays read-only.
+    // A query that found nothing is the coverage-gap signal, so it still gets a trace; pinned-only
+    // stays read-only.
     if (!plan.pinnedOnly) await traceEmptyContext(ctx, opts, plan);
     return { entries: [], tokens: 0 };
   }
 
-  // pinnedOnly is the UserPromptSubmit hot path: read-only so pinned memories don't inflate retrieval_count or extend
-  // half_life every turn.
+  // pinnedOnly is the UserPromptSubmit hot path: read-only so pinned memories don't inflate
+  // retrieval_count or extend half_life every turn.
   const recorded = plan.pinnedOnly
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
@@ -247,7 +257,9 @@ function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boo
 const isolationWarned = new WeakSet<HippoStore>();
 
 /**
- * A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there.
+ * A laptop config copied onto a team store must not open every member's rows to every prompt, so
+ * the flag loses there.
+ *
  */
 function warnIsolationIgnored(store: HippoStore): void {
   if (isolationWarned.has(store)) return;
@@ -267,8 +279,8 @@ function storesInReach(ctx: Context, opts: ContextOptions) {
   };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
-  // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
-  // `global` only beside hippo.db.
+  // A store serving many people is not its operator's, so the operator's own global store stays
+  // out; the root sets `global` only beside hippo.db.
   const hasGlobal = !sharedStore && reach.global !== undefined;
   // Global memories do not establish a project boundary for task state.
   return {
@@ -284,7 +296,8 @@ function globalSource(ctx: Context): ContextSource {
   return sourceOf(globalStoreInReach(ctx));
 }
 
-/** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
+/** Prices one entry against the budget: the caller's cost model when it gave one, else a token
+ * estimate. */
 function entryPricer(
   cost: ContextOptions['cost'],
   currentProject: ContextPlan['currentProject'],
@@ -309,19 +322,21 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   );
   const query = (opts.q ?? '').trim() || NO_QUERY;
 
-  // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are excluded unless
-  // the caller asks for them (crossProject) or isolation is disabled.
+  // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories
+  // are excluded unless the caller asks for them (crossProject) or isolation is disabled.
   const config = ctx.config;
   const isolationEnabled = config.contextProjectIsolation !== false;
   const currentProject = opts.currentProject;
-  // A caller with no project reads every row as its own; on a shared store those rows are other people's.
+  // A caller with no project reads every row as its own; on a shared store those rows are other
+  // people's.
   if (sharedStore && projectId(currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
   if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.store);
   const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
-  // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.
+  // Decided before the ambient loads so the pinned-only FTS candidate query can share their
+  // connection.
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
 
@@ -383,7 +398,8 @@ function promptRecallRequest(
     : undefined;
 }
 
-/** Reports the block's facts to the observer and returns the budget left after the fixed headers. */
+/** Reports the block's facts to the observer and returns the budget left after the fixed
+ * headers. */
 function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
@@ -415,7 +431,8 @@ interface RawTaskState {
 
 const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] };
 
-// Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
+// Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another
+// session's ambient handoff.
 async function loadRawTaskState(
   ctx: Context,
   opts: ContextOptions,
@@ -423,18 +440,21 @@ async function loadRawTaskState(
 ): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store } = plan.local;
-  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
-  // session.
+  // On a shared store task state is one person's, keyed by owner and project so it follows them
+  // into their next session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
   const block = await store.continuity(ctx.tenantId, 5, key);
-  // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
+  // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read
+  // stays unbounded.
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
-  // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
+  // The block's handoff and events are the raw snapshot's session's, so they stand only while that
+  // snapshot is fresh.
   if (snapshot?.sessionId)
     return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
-  // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
+  // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an
+  // older eligible one.
   const unfinished = {
     sessionId: null,
     unfinishedOnly: true,
@@ -448,8 +468,8 @@ async function loadRawTaskState(
   };
 }
 
-// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry
-// is.
+// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped,
+// as an oversize entry is.
 async function loadTaskSections(
   ctx: Context,
   opts: ContextOptions,
@@ -506,14 +526,17 @@ function ambientAdmission(
       shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : undefined,
   };
   const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
-  // The two-store search has always ranked a session's own compaction items; only the local search drops them.
+  // The two-store search has always ranked a session's own compaction items; only the local search
+  // drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean =>
     !e.supersededBy && ambientEnvelopeAdmits(e, rule);
   return { rule, admit, bothStoresAdmit };
 }
 
 /**
- * Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows.
+ * Origins the recent backfill may read past its first window; on a shared store, only the caller's
+ * own project rows.
+ *
  */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   if (plan.sharedStore)
@@ -542,7 +565,8 @@ async function loadPools(
       else if (!plan.promptRecallPending) obs.qualityDropped(r.id, isGlobal);
     });
 
-  // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are unchanged.
+  // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are
+  // unchanged.
   const window: ContextCandidateFilter | ContextQueryWindow = searches
     ? { query: plan.query, exactScope, ownScope, project: plan.originProject }
     : {
@@ -586,7 +610,8 @@ interface FinalSelection {
 /** The `limit` cut, then the held-copy drop, then each entry's origin annotation. */
 function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): FinalSelection {
   const { obs } = plan;
-  // Ranking reports nothing itself, so its results are offered here and the cuts below can name what they drop.
+  // Ranking reports nothing itself, so its results are offered here and the cuts below can name
+  // what they drop.
   if (!plan.pinnedOnly && obs) {
     const pool = plan.query === NO_QUERY ? 'strength' : 'search';
     obs.offer(
@@ -622,8 +647,8 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark
-  // cross-project rows.
+  // Every returned entry carries its origin and how it relates to the active project, so renderers
+  // can mark cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.originProject ?? null,
@@ -685,7 +710,8 @@ async function recordRetrieval(
     })),
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
-  // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the recall without one.
+  // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the
+  // recall without one.
   const store = ctx.store;
   const traceId = store.lastRecall
     ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
@@ -693,8 +719,8 @@ async function recordRetrieval(
   plan.obs?.traced(traceId);
   await store.bumpRecallStats(selected.length);
 
-  // Replace selectedItems entries with markRetrieved-updated copies so the returned ContextResult reflects post-recall
-  // state.
+  // Replace selectedItems entries with markRetrieved-updated copies so the returned ContextResult
+  // reflects post-recall state.
   const items = selected.map((s) => ({
     ...s,
     entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,

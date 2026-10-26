@@ -1,5 +1,5 @@
-/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store may leave empty -wal and
- * -shm files); never touches memory content. */
+/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store
+ * may leave empty -wal and -shm files); never touches memory content. */
 import { envByName, processEnv } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -38,11 +38,12 @@ export interface SupportBundleOptions extends DoctorOptions {
 const TAIL_MAX_BYTES = 256 * 1024;
 export const TAIL_MAX_LINES = 200;
 const TAIL_MAX_LINE_CHARS = 2000;
-// Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be
-// key body.
+// Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what
+// precedes it may be key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/infra/embedding-provider.ts, surface/connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/infra/embedding-provider.ts,
+// surface/connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
@@ -190,7 +191,8 @@ function tailLogFile(file: string): string[] {
   // A tail read starting mid-file cuts its first piece off mid-line.
   if (startedMidFile) lines = lines.slice(1);
   if (lines.length > 0 && lines[lines.length - 1] === '') lines = lines.slice(0, -1);
-  // Redact before splitting: a private key spans lines. An END still left has lost its BEGIN to the window cut.
+  // Redact before splitting: a private key spans lines. An END still left has lost its BEGIN to the
+  // window cut.
   const redacted = redactSecretsStrict(lines.join('\n')).replace(ORPHAN_KEY_END_RE, '[REDACTED]');
   return redacted
     .split('\n')
@@ -218,7 +220,8 @@ function buildLogsSection(opts: SupportBundleOptions): JsonObject {
   return logs;
 }
 
-// The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what it is.
+// The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what
+// it is.
 function nativeRealPathKey(p: string): string | null {
   // A path that does not exist, or that loops, has no alias to find.
   const real = ignoringCodes([...PATH_UNREADABLE, 'ELOOP', 'ENAMETOOLONG'], () =>
@@ -240,8 +243,8 @@ function collectHomeAliases(home: string, probes: readonly string[]): Set<string
     aliases.add(path.resolve(base));
   }
 
-  // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and compare native
-  // realpaths rather than checking each probe alone.
+  // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and
+  // compare native realpaths rather than checking each probe alone.
   const homeKeys = new Set(
     [nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter(
       (k): k is string => k !== null,
@@ -260,31 +263,34 @@ function collectHomeAliases(home: string, probes: readonly string[]): Set<string
   return aliases;
 }
 
-// Node's own encoding, so it matches file URLs and ESM stack frames; a drive path's URL gains a leading slash.
+// Node's own encoding, so it matches file URLs and ESM stack frames; a drive path's URL gains a
+// leading slash.
 function fileUrlPath(p: string): string {
   const pathname = pathToFileURL(p).pathname;
   return /^\/[A-Za-z]:/.test(pathname) ? pathname.slice(1) : pathname;
 }
 
-// A home turns up as a path, as a file URL's percent-encoded path, and as a Claude Code project folder name.
+// A home turns up as a path, as a file URL's percent-encoded path, and as a Claude Code project
+// folder name.
 const HOME_SPELLINGS: readonly ((p: string) => string)[] = [
   (p) => p,
   fileUrlPath,
   (p) => p.replace(/[^A-Za-z0-9]/g, '-'),
 ];
 
-// Git Bash, Cygwin and WSL mount a drive at /c, /cygdrive/c and /mnt/c; a Claude Code folder name writes each / and :
-// as -.
+// Git Bash, Cygwin and WSL mount a drive at /c, /cygdrive/c and /mnt/c; a Claude Code folder name
+// writes each / and : as -.
 function mountedDrive(letter: string): string {
   return `(?:${letter}[:-]|(?:[-/](?:cygdrive|mnt))?[-/]${letter})`;
 }
 
-/** Regex source for one spelling of the home, or null when too little of it is left to swap safely. */
+/** Regex source for one spelling of the home, or null when too little of it is left to swap
+ * safely. */
 function spellingPattern(spelling: string, deep: boolean): string | null {
   if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
-  // Each tool that mounts a drive writes it its own way, so a home two or more folders below its drive (\Users\<name>)
-  // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap
-  // with it.
+  // Each tool that mounts a drive writes it its own way, so a home two or more folders below its
+  // drive (\Users\<name>) matches after any prefix, with \, / or JSON's \\ between folders. A drive
+  // written a known way goes into the swap with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
   const body = below
@@ -296,12 +302,13 @@ function spellingPattern(spelling: string, deep: boolean): string | null {
     return deep ? body : `(?<![\\p{L}\\p{N}_])${body}`;
   }
   if (deep) return `${mountedDrive(drive[1])}?${body}`;
-  // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as a whole name; a
-  // drive root swaps nothing.
+  // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as
+  // a whole name; a drive root swaps nothing.
   return /[^\\/-]/.test(below) ? `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}` : null;
 }
 
-/** One pattern for every alias of the home in every spelling, or null when none is long enough to swap safely. */
+/** One pattern for every alias of the home in every spelling, or null when none is long enough
+ * to swap safely. */
 function buildHomePattern(home: string, probes: readonly string[]): RegExp | null {
   const spellings: [spelling: string, deep: boolean][] = [];
   for (const alias of collectHomeAliases(home, probes)) {
@@ -313,7 +320,8 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
         .filter(Boolean).length >= 2;
     for (const spell of HOME_SPELLINGS) spellings.push([spell(alias), deep]);
   }
-  // Longest first: where one home nests in another (a test home under the real one), swap the longer.
+  // Longest first: where one home nests in another (a test home under the real one), swap the
+  // longer.
   const patterns = new Map<string, string>();
   for (const [s, deep] of spellings.sort(([a], [b]) => b.length - a.length)) {
     const pattern = spellingPattern(s, deep);
@@ -322,8 +330,9 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
     if (!patterns.has(key)) patterns.set(key, pattern);
   }
   if (patterns.size === 0) return null;
-  // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app, do not. On Windows
-  // the start is spellingPattern's call, because the path below the drive may follow anything.
+  // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app,
+  // do not. On Windows the start is spellingPattern's call, because the path below the drive may
+  // follow anything.
   const before = process.platform === 'win32' ? '' : '(?<![\\p{L}\\p{N}_])';
   const alternatives = [...patterns.values()].join('|');
   return new RegExp(
@@ -365,7 +374,8 @@ function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue 
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
 export async function buildSupportBundle(opts: SupportBundleOptions): Promise<JsonObject> {
-  // Before doctor: its read-only open leaves an empty -wal that the store's file list would then report.
+  // Before doctor: its read-only open leaves an empty -wal that the store's file list would then
+  // report.
   const stores = await buildStores(opts);
   const bundle: JsonObject = {
     format: 'hippo-support-bundle/1',
@@ -377,8 +387,9 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),
   };
-  // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
-  // lines often quote the temp folder, which usually sits under the home.
+  // Store paths found from the working folder arrive resolved; the global root arrives as
+  // HIPPO_HOME was typed, and log lines often quote the temp folder, which usually sits under the
+  // home.
   const redacted = redactStrings(
     bundle,
     buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]),

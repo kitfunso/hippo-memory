@@ -16,8 +16,9 @@ function slugify(heading: string): string {
 }
 
 /**
- * Parse structured markdown into {content, sectionSlug} pairs: each heading starts a section whose bullets or numbered
- * items become memories.
+ * Parse structured markdown into {content, sectionSlug} pairs: each heading starts a section whose
+ * bullets or numbered items become memories.
+ *
  */
 function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionSlug: string }> {
   const results: Array<{ content: string; sectionSlug: string }> = [];

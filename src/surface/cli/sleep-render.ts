@@ -1,4 +1,5 @@
-// The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the lines directly.
+// The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the lines
+// directly.
 
 import type * as api from '../../api/index.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
@@ -6,7 +7,9 @@ import { plural } from '../../base/util/format.js';
 import { sleepEventLines } from '../render/sleep-events.js';
 
 /**
- * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy.
+ * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them
+ * without a console spy.
+ *
  */
 export function sleepResultLines(result: api.SleepResult): string[] {
   return [

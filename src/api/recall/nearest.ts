@@ -1,5 +1,5 @@
-// The nearest-row read a CLI on this host asks of the served store, whose vector graph answers it; it reaches no row
-// the caller's own recall could not.
+// The nearest-row read a CLI on this host asks of the served store, whose vector graph answers it;
+// it reaches no row the caller's own recall could not.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import {
   assertScopeRequestAllowed,
@@ -8,8 +8,9 @@ import {
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 import { sharedStoreOf, type Context } from '../types.js';
 
-/** The ids of the rows nearest `vector` that pass `spec`, nearest first. Refuses a spec for another tenant, a scope the
- * caller may not request, and on a shared store a spec that names no project, as recall refuses them. */
+/** The ids of the rows nearest `vector` that pass `spec`, nearest first. Refuses a spec for
+ * another tenant, a scope the caller may not request, and on a shared store a spec that names no
+ * project, as recall refuses them. */
 export async function nearestMemoryIds(
   ctx: Context,
   vector: readonly number[],

@@ -1,6 +1,7 @@
-// What one process keeps between its store connections: the open steps each store has run, the request scopes still
-// open, idle read handles, and file writes held back. A composition root makes one,
-// runs its work inside it, and disposes it from its own exit hook; outside every runtime each open starts fresh.
+// What one process keeps between its store connections: the open steps each store has run, the
+// request scopes still open, idle read handles, and file writes held back. A composition root makes
+// one, runs its work inside it, and disposes it from its own exit hook; outside every runtime each
+// open starts fresh.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
@@ -19,7 +20,8 @@ interface OpenScope {
   close(): void;
 }
 
-// Per pool key: a server answers several requests at once, and each closing scope hands its handle back.
+// Per pool key: a server answers several requests at once, and each closing scope hands its handle
+// back.
 const IDLE_PER_KEY = 4;
 
 const runtimes = new AsyncLocalStorage<StoreRuntime>();
@@ -72,7 +74,8 @@ export class StoreRuntime {
     this.#open.delete(scope);
   }
 
-  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections' commits. */
+  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections'
+   * commits. */
   checkpointsInBackground(key: string): boolean {
     return this.#background.has(key);
   }
@@ -80,7 +83,8 @@ export class StoreRuntime {
   markBackground(key: string, on: boolean): void {
     if (on) this.#background.add(key);
     else this.#background.delete(key);
-    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close for fresh ones.
+    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close
+    // for fresh ones.
     for (const [poolKey, idle] of this.#idle) {
       if (!poolKey.startsWith(`${key}\0`)) continue;
       for (const db of idle) closeQuietly(db);
@@ -107,7 +111,8 @@ export class StoreRuntime {
     return undefined;
   }
 
-  /** Keeps `db` for the next scope on `poolKey`; false when the pool is full and the caller closes it. */
+  /** Keeps `db` for the next scope on `poolKey`; false when the pool is full and the caller
+   * closes it. */
   giveIdle(poolKey: string, db: DatabaseSyncLike): boolean {
     const idle = this.#idle.get(poolKey) ?? [];
     if (idle.length >= IDLE_PER_KEY) return false;
@@ -122,8 +127,8 @@ export class StoreRuntime {
     this.#idle.clear();
   }
 
-  /** Runs the held writes, then closes the open scopes and the idle handles; each step runs if the one before
-   * throws. */
+  /** Runs the held writes, then closes the open scopes and the idle handles; each step runs if
+   * the one before throws. */
   dispose(): void {
     try {
       this.held.flush();

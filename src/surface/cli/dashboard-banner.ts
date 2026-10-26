@@ -7,14 +7,16 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 const DASHBOARD_URL_FILE = 'dashboard.url';
 
-/** Node ignores a file mode on Windows, so there the file goes under the profile's global hippo folder, which the user
- * profile already makes user-only; elsewhere mode 0600 does the job in the store folder. */
+/** Node ignores a file mode on Windows, so there the file goes under the profile's global hippo
+ * folder, which the user profile already makes user-only; elsewhere mode 0600 does the job in
+ * the store folder. */
 function dashboardUrlFile(hippoRoot: string, platform: NodeJS.Platform): string {
   return path.join(platform === 'win32' ? hippoHomeDir() : hippoRoot, DASHBOARD_URL_FILE);
 }
 
-/** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a terminal, like a captured
- * log, never shows the ticket, since whoever spends it first can read every memory. */
+/** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a
+ * terminal, like a captured log, never shows the ticket, since whoever spends it first can read
+ * every memory. */
 export function printDashboardBanner(
   hippoRoot: string,
   port: number,
@@ -38,7 +40,8 @@ export function printDashboardBanner(
   console.log('Press Ctrl+C to stop.');
 }
 
-/** A port that will not open is the user's to fix, so it gets one plain line and a failure exit code, not a stack. */
+/** A port that will not open is the user's to fix, so it gets one plain line and a failure exit
+ * code, not a stack. */
 export function reportListenFailure(port: number, err: Error): void {
   const inUse = 'code' in err && err.code === 'EADDRINUSE';
   printError(

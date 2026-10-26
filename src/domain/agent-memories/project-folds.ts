@@ -1,5 +1,5 @@
-// Project names folded into others, read from the audit trail: the sync files imports under the surviving name, and
-// `hippo projects` repair agrees.
+// Project names folded into others, read from the audit trail: the sync files imports under the
+// surviving name, and `hippo projects` repair agrees.
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import type { ProjectFold } from '../../base/ports/store/project-tags.js';
 import type { AuditLog } from '../../base/ports/store/audit.js';
@@ -49,7 +49,8 @@ export function foldedInto(edges: readonly ProjectFold[], names: readonly string
   return [...seen].filter((n) => !names.includes(n));
 }
 
-/** Names folded, directly or through others, into one of `names`; the sync moves imports still filed under them. */
+/** Names folded, directly or through others, into one of `names`; the sync moves imports still
+ * filed under them. */
 export async function namesFoldedInto(
   audit: AuditReads,
   tenantId: string,

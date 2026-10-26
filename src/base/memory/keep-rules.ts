@@ -3,8 +3,9 @@ import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
 
-/** An imported agent memory is kept for good: the agent's note file is its record. It needs its tool's tag and a source
- * with that tool's prefix, since merge copies source tags onto rows whose source is 'consolidation'. */
+/** An imported agent memory is kept for good: the agent's note file is its record. It needs its
+ * tool's tag and a source with that tool's prefix, since merge copies source tags onto rows
+ * whose source is 'consolidation'. */
 export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
@@ -28,8 +29,8 @@ export function canAutoDelete(
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
-/** Counts the outcome and scores the entry at `now`; calculateStrength turns the counts into a reward factor on the
- * half-life, so there is no fixed delta here. */
+/** Counts the outcome and scores the entry at `now`; calculateStrength turns the counts into a
+ * reward factor on the half-life, so there is no fixed delta here. */
 export function applyOutcome(
   entry: MemoryEntry,
   good: boolean,
@@ -46,7 +47,8 @@ export function applyOutcome(
   return updated;
 }
 
-/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its churn-stale tag goes. */
+/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its
+ * churn-stale tag goes. */
 export function entryAfterOutcome(
   entry: MemoryEntry,
   good: boolean,

@@ -111,7 +111,8 @@ interface RecallStageFlags {
   layer?: string;
 }
 
-/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
+/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local
+ * store only. */
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   const hops = intFlagInRange(flags, 'graph-hops', { min: 1, max: MAX_HOPS, example: '2' });
   hops.fail?.();
@@ -203,8 +204,8 @@ function parseStageFlags(flags: CliFlags): RecallStageFlags {
   };
 }
 
-/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieveWithCliCore` ranks and
- * records, then the block prints. */
+/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter,
+ * `retrieveWithCliCore` ranks and records, then the block prints. */
 async function printRecall(
   hippoRoot: string,
   tenantId: string,
@@ -223,7 +224,8 @@ async function printRecall(
     { query, boost: { goalTag: parsed.goalTag, sessionId: parsed.sessionId } },
     {
       rank: rankOptions(query, flags, parsed, priced),
-      // The global store is a second source for this surface alone, and never when it is the store being searched.
+      // The global store is a second source for this surface alone, and never when it is the store
+      // being searched.
       sources: globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
@@ -238,7 +240,8 @@ async function printRecall(
   console.log(slot.presented.text);
 }
 
-/** What `hippo recall` reads: its flags, the store setting they pick, the tenant and the store's config. */
+/** What `hippo recall` reads: its flags, the store setting they pick, the tenant and the store's
+ * config. */
 export interface ParsedRecallFlags {
   readonly budget: number;
   readonly limit: number;
@@ -259,8 +262,8 @@ export interface ParsedRecallFlags {
   readonly includeContinuity: boolean;
 }
 
-/** Every flag recall reads, parsed in a fixed order because the first invalid flag decides which error prints; all
- * of them are checked before ranking starts. */
+/** Every flag recall reads, parsed in a fixed order because the first invalid flag decides which
+ * error prints; all of them are checked before ranking starts. */
 function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecallFlags {
   const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags, 'limit');
@@ -268,7 +271,8 @@ function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecallFlags 
   const showWhy = boolFlag(flags, 'why');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
-  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
+  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection
+  // never filters.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const setting = recallStoreSetting(ctx, explicitScope || envActiveScope());
   const config = ctx.config;
@@ -326,7 +330,8 @@ function rankOptions(
   parsed: ParsedRecallFlags,
   priced: PricedEntries,
 ): api.CliCoreRecall['rank'] {
-  // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
+  // Engines spend the budget on the text each result prints as, less the header, so selection and
+  // print agree.
   const entryBudget = Math.max(
     0,
     parsed.budget - printedTokens(recallHeading(parsed.budget, parsed.budget, query)),
@@ -371,7 +376,8 @@ export interface RecallBlockHints extends RecallHints {
 /** Hints for a list that dropped `held` merged copies. */
 type HintsFor = (list: SearchResult[], held: number) => RecallBlockHints;
 
-/** Each pipeline computes its hints over the list it returns, so they follow the list as it shrinks. */
+/** Each pipeline computes its hints over the list it returns, so they follow the list as it
+ * shrinks. */
 function recallHinter(
   ctx: api.Context,
   query: string,
@@ -391,7 +397,8 @@ function recallHinter(
     const { anchoring, availability } = detectRecallHints({ list, pool, anchorRing, queryHash });
     const summary = suppressionSummary(
       {
-        // The total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
+        // The total includes graph-surfaced rows, so total == preRank + byBudget + returned holds
+        // for callers.
         totalCandidates: rank.totalCandidates + rank.graphAdded,
         droppedPreRank: rank.droppedPreRank + held,
         droppedByBudget: Math.max(
@@ -434,7 +441,8 @@ function renderRecallBlock(
         : `No memories found for: ${query}`;
       return [...plan, ...(hasContinuity ? continuity : []), none].join('\n');
     }
-    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
+    // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list,
+    // where a reader sees it.
     const lines = [...continuity];
     if (hints.anchoring)
       lines.push(`[anchored_on: ${hints.anchoring.memoryId}] ${hints.anchoring.summary}`, '');
@@ -450,7 +458,8 @@ function renderRecallBlock(
   });
 }
 
-/** Pays the continuity sections in print order after the header; one that does not fit is dropped. */
+/** Pays the continuity sections in print order after the header; one that does not fit is
+ * dropped. */
 function payContinuity(loaded: api.ContinuityBlock, sectionBudget: number) {
   let { activeSnapshot, sessionHandoff, recentSessionEvents } = loaded;
   const { pays, left } = tokenPurse(sectionBudget);
@@ -502,11 +511,13 @@ export interface FittedRecall extends RenderedRecall {
   readonly planningFallacyWatching: PlanningFallacyWatching | null;
 }
 
-/** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
+/** Pays the continuity sections and the plan hint first, then fits the memories into what is
+ * left. */
 function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const { ctx, query, parsed, ranked, loaded, planning } = options;
   const { budget } = parsed;
-  // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
+  // Sections print ahead of the memories, so they are paid first, after the header; one that does
+  // not fit is dropped.
   const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
   const { continuity, continuityTokens } = payContinuity(loaded, sectionBudget);
   let left = sectionBudget - continuityTokens;
@@ -514,7 +525,8 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const hasContinuity =
     activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
 
-  // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this only prices the line.
+  // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this
+  // only prices the line.
   const planText = planningLine(planning);
   const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
   const showPlan = planText !== null && planTokens <= left;
@@ -535,7 +547,8 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const { results, hints, recallText } = fitRecall(ranked.rank.results, {
     room: left,
     budget,
-    // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
+    // The first --min-results are kept whatever they cost (the documented exception); the rest skip
+    // and continue.
     floor: parsed.minResults ?? 1,
     cost: ranked.printCost,
     render: (rows) => renderRows(rows, hintsFor, view),
@@ -558,8 +571,8 @@ export interface PresentedRecall {
   readonly shown: api.ShownCliCore;
 }
 
-/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and names the rows and hint
- * rows to record. */
+/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and
+ * names the rows and hint rows to record. */
 async function presentRecall(
   ctx: api.Context,
   query: string,
@@ -567,7 +580,8 @@ async function presentRecall(
   ranked: RankedRecall,
   planning: PlanningFallacyOutput,
 ): Promise<PresentedRecall> {
-  // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
+  // Loaded before the zero-result branch, so a no-match query with live continuity still returns a
+  // resume packet.
   const loaded = await loadScopedContinuity(ctx, parsed.setting, parsed.includeContinuity);
   const fit = fitRecallBlock({ ctx, query, parsed, ranked, loaded, planning });
   const { results, hints } = fit;
@@ -583,15 +597,16 @@ async function presentRecall(
       availability: hints.availability,
     },
   );
-  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final
-  // detect made.
+  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps
+  // the hint the final detect made.
   return {
     text,
     shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId },
   };
 }
 
-/** Where the presenter parks what it built; a `let` it assigned would read as never-assigned after the await. */
+/** Where the presenter parks what it built; a `let` it assigned would read as never-assigned
+ * after the await. */
 interface PresentedSlot {
   presented?: PresentedRecall;
 }
@@ -634,7 +649,8 @@ interface RecallJsonTail {
   continuityTokens?: number;
 }
 
-/** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
+/** The JSON keys after the result list: suppression summary, any bias hints, then continuity
+ * when asked for. */
 function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
   const { planningFallacyHint, planningFallacyWatching, continuityTokens } = fit;
   const { anchoring, availability, summary } = fit.hints;

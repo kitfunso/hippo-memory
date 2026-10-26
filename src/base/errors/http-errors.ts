@@ -1,4 +1,5 @@
-// Errors that carry an HTTP status. Transport-free, so the api and the store map them without importing node:http.
+// Errors that carry an HTTP status. Transport-free, so the api and the store map them without
+// importing node:http.
 
 export class HttpError extends Error {
   status: number;
@@ -12,8 +13,9 @@ export class HttpError extends Error {
 }
 
 /**
- * A request, or a store call it waited on, ran past the request's deadline; the reply carries `code` so a client
- * branches without parsing prose.
+ * A request, or a store call it waited on, ran past the request's deadline; the reply carries
+ * `code` so a client branches without parsing prose.
+ *
  */
 export class DeadlineExceededError extends HttpError {
   readonly code = 'deadline_exceeded';
@@ -24,7 +26,8 @@ export class DeadlineExceededError extends HttpError {
 
 export class BodyTooLargeError extends Error {}
 
-/** The body did not arrive in time. Its own class so mapApiError answers 408 and the server drops the socket. */
+/** The body did not arrive in time. Its own class so mapApiError answers 408 and the server
+ * drops the socket. */
 export class BodyTimeoutError extends Error {}
 
 export const INTERNAL_ERROR_MESSAGE = 'internal server error';

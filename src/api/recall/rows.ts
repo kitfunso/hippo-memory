@@ -1,5 +1,5 @@
-// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON
-// rows.
+// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume
+// packet and the JSON rows.
 
 import { confidenceFacets } from '../../base/memory/strength.js';
 import { Layer } from '../../base/memory/entry.js';
@@ -21,15 +21,16 @@ import type { Context, ContextWith } from '../types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
-/** The global store beside this one ('' when the call reaches none), whether this one is it, and the boosting scope. */
+/** The global store beside this one ('' when the call reaches none), whether this one is it, and
+ * the boosting scope. */
 export interface RecallStoreSetting {
   readonly globalRoot: string;
   readonly primaryIsGlobal: boolean;
   readonly activeScope: string | null;
 }
 
-/** Which stores a recall reads under `ctx`, with `activeScope` (an explicit scope merged with the detected one), which
- * only boosts. */
+/** Which stores a recall reads under `ctx`, with `activeScope` (an explicit scope merged with
+ * the detected one), which only boosts. */
 export function recallStoreSetting(ctx: Context, activeScope: string | null): RecallStoreSetting {
   return {
     globalRoot: ctx.reach?.global?.root ?? '',
@@ -40,7 +41,8 @@ export function recallStoreSetting(ctx: Context, activeScope: string | null): Re
 
 export interface RecallRowOrigin {
   readonly globalOn: boolean;
-  /** True when a ranked row came from the global store: this store is it, or the merge tagged the row global. */
+  /** True when a ranked row came from the global store: this store is it, or the merge tagged
+   * the row global. */
   readonly isGlobal: (r: SearchResult) => boolean;
 }
 
@@ -68,7 +70,8 @@ export async function scopeHiddenCount(
   return probe.filter((e) => !passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
 }
 
-/** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
+/** The active snapshot, its session's latest handoff and last five events, each kept only when
+ * its scope passes. */
 export async function loadScopedContinuity(
   ctx: Context,
   setting: RecallStoreSetting,
@@ -98,8 +101,8 @@ export interface RecallRerankerPick {
   readonly defaultTopK: number;
 }
 
-/** The reranker `name` picks from the Context's registry and the top-k it takes by default; an unknown name throws, a
- * blank one picks none. */
+/** The reranker `name` picks from the Context's registry and the top-k it takes by default; an
+ * unknown name throws, a blank one picks none. */
 export function recallRerankerPick(
   ctx: Pick<Context, 'infra'>,
   name: string,
@@ -112,8 +115,8 @@ export function recallRerankerPick(
   };
 }
 
-/** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a
- * recall; a blank name picks none. */
+/** A registry reranker that sends `clef` when a call names no transport of its own, for a script
+ * that reranks outside a recall; a blank name picks none. */
 export function rerankerWithClef(
   ctx: Pick<Context, 'infra'>,
   name: string | null | undefined,
@@ -125,7 +128,8 @@ export function rerankerWithClef(
     fn(query, results, { ...options, clef: options?.clef ?? clef });
 }
 
-/** How a shown list is cut to a token budget: each row by its own cost, then the rendered text as a whole. */
+/** How a shown list is cut to a token budget: each row by its own cost, then the rendered text
+ * as a whole. */
 export interface RecallFit<R> {
   /** Tokens the rows may spend: the budget less what prints ahead of them. */
   readonly room: number;
@@ -139,13 +143,14 @@ export interface RecallFit<R> {
   readonly textOf: (rendered: R) => string;
 }
 
-/** Renders the ranked rows `room` holds, then drops the lowest-ranked one until the text fits `budget` or only `floor`
- * rows remain. */
+/** Renders the ranked rows `room` holds, then drops the lowest-ranked one until the text fits
+ * `budget` or only `floor` rows remain. */
 export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
   const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
   let kept = fitted.length;
   let rendered = fit.render(fitted.slice(0, kept));
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each
+  // drop.
   while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
     kept--;
     rendered = fit.render(fitted.slice(0, kept));

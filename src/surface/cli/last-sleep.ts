@@ -1,4 +1,5 @@
-// `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for the user.
+// `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for
+// the user.
 import * as fs from 'node:fs';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../../infra/compaction-spool.js';
@@ -15,8 +16,9 @@ const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
 
 /**
- * The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the spool holds `.bad`
- * files; null when none did.
+ * The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the
+ * spool holds `.bad` files; null when none did.
+ *
  */
 export function sleepProblems(logText: string, bad: number): string | null {
   const lines = logText.split(/\r?\n/);

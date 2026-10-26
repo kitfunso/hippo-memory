@@ -1,5 +1,5 @@
-// Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can
-// commit in short transactions.
+// Splits sleep's queued writes, deletes and dormant moves into components that must each commit
+// whole, so the flush can commit in short transactions.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type {
   DormantMove,
@@ -15,7 +15,8 @@ export interface PendingOps {
   dormant: readonly DormantMove[];
 }
 
-/** Components that share no id, ordered by each one's first op: refreshes, writes, deletes, then dormant moves. */
+/** Components that share no id, ordered by each one's first op: refreshes, writes, deletes, then
+ * dormant moves. */
 export function groupFlush(
   { refreshes, writes, deletes, dormant }: PendingOps,
   units: readonly (readonly string[])[],
@@ -71,11 +72,12 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
 }
 
 /**
- * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark otherwise lands
- * after the parent is gone.
+ * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark
+ * otherwise lands after the parent is gone.
+ *
  */
-// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can pass holdMs by a
-// family's size; split by child if a family grows large.
+// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can
+// pass holdMs by a family's size; split by child if a family grows large.
 export function familyUnits(
   { refreshes, writes, deletes, dormant }: PendingOps,
   loadedParent: (id: string) => string | undefined,

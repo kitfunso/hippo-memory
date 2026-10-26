@@ -1,5 +1,5 @@
-// The PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code
-// shows this hook's stdout as-is.
+// The PostCompact hook: saves the compaction summary and its memories, then prints one plain line,
+// because Claude Code shows this hook's stdout as-is.
 import { importSessionFolder } from '../../../api/agent-memories.js';
 import { summaryLine } from '../../../base/memory/agent-memory-report.js';
 import { COMPACTION_DB_WAIT_MS } from '../../../base/session/compaction-timing.js';

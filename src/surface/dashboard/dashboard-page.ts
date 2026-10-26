@@ -1,18 +1,20 @@
-// The dashboard's pages: the React app and its assets, the not-built page, and the step off the ticket URL.
+// The dashboard's pages: the React app and its assets, the not-built page, and the step off the
+// ticket URL.
 import { createHash } from 'node:crypto';
 import type * as http from 'node:http';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { assetFor, sendAsset } from './static-file.js';
 
-// One style block, not style attributes, so the policy below can name its hash and allow no other inline style.
+// One style block, not style attributes, so the policy below can name its hash and allow no other
+// inline style.
 const NOT_BUILT_CSS =
   "body{font-family:Georgia,'Palatino Linotype',serif;max-width:640px;margin:60px auto;padding:24px;line-height:1.6;" +
   'background:#f4efe6;color:#3a3228}' +
   'h1{color:#c45c3c}' +
   'pre{background:#faf7f2;padding:16px;border:1px solid #c4b9a8;border-radius:3px;font-family:Consolas,monospace}';
 
-// Memory text is written by other tools and people, so every reply tells the browser to load code only from this server
-// and never to frame, sniff or name the page elsewhere.
+// Memory text is written by other tools and people, so every reply tells the browser to load code
+// only from this server and never to frame, sniff or name the page elsewhere.
 export const SECURITY_HEADERS = {
   'Content-Security-Policy': [
     "default-src 'none'",
@@ -44,7 +46,9 @@ present.</p>
 }
 
 /**
- * Moves the browser off the URL that carries the ticket, so the page's own address holds no spent secret.
+ * Moves the browser off the URL that carries the ticket, so the page's own address holds no spent
+ * secret.
+ *
  */
 function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSearchParams): void {
   const rest = new URLSearchParams(query);
@@ -55,7 +59,8 @@ function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSe
   res.end();
 }
 
-/** Any path outside the JSON API: an asset, else index.html, since the app routes in the browser. */
+/** Any path outside the JSON API: an asset, else index.html, since the app routes in the
+ * browser. */
 export async function pageRoute(r: DashboardRouteRequest, match: RegExpMatchArray): Promise<void> {
   const pathname = match[0];
   if (r.session === 'ticket') return leaveTicketUrl(r.res, pathname, r.query);

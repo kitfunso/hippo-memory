@@ -37,8 +37,9 @@ interface EntryScore {
 }
 
 /**
- * Scores every pool entry; rows with no lexical hit drop out unless vectors are in play, and non-positive scores always
- * do.
+ * Scores every pool entry; rows with no lexical hit drop out unless vectors are in play, and
+ * non-positive scores always do.
+ *
  */
 export function scoreHybridPool(input: HybridScoreInput): SearchResult[] {
   const scored: SearchResult[] = [];

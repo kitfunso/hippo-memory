@@ -12,7 +12,8 @@ import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
 // ── Tool definitions ──
 
-// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
+// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while
+// bounding one call's work.
 const FRESH_TAIL_NOTE = `(default ${DEFAULT_FRESH_TAIL_COUNT}). These are never evicted.`;
 const FRESH_TAIL_DESCRIPTION = `Recent raw rows always kept verbatim ${FRESH_TAIL_NOTE}`;
 const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
@@ -344,7 +345,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
-// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the same bad value.
+// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the
+// same bad value.
 export const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([
   ['hippo_recall', new Set(['scorer_window'])],
 ]);

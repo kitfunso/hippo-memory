@@ -1,7 +1,7 @@
-// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the
-// `objects` store group. Each flow runs once, over the `objects` group of whatever store the caller holds: the CLI's, a
-// served one, or a test's. The tenant, the fields and the list status are checked first, so a bad request fails before
-// a store is asked.
+// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the
+// error text, over the `objects` store group. Each flow runs once, over the `objects` group of
+// whatever store the caller holds: the CLI's, a served one, or a test's. The tenant, the fields and
+// the list status are checked first, so a bad request fails before a store is asked.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
@@ -124,7 +124,8 @@ export function objectMirror(
   );
 }
 
-/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror starts on. */
+/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
+ * starts on. */
 /** Who closes or opens an object, and the instant the row is stamped with. */
 export interface ActedBy {
   readonly actor: string;
@@ -180,7 +181,8 @@ function saved<K extends SavableKind, W>(
   }
 }
 
-/** Creates an object, or the version that replaces the one its options name, with its mirror memory in one write. */
+/** Creates an object, or the version that replaces the one its options name, with its mirror
+ * memory in one write. */
 export async function saveObject<K extends SavableKind, W>(
   objects: Objects,
   d: SavableDescriptor<K, W>,

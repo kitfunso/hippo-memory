@@ -156,7 +156,8 @@ export interface ObjectByKind {
 
 export type ObjectKind = keyof ObjectByKind;
 
-/** What one save stores, per kind the shared save writes; core has checked and resolved every value. */
+/** What one save stores, per kind the shared save writes; core has checked and resolved every
+ * value. */
 export interface ObjectFields {
   decision: { readonly decisionText: string; readonly context: string | undefined };
   process: {
@@ -180,9 +181,10 @@ export interface ObjectFields {
   customer_note: { readonly customer: string; readonly note: string };
 }
 
-/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's `status` is not one the write
- * may start from, another writer moved it between the check and the write (`raced`), or the written row could not be
- * read back (`vanished`). Core turns each into its own error text. */
+/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's
+ * `status` is not one the write may start from, another writer moved it between the check and
+ * the write (`raced`), or the written row could not be read back (`vanished`). Core turns each
+ * into its own error text. */
 export type ObjectRefusal =
   | { readonly refused: 'missing' }
   | { readonly refused: 'status'; readonly status: string }
@@ -196,10 +198,12 @@ export function isObjectRefusal<T extends object>(
   return 'refused' in written;
 }
 
-/** The kinds whose rows are active until a successor supersedes them; an incident is opened and resolved instead. */
+/** The kinds whose rows are active until a successor supersedes them; an incident is opened and
+ * resolved instead. */
 export type SavableKind = keyof ObjectFields;
 
-/** What opening an incident stores; core has checked the text, and the store checks each linked id. */
+/** What opening an incident stores; core has checked the text, and the store checks each linked
+ * id. */
 export interface IncidentFields {
   readonly incidentText: string;
   readonly context: string | undefined;

@@ -1,5 +1,5 @@
-// The store-kit suite an add-on runs against its own HippoStore. It takes the test runner's describe, it and expect, so
-// the package imports no test framework.
+// The store-kit suite an add-on runs against its own HippoStore. It takes the test runner's
+// describe, it and expect, so the package imports no test framework.
 import { NotFoundError } from '../base/errors/api-errors.js';
 import type { HippoStore } from '../base/ports/store-index.js';
 
@@ -54,7 +54,8 @@ async function failureOf<R>(run: () => Promise<R>): Promise<string | undefined> 
   return undefined;
 }
 
-/** Registers the checks every store must pass on its required groups; `open` gives a fresh, empty store for each. */
+/** Registers the checks every store must pass on its required groups; `open` gives a fresh,
+ * empty store for each. */
 export function runStoreConformance(
   runner: ConformanceRunner,
   open: () => Promise<HippoStore> | HippoStore,

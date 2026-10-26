@@ -1,5 +1,6 @@
-// The text rules of a compaction's "Memories for hippo" list: reading it out of a summary, which items become rows, and
-// when one restates a held row. Pure text in, text out: hooks, replay and every store share it.
+// The text rules of a compaction's "Memories for hippo" list: reading it out of a summary, which
+// items become rows, and when one restates a held row. Pure text in, text out: hooks, replay and
+// every store share it.
 export const COMPACTION_ITEM_MAX_CHARS = 500;
 export const COMPACTION_ITEM_ROW_CAP = 10;
 
@@ -15,13 +16,15 @@ export interface CompactionItemRows {
 }
 
 const HEADING = 'memories for hippo';
-// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once per space.
+// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once per
+// space.
 const ITEM_LINE = /^\s*(?:[-*]|\d+[.)])(?:\s+(\S.*)?)?$/;
 const ANALYSIS_OPEN = '<analysis>';
 const ANALYSIS_CLOSE = '</analysis>';
 const HEADING_TRAILER = /[*:\s]/;
 
-/** `text` minus each closed <analysis> block; a search, as a lazy pattern rescans the rest from every unclosed tag. */
+/** `text` minus each closed <analysis> block; a search, as a lazy pattern rescans the rest from
+ * every unclosed tag. */
 function withoutAnalysis(text: string): string {
   let kept = '';
   let from = 0;
@@ -35,8 +38,9 @@ function withoutAnalysis(text: string): string {
 }
 
 /**
- * `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern retries the run from each
- * character.
+ * `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern
+ * retries the run from each character.
+ *
  */
 function withoutHeadingTrailer(text: string): string {
   let end = text.length;
@@ -45,8 +49,9 @@ function withoutHeadingTrailer(text: string): string {
 }
 
 /**
- * The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole text trimmed when
- * there is no <summary> tag.
+ * The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole
+ * text trimmed when there is no <summary> tag.
+ *
  */
 export function compactSummaryBody(compactSummary: string): string {
   const text = withoutAnalysis(compactSummary);
@@ -103,8 +108,8 @@ export function selectItemRows(items: readonly string[]): CompactionItemRows {
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
-/** The items that may become rows, as selectItemRows picks them from those with no secret; `note` hears what was left
- * out. */
+/** The items that may become rows, as selectItemRows picks them from those with no secret;
+ * `note` hears what was left out. */
 export function writableItemRows(
   items: readonly string[],
   note: (message: string) => void,
@@ -133,10 +138,12 @@ const PROTECTED_WORDS = new Set([
   'unless',
   'until',
 ]);
-/** Below this share of the held text's words, an item is a fragment of something longer, not a restatement. */
+/** Below this share of the held text's words, an item is a fragment of something longer, not a
+ * restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
-/** The words restates compares: NFC, lower case, split on anything that is not a letter, mark, digit or `_`. */
+/** The words restates compares: NFC, lower case, split on anything that is not a letter, mark,
+ * digit or `_`. */
 export function itemWords(text: string): string[] {
   return text
     .normalize('NFC')
@@ -145,8 +152,8 @@ export function itemWords(text: string): string[] {
     .filter(Boolean);
 }
 
-/** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing,
- * case and punctuation may differ. */
+/** True when `item` is `held` with words left out, in the same order, keeping every number and
+ * protected word. Spacing, case and punctuation may differ. */
 export function restates(item: readonly string[], held: readonly string[]): boolean {
   if (item.length === 0 || item.length < RESTATE_MIN_SHARE * held.length) return false;
   const kept = new Set(item);

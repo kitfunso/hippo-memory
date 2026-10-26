@@ -1,5 +1,5 @@
-// Project names for every front end: list them, fold one into another, and repair old tags; the store owns each
-// transaction.
+// Project names for every front end: list them, fold one into another, and repair old tags; the
+// store owns each transaction.
 import {
   listProjects,
   mergeProjects,
@@ -48,8 +48,8 @@ export function projectNameList(ctx: ContextWith<'projectTags'>): Promise<Projec
   return listProjects(ctx.store, ctx.tenantId);
 }
 
-/** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on user-global, unknown or equal
- * names. */
+/** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on
+ * user-global, unknown or equal names. */
 export function projectNameMerge(
   ctx: ContextWith<'projectTags'>,
   opts: MergeProjectNamesOptions,
@@ -57,7 +57,8 @@ export function projectNameMerge(
   return mergeProjects(ctx.store.projectTags, scopeOf(ctx), opts);
 }
 
-/** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a dry run only plans. */
+/** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a
+ * dry run only plans. */
 export async function projectNameRepair(
   ctx: RepairContext,
   opts: { dryRun: boolean },

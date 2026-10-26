@@ -1,5 +1,5 @@
-// Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for
-// containers its store now syncs.
+// Design 2's handover: rows the store-less hook path left in the global store, under this project's
+// origin, for containers its store now syncs.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
@@ -26,8 +26,8 @@ export async function handOver(
   let store: ImportStore | undefined;
   try {
     store = opts.stores.open(globalRoot, { busyWaitMs: opts.busyWaitMs });
-    // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
-    // Names folded into this project's in the global store were its rows too.
+    // A folder with no git and no marker wrote as '' before its store existed, and as its own name
+    // after. Names folded into this project's in the global store were its rows too.
     const names = projectNames(opts.machine.projectIdentity(projectRoot));
     const folded = await namesFoldedInto(store.auditLog, opts.tenantId, names);
     const origins = [...new Set([...names, ...folded, ''])];
@@ -56,7 +56,8 @@ interface HandOverContainerOptions {
   readonly report: ImportReport;
 }
 
-/** The container's tagged global rows set aside in one transaction, planned once more if they changed meanwhile. */
+/** The container's tagged global rows set aside in one transaction, planned once more if they
+ * changed meanwhile. */
 async function handOverContainer(
   store: ImportStore,
   work: ContainerWork,
@@ -88,7 +89,8 @@ async function handOverPlan(
   tenantId: string,
   prefixes: readonly string[],
 ): Promise<ContainerApply> {
-  // A note the local pass could not read has no local row yet, so its global copy stays until it does.
+  // A note the local pass could not read has no local row yet, so its global copy stays until it
+  // does.
   const unread = new Set(work.container.skipped);
   const tag = work.tool.tag;
   const rows: MemoryEntry[] = [];

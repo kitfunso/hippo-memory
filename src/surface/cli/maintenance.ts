@@ -147,13 +147,14 @@ export async function handleEmbed(
   { hippoRoot, tenantId, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
-  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit, so it heals
-  // pre-1.27.0 global stores from a directory with no local .hippo.
+  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local
+  // requireInit, so it heals pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 
-  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
-  // earlier embed); the provider-availability gate is deferred to the embed path.
+  // --status and --reset-physics only read cached state, so they must work with no provider key
+  // (e.g. removed after an earlier embed); the provider-availability gate is deferred to the embed
+  // path.
   if (boolFlag(flags, 'reset-physics')) {
     await resetPhysics(ctx);
     return;

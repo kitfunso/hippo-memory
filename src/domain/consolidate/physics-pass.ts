@@ -3,8 +3,8 @@ import { simulate, type ForceContext } from '../../base/rank/physics.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { recordPhaseFailure, type SleepRun } from './run.js';
 
-// Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their stored state until
-// they are recalled.
+// Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their
+// stored state until they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
 export async function physicsPass(
@@ -65,8 +65,8 @@ async function recallTimes(
 }
 
 /**
- * Every stored particle id in load order up to the cap; past it, the most recently recalled survivors (memory id breaks
- * ties), then particles with no survivor. */
+ * Every stored particle id in load order up to the cap; past it, the most recently recalled
+ * survivors (memory id breaks ties), then particles with no survivor. */
 export function particlesToSimulate(
   stored: readonly string[],
   entries: ReadonlyMap<string, Pick<MemoryEntry, 'lastRetrieved'>>,
@@ -80,12 +80,13 @@ export function particlesToSimulate(
     return a < b ? -1 : a > b ? 1 : 0;
   });
   const kept = new Set(ranked.slice(0, max));
-  // Load order, not rank order: the force sums run in this order, so a capped run matches an uncapped one over the same
-  // set.
+  // Load order, not rank order: the force sums run in this order, so a capped run matches an
+  // uncapped one over the same set.
   return stored.filter((id) => kept.has(id));
 }
 
-/** The forces among `entries`, the survivors behind the simulated particles: the simulation looks up no other id. */
+/** The forces among `entries`, the survivors behind the simulated particles: the simulation
+ * looks up no other id. */
 function survivorForces(run: SleepRun, entries: ReadonlyMap<string, MemoryEntry>): ForceContext {
   const conflictPairs = new Map<string, Set<string>>();
   const halfLives = new Map<string, number>();

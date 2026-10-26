@@ -1,5 +1,6 @@
-// The rows a kind of record serves under its collection path, built from one spec so the route table names each kind
-// once: create, list, the kind's literal sub-paths, its POST actions on one id, then the id read.
+// The rows a kind of record serves under its collection path, built from one spec so the route
+// table names each kind once: create, list, the kind's literal sub-paths, its POST actions on one
+// id, then the id read.
 import type { AuthedRouteRequest, Route, RouteParams } from '../types.js';
 
 export type KindHandler = (rr: AuthedRouteRequest) => Promise<void>;
@@ -7,7 +8,8 @@ export type KindHandler = (rr: AuthedRouteRequest) => Promise<void>;
 /** A handler for one row of the kind, given the id its path carries. */
 export type IdHandler = (rr: AuthedRouteRequest, id: number) => Promise<void>;
 
-/** A literal sub-path such as `asof`; listed before the id rows, though `:id(int)` would never take a word anyway. */
+/** A literal sub-path such as `asof`; listed before the id rows, though `:id(int)` would never
+ * take a word anyway. */
 export interface NamedRoute {
   readonly method: 'GET' | 'POST';
   readonly sub: string;

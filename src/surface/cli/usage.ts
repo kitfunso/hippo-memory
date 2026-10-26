@@ -1,4 +1,5 @@
-// The help listing's header and examples, and the longer usage of a few sub-commands; each verb's help is in its row.
+// The help listing's header and examples, and the longer usage of a few sub-commands; each verb's
+// help is in its row.
 
 export function printAuditPruneUsage(): void {
   console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');

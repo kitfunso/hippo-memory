@@ -61,7 +61,8 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
   states: VALID_BRIEF_STATES,
   closableFrom: ['active'],
   draft(opts, now) {
-    // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be one line.
+    // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be
+    // one line.
     const repo = requireLine(opts.repo, MAX_REPO_LEN, 'repo');
     const summary = requireText(opts.summary, MAX_BRIEF_SUMMARY_LEN, 'summary');
     capText(opts.changeSummary, MAX_SHORT_FIELD_LEN, 'changeSummary');
@@ -108,22 +109,24 @@ function receiptHeadline(content: string): string {
   return truncateWithEllipsis(trimmed, MAX_RECEIPT_HEADLINE_LEN);
 }
 
-/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches `path:hippo`. */
+/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches
+ * `path:hippo`. */
 function receiptTag(normalizedRepo: string): string {
   return `path:${normalizedRepo.toLowerCase()}`;
 }
 
-// `id DESC` is a lexical tiebreak on a random-ish id, so same-`created` order is stable but arbitrary; `created DESC`
-// is the recency order. Receipt lines go newest-first only while they fit MAX_BRIEF_SUMMARY_LEN (reserving slack for
-// header and omission footer), else the store rejects the body.
+// `id DESC` is a lexical tiebreak on a random-ish id, so same-`created` order is stable but
+// arbitrary; `created DESC` is the recency order. Receipt lines go newest-first only while they fit
+// MAX_BRIEF_SUMMARY_LEN (reserving slack for header and omission footer), else the store rejects
+// the body.
 function fitReceiptLines(receipts: readonly BriefReceipt[]): string[] {
   const buildReceiptLine = (r: BriefReceipt): string =>
     `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
 
   const receiptLines: string[] = [];
   if (receipts.length > 0) {
-    // Header + "## Recent receipts" + a worst-case omission footer cost; keep slack so the joined markdown stays <=
-    // MAX_BRIEF_SUMMARY_LEN even after the footer.
+    // Header + "## Recent receipts" + a worst-case omission footer cost; keep slack so the joined
+    // markdown stays <= MAX_BRIEF_SUMMARY_LEN even after the footer.
     const SLACK = 400;
     let bodyBudget = MAX_BRIEF_SUMMARY_LEN - SLACK;
     for (const r of receipts) {
@@ -162,7 +165,8 @@ function renderBriefDigest(
       lines.push(`_... ${omitted} more receipt(s) omitted (summary cap)._`);
     }
   }
-  // Belt-and-suspenders: hard-clamp so the store's NOT-NULL/<=cap contract holds even for a single oversized line.
+  // Belt-and-suspenders: hard-clamp so the store's NOT-NULL/<=cap contract holds even for a single
+  // oversized line.
   let markdown = lines.join('\n');
   if (markdown.length > MAX_BRIEF_SUMMARY_LEN) {
     markdown = markdown.slice(0, MAX_BRIEF_SUMMARY_LEN);
@@ -204,7 +208,8 @@ function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]):
   };
 }
 
-/** The version a refresh saves: a successor of the repo's active brief when it has one, else a first version. */
+/** The version a refresh saves: a successor of the repo's active brief when it has one, else a
+ * first version. */
 function refreshWrite(
   normalizedRepo: string,
   digest: BriefDigest,
@@ -216,14 +221,14 @@ function refreshWrite(
     changeSummary: active ? `auto-refresh from ${digest.receiptCount} receipt(s)` : undefined,
     supersedesBriefId: active ? active.id : undefined,
     refreshReceiptCount: digest.receiptCount,
-    // The path tag lets path-aware recall boost the brief; it cannot become its own receipt, because receipts leave out
-    // source project_brief.
+    // The path tag lets path-aware recall boost the brief; it cannot become its own receipt,
+    // because receipts leave out source project_brief.
     extraTags: [receiptTag(normalizedRepo)],
   };
 }
 
-/** Saves a new version of the repo's brief from its receipts. The receipts are read before the save's transaction, so a
- * receipt written in between shows in the next refresh. */
+/** Saves a new version of the repo's brief from its receipts. The receipts are read before the
+ * save's transaction, so a receipt written in between shows in the next refresh. */
 export async function refreshedBrief(
   objects: Objects,
   site: ObjectSaveSite,

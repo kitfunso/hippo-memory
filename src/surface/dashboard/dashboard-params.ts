@@ -1,4 +1,5 @@
-// One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an unchecked id.
+// One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an
+// unchecked id.
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { LAYERS, type Chip } from '../../api/dashboard/live.js';
@@ -73,7 +74,8 @@ function rangeParam(params: URLSearchParams, lo: string, hi: string): [number, n
   return [min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY];
 }
 
-/** Search text for the memories route: shorter than the minimum means no filter; longer than the maximum is a 400. */
+/** Search text for the memories route: shorter than the minimum means no filter; longer than the
+ * maximum is a 400. */
 function optionalSearch(params: URLSearchParams): string | null {
   const raw = params.get('q');
   if (raw === null) return null;
@@ -100,7 +102,8 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   };
 }
 
-/** Search text for `GET /api/search`: 2 to 200 characters after trim, returned as typed (trimmed). */
+/** Search text for `GET /api/search`: 2 to 200 characters after trim, returned as typed
+ * (trimmed). */
 export function parseSearchText(params: URLSearchParams): string {
   const q = (params.get('q') ?? '').trim();
   if (q.length < SEARCH_MIN || q.length > SEARCH_MAX) {

@@ -14,7 +14,8 @@ import { remember } from './remember.js';
 
 export { parseSteps } from '../../domain/consolidate/trace.js';
 
-/** A finished task as its caller recorded it, with the session it ran in and where the record came from. */
+/** A finished task as its caller recorded it, with the session it ran in and where the record
+ * came from. */
 export interface TraceInput extends TraceRecord {
   readonly sessionId: string | null;
   readonly tags: string[];
@@ -37,8 +38,8 @@ export async function traceRecord(ctx: Context, input: TraceInput): Promise<{ id
   return { id };
 }
 
-/** What `hippo trace <id>` shows of one row now: strength, half-life with and without its reward factor, ages, the
- * confidence reading and a projection of strength to later days. */
+/** What `hippo trace <id>` shows of one row now: strength, half-life with and without its reward
+ * factor, ages, the confidence reading and a projection of strength to later days. */
 export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'config'>) {
   const now = ctx.infra.clock();
   const model = strengthOf(ctx);

@@ -1,5 +1,6 @@
-// Reads and writes hippo's GitHub Copilot files: the hooks file, the MCP configs and the instructions under the Copilot
-// home and each VS Code User folder. What goes in them is rules/copilot.ts.
+// Reads and writes hippo's GitHub Copilot files: the hooks file, the MCP configs and the
+// instructions under the Copilot home and each VS Code User folder. What goes in them is
+// rules/copilot.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -67,16 +68,16 @@ export function copilotPaths(): CopilotPaths {
   };
 }
 
-/** Null for a file with comments, one that is not JSON, or one whose shape a merge would overwrite; a missing file
- * reads as empty. */
+/** Null for a file with comments, one that is not JSON, or one whose shape a merge would
+ * overwrite; a missing file reads as empty. */
 function readMcpConfig(file: string, host: McpHost): McpConfig | null {
   let config: JsonValue = {};
   if (fs.existsSync(file)) {
     try {
       config = readJsonFile(file);
     } catch (err) {
-      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown with its own
-      // message.
+      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown
+      // with its own message.
       if (!(err instanceof SyntaxError)) throw err;
       // An empty file is a new one with no servers yet, not one with comments.
       if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
@@ -106,8 +107,8 @@ function hasErrnoCode(err: Error): err is NodeJS.ErrnoException {
   return 'code' in err && typeof err.code === 'string';
 }
 
-/** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the instructions still
- * install. */
+/** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the
+ * instructions still install. */
 function mcpStep<S extends string>(step: () => S): S | McpFailure {
   try {
     return step();
@@ -148,8 +149,8 @@ function removeVscodeInstructions(file: string): VscodeInstructionsRemoveStatus 
   return 'removed';
 }
 
-/** The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS Code-only machine
- * still finds no CLI. */
+/** The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS
+ * Code-only machine still finds no CLI. */
 export function isCopilotCliPresent(home: string = copilotHomeDir(processHomes())): boolean {
   if (fs.statSync(home, { throwIfNoEntry: false })?.isDirectory() !== true) return false;
   const entries = fs.readdirSync(home);

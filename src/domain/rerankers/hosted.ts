@@ -1,4 +1,5 @@
-// The hosted rerankers' names and pool size: recall sizes its pool from these, and their clients live in src/infra.
+// The hosted rerankers' names and pool size: recall sizes its pool from these, and their clients
+// live in src/infra.
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';

@@ -1,4 +1,5 @@
-// hippo.db's CompactionHooks: each call opens with the hook's wait, and every line a step logs comes back as a note.
+// hippo.db's CompactionHooks: each call opens with the hook's wait, and every line a step logs
+// comes back as a note.
 import {
   COMPACTION_DB_WAIT_MS,
   REPLAY_AFTER_MS,
@@ -49,7 +50,8 @@ import type {
 } from '../../base/ports/store/capture.js';
 import { handleNow } from './handle-clock.js';
 
-// A note leaves the store only as the port's answer, so a caught error also goes to the shared logger with its stack.
+// A note leaves the store only as the port's answer, so a caught error also goes to the shared
+// logger with its stack.
 const noteTo =
   (notes: string[]): Log =>
   (message, err) => {
@@ -128,8 +130,8 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   }
 }
 
-/** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is
- * independent. Never throws. */
+/** The PostCompact store work, on a handle of its own: record the summary, then write its items.
+ * Each step is independent. Never throws. */
 function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   const notes: string[] = [];
@@ -148,8 +150,8 @@ function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutco
   return { result, spoolReason: null, notes };
 }
 
-/** A row that will not map is skipped and a record that throws is noted, so the rest still run until the deadline; a
- * held lock stops the run, as every later row would wait on it too. */
+/** A row that will not map is skipped and a record that throws is noted, so the rest still run
+ * until the deadline; a held lock stops the run, as every later row would wait on it too. */
 function saveStalled(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -216,7 +218,8 @@ function saveRecordItems(
   }
 }
 
-/** Old enough that their PostCompact will not come, young enough that the transcript may still reach back to them. */
+/** Old enough that their PostCompact will not come, young enough that the transcript may still
+ * reach back to them. */
 function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
   const now = handleNow(db).getTime();
   const rows = openTranscriptRows(
@@ -249,7 +252,8 @@ function fillRecord(
 ): boolean {
   const { tenantId, record, text, log } = fill;
   if (text === null) {
-    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays empty.
+    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays
+    // empty.
     if (closeStartedWithoutSummary(db, tenantId, record.id) > 0) {
       log(`${record.id} closed as no-summary: its transcript holds no summary for it`);
     }

@@ -1,7 +1,8 @@
-// Four stopword sets, one per matcher. Each is tuned to its own matcher, so they differ on purpose and are not
-// merged.
+// Four stopword sets, one per matcher. Each is tuned to its own matcher, so they differ on purpose
+// and are not merged.
 
-/** Articles, auxiliaries and pronouns. Unlike the conflict set it also drops "not" and "no"; it has no wh-words. */
+/** Articles, auxiliaries and pronouns. Unlike the conflict set it also drops "not" and "no"; it
+ * has no wh-words. */
 export const MEMORY_QUALITY_STOPWORDS: ReadonlySet<string> = new Set([
   'the',
   'a',
@@ -74,8 +75,9 @@ export const MEMORY_QUALITY_STOPWORDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The widest set: drops wh-words, prepositions and quantifiers so overlap comes from domain tokens. It keeps "not" and
- * "no", which polarity detection needs.
+ * The widest set: drops wh-words, prepositions and quantifiers so overlap comes from domain tokens.
+ * It keeps "not" and "no", which polarity detection needs.
+ *
  */
 export const CONFLICT_STOPWORDS: ReadonlySet<string> = new Set([
   'the',
@@ -180,7 +182,8 @@ export const CONFLICT_STOPWORDS: ReadonlySet<string> = new Set([
   'two',
 ]);
 
-/** Adds "not" and the generic verbs "use/used/using", which every invalidation sentence holds; it has no wh-words. */
+/** Adds "not" and the generic verbs "use/used/using", which every invalidation sentence holds;
+ * it has no wh-words. */
 export const INVALIDATION_STOPWORDS: ReadonlySet<string> = new Set([
   'the',
   'an',
@@ -224,7 +227,8 @@ export const INVALIDATION_STOPWORDS: ReadonlySet<string> = new Set([
   'using',
 ]);
 
-/** Pronouns and modals plus the verbs and duration units the forward-claim regexes already gate on. */
+/** Pronouns and modals plus the verbs and duration units the forward-claim regexes already gate
+ * on. */
 export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'the',
   'a',
@@ -274,8 +278,8 @@ export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'so',
   'than',
   'then',
-  // Verbs inside FORWARD_CLAIM_PATTERNS gate the regex but are no signal for class resolution; listing them keeps them
-  // out of the classQueryTokens overlap.
+  // Verbs inside FORWARD_CLAIM_PATTERNS gate the regex but are no signal for class resolution;
+  // listing them keeps them out of the classQueryTokens overlap.
   'take',
   'taken',
   'takes',
@@ -290,8 +294,8 @@ export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'next',
   'about',
   'around',
-  // Every forward-claim phrase contains a duration unit by design; letting it through would let a class tag containing
-  // 'days' win or tie on the unit.
+  // Every forward-claim phrase contains a duration unit by design; letting it through would let a
+  // class tag containing 'days' win or tie on the unit.
   'day',
   'days',
   'week',

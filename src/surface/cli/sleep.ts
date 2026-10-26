@@ -40,8 +40,8 @@ export async function handleSleep({
 
 /** Sleeps one store; with `--log-file` it also tees its output to that file. */
 export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can
-  // re-display the output.
+  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
+  // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
@@ -103,8 +103,8 @@ async function learnBeforeSleep(
   tenantId: string,
   flags: CliFlags,
 ): Promise<void> {
-  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
-  // The CLI runs it here because api.sleep covers Phase 2-6 only.
+  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses
+  // process.cwd() / os.homedir()). The CLI runs it here because api.sleep covers Phase 2-6 only.
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   if (learn && boolFlag(flags, 'dry-run')) {
     console.log(
@@ -143,7 +143,8 @@ async function runSleepCommand(
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
 
-  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
+  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run
+  // writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
     const finished = await replayCompactions(

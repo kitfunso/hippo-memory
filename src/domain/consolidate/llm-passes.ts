@@ -25,7 +25,8 @@ interface SleepLlm {
   readonly llmOpts: { readonly llm: Llm; readonly model?: string };
 }
 
-/** Null when no phase may call a model: none was handed in, or extraction.enabled=false opts every LLM phase out. */
+/** Null when no phase may call a model: none was handed in, or extraction.enabled=false opts
+ * every LLM phase out. */
 function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   const { config, result } = run;
   if (llm === undefined || config.extraction.enabled === false) return null;
@@ -42,7 +43,8 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
-/** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
+/** Counts the survivors extraction could read and returns the first `limit` of them, holding no
+ * others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows())
@@ -73,7 +75,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
-    // The DAG passes call the same API with the same key and model, so they would fail the same way.
+    // The DAG passes call the same API with the same key and model, so they would fail the same
+    // way.
     if (stopped) return;
   }
 
@@ -91,8 +94,8 @@ interface Extraction {
   threw?: unknown;
 }
 
-/** Runs `call` for every index with at most `width` in flight, launching nothing once `canLaunch` says no; a result
- * sits at its input index, undefined where nothing launched. */
+/** Runs `call` for every index with at most `width` in flight, launching nothing once
+ * `canLaunch` says no; a result sits at its input index, undefined where nothing launched. */
 async function pooled<T>(
   count: number,
   width: number,
@@ -121,8 +124,10 @@ function keepFacts(
 }
 
 /**
- * Extracts facts from each candidate, up to four model calls at once; every write, count and report then runs in input
- * order. True when it stopped on a failure every later call would repeat (bad key, no credit, unknown model).
+ * Extracts facts from each candidate, up to four model calls at once; every write, count and report
+ * then runs in input order. True when it stopped on a failure every later call would repeat (bad
+ * key, no credit, unknown model).
+ *
  */
 async function extractionPass(
   run: SleepRun,
@@ -180,7 +185,8 @@ async function extractionPass(
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
 async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
-  // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as it always did.
+  // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as
+  // it always did.
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
   for await (const e of run.survivors.rows()) {
@@ -220,9 +226,9 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
   }
 }
 
-// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same model/dryRun gate as
-// buildDag.
-// Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard ceiling 1000), prevents runaway LLM cost.
+// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same
+// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard
+// ceiling 1000), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
@@ -261,7 +267,8 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
-/** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a statement need not. */
+/** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a
+ * statement need not. */
 async function allUnprofiledTopicSummaries(
   store: SleepRun['store']['consolidation'],
 ): Promise<MemoryEntry[]> {
@@ -274,9 +281,9 @@ async function allUnprofiledTopicSummaries(
   }
 }
 
-// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped
-// (re-clusters existing L2s every sleep).
-// Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
+// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7
+// was skipped (re-clusters existing L2s every sleep). Reads the stored L2s, not `survivors`: phase
+// 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);

@@ -8,8 +8,8 @@ export function isFile(p: string): boolean {
   return fs.statSync(p, { throwIfNoEntry: false })?.isFile() === true;
 }
 
-/** Dereferences symlinks and junctions and normalizes case on Windows; falls back to path.resolve when the path does
- * not exist yet. */
+/** Dereferences symlinks and junctions and normalizes case on Windows; falls back to
+ * path.resolve when the path does not exist yet. */
 export function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);

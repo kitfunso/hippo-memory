@@ -1,5 +1,5 @@
-// The required groups port.ts names among StoreGroups beyond its own: sessions, cards, goals, conflicts,
-// dormant memories, reports, rejections, the failure log and compactions.
+// The required groups port.ts names among StoreGroups beyond its own: sessions, cards, goals,
+// conflicts, dormant memories, reports, rejections, the failure log and compactions.
 import type { FailureLog, Rejections } from './store/rejections.js';
 import type { Compactions } from './store/capture.js';
 import type { Sessions } from './store/sessions.js';

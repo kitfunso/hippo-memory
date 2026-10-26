@@ -1,4 +1,5 @@
-// The event log by ConnectorEvent, whichever connector's table holds the key, and the archive a deletion event logs.
+// The event log by ConnectorEvent, whichever connector's table holds the key, and the archive a
+// deletion event logs.
 
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -27,7 +28,8 @@ function eventSeen(db: DatabaseSyncLike, event: ConnectorEvent): boolean {
     : githubEventSeen(db, event.idempotencyKey);
 }
 
-/** False when the key was logged before: the insert ignores a taken key, so the first writer's row stays. */
+/** False when the key was logged before: the insert ignores a taken key, so the first writer's
+ * row stays. */
 export function logEvent(
   db: DatabaseSyncLike,
   event: ConnectorEvent,
@@ -60,8 +62,8 @@ export function eventRecord(
   return { seen: false, memoryId: row?.id ?? null };
 }
 
-/** With `deleted`, every raw row of the tenant's artifact is archived and the log row names the first; a failed archive
- * rolls back the batch and the log row. */
+/** With `deleted`, every raw row of the tenant's artifact is archived and the log row names the
+ * first; a failed archive rolls back the batch and the log row. */
 export function markEventSeen(
   db: DatabaseSyncLike,
   event: ConnectorEvent,

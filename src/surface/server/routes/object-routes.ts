@@ -1,5 +1,6 @@
-// The rows of a typed-object kind, from one config: create, list, get and close for every kind, plus supersede for a
-// kind that versions. Each handler parses and replies; the work is one api call.
+// The rows of a typed-object kind, from one config: create, list, get and close for every kind,
+// plus supersede for a kind that versions. Each handler parses and replies; the work is one api
+// call.
 import type { Context } from '../../../api/index.js';
 import {
   objectClose,
@@ -43,8 +44,8 @@ export interface ObjectRouteConfig<K extends ObjectKind> {
 }
 
 export interface VersionedRouteConfig<K extends SavableKind> extends ObjectRouteConfig<K> {
-  /** Checks the body, then returns the successor's write: two steps, so a bad body answers 400 before a missing row
-   * answers 404. */
+  /** Checks the body, then returns the successor's write: two steps, so a bad body answers 400
+   * before a missing row answers 404. */
   readonly revise: (body: Body) => (existing: ObjectByKind[K], id: number) => ObjectWrites[K];
 }
 
@@ -137,7 +138,8 @@ export function objectRoutes<K extends ObjectKind>(cfg: ObjectRouteConfig<K>): R
   });
 }
 
-/** Every row of a kind that versions: its supersede reads the active row, then saves the successor `revise` builds. */
+/** Every row of a kind that versions: its supersede reads the active row, then saves the
+ * successor `revise` builds. */
 export function versionedRoutes<K extends SavableKind>(cfg: VersionedRouteConfig<K>): Route[] {
   const supersede: IdHandler = (rr, id) => supersedeRoute(cfg, rr, id);
   return objectRoutes({ ...cfg, actions: { supersede, ...cfg.actions } });

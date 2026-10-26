@@ -15,8 +15,9 @@ export interface OwnerValidation {
   message: string;
 }
 
-/** Pure validator returning `{ ok, value, message }`; never prints or exits, so it is unit-testable.
- * A non-matching owner is accepted with a warning unless strict, where ok=false with an error message. */
+/** Pure validator returning `{ ok, value, message }`; never prints or exits, so it is
+ * unit-testable. A non-matching owner is accepted with a warning unless strict, where ok=false
+ * with an error message. */
 export function validateOwner(
   owner: string | null | undefined,
   opts: { strict?: boolean } = {},

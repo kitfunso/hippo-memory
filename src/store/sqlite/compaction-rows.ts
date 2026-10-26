@@ -1,4 +1,5 @@
-// The `compactions` table: one row per Claude Code compaction, and the reads project merge makes over it.
+// The `compactions` table: one row per Claude Code compaction, and the reads project merge makes
+// over it.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -76,7 +77,8 @@ export function compactionRowsByRequest(
   return listRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }
 
-/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO strings. */
+/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO
+ * strings. */
 export function latestStartedRows(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -109,7 +111,8 @@ export function stalledSummarizedRows(
   );
 }
 
-/** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`, oldest first. */
+/** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`,
+ * oldest first. */
 export function openTranscriptRows(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -290,7 +293,8 @@ export function restampCompactionOrigin(
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type CompactionOriginRow = CompactionOrigin;
 
-/** Each distinct project name, transcript and working folder of the tenant's compactions, in one read. */
+/** Each distinct project name, transcript and working folder of the tenant's compactions, in one
+ * read. */
 export function compactionOrigins(db: DatabaseSyncLike, tenantId: string): CompactionOrigin[] {
   return cachedStatement(
     db,

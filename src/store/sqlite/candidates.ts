@@ -41,8 +41,8 @@ import type { SourceTally } from '../../base/ports/store/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../base/ports/store/reports.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 
-// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order given so the
-// average rounds the same on every run.
+// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order
+// given so the average rounds the same on every run.
 
 /** What one row's status reads: its strength and confidence inputs and its layer. */
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
@@ -82,7 +82,8 @@ function tallyStatus(
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 const AMBIENT_PINNED = 'pinned = 1 AND superseded_by IS NULL';
-/** A stamp whose text does not sort by time; idx_memories_created_drift (migration v51) holds the live ones. */
+/** A stamp whose text does not sort by time; idx_memories_created_drift (migration v51) holds
+ * the live ones. */
 const CREATED_DRIFTED = "(length(created) <> 24 OR created NOT LIKE '%Z')";
 
 type RunSql = (where: string, params: Array<string | number>) => MemoryEntry[];
@@ -98,8 +99,8 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
-// `id DESC` mirrors contextGet's comparator, not listFreshRawMemories' cross-ingest-stable order: that would change
-// what the hook injects.
+// `id DESC` mirrors contextGet's comparator, not listFreshRawMemories' cross-ingest-stable order:
+// that would change what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
 
@@ -121,7 +122,8 @@ const newestFirst = (a: Position, b: Position): number =>
 const afterParams = (after: Position | undefined): string[] =>
   after ? [after.at, after.at, after.id] : [];
 
-/** Reads in `created` text order, which is time order while every live row of the tenant holds toISOString text. */
+/** Reads in `created` text order, which is time order while every live row of the tenant holds
+ * toISOString text. */
 function readByText(run: RunSql): ReadNewest {
   return (own, limit, after) =>
     run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
@@ -131,7 +133,8 @@ function readByText(run: RunSql): ReadNewest {
     ]);
 }
 
-/** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is no tenant scan. */
+/** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is
+ * no tenant scan. */
 function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
   return run(`${own.sql} AND ${CREATED_DRIFTED}`, [...own.params])
     .map((entry) => ({ entry, at: positionOf(entry) }))
@@ -139,8 +142,8 @@ function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
     .map(({ entry }) => entry);
 }
 
-/** The text-ordered rows merged with the drifted ones by instant: the rows and order a store whose stamps were all
- * written in toISOString form would read. */
+/** The text-ordered rows merged with the drifted ones by instant: the rows and order a store
+ * whose stamps were all written in toISOString form would read. */
 function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNewest {
   return (own, limit, after) => {
     let odd = drifted.get(own.sql);
@@ -158,8 +161,9 @@ function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNe
   };
 }
 
-// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
-// ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
+// The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still
+// sees, and the delivery ledger still counts, the other-project rows it refuses; past it, the reads
+// narrow to the caller's origins.
 function listRecentRows(
   read: ReadNewest,
   tenantId: string,
@@ -188,8 +192,8 @@ function listRecentRows(
   return [...kept, ...keptPastWindow(read, own, rows, needed - kept.length, keep)];
 }
 
-// A window of refused rows can hide older ones, so read on in keyset pages, each four times the last, until enough are
-// kept.
+// A window of refused rows can hide older ones, so read on in keyset pages, each four times the
+// last, until enough are kept.
 function keptPastWindow(
   read: ReadNewest,
   own: SqlFragment,
@@ -240,9 +244,9 @@ function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<Memo
   });
 }
 
-// The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
-// rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
-// recent rows past the first window.
+// The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each
+// refusal in the order the rows were read. One connection; `recall` piggybacks the prompt-recall
+// FTS query on it too. `origins` narrows the recent rows past the first window.
 export function listAmbientCandidates(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -250,8 +254,8 @@ export function listAmbientCandidates(
 ): AmbientCandidates {
   const refused: AmbientRefusal[] = [];
   const admit = noting(judge, refused);
-  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one, and include_recent is any non-negative
-  // finite number at the HTTP edge.
+  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one, and include_recent
+  // is any non-negative finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
   const run: RunSql = (where, params) =>
     (
@@ -274,8 +278,8 @@ export function listAmbientCandidates(
     for (const e of listRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
-  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
-  // downstream.
+  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input
+  // order is load-bearing downstream.
   const entries = [...byId.values()].sort(oldestFirst);
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
@@ -290,8 +294,8 @@ export function listAmbientCandidates(
   return { entries, recall: recallEntries, refused };
 }
 
-// calculateStrength's decay exponent with its reward factor under `model`: the strongest rows, without scoring each
-// one in JS.
+// calculateStrength's decay exponent with its reward factor under `model`: the strongest rows,
+// without scoring each one in JS.
 const decayExponentSql = (
   model: StrengthModel,
 ): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) -
@@ -301,7 +305,8 @@ const decayRankSql = (model: StrengthModel): string => `pinned DESC,
   ${decayExponentSql(model)} ASC NULLS LAST,
   id ASC`;
 
-/** The shared WHERE of a context read: live tenant rows, then `extra` predicates, then the scope and origin rules. */
+/** The shared WHERE of a context read: live tenant rows, then `extra` predicates, then the scope
+ * and origin rules. */
 export function contextRowsWhere(
   tenantId: string,
   filter: Pick<ContextCandidateFilter, 'exactScope' | 'ownScope' | 'project'>,
@@ -327,12 +332,14 @@ export function contextRowsWhere(
 const RANK_COLUMNS =
   'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
 
-// The `cap` best of the pinned rows and the unpinned rows the v60 key puts within DECAY_KEY_HALF_LIVES; nothing unless
-// every unpinned winner is within it too, since then each row left out has decayed further and the rank is the scan's.
+// The `cap` best of the pinned rows and the unpinned rows the v60 key puts within
+// DECAY_KEY_HALF_LIVES; nothing unless every unpinned winner is within it too, since then each row
+// left out has decayed further and the rank is the scan's.
 function decayKeySubsetSql(whereSql: string): string {
   const arm = (extra: string): string =>
     `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
-  // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row with a key.
+  // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row
+  // with a key.
   return `WITH top AS MATERIALIZED (
       SELECT id, pinned, ${decayExponentSql(PRODUCTION_STRENGTH)} AS d FROM (
         ${arm(`pinned = 1 AND ${DECAY_KEY_WHERE}`)}
@@ -366,7 +373,8 @@ function decayKeySubsetRows(
   return cachedStatement(db, decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
 }
 
-/** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
+/** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the
+ * cap, every such row. */
 export function listContextCandidates(
   db: DatabaseSyncLike,
   model: StrengthModel,
@@ -388,12 +396,13 @@ export function listContextCandidates(
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
-  // The key holds the production reward factor, so a rank at another slope skips it. An empty answer means the subset
-  // could not prove itself, and the scan below ranks the tenant.
+  // The key holds the production reward factor, so a rank at another slope skips it. An empty
+  // answer means the subset could not prove itself, and the scan below ranks the tenant.
   const keyed = model.rewardSlope === PRODUCTION_STRENGTH.rewardSlope;
   const bySubset = ranked && cap > 0 && keyed ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
   if (bySubset.length > 0) return bySubset.map(rowToEntry);
-  // No index orders rows past the key's window by decay, so this scan stays; its LIMIT keeps the sort to the cap.
+  // No index orders rows past the key's window by decay, so this scan stays; its LIMIT keeps the
+  // sort to the cap.
   const sql = ranked
     ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql(model)} LIMIT ?
@@ -406,12 +415,14 @@ export function listContextCandidates(
   return rows.map(rowToEntry);
 }
 
-// No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
+// No owner: for session capture, a personal or connector-private row must never stop a team copy
+// being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
-/** Tenant rows that may hold one of `texts` and that `admit` passes (default: team-visible): equal to a text apart from
- * spacing, or a sleep-merged row holding one. With `project`, only rows carrying one of those names plus user-global
- * rows, as listContextCandidates' filter. A superset the caller checks again with heldTextKeys. */
+/** Tenant rows that may hold one of `texts` and that `admit` passes (default: team-visible):
+ * equal to a text apart from spacing, or a sleep-merged row holding one. With `project`, only
+ * rows carrying one of those names plus user-global rows, as listContextCandidates' filter. A
+ * superset the caller checks again with heldTextKeys. */
 export function listTextsHolding(
   db: DatabaseSyncLike,
   tenantId: TenantId,
@@ -440,8 +451,8 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }
 
-/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
- * stream one column, so no row is loaded. */
+/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from
+ * one aggregate and texts stream one column, so no row is loaded. */
 export function schemaFit(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -463,8 +474,8 @@ export function schemaFit(
       for (const tag of parseJsonArray(group.tags_json))
         tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
     }
-    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored per-tenant tag and
-    // token tally is the upgrade.
+    // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored
+    // per-tenant tag and token tally is the upgrade.
     const texts = cachedStatement(db, `SELECT content FROM (${newest})`).iterate(
       tenantId,
       SCHEMA_FIT_WINDOW_ROWS,
@@ -489,12 +500,13 @@ export function tallySources(db: DatabaseSyncLike, tenantId: TenantId): SourceTa
   ).all(...tenant.params) as SourceTallyDbRow[];
 }
 
-// A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
+// A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing
+// json_each.
 export const jsonList = (column: string): string =>
   `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
-/** calculateStrength over every row of a tenant in one aggregate pass, no row loaded, on a handle the caller holds so
- * it can share a snapshot with other reads. */
+/** calculateStrength over every row of a tenant in one aggregate pass, no row loaded, on a
+ * handle the caller holds so it can share a snapshot with other reads. */
 export function strengthTallies(
   db: DatabaseSyncLike,
   rules: StoreModel,
@@ -537,8 +549,8 @@ type StatusColumn =
   | 'emotional_valence'
   | 'outcome_positive'
   | 'outcome_negative';
-// SAFETY: every read cast to this row selects STATUS_ROW_COLUMNS; scripts/check-row-casts.mjs proves it.
-// The store writes `layer` only from the Layer enum.
+// SAFETY: every read cast to this row selects STATUS_ROW_COLUMNS; scripts/check-row-casts.mjs
+// proves it. The store writes `layer` only from the Layer enum.
 type StatusRow = Omit<Pick<MemoryRow, StatusColumn>, 'layer'> & { layer: Layer };
 // What calculateStrength and confidenceFacets read, plus the layer: no text and no JSON column.
 const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
@@ -554,8 +566,9 @@ const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
   'outcome_negative',
 ];
 
-// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its counts would
-// differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry would.
+// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its
+// counts would differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry
+// would.
 function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
   for (const row of rows) {
     yield {
@@ -574,7 +587,9 @@ function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
 }
 
 /**
- * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
+ * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no
+ * row array is built.
+ *
  */
 export function statusCounts(
   db: DatabaseSyncLike,
@@ -584,7 +599,8 @@ export function statusCounts(
 ): StatusCounts {
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
-    // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
+    // loadAllEntries' order, so the strengths add up in the order they did and the average rounds
+    // the same.
     const rows = cachedStatement(
       db,
       `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,

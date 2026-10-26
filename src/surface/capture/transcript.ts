@@ -15,8 +15,9 @@ const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
 
 /**
- * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the
- * final assistant text chunk, without thinking, tool_use and tool_result noise. Exported for tests. */
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain
+ * user messages and the final assistant text chunk, without thinking, tool_use and tool_result
+ * noise. Exported for tests. */
 
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
 const CLAUDE_CODE_COMMAND_PREFIXES = [
@@ -27,8 +28,9 @@ const CLAUDE_CODE_COMMAND_PREFIXES = [
 ];
 
 /**
- * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'` marks Claude Code's own
- * notices.
+ * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'`
+ * marks Claude Code's own notices.
+ *
  */
 interface TranscriptLineFlags {
   type?: unknown;
@@ -58,8 +60,8 @@ interface TranscriptMessage {
 const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
 
 /**
- * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own
- * open-file, selection and interrupt blocks. */
+ * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text
+ * blocks, beside its own open-file, selection and interrupt blocks. */
 export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
   const content = message.content;
   let text = '';
@@ -120,8 +122,9 @@ export function collectSessionTurns(
 }
 
 /**
- * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply
- * text.
+ * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no
+ * human or reply text.
+ *
  */
 function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   if (entry.type !== 'user' && entry.type !== 'assistant') return null;
@@ -148,8 +151,8 @@ function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
 }
 
-// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and
-// app state.
+// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for
+// the environment and app state.
 const CODEX_INJECTED_USER_TEXT =
   /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
 
@@ -196,7 +199,8 @@ export function summariseTranscript(jsonl: string): string {
   return summarizeSessionTurns(collectSessionTurns(jsonl));
 }
 
-/** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
+/** The last 20 user turns and last 10 replies: session-end is about what was decided near the
+ * end, not at the start. */
 export function sessionTail(turns: readonly SessionTurn[]) {
   return {
     users: turns
@@ -221,16 +225,17 @@ export function summarizeSessionTurns(turns: readonly SessionTurn[]): string {
     ...tailUsers.map((m) => `- ${m}`),
     '',
     '## Assistant Responses',
-    // A blank line between replies keeps capture from joining two of them; each user turn opens its own list item.
+    // A blank line between replies keeps capture from joining two of them; each user turn opens its
+    // own list item.
     tailAssistants.join('\n\n'),
   ].join('\n');
 }
 
 /**
- * Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload, then the newest
- * `.jsonl` in the Claude config dir.
- * The scan runs only with `mayScan` (it spans every project on the box); returns null when nothing resolves, never
- * throws.
+ * Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload,
+ * then the newest `.jsonl` in the Claude config dir. The scan runs only with `mayScan` (it spans
+ * every project on the box); returns null when nothing resolves, never throws.
+ *
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,

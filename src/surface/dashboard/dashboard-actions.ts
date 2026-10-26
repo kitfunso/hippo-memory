@@ -15,7 +15,8 @@ export interface ActionResult {
   body: unknown;
   /** True when a write committed, so the router moves the snapshot id. */
   changed: boolean;
-  /** The live entry an action acted on, so the router can build the detail after the cache is dropped. */
+  /** The live entry an action acted on, so the router can build the detail after the cache is
+   * dropped. */
   entry?: MemoryEntry;
 }
 
@@ -56,7 +57,8 @@ export async function markWrong(ctx: api.Context, rawId: string): Promise<Action
   return entry === null ? notFound() : { status: 200, body: null, changed: true, entry };
 }
 
-/** Deletes a memory like `hippo forget`; a raw receipt is append-only and answers 409 with the archive hint. */
+/** Deletes a memory like `hippo forget`; a raw receipt is append-only and answers 409 with the
+ * archive hint. */
 export async function forgetMemory(ctx: api.Context, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if ((await liveEntry(ctx, id)) === null) return notFound();
@@ -73,7 +75,8 @@ export async function forgetMemory(ctx: api.Context, rawId: string): Promise<Act
   }
 }
 
-/** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old statuses and texts. */
+/** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old
+ * statuses and texts. */
 export async function resolveOpenConflict(
   ctx: api.Context,
   conflictId: number,

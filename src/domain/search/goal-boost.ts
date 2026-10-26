@@ -1,4 +1,5 @@
-// src/domain/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and touches no store.
+// src/domain/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and
+// touches no store.
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
@@ -16,8 +17,9 @@ export interface GoalStackBoostOptions {
   limit: number;
   now: Date;
   /**
-   * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because the helper re-spreads
-   * rows); only populated when passed.
+   * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because
+   * the helper re-spreads rows); only populated when passed.
+   *
    */
   trace?: Map<string, RerankStep>;
 }
@@ -36,7 +38,8 @@ function goalBoostMultiplier(
   goalsByTag: Map<string, Goal>,
   policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
 ): number {
-  // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at MAX_FINAL_MULTIPLIER.
+  // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at
+  // MAX_FINAL_MULTIPLIER.
   let multiplier = Math.min(
     FIRST_MATCH_BOOST + EXTRA_MATCH_BOOST * (matches.length - 1),
     MAX_FINAL_MULTIPLIER,
@@ -93,9 +96,11 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
 }
 
 /**
- * The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its
- * log covers the top `limit` rows and keeps those whose memory is global, since only the store can tell them apart;
- * {@link localGoalRecallRows} drops those before the write.
+ * The goal-stack boost over goals already read, touching no store; a caller skips it under an
+ * explicit goal tag. Its log covers the top `limit` rows and keeps those whose memory is global,
+ * since only the store can tell them apart; {@link localGoalRecallRows} drops those before the
+ * write.
+ *
  */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
@@ -108,8 +113,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
   const policiesByGoalId = active.policies;
 
-  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker property) so `boosted`
-  // stays exactly R[] with no cast-then-strip.
+  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker
+  // property) so `boosted` stays exactly R[] with no cast-then-strip.
   const matchesByEntryId = new Map<string, string[]>();
 
   const boosted = results
@@ -118,8 +123,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
-      // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by entry id; a pure
-      // read of r.score.
+      // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by
+      // entry id; a pure read of r.score.
       if (trace) {
         trace.set(r.entry.id, {
           stage: 'goal-boost',
@@ -130,8 +135,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
         });
       }
       matchesByEntryId.set(r.entry.id, matches);
-      // SAFETY: spreading a generic-constrained `r: R` widens to the spread's plain object type; only `score` changes,
-      // so the value still satisfies R.
+      // SAFETY: spreading a generic-constrained `r: R` widens to the spread's plain object type;
+      // only `score` changes, so the value still satisfies R.
       return { ...r, score: r.score * multiplier } as R;
     })
     // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic

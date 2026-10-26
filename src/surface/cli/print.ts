@@ -34,7 +34,8 @@ export function recallEntryText(
       `${e.retrievalCount}x`,
   ];
   if (showWhy) {
-    // The row --json prints carries the same reason and envelope, so the two outputs never explain a match apart.
+    // The row --json prints carries the same reason and envelope, so the two outputs never explain
+    // a match apart.
     const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal, now);
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
@@ -48,7 +49,8 @@ export function recallEntryText(
       if (env.session_id) lines.push(`    session_id: ${env.session_id}`);
       lines.push(`    confidence: ${env.confidence}`);
     }
-    // The recall trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost x1.50 -> 0.189".
+    // The recall trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost
+    // x1.50 -> 0.189".
     if (r.rerankTrace && r.rerankTrace.length > 0) {
       const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
       for (const step of r.rerankTrace) {
@@ -87,7 +89,8 @@ export function printHandoff(handoff: SessionHandoff): void {
   console.log(handoffText(handoff));
 }
 
-/** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty one is left out. */
+/** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty
+ * one is left out. */
 export function continuityTexts(
   snapshot: TaskSnapshot | null | undefined,
   handoff: SessionHandoff | null | undefined,

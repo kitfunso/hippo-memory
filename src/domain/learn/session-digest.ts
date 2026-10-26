@@ -1,5 +1,6 @@
-// Which sentences of a session's final reply carry a lesson, and the digest text built from them. No file or store
-// access: surface/capture/session-digest.ts reads the transcript, api/memories/session-digest.ts writes the row.
+// Which sentences of a session's final reply carry a lesson, and the digest text built from them.
+// No file or store access: surface/capture/session-digest.ts reads the transcript,
+// api/memories/session-digest.ts writes the row.
 import { USER_SEGMENT } from '../../base/util/home-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 
@@ -94,7 +95,8 @@ function proseText(text: string): string {
   return kept.join('\n');
 }
 
-/** Sentences of the reply; code spans and "e.g." are held out of the split so their dots never end a sentence. */
+/** Sentences of the reply; code spans and "e.g." are held out of the split so their dots never
+ * end a sentence. */
 export function digestSentences(text: string): string[] {
   const held: string[] = [];
   const masked = proseText(text).replace(PROTECTED, (m) => `\uE000${held.push(m) - 1}\uE001`);
@@ -149,18 +151,21 @@ interface Candidate {
   score: number;
 }
 
-/** Surviving sentences, best first: anchored or reasoned ones rank above the rest, earlier wins a tie. */
+/** Surviving sentences, best first: anchored or reasoned ones rank above the rest, earlier wins
+ * a tie. */
 function rankedSentences(
   finalText: string,
   windows: ReadonlySet<string>,
   relativePath: (absolute: string) => string | null,
 ): Candidate[] {
   const kept: Candidate[] = [];
-  // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that no pattern matches.
+  // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that
+  // no pattern matches.
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, relativePath);
-    // A home-directory path names its user and the store may be shared, so such a sentence is dropped.
+    // A home-directory path names its user and the store may be shared, so such a sentence is
+    // dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });

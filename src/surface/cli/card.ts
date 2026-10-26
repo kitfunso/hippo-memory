@@ -102,8 +102,8 @@ async function cardRefusal(hippoRoot: string, tenantId: string, id: string): Pro
   return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
-// One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on fails fast instead
-// of silently doing nothing.
+// One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on
+// fails fast instead of silently doing nothing.
 type CardSubcommand =
   | 'create'
   | 'show'
@@ -136,7 +136,8 @@ type CardHandler = (
   flags: CliFlags,
 ) => Promise<void>;
 
-/** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to its handler. */
+/** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to
+ * its handler. */
 export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
@@ -146,7 +147,8 @@ export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext)
       'Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>',
     );
   }
-  // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real key.
+  // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real
+  // key.
   const known = subcommand as CardSubcommand;
   const allowedFlags = CARD_SUBCOMMAND_FLAGS[known];
   for (const key of Object.keys(flags)) {
@@ -220,7 +222,8 @@ async function cardShow(
   printCard(detail);
 }
 
-/** Every page of the tenant's cards in list order, the largest page at a time, so the list prints as it reads. */
+/** Every page of the tenant's cards in list order, the largest page at a time, so the list
+ * prints as it reads. */
 async function* cardPages(
   hippoRoot: string,
   tenantId: string,
@@ -407,8 +410,8 @@ async function cardComment(
   if (!id) {
     throw usageError('comment');
   }
-  // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store
-  // instead.
+  // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw
+  // from the store instead.
   const cards = cliStore(hippoRoot).cards;
   const card = (await cards.detail(tenantId, id))?.card;
   if (!card) {

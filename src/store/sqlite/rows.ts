@@ -25,7 +25,8 @@ type Count = number | null | undefined;
 type Flag = boolean | number | null | undefined;
 type Text = string | null | undefined;
 
-/** A memories row in MemoryEntry's names, its JSON lists parsed; each column with a default may be absent or null. */
+/** A memories row in MemoryEntry's names, its JSON lists parsed; each column with a default may
+ * be absent or null. */
 interface StoredColumns extends Pick<
   MemoryEntry,
   'id' | 'created' | 'lastRetrieved' | 'layer' | 'content' | 'tenantId'
@@ -182,7 +183,8 @@ export interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
-  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count / earliest_at / latest_at.
+  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count /
+  // earliest_at / latest_at.
   summary_dirty: number | null;
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
@@ -197,7 +199,8 @@ export interface ConsolidationRunRow {
   removed: number;
 }
 
-// SAFETY: every read cast to this row selects TASK_SNAPSHOT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects TASK_SNAPSHOT_COLUMNS; scripts/check-row-casts.mjs
+// proves it.
 export interface TaskSnapshotRow {
   id: number;
   task: string;
@@ -213,7 +216,8 @@ export interface TaskSnapshotRow {
 export const TASK_SNAPSHOT_COLUMNS =
   'id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at';
 
-// SAFETY: every read cast to this row selects MEMORY_CONFLICT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects MEMORY_CONFLICT_COLUMNS; scripts/check-row-casts.mjs
+// proves it.
 export interface MemoryConflictRow {
   id: number;
   memory_a_id: string;
@@ -227,7 +231,8 @@ export interface MemoryConflictRow {
 export const MEMORY_CONFLICT_COLUMNS =
   'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
 
-// SAFETY: every read cast to this row selects SESSION_EVENT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects SESSION_EVENT_COLUMNS; scripts/check-row-casts.mjs
+// proves it.
 export interface SessionEventRow {
   id: number;
   session_id: string;
@@ -243,7 +248,8 @@ export const SESSION_EVENT_COLUMNS =
   'id, session_id, task, event_type, content, source, scope, metadata_json, created_at';
 
 export const INDEX_VERSION = 3;
-/** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update share it. */
+/** The columns a row write sets, in memoryRowValues' order; the upsert and the batch update
+ * share it. */
 export const MEMORY_ROW_COLUMNS = [
   'id',
   'created',
@@ -283,7 +289,8 @@ export const MEMORY_ROW_COLUMNS = [
   'latest_at',
   'dag_level_3_built_at',
 ] as const;
-// Rebuild-queue columns the DAG summary rebuild writes (store/sqlite/consolidation.ts); a row write never sets them.
+// Rebuild-queue columns the DAG summary rebuild writes (store/sqlite/consolidation.ts); a row write
+// never sets them.
 const MEMORY_COLUMN_NAMES = [
   ...MEMORY_ROW_COLUMNS,
   'summary_dirty',
@@ -291,15 +298,17 @@ const MEMORY_COLUMN_NAMES = [
   'rebuild_count',
 ] as const;
 
-// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
+// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads
+// working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
 export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 
 /** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
 function storedColumnsOf(row: MemoryRow): StoredColumns {
   const site = (column: string): StoredJsonSite => ({ table: 'memories', id: row.id, column });
-  // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes from
-  // MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, and the DB layer writes these columns only from the same enums.
+  // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes
+  // from MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, and the DB layer writes these columns only
+  // from the same enums.
   return {
     id: row.id,
     created: row.created,
@@ -348,8 +357,8 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
   return storedEntry(storedColumnsOf(row));
 }
 
-/** A column that is not JSON reads as empty. With `site` the row is named at warn once; without it no row is known and
- * the line stays at debug. */
+/** A column that is not JSON reads as empty. With `site` the row is named at warn once; without
+ * it no row is known and the line stays at debug. */
 export function parseJsonArray(raw: string | null | undefined, site?: StoredJsonSite): string[] {
   if (!raw) return [];
   const parsed = tryParseJson(raw);
@@ -361,9 +370,10 @@ export function parseJsonArray(raw: string | null | undefined, site?: StoredJson
   return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
-/** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK violation); require a
- * clean positive integer string, else unset. The ONE place that decides 'clean'; consumers read the validated value
- * from `buildIndexFromDb`'s result and never re-parse. */
+/** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK
+ * violation); require a clean positive integer string, else unset. The ONE place that decides
+ * 'clean'; consumers read the validated value from `buildIndexFromDb`'s result and never
+ * re-parse. */
 export function parseLastTraceId(raw: string | null | undefined): string | null {
   const trimmed = (raw ?? '').trim();
   if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;

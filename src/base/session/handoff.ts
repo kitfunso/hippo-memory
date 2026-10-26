@@ -1,6 +1,7 @@
 /**
- * Session handoff types and helpers: a handoff captures a session's state so a successor session or another agent can
- * pick up where it left off.
+ * Session handoff types and helpers: a handoff captures a session's state so a successor session or
+ * another agent can pick up where it left off.
+ *
  */
 
 import { isJsonString, type JsonValue } from '../util/json.js';
@@ -9,13 +10,16 @@ import { parseStoredJson, warnDamagedColumn } from '../util/stored-json.js';
 /** Terminal state of a handoff's session, denormalized from its `session_complete` event. */
 export type HandoffOutcome = 'success' | 'failure' | 'partial';
 
-/** Best-effort evidence of repo state at handoff time; null fields mean collection failed or was skipped. */
+/** Best-effort evidence of repo state at handoff time; null fields mean collection failed or was
+ * skipped. */
 export interface HandoffEvidence {
   gitRef?: string | null;
   dirtyTree?: boolean | null;
   testStatus?: 'pass' | 'fail' | 'unknown' | null;
   /**
-   * 'transcript' when hippo read the handoff off the session's transcript at session end; a later exit may replace it.
+   * 'transcript' when hippo read the handoff off the session's transcript at session end; a later
+   * exit may replace it.
+   *
    */
   derivedFrom?: 'transcript';
 }
@@ -85,7 +89,8 @@ function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
   );
 }
 
-/** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the whole handoff. */
+/** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the
+ * whole handoff. */
 function storedList(
   row: SessionHandoffRow,
   column: 'artifacts_json' | 'constraints_json',
@@ -96,7 +101,8 @@ function storedList(
   return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
-/** Stored evidence, or null (after a log line) when the column is damaged or holds another shape. */
+/** Stored evidence, or null (after a log line) when the column is damaged or holds another
+ * shape. */
 function storedEvidence(row: SessionHandoffRow): HandoffEvidence | null {
   if (!row.evidence_json) return null;
   const site = { table: 'session_handoffs', id: row.id, column: 'evidence_json' };

@@ -1,8 +1,9 @@
 /**
- * HTTP client wrapper for `hippo serve`: the routed writes (remember, forget, archive, promote) and the nearest-vector
- * read; every other command opens the store directly.
- * Server errors rethrow with the message verbatim so CLI substring matches still work; network errors propagate as the
- * native fetch failure.
+ * HTTP client wrapper for `hippo serve`: the routed writes (remember, forget, archive, promote) and
+ * the nearest-vector read; every other command opens the store directly. Server errors rethrow with
+ * the message verbatim so CLI substring matches still work; network errors propagate as the native
+ * fetch failure.
+ *
  */
 
 import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
@@ -13,25 +14,30 @@ import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isObjectLike } from '../../base/session/capture-contract.js';
 
-/** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
+/** A write the local server has not answered in this long is stuck; the caller treats it as
+ * delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
 
 /**
- * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the server answered busy
- * with 503.
+ * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the
+ * server answered busy with 503.
+ *
  */
 const STORE_BUSY_ATTEMPTS = 5;
 
 /**
- * The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the auth-provider 503 has none.
+ * The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the
+ * auth-provider 503 has none.
+ *
  */
 function isStoreBusy(res: Response): boolean {
   return res.status === 503 && res.headers.has('retry-after');
 }
 
 /**
- * Replaying is safe because each routed write commits in one transaction and anything after it is best-effort, so a
- * busy 503 means nothing landed; a sleep is safe too, as a re-run finishes a partial one. */
+ * Replaying is safe because each routed write commits in one transaction and anything after it
+ * is best-effort, so a busy 503 means nothing landed; a sleep is safe too, as a re-run finishes
+ * a partial one. */
 function sendWrite(url: string, init: RequestInit): Promise<Response> {
   return fetchWithRetry(url, init, {
     timeoutMs: SERVER_TIMEOUT_MS,
@@ -48,7 +54,9 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
 }
 
 /**
- * An error the server answered with, not one the transport raised, so the transport classifier can skip it by class.
+ * An error the server answered with, not one the transport raised, so the transport classifier can
+ * skip it by class.
+ *
  */
 export class HttpResponseError extends Error {
   constructor(
@@ -60,8 +68,8 @@ export class HttpResponseError extends Error {
   }
 }
 
-/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same substrings ("not
- * found", "already superseded") as on the direct path. */
+/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same
+ * substrings ("not found", "already superseded") as on the direct path. */
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -79,7 +87,8 @@ async function throwForStatus(res: Response): Promise<never> {
   throw new HttpResponseError(message, res.status);
 }
 
-/** A 2xx reply that is not the JSON object the route promises: another process may now own the pidfile's port. */
+/** A 2xx reply that is not the JSON object the route promises: another process may now own the
+ * pidfile's port. */
 export class MalformedReplyError extends Error {
   constructor(
     readonly route: string,
@@ -91,8 +100,9 @@ export class MalformedReplyError extends Error {
 }
 
 /**
- * A 2xx reply's body, read under the cap; it must be a JSON object, and `guard` narrows it further where the shape is
- * known.
+ * A 2xx reply's body, read under the cap; it must be a JSON object, and `guard` narrows it further
+ * where the shape is known.
+ *
  */
 async function readReply<T>(
   res: Response,
@@ -192,7 +202,8 @@ export interface NearestIdsBody {
   readonly spec: JsonValue;
 }
 
-/** The ids the server finds nearest `body.vector`, nearest first, in one try that gives up after `timeoutMs`. */
+/** The ids the server finds nearest `body.vector`, nearest first, in one try that gives up after
+ * `timeoutMs`. */
 export async function nearestIds(
   serverUrl: string,
   apiKey: string | undefined,
@@ -214,13 +225,15 @@ export async function nearestIds(
 }
 
 /**
- * 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request was on the wire and
- * may have committed, so never replay a write. 'none': not a transport failure. */
+ * 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request
+ * was on the wire and may have committed, so never replay a write. 'none': not a transport
+ * failure. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
 /**
- * The syscall code Node puts on a system error itself (`http` errors) or on the `cause` of a fetch `TypeError`; '' when
- * there is none.
+ * The syscall code Node puts on a system error itself (`http` errors) or on the `cause` of a fetch
+ * `TypeError`; '' when there is none.
+ *
  */
 function transportCode(err: Error): string {
   if ('code' in err) return String(err.code);
@@ -233,8 +246,8 @@ export function classifyTransportFailure(err: Error): TransportFailure {
   // The server answered, so the transport worked, whatever the message says.
   if (err instanceof HttpResponseError) return 'none';
   const code = transportCode(err);
-  // Connect-phase failures: no request bytes ever left the client, so a stale pidfile can be healed and the call
-  // replayed on the direct path.
+  // Connect-phase failures: no request bytes ever left the client, so a stale pidfile can be healed
+  // and the call replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
   // The socket died mid-exchange.
   if (
@@ -245,8 +258,8 @@ export function classifyTransportFailure(err: Error): TransportFailure {
   ) {
     return 'delivery-unknown';
   }
-  // Fetch rejects every network failure as a TypeError, with a cause only when the syscall is known, so no code means
-  // the conservative answer.
+  // Fetch rejects every network failure as a TypeError, with a cause only when the syscall is
+  // known, so no code means the conservative answer.
   if (err instanceof TypeError) return 'delivery-unknown';
   // The request was sent and the server went quiet, so it may have committed.
   if (err.name === 'TimeoutError') return 'delivery-unknown';

@@ -1,5 +1,5 @@
-// One container's planned steps on the caller's write scope: the rows they name are re-read first, and a plan whose
-// rows moved on since the sync read them writes nothing.
+// One container's planned steps on the caller's write scope: the rows they name are re-read first,
+// and a plan whose rows moved on since the sync read them writes nothing.
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -53,7 +53,8 @@ function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): Memo
   ];
 }
 
-/** Null when the rows the plan read have changed: nothing is written then, and the sync plans again. */
+/** Null when the rows the plan read have changed: nothing is written then, and the sync plans
+ * again. */
 export function runSteps(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -63,8 +64,8 @@ export function runSteps(
   return rows === null ? null : new ContainerSteps(db, files, plan, rows).run();
 }
 
-/** The rows under the plan's prefixes and those its steps name outside them, by id; null when the prefixes no longer
- * hold exactly the planned rows or an adopted row left its legacy source. */
+/** The rows under the plan's prefixes and those its steps name outside them, by id; null when
+ * the prefixes no longer hold exactly the planned rows or an adopted row left its legacy source. */
 function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, MemoryEntry> | null {
   const rows = new Map<string, MemoryEntry>();
   for (const prefix of outermost(plan.prefixes)) {
@@ -180,7 +181,8 @@ class ContainerSteps {
     return 'done';
   }
 
-  /** api.supersede's steps on this transaction; false when the row is gone or another writer superseded it first. */
+  /** api.supersede's steps on this transaction; false when the row is gone or another writer
+   * superseded it first. */
   private supersede(id: string, by: string): boolean {
     const old = this.rows.get(id);
     if (old === undefined || !supersedeEntry(this.db, old.tenantId, old.id, by)) return false;
@@ -214,7 +216,8 @@ class ContainerSteps {
     return result;
   }
 
-  /** A deleted note came back unchanged: its old row returns with its id and history, under the sync's own audit op. */
+  /** A deleted note came back unchanged: its old row returns with its id and history, under the
+   * sync's own audit op. */
   private restore(step: RestoreStep): StepOutcome {
     const tenantId = this.plan.tenantId;
     const snap = readDormantSnapshot(this.db, tenantId, step.dormantId);

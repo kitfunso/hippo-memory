@@ -1,12 +1,12 @@
-// A checkout's `origin` remote, read from its git config file and normalized into a project id; no git process, so the
-// prompt hook can call it.
+// A checkout's `origin` remote, read from its git config file and normalized into a project id; no
+// git process, so the prompt hook can call it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isObjectLike, isStringValue } from '../base/session/capture-contract.js';
 import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
 
-/** Where a `.git` file points: its own git dir, and the shared one when that dir names a `commondir` (a linked
- * worktree); null when the file names no git dir. */
+/** Where a `.git` file points: its own git dir, and the shared one when that dir names a
+ * `commondir` (a linked worktree); null when the file names no git dir. */
 export function readGitFilePointer(
   gitRoot: string,
   pointer: string,
@@ -19,8 +19,8 @@ export function readGitFilePointer(
   return { linkDir, commonDir: path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()) };
 }
 
-/** The config file git reads for a checkout: `.git/config`, a linked worktree's `<commondir>/config`, a submodule's
- * `<gitdir>/config`. */
+/** The config file git reads for a checkout: `.git/config`, a linked worktree's
+ * `<commondir>/config`, a submodule's `<gitdir>/config`. */
 export function gitConfigPath(gitRoot: string): string | null {
   const marker = path.join(gitRoot, '.git');
   try {
@@ -36,7 +36,8 @@ export function gitConfigPath(gitRoot: string): string | null {
     }
     return path.join(dirs.commonDir ?? dirs.linkDir, 'config');
   } catch (err) {
-    // The caller falls back to the folder name. A missing .git is the plain case; an unreadable one is told once.
+    // The caller falls back to the folder name. A missing .git is the plain case; an unreadable one
+    // is told once.
     const message = `project remote: no git config for ${gitRoot}: ${errorMessage(err)}`;
     if (errorCode(err) === 'ENOENT') log.debug(message, errorFields(err));
     else log.warnThenDebug(`project-remote:${errorCode(err)}`, message, errorFields(err));
@@ -44,8 +45,8 @@ export function gitConfigPath(gitRoot: string): string | null {
   }
 }
 
-/** The text of a `.git` file, or null when `.git` is a folder; one descriptor answers both, so the path cannot change
- * in between. */
+/** The text of a `.git` file, or null when `.git` is a folder; one descriptor answers both, so
+ * the path cannot change in between. */
 function gitFilePointer(marker: string): string | null {
   const fd = fs.openSync(marker, 'r');
   try {
@@ -55,8 +56,8 @@ function gitFilePointer(marker: string): string | null {
   }
 }
 
-/** One config value with git's quoting: `"` toggles quoting, backslash escapes, and an unquoted `#` or `;` starts a
- * comment. */
+/** One config value with git's quoting: `"` toggles quoting, backslash escapes, and an unquoted
+ * `#` or `;` starts a comment. */
 function configValue(raw: string): string {
   let out = '';
   let quoted = false;
@@ -79,8 +80,8 @@ function configValue(raw: string): string {
 const SECTION = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\](.*)$/;
 const ENTRY = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=(.*))?$/;
 
-/** `remote.origin.url` from a config file's text, the first value as git fetch uses; the subsection name is
- * case-sensitive. */
+/** `remote.origin.url` from a config file's text, the first value as git fetch uses; the
+ * subsection name is case-sensitive. */
 export function originUrlFromConfig(text: string): string | null {
   let inOrigin = false;
   for (const raw of text.split(/\r?\n/)) {
@@ -112,8 +113,8 @@ function azureDevOps(hostPath: string): string {
   return https.startsWith('dev.azure.com/') ? https.replace('/_git/', '/') : https;
 }
 
-/** `host/path` for a network remote, so ssh, scp and https forms agree; null for a local path, which would put a user
- * path into rows. */
+/** `host/path` for a network remote, so ssh, scp and https forms agree; null for a local path,
+ * which would put a user path into rows. */
 export function normalizeRemote(url: string): string | null {
   // A query or fragment can carry a token (`?private_token=`) and never names the repo.
   const u = url.trim().replace(/[?#].*$/, '');
@@ -143,12 +144,13 @@ export function normalizeRemote(url: string): string | null {
     .replace(/\.git$/, '')
     .replace(/\/+$/, '');
   const id = azureDevOps(tidy);
-  // A colon would break the `shared:<project>:` source format; whitespace means this was no URL; an `@` left in a path
-  // may be a credential.
+  // A colon would break the `shared:<project>:` source format; whitespace means this was no URL; an
+  // `@` left in a path may be a credential.
   return /^[^/]+\/./.test(id) && !/[:\s@]/.test(id) ? id : null;
 }
 
-/** The normalized origin of the checkout rooted at gitRoot, or null when it has none a project can be named by. */
+/** The normalized origin of the checkout rooted at gitRoot, or null when it has none a project
+ * can be named by. */
 export function originRemoteId(gitRoot: string): string | null {
   const file = gitConfigPath(gitRoot);
   if (file === null) return null;
@@ -164,8 +166,8 @@ export function originRemoteId(gitRoot: string): string | null {
 
 export const PROJECT_FILE = '.hippo-project.json';
 
-/** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project name; null when absent or
- * unusable. */
+/** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project
+ * name; null when absent or unusable. */
 export function projectFileId(root: string): string | null {
   const file = path.join(root, PROJECT_FILE);
   if (!fs.existsSync(file)) return null;
@@ -173,7 +175,8 @@ export function projectFileId(root: string): string | null {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     const raw = isObjectLike(parsed) && 'id' in parsed ? parsed.id : undefined;
     const id = isStringValue(raw) ? raw.trim().toLowerCase() : '';
-    // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like `github.com/acme/api`.
+    // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like
+    // `github.com/acme/api`.
     if (id !== '' && id.length <= 200 && !/[:\s/\\]/.test(id)) return id;
     log.warn(
       `${file}: "id" must be a non-empty string with no colon, slash or spaces; ` +

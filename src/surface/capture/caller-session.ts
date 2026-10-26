@@ -1,5 +1,5 @@
-// The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never
-// the server's env or folder.
+// The checks every caller call shares: ids, project, the session's owner and the pilot arm, all
+// from the request, never the server's env or folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { ownerOrSubject, type Context } from '../../api/types.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
@@ -17,8 +17,9 @@ import {
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 
 /**
- * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns
- * the key the call's rows go under.
+ * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner
+ * holds it). Returns the key the call's rows go under.
+ *
  */
 export async function bindCaller(
   ctx: Context,
@@ -33,7 +34,8 @@ export async function bindCaller(
   return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
 }
 
-/** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from hippo. */
+/** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from
+ * hippo. */
 export async function callerInHoldout(ctx: Context, sessionId: string): Promise<boolean> {
   const reach = ledgerReachOf(ctx, true);
   const armOpts = { reach, ownTenantOnly: true };
@@ -41,8 +43,9 @@ export async function callerInHoldout(ctx: Context, sessionId: string): Promise<
 }
 
 /**
- * Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not
- * trusted, then cut back to the cap.
+ * Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the
+ * caller's scrub is not trusted, then cut back to the cap.
+ *
  */
 export function checkedWorkingState(state: WorkingState | null): WorkingState | null {
   if (state === null) return null;

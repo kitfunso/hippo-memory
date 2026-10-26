@@ -8,7 +8,9 @@ const HEADER_DELIM = Buffer.from('\r\n\r\n');
 const EMPTY = Buffer.alloc(0);
 
 /**
- * What of a refused frame has not arrived yet: a byte count when its header declared one, else the rest of its line.
+ * What of a refused frame has not arrived yet: a byte count when its header declared one, else the
+ * rest of its line.
+ *
  */
 export type FrameRemainder = number | 'line';
 

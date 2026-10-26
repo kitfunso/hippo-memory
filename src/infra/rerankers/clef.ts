@@ -46,13 +46,15 @@ function isRejection(v: ClefScores | string): v is string {
   return v.constructor === String;
 }
 
-// fetch quotes a rejected header value in its error, so a token it would reject must never reach it.
+// fetch quotes a rejected header value in its error, so a token it would reject must never reach
+// it.
 function checkHeaderSafe(name: string, token: string): void {
   if (!/^[\x21-\x7e]+$/.test(token))
     throw new Error(`${name} has characters a header cannot carry`);
 }
 
-/** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
+/** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted
+ * Workers AI. */
 export function resolveClefRoute(model: ClefModel, settings: ClefSettings | undefined): ClefRoute {
   const endpoint = settings?.endpoint;
   if (endpoint) {
@@ -75,8 +77,9 @@ export function resolveClefRoute(model: ClefModel, settings: ClefSettings | unde
 }
 
 /**
- * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and `c1..cN`; a string is the
- * rejection reason.
+ * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and
+ * `c1..cN`; a string is the rejection reason.
+ *
  */
 export function parseClefReply(
   body: JsonValue,
@@ -117,7 +120,8 @@ export function parseClefReply(
   };
 }
 
-/** Where one scoring request goes and how: the transport, the model asked for, its route and the call's timeout. */
+/** Where one scoring request goes and how: the transport, the model asked for, its route and the
+ * call's timeout. */
 interface ClefCall {
   readonly http: Http;
   readonly model: ClefModel;
@@ -170,8 +174,9 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
 }
 
 /**
- * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and
- * warns.
+ * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order
+ * (never paid Jev) and warns.
+ *
  */
 export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
   const outage = createOutageWarning(model, 'keeping the native order');

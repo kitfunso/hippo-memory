@@ -1,4 +1,5 @@
-// Codex CLI's memory_summary.md, the one memory file Codex puts in its prompt, read as a single text-keyed file.
+// Codex CLI's memory_summary.md, the one memory file Codex puts in its prompt, read as a single
+// text-keyed file.
 import path from 'node:path';
 import { codexHomeDir } from '../../base/util/agent-homes.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';

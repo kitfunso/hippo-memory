@@ -1,4 +1,5 @@
-// Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help` lists them.
+// Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help`
+// lists them.
 
 import {
   CONFLICT_PEER_MULTIPLIER,

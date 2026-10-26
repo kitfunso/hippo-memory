@@ -1,4 +1,5 @@
-// Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
+// Conflict listing and resolution for every front end, so the reach, status, pair and liveness
+// rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
   assertWriteRight,
@@ -24,7 +25,8 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { TenantReach } from './memories.js';
 
-/** A page of a conflict list: `limit` (default 100, at most 1000) and the position the previous page ended on. */
+/** A page of a conflict list: `limit` (default 100, at most 1000) and the position the previous
+ * page ended on. */
 export interface ConflictPageOptions {
   limit?: number;
   after?: KeysetPosition;
@@ -32,7 +34,8 @@ export interface ConflictPageOptions {
 
 export interface ConflictPage {
   conflicts: MemoryConflict[];
-  /** Where the next page starts, or null after the last; a filtered page can be short and still go on. */
+  /** Where the next page starts, or null after the last; a filtered page can be short and still
+   * go on. */
   next: KeysetPosition | null;
 }
 
@@ -72,7 +75,8 @@ async function touchableConflict(ctx: Context, conflictId: number): Promise<Conf
   return row !== null && touchable(ctx.actor, row) ? row : null;
 }
 
-/** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is out of reach. */
+/** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is
+ * out of reach. */
 export async function conflictGet(
   ctx: Context,
   conflictId: number,
@@ -80,15 +84,16 @@ export async function conflictGet(
   return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
 }
 
-/** Keeps `keepId` and weakens, deletes or rejects the other side, auditing as `ctx.actor`. NotFound: missing,
- * untouchable or no longer live. Forbidden: a loser to remove the caller may not change. Conflict: already resolved.
- * BadRequest: `keepId` outside the pair. */
+/** Keeps `keepId` and weakens, deletes or rejects the other side, auditing as `ctx.actor`.
+ * NotFound: missing, untouchable or no longer live. Forbidden: a loser to remove the caller may
+ * not change. Conflict: already resolved. BadRequest: `keepId` outside the pair. */
 export async function conflictResolve(
   ctx: Context,
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
-  // Any status, so a resolved conflict answers 409 while one holding another person's personal row stays a 404.
+  // Any status, so a resolved conflict answers 409 while one holding another person's personal row
+  // stays a 404.
   const row = await touchableConflict(ctx, conflictId);
   if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
   if (row.conflict.status !== 'open')
@@ -111,12 +116,14 @@ export async function conflictResolve(
     reason,
     at: ctx.infra.clock().toISOString(),
   });
-  // Every check passed above, so false here is another resolver, or a scope change, getting there first.
+  // Every check passed above, so false here is another resolver, or a scope change, getting there
+  // first.
   if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);
   return { conflictId, keptId: keep.id, loserId: loser.id };
 }
 
-/** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a missing conflict. */
+/** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a
+ * missing conflict. */
 async function assertMayRemove(ctx: Context, conflictId: number, loserId: string): Promise<void> {
   const [loser] = await ctx.store.entriesByIds([loserId], ctx.tenantId);
   assertWriteRight(scopeReaderOf(ctx.actor), loser, loserId, `conflict not found: ${conflictId}`);
@@ -163,8 +170,8 @@ export async function conflictListOpen(
   return { conflicts: page.rows.filter(shown).map((row) => row.conflict), next: page.next };
 }
 
-/** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host
- * admin only. */
+/** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's
+ * own view, so the host admin only. */
 export async function conflictList(
   ctx: Context,
   status: string,
@@ -181,7 +188,8 @@ export async function conflictList(
   return { conflicts: page.rows.map((row) => row.conflict), next: page.next };
 }
 
-/** Each page a paged list answers from `start`, the largest page at a time, for the verbs that print every conflict. */
+/** Each page a paged list answers from `start`, the largest page at a time, for the verbs that
+ * print every conflict. */
 export function conflictPages(
   read: (page: ConflictPageOptions) => Promise<ConflictPage>,
   start?: KeysetPosition,

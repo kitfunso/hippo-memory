@@ -20,8 +20,9 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
   if (boolArg(args, 'error')) tags.push(ERROR_TAG);
   const tag = stringArg(args, 'tag', MAX_ID_LEN);
   if (tag) tags.push(tag);
-  // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor
-  // under HTTP-MCP, 'mcp' for stdio. It also starts the root's auto-sleep when one is due.
+  // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the
+  // auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio. It also starts the root's auto-sleep
+  // when one is due.
   const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
     tags,
@@ -40,8 +41,9 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const ids = keptShownIds(apiCtx);
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-  // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,
-  // 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips cross-tenant ids silently.
+  // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved
+  // ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips
+  // cross-tenant ids silently.
   const { applied } = await apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
@@ -49,8 +51,8 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
 export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
-  // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin
-  // (mcpActor fails closed).
+  // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio
+  // and a host admin (mcpActor fails closed).
   const result = await apiLearn(mcpApiContext(ctx), {
     repoPath: process.cwd(),
     days,

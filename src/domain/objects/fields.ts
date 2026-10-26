@@ -2,15 +2,16 @@
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
-/** Required text, trimmed: blank is refused, and so is text over `max` once trimmed. The caller stores the trimmed
- * text. */
+/** Required text, trimmed: blank is refused, and so is text over `max` once trimmed. The caller
+ * stores the trimmed text. */
 export function requireText(value: string | undefined, max: number, field: string): string {
   const text = (value ?? '').trim();
   if (text.length === 0) throw new BadRequestError(`${field} must not be blank`);
   return capText(text, max, field);
 }
 
-/** Required text that becomes a tag, a heading or a filter value, so it must also fit on one line. */
+/** Required text that becomes a tag, a heading or a filter value, so it must also fit on one
+ * line. */
 export function requireLine(value: string | undefined, max: number, field: string): string {
   return oneLine(requireText(value, max, field), field);
 }

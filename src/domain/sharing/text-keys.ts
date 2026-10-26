@@ -1,10 +1,12 @@
-// The store share and sync down read, and its text keys a page at a time, so no one read returns every row.
+// The store share and sync down read, and its text keys a page at a time, so no one read returns
+// every row.
 import type { EntryTextKey, Sharing, StoreWith } from '../../base/ports/store.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
-/** A store with sharing reads and the facts of its folder, as share, peers, sync down and the two-store search need. */
+/** A store with sharing reads and the facts of its folder, as share, peers, sync down and the
+ * two-store search need. */
 export type SharingStore = StoreWith<'sharing' | 'folderFiles'>;
 
 /** The text keys of `tenantId`, a page at a time, oldest first. */

@@ -94,8 +94,8 @@ export async function handleIncident({
   if (subcommand === 'resolve') return resolveIncident(ctx, args, flags);
   if (subcommand === 'close') return incidentClose(ctx, args);
 
-  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident "<text>"`; for the
-  // `open` keyword the text is args[1], otherwise args[0] is the text.
+  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident
+  // "<text>"`; for the `open` keyword the text is args[1], otherwise args[0] is the text.
   await incidentCreate(ctx, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 

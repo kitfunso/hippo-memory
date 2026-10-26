@@ -1,5 +1,5 @@
-// Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs no validator
-// dependency.
+// Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs
+// no validator dependency.
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
@@ -48,8 +48,8 @@ function isArgNumber(v: ToolArgValue): v is number {
 
 const NUMERIC_STRING = /^-?\d+(\.\d+)?$/;
 
-// LLM clients often send numbers as strings, and the handlers Number-coerce, so "4000" counts as 4000 while "12abc"
-// does not.
+// LLM clients often send numbers as strings, and the handlers Number-coerce, so "4000" counts as
+// 4000 while "12abc" does not.
 function asNumber(v: ToolArgValue): number | null {
   if (isArgNumber(v)) return v;
   if (isArgString(v) && NUMERIC_STRING.test(v.trim())) return Number(v.trim());
@@ -96,8 +96,9 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
 }
 
 /**
- * One message per violation; undeclared properties pass, and `checkedDownstream` names keep the API layer's own error
- * contract.
+ * One message per violation; undeclared properties pass, and `checkedDownstream` names keep the API
+ * layer's own error contract.
+ *
  */
 export function validateToolArgs(
   schema: ToolInputSchema,
@@ -116,10 +117,12 @@ export function validateToolArgs(
   return problems;
 }
 
-// The readers below run after validateToolArgs, so a declared argument already has its schema type; each one caps a
-// string as the HTTP routes do (surface/server/validation.ts), so the same field takes the same length on both.
+// The readers below run after validateToolArgs, so a declared argument already has its schema type;
+// each one caps a string as the HTTP routes do (surface/server/validation.ts), so the same field
+// takes the same length on both.
 
-/** A string argument, or undefined when absent; one over `max` characters is refused with the HTTP route's message. */
+/** A string argument, or undefined when absent; one over `max` characters is refused with the
+ * HTTP route's message. */
 export function optionalStringArg(args: ToolArgs, name: string, max: number): string | undefined {
   const v = args[name];
   if (v === undefined || !isArgString(v)) return undefined;

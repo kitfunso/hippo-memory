@@ -1,5 +1,5 @@
-// What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
-// for it; the SQL is the adapter's compactions-record.ts.
+// What turns a compaction's summary into text the store keeps, and the replay that reads the spool
+// and transcripts for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'node:fs';
 import {
   isObjectLike,
@@ -41,7 +41,8 @@ export const PRE_COMPACT_INSTRUCTION =
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
-/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root resolved. */
+/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root
+ * resolved. */
 export interface CompactionFolder {
   readonly root: string;
   readonly store: Pick<StoreGroups, 'compactionHooks'>;
@@ -62,7 +63,8 @@ interface ScrubbedSummary {
   found: boolean;
 }
 
-/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item scrubbed. */
+/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item
+ * scrubbed. */
 export function readCompactionText(compactSummary: string): ScrubbedSummary {
   const body = compactSummaryBody(compactSummary);
   const parsed = parseCompactionItems(body);
@@ -73,8 +75,8 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   };
 }
 
-/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted;
- * cut after it, as a mask can run longer than what it hides. */
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's
+ * scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
 export function scrubCompactionItems(items: readonly string[]): string[] {
   return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
 }
@@ -104,8 +106,8 @@ function writeNotes(log: Log, notes: readonly string[]): void {
   for (const note of notes) log(note);
 }
 
-/** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
- * defers. Never throws. */
+/** The PostCompact work: record the summary, then write its items. Each step is independent; a
+ * busy store spools or defers. Never throws. */
 export async function saveCompaction(
   folder: CompactionFolder,
   payload: PostCompactPayload,
@@ -163,8 +165,8 @@ function lineText(line: TranscriptLine): string {
   return content.map((block) => (isStringValue(block.text) ? block.text : '')).join('\n');
 }
 
-/** The summary Claude Code wrote into a transcript between two moments; null when it is not (yet) there or the window
- * cannot reach back that far. */
+/** The summary Claude Code wrote into a transcript between two moments; null when it is not
+ * (yet) there or the window cannot reach back that far. */
 function transcriptSummary(
   transcriptPath: string,
   afterMs: number,
@@ -190,13 +192,15 @@ function transcriptSummary(
   return null;
 }
 
-/** How long a replay waits on a locked store, and the Date.now() after which it starts no new record. */
+/** How long a replay waits on a locked store, and the Date.now() after which it starts no new
+ * record. */
 export interface ReplayOptions {
   busyWaitMs?: number;
   deadline?: number;
 }
 
-/** What every replay step reads: the store's hooks, the folder its spool sits in, and the deadline the run works to. */
+/** What every replay step reads: the store's hooks, the folder its spool sits in, and the
+ * deadline the run works to. */
 interface Replay {
   readonly hooks: CompactionHooks;
   readonly root: string;
@@ -275,8 +279,9 @@ async function replayOpen(run: Replay): Promise<number> {
   return saved;
 }
 
-/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left (`summarised` records, spool
- * files, and `started` records the transcript can fill), never throws. Returns how many compactions it saved. */
+/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left
+ * (`summarised` records, spool files, and `started` records the transcript can fill), never
+ * throws. Returns how many compactions it saved. */
 export async function replayCompactions(
   { root, store, tenantId }: CompactionFolder,
   log: Log,

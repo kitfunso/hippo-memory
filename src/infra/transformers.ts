@@ -1,10 +1,11 @@
-// The optional Transformers.js package, and a bounded load of a model from it, shared by the local embedder and the
-// cross-encoder.
+// The optional Transformers.js package, and a bounded load of a model from it, shared by the local
+// embedder and the cross-encoder.
 import { resolveTransformersPackage } from '../base/embeddings/local.js';
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorMessage } from '../base/util/log.js';
 
-/** The package's module namespace, typed by the parts the caller reads; null when neither package is installed. */
+/** The package's module namespace, typed by the parts the caller reads; null when neither
+ * package is installed. */
 export async function importTransformers<M>(): Promise<{
   readonly name: string;
   readonly mod: M;
@@ -27,16 +28,18 @@ export async function importTransformers<M>(): Promise<{
 
 export interface ModelLoadPolicy {
   /**
-   * How long one load may run before it counts as failed; nothing can cancel it, so it keeps running and a late model
-   * is still kept.
+   * How long one load may run before it counts as failed; nothing can cancel it, so it keeps
+   * running and a late model is still kept.
+   *
    */
   readonly timeoutMs: number;
   /** How long a failure is answered from memory before the next call loads again. */
   readonly backoffMs: number;
 }
 
-// A quantized MiniLM is about 23 MB, so two minutes is a 1.5 Mbit/s link; a load from disk takes about a second.
-// The backoff matches the reranker outage warning's repeat window, so each window has one attempt and one warning.
+// A quantized MiniLM is about 23 MB, so two minutes is a 1.5 Mbit/s link; a load from disk takes
+// about a second. The backoff matches the reranker outage warning's repeat window, so each window
+// has one attempt and one warning.
 export const MODEL_LOAD_POLICY: ModelLoadPolicy = {
   timeoutMs: 2 * MINUTE_MS,
   backoffMs: 5 * MINUTE_MS,
@@ -44,13 +47,15 @@ export const MODEL_LOAD_POLICY: ModelLoadPolicy = {
 
 export interface ModelLoads<T> {
   /**
-   * The model under `key`: the loaded one, the load in flight, the failure inside its backoff window, or a new
-   * `start()`.
+   * The model under `key`: the loaded one, the load in flight, the failure inside its backoff
+   * window, or a new `start()`.
+   *
    */
   load(key: string, start: () => Promise<T>): Promise<T>;
 }
 
-/** Runs `start` under a timeout; a model that arrives after the timeout is still handed to `onLoaded`. */
+/** Runs `start` under a timeout; a model that arrives after the timeout is still handed to
+ * `onLoaded`. */
 function loadWithTimeout<T>(
   key: string,
   start: () => Promise<T>,
@@ -80,8 +85,9 @@ function loadWithTimeout<T>(
 }
 
 /**
- * One load per key at a time, bounded by the policy's timeout; `onFailure` hears each failed attempt, so once per
- * backoff window.
+ * One load per key at a time, bounded by the policy's timeout; `onFailure` hears each failed
+ * attempt, so once per backoff window.
+ *
  */
 export function createModelLoads<T>(
   policy: ModelLoadPolicy,

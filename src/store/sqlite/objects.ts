@@ -1,5 +1,5 @@
-// hippo.db's half of the Objects store group: every statement the typed objects and predictions run, each call on a
-// handle of its own.
+// hippo.db's half of the Objects store group: every statement the typed objects and predictions
+// run, each call on a handle of its own.
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
@@ -73,9 +73,11 @@ const KINDS = {
 const objectTable = (kind: ObjectKind): string => KINDS[kind].table;
 
 interface SaveRule<K extends SavableKind> {
-  /** A successor takes its predecessor's version plus one and the caller's change note; a decision has no version. */
+  /** A successor takes its predecessor's version plus one and the caller's change note; a
+   * decision has no version. */
   readonly versioned: boolean;
-  /** The create row's keys after the id, in stored order: ids, counts and flags, never the object's text. */
+  /** The create row's keys after the id, in stored order: ids, counts and flags, never the
+   * object's text. */
   readonly createKeys: (fields: ObjectFields[K], version: number) => JsonObject;
   /** Keys the supersede row stores after its own. */
   readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
@@ -177,8 +179,8 @@ export function sqliteObjects({ on, files }: Handles): Objects {
     closeObject: (...args) => answered(() => closeAny(on, ...args)),
     saveObject: (...args) => answered(() => saveAny(on, files, ...args)),
   };
-  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the port's overloads name,
-  // so every overload gets the row its kind declares.
+  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the
+  // port's overloads name, so every overload gets the row its kind declares.
   return objects as Objects;
 }
 
@@ -257,7 +259,8 @@ function listRows<K extends ObjectKind>(
     params.push(query.memoryId);
   }
   const after = keysetAfter('created_at', 'id', query.after);
-  // SAFETY: the SELECT names spec.cols, the columns the kind's row declares, whatever the WHERE clause holds.
+  // SAFETY: the SELECT names spec.cols, the columns the kind's row declares, whatever the WHERE
+  // clause holds.
   const rows = cachedStatement(
     db,
     `
@@ -270,7 +273,8 @@ function listRows<K extends ObjectKind>(
   return rows.map((row) => spec.rowTo(row));
 }
 
-/** The status guard sits in the UPDATE, so zero rows changed means missing or not closable; the reread tells which. */
+/** The status guard sits in the UPDATE, so zero rows changed means missing or not closable; the
+ * reread tells which. */
 function closeRow<K extends ObjectKind>(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -314,8 +318,8 @@ function close<K extends ObjectKind>(
   return on((db) => {
     const closed = closeRow(db, tenantId, kind, id, close);
     if (isObjectRefusal(closed) || !graphType) return closed;
-    // Each graph write takes its own write lock, so both wait for the commit. The rows go at once because the rebuild
-    // queue is keyed by a mirror memory that may be gone.
+    // Each graph write takes its own write lock, so both wait for the commit. The rows go at once
+    // because the rebuild queue is keyed by a mirror memory that may be gone.
     removeGraphEntitiesForObject(db, tenantId, graphType, closed.id);
     markGraphDirty(db, tenantId, closed.memoryId);
     return closed;
@@ -370,8 +374,8 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   return Number(result.lastInsertRowid ?? 0);
 }
 
-/** The status guard sits in the UPDATE, so a row another writer retired since the preflight fails the whole save; false
- * says so. */
+/** The status guard sits in the UPDATE, so a row another writer retired since the preflight
+ * fails the whole save; false says so. */
 function supersedeRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   row: NewRow<K>,
@@ -392,8 +396,8 @@ function supersedeRow<K extends SavableKind>(
   return true;
 }
 
-/** The object half of a save, inside the scope that holds the mirror memory: a refusal or a throw here leaves no row,
- * memory or audit event. */
+/** The object half of a save, inside the scope that holds the mirror memory: a refusal or a
+ * throw here leaves no row, memory or audit event. */
 function writeObjectRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -432,8 +436,8 @@ interface MirroredWrite {
   readonly graphTenant?: string;
 }
 
-/** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read
- * under the save's write lock, so the two cannot interleave. */
+/** Until the typed migration has run, a mirror goes in on the flat half-life that migration
+ * moves; the flag is read under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(
   db: DatabaseSyncLike,
   mirror: MemoryEntry,
@@ -444,8 +448,8 @@ function onStoreHalfLife(
   return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
 }
 
-/** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the
- * mirror's remember row last. */
+/** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link
+ * and every audit row, the mirror's remember row last. */
 function withMirror<R extends object, F extends Refused>(
   on: OnHandle,
   write: MirroredWrite,
@@ -491,7 +495,8 @@ function save<K extends SavableKind>(
   return isObjectRefusal(written) ? written : spec.rowTo(written);
 }
 
-/** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes the mirror with it. */
+/** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes
+ * the mirror with it. */
 function openIncidentRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -546,7 +551,8 @@ function openIncident(
   return 'refused' in written ? written : rowSpec('incident').rowTo(written);
 }
 
-/** The status guard sits in the UPDATE, so zero rows changed means missing or not open; the reread tells which. */
+/** The status guard sits in the UPDATE, so zero rows changed means missing or not open; the
+ * reread tells which. */
 function resolveRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -587,7 +593,9 @@ function resolveRow(
 }
 
 /**
- * The successor is joined in so a superseded version is kept only while the row that replaced it is not yet in force.
+ * The successor is joined in so a superseded version is kept only while the row that replaced it is
+ * not yet in force.
+ *
  */
 function policiesInForce(
   db: DatabaseSyncLike,

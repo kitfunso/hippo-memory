@@ -36,8 +36,8 @@ async function scoreHead(
         succeeded++;
       } catch (err) {
         firstError ??= err instanceof Error ? err : new Error(errorMessage(err));
-        // One bad inference must not sink the whole pass; a pass where every call fails is warned about by the outage
-        // tracker below.
+        // One bad inference must not sink the whole pass; a pass where every call fails is warned
+        // about by the outage tracker below.
         log.debug(
           `cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`,
           errorFields(err),
@@ -53,15 +53,15 @@ async function scoreHead(
     }),
   );
 
-  // Plain stable sort on purpose: tied scores MUST fall back to the prior relevance order, never an arbitrary content
-  // order.
+  // Plain stable sort on purpose: tied scores MUST fall back to the prior relevance order, never an
+  // arbitrary content order.
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return { results: scored, succeeded, firstError };
 }
 
-/** Track 2 reranker: a cross-encoder from `loadModel`, identity fallback if the model will not load. Each instance owns
- * its outage warning. */
+/** Track 2 reranker: a cross-encoder from `loadModel`, identity fallback if the model will not
+ * load. Each instance owns its outage warning. */
 export function createCrossEncoderReranker(loadModel: CrossEncoderLoad): RerankerFn {
   const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
@@ -75,7 +75,8 @@ export function createCrossEncoderReranker(loadModel: CrossEncoderLoad): Reranke
       return identityOrder(head);
     }
     const { results: scored, succeeded, firstError } = await scoreHead(pipe, query, head);
-    // A loaded model whose every call throws is as dead as one that never loaded; the first error names why.
+    // A loaded model whose every call throws is as dead as one that never loaded; the first error
+    // names why.
     if (head.length > 0 && succeeded === 0) {
       outage.failed(`every inference failed: ${errorMessage(firstError)}`, errorFields(firstError));
     } else {

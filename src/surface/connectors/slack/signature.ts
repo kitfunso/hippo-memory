@@ -9,8 +9,10 @@ function withinSkew(timestamp: string, now: number, skewSeconds: number): boolea
 }
 
 /**
- * True for headers that could pass verifySlackSignature: a timestamp inside the skew window and a `v0=` signature of 64
- * hex digits. Anything else is refused before the body is read, since no secret can make it match.
+ * True for headers that could pass verifySlackSignature: a timestamp inside the skew window and a
+ * `v0=` signature of 64 hex digits. Anything else is refused before the body is read, since no
+ * secret can make it match.
+ *
  */
 export function isWellFormedSlackRequest(
   timestamp: string,
@@ -27,8 +29,9 @@ export interface VerifyOptions {
   signature: string;
   signingSecret: string;
   /**
-   * Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries `signingSecret` first,
-   * then this.
+   * Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries
+   * `signingSecret` first, then this.
+   *
    */
   previousSecret?: string;
   /** Current unix seconds. Injectable for tests. */

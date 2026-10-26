@@ -1,12 +1,14 @@
-// Particle properties follow the memory they stand for; pure, so sleep refreshes them without reaching the store.
+// Particle properties follow the memory they stand for; pure, so sleep refreshes them without
+// reaching the store.
 import { calculateStrength, type StrengthModel } from '../memory/strength.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import { computeCharge, computeMass, computeTemperature, type PhysicsParticle } from './physics.js';
 import { DAY_MS } from '../util/time.js';
 
 /**
- * Refresh mass, charge and temperature for existing particles from current memory attributes (called during
- * consolidation).
+ * Refresh mass, charge and temperature for existing particles from current memory attributes
+ * (called during consolidation).
+ *
  */
 export function refreshParticleProperties(
   particles: PhysicsParticle[],

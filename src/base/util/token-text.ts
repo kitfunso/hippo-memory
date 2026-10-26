@@ -11,7 +11,8 @@ export const DATE_PREFIX_CHARS = 10;
 /** Characters of memory content shown as a one-line preview. */
 export const CONTENT_PREVIEW_CHARS = 80;
 
-/** Rough token estimate: characters / 4, the single estimate behind every token budget and ledger count. */
+/** Rough token estimate: characters / 4, the single estimate behind every token budget and
+ * ledger count. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -21,7 +22,8 @@ export function blockHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, FINGERPRINT_HEX_CHARS);
 }
 
-/** A token allowance that sections pay from in print order; one that does not fit is refused whole. */
+/** A token allowance that sections pay from in print order; one that does not fit is refused
+ * whole. */
 export function tokenPurse(allowance: number) {
   let left = allowance;
   return {

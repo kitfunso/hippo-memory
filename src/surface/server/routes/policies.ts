@@ -8,8 +8,8 @@ import { getString, requiredString } from '../validation.js';
 import { MAX_DATE_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 
-// The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before
-// it reaches the Date parser.
+// The date fields get a type and length check only: the store parses the date, and the cap bounds a
+// junk string before it reaches the Date parser.
 
 async function handlePoliciesAsOf(rr: AuthedRouteRequest): Promise<void> {
   const { res, query, ctx } = rr;

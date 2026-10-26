@@ -31,7 +31,8 @@ export interface CreateApiKeyOptions {
   label?: string;
   /** 'admin' | 'member'. Defaults to 'member', like the API layer. */
   role?: 'admin' | 'member';
-  /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI mints. */
+  /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI
+   * mints. */
   ownerSubject?: string;
   /** ISO time the key stops working; unset means DEFAULT_KEY_TTL_DAYS from now. */
   expiresAt?: string;
@@ -43,8 +44,8 @@ export interface CreateApiKeyResult {
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
-  // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key, so
-  // the store shuts it out before the first one exists.
+  // Migration v26 (role column) has already run; an older binary ignores expires_at and would
+  // honour an expired key, so the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   cachedStatement(
     db,
@@ -116,7 +117,8 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   };
 }
 
-/** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
+/** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any
+ * failure. */
 function verifyApiKey(db: DatabaseSyncLike, plaintext: string, now: number): VerifiedApiKey | null {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;

@@ -20,13 +20,15 @@ export function autodebiasMode(runtime: RuntimeSettings | undefined): Autodebias
   return runtime?.autodebias === false ? 'off' : 'regex';
 }
 
-/** The output a claim earns from its evidence, and the audit row that records the decision when there is one. */
+/** The output a claim earns from its evidence, and the audit row that records the decision when
+ * there is one. */
 export interface PlanningFallacyDecision {
   output: PlanningFallacyOutput;
   audit?: AppendAuditOptions;
 }
 
-/** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */
+/** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no
+ * claim matches. */
 export function detectPlanningClaim(
   queryText: string,
   opts: ComputePlanningFallacyHintOptions = {},
@@ -37,7 +39,8 @@ export function detectPlanningClaim(
   return detectForwardClaim(queryText);
 }
 
-/** The hint, the watching variant or nothing for a claim and its class evidence; reads and writes nothing itself. */
+/** The hint, the watching variant or nothing for a claim and its class evidence; reads and
+ * writes nothing itself. */
 export function decidePlanningFallacy(
   match: ForwardClaimMatch,
   evidence: PlanningFallacyEvidence,
@@ -45,13 +48,14 @@ export function decidePlanningFallacy(
   actor: string,
 ): PlanningFallacyDecision {
   if (evidence.tiebreak) {
-    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets the caller render
-    // "watching but no baserate (tiebreak)"; the audit channel stays the source of truth.
+    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets
+    // the caller render "watching but no baserate (tiebreak)"; the audit channel stays the source
+    // of truth.
     return watchingWithAudit(tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
   }
   if (!evidence.classTag) {
-    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real forward-claims with no
-    // class signal, the case for an embedding fallback.
+    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real
+    // forward-claims with no class signal, the case for an embedding fallback.
     return watchingWithAudit(tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
   }
   const baserate = evidence.baserate;

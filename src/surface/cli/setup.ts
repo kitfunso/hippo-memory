@@ -1,4 +1,5 @@
-// `hippo hook`, `hippo setup` and `hippo daily-runner`: install and run the agent and machine integrations.
+// `hippo hook`, `hippo setup` and `hippo daily-runner`: install and run the agent and machine
+// integrations.
 
 import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import * as path from 'node:path';
@@ -90,7 +91,8 @@ export function handleHook({ args }: CommandContext): void {
   fail('Usage: hippo hook <install|uninstall|list> [target]');
 }
 
-// Cursor has no init row, so the AGENTS.md block is usually another agent's, and Cursor reads that one as it is.
+// Cursor has no init row, so the AGENTS.md block is usually another agent's, and Cursor reads that
+// one as it is.
 function othersBlock(target: string, text: string): boolean {
   return target === 'cursor' && hippoBlock(text)?.owner !== 'cursor';
 }
@@ -109,7 +111,8 @@ function hookList(): void {
 }
 
 function hookInstall(target: string | undefined): void {
-  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS entry.
+  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS
+  // entry.
   if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
@@ -125,7 +128,8 @@ function hookInstall(target: string | undefined): void {
     installOpencodeHook();
   } else if (target === 'codex') {
     installCodexMemoryHooks('');
-    // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is not an error.
+    // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is
+    // not an error.
     if (detectRealCodexPath()) {
       const result = installCodexWrapper();
       console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
@@ -161,8 +165,8 @@ function patchAgentFile(hook: HookSpec, target: string): void {
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
   } else {
-    // Do not create an agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories without one, to avoid
-    // polluting cwd; the settings.json hook below is still installed for claude-code.
+    // Do not create an agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories without
+    // one, to avoid polluting cwd; the settings.json hook below is still installed for claude-code.
     console.log(`${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`);
     console.log(
       `   Create ${hook.file} and re-run \`hippo hook install ${target}\` if you want the agent prompt.`,
@@ -376,8 +380,8 @@ function hookUninstall(target: string | undefined): void {
       warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
-    // opencode uses a TS plugin; uninstall removes the plugin file and also runs the legacy-hooks migration, so remove
-    // leaves opencode launchable.
+    // opencode uses a TS plugin; uninstall removes the plugin file and also runs the legacy-hooks
+    // migration, so remove leaves opencode launchable.
     if (uninstallOpencodePlugin()) {
       console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
     }
@@ -528,12 +532,12 @@ function setupCopilot(dryRun: boolean): void {
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name === 'copilot') return setupCopilot(dryRun);
-  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot (rules/shared.ts), and copilot
-  // returned above.
+  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot
+  // (rules/shared.ts), and copilot returned above.
   const target = tool.name as JsonHookTarget;
   if (dryRun) {
-    // Resolve the real settings path so the filename is right for each tool (claude-code -> settings.json, opencode ->
-    // opencode.json).
+    // Resolve the real settings path so the filename is right for each tool (claude-code ->
+    // settings.json, opencode -> opencode.json).
     const { settings } = resolveJsonHookPaths(target);
     console.log(`[dry-run] would install hooks in ${settings}`);
     return;
@@ -608,12 +612,14 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
   }
 }
 
-// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a hung child cannot
-// stall every later workspace.
+// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a
+// hung child cannot stall every later workspace.
 const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 
 /**
- * Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code.
+ * Why a child step failed; a child killed at the deadline says so, since its own message is only
+ * the spawn error code.
+ *
  */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   if (errorCode(err) === 'ETIMEDOUT') {
@@ -624,7 +630,8 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
 
 export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
   const globalRoot = hippoHomeDir();
-  // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
+  // No workspace sleep ever opens the global store, yet hooks in folders without a store compact
+  // into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
     const finished = await replayCompactions(
@@ -668,7 +675,8 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
       );
     }
   };
-  // Before the no-workspace return: a box with no workspaces still has a global store that hooks write to.
+  // Before the no-workspace return: a box with no workspaces still has a global store that hooks
+  // write to.
   if (isInitialized(globalRoot)) await sleepGlobalStore(globalRoot, tenantId, runStep);
 
   if (workspaces.length === 0) {
@@ -684,7 +692,8 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
 
 const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;
 
-/** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history sleeps it anyway. */
+/** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history
+ * sleeps it anyway. */
 async function sleepGlobalStore(
   globalRoot: string,
   tenantId: string,
@@ -711,6 +720,7 @@ function reportDailyRun(processed: number, failed: number): void {
     `Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
       `${plural(failed, 'command failure')}.`,
   );
-  // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
+  // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a
+  // clean run.
   if (failed > 0) process.exitCode = 1;
 }

@@ -1,4 +1,5 @@
-// A served hippo.db keeps one connection open for the life of the server, beside the worker that checkpoints its WAL.
+// A served hippo.db keeps one connection open for the life of the server, beside the worker that
+// checkpoints its WAL.
 import { existsSync } from 'node:fs';
 import {
   closeHippoDb,
@@ -24,25 +25,29 @@ export interface StoreHolder {
   hold: () => void;
   afterResponse: () => void;
   release: () => Promise<void>;
-  /** Runs one request in the server's scope, inside the fence that keeps hippo.db shut when the store is not it. */
+  /** Runs one request in the server's scope, inside the fence that keeps hippo.db shut when the
+   * store is not it. */
   runRequest: (run: () => Promise<void>) => Promise<void>;
 }
 
-/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates one. */
+/** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates
+ * one. */
 function holdSqliteConnection(hippoRoot: string): StoreHolder {
-  // Captured here: the response listener that holds the connection may run outside the runtime's context.
+  // Captured here: the response listener that holds the connection may run outside the runtime's
+  // context.
   const runtime = currentStoreRuntime();
-  // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last, which
-  // checkpoints and deletes the WAL.
+  // Handlers open and close their own connections; while this one is held, none of those closes is
+  // SQLite's last, which checkpoints and deletes the WAL.
   let heldDb: DatabaseSyncLike | undefined;
   let checkpointer: WalCheckpointer | undefined;
   let stopHolding = false;
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The 'finish' listener can fire inside a request scope (closing this connection with the request) and inside a
-      // `loop: 'off'` block (refusing the open). The server's lock wait: this open runs on the event loop, where
-      // SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
+      // The 'finish' listener can fire inside a request scope (closing this connection with the
+      // request) and inside a `loop: 'off'` block (refusing the open). The server's lock wait: this
+      // open runs on the event loop, where SQLite's 5 s default and the 30 s journal-mode retry
+      // would stall every request.
       heldDb = outsideSqliteOffLoop(() =>
         outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })),
       );
@@ -61,8 +66,8 @@ function holdSqliteConnection(hippoRoot: string): StoreHolder {
   };
   const release = async (): Promise<void> => {
     stopHolding = true;
-    // The worker's connection closes first, so the held one is SQLite's last and its close checkpoints and deletes the
-    // WAL.
+    // The worker's connection closes first, so the held one is SQLite's last and its close
+    // checkpoints and deletes the WAL.
     await checkpointer?.stop();
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;
@@ -70,13 +75,15 @@ function holdSqliteConnection(hippoRoot: string): StoreHolder {
   return { hold, afterResponse, release, runRequest: (run) => runSqliteRequest(run, 'server') };
 }
 
-/** The holder for the store a server serves: hippo.db's held connection, else a fence that keeps hippo.db shut. */
+/** The holder for the store a server serves: hippo.db's held connection, else a fence that keeps
+ * hippo.db shut. */
 export function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   if (isHippoDbStore(store)) return holdSqliteConnection(hippoRoot);
   log.info(
     `serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`,
   );
-  // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+  // A missed port under another store would otherwise create and write a hippo.db that store never
+  // reads.
   return {
     hold: () => {},
     afterResponse: () => {},
@@ -90,8 +97,8 @@ export function offLoopFor(store: HippoStore): <T>(run: () => T) => T {
   return runsOffLoop(store) ? withSqliteOffLoop : (run) => run();
 }
 
-// A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a
-// `loop: 'off'` route.
+// A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs
+// outside the block of a `loop: 'off'` route.
 export function outsideRouteBlock<A extends readonly unknown[], R>(
   resolver: ((...args: A) => R) | undefined,
 ): ((...args: A) => R) | undefined {

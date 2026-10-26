@@ -1,6 +1,7 @@
-// The one module outside the SQLite adapter that names it: each composition root opens the default store, its request
-// scopes, its store runtime and its server runtime here, so a second adapter changes this file and no root
-// (scripts/check-layers.mjs). The exit hooks live here too, since the store layers install none.
+// The one module outside the SQLite adapter that names it: each composition root opens the default
+// store, its request scopes, its store runtime and its server runtime here, so a second adapter
+// changes this file and no root (scripts/check-layers.mjs). The exit hooks live here too, since the
+// store layers install none.
 import {
   currentStoreRuntime,
   sqliteServerRuntime,
@@ -40,8 +41,8 @@ export {
   type VectorRow,
 } from '../store/sqlite/index.js';
 
-/** Runs `fn` inside the process's store runtime: inside one already, it joins it; else it opens one that is disposed
- * when `fn` settles, or by its exit hook when process.exit comes first. */
+/** Runs `fn` inside the process's store runtime: inside one already, it joins it; else it opens
+ * one that is disposed when `fn` settles, or by its exit hook when process.exit comes first. */
 export async function withRootStoreRuntime<T>(fn: () => Promise<T>): Promise<T> {
   if (currentStoreRuntime()) return fn();
   const runtime = new StoreRuntime();
@@ -55,15 +56,16 @@ export async function withRootStoreRuntime<T>(fn: () => Promise<T>): Promise<T> 
   }
 }
 
-/** A store runtime for a root that runs until the process exits, such as the stdio MCP loop; its exit hook disposes
- * it. */
+/** A store runtime for a root that runs until the process exits, such as the stdio MCP loop; its
+ * exit hook disposes it. */
 export function openRootStoreRuntime(): StoreRuntime {
   const runtime = new StoreRuntime();
   process.once('exit', () => runtime.dispose());
   return runtime;
 }
 
-/** hippo.db as a server serves it, with an exit hook that closes what the server opened if close() never runs. */
+/** hippo.db as a server serves it, with an exit hook that closes what the server opened if
+ * close() never runs. */
 export function defaultServerRuntime(
   hippoRoot: string,
   opts: ServerRuntimeOptions = {},

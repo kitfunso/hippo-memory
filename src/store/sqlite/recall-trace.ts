@@ -1,7 +1,8 @@
-/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and
- * `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and printRecall: the (query, shown,
- * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
- * and swallowed, never breaking the surrounding call. */
+/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results`
+ * and `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and
+ * printRecall: the (query, shown, outcome) triple the learned components train on. All writes
+ * are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the
+ * surrounding call. */
 
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
@@ -24,17 +25,18 @@ import { handleStamp } from './handle-clock.js';
 
 // How long the delivery ledger and the recall traces stay.
 
-/** Delivery events, and recall traces with no outcome that are not the store's last recall, are kept this long. */
+/** Delivery events, and recall traces with no outcome that are not the store's last recall, are
+ * kept this long. */
 const RETENTION_DAYS = 90;
 
-/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real clock, so a far-future
- * fake time spares real rows. */
+/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real
+ * clock, so a far-future fake time spares real rows. */
 const deliveryCutoff = (ts: string, nowMs: number): string =>
   new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
 
-/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
- * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is
- * dropped too. */
+/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the
+ * CLI goal-boost step embeds goal tag text) and would leak user content into `rerank_json`; an
+ * allowlist, so any future free-form field is dropped too. */
 function sanitizeRerankSteps(
   steps: RerankStep[],
 ): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
@@ -55,8 +57,9 @@ const INSERT_TRACE_SQL = `
 // Six binds a row; 100 rows is 600, under the 999 floor of SQLite's bound-parameter limit.
 const RESULT_ROWS_PER_INSERT = 100;
 
-/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
- * stderr and returns null on failure. api.recall/contextGet reach this via `finishRecall` on their own handle. */
+/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection.
+ * Fail-soft: logs to stderr and returns null on failure. api.recall/contextGet reach this via
+ * `finishRecall` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
@@ -113,9 +116,10 @@ export interface RecordTraceOutcomeInput {
   memoryIds: string[];
 }
 
-/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from
- * api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it
- * returned. Own table so `auditPrune` cannot erase training data. */
+/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK
+ * `traceId`, never from api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is
+ * in `input.tenantId`; keeps only memoryIds it returned. Own table so `auditPrune` cannot erase
+ * training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
     const trace = cachedStatement(db, `SELECT tenant_id FROM recall_traces WHERE id = ?`).get(
@@ -151,10 +155,11 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
+/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the
+ * hook. */
 const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire
- * twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this
+ * close are one fire twice. */
 const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
@@ -230,7 +235,8 @@ function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInpu
 
 function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   if (input.eventType === 'tool-failure') return readDuplicateToolFailure(db, input);
-  // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
+  // A boundary has no prompt, and two compactions of one session never start within the window, so
+  // time alone decides.
   if (isBoundaryEvent(input.eventType)) return readDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     const row = cachedStatement(
@@ -337,7 +343,8 @@ const DELIVERY_CANDIDATE_COLUMNS = [
   'tokens',
 ] as const;
 
-/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not give back bit for bit. */
+/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not
+ * give back bit for bit. */
 function insertDeliveryCandidates(
   db: DatabaseSyncLike,
   eventId: number,
@@ -367,11 +374,12 @@ function insertDeliveryCandidates(
   }
 }
 
-/** How often a store prunes its delivery ledger and old recall traces: each prune walks the expired rows, so a busy
- * server skips most. */
+/** How often a store prunes its delivery ledger and old recall traces: each prune walks the
+ * expired rows, so a busy server skips most. */
 const DELIVERY_PRUNE_EVERY_MS = 60_000;
 
-/** When a store last pruned its delivery ledger; each store holds its own, so the minute is counted per store. */
+/** When a store last pruned its delivery ledger; each store holds its own, so the minute is
+ * counted per store. */
 export interface DeliveryPruneSchedule {
   due(nowMs: number): boolean;
   pruned(nowMs: number): void;
@@ -389,12 +397,13 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   };
 }
 
-/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after an upgrade holds the
- * hook's write lock briefly; the rest of a backlog goes on the next prunes. */
+/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after
+ * an upgrade holds the hook's write lock briefly; the rest of a backlog goes on the next prunes. */
 const TRACE_PRUNE_BATCH = 1000;
 
-/** Traces before `cutoff` that no outcome names and that are not the last recall's, with their results through the
- * v40 cascade; a trace with an outcome is training data, and the last one may still get its outcome. */
+/** Traces before `cutoff` that no outcome names and that are not the last recall's, with their
+ * results through the v40 cascade; a trace with an outcome is training data, and the last one
+ * may still get its outcome. */
 function pruneRecallTraces(db: DatabaseSyncLike, cutoff: string): void {
   const last = parseLastTraceId(getMeta(db, META_KEY.lastTraceId));
   cachedStatement(
@@ -418,8 +427,8 @@ function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): voi
   pruneRecallTraces(db, cutoff);
 }
 
-/** One event plus its candidates in one write transaction, then a prune when `prune` is due; fail-soft. The caller must
- * not hold a transaction on `db`. */
+/** One event plus its candidates in one write transaction, then a prune when `prune` is due;
+ * fail-soft. The caller must not hold a transaction on `db`. */
 function writeDeliveryEvent(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -429,7 +438,8 @@ function writeDeliveryEvent(
     const now = Date.now();
     const pruning = prune.due(now);
     const eventId = withWriteScope(db, 'write_delivery_event', () => {
-      // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
+      // Missing-session and sub-agent events are not turns of a session, so they get no number and
+      // no duplicate check.
       const isTurn =
         input.sessionId !== null &&
         (input.sessionState === 'payload' || input.sessionState === 'env');
@@ -458,8 +468,8 @@ function writeDeliveryEvent(
   }
 }
 
-/** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock.
- * Fail-soft. */
+/** Write on the request's handle, or a short-lived one, waiting at most {@link
+ * DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
 export function writeDeliveryEventVia(
   on: OnHandle,
   input: DeliveryEventInput,
@@ -478,8 +488,9 @@ export function writeDeliveryEventVia(
   }
 }
 
-/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back
- * after. A caller holding only a handle gets a fresh schedule, so each of its writes prunes. */
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own
+ * lock wait comes back after. A caller holding only a handle gets a fresh schedule, so each of
+ * its writes prunes. */
 export function writeDeliveryEventOnHandle(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,

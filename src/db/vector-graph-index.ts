@@ -1,5 +1,6 @@
-// The HNSW graphs of one store's vectors, one per vector length, held by the store worker thread that answers its
-// nearest-row reads. Built off the request path; until a graph is ready, reads search the saved graph file or scan.
+// The HNSW graphs of one store's vectors, one per vector length, held by the store worker thread
+// that answers its nearest-row reads. Built off the request path; until a graph is ready, reads
+// search the saved graph file or scan.
 import { DEFAULT_CONFIG } from '../base/config/config.js';
 import { errorFields, log } from '../base/util/log.js';
 import { requestScopes } from '../base/util/request-scope.js';
@@ -26,12 +27,13 @@ import { cachedStatement } from './statement-cache.js';
 
 // Longest a build holds the thread before a waiting job may run.
 const SLICE_MS = 10;
-// New rows one query inserts itself; past this the graph catches up in the background and answers meanwhile for the
-// rows it holds.
+// New rows one query inserts itself; past this the graph catches up in the background and answers
+// meanwhile for the rows it holds.
 const INLINE_ROWS = 32;
 // Refreshes between two counts of the stored rows, the only read that sees a deleted vector.
 const RECOUNT_EVERY = 256;
-// A build that failed is not tried again for this long, so a broken store logs once a minute, not once a query.
+// A build that failed is not tried again for this long, so a broken store logs once a minute, not
+// once a query.
 const RETRY_MS = 60_000;
 
 export interface VectorGraphsOptions {
@@ -44,11 +46,13 @@ export interface VectorGraphsOptions {
 interface Ready {
   readonly kind: 'ready';
   readonly rows: GraphRows;
-  /** The connection and data_version the graph was last brought up to date on; versions of two connections differ. */
+  /** The connection and data_version the graph was last brought up to date on; versions of two
+   * connections differ. */
   seenOn: DatabaseSyncLike | undefined;
   dataVersion: number;
   refreshes: number;
-  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from the graph. */
+  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from the
+   * graph. */
   catchingUpFrom: number | undefined;
 }
 
@@ -63,7 +67,8 @@ function dataVersion(db: DatabaseSyncLike): number {
     .data_version;
 }
 
-// max(rowid) is one lookup and bounds the row count from above, so a store far under the threshold is never counted.
+// max(rowid) is one lookup and bounds the row count from above, so a store far under the threshold
+// is never counted.
 function storedCount(db: DatabaseSyncLike, threshold: number): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const top =
@@ -77,8 +82,8 @@ function storedCount(db: DatabaseSyncLike, threshold: number): number {
   return (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
 }
 
-/** True when the store on `db` holds enough vectors, and not more than `maxVectors`, for a served store's reads to
- * search a graph rather than scan. */
+/** True when the store on `db` holds enough vectors, and not more than `maxVectors`, for a
+ * served store's reads to search a graph rather than scan. */
 export function graphServesStore(db: DatabaseSyncLike, maxVectors: number): boolean {
   const stored = storedCount(db, VECTOR_GRAPH_THRESHOLD);
   return stored >= VECTOR_GRAPH_THRESHOLD && stored <= maxVectors;
@@ -91,11 +96,12 @@ export class VectorGraphs implements VectorIndex {
   readonly #maxVectors: number;
   readonly #slots = new Map<number, Slot>();
   readonly #file: GraphFileIndex;
-  // Builds, catch-ups and the saves after them, so the thread closes its store with none left running.
+  // Builds, catch-ups and the saves after them, so the thread closes its store with none left
+  // running.
   readonly #work = new Set<Promise<void>>();
   #closed = false;
-  // Counted under the threshold or over the cap on this connection at this data_version, so not counted again until a
-  // write.
+  // Counted under the threshold or over the cap on this connection at this data_version, so not
+  // counted again until a write.
   #unfit: { db: DatabaseSyncLike; version: number } | undefined;
   // Set once the over-cap line is logged, so a store that stays over the cap logs it once.
   #overCap = false;
@@ -133,7 +139,8 @@ export class VectorGraphs implements VectorIndex {
     this.#closed = true;
   }
 
-  /** Settles once no build or save runs, so the thread closes its store with no build's connection left open. */
+  /** Settles once no build or save runs, so the thread closes its store with no build's
+   * connection left open. */
   async idle(): Promise<void> {
     await Promise.all(this.#work);
   }
@@ -149,7 +156,8 @@ export class VectorGraphs implements VectorIndex {
     const version = dataVersion(db);
     if (this.#unfit?.db === db && this.#unfit.version === version) return false;
     const stored = storedCount(db, this.#threshold);
-    // Under the threshold the count is only a bound from max(rowid), so the cap is not checked against it.
+    // Under the threshold the count is only a bound from max(rowid), so the cap is not checked
+    // against it.
     const fits = stored >= this.#threshold && this.#underCap(stored);
     this.#unfit = fits ? undefined : { db, version };
     return fits;
@@ -169,7 +177,8 @@ export class VectorGraphs implements VectorIndex {
     return !over;
   }
 
-  // The rowid up to which the graph answers for the store as this connection sees it; undefined drops to the file.
+  // The rowid up to which the graph answers for the store as this connection sees it; undefined
+  // drops to the file.
   #covered(db: DatabaseSyncLike, dim: number, slot: Ready): number | undefined {
     if (slot.catchingUpFrom !== undefined) {
       return storedModel(db) === slot.rows.model ? slot.catchingUpFrom : undefined;
@@ -193,7 +202,8 @@ export class VectorGraphs implements VectorIndex {
       const fresh = staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length;
       if (this.#underCap(slot.rows.live) && fresh) return slot.rows.lastRowid;
     }
-    // Dropped, so the next read builds a fresh graph without the stale nodes or the other model's vectors.
+    // Dropped, so the next read builds a fresh graph without the stale nodes or the other model's
+    // vectors.
     this.#slots.delete(dim);
     return undefined;
   }
@@ -221,7 +231,8 @@ export class VectorGraphs implements VectorIndex {
     });
   }
 
-  // The graph keeps answering for the rows up to `afterRowid` while the rows above it are added between turns.
+  // The graph keeps answering for the rows up to `afterRowid` while the rows above it are added
+  // between turns.
   #catchUp(dim: number, slot: Ready, afterRowid: number): void {
     slot.catchingUpFrom = afterRowid;
     this.#background(dim, async () => {
@@ -269,7 +280,8 @@ export class VectorGraphs implements VectorIndex {
     this.#work.add(done);
   }
 
-  // Undefined when the threads close first or the vectors now come from another model, so the next read starts over.
+  // Undefined when the threads close first or the vectors now come from another model, so the next
+  // read starts over.
   async #grow(
     dim: number,
     base: GraphRows | undefined,
@@ -292,15 +304,16 @@ export class VectorGraphs implements VectorIndex {
     return rows;
   }
 
-  // A connection of the build's own: its cursor stays open across turns, and jobs on the thread's connection must never
-  // read through that snapshot.
+  // A connection of the build's own: its cursor stays open across turns, and jobs on the thread's
+  // connection must never read through that snapshot.
   async #readRows(
     dim: number,
     afterRowid: number,
   ): Promise<{ model: string; staged: StagedRows } | undefined> {
     const db = openHippoDbReadOnly(this.#hippoRoot);
     try {
-      // Before the rows: a model change between the two reads then shows as a mismatch at the next query.
+      // Before the rows: a model change between the two reads then shows as a mismatch at the next
+      // query.
       const model = storedModel(db);
       const staged = new StagedRows(dim);
       let slice = performance.now();

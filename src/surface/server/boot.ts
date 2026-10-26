@@ -65,8 +65,8 @@ import type {
   ServerHandle,
 } from './types.js';
 
-// server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string only for
-// pipe/unix-socket listeners (never used here).
+// server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string
+// only for pipe/unix-socket listeners (never used here).
 function isAddressInfo(
   a: string | import('node:net').AddressInfo | null,
 ): a is import('node:net').AddressInfo {
@@ -88,13 +88,13 @@ async function handleRequest(
   options: HandleRequestOptions,
 ): Promise<void> {
   const { streamSlots, limiter } = options;
-  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before Node's URL parser collapses them and they slip past
-  // the route table.
+  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before Node's URL parser collapses them
+  // and they slip past the route table.
   rejectEncodedSlash(req.url ?? '/');
 
   const { method, path, query } = parseRequest(req);
-  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client this one filters by
-  // it.
+  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client
+  // this one filters by it.
   if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
   const routeRequest: RouteRequest = { req, res, opts, query };
@@ -113,8 +113,9 @@ async function handleRequest(
 
   if (await dispatchScopedRoute(routeRequest, method, path)) return;
 
-  // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
-  // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
+  // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so
+  // the key check and every heartbeat wait that long. Store-ready: the stream only authenticates,
+  // through the port.
   if (
     await dispatchHostRoute(routeRequest, request, mcpStream, () =>
       handleMcpStream(req, res, opts, streamSlots),
@@ -127,8 +128,8 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
- * JSON, add-on routes and POST /mcp. */
+/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with
+ * the webhooks, public JSON, add-on routes and POST /mcp. */
 async function dispatchScopedRoute(
   r: RouteRequest,
   method: string,
@@ -137,7 +138,8 @@ async function dispatchScopedRoute(
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
+  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the
+  // port.
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
     handleMcpPost(r.req, r.res, r.opts),
   );
@@ -148,9 +150,10 @@ function sendHealth(
   res: ServerResponse,
   { startedAt, counts, workerCounts }: HandleRequestOptions,
 ): void {
-  // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a
-  // proxied caller or a browser page on loopback, gets liveness only: the version would fingerprint the build and the
-  // pid is noise. Platform health checks only need the 200.
+  // A caller on this machine (detectServer's probe reads version and pid) gets the full body;
+  // anyone else, even a proxied caller or a browser page on loopback, gets liveness only: the
+  // version would fingerprint the build and the pid is noise. Platform health checks only need the
+  // 200.
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
@@ -169,8 +172,8 @@ function sendHealth(
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe
- * can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -184,7 +187,8 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
   sendJson(res, 200, { ok: true });
 }
 
-/** A flag typo is refused at boot, since the safe side it would take may not be the side the operator meant. */
+/** A flag typo is refused at boot, since the safe side it would take may not be the side the
+ * operator meant. */
 function assertFlagsValid(): void {
   const bad = validateFlags();
   if (bad.length > 0) {
@@ -202,7 +206,8 @@ export function listenOn(server: Server, port: number, host: string): Promise<vo
     };
     const onListening = (): void => {
       server.removeListener('error', onError);
-      // With no listener, an 'error' event after boot is an uncaught exception that stops the server for every caller.
+      // With no listener, an 'error' event after boot is an uncaught exception that stops the
+      // server for every caller.
       server.on('error', (err) =>
         log.error(`serve: listener error: ${err.message}`, errorFields(err)),
       );
@@ -220,17 +225,18 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   installCrashHandlers('serve', shutdown);
 }
 
-/** The ./testing kit's tenant resolver, kept at this root because it reads HIPPO_TENANT: the tenant `opts.apiKey`
- * names, else HIPPO_TENANT's (the default tenant when unset or blank), as the server names it. */
+/** The ./testing kit's tenant resolver, kept at this root because it reads HIPPO_TENANT: the
+ * tenant `opts.apiKey` names, else HIPPO_TENANT's (the default tenant when unset or blank), as
+ * the server names it. */
 export function resolveTenantId(opts: ResolveOptions): string {
   return opts.apiKey ? tenantOfApiKey({ ...opts, apiKey: opts.apiKey }) : envTenant();
 }
 
 /**
- * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot; refuses a non-loopback
- * host unless `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
- * HIPPO_TRUSTED_PROXIES.
- * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
+ * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot;
+ * refuses a non-loopback host unless `tls` or allowCleartext is given, and refuses
+ * HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES. Use port: 0 in tests for an ephemeral
+ * port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
@@ -246,12 +252,13 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
     loopbackHosts,
     opts.allowCleartext ?? envAllowCleartext(),
   );
-  // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
+  // An open-ended previous secret keeps working, so the operator hears once that nothing will close
+  // it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
 
-  // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
-  // can prove a pid-reusing impostor is not this server.
+  // Single source of truth for the start time: returned by GET /health and written into the
+  // pidfile, so detectServer can prove a pid-reusing impostor is not this server.
   const startedAt = new Date().toISOString();
   await claimPidfile(opts.hippoRoot, startedAt);
   try {
@@ -317,7 +324,8 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     if (stopping) return;
     stopping = true;
     await stopListening(opts, server, inflight, startedAt);
-    // An auto-sleep answers no request, so draining skips it; its child must leave the store before the store closes.
+    // An auto-sleep answers no request, so draining skips it; its child must leave the store before
+    // the store closes.
     await served.sleeps.settled();
     await runtime.close();
   };
@@ -429,8 +437,8 @@ async function stopListening(
   inflight: Set<ServerResponse>,
   startedAt: string,
 ): Promise<void> {
-  // Remove the pidfile only if it still names this server: a newer server may have rewritten it, and an unconditional
-  // unlink would orphan it.
+  // Remove the pidfile only if it still names this server: a newer server may have rewritten it,
+  // and an unconditional unlink would orphan it.
   removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
   await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }

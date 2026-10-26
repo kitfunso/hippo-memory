@@ -1,5 +1,6 @@
-// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart from spacing.
-// A digit, sign or word that differs is a different value, so nothing looser may count as a copy.
+// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart
+// from spacing. A digit, sign or word that differs is a different value, so nothing looser may
+// count as a copy.
 import type { MemoryEntry } from '../memory/entry.js';
 
 type Text = Pick<MemoryEntry, 'content'> & { source?: string; pinned?: boolean };
@@ -8,7 +9,8 @@ export function duplicateKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** A 53-bit hash (cyrb53) of the text with every space removed: texts duplicateKey calls equal share it. */
+/** A 53-bit hash (cyrb53) of the text with every space removed: texts duplicateKey calls equal
+ * share it. */
 export function duplicateHash(text: string): number {
   const bare = text.replace(/\s+/g, '');
   let h1 = 0xdeadbeef;
@@ -23,13 +25,16 @@ export function duplicateHash(text: string): number {
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
-/** A sleep-merged row's text: a header, a blank line, then each text as a "- " bullet with its later lines indented. */
+/** A sleep-merged row's text: a header, a blank line, then each text as a "- " bullet with its
+ * later lines indented. */
 export function mergedText(header: string, texts: readonly string[]): string {
   return `${header}\n\n${texts.map((t) => `- ${t.trim().replace(/\n/g, '\n  ')}`).join('\n')}`;
 }
 
 /**
- * Each source text a sleep-merged row holds; a two-row merge by an older release kept one text whole after its header.
+ * Each source text a sleep-merged row holds; a two-row merge by an older release kept one text
+ * whole after its header.
+ *
  */
 export function heldTexts(entry: Text): string[] {
   const cut = entry.content.indexOf('\n\n');
@@ -43,7 +48,8 @@ export function heldTexts(entry: Text): string[] {
     .map((t) => t.replace(/\n {2}/g, '\n'));
 }
 
-/** Keys of every text a row holds word for word: its own, plus each source text inside a sleep-merged row. */
+/** Keys of every text a row holds word for word: its own, plus each source text inside a
+ * sleep-merged row. */
 export function heldTextKeys(entry: Text): string[] {
   return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
 }
@@ -55,8 +61,9 @@ export function storedTextKeys(entries: Iterable<Text>): Set<string> {
 }
 
 /**
- * A final result list without copies: drops each unpinned row a sleep-merged row in the list holds word for word, and
- * each later unpinned copy of a text.
+ * A final result list without copies: drops each unpinned row a sleep-merged row in the list holds
+ * word for word, and each later unpinned copy of a text.
+ *
  */
 export function dropHeldCopies<T>(rows: readonly T[], textOf: (row: T) => Text): T[] {
   const held = new Set(rows.flatMap((r) => heldTextKeys(textOf(r)).slice(1)));

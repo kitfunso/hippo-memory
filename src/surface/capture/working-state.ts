@@ -1,5 +1,5 @@
-// A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can
-// derive it.
+// A session's working state read from its transcript tail, with no store in the imports, so a hook
+// with no store can derive it.
 import * as fs from 'node:fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -13,8 +13,9 @@ type LineFlags = Parameters<typeof humanUserText>[0];
 type LineMessage = Parameters<typeof humanUserText>[1];
 
 /**
- * Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript; `textOf` reads a Claude
- * Code line, '' when it has no text.
+ * Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript;
+ * `textOf` reads a Claude Code line, '' when it has no text.
+ *
  */
 function lastTurnText(
   jsonl: string,
@@ -30,8 +31,8 @@ function lastTurnText(
     const copilot = copilotTurn(entry);
     if (copilot?.role === role) return copilot.text;
     if (entry.type !== role) continue;
-    // An isMeta line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is this
-    // session's own.
+    // An isMeta line holds an earlier compact summary and an isSidechain one is a sub-agent turn;
+    // neither is this session's own.
     if (
       ('isMeta' in entry && entry.isMeta === true) ||
       ('isSidechain' in entry && entry.isSidechain === true)
@@ -46,7 +47,8 @@ function lastTurnText(
   return '';
 }
 
-/** The last text block of an assistant message, skipping thinking and tool_use blocks (as summariseTranscript does). */
+/** The last text block of an assistant message, skipping thinking and tool_use blocks (as
+ * summariseTranscript does). */
 function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
   const content = message.content;
   if (!Array.isArray(content)) return '';
@@ -61,8 +63,8 @@ function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
 }
 
 /**
- * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null
- * with a logged reason when nothing is derivable. */
+ * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped,
+ * '' where none; null with a logged reason when nothing is derivable. */
 export function transcriptWorkingState(
   transcriptPath: string,
   log: (message: string) => void,
@@ -71,8 +73,8 @@ export function transcriptWorkingState(
   let rawTask = '';
   let rawNextStep = '';
   try {
-    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit megabytes back: grow
-    // the window a bounded number of times until both turns are in it.
+    // Compaction fires when a big tool_result lands, so the last human and assistant turns can sit
+    // megabytes back: grow the window a bounded number of times until both turns are in it.
     const size = fs.statSync(transcriptPath).size;
     for (const cap of [
       PRE_COMPACT_TAIL_BYTES,

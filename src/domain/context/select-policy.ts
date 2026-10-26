@@ -1,5 +1,5 @@
-// The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices the rows and asks
-// these functions who gets in.
+// The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices
+// the rows and asks these functions who gets in.
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
@@ -31,9 +31,9 @@ const DEFAULT_PROMPT_RECALL_MAX_ITEMS = 5;
 export const finiteOr = (v: number, dflt: number, min: number): number =>
   Number.isFinite(v) && v >= min ? v : dflt;
 
-// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving, and dedupes by id
-// because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill,
-// safely.
+// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving,
+// and dedupes by id because a synced pin sits in both stores. A pin also in the recent slice is
+// counted twice: recents under-fill, safely.
 export function reservePinned(rankedPinned: readonly PricedRow[], budget: number): number {
   let reserve = 0;
   const reservedIds = new Set<string>();
@@ -47,7 +47,8 @@ export function reservePinned(rankedPinned: readonly PricedRow[], budget: number
   return reserve;
 }
 
-/** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones behind it. */
+/** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones
+ * behind it. */
 export function admitWithinBudget<T extends PricedRow>(
   rows: readonly T[],
   picked: Picked<T>,

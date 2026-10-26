@@ -18,7 +18,8 @@ export function backupStore(
   return file;
 }
 
-/** Backs the store up, then runs one transaction; a transaction that throws rolled back, so its backup goes too. */
+/** Backs the store up, then runs one transaction; a transaction that throws rolled back, so its
+ * backup goes too. */
 export function withBackup<T>(
   db: DatabaseSyncLike,
   hippoRoot: string,

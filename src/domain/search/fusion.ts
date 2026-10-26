@@ -5,7 +5,8 @@ import { DEFAULT_GRAPH_SEED_COUNT } from '../../base/rank/recall-defaults.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import type { DenseScores } from './vector.js';
 
-/** Opt-in third RRF list ranking in-pool candidates by graph proximity to the strong lexical seeds. */
+/** Opt-in third RRF list ranking in-pool candidates by graph proximity to the strong lexical
+ * seeds. */
 export interface GraphStreamOptions {
   /** RRF weight for the graph list. Required (opt-in is explicit; no implicit default). */
   weight: number;
@@ -30,7 +31,8 @@ export interface FusionInput {
   graphStream?: GraphStreamOptions;
 }
 
-// Score desc, then entry identity, so ties cannot leak fresh-ingest order into graph seeds or RRF ranks.
+// Score desc, then entry identity, so ties cannot leak fresh-ingest order into graph seeds or RRF
+// ranks.
 function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): number[] {
   return [...eligible].sort((a, b) => {
     const d = scores[b] - scores[a];
@@ -38,7 +40,8 @@ function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): n
   });
 }
 
-/** Reciprocal rank fusion of the BM25 and dense rankings, plus the graph list when it ranks anything. */
+/** Reciprocal rank fusion of the BM25 and dense rankings, plus the graph list when it ranks
+ * anything. */
 export async function fuseRanks(input: FusionInput): Promise<Map<number, number>> {
   const { entries, bm25Scores, dense } = input;
   const eligible = entries.map((_, i) => i).filter((i) => bm25Scores[i] > 0 || dense.cosine[i] > 0);
@@ -47,7 +50,8 @@ export async function fuseRanks(input: FusionInput): Promise<Map<number, number>
   const graphRanked = await graphRanking(input, eligible.length, bm25Ranked, cosineRanked);
   // absentRank stays entries.length + 1 rather than rrfFuse's longest-list default.
   const opts = { absentRank: entries.length + 1 };
-  // An all-absent third list would add a constant the later multipliers make non-uniform, so an empty one is skipped.
+  // An all-absent third list would add a constant the later multipliers make non-uniform, so an
+  // empty one is skipped.
   return graphRanked.length > 0
     ? rrfFuse(
         [bm25Ranked, cosineRanked, graphRanked],
@@ -64,7 +68,8 @@ async function graphRanking(
   cosineRanked: number[],
 ): Promise<number[]> {
   const { graph, graphStream: gs } = input;
-  // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean nothing.
+  // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean
+  // nothing.
   const hasDocVectors = input.dense.hadVec.some(Boolean);
   if (!gs || gs.weight <= 0 || !graph || !hasDocVectors) return [];
   const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligibleCount);

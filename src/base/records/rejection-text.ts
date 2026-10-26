@@ -1,5 +1,5 @@
-// Which text a rejection names and which rows it may remove: the rules a store applies inside its write, so the caller
-// sends data and no function crosses the port.
+// Which text a rejection names and which rows it may remove: the rules a store applies inside its
+// write, so the caller sends data and no function crosses the port.
 import { BadRequestError } from '../errors/api-errors.js';
 import { isPersonalScope, ownScopeTouches } from '../scope/recall-scope.js';
 
@@ -10,7 +10,8 @@ export interface RejectedTextRequest {
   readonly value?: string;
 }
 
-/** The text to reject: the named row's, which must sit in the tenant and not be personal, else the stated value. */
+/** The text to reject: the named row's, which must sit in the tenant and not be personal, else
+ * the stated value. */
 export function rejectedText(
   request: RejectedTextRequest,
   row:

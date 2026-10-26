@@ -37,7 +37,8 @@ export function listTableNames(db: DatabaseSyncLike): string[] {
   return rows.map((r) => r.name);
 }
 
-/** Row count of one table; null when the table is missing or unreadable, which callers show as unknown. */
+/** Row count of one table; null when the table is missing or unreadable, which callers show as
+ * unknown. */
 export function countTableRows(db: DatabaseSyncLike, table: string): number | null {
   try {
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as
@@ -56,7 +57,9 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
 }
 
 /**
- * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows.
+ * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a
+ * fixed number of rows.
+ *
  */
 export const CONSOLIDATION_RUNS_KEPT = 50;
 

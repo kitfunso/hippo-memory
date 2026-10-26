@@ -14,11 +14,12 @@ export const MAX_DRILL_DOWN_DEPTH = 10;
 export interface DrillDownOptions {
   /** Cap on number of children returned. Default 50. */
   limit?: number;
-  /** Token budget: children append in created order until the next would exceed it (cost: printed line under `cost`,
-   * else ceil(content.length / 4)). For depth > 1 the budget is global and cumulative, not per level. */
+  /** Token budget: children append in created order until the next would exceed it (cost:
+   * printed line under `cost`, else ceil(content.length / 4)). For depth > 1 the budget is
+   * global and cumulative, not per level. */
   budget?: number;
-  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with a visited Set,
-   * defensive against shared-child anomalies. */
+  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with
+   * a visited Set, defensive against shared-child anomalies. */
   depth?: number;
   cost?: DrillDownCost;
   project?: CallerProject;
@@ -39,7 +40,8 @@ export interface DrillDownChild {
   created: string;
 }
 
-// Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading can print.
+// Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading
+// can print.
 export interface DrillDownCost {
   child: (c: DrillDownChild) => number;
   fixed: (summary: DrillDownSummary, widest: number) => number;
@@ -52,24 +54,27 @@ export interface DrillDownResult {
   truncated: boolean;
 }
 
-/** `not_found` covers missing, wrong-tenant AND scope-blocked, because distinguishing scope_blocked leaked private-row
- * existence to no-scope callers. `not_drillable`: the id is a leaf row (level 0/1), which the caller can act on. */
+/** `not_found` covers missing, wrong-tenant AND scope-blocked, because distinguishing
+ * scope_blocked leaked private-row existence to no-scope callers. `not_drillable`: the id is a
+ * leaf row (level 0/1), which the caller can act on. */
 export interface DrillDownFailure {
   failure: 'not_found' | 'not_drillable';
 }
 
 export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
 
-/** One step down the DAG from a level-2+ summary to its direct children (the way back from `recall(...
- * summarizeOverflow: true)` substitutions). Only `ctx.tenantId` summaries are reachable; children get recall's scope
- * filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
+/** One step down the DAG from a level-2+ summary to its direct children (the way back from
+ * `recall(... summarizeOverflow: true)` substitutions). Only `ctx.tenantId` summaries are
+ * reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP
+ * maps `not_drillable` to 422. */
 export async function drillDown(
   ctx: Context,
   summaryId: string,
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
   const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
-  // The cap bounds the walk on a pathologically deep tree; CLI, HTTP and MCP reject invalid values before this.
+  // The cap bounds the walk on a pathologically deep tree; CLI, HTTP and MCP reject invalid values
+  // before this.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), MAX_DRILL_DOWN_DEPTH));
   const admit: DescendantAdmission = {
     ownScope: personalScopeOf(ctx.actor) ?? undefined,
@@ -83,11 +88,11 @@ export async function drillDown(
     minSummaryLevel: DAG_LEVEL.topic,
     page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit } : undefined,
   });
-  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant" alike, because
-  // telling them apart would leak existence to unauthorised tenants.
+  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant"
+  // alike, because telling them apart would leak existence to unauthorised tenants.
   if (!walked) return { failure: 'not_found' };
-  // A distinguishable "scope_blocked" would tell a no-scope caller "this row exists, just not for you", the existence
-  // leak the HTTP 404 collapse prevents.
+  // A distinguishable "scope_blocked" would tell a no-scope caller "this row exists, just not for
+  // you", the existence leak the HTTP 404 collapse prevents.
   if (!descendantAdmits(walked.summary, admit)) return { failure: 'not_found' };
   if (!isDrillable(walked.summary)) return { failure: 'not_drillable' };
   return drillResult(walked, opts, limit);
@@ -108,7 +113,8 @@ function drillResult(
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
-    // The stored direct-child count; the fallback counts level-0 children, never the whole depth-N walk.
+    // The stored direct-child count; the fallback counts level-0 children, never the whole depth-N
+    // walk.
     descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
     earliestAt: summary.earliestAt ?? null,
     latestAt: summary.latestAt ?? null,
@@ -127,7 +133,8 @@ function drillResult(
   return {
     summary: summaryOut,
     children,
-    // totalChildren is the BFS-collected count, cumulative across levels (equals the direct-children count at depth=1).
+    // totalChildren is the BFS-collected count, cumulative across levels (equals the
+    // direct-children count at depth=1).
     totalChildren: total,
     truncated,
   };

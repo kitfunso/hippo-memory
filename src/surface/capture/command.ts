@@ -24,8 +24,8 @@ import { evalClock } from '../../infra/eval-switches.js';
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
-  /** Explicit transcript path for `--last-session`. Without one, `stdinText` is used, then auto-discovery under
-   * `<claude config dir>/projects/` on a manual run. */
+  /** Explicit transcript path for `--last-session`. Without one, `stdinText` is used, then
+   * auto-discovery under `<claude config dir>/projects/` on a manual run. */
   transcriptPath?: string;
   /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
@@ -39,14 +39,18 @@ export interface CaptureOptions {
   dryRun: boolean;
   global: boolean;
   /**
-   * The caller's tenant: the dedup read counts only its memories, except under `global`, which counts every tenant's.
+   * The caller's tenant: the dedup read counts only its memories, except under `global`, which
+   * counts every tenant's.
+   *
    */
   tenantId: string;
-  /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
+  /** The session's project: rows are stamped with its id, and dedup reads its rows under either
+   * name. */
   originProject?: ProjectRef;
 }
 
-/** The folder a capture writes to, the global one under `global`, and its store, which the CLI root builds. */
+/** The folder a capture writes to, the global one under `global`, and its store, which the CLI
+ * root builds. */
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
@@ -56,8 +60,8 @@ export interface CaptureTarget {
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
-  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
-  // wrote its header and body.
+  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that
+  // sequence and already wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
     await runCaptureCore(target, options);
@@ -70,14 +74,16 @@ export async function runCapture(target: CaptureTarget, options: CaptureOptions)
   }
 }
 
-/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore function is called. */
+/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore
+ * function is called. */
 function beginLogTee(logFile: string): () => void {
   if (!writeLogBanner(logFile)) return () => {};
 
   return teeStdStreams(logFile);
 }
 
-/** Creates the log's folder and appends the banner line; false, after a warning, when the log cannot be written. */
+/** Creates the log's folder and appends the banner line; false, after a warning, when the log
+ * cannot be written. */
 function writeLogBanner(logFile: string): boolean {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
@@ -116,8 +122,8 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in
-  // memories).
+  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md:
+  // no secrets in memories).
   const extracted = extractFromTexts(
     texts.map((text) => maskEmails(redactSecretsStrict(text))),
     userTexts,
@@ -151,8 +157,8 @@ async function captureFromCli(
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
-// Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
-// stop its own copy.
+// Dedup only against rows this capture's reader sees: another tenant's or project's rows are
+// hidden, so they must not stop its own copy.
 async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
   options: CaptureOptions,
@@ -163,11 +169,13 @@ async function storedKeysInView(
   return storedTextKeys(await store.captures.textsHolding(tenantId, texts, filter));
 }
 
-/** The rows a capture's dedup reads, as data, so the store's write can read them again in its own transaction. */
+/** The rows a capture's dedup reads, as data, so the store's write can read them again in its
+ * own transaction. */
 function captureDedup(options: CaptureOptions): CaptureDedup {
   const tenantId = options.global ? ALL_TENANTS : options.tenantId;
   const origin = options.originProject;
-  // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and user-global rows.
+  // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and
+  // user-global rows.
   if (origin === undefined || projectId(origin) === '') return { tenantId, everyScope: true };
   return { tenantId, everyScope: true, project: projectNames(origin) };
 }
@@ -243,7 +251,8 @@ export interface CaptureTally {
   rejected: number;
 }
 
-/** What a capture's rows carry. The CLI passes no tenant for the global store, so `global` never reaches the writes. */
+/** What a capture's rows carry. The CLI passes no tenant for the global store, so `global` never
+ * reaches the writes. */
 export interface CaptureWriteOptions {
   readonly tenantId: string | undefined;
   readonly originProject: ProjectRef | undefined;
@@ -258,21 +267,24 @@ export interface CaptureWriteOptions {
   readonly now: Date;
 }
 
-/** A folder's store with the config its root loaded for this capture, and where its rows' vectors go. */
+/** A folder's store with the config its root loaded for this capture, and where its rows'
+ * vectors go. */
 export interface ConfiguredStore {
   readonly store: Pick<StoreGroups, 'captures'>;
   readonly config: HippoConfig;
   readonly embed: (entry: MemoryEntry) => void;
 }
 
-/** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the store already holds. */
+/** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the
+ * store already holds. */
 interface CapturePlan {
   readonly entries: MemoryEntry[];
   readonly keys: string[];
   readonly slots: number[];
 }
 
-/** One entry per new text: building can throw, so a held text or a repeat within the batch is never built. */
+/** One entry per new text: building can throw, so a held text or a repeat within the batch is
+ * never built. */
 function planCapture(
   extracted: readonly ExtractedItem[],
   held: ReadonlySet<string>,
@@ -293,7 +305,8 @@ function planCapture(
   return plan;
 }
 
-/** Writes each new text once; a repeat of a captured text in the same batch counts as skipped, as a held one does. */
+/** Writes each new text once; a repeat of a captured text in the same batch counts as skipped,
+ * as a held one does. */
 export async function captureExtractedItems(
   { store, config, embed }: ConfiguredStore,
   options: CaptureWriteOptions,
@@ -320,8 +333,8 @@ export async function captureExtractedItems(
   return tally;
 }
 
-/** A dry run asks the store the same rejected-value question the write's gate does, so a tombstoned item previews as
- * rejected rather than captured. */
+/** A dry run asks the store the same rejected-value question the write's gate does, so a
+ * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
   { rejections }: Pick<StoreGroups, 'rejections'>,
   options: CaptureWriteOptions,
@@ -361,9 +374,10 @@ function captureEntry(
   baseHalfLifeDays: number,
 ): MemoryEntry {
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
-  // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
-  // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
-  // SHORTCUT: every stated rule pins; cap or age these pins if a store's pins outgrow the hook budget.
+  // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
+  // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
+  // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
+  // outgrow the hook budget.
   const created = createMemory(
     item.content,
     {

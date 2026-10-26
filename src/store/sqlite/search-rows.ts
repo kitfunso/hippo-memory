@@ -27,8 +27,8 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { LIKE_WINDOW_ROWS } from '../rules/windows.js';
 
-/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
- * its JS twin. */
+/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
+ * in recall-scope.ts is its JS twin. */
 function recallScopeClause(
   col: 'm.' | '',
   scopeFilter: RecallScopeFilter | undefined,
@@ -39,14 +39,16 @@ function recallScopeClause(
   const admit = scopeAdmitSql(col, scopeFilter.ownScope);
   if (scopeFilter.mode === 'default-deny')
     return { sql: ` AND ${admit.sql}`, params: admit.params };
-  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
+  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
+  // included.
   return {
     sql: ` AND (${admit.sql} OR ${col}scope = ?)`,
     params: [...admit.params, scopeFilter.value],
   };
 }
 
-// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
+// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows
+// out of the LIMIT.
 function withProject(
   scope: SqlFragment,
   col: 'm.' | '',
@@ -107,8 +109,8 @@ function listSearchRows(
   const rows = listLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
-  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded fallback would misstate
-  // the candidate-pool size.
+  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded
+  // fallback would misstate the candidate-pool size.
   return listAllCandidates(db, p, limit);
 }
 
@@ -124,11 +126,11 @@ function searchPredicates(
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantAnd(tenantId).params;
 
-  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
-  // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
+  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this
+  // only guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and
-  // ' WHERE' by caller context.
+  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches
+  // between ' AND' and ' WHERE' by caller context.
   const archivedClauseTenantOnly = one ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
@@ -192,15 +194,16 @@ function listFtsCandidates(
   }
 }
 
-/** Substring matches in content or tags: the trigram index answers each term of 3 or more characters over every
- * admitted row, and LIKE tests the rest over the newest admitted rows. */
+/** Substring matches in content or tags: the trigram index answers each term of 3 or more
+ * characters over every admitted row, and LIKE tests the rest over the newest admitted rows. */
 function listLikeCandidates(
   db: DatabaseSyncLike,
   terms: string[],
   p: SearchPredicates,
   limit: number,
 ): MemoryRow[] {
-  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has no index at all.
+  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has
+  // no index at all.
   const indexed = isFtsAvailable(db)
     ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS)
     : [];
@@ -239,7 +242,8 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
   };
 }
 
-/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the whole store. */
+/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the
+ * whole store. */
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
   const where = terms
     .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
@@ -248,7 +252,8 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
     const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
-  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own order needs no sort.
+  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
+  // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
   return {
     sql:
@@ -282,9 +287,10 @@ export function listSearchEntries(
   return listSearchRows(db, query, limit, tenantId).map(rowToEntry);
 }
 
-/** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
- * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
- * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
+/** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty
+ * `requestedScope` default-denies (admits `ownScope`); else exact match. SQL `NOT LIKE
+ * '%:private:%'` runs before the LIMIT so private rows cannot starve admitted ones;
+ * `passesScopeFilterForRecall` is the exact post-filter. */
 export function listRecallEntries(
   db: DatabaseSyncLike,
   query: string,
@@ -307,7 +313,8 @@ export function listRecallEntries(
   }).map(rowToEntry);
 }
 
-/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
+/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it
+ * can. */
 export async function listVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
@@ -365,7 +372,8 @@ export function pickRarestFtsQuery(
   ensureRarestVocab(db);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
-  // One cached shape per term count: an IN list over a virtual table needs one mark per term to keep its lookups.
+  // One cached shape per term count: an IN list over a virtual table needs one mark per term to
+  // keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,

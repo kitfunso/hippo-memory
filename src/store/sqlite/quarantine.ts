@@ -1,4 +1,5 @@
-// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
+// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
+// their audit rows.
 import { appendAuditEvents } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -29,7 +30,8 @@ import { handleStamp } from './handle-clock.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 interface QuarantineDbRow {
   tenant_id: string;
   memory_id: string;
@@ -50,7 +52,8 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
     memoryId: row.memory_id,
     originalScope: row.original_scope,
     reason: row.reason,
-    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of status.
+    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of
+    // status.
     status: row.status as QuarantineStatus,
     quarantinedAt: row.quarantined_at,
     decidedAt: row.decided_at,
@@ -77,8 +80,8 @@ function listQuarantineRows(
   limit = QUARANTINE_LIST_LIMIT,
   afterRow?: KeysetPosition,
 ): QuarantineRow[] {
-  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the
-  // queue.
+  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history,
+  // drop it from the queue.
   const live =
     status === 'pending'
       ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = ' +
@@ -108,7 +111,8 @@ interface RecordQuarantineOptions {
   actor: string;
 }
 
-/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write transaction. */
+/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write
+ * transaction. */
 export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
   cachedStatement(
     db,
@@ -179,7 +183,8 @@ function pendingOrRefusal(
   return row;
 }
 
-/** Puts the memory back under its original scope; the scope guard refuses a row moved since it was quarantined. */
+/** Puts the memory back under its original scope; the scope guard refuses a row moved since it
+ * was quarantined. */
 function approveQuarantined(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -235,8 +240,8 @@ function rejectQuarantined(
   );
 }
 
-/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the quarantine scope, which still
- * hides the memory. */
+/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the
+ * quarantine scope, which still hides the memory. */
 function rewriteMirror(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -275,7 +280,8 @@ function decide(
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   const quarantine: QuarantineCalls = {
     ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
-    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror folders.
+    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror
+    // folders.
     ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
       on,
       {

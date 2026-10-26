@@ -1,5 +1,5 @@
-// The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader and writer of them
-// shares.
+// The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader
+// and writer of them shares.
 import type {
   Entity,
   EntityType,
@@ -57,7 +57,8 @@ export interface RelationRow {
 
 export function rowToEntity(row: EntityRow): Entity {
   // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
-  // EntityType/SourceKind/SourceObjectType enum values, so the row's column values match those types.
+  // EntityType/SourceKind/SourceObjectType enum values, so the row's column values match those
+  // types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -73,7 +74,8 @@ export function rowToEntity(row: EntityRow): Entity {
 }
 export function rowToRelation(row: RelationRow): Relation {
   // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
-  // RelationType/SourceKind/SourceObjectType enum values, so the row's column values match those types.
+  // RelationType/SourceKind/SourceObjectType enum values, so the row's column values match those
+  // types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -117,8 +119,8 @@ export interface QueueRow {
 }
 
 export function rowToQueueItem(row: QueueRow): GraphQueueItem {
-  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values, so the row's
-  // column values match those types.
+  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum
+  // values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -143,7 +145,8 @@ export interface InsertEntityOptions {
   sourceObject?: SourceObjectRef;
 }
 
-/** What an in-place entity update may change; type and source object are the row's identity and stay. */
+/** What an in-place entity update may change; type and source object are the row's identity and
+ * stay. */
 export interface UpdateEntityOptions {
   name: string;
   memoryId?: string | null;

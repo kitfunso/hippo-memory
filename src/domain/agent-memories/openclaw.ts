@@ -1,4 +1,5 @@
-// OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are left out on purpose.
+// OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are
+// left out on purpose.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import { textItemKeys } from './keys.js';
@@ -18,8 +19,8 @@ export const openclawAdapter: Adapter = {
   },
 };
 
-// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and there is no parser
-// for that here); read it if users ask.
+// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and
+// there is no parser for that here); read it if users ask.
 function workspaceDir(ctx: AdapterContext): string {
   const { OPENCLAW_WORKSPACE_DIR: workspace } = ctx.env;
   return path.resolve(workspace || path.join(stateDir(ctx), 'workspace'));

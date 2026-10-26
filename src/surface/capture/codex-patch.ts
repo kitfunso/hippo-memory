@@ -1,5 +1,5 @@
-// Files named by a Codex apply_patch call, read the way openai/codex codex-rs/apply-patch reads them (parser.rs for the
-// body, invocation.rs for the shell forms it runs as apply_patch).
+// Files named by a Codex apply_patch call, read the way openai/codex codex-rs/apply-patch reads
+// them (parser.rs for the body, invocation.rs for the shell forms it runs as apply_patch).
 import * as path from 'node:path';
 import { isStringValue } from '../../base/session/capture-contract.js';
 
@@ -11,7 +11,8 @@ const END_PATCH = '*** End Patch';
 const MOVE_TO = '*** Move to: ';
 const FILE_HEADER = /^\*\*\* (Add|Delete|Update) File: (.+)$/;
 
-/** Paths a patch body adds, deletes, updates or moves to, in patch order; [] when the text holds no patch. */
+/** Paths a patch body adds, deletes, updates or moves to, in patch order; [] when the text holds
+ * no patch. */
 export function patchPaths(body: string): string[] {
   const lines = body.split(/\r?\n/);
   const start = lines.findIndex((l) => l.trim() === BEGIN_PATCH);
@@ -20,7 +21,8 @@ export function patchPaths(body: string): string[] {
   let updating = false;
   let canMove = false;
   for (const line of lines.slice(start + 1)) {
-    // Inside an update hunk a leading space marks a context line, so headers match on trimEnd only there.
+    // Inside an update hunk a leading space marks a context line, so headers match on trimEnd only
+    // there.
     const head = updating ? line.trimEnd() : line.trim();
     if (head === END_PATCH) break;
     const header = FILE_HEADER.exec(head);

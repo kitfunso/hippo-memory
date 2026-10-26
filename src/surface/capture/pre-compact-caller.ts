@@ -1,5 +1,5 @@
-// PreCompact for a caller on another machine: the record and the owner's snapshot go under its tenant and project; only
-// a refused bind or the holdout arm withholds the instruction.
+// PreCompact for a caller on another machine: the record and the owner's snapshot go under its
+// tenant and project; only a refused bind or the holdout arm withholds the instruction.
 import type { Context, EntryContext } from '../../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -27,7 +27,8 @@ export interface CallerHookOutput {
   readonly stdout: string;
 }
 
-/** A failed step is logged and the instruction still goes out, as the local hook prints it before any store work. */
+/** A failed step is logged and the instruction still goes out, as the local hook prints it
+ * before any store work. */
 async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn();

@@ -20,7 +20,8 @@ export function requireInit(hippoRoot: string): void {
   }
 }
 
-/** Runs churn staleness for the repo this process runs in, against every store its memories can live in. */
+/** Runs churn staleness for the repo this process runs in, against every store its memories can
+ * live in. */
 export async function runChurnStaleForRepo(
   hippoRoot: string,
   tenantId: string,
@@ -33,7 +34,8 @@ export async function runChurnStaleForRepo(
   });
 }
 
-/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+/** True, after one line, on a shared store: this account's commits and agent notes are not its
+ * members' memories. */
 export function skipLearnOnSharedStore(hippoRoot: string): boolean {
   if (!isSharedStore(hippoRoot)) return false;
   console.log(

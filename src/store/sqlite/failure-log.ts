@@ -1,5 +1,5 @@
-// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a handle
-// of its own.
+// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not,
+// each call on a handle of its own.
 import { otherSessionsRequest } from '../rules/request-ids.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type {
@@ -39,7 +39,8 @@ interface FailureRow {
   readonly requestId: string | null;
 }
 
-/** The row `event` stores, stamped in toISOString form since the window and prune compare stamps as text. */
+/** The row `event` stores, stamped in toISOString form since the window and prune compare stamps
+ * as text. */
 function failureRow(event: FailureEvent, fallbackNow: Date): FailureRow {
   return {
     ts: new Date(event.now ?? fallbackNow.getTime()).toISOString(),
@@ -64,7 +65,8 @@ const retentionCutoff = (ts: string): string =>
 const sameStoredSession = (stored: string | null, sessionId: string): boolean =>
   stored === sessionId.slice(0, MAX_HOOK_FIELD_LEN);
 
-/** The window's totals from its per-outcome counts and the tenant's rated rows in id order, the earlier ones too. */
+/** The window's totals from its per-outcome counts and the tenant's rated rows in id order, the
+ * earlier ones too. */
 function failureTotals(
   sinceIso: string,
   count: (outcome: FailureOutcome) => number,
@@ -89,7 +91,8 @@ function failureTotals(
   };
 }
 
-/** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
+/** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the
+ * new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   const row = failureRow(event, handleNow(db));
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
@@ -115,8 +118,8 @@ function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   return Number(inserted.lastInsertRowid);
 }
 
-/** The outcome logged for a caller's request id, or null, so a retried send finds the first one; another session's id
- * is a ConflictError. */
+/** The outcome logged for a caller's request id, or null, so a retried send finds the first one;
+ * another session's id is a ConflictError. */
 export function requestOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -133,7 +136,9 @@ export function requestOutcome(
 }
 
 /**
- * A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant.
+ * A retry that stored what the first try could not rewrites that row, since the request id allows
+ * one row per tenant.
+ *
  */
 function settleFailureOutcome(
   db: DatabaseSyncLike,
@@ -147,7 +152,8 @@ function settleFailureOutcome(
   ).run(outcome, tenantId, requestId);
 }
 
-/** The tenant's rated failures in id order, the ones before the window too: they decide which session hit first. */
+/** The tenant's rated failures in id order, the ones before the window too: they decide which
+ * session hit first. */
 function ratedFailures(db: DatabaseSyncLike, tenantId: string): RatedFailure[] {
   const rows = cachedStatement(
     db,

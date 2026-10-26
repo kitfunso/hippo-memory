@@ -1,5 +1,6 @@
-// The dashboard's reads. Each answers per-project counts, one page, a capped point set or a fixed grid, so what a read
-// hands back never grows with the tenant's row count. Strengths are judged at the `nowMs` each read names.
+// The dashboard's reads. Each answers per-project counts, one page, a capped point set or a fixed
+// grid, so what a read hands back never grows with the tenant's row count. Strengths are judged at
+// the `nowMs` each read names.
 import type { MemoryFacts } from '../../memory/memory-facts.js';
 import type { ConflictRow } from './conflicts.js';
 
@@ -9,7 +10,8 @@ export const SCATTER_POINTS_MAX = 4_000;
 export const SCATTER_COLS = 64;
 export const SCATTER_ROWS = 32;
 
-/** Each left-out row counts under the first of quarantined, superseded and archived that fits it. */
+/** Each left-out row counts under the first of quarantined, superseded and archived that fits
+ * it. */
 export interface ExcludedCounts {
   superseded: number;
   archived: number;
@@ -39,7 +41,8 @@ export interface ProjectTally {
   readonly maxAgeDays: number;
   /** The earliest created time that parses, or null when none does. */
   readonly firstCreatedMs: number | null;
-  /** Rows per seriesDay of their created time (one that does not parse is today), indices 0 to SERIES_DAYS. */
+  /** Rows per seriesDay of their created time (one that does not parse is today), indices 0 to
+   * SERIES_DAYS. */
   readonly createdDays: readonly number[];
 }
 
@@ -86,7 +89,8 @@ export interface DashboardPageQuery extends DashboardFilter {
   readonly limit: number;
 }
 
-/** The filtered rows' chip counts, and their strength buckets (strong, fading, weak) now, at 7 days and at 30 days. */
+/** The filtered rows' chip counts, and their strength buckets (strong, fading, weak) now, at 7
+ * days and at 30 days. */
 export interface FilterTally {
   readonly counts: { all: number; risk: number; pinned: number; conflict: number };
   readonly decay: {
@@ -120,7 +124,8 @@ interface ScatterPoint {
   readonly band: number;
 }
 
-/** Every row by created then id while the project holds at most SCATTER_POINTS_MAX, else per-layer cell counts. */
+/** Every row by created then id while the project holds at most SCATTER_POINTS_MAX, else
+ * per-layer cell counts. */
 export type ScatterRows =
   | {
       readonly mode: 'points';
@@ -129,7 +134,8 @@ export type ScatterRows =
     }
   | { readonly mode: 'grid'; readonly maxAgeDays: number; readonly cells: readonly number[][] };
 
-/** Per project, in the order of DashboardTotals: its live rows and those whose content or tags hold the text. */
+/** Per project, in the order of DashboardTotals: its live rows and those whose content or tags
+ * hold the text. */
 export interface SearchTally {
   readonly origin: Origin;
   readonly live: number;
@@ -137,7 +143,8 @@ export interface SearchTally {
 }
 
 export interface DashboardReads {
-  /** Moves when another connection commits; null while no hippo.db exists, and no other read then creates one. */
+  /** Moves when another connection commits; null while no hippo.db exists, and no other read
+   * then creates one. */
   commitCount(): Promise<number | null>;
   totals(tenantId: string, nowMs: number): Promise<DashboardTotals>;
   /** The project's tally and scatter from one read, or null when it holds no live row. */
@@ -146,7 +153,8 @@ export interface DashboardReads {
     origin: Origin,
     nowMs: number,
   ): Promise<{ tally: ProjectTally; scatter: ScatterRows } | null>;
-  /** The filter's tally and the chip's page of it, sorted, from one read; null when the project holds no live row. */
+  /** The filter's tally and the chip's page of it, sorted, from one read; null when the project
+   * holds no live row. */
   memoryPage(
     tenantId: string,
     query: DashboardPageQuery,
@@ -154,7 +162,8 @@ export interface DashboardReads {
   ): Promise<{ tally: FilterTally; rows: ListedRow[] } | null>;
   /** `needle` is lower-case, matched against lower-cased content and tags. */
   search(tenantId: string, needle: string): Promise<SearchTally[]>;
-  /** The tenant's open conflicts naming `memoryId`, newest change first, each with both members' columns. */
+  /** The tenant's open conflicts naming `memoryId`, newest change first, each with both members'
+   * columns. */
   openConflictsOf(tenantId: string, memoryId: string): Promise<ConflictRow[]>;
   /** Whether a vector is stored for `id`, whatever its tenant. */
   hasVector(id: string): Promise<boolean>;

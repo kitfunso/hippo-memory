@@ -32,9 +32,10 @@ import { MINUTE_MS } from '../../base/util/time.js';
 const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
-// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
-// (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to handleMcpRequest as stdio does. Auth matches
-// /v1/* (Bearer via `requireAuth`); an SSE stream is checked at open and again before every ping.
+// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a
+// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to
+// handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`); an SSE stream is
+// checked at open and again before every ping.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -47,8 +48,8 @@ function decodeHeaderPiece(raw: string, header: string): string {
   return decoded;
 }
 
-/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any
- * other store ignores both. */
+/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated
+ * X-Hippo-Project-Aliases; any other store ignores both. */
 export function callerProjectFromHeaders(
   req: IncomingMessage,
   shared: boolean,
@@ -113,8 +114,8 @@ export async function handleMcpPost(
   if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
-  // SAFETY: validated above as a plain JSON object with a string method; the other McpRequest wire fields (jsonrpc, id,
-  // params) are checked or defaulted in handleMcpRequest.
+  // SAFETY: validated above as a plain JSON object with a string method; the other McpRequest wire
+  // fields (jsonrpc, id, params) are checked or defaulted in handleMcpRequest.
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
@@ -180,11 +181,13 @@ export async function handleMcpStream(
     'cache-control': 'no-cache',
     connection: 'keep-alive',
   });
-  // Initial ping so smoke tests can confirm the stream is live without waiting for the first keepalive interval.
+  // Initial ping so smoke tests can confirm the stream is live without waiting for the first
+  // keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and closes with
-  // 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default 3600) ends it as 'max_age_exceeded'.
+  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and
+  // closes with 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default
+  // 3600) ends it as 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 
@@ -234,8 +237,8 @@ function keepStreamAlive(
         log.warn('heartbeat tick failed', errorFields(err));
       });
   }, heartbeatMs);
-  // Don't keep the event loop alive just for this timer; the server's listener already does that, and tests want the
-  // process to exit cleanly.
+  // Don't keep the event loop alive just for this timer; the server's listener already does that,
+  // and tests want the process to exit cleanly.
   if (ping.unref instanceof Function) ping.unref();
   // res 'close' covers an early socket drop that req 'close' can miss.
   res.on('close', () => {
@@ -250,7 +253,8 @@ function writePing(res: ServerResponse): boolean {
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  // A socket that refused the write is already logged; end() on it would only log the same failure again.
+  // A socket that refused the write is already logged; end() on it would only log the same failure
+  // again.
   if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
   else res.destroy();
 }

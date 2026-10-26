@@ -1,6 +1,6 @@
-// hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the dashboard's SQL
-// functions, so the rows a read hands to JavaScript never grow with the tenant. The commit signal uses one held
-// connection.
+// hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the
+// dashboard's SQL functions, so the rows a read hands to JavaScript never grow with the tenant. The
+// commit signal uses one held connection.
 import * as fs from 'node:fs';
 import {
   closeHippoDb,
@@ -226,8 +226,8 @@ function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchT
   }));
 }
 
-/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held reader, so its
- * statement is prepared once. */
+/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held
+ * reader, so its statement is prepared once. */
 function hasVector(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
   return (
@@ -260,7 +260,8 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
         held = openHippoDbReadOnly(hippoRoot);
       return held;
     },
-    // The first list runs the open the other reads run, so a pending migration lands before it sorts.
+    // The first list runs the open the other reads run, so a pending migration lands before it
+    // sorts.
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();
@@ -276,9 +277,9 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
   };
 }
 
-/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
- * dashboard's functions scored by `rules`; memory pages run on the held reader, whose sorted lists outlive a read.
- * While no hippo.db exists they answer empty and create none. */
+/** Reads run on a fresh writable open, which runs any pending migration and legacy import first
+ * and carries the dashboard's functions scored by `rules`; memory pages run on the held reader,
+ * whose sorted lists outlive a read. While no hippo.db exists they answer empty and create none. */
 export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}): DashboardReads {
   const { on, files } = handlesOf(hippoRoot, rules);
   const open = dashboardOpener(files);

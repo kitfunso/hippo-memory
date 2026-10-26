@@ -1,6 +1,7 @@
 import { BadRequestError } from './api-errors.js';
 
-/** The refusal a delete of a raw row gets; a plain Error subclass, so it joins no HTTP status family. */
+/** The refusal a delete of a raw row gets; a plain Error subclass, so it joins no HTTP status
+ * family. */
 export class RawAppendOnlyError extends Error {
   /** `cause` is the SQLite trigger's abort; a store with no trigger refuses with none. */
   constructor(cause?: Error) {
@@ -8,7 +9,8 @@ export class RawAppendOnlyError extends Error {
   }
 }
 
-/** Forget refuses a raw row and the raw archive refuses every other kind; null when the removal may go ahead. */
+/** Forget refuses a raw row and the raw archive refuses every other kind; null when the removal
+ * may go ahead. */
 export function rawRemovalRefusal(
   row: { readonly id: string; readonly kind: string },
   archive: boolean,

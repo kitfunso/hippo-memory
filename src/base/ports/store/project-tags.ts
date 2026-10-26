@@ -1,5 +1,6 @@
-// The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and the merge and the
-// repair, each one transaction, backed up first, whose mirror files follow the commit.
+// The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and
+// the merge and the repair, each one transaction, backed up first, whose mirror files follow the
+// commit.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AuditLog } from './audit.js';
 import type { EntryFilter, Reports } from './reports.js';
@@ -8,22 +9,24 @@ import type { DormantSnapshot } from './types.js';
 export interface ProjectTags {
   /** Every project name with live rows, in the order its first row was written. */
   originTallies(tenantId: string, sourcePrefix: string): Promise<OriginTally[]>;
-  /** The readable dormant snapshots whose row `filter` keeps, by tenant then id. Live rows come from entriesWhere. */
+  /** The readable dormant snapshots whose row `filter` keeps, by tenant then id. Live rows come
+   * from entriesWhere. */
   dormantWhere(filter: EntryFilter): Promise<DormantSnapshot[]>;
-  /** Each distinct project name, transcript and working folder the tenant's compactions recorded together. */
+  /** Each distinct project name, transcript and working folder the tenant's compactions recorded
+   * together. */
   compactionOrigins(tenantId: string): Promise<CompactionOrigin[]>;
-  /** Folds `from` into `into` and writes the project_merge audit row; a dry run rolls back and writes nothing, backup
-   * and mirrors included. */
+  /** Folds `from` into `into` and writes the project_merge audit row; a dry run rolls back and
+   * writes nothing, backup and mirrors included. */
   merge(scope: ProjectTagScope, request: MergeRequest): Promise<AppliedMerge>;
-  /** Applies a repair planned from the reads above and writes the project_repair audit row; a row the plan names that
-   * is gone or moved since its read is skipped. */
+  /** Applies a repair planned from the reads above and writes the project_repair audit row; a
+   * row the plan names that is gone or moved since its read is skipped. */
   repair(scope: ProjectTagScope, plan: RepairPlan): Promise<AppliedRepair>;
   repairedOnce(): Promise<boolean>;
   markRepairedOnce(): Promise<void>;
 }
 
-/** What a repair plans from: this group, entry pages and the merge audit rows, which doctor offers on read-only
- * handles. */
+/** What a repair plans from: this group, entry pages and the merge audit rows, which doctor
+ * offers on read-only handles. */
 export interface ProjectTagReads {
   readonly projectTags: ProjectTags;
   readonly reports: Pick<Reports, 'entriesWhere'>;
@@ -41,14 +44,16 @@ export type SetAsideResult =
   | { readonly kind: 'untagged'; readonly entry: MemoryEntry }
   | { readonly kind: 'dormant'; readonly id: string };
 
-/** A compaction's project name ('' when none was recorded), Claude transcript and working folder. */
+/** A compaction's project name ('' when none was recorded), Claude transcript and working
+ * folder. */
 export interface CompactionOrigin {
   readonly origin: string;
   readonly transcript: string | null;
   readonly cwd: string | null;
 }
 
-/** One project name's live rows: how many, how many whose source starts with the asked prefix, and the newest. */
+/** One project name's live rows: how many, how many whose source starts with the asked prefix,
+ * and the newest. */
 export interface OriginTally {
   /** '' is user-global, null is unknown. */
   readonly origin: string | null;
@@ -74,8 +79,8 @@ export interface MergeRequest extends ProjectFold {
 
 /** What folding one project name into another changed. */
 export interface FoldResult {
-  /** Imports the target already held for the same note, moved to dormant storage; the rest are re-tagged and the next
-   * sync files them under the target. */
+  /** Imports the target already held for the same note, moved to dormant storage; the rest are
+   * re-tagged and the next sync files them under the target. */
   readonly setAside: readonly string[];
   readonly restamped: readonly string[];
   readonly dormantRestamped: readonly string[];
@@ -105,7 +110,8 @@ export interface RepairPlan {
   readonly folds: readonly ProjectFold[];
   /** Live user-global sleep merges to re-tag. */
   readonly toProject: readonly RowRetag[];
-  /** Live user-global sleep merges whose parents sit in two projects, retired to dormant storage. */
+  /** Live user-global sleep merges whose parents sit in two projects, retired to dormant
+   * storage. */
   readonly setAside: readonly string[];
   /** Named in the audit row only. */
   readonly untraced: readonly string[];

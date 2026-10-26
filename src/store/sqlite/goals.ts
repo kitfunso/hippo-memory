@@ -18,7 +18,8 @@ import { handleStamp } from './handle-clock.js';
 // The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
 
-// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
+// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex
+// characters.
 const GOAL_ID_CHARS = 16;
 const MAX_ACTIVE_GOAL_DEPTH = 3;
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -81,7 +82,8 @@ function pushedGoal(
   };
 }
 
-/** The factor a completed goal's score applies to the strength of each memory recalled in its active life. */
+/** The factor a completed goal's score applies to the strength of each memory recalled in its
+ * active life. */
 function goalOutcomeMultiplier(score: number): number {
   if (score >= POSITIVE_OUTCOME_THRESHOLD) return STRENGTH_BOOST;
   return score < NEGATIVE_OUTCOME_THRESHOLD ? STRENGTH_DECAY : 1;
@@ -129,8 +131,9 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-/** Depth-cap enforcer for pushGoal and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside a
- * `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
+/** Depth-cap enforcer for pushGoal and resumeGoal: suspends the oldest `overflow` goals;
+ * **caller MUST be inside a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack
+ * invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const activeCount = (
@@ -323,8 +326,8 @@ export function localGoalRecallRows(
   return rows.filter((r) => localIds.has(r.memoryId));
 }
 
-/** INSERT OR IGNORE: UNIQUE(memory_id, goal_id) makes a re-recall during the same goal life a no-op for outcome
- * attribution. */
+/** INSERT OR IGNORE: UNIQUE(memory_id, goal_id) makes a re-recall during the same goal life a
+ * no-op for outcome attribution. */
 export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
   if (rows.length === 0) return;
   const insertLog = cachedStatement(
@@ -373,8 +376,8 @@ function completeGoal(
       const multiplier = goalOutcomeMultiplier(score);
 
       if (multiplier !== 1) {
-        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment
-        // per pair.
+        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id)
+        // gives one adjustment per pair.
         cachedStatement(
           db,
           `

@@ -5,7 +5,8 @@ import { LIMITER_MAX_KEYS } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { RateLimitSpec, ServeOptions } from './types.js';
 
-// The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one server per store.
+// The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one
+// server per store.
 function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
   return createRateLimiter({
     ratePerSec,
@@ -18,9 +19,9 @@ function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
 function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLimiter | undefined {
   if (perAddress === 'off') return undefined;
   if (perAddress !== undefined) return limiterFor(perAddress);
-  // Per-IP rate limiter for /v1/* and /mcp*, built here (not at module scope) so HIPPO_V1_RPS is read at boot and a
-  // test can set it before serve().
-  // A typo must not switch the limit off, so only an explicit 0 does.
+  // Per-IP rate limiter for /v1/* and /mcp*, built here (not at module scope) so HIPPO_V1_RPS is
+  // read at boot and a test can set it before serve(). A typo must not switch the limit off, so
+  // only an explicit 0 does.
   const raw = envV1Rps();
   const v1Rps = raw === undefined ? 20 : Number(raw);
   if (!Number.isFinite(v1Rps) || v1Rps < 0) {
@@ -52,8 +53,9 @@ export interface BootedLimiters {
 const DEFAULT_CALLER_RPS = 20;
 
 /**
- * The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else 20 per second with a burst of twice
- * that.
+ * The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else 20 per second with
+ * a burst of twice that.
+ *
  */
 function defaultCallerSpec(): RateLimitSpec | 'off' {
   const raw = envCallerRps();
@@ -68,7 +70,8 @@ function defaultCallerSpec(): RateLimitSpec | 'off' {
   return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
 }
 
-/** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
+/** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or
+ * refuse every request. */
 export function bootLimiters(rateLimits: ServeOptions['rateLimits']): BootedLimiters {
   const {
     perCaller = defaultCallerSpec(),

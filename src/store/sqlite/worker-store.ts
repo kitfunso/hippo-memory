@@ -1,5 +1,5 @@
-// hippo.db as serve() runs it by default: the methods in the op table answer from worker threads, the rest still run on
-// the calling thread.
+// hippo.db as serve() runs it by default: the methods in the op table answer from worker threads,
+// the rest still run on the calling thread.
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../base/util/request-scope.js';
@@ -26,8 +26,8 @@ import { asHippoDb } from './hippo-db-stores.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
 
-/** Whether `store` answers its `loop: 'off'` routes from worker threads, so a hippo.db open on the server thread inside
- * one is a defect. */
+/** Whether `store` answers its `loop: 'off'` routes from worker threads, so a hippo.db open on
+ * the server thread inside one is a defect. */
 export function runsOffLoop(store: HippoStore): boolean {
   return offLoopStores.has(store);
 }
@@ -49,8 +49,8 @@ function send<T>(
   return deadline ? deadline.track(call) : call;
 }
 
-/** `inProcess` with each method the op table places on a worker answered from one, so a new method of a group needs its
- * tag and no body here. */
+/** `inProcess` with each method the op table places on a worker answered from one, so a new
+ * method of a group needs its tag and no body here. */
 function onWorkers<G>(
   executor: SqliteExecutor,
   group: WorkerGroup,
@@ -68,8 +68,8 @@ type SentParts = {
   readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>>;
 };
 
-// Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids reads nothing,
-// as in process.
+// Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids
+// reads nothing, as in process.
 function vectorGroups(
   executor: SqliteExecutor,
   inProcess: VectorReads,
@@ -90,8 +90,8 @@ function vectorGroups(
   };
 }
 
-// A probe must not create the store, and a worker's first job sets it up, so a root with no hippo.db is ready before
-// any thread starts.
+// A probe must not create the store, and a worker's first job sets it up, so a root with no
+// hippo.db is ready before any thread starts.
 function probing(hippoRoot: string, served: Readiness): Readiness {
   return {
     ping: async () => {
@@ -100,8 +100,8 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a Map, readiness is
- * probed. */
+/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
+ * Map, readiness is probed. */
 type CustomGroup = 'base' | 'vectors' | 'readiness';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
@@ -111,8 +111,8 @@ const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
 // SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
 const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
 
-/** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it misses a compile
- * error. */
+/** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
+ * misses a compile error. */
 function plainGroups(
   executor: SqliteExecutor,
   inProcess: StoreGroups,
@@ -121,14 +121,14 @@ function plainGroups(
     group,
     onWorkers(executor, group, WORKER_OPS[group], inProcess[group]),
   ]);
-  // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has every PlainGroup
-  // key.
+  // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has
+  // every PlainGroup key.
   return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
 }
 
-/** `sqliteStore` with every method the op table places on a worker answered from one; close() closes `executor` and
- * resolves once its threads have exited. `executor` defaults to threads of the store's own, with the server's lock
- * wait; `rules` must be the ones it was built with. */
+/** `sqliteStore` with every method the op table places on a worker answered from one; close()
+ * closes `executor` and resolves once its threads have exited. `executor` defaults to threads of
+ * the store's own, with the server's lock wait; `rules` must be the ones it was built with. */
 export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
@@ -156,8 +156,9 @@ interface GlobalStores {
   readonly close: () => Promise<void>;
 }
 
-/** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
- * thread; each is built at first use, since the global store can appear while the server runs. */
+/** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never
+ * opens one on the server thread; each is built at first use, since the global store can appear
+ * while the server runs. */
 export function globalStoresFor(
   served: HippoStore,
   executorOpts: ExecutorOptions = {},

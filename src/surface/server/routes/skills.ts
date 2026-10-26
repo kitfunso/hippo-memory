@@ -1,5 +1,5 @@
-// /v1/skills routes; "executable" means exportable instruction (no code exec). GET /v1/skills/export renders the active
-// skills as one markdown block for AGENTS.md or CLAUDE.md.
+// /v1/skills routes; "executable" means exportable instruction (no code exec). GET
+// /v1/skills/export renders the active skills as one markdown block for AGENTS.md or CLAUDE.md.
 import { OBJECT_CAPS, skillsExport } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../http/http-util.js';

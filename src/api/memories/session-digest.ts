@@ -1,4 +1,5 @@
-// The session digest's write: which sessions earn one, the text the echo filters leave, and one row per session.
+// The session digest's write: which sessions earn one, the text the echo filters leave, and one row
+// per session.
 import type { HippoConfig } from '../../base/config/config.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
@@ -12,17 +13,20 @@ import type { Context } from '../types.js';
 /** The repo store's reads and the digest's write. */
 export type DigestStore = Pick<HippoStore, 'reports' | 'sessions' | 'entryWrites'>;
 
-/** Where a digest writes: the repo's own store, its tenant and config, and the actor its audit names. */
+/** Where a digest writes: the repo's own store, its tenant and config, and the actor its audit
+ * names. */
 export type DigestContext = Pick<Context, 'tenantId' | 'actor'> & {
   readonly store: DigestStore;
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 };
 
-/** The repo's paths as the disk has them; the surface reads them, so the api names no file system. */
+/** The repo's paths as the disk has them; the surface reads them, so the api names no file
+ * system. */
 export interface DigestRepo {
   /** The repo folder with links followed, or null when it sits on a network path. */
   root(): string | null;
-  /** `p` relative to `root` with forward slashes, '' for the root itself, null outside it or when it cannot resolve. */
+  /** `p` relative to `root` with forward slashes, '' for the root itself, null outside it or
+   * when it cannot resolve. */
   relative(p: string, root: string): string | null;
   /** The files the session's edits changed inside `root`, repo-relative, each once. */
   changedFiles(root: string): string[];
@@ -53,9 +57,9 @@ function skipped(reason: string): DigestOutcome {
   return { written: false, reason, sentences: 0, files: 0 };
 }
 
-/** What hippo could have injected into the session: the newest live digests (prompt recall reaches older ones too,
- * but the echo filter only needs the recent ones a session most likely saw) and the ambient handoff, never this
- * session's own. */
+/** What hippo could have injected into the session: the newest live digests (prompt recall
+ * reaches older ones too, but the echo filter only needs the recent ones a session most likely
+ * saw) and the ambient handoff, never this session's own. */
 async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]> {
   const filter = {
     tenantId: ctx.tenantId,
@@ -89,7 +93,8 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
   ];
 }
 
-/** The reason a session earns no digest, in the order the checks run, else the repo root it ran in. */
+/** The reason a session earns no digest, in the order the checks run, else the repo root it ran
+ * in. */
 function skipReason(req: SessionDigestRequest): { reason: string } | { root: string } {
   if (req.prompts.length === 0) return { reason: 'no human prompt' };
   if (!req.finalText.trim() && req.editCount === 0)
@@ -102,7 +107,8 @@ function skipReason(req: SessionDigestRequest): { reason: string } | { root: str
   return { root };
 }
 
-/** Writes the session's digest row, keyed on the session so a second run updates it; a rejected value skips. */
+/** Writes the session's digest row, keyed on the session so a second run updates it; a rejected
+ * value skips. */
 export async function writeSessionDigest(
   ctx: DigestContext,
   req: SessionDigestRequest,

@@ -1,4 +1,5 @@
-/** Git reads for churn-staleness (src/domain/learn/invalidation.ts), through the caller's git runner. */
+/** Git reads for churn-staleness (src/domain/learn/invalidation.ts), through the caller's git
+ * runner. */
 
 import type { GitResult, GitRunner } from '../../base/ports/git.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
@@ -7,11 +8,12 @@ import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
-// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet bounded so a wedged
-// git cannot stall sleep.
+// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet
+// bounded so a wedged git cannot stall sleep.
 const GIT_TIMEOUT_MS = MINUTE_MS;
 
-/** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on this. */
+/** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on
+ * this. */
 export class GitReadError extends Error {}
 
 /** The work tree churn checks read and the runner that starts git there. */
@@ -67,7 +69,8 @@ export interface ChurnCommit {
   files: ChurnCommitFile[];
 }
 
-// 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the anchor.
+// 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the
+// anchor.
 export function fetchChurnWindowLog(repo: ChurnRepo, sinceIso: string): ChurnCommit[] {
   const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(
@@ -98,7 +101,8 @@ export function fetchChurnWindowLog(repo: ChurnRepo, sinceIso: string): ChurnCom
   return commits;
 }
 
-/** `git grep -o -h -w -F -f - <rev>` with the patterns on stdin; returns the subset of `patterns` found. */
+/** `git grep -o -h -w -F -f - <rev>` with the patterns on stdin; returns the subset of
+ * `patterns` found. */
 export function gitGrepPresence(repo: ChurnRepo, patterns: string[], rev: string): Set<string> {
   if (patterns.length === 0) return new Set();
   const input = `${patterns.join('\n')}\n`;
@@ -122,8 +126,9 @@ export function resolveCommitBefore(repo: ChurnRepo, beforeIso: string): string 
 }
 
 /**
- * package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git failures throw
- * GitReadError.
+ * package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git
+ * failures throw GitReadError.
+ *
  */
 export function packageScriptsAt(repo: ChurnRepo, rev: string): Record<string, string> | null {
   if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repo).trim() === '') return {};

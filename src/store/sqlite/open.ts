@@ -1,5 +1,6 @@
-// The store's handle types and the legacy setup a first open runs; src/store/sqlite/handles.ts opens hippo.db, the
-// source of truth, and Markdown and JSON files are human-readable mirrors of it.
+// The store's handle types and the legacy setup a first open runs; src/store/sqlite/handles.ts
+// opens hippo.db, the source of truth, and Markdown and JSON files are human-readable mirrors of
+// it.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,14 +29,16 @@ import { createHost, type Host } from '../../host/host.js';
 import { META_KEY } from '../../db/meta.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
-/** The strength model a store scores by and the clock its writes stamp by, both fixed when it opens. */
+/** The strength model a store scores by and the clock its writes stamp by, both fixed when it
+ * opens. */
 export interface StoreModel {
   readonly strength: StrengthModel;
   readonly clock: Clock;
 }
 
-/** The folder a store keeps its mirror files in, beside hippo.db, with the model its root opened it with; an adapter
- * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
+/** The folder a store keeps its mirror files in, beside hippo.db, with the model its root opened
+ * it with; an adapter hands it on and never reads it. `host` keeps the folder's project walk and
+ * shared flag for the store's life. */
 export interface StoreFiles extends StoreModel {
   readonly hippoRoot: string;
   readonly host: Host;
@@ -43,8 +46,8 @@ export interface StoreFiles extends StoreModel {
 
 export type HandleOpener = (hippoRoot: string) => DatabaseSyncLike;
 
-/** One call on a handle of the store's own, closed after; `open` defaults to a bare handle, `openStore` also sets up
- * the mirror folders. */
+/** One call on a handle of the store's own, closed after; `open` defaults to a bare handle,
+ * `openStore` also sets up the mirror folders. */
 export type OnHandle = <T>(
   fn: (db: DatabaseSyncLike, files: StoreFiles) => T,
   open?: HandleOpener,
@@ -63,7 +66,8 @@ export function waitingOpener(
   return (hippoRoot) => open(hippoRoot, { busyWaitMs });
 }
 
-/** What an adapter gets of the store it serves: the openers and the files beside hippo.db, never the folder itself. */
+/** What an adapter gets of the store it serves: the openers and the files beside hippo.db, never
+ * the folder itself. */
 export interface Handles {
   readonly on: OnHandle;
   readonly onAsync: OnHandleAsync;
@@ -72,13 +76,15 @@ export interface Handles {
   readonly files: StoreFiles;
 }
 
-/** Whether the store holds any memory row; existence, not COUNT(*), which would walk every row on each open. */
+/** Whether the store holds any memory row; existence, not COUNT(*), which would walk every row
+ * on each open. */
 export function holdsMemory(db: DatabaseSyncLike): boolean {
   return db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined;
 }
 
-/** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that
- * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */
+/** A store with no memories starts on the current default half-life base so `hippo sleep` never
+ * migrates it; one that holds memories but no recorded base predates the record and keeps the
+ * legacy 7-day base until sleep migrates it. */
 export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, META_KEY.halfLifeBase, '') !== '') return;
   if (holdsMemory(db)) return;
@@ -86,11 +92,12 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   setMeta(db, META_KEY.typedHalfLife, '1');
 }
 
-/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any row. */
+/** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any
+ * row. */
 export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
   if (holdsMemory(db)) return false;
-  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the import on every open
-  // and duplicate consolidation_runs; this meta flag settles it.
+  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the
+  // import on every open and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, META_KEY.legacyBootstrapCompleted, '0') === '1') return false;
 
   const legacyEntries = readLegacyMarkdownEntries(hippoRoot, handleNow(db));
@@ -112,13 +119,13 @@ function importLegacyEntries(
   legacyEntries: MemoryEntry[],
   caller: string,
 ): void {
-  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit() inline, because nothing
-  // rolls back on a per-row skip.
+  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
+  // inline, because nothing rolls back on a per-row skip.
   let rejectedCount = 0;
   const host = createHost();
   for (const entry of legacyEntries) {
-    // v39: legacy markdown carries no origin_project; stamp from the store location so bootstrapped rows stay visible
-    // to ambient context.
+    // v39: legacy markdown carries no origin_project; stamp from the store location so bootstrapped
+    // rows stay visible to ambient context.
     const stamped = stampOriginProjectForImport(host, hippoRoot, entry);
     try {
       upsertEntryRow(db, stamped);
@@ -144,8 +151,8 @@ function importLegacyEntries(
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = readLegacyIndexFile(hippoRoot);
   setMeta(db, META_KEY.lastRetrievalIds, JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string rather than trusting a
-  // hand-edited or corrupt index.json.
+  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string
+  // rather than trusting a hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, META_KEY.lastTraceId, /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
@@ -221,8 +228,8 @@ function readLegacyIndexFile(hippoRoot: string): HippoIndex {
     last_trace_id: null,
   };
   if (!fs.existsSync(indexPath)) return empty;
-  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object
-  // shape is checked.
+  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field,
+  // so only the object shape is checked.
   return (readLegacyJsonObject(indexPath) as HippoIndex | null) ?? empty;
 }
 
@@ -235,6 +242,7 @@ function readLegacyStatsFile(hippoRoot: string): LegacyStats {
     consolidation_runs: [],
   };
   if (!fs.existsSync(statsPath)) return empty;
-  // SAFETY: callers guard every field read with `?? 0` / `Array.isArray`, so only the object shape is checked.
+  // SAFETY: callers guard every field read with `?? 0` / `Array.isArray`, so only the object shape
+  // is checked.
   return (readLegacyJsonObject(statsPath) as LegacyStats | null) ?? empty;
 }

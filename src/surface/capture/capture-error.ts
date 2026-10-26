@@ -1,6 +1,7 @@
-// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not stored,
-// because error memories decay slowly and would crowd out real lessons; what is stored stays `observed` until outcome
-// feedback confirms it. Every failure, stored or not, goes to the failure log.
+// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and
+// repeats are not stored, because error memories decay slowly and would crowd out real lessons;
+// what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
+// goes to the failure log.
 import type { Context } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -21,7 +22,9 @@ export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'> & {
 };
 
 /**
- * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws.
+ * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even
+ * when storing throws.
+ *
  */
 export async function captureToolFailure(
   target: FailureTarget,
@@ -38,7 +41,8 @@ export async function captureToolFailure(
   }
 }
 
-/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw goes on. */
+/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw
+ * goes on. */
 async function logAndReport(
   target: FailureTarget,
   payload: JsonValue,
@@ -74,7 +78,8 @@ function logFailure(
   });
 }
 
-/** Who sent a failure from another machine: the audit actor and the project its lesson and repeat check belong to. */
+/** Who sent a failure from another machine: the audit actor and the project its lesson and
+ * repeat check belong to. */
 export interface LessonCaller {
   actor: string;
   originProject: string;

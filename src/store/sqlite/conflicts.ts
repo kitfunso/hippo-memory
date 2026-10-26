@@ -38,7 +38,8 @@ import { bound, type Bodies } from './bound.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { handleStamp } from './handle-clock.js';
 
-// The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
+// The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be
+// ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
@@ -58,7 +59,8 @@ const memberCols = (alias: string, side: string): string =>
   MEMBER_COLS.map((c) => `${alias}.${c} AS ${side}_${c}`).join(', ');
 const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memberCols('mb', 'b')}`;
 
-// SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/check-row-casts.mjs proves
+// it.
 interface ConflictJoinRow extends MemoryConflictRow {
   a_id: string | null;
   a_scope: string | null;
@@ -91,8 +93,9 @@ function toConflictRow(r: ConflictJoinRow): ConflictRow {
   };
 }
 
-/** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
- * surfaces; with none, every conflict comes back with whichever members still exist. */
+/** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no
+ * cross-tenant or stale pair surfaces; with none, every conflict comes back with whichever
+ * members still exist. */
 function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): SqlFragment {
   const join = tenantId === ALL_TENANTS ? 'LEFT JOIN' : 'JOIN';
   const where: SqlFragment[] =
@@ -111,7 +114,8 @@ function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): Sq
   };
 }
 
-/** One page of conflicts, newest change first, each with both members' columns from the same JOIN. */
+/** One page of conflicts, newest change first, each with both members' columns from the same
+ * JOIN. */
 export function conflictPage(
   db: DatabaseSyncLike,
   { tenantId, status, limit, after }: ConflictListQuery,
@@ -158,7 +162,8 @@ export function countOpenConflicts(db: DatabaseSyncLike, tenantId: string): numb
   return Number(row.n);
 }
 
-/** The tenant's open conflicts naming `memoryId`, newest change first, each with both members' columns. */
+/** The tenant's open conflicts naming `memoryId`, newest change first, each with both members'
+ * columns. */
 export function openConflictsNaming(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -192,24 +197,26 @@ export function replaceDetectedConflicts(
   syncChangedMirrors(files.hippoRoot, db, changed, detectedAt);
 }
 
-/** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before
- * the refresh takes the write lock. */
+/** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other
+ * than '[]', read before the refresh takes the write lock. */
 interface ConflictRefreshReads {
   sameTenant: SameTenant;
   storedRefs: ReadonlyMap<string, string | null>;
 }
 
-/** The refresh's reads, kept out of the write lock; only rows holding refs, in an open conflict or in `detected` are
- * loaded, not the whole table. */
+/** The refresh's reads, kept out of the write lock; only rows holding refs, in an open conflict
+ * or in `detected` are loaded, not the whole table. */
 function readConflictRefresh(
   db: DatabaseSyncLike,
   detected: readonly DetectedConflict[],
 ): ConflictRefreshReads {
-  // Tenant guard: a conflict is meaningful only within one tenant, so cross-tenant pairs are skipped on insert and on
-  // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
+  // Tenant guard: a conflict is meaningful only within one tenant, so cross-tenant pairs are
+  // skipped on insert and on rebuild, and a stale cross-tenant row can neither persist nor leak a
+  // foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
-  // A UNION, not one OR: SQLite plans that OR as a scan of every memory, while each arm here reads an index.
+  // A UNION, not one OR: SQLite plans that OR as a scan of every memory, while each arm here reads
+  // an index.
   const rows = cachedStatement(
     db,
     `
@@ -245,7 +252,8 @@ function readConflictRefresh(
   return { sameTenant, storedRefs };
 }
 
-/** Under the write lock: the memory_conflicts rows, then each memory whose refs change; returns the ids it rewrote. */
+/** Under the write lock: the memory_conflicts rows, then each memory whose refs change; returns
+ * the ids it rewrote. */
 function writeConflictRefresh(
   db: DatabaseSyncLike,
   reads: ConflictRefreshReads,
@@ -281,8 +289,8 @@ function resolveStaleOpenConflicts(
       db,
       `SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'open' AND id > ? ORDER BY id LIMIT ?`,
     ).all(after, READ_PAGE_ROWS) as Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
-    // Auto-resolve any open cross-tenant row: the insert loop and refMap rebuild skip those pairs, so re-detected ones
-    // would linger as 'open'.
+    // Auto-resolve any open cross-tenant row: the insert loop and refMap rebuild skip those pairs,
+    // so re-detected ones would linger as 'open'.
     const resolved = page.filter(
       (row) =>
         !detectedKeys.has(`${row.memory_a_id}::${row.memory_b_id}`) ||
@@ -351,8 +359,8 @@ function rebuildConflictsWithJson(
     refMap.get(row.memory_b_id)!.add(row.memory_a_id);
   }
 
-  // Only a row holding refs, or due some, can change. Compare-and-set, so a writer since the read keeps its value and
-  // the next sleep redoes the row.
+  // Only a row holding refs, or due some, can change. Compare-and-set, so a writer since the read
+  // keeps its value and the next sleep redoes the row.
   const update = cachedStatement(
     db,
     `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') ` +
@@ -368,8 +376,8 @@ function rebuildConflictsWithJson(
   return changedIds;
 }
 
-/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest is set only when the loser's value was also
- * tombstoned. */
+/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest is set only when the
+ * loser's value was also tombstoned. */
 interface ConflictResolveMeta {
   conflictId: number;
   keepId: string;
@@ -384,7 +392,9 @@ interface ConflictResolveMeta {
 const SIDE_HOLDS = 'EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = ? AND scope IS ?)';
 
 /**
- * Marks the conflict resolved while it is open, names this pair and each side holds its scope; false writes nothing.
+ * Marks the conflict resolved while it is open, names this pair and each side holds its scope;
+ * false writes nothing.
+ *
  */
 function claimConflict(
   db: DatabaseSyncLike,
@@ -403,8 +413,9 @@ function claimConflict(
   return Number(claimed.changes ?? 0) > 0;
 }
 
-/** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one `conflict_resolve` audit row;
- * false when another resolver got there first or a side moved since the api read it. */
+/** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one
+ * `conflict_resolve` audit row; false when another resolver got there first or a side moved
+ * since the api read it. */
 function resolveConflict(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -430,7 +441,8 @@ function resolveConflict(
   return true;
 }
 
-/** What removing the loser did; drives the conflicts_with_json skip, the audit row and the mirror purge. */
+/** What removing the loser did; drives the conflicts_with_json skip, the audit row and the
+ * mirror purge. */
 interface LoserRemoval {
   loserRemoved: boolean;
   loserWasRaw: boolean;
@@ -477,8 +489,8 @@ function removeConflictLoser(
   tenantId: string,
   r: ConflictResolution,
 ): LoserRemoval {
-  // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the same helpers as the
-  // reject verb.
+  // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the
+  // same helpers as the reject verb.
   const removal = emptyRemoval();
   const loserId = r.loser.id;
   const loserRow = cachedStatement(
@@ -522,7 +534,8 @@ function recordRejectedLoserValue(
   });
 }
 
-/** A loser whose value is rejected: its row, the scope its duplicates are swept in, and the removal they go into. */
+/** A loser whose value is rejected: its row, the scope its duplicates are swept in, and the
+ * removal they go into. */
 interface RejectedLoser {
   readonly r: ConflictResolution;
   readonly ownScope: string | null;
@@ -530,17 +543,18 @@ interface RejectedLoser {
   readonly removal: LoserRemoval;
 }
 
-/** Removes the live same-tenant rows `ownScope` may touch whose digest matches the rejected value into `removal`;
- * `keep` is spared. */
+/** Removes the live same-tenant rows `ownScope` may touch whose digest matches the rejected
+ * value into `removal`; `keep` is spared. */
 function removeDuplicatesOfRejectedValue(
   db: DatabaseSyncLike,
   { r, ownScope, loserRow, removal }: RejectedLoser,
   rejectedDigest: string,
 ): void {
-  // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because the human chose it.
+  // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because
+  // the human chose it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
-  // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a (tenant_id, digest) index
-  // would read just those.
+  // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a
+  // (tenant_id, digest) index would read just those.
   const dupRows = cachedStatement(
     db,
     `SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`,
@@ -569,7 +583,8 @@ function removeDuplicatesOfRejectedValue(
   }
 }
 
-/** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns the digest. */
+/** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns
+ * the digest. */
 function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string {
   const rejectedDigest = rejectionDigest(loser.loserRow.content);
   recordRejectedLoserValue(db, loser.r, loser.loserRow, rejectedDigest);
@@ -619,14 +634,15 @@ function auditConflictResolve(
     loserId: r.loser.id,
     disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
     rejected: r.fate.kind === 'reject',
-    // Every row this call removed, not just loserId, so the duplicate sweep (extraRemovedIds) is audited too.
+    // Every row this call removed, not just loserId, so the duplicate sweep (extraRemovedIds) is
+    // audited too.
     removedIds: loserRemoved ? [r.loser.id, ...extraRemovedIds] : [],
   };
-  // Assigned only when present so the serialized audit payload keeps omitting the key, exactly as the pre-migration
-  // object literal did.
+  // Assigned only when present so the serialized audit payload keeps omitting the key, exactly as
+  // the pre-migration object literal did.
   if (rejectedDigest !== undefined) conflictResolveMeta.rejectedDigest = rejectedDigest;
-  // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s Record<string,
-  // JsonValue> metadata otherwise.
+  // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s
+  // Record<string, JsonValue> metadata otherwise.
   audit(db, 'conflict_resolve', {
     targetId: r.keep.id,
     metadata: { ...conflictResolveMeta },
@@ -641,14 +657,14 @@ function purgeRemovedLoserMirrors(
   loserId: string,
   removal: LoserRemoval,
 ): void {
-  // Mirror purge and reaper stamp for EVERY removed loser (loserId and each extraRemovedIds duplicate), post-commit
-  // like the reject verb.
-  // A non-raw mirror has no reaper, so skipping the purge would orphan it forever.
+  // Mirror purge and reaper stamp for EVERY removed loser (loserId and each extraRemovedIds
+  // duplicate), post-commit like the reject verb. A non-raw mirror has no reaper, so skipping the
+  // purge would orphan it forever.
   for (const removedId of [loserId, ...removal.extraRemovedIds]) {
     const isRaw =
       removedId === loserId ? removal.loserWasRaw : removal.extraRemovedRawIds.includes(removedId);
-    // purgeMirrorBestEffort retries once, then reports the explicit leftover paths for non-raw ids, which the
-    // cleanupArchivedMirrors reaper never scans.
+    // purgeMirrorBestEffort retries once, then reports the explicit leftover paths for non-raw ids,
+    // which the cleanupArchivedMirrors reaper never scans.
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
     if (mirrorOk && isRaw) {
       cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(

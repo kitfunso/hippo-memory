@@ -1,4 +1,5 @@
-// The base store's planning-fallacy read: a claim's tokens resolved to one prediction class, and that class's baserate.
+// The base store's planning-fallacy read: a claim's tokens resolved to one prediction class, and
+// that class's baserate.
 import { computePredictionBaserate } from './predictions.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { PlanningFallacyEvidence, ClassResolution } from '../../base/ports/store/types.js';
@@ -6,8 +7,9 @@ import { cachedStatement } from '../../db/statement-cache.js';
 
 // A claim's prediction class: the tenant's class tags scored by lower-cased token overlap.
 
-/** A unique best of at least one shared token wins; a tie at the top resolves no class, since an alphabetical pick
- * would name the wrong class on an ambiguous claim. The result does not depend on the order of `classTags`. */
+/** A unique best of at least one shared token wins; a tie at the top resolves no class, since an
+ * alphabetical pick would name the wrong class on an ambiguous claim. The result does not depend
+ * on the order of `classTags`. */
 function resolveClass(
   classTags: Iterable<string>,
   queryTokens: readonly string[],
@@ -36,9 +38,9 @@ function resolveClass(
   return { classTag: bestClass, tiebreak: false };
 }
 
-/** Resolves a claim's tokens to one class and reads its baserate, writing no audit row. The class tags are
- * TENANT-GLOBAL by design, not scope-filtered (base rates need the full sample): class_tag NAMES can cross scopes; use
- * opaque names or HIPPO_AUTODEBIAS=off. */
+/** Resolves a claim's tokens to one class and reads its baserate, writing no audit row. The
+ * class tags are TENANT-GLOBAL by design, not scope-filtered (base rates need the full sample):
+ * class_tag NAMES can cross scopes; use opaque names or HIPPO_AUTODEBIAS=off. */
 export function planningFallacyEvidence(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -56,7 +58,8 @@ export function planningFallacyEvidence(
     tags.map((row) => row.class_tag),
     classQueryTokens,
   );
-  // emitAudit=false: the recall_autodebias_hint row carries n_closed and mean_ratio, so predict_baserate stays off.
+  // emitAudit=false: the recall_autodebias_hint row carries n_closed and mean_ratio, so
+  // predict_baserate stays off.
   const baserate = resolution.classTag
     ? computePredictionBaserate(db, tenantId, resolution.classTag, 'recall', false)
     : null;

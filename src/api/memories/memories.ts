@@ -1,4 +1,5 @@
-// Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every tenant's.
+// Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every
+// tenant's.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
@@ -13,7 +14,8 @@ export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry |
   return entry ?? null;
 }
 
-/** memoryGet, but NotFound when the caller could not read the row, so the reply does not reveal that the id exists. */
+/** memoryGet, but NotFound when the caller could not read the row, so the reply does not reveal
+ * that the id exists. */
 export async function memoryGetTouchable(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const entry = await memoryGet(ctx, id);
   if (!canReadScope(ctx.actor, entry?.scope ?? null))
@@ -50,7 +52,8 @@ export async function* memoryPages(
   } while (after);
 }
 
-/** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read grows with the store. */
+/** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read
+ * grows with the store. */
 export async function memoryList(
   ctx: Context,
   reach: TenantReach = {},

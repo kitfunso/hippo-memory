@@ -105,8 +105,9 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the
- * HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
+/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so
+ * the caller leaves the HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a
+ * capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -131,8 +132,9 @@ async function drainStream(
     pages++;
 
     for (const item of page.items) {
-      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
-      // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
+      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't
+      // loop forever. SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this
+      // stream returns.
       const updatedAt = isJsonObject(item)
         ? ((item.updated_at as string | undefined) ?? null)
         : null;
@@ -161,8 +163,8 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole
-// window.
+// A reset hours away must fail the run for a later rerun; sleeping through it would hold the
+// process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
@@ -210,8 +212,8 @@ function issueCommentItemToEvent(
   repository: GitHubRepository,
 ): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem validates is an
-  // IssueCommentItem; a missing issue_url is handled below.
+  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem
+  // validates is an IssueCommentItem; a missing issue_url is handled below.
   const c = item as IssueCommentItem;
   const issueNumber = parseTrailingNumber(c.issue_url);
   if (issueNumber === null) return null;
@@ -234,8 +236,8 @@ function prReviewCommentItemToEvent(
   repository: GitHubRepository,
 ): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem validates is a
-  // PrReviewCommentItem; a missing pull_request_url is handled below.
+  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem
+  // validates is a PrReviewCommentItem; a missing pull_request_url is handled below.
   const c = item as PrReviewCommentItem;
   const prNumber = parseTrailingNumber(c.pull_request_url);
   if (prNumber === null) return null;
@@ -300,7 +302,8 @@ async function backfillStream(
     sleep,
     maxItems: opts.maxPerStream,
   });
-  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
+  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
+  // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
     await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
   }

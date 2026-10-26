@@ -95,9 +95,9 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   return null;
 }
 
-/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days, confidence 'stale', add
- * 'invalidated' tag; pinned are skipped).
- * Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
+/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days,
+ * confidence 'stale', add 'invalidated' tag; pinned are skipped). Tag matching is EXACT: the
+ * FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
 export async function invalidateMatching(
   store: StoreWith<'learning'>,
@@ -105,7 +105,8 @@ export async function invalidateMatching(
   tenantId: string,
   options?: InvalidationOptions,
 ): Promise<InvalidationResult> {
-  // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's id is invisible.
+  // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's
+  // id is invisible.
   if (options?.onlyId !== undefined) {
     const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter(
       (entry) => entry !== null,
@@ -144,10 +145,9 @@ export async function invalidateMatching(
   return result;
 }
 
-/** invalidateMatching for a batch: matches against `live`, the caller's list of the tenant's rows, and keeps it
- * current.
- * Each match is read again before it is weakened, so a row another writer changed since the list was read is never
- * written back stale. */
+/** invalidateMatching for a batch: matches against `live`, the caller's list of the tenant's
+ * rows, and keeps it current. Each match is read again before it is weakened, so a row another
+ * writer changed since the list was read is never written back stale. */
 export async function invalidateMatchingAmong(
   store: HippoStore,
   live: MemoryEntry[],
@@ -211,8 +211,8 @@ function weakenMatches(
       if (entry.id !== options.onlyId) continue;
     } else if (!referencesPattern(entry, fromTokens, exactTag)) continue;
 
-    // Pinned check runs AFTER matching so pinned would-be targets are observable in skippedPinned (pattern mode and
-    // onlyId mode alike).
+    // Pinned check runs AFTER matching so pinned would-be targets are observable in skippedPinned
+    // (pattern mode and onlyId mode alike).
     if (entry.pinned) {
       result.skippedPinned.push(entry.id);
       continue;
@@ -288,8 +288,8 @@ export interface ChurnRefs {
   scripts: string[];
 }
 
-/** Pure syntactic extraction; repo-aware resolution (trackedness, path relativization) happens only in
- * detectChurnStale. */
+/** Pure syntactic extraction; repo-aware resolution (trackedness, path relativization) happens
+ * only in detectChurnStale. */
 export function extractChurnRefs(content: string): ChurnRefs {
   const paths = new Set<string>();
   for (const m of content.matchAll(CHURN_PATH_RE)) {
@@ -363,8 +363,8 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
   return trackedSpelling(index, candidate) !== null;
 }
 
-// Absolute-path relativization and the <repoName>/ strip both need the repo, so they happen here rather than in the
-// pure extractor.
+// Absolute-path relativization and the <repoName>/ strip both need the repo, so they happen here
+// rather than in the pure extractor.
 function resolveTrackedPath(
   token: string,
   repoRoot: string,
@@ -445,7 +445,8 @@ function collectChurnCandidates(
   return { candidates, skippedPinned };
 }
 
-/** Git facts every candidate's evidence check shares; per-commit lookups are cached so each runs at most once. */
+/** Git facts every candidate's evidence check shares; per-commit lookups are cached so each runs
+ * at most once. */
 interface ChurnGitView {
   repoRoot: string;
   projectName: string;
@@ -465,7 +466,8 @@ interface ChurnNeeds {
   scripts: boolean;
 }
 
-/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the answer. */
+/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the
+ * answer. */
 function churnCommitLookups(
   repo: ChurnRepo,
 ): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
@@ -593,7 +595,9 @@ function scriptEvidence(
 }
 
 /**
- * The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone script.
+ * The first churn evidence against one candidate: a changed or deleted file, then a gone symbol,
+ * then a gone script.
+ *
  */
 function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): string | null {
   let evidence = pathEvidence(git, refs.paths, new Date(anchor).getTime());
@@ -604,7 +608,8 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
   return evidence;
 }
 
-/** An outcome row is stamped before it commits, so the recheck starts a little before the first read. */
+/** An outcome row is stamped before it commits, so the recheck starts a little before the first
+ * read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
 async function tagChurnStale(
@@ -614,8 +619,9 @@ async function tagChurnStale(
   confirmedAt: Map<string, string>,
   firstReadAt: number,
 ): Promise<void> {
-  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence. Only
-  // outcomes since the first read can have landed, so that is all the recheck reads.
+  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past
+  // the evidence. Only outcomes since the first read can have landed, so that is all the recheck
+  // reads.
   const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
   const confirmedSince = await learning.confirmedOutcomeTimes(tenantId, recheckSince);
   const unconfirmed = toTag.filter((stale) => {
@@ -630,7 +636,8 @@ async function tagChurnStale(
   );
 }
 
-/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing nothing. */
+/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing
+ * nothing. */
 function recordChurnEvidence(
   git: ChurnGitView,
   candidates: readonly ChurnCandidate[],
@@ -656,15 +663,16 @@ function recordChurnEvidence(
   return toTag;
 }
 
-/** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is later
- * than its creation. */
+/** The good-outcome times the candidates' anchors need, and the anchor of each: its last
+ * confirmation, if that is later than its creation. */
 async function readChurnAnchors(
   learning: Learning,
   tenantId: string,
   candidates: readonly ChurnCandidate[],
 ) {
   const firstReadAt = Date.now();
-  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts there.
+  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts
+  // there.
   const oldestCreated = candidates.reduce(
     (oldest, c) => Math.min(oldest, Date.parse(c.entry.created)),
     Infinity,
@@ -684,8 +692,8 @@ async function readChurnAnchors(
   return { confirmedAt, firstReadAt, anchorOf };
 }
 
-/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only
- * adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
+/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
+ * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export async function detectChurnStale(
   { learning, reports }: StoreWith<'learning'>,
   repo: ChurnRepo,
@@ -752,8 +760,8 @@ export async function detectChurnStale(
       anchorOf,
       needs,
     );
-    // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot
-    // leave an earlier candidate tagged.
+    // Collected here and written only after every candidate's evidence is computed, so a
+    // GitReadError mid-loop cannot leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
     if (!dryRun && toTag.length > 0)

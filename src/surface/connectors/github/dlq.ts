@@ -21,8 +21,8 @@ type GitHubOwnColumns = Pick<
   'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'
 >;
 
-/** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without
- * re-reading the payload. */
+/** GitHub's dead-letter table; the event, delivery, installation and repo columns let an
+ * operator triage a row without re-reading the payload. */
 export const githubDlq: ConnectorDlq<'github', GitHubOwnColumns, DlqBucket> = {
   connector: 'github',
   letter: (row) => ({ connector: 'github', ...row }),
@@ -31,8 +31,8 @@ export const githubDlq: ConnectorDlq<'github', GitHubOwnColumns, DlqBucket> = {
 export interface ReplayDlqOptions {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
-  /** Previous webhook secret during rotation, passed to verifyGitHubSignature.previousSecret so old-secret DLQ rows
-   * need no --force. */
+  /** Previous webhook secret during rotation, passed to verifyGitHubSignature.previousSecret so
+   * old-secret DLQ rows need no --force. */
   previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
@@ -49,8 +49,9 @@ export type IngestHook = (
   },
 ) => Promise<{ memoryId: string | null }>;
 
-/** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check bumps retry_count.
- * No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with memoryId=null. Replays use today's routing. */
+/** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check
+ * bumps retry_count. No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with
+ * memoryId=null. Replays use today's routing. */
 export async function replayGithubDlqEntry(
   ctx: Context,
   id: number,
@@ -74,7 +75,8 @@ export async function replayGithubDlqEntry(
             reason: 'dry-run: no ingest hook supplied',
           };
         }
-        // The hook owns routing, idempotency and the memory write, and re-derives the key from the parsed event.
+        // The hook owns routing, idempotency and the memory write, and re-derives the key from the
+        // parsed event.
         const { memoryId } = await ingestHook(ctx, {
           rawPayload: row.rawPayload,
           eventName: row.eventName ?? '',

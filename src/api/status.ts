@@ -1,4 +1,5 @@
-// Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
+// Store-wide status reads: counts, stats, vector index state and the correction and provenance
+// reports.
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../base/ports/store/reports.js';
@@ -32,7 +33,8 @@ export async function storeStatus(
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
 }
 
-/** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host admin only. */
+/** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host
+ * admin only. */
 export async function lastSleepAt(ctx: Context): Promise<string | undefined> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const runs = (await ctx.store.reports.stats()).consolidation_runs;
@@ -50,7 +52,9 @@ export async function vectorSummary(
 }
 
 /**
- * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only.
+ * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so
+ * the host admin only.
+ *
  */
 export async function embeddingReindexNeeded(
   ctx: ContextWith<'embeddingIndex'>,
@@ -60,8 +64,8 @@ export async function embeddingReindexNeeded(
   return indexStep(ctx.store.embeddingIndex, { kind: 'reindex', providerId });
 }
 
-/** The stored particles' count and mean speed, and the particles while at most `fullUpTo`. Every tenant, so the host
- * admin only. */
+/** The stored particles' count and mean speed, and the particles while at most `fullUpTo`. Every
+ * tenant, so the host admin only. */
 export async function storedParticleStats(
   ctx: ContextWith<'embeddingIndex'>,
   fullUpTo: number,
@@ -92,13 +96,15 @@ async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
   }
 }
 
-/** Correction latency over every superseded row in the store. Every tenant, so the host admin only. */
+/** Correction latency over every superseded row in the store. Every tenant, so the host admin
+ * only. */
 export async function correctionLatencyReport(ctx: Context): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildCorrectionLatency(await allCorrectionLinks(ctx.store.reports));
 }
 
-/** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin only. */
+/** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
+ * only. */
 export async function provenanceCoverageReport(ctx: Context): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildProvenanceCoverage(await allRawProvenance(ctx.store.reports));

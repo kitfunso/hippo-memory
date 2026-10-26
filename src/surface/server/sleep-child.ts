@@ -1,5 +1,6 @@
-// Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
-// it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
+// Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it
+// and nothing imports it. The sleep modules alone: the api barrel loads far more than one sleep
+// needs, and every sleep pays for the start.
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
@@ -17,7 +18,8 @@ import { contextReach } from '../../api/types.js';
 
 type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 
-// The vector graph build gives up this long before the server's deadline, so the child exits before it is killed.
+// The vector graph build gives up this long before the server's deadline, so the child exits before
+// it is killed.
 const EXIT_MARGIN_MS = 5_000;
 
 const loadConfig = configReader(envRuntimeSettings);
@@ -35,7 +37,8 @@ function failed<E>(err: E): SleepReply<never> {
   };
 }
 
-/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
+/** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global
+ * store. */
 function sleepJob({
   hippoRoot,
   ...job
@@ -53,7 +56,8 @@ function sleepJob({
   );
 }
 
-/** A sleep that changed the store saves its vector graph file, so a store whose server holds no graph gets one. */
+/** A sleep that changed the store saves its vector graph file, so a store whose server holds no
+ * graph gets one. */
 async function saveGraphAfter(job: SleepMessage): Promise<void> {
   if (job.kind !== 'sleep' || job.opts.dryRun) return;
   const { maxVectors } = loadConfig(job.hippoRoot).vectorGraph;
@@ -86,13 +90,15 @@ process.once('message', (message) => {
           infra: childInfra(),
         })
       : sleepJob(job);
-  // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
+  // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran
+  // in the server.
   runStoreRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(async (reply) => {
       const code = await sendReply(reply);
-      // After the reply, so the sleep's caller never waits on the build; the server's queue waits for the exit.
+      // After the reply, so the sleep's caller never waits on the build; the server's queue waits
+      // for the exit.
       if (reply.ok) await saveGraphAfter(job);
       return code;
     })

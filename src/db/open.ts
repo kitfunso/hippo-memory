@@ -12,15 +12,16 @@ import { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';
 
 export { getHippoDbPath };
 
-/** Lock wait for hook commands: under the 5 s prompt-hook budget even after a few skipped writes, and far above a
- * normal write's hold. */
+/** Lock wait for hook commands: under the 5 s prompt-hook budget even after a few skipped
+ * writes, and far above a normal write's hold. */
 export const HOOK_DB_WAIT_MS = 1000;
 
-/** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall every other request on the
- * event loop. */
+/** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall
+ * every other request on the event loop. */
 export const SERVER_DB_WAIT_MS = 250;
 
-/** A busy store made a command skip work: warn once per process (the holder is usually `hippo sleep`). */
+/** A busy store made a command skip work: warn once per process (the holder is usually `hippo
+ * sleep`). */
 export function noteStoreBusy(skipped: string): void {
   log.once(
     'store-busy',
@@ -30,9 +31,9 @@ export function noteStoreBusy(skipped: string): void {
   currentRequestStores()?.noteBusy();
 }
 
-/** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the
- * process exits.
- * `busyWaitMs` is the lock wait of every open inside `fn` that does not pass its own. */
+/** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open
+ * until `fn` settles or the process exits. `busyWaitMs` is the lock wait of every open inside
+ * `fn` that does not pass its own. */
 export async function withSharedStoreHandles<T>(
   fn: () => T | Promise<T>,
   opts?: { busyWaitMs?: number },
@@ -40,52 +41,55 @@ export async function withSharedStoreHandles<T>(
   return runWithRequestStores(fn, { busyWaitMs: opts?.busyWaitMs });
 }
 
-/** Lock wait for each of sleep's short write transactions, even inside a server request: a run stops only on a writer
- * that holds the lock longer. */
+/** Lock wait for each of sleep's short write transactions, even inside a server request: a run
+ * stops only on a writer that holds the lock longer. */
 export const SLEEP_DB_WAIT_MS = 5000;
 
-/** The lock wait an open here would get without its own `busyWaitMs`: the request scope's; undefined outside every
- * scope. */
+/** The lock wait an open here would get without its own `busyWaitMs`: the request scope's;
+ * undefined outside every scope. */
 export function scopedBusyWait(): number | undefined {
   return currentRequestStores()?.busyWaitMs;
 }
 
 const sqliteBlockedBy = new AsyncLocalStorage<string>();
 
-/** Runs `fn` so that every hippo.db open inside it, across awaits, throws; otherwise a missed port would create and
- * write a hippo.db nobody reads. */
+/** Runs `fn` so that every hippo.db open inside it, across awaits, throws; otherwise a missed
+ * port would create and write a hippo.db nobody reads. */
 export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
   return sqliteBlockedBy.run(storeKind, fn);
 }
 
-/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by hippo.db, or a copy that
- * reads the old hippo.db. */
+/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by
+ * hippo.db, or a copy that reads the old hippo.db. */
 export function withSqliteAllowed<T>(fn: () => T): T {
   return sqliteBlockedBy.exit(() => markerWaived.run(true, fn));
 }
 
-// Not a store kind: the block of a route whose SQLite work belongs on a worker thread, under the hippo.db store itself.
+// Not a store kind: the block of a route whose SQLite work belongs on a worker thread, under the
+// hippo.db store itself.
 const OFF_LOOP = 'sqlite (off the event loop)';
 const OFF_LOOP_MESSAGE =
   'hippo.db was opened on the server thread by a route whose SQLite work runs on a worker thread';
 
-/** Runs `fn` so that a hippo.db open on this thread throws, across awaits; a block of another store, when one is open,
- * already refuses and stays as it is. */
+/** Runs `fn` so that a hippo.db open on this thread throws, across awaits; a block of another
+ * store, when one is open, already refuses and stays as it is. */
 export function withSqliteOffLoop<T>(fn: () => T): T {
   return sqliteBlockedBy.getStore() === undefined ? sqliteBlockedBy.run(OFF_LOOP, fn) : fn();
 }
 
-/** Leaves withSqliteOffLoop's block and nothing else: another store's block and the folder marker still refuse, which
- * withSqliteAllowed would waive. */
+/** Leaves withSqliteOffLoop's block and nothing else: another store's block and the folder
+ * marker still refuse, which withSqliteAllowed would waive. */
 export function outsideSqliteOffLoop<T>(fn: () => T): T {
   return sqliteBlockedBy.getStore() === OFF_LOOP ? sqliteBlockedBy.exit(fn) : fn();
 }
 
-/** store init --db, store copy --db and serve --db write this file in the hippo root; its text is the store kind. */
+/** store init --db, store copy --db and serve --db write this file in the hippo root; its text
+ * is the store kind. */
 export const OTHER_STORE_MARKER = 'other-store';
 const markerWaived = new AsyncLocalStorage<true>();
 
-// An empty or unreadable marker still refuses: falling through would write the hippo.db the marker forbids.
+// An empty or unreadable marker still refuses: falling through would write the hippo.db the marker
+// forbids.
 function markerKind(marker: string): string {
   try {
     return readFileSync(marker, 'utf8').trim() || 'unknown';
@@ -98,8 +102,8 @@ function markerKind(marker: string): string {
   }
 }
 
-/** Throws where hippo.db must not open; checked on every open, not cached, since the marker can appear while a process
- * runs. */
+/** Throws where hippo.db must not open; checked on every open, not cached, since the marker can
+ * appear while a process runs. */
 export function assertSqliteAllowed(hippoRoot: string): void {
   const storeKind = sqliteBlockedBy.getStore();
   if (storeKind === OFF_LOOP) throw new SqliteBlockedError('sqlite', OFF_LOOP_MESSAGE);
@@ -109,7 +113,8 @@ export function assertSqliteAllowed(hippoRoot: string): void {
   if (existsSync(marker)) throw new OtherStoreFolderError(markerKind(marker), marker);
 }
 
-/** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
+/** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its
+ * own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   return openHippoDbWithFacts(hippoRoot, opts).db;
 }
@@ -123,8 +128,8 @@ export function openHippoDbWithFacts(hippoRoot: string, opts?: { busyWaitMs?: nu
     : connectWithFacts(hippoRoot, opts?.busyWaitMs);
 }
 
-/** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db
- * is missing. */
+/** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror
+ * cleanup. Throws when hippo.db is missing. */
 export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
   assertSqliteAllowed(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
@@ -145,8 +150,8 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
   }
 }
 
-/** Runs `fn` on an existing hippo.db opened without migrations, for a repair of a store whose schema is behind; closes
- * it after. */
+/** Runs `fn` on an existing hippo.db opened without migrations, for a repair of a store whose
+ * schema is behind; closes it after. */
 export function withUnmigratedDb<T>(
   hippoRoot: string,
   readOnly: boolean,

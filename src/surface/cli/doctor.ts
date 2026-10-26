@@ -1,5 +1,6 @@
-/** `hippo doctor`: a read-only health check (never creates a store, installs a hook or migrates a database).
- * Every non-passing check names the command that fixes it, so an agent can act on the `--json` output. */
+/** `hippo doctor`: a read-only health check (never creates a store, installs a hook or migrates
+ * a database). Every non-passing check names the command that fixes it, so an agent can act on
+ * the `--json` output. */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -58,8 +59,9 @@ export interface DoctorReport {
 export interface DoctorOptions {
   cwd?: string;
   /**
-   * Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless
-   * CODEX_HOME is).
+   * Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set,
+   * ~/.codex unless CODEX_HOME is).
+   *
    */
   home?: string;
   version: string;
@@ -69,11 +71,13 @@ export interface DoctorOptions {
   now?: Date;
   /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
-  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the store. */
+  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the
+   * store. */
   diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 
-/** What doctor reads of a store: its health and, for the global store, what a project repair plans from. */
+/** What doctor reads of a store: its health and, for the global store, what a project repair
+ * plans from. */
 export type DoctorStore = Pick<StoreGroups, 'diagnostics'> & ProjectTagReads;
 
 /** Minimum Node.js version hippo supports (package.json engines). */
@@ -203,7 +207,8 @@ interface SpoolRead {
   unread: string;
 }
 
-/** Spool counts in their own try, so a spool that cannot be read never hides the database counts. */
+/** Spool counts in their own try, so a spool that cannot be read never hides the database
+ * counts. */
 function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
     return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };
@@ -216,8 +221,9 @@ function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
 }
 
 /**
- * Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo
- * sleep` replays.
+ * Compaction records the PostCompact hook left unfinished and spool files a replay has not
+ * finished, which `hippo sleep` replays.
+ *
  */
 function compactionsCheck(
   compactions: StoreHealth['compactions'],
@@ -268,7 +274,8 @@ function compactionsCheck(
   };
 }
 
-/** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
+/** Old project tags in the global store, counted by the repair's own plan so a truly user-global
+ * merge never warns. */
 async function projectsCheck(global: DoctorStore, tenantId: string): Promise<DoctorCheck> {
   try {
     const r = await globalProjectRepairPlan(global, tenantId, currentMachine());
@@ -336,7 +343,8 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
     };
   }
   if (local !== null) {
-    // The walk stops at the first .hippo it finds, so a bare one (no hippo.db) blocks a parent or global store too.
+    // The walk stops at the first .hippo it finds, so a bare one (no hippo.db) blocks a parent or
+    // global store too.
     return {
       store: null,
       check: {
@@ -400,8 +408,9 @@ function memoriesCheck(memories: number | null, dormant: number | null): DoctorC
 }
 
 /**
- * Whether the full-text index still matches `memories`; opening a current store no longer checks, so doctor reports and
- * sleep repairs.
+ * Whether the full-text index still matches `memories`; opening a current store no longer checks,
+ * so doctor reports and sleep repairs.
+ *
  */
 function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
   if (!fts.ok)
@@ -446,7 +455,8 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
   };
 }
 
-/** Checks that read the store's database; a store that cannot be opened becomes one failed schema check. */
+/** Checks that read the store's database; a store that cannot be opened becomes one failed
+ * schema check. */
 async function databaseChecks(
   { diagnostics }: DoctorStore,
   store: string,

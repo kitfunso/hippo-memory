@@ -52,8 +52,8 @@ export interface PhysicsSearchOptions {
   cost?: ResultCost;
   /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
-  /** Include superseded memories; must reach the inner hybrid filter or `recall --include-superseded` rows drop out
-   * here. */
+  /** Include superseded memories; must reach the inner hybrid filter or `recall
+   * --include-superseded` rows drop out here. */
   includeSuperseded?: boolean;
   /** Bi-temporal filter: memories current at this ISO date string, ranked by hybridSearch. */
   asOf?: string;
@@ -73,7 +73,8 @@ export interface PhysicsSearchOptions {
   cwd?: string;
 }
 
-/** physicsSearch's options once the caller names its store; the folder fields belong to the published wrapper. */
+/** physicsSearch's options once the caller names its store; the folder fields belong to the
+ * published wrapper. */
 export type PhysicsRankOptions = Omit<PhysicsSearchOptions, 'hippoRoot' | 'store'> & {
   /** Where vectors and particles are read; without one nothing ranks. */
   source?: VectorSource;
@@ -92,8 +93,9 @@ interface PhysicsScoring {
 }
 
 /**
- * Scores memories by gravity, momentum and cluster amplification on the store `source` names; rows without physics
- * state rank through hybridSearch.
+ * Scores memories by gravity, momentum and cluster amplification on the store `source` names; rows
+ * without physics state rank through hybridSearch.
+ *
  */
 export async function rankPhysics(
   query: string,
@@ -107,10 +109,12 @@ export async function rankPhysics(
   if (entries.length === 0 || !source) return [];
   const { store } = source;
   const hybrid = { ...options, source };
-  // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
+  // memory_physics keeps only current positions and masses, so a past-dated query must rank without
+  // them.
   if (options.asOf) return hybridSearch(query, entries, hybrid);
 
-  // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
+  // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a
+  // second time.
   const queryEmbedDeadline = startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs);
   const queryVector = await physicsQueryVector(
     query,
@@ -157,7 +161,8 @@ async function physicsQueryVector(
   given: number[] | undefined,
 ): Promise<number[] | null> {
   if (given && given.length > 0) return given;
-  // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
+  // Physics scores against particle positions, not the stored vector index, so a pruned index must
+  // not block it.
   try {
     const provider = source.provider();
     if (!provider.isAvailable()) return null;
@@ -197,7 +202,8 @@ async function withVectorCandidates(
   }
 }
 
-/** Particles for the candidate rows only, so one tenant's search never reads every tenant's physics state. */
+/** Particles for the candidate rows only, so one tenant's search never reads every tenant's
+ * physics state. */
 async function loadCandidateParticles(
   reads: VectorReads,
   pool: MemoryEntry[],
@@ -238,8 +244,8 @@ function splitByParticle(
       continue;
     }
     pools.entries.push(entry);
-    // EVAL-ONLY ablation (see ablation.ts): persisted masses bake in recall history twice, so the flag recomputes mass
-    // live.
+    // EVAL-ONLY ablation (see ablation.ts): persisted masses bake in recall history twice, so the
+    // flag recomputes mass live.
     pools.particles.push(
       liveMass
         ? {
@@ -260,7 +266,8 @@ function scorePhysicsPool(
 ): SearchResult[] {
   if (pools.particles.length === 0) return [];
   const entryMap = new Map(pools.entries.map((e) => [e.id, e]));
-  // Content tie key: baseScore ties pick the cluster amplification set, so the order must hold across fresh ingests.
+  // Content tie key: baseScore ties pick the cluster amplification set, so the order must hold
+  // across fresh ingests.
   const scored = computePhysicsScores(
     pools.particles,
     queryVector,

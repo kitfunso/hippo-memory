@@ -1,4 +1,5 @@
-// Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
+// Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant,
+// quarantine, invalidate.
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -76,7 +77,8 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
 const ARCHIVE_REASON_REQUIRED =
   'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
-// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a guess.
+// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a
+// guess.
 async function previewForget(
   hippoRoot: string,
   tenantId: string,
@@ -113,7 +115,8 @@ export async function handleConflicts({
     return;
   }
 
-  // The header leads with the count, so a list past one page is read once to count and again from page 2 to print.
+  // The header leads with the count, so a list past one page is read once to count and again from
+  // page 2 to print.
   let total = 0;
   let first: api.ConflictPage | undefined;
   for await (const page of api.conflictPages(read)) {
@@ -202,8 +205,9 @@ export async function handleResolve({
   }
 
   const forgetLoser = boolFlag(flags, 'forget');
-  // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing it.
-  // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
+  // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing
+  // it. --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and
+  // keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
   const result = await api.conflictResolve(cliApiContext(hippoRoot, tenantId), conflictId, {
@@ -227,11 +231,12 @@ export async function handleReject({
   args,
   flags,
 }: CommandContext): Promise<void> {
-  // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the local store
-  // (requireInit'd via resolveAuthRoot).
+  // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the
+  // local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
 
-  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable identity.
+  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable
+  // identity.
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     fail(
@@ -352,8 +357,9 @@ export async function handleUnreject({
   );
 }
 
-/** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting (on by
- * default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
+/** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps
+ * instead of deleting (on by default; `"dormant": { "enabled": false }` in .hippo/config.json
+ * deletes instead). */
 export async function handleDormant({
   hippoRoot,
   tenantId,
@@ -445,8 +451,8 @@ function printDormantRows(
   );
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>`
- * (poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine
+ * reject <id>` (poisoning defence). */
 export async function handleQuarantine({
   hippoRoot,
   tenantId,
@@ -595,8 +601,8 @@ export async function handleInvalidate({
   if (boolFlag(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
   if (flagValueless(flags, 'id')) {
-    // Value-less --id must never silently fall through to pattern mode (pattern mode writes broadly; an ignored --id
-    // reverses user intent).
+    // Value-less --id must never silently fall through to pattern mode (pattern mode writes
+    // broadly; an ignored --id reverses user intent).
     fail('--id requires a memory id');
   }
   const onlyId = stringFlag(flags, 'id');

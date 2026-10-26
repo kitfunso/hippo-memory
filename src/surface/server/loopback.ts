@@ -1,4 +1,5 @@
-// Hosts a bind may name without auth or TLS: the loopback literals, and 'localhost' only if it resolves to loopback.
+// Hosts a bind may name without auth or TLS: the loopback literals, and 'localhost' only if it
+// resolves to loopback.
 import { promises as dns } from 'node:dns';
 import { errorFields, log } from '../../base/util/log.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
@@ -8,7 +9,8 @@ export type LookupAll = (hostname: string) => Promise<readonly { address: string
 
 const resolveAll: LookupAll = (hostname) => dns.lookup(hostname, { all: true });
 
-// A hosts-file line or a resolver can point 'localhost' at a routable address, so the name alone proves nothing.
+// A hosts-file line or a resolver can point 'localhost' at a routable address, so the name alone
+// proves nothing.
 async function localhostIsLoopback(lookup: LookupAll): Promise<boolean> {
   try {
     const found = await lookup('localhost');
@@ -22,7 +24,8 @@ async function localhostIsLoopback(lookup: LookupAll): Promise<boolean> {
   }
 }
 
-/** The hosts `serve` treats as loopback for a bind to `host`; the resolver is asked only when `host` is 'localhost'. */
+/** The hosts `serve` treats as loopback for a bind to `host`; the resolver is asked only when
+ * `host` is 'localhost'. */
 export async function loopbackBindHosts(
   host: string,
   lookup: LookupAll = resolveAll,

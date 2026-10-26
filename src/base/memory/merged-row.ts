@@ -1,13 +1,14 @@
-// A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its source) must reach the
-// row too.
-// SHORTCUT: reject rewrites merged rows at once, live and dormant; supersede and `resolve
-// --reject-loser` wait for the next sleep's check, which sees a dormant row only once restored.
+// A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its
+// source) must reach the row too. SHORTCUT: reject rewrites merged rows at once, live and dormant;
+// supersede and `resolve --reject-loser` wait for the next sleep's check, which sees a dormant row
+// only once restored.
 import { generateId, type MemoryEntry } from './entry.js';
 import { duplicateKey, heldTexts, mergedText } from '../util/same-text.js';
 
 /**
- * The row that replaces a merged row once its retired texts leave: undefined when it holds none, null when nothing else
- * is left.
+ * The row that replaces a merged row once its retired texts leave: undefined when it holds none,
+ * null when nothing else is left.
+ *
  */
 export function mergedSuccessor(
   row: MemoryEntry,
@@ -22,7 +23,8 @@ export function mergedSuccessor(
   const header = row.content
     .slice(0, row.content.indexOf('\n\n'))
     .replace(/\d+ related memor(?:y|ies)/, count);
-  // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row no extra life.
+  // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row
+  // no extra life.
   return {
     ...row,
     id: generateId('sem'),
@@ -33,8 +35,9 @@ export function mergedSuccessor(
 }
 
 /**
- * Sleep's check on a merged row: drops texts whose source was superseded since the merge, or that a rejection now
- * covers.
+ * Sleep's check on a merged row: drops texts whose source was superseded since the merge, or that a
+ * rejection now covers.
+ *
  */
 export function successorAfterRetirement(
   row: MemoryEntry,

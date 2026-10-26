@@ -1,5 +1,6 @@
-// Slack workspace registration: `slack_workspaces` maps `team_id` to `tenant_id` (empty = single-tenant, non-empty =
-// fail-closed routing). `add` overwrites a team's tenant on purpose, so moving a workspace needs no delete first.
+// Slack workspace registration: `slack_workspaces` maps `team_id` to `tenant_id` (empty =
+// single-tenant, non-empty = fail-closed routing). `add` overwrites a team's tenant on purpose, so
+// moving a workspace needs no delete first.
 
 import type { HippoStore } from '../../../base/ports/store-index.js';
 import type { SlackWorkspace } from '../../../base/ports/store/connectors.js';

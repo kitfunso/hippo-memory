@@ -1,4 +1,5 @@
-// A handle stamps its writes by the clock of the store that opened it, so a root's fake clock reaches every write row.
+// A handle stamps its writes by the clock of the store that opened it, so a root's fake clock
+// reaches every write row.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { Clock } from '../../base/ports/infra.js';
 import { hostClock } from '../../host/clock.js';

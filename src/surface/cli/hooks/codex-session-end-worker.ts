@@ -1,4 +1,5 @@
-// The Codex wrapper's session-end worker (`__codex-session-end-worker`): sleep, then capture and digest the rollout.
+// The Codex wrapper's session-end worker (`__codex-session-end-worker`): sleep, then capture and
+// digest the rollout.
 import * as path from 'node:path';
 import { resolveCodexSessionTranscript } from '../../capture/codex-session.js';
 import { resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
@@ -39,7 +40,8 @@ async function sleepCodexProjectStore(
   tenantId: string,
   logFile: string | null,
 ): Promise<void> {
-  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
+  // Sleeping the global store from here would learn this folder's git commits into it; it has its
+  // own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
       await (

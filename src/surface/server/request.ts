@@ -9,7 +9,8 @@ import { sendJson } from '../http/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
 
-// The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
+// The caller's id lands in a response header and in logs, so only a short plain token is echoed
+// back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
@@ -19,8 +20,10 @@ function resolveRequestId(header: string | string[] | undefined): string {
 }
 
 /**
- * One line per failed request, naming the route template since a path can hold caller data; 4xx is the caller's
- * mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none logs as an error.
+ * One line per failed request, naming the route template since a path can hold caller data; 4xx is
+ * the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none
+ * logs as an error.
+ *
  */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
   const message = errorMessage(err);
@@ -34,25 +37,26 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   } else if (status >= 500 && status !== 501) {
     log.error(line, { status, ...errorFields(err) });
   } else if (status === 401 || status === 403) {
-    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
-    // request scope.
+    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is
+    // stamped from the request scope.
     log.warn(line, { status, ...errorClassFields(err) });
   } else {
     log.info(line, { status, ...errorClassFields(err) });
   }
 }
 
-/** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
+/** The status and client message for a failed request; a held write lock is a retryable 503,
+ * never a 500. */
 export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
-// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called
-// slow.
+// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered
+// before it is called slow.
 const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
-/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer
- * goes when the reply finishes or the socket closes. */
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or
+ * touches the reply; the timer goes when the reply finishes or the socket closes. */
 function watchSlowRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -87,22 +91,25 @@ const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
 const UNMATCHED_ROUTE = 'unmatched';
 
 /**
- * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the request's access
- * line.
+ * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the
+ * request's access line.
+ *
  */
 export function noteAccess(req: IncomingMessage, note: AccessNote): void {
   const held = accessNotes.get(req);
   if (held) Object.assign(held, note);
 }
 
-/** The route name the request's access line carries, for a line about the same request logged after its reply. */
+/** The route name the request's access line carries, for a line about the same request logged
+ * after its reply. */
 export function accessRouteOf(req: IncomingMessage): string {
   return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
 }
 
 /**
- * One info line per finished request. A path id and a query string can both hold caller data, so the line carries
- * neither.
+ * One info line per finished request. A path id and a query string can both hold caller data, so
+ * the line carries neither.
+ *
  */
 function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
   const note: AccessNote = {};
@@ -121,8 +128,9 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
 }
 
 /**
- * The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the
- * access line.
+ * The request's id, after stamping the headers every reply carries and starting the slow-request
+ * watchdog and the access line.
+ *
  */
 export function openRequest(
   req: IncomingMessage,
@@ -142,7 +150,8 @@ export function sendError(res: ServerResponse, status: number, message: string):
   sendJson(res, status, { error: message });
 }
 
-/** Ends the reply; a socket that refuses is logged under the request's id, once, since no other reply can follow. */
+/** Ends the reply; a socket that refuses is logged under the request's id, once, since no other
+ * reply can follow. */
 export function endReply(res: ServerResponse): void {
   try {
     res.end();
@@ -151,7 +160,8 @@ export function endReply(res: ServerResponse): void {
   }
 }
 
-/** True when the socket took the chunk; one that refuses is logged under the request's id and is not written again. */
+/** True when the socket took the chunk; one that refuses is logged under the request's id and is
+ * not written again. */
 export function writeChunk(res: ServerResponse, chunk: string): boolean {
   try {
     res.write(chunk);
@@ -201,14 +211,17 @@ function paramName(spec: string): string {
   return spec.slice(1, spec.endsWith(INT_PARAM) ? -INT_PARAM.length : undefined);
 }
 
-/** The value a `:name` segment takes: decoded text, or for `:name(int)` digits only; null when the segment misses. */
+/** The value a `:name` segment takes: decoded text, or for `:name(int)` digits only; null when
+ * the segment misses. */
 function paramValue(spec: string, segment: string): string | null {
-  // Digits need no decoding, so an escape in an id segment misses the row rather than throwing a 400.
+  // Digits need no decoding, so an escape in an id segment misses the row rather than throwing a
+  // 400.
   if (spec.endsWith(INT_PARAM)) return DIGITS.test(segment) ? segment : null;
   return segment.length === 0 ? null : decodePathSegment(segment);
 }
 
-/** The params of a pattern such as `/v1/policies/:id(int)/close`, by name, or null when `path` is another path. */
+/** The params of a pattern such as `/v1/policies/:id(int)/close`, by name, or null when `path`
+ * is another path. */
 export function matchPath(pattern: string, path: string): RouteParams | null {
   const patternParts = pattern.split('/');
   const pathParts = path.split('/');
@@ -229,9 +242,9 @@ export function matchPath(pattern: string, path: string): RouteParams | null {
 }
 
 /**
- * Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would become `/` and 404 or
- * match the wrong template).
- * Only the PATHNAME is scanned, so recall queries like `?q=https%3A%2F%2Fexample.com` are not rejected. */
+ * Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would
+ * become `/` and 404 or match the wrong template). Only the PATHNAME is scanned, so recall
+ * queries like `?q=https%3A%2F%2Fexample.com` are not rejected. */
 export function rejectEncodedSlash(rawUrl: string): void {
   const queryIdx = rawUrl.indexOf('?');
   const pathname = queryIdx === -1 ? rawUrl : rawUrl.slice(0, queryIdx);

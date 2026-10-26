@@ -7,8 +7,10 @@ export const DEFAULT_RERANK_TOP_K = 50;
 // MMR is O(K^2) cosine ops; candidates below this window never survive budget filtering anyway.
 const MMR_CANDIDATE_CAP = 100;
 
-/** MMR: repeatedly picks the candidate maximising lambda * relevance - (1 - lambda) * max(cos(cand, picked)).
- * Input must be sorted by relevance; strict `>` keeps ties first-wins, so a deterministic input stays deterministic.
+/** MMR: repeatedly picks the candidate maximising lambda * relevance - (1 - lambda) * max(cos(cand,
+ * picked)). Input must be sorted by relevance; strict `>` keeps ties first-wins, so a deterministic
+ * input stays deterministic.
+ *
  */
 export function mmrRerank(
   scored: SearchResult[],
@@ -84,7 +86,8 @@ export function applyMmrWindow(
   return [...mmrRerank(head, embeddingIndex, lambda, explain), ...tail];
 }
 
-/** Reranks the top `topK` (default 50), stamps pre and post ranks, then maps each head row through `onRanked`. */
+/** Reranks the top `topK` (default 50), stamps pre and post ranks, then maps each head row
+ * through `onRanked`. */
 export async function applyReranker(
   query: string,
   ordered: SearchResult[],

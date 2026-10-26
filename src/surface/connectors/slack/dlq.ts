@@ -44,8 +44,9 @@ export interface ReplayDlqOptions {
   allowUnknownTeamFallback?: boolean;
 }
 
-/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
- * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
+/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`),
+ * re-verifying the signature with the CURRENT secret unless forced. A NULL signature needs
+ * --force; replays use today's routing. */
 export async function replaySlackDlqEntry(
   ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'infra'>,
   id: number,
@@ -70,7 +71,8 @@ export async function replaySlackDlqEntry(
   );
 }
 
-/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */
+/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current
+ * secret to show. */
 function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal | null {
   if (!row.signature || !row.slackTimestamp) {
     return {

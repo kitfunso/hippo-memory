@@ -1,5 +1,5 @@
-/** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or unknown means warn.
- * `HIPPO_LOG_FORMAT=json` writes JSON lines. */
+/** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or
+ * unknown means warn. `HIPPO_LOG_FORMAT=json` writes JSON lines. */
 
 import { envLogJson, envLogLevel } from './env.js';
 import { currentRequestId } from './request-scope.js';
@@ -7,7 +7,9 @@ import { currentRequestId } from './request-scope.js';
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
 /**
- * Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to every line written.
+ * Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to
+ * every line written.
+ *
  */
 export interface LogFields {
   ts?: string;
@@ -21,7 +23,8 @@ function isLogLevel(value: string): value is LogLevel {
   return Object.hasOwn(RANK, value);
 }
 
-/** The active threshold, read on every call so a test or a long-lived server can change it without a restart. */
+/** The active threshold, read on every call so a test or a long-lived server can change it
+ * without a restart. */
 function logThreshold(): LogLevel {
   const raw = envLogLevel();
   return isLogLevel(raw) ? raw : 'warn';
@@ -34,11 +37,13 @@ export function isLevelEnabled(level: LogLevel): boolean {
 // A field value is caller data; flattening newlines keeps one event on one line.
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 
-// A value with a space, quote or `=` is quoted, so a reader of the line can tell where it ends and the next key starts.
+// A value with a space, quote or `=` is quoted, so a reader of the line can tell where it ends and
+// the next key starts.
 const fieldValue = (value: string): string =>
   /[\s"=]/.test(value) ? JSON.stringify(value) : value;
 
-/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as before. */
+/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as
+ * before. */
 export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
   const extras = Object.entries(fields)
     .filter(([, v]) => v !== undefined)
@@ -47,7 +52,8 @@ export function formatLogLine(level: LogLevel, message: string, fields: LogField
   return `[hippo] ${level}: ${oneLine(message)}${extras}`;
 }
 
-/** One JSON object per line for a log collector; JSON escaping keeps a multi-line value on the one line. */
+/** One JSON object per line for a log collector; JSON escaping keeps a multi-line value on the
+ * one line. */
 export function formatLogJson(level: LogLevel, message: string, fields: LogFields = {}): string {
   const { ts, ...rest } = fields;
   return JSON.stringify({ ts, level, msg: message, ...rest });
@@ -55,7 +61,8 @@ export function formatLogJson(level: LogLevel, message: string, fields: LogField
 
 function write(level: LogLevel, message: string, fields?: LogFields): void {
   if (!isLevelEnabled(level)) return;
-  // The request id is ambient, so a line logged deep in a library call still names the request it ran for.
+  // The request id is ambient, so a line logged deep in a library call still names the request it
+  // ran for.
   const stamped: LogFields = {
     ts: new Date().toISOString(),
     requestId: currentRequestId(),
@@ -65,14 +72,15 @@ function write(level: LogLevel, message: string, fields?: LogFields): void {
   process.stderr.write(`${format(level, message, stamped)}\n`);
 }
 
-// No key follows the data: each names a table, column, errno or site. The cap guards a call site that puts a per-row
-// value in its key, which would otherwise grow the set without bound.
+// No key follows the data: each names a table, column, errno or site. The cap guards a call site
+// that puts a per-row value in its key, which would otherwise grow the set without bound.
 const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
 let onceCapReported = false;
 
-/** 'new' records the key and 'seen' is a repeat. A full set forgets its least recently seen key to take a new one, so
- * a new failure class always logs at its level; the first eviction says so at warn. */
+/** 'new' records the key and 'seen' is a repeat. A full set forgets its least recently seen key
+ * to take a new one, so a new failure class always logs at its level; the first eviction says so
+ * at warn. */
 function sightOnceKey(key: string): 'new' | 'seen' {
   if (onceKeys.has(key)) {
     // Re-inserting moves the key last in Set order, so Set order tracks least recently seen.
@@ -98,13 +106,14 @@ function sightOnceKey(key: string): 'new' | 'seen' {
   return 'new';
 }
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. */
+/** Write `message` at `level` the first time `key` is seen in this process; later calls are
+ * dropped. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') write(level, message, fields);
 }
 
-/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable without
- * flooding stderr. */
+/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure
+ * stays findable without flooding stderr. */
 function warnThenDebug(key: string, message: string, fields?: LogFields): void {
   write(sightOnceKey(key) === 'new' ? 'warn' : 'debug', message, fields);
 }
@@ -112,14 +121,16 @@ function warnThenDebug(key: string, message: string, fields?: LogFields): void {
 const SAMPLE_EVERY = 100;
 const repeatCounts = new Map<string, number>();
 
-/** Warn the first time `key` is seen, then count repeats at debug and warn again with the running count on every 100th,
- * so a failure that keeps happening stays visible without flooding stderr. */
+/** Warn the first time `key` is seen, then count repeats at debug and warn again with the
+ * running count on every 100th, so a failure that keeps happening stays visible without flooding
+ * stderr. */
 function warnThenSample(key: string, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') {
     write('warn', message, fields);
     return;
   }
-  // Counts only keys sightOnceKey recorded, and it drops a count with its key, so the map is bounded by ONCE_KEY_CAP.
+  // Counts only keys sightOnceKey recorded, and it drops a count with its key, so the map is
+  // bounded by ONCE_KEY_CAP.
   const seen = (repeatCounts.get(key) ?? 0) + 1;
   repeatCounts.set(key, seen);
   if (seen % SAMPLE_EVERY === 0)
@@ -129,7 +140,8 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
 
 const CAUSE_DEPTH = 5;
 
-/** `class: message` for each link of an Error.cause chain, at most CAUSE_DEPTH deep, stopping at a cycle. */
+/** `class: message` for each link of an Error.cause chain, at most CAUSE_DEPTH deep, stopping at
+ * a cycle. */
 function causeChain(err: Error): string | undefined {
   const seen = new Set<unknown>([err]);
   const links: string[] = [];
@@ -146,8 +158,9 @@ function causeChain(err: Error): string | undefined {
   return links.length > 0 ? links.join(' <- ') : undefined;
 }
 
-/** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has no stack. Both texts
- * repeat the message, so `scrub` runs over them where the message is redacted. */
+/** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has
+ * no stack. Both texts repeat the message, so `scrub` runs over them where the message is
+ * redacted. */
 export function errorFields<E>(
   err: E,
   scrub: (text: string) => string = (text) => text,
@@ -161,7 +174,8 @@ export function errorFields<E>(
   };
 }
 
-/** The class and errno name of a thrown value without its text, for a line that must not carry caller data. */
+/** The class and errno name of a thrown value without its text, for a line that must not carry
+ * caller data. */
 export function errorClassFields<E>(err: E): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
   const code = errorCode(err);
@@ -180,19 +194,21 @@ export const log = {
   warnThenSample,
 } as const;
 
-/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause
- * enrichment). */
+/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case
+ * (error-cause enrichment). */
 export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-/** The text of an error the caller's classifier named as expected, for its one debug line. Nothing is wrong, so the
- * line leaves the stack out; check-caught-error-logs accepts this at debug level only. */
+/** The text of an error the caller's classifier named as expected, for its one debug line.
+ * Nothing is wrong, so the line leaves the stack out; check-caught-error-logs accepts this at
+ * debug level only. */
 export function expectedErrorText<E>(err: E): string {
   return errorMessage(err);
 }
 
-/** One post-compact failure, told once to the hook's output (`say`) and once to the structured log. */
+/** One post-compact failure, told once to the hook's output (`say`) and once to the structured
+ * log. */
 export function reportCompactionFailure(
   say: (message: string) => void,
   step: string,

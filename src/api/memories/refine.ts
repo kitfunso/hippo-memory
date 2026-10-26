@@ -1,4 +1,5 @@
-// The write half of `hippo refine`: the model call stays with the caller, the rewritten row is stored here.
+// The write half of `hippo refine`: the model call stays with the caller, the rewritten row is
+// stored here.
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Context } from '../types.js';
@@ -7,8 +8,9 @@ import type { Context } from '../types.js';
 export const REFINED_TAG = 'llm-refined';
 
 /**
- * Store a model's rewrite of a merged memory: the new text replaces the old one, and the row gains the refined tag
- * once.
+ * Store a model's rewrite of a merged memory: the new text replaces the old one, and the row gains
+ * the refined tag once.
+ *
  */
 export async function storeRefinement(
   ctx: Context,

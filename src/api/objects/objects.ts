@@ -1,5 +1,5 @@
-// The typed objects as one seam: each call names its kind, so the HTTP routes and the CLI verbs make the same calls,
-// and the caller's tenant, actor and half-life come from the Context alone.
+// The typed objects as one seam: each call names its kind, so the HTTP routes and the CLI verbs
+// make the same calls, and the caller's tenant, actor and half-life come from the Context alone.
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../base/records/object-types.js';
 import {
   CUSTOMER_NOTE,
@@ -42,7 +42,8 @@ export interface ObjectWrites {
   customer_note: SaveCustomerNoteOptions;
 }
 
-/** Where a write was made: a CLI write names its working folder, whose path segments tag the mirror memory. */
+/** Where a write was made: a CLI write names its working folder, whose path segments tag the
+ * mirror memory. */
 export interface WriteOrigin {
   readonly folder: string;
 }
@@ -62,7 +63,8 @@ const SAVABLE: SavableDescriptors = {
 
 const DESCRIPTORS: ObjectDescriptors = { ...SAVABLE, incident: INCIDENT };
 
-/** The request store's object group; the dispatcher has already answered 501 for a store without it. */
+/** The request store's object group; the dispatcher has already answered 501 for a store without
+ * it. */
 export function objectsOf(ctx: Context): Objects {
   return ctx.store.objects;
 }
@@ -123,7 +125,8 @@ export function objectClose<K extends ObjectKind>(
   });
 }
 
-/** Creates an object, or the version that replaces the one its write names, with its mirror memory in one write. */
+/** Creates an object, or the version that replaces the one its write names, with its mirror
+ * memory in one write. */
 export function objectCreate<K extends SavableKind>(
   ctx: Context,
   kind: K,
@@ -133,8 +136,8 @@ export function objectCreate<K extends SavableKind>(
   return saveObject(objectsOf(ctx), SAVABLE[kind], saveSiteOf(ctx), taggedFrom(write, origin));
 }
 
-/** The version that replaces object `id`, built from it by `next`, or null when the tenant has no such object; the
- * save's own check that `id` is still active is the one that counts. */
+/** The version that replaces object `id`, built from it by `next`, or null when the tenant has
+ * no such object; the save's own check that `id` is still active is the one that counts. */
 export async function objectSupersede<K extends SavableKind>(
   ctx: Context,
   kind: K,

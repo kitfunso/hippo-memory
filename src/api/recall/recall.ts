@@ -1,5 +1,6 @@
-// Read path: the recall entries that cut a band. Each ranks with rankRecall under its profile, then composes the band
-// and writes the recall; the budget-cut entry, retrieveWithCliCore, is in request.ts.
+// Read path: the recall entries that cut a band. Each ranks with rankRecall under its profile, then
+// composes the band and writes the recall; the budget-cut entry, retrieveWithCliCore, is in
+// request.ts.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
@@ -44,8 +45,8 @@ import type { RecallWrites } from '../../base/ports/store.js';
 
 const CONTINUITY_EVENT_LIMIT = 5;
 
-/** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets `recordAs` also has the
- * recall recorded in full. */
+/** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets
+ * `recordAs` also has the recall recorded in full. */
 export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
@@ -69,9 +70,9 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
   return result;
 }
 
-/** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the ids `show` returns;
- * `results` stays the top window of that ranking. Under `recordAs`, `show` judges the hints, so only the shown list is
- * recorded. */
+/** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the
+ * ids `show` returns; `results` stays the top window of that ranking. Under `recordAs`, `show`
+ * judges the hints, so only the shown list is recorded. */
 export async function retrieveRanking(
   ctx: Context,
   opts: RecallOptions,
@@ -113,12 +114,14 @@ function presentedList(opts: RecallOptions, shown: ShownRanking): ShownList {
     anchoredOn: shown.anchoredOn,
     tokens: shown.tokens ?? 0,
     ledgerSessionId: null,
-    // finishShownRecall throws when its audit write fails, so this point is never reached without the rows.
+    // finishShownRecall throws when its audit write fails, so this point is never reached without
+    // the rows.
     written: true,
   };
 }
 
-/** What `retrieve` records: the rows it returns, and the continuity block the reply carries beside them. */
+/** What `retrieve` records: the rows it returns, and the continuity block the reply carries
+ * beside them. */
 function returnedList(opts: RecallOptions, result: RecallResult): ShownList {
   return {
     query: opts.query,
@@ -127,7 +130,8 @@ function returnedList(opts: RecallOptions, result: RecallResult): ShownList {
     anchoredOn: result.anchoringHint?.memoryId,
     tokens: result.tokens + (result.continuityTokens ?? 0),
     ledgerSessionId: opts.boost?.sessionId ?? null,
-    // A failed audit write throws out of recallFromWindow, so this point is never reached without the rows.
+    // A failed audit write throws out of recallFromWindow, so this point is never reached without
+    // the rows.
     written: true,
   };
 }
@@ -156,7 +160,8 @@ async function recallFromWindow(
   return composed.result;
 }
 
-/** What an API recall asks the ranker for: its exact scope and own scope, its project, and the engine `mode` names. */
+/** What an API recall asks the ranker for: its exact scope and own scope, its project, and the
+ * engine `mode` names. */
 function rankRequestOf(
   ctx: Context,
   opts: RecallOptions,
@@ -172,7 +177,8 @@ function rankRequestOf(
     scopeMode: 'exact',
     ownScope: personalScope,
     originProjects: recallOrigin(opts),
-    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag instead.
+    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag
+    // instead.
     boost: goalTag ? {} : { sessionId },
     search: {
       usePhysics: opts.mode === 'physics',
@@ -184,7 +190,8 @@ function rankRequestOf(
   };
 }
 
-/** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
+/** The one recall write: the caller's leading audit rows go first, and the ids shown are the
+ * ones strengthened. */
 async function finishRecall(
   ctx: Context,
   opts: RecallOptions,
@@ -198,7 +205,8 @@ async function finishRecall(
   });
 }
 
-/** The ranking the MCP presenter cuts its list from: every ranked row, and the scope-filtered pool for its hints. */
+/** The ranking the MCP presenter cuts its list from: every ranked row, and the scope-filtered
+ * pool for its hints. */
 function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   const rankedEntries = ranking.results.map((r) => r.entry);
   return {
@@ -208,14 +216,16 @@ function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   };
 }
 
-/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it earned. */
+/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it
+ * earned. */
 interface CallerCut {
   readonly show: ShowRanking;
   readonly ranking: StoreRanking;
   readonly goalLog: GoalRecallLogRow[];
 }
 
-/** The caller shows its cut of the ranking; its rows go after the window's, in the same one write. */
+/** The caller shows its cut of the ranking; its rows go after the window's, in the same one
+ * write. */
 async function finishShownRecall(
   ctx: Context,
   opts: RecallOptions,
@@ -277,8 +287,9 @@ function recallWindowSize(ctx: Context, window: RecallWindowOptions = {}): numbe
         'pass opts.window.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
     );
   }
-  // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill overflow summaries.
-  // 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so non-positive values throw.
+  // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill
+  // overflow summaries. 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so
+  // non-positive values throw.
   if (scorerWindow !== undefined) {
     if (!Number.isFinite(scorerWindow) || !Number.isInteger(scorerWindow) || scorerWindow < 1) {
       throw new RecallContractError(
@@ -329,7 +340,8 @@ async function goalsOf(ctx: Context, plan: RecallPlan, known: ActiveGoals | null
   return ctx.store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId: ctx.tenantId });
 }
 
-// On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
+// On a shared store the tenant's newest row is another developer's; no project keys to nothing, so
+// the block is empty.
 function continuityKey(ctx: Context, opts: RecallOptions): ContinuityKey | null {
   if (!sharedStoreOf(ctx)) return null;
   return { owner: ownerOrSubject(ctx.actor), project: recallOrigin(opts) ?? [] };

@@ -4,10 +4,12 @@ import { compareScoredResults } from '../../base/rank/compare.js';
 import { churnStaleFactor } from './boosts.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
 
-/** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
+/** When an extracted fact and its source both match, keep only the higher-scoring one (usually
+ * the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   const seenExtractedFrom = new Set<string>();
-  // A dropped source leaves a hole instead of splicing, so each result costs one map step however many came before.
+  // A dropped source leaves a hole instead of splicing, so each result costs one map step however
+  // many came before.
   const slots: Array<SearchResult | null> = [];
   const slotsOfId = new Map<string, number[]>();
   const keep = (result: SearchResult): void => {
@@ -32,7 +34,8 @@ export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
 
 const DAG_CHILD_SCORE_FACTOR = 0.9;
 
-/** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts `results` in place. */
+/** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts
+ * `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
   const summaryIds = new Set(
     results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id),
@@ -62,7 +65,8 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   return results;
 }
 
-// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine spends alike.
+// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine
+// spends alike.
 export function fitBudget<T extends SearchResult>(
   ordered: T[],
   budget: number,

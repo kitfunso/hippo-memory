@@ -58,17 +58,17 @@ export async function handleDashboard({
 }
 
 export async function handleMcp(): Promise<void> {
-  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is transport-agnostic, so we
-  // explicitly attach the stdio loop here. (HTTP/SSE transport is wired in src/server.ts and imports the same module
-  // without triggering stdin handlers.)
+  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is
+  // transport-agnostic, so we explicitly attach the stdio loop here. (HTTP/SSE transport is wired
+  // in src/server.ts and imports the same module without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
   mod.startStdioLoop(cliStdioHost());
   // Server runs until stdin closes, so we never reach here
   await new Promise(() => {}); // hang forever
 }
 
-/** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and HIPPO_TLS_KEY; undefined when
- * neither is set. */
+/** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and
+ * HIPPO_TLS_KEY; undefined when neither is set. */
 function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
   // A flag with no value exits here; falling back to cleartext would hide the mistake.
   const certPath = stringFlagOrExit(flags, 'tls-cert') ?? envTlsCert();
@@ -87,8 +87,8 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   }
 }
 
-/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains
- * itself. */
+/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that
+ * changed it explains itself. */
 function keyRuleLine(hippoRoot: string): string {
   return (
     'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ' +

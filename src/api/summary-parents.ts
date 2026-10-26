@@ -3,7 +3,8 @@ import { passesScopeFilterForRecall } from '../base/scope/recall-scope.js';
 import { classifyOriginProject } from '../base/scope/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
 
-/** The level-2 summaries that may stand in for their children: live, in the caller's scope and in its project. */
+/** The level-2 summaries that may stand in for their children: live, in the caller's scope and
+ * in its project. */
 export function eligibleSummaryParents(
   parents: readonly MemoryEntry[],
   scope: string | undefined,

@@ -1,5 +1,5 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection
- * where a replay is safe. */
+/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and
+ * on a dropped connection where a replay is safe. */
 
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
@@ -10,20 +10,23 @@ export interface RetryPolicy {
   timeoutMs: number;
   /** Total attempts including the first. */
   attempts?: number;
-  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would reach
-   * it. */
+  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts
+   * whose wait would reach it. */
   totalMs?: number;
   baseDelayMs?: number;
-  /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
+  /** A Retry-After longer than this hands the response back, so a caller with its own long pause
+   * keeps it. */
   maxDelayMs?: number;
-  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call (`retryTransport`). A write narrows it
-   * to answers that prove nothing committed. */
+  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call
+   * (`retryTransport`). A write narrows it to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
-  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out attempt is replayed. On
-   * for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
+  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out
+   * attempt is replayed. On for GET and HEAD; any other method turns it on only when a replay
+   * cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
-  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
+  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at
+   * once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   /** Replaces the clock `totalMs` is measured on. */
@@ -35,14 +38,14 @@ const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
 const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
-/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; the Anthropic client passes
- * `HIPPO_LLM_TIMEOUT_MS` as `configured`. */
+/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; the
+ * Anthropic client passes `HIPPO_LLM_TIMEOUT_MS` as `configured`. */
 export function llmTimeoutMs(configured?: number): number {
   return configured ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
-/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures would
- * hold a sleep for 3x the timeout. */
+/** One LLM call with its retries: two full attempts and the longest wait between them, where
+ * three slow failures would hold a sleep for 3x the timeout. */
 export function llmTotalMs(timeoutMs: number = llmTimeoutMs()): number {
   return 2 * timeoutMs + DEFAULT_MAX_DELAY_MS;
 }
@@ -70,8 +73,8 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set([
   'UND_ERR_HEADERS_TIMEOUT',
 ]);
 
-/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is
- * not one. */
+/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A
+ * refused connection is not one. */
 export function isTransientTransportError<E>(err: E): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === 'TimeoutError') return true;
@@ -102,7 +105,8 @@ interface RetryLogEntry {
 
 function logRetry(entry: RetryLogEntry): void {
   const { init, url, reason, attempt, attempts, delayMs } = entry;
-  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final
+  // failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
     target: redactedTarget(url),
@@ -121,8 +125,8 @@ const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> =>
     cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
   });
 
-/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its reason,
- * so no further attempt starts. */
+/** The wait between attempts. With a caller signal it ends the moment that signal aborts and
+ * rejects with its reason, so no further attempt starts. */
 async function backoffWait(
   ms: number,
   sleep: Sleep | undefined,
@@ -145,15 +149,16 @@ async function backoffWait(
   }
 }
 
-/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429 refused the call
- * unrun. */
+/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429
+ * refused the call unrun. */
 const defaultRetryOn =
   (replaySafe: boolean) =>
   (res: Response): boolean =>
     res.status === 429 || (replaySafe && isRetryableStatus(res.status));
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe call (see
- * `retryTransport`), on 5xx and transport faults; the last response or error comes back as is. */
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe
+ * call (see `retryTransport`), on 5xx and transport faults; the last response or error comes
+ * back as is. */
 export async function fetchWithRetry(
   url: string | URL,
   init: RequestInit,
@@ -207,7 +212,8 @@ export async function fetchWithRetry(
     try {
       await res.body?.cancel();
     } catch (err) {
-      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to idle out.
+      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to
+      // idle out.
       log.debug('http retry: body cancel failed', errorFields(err));
     }
     logRetry({ init, url, reason: `status ${res.status}`, attempt, attempts, delayMs: delay });

@@ -1,5 +1,5 @@
-// The dead-letter statements both connectors share; each connector names its table and columns and maps rows to its own
-// item type.
+// The dead-letter statements both connectors share; each connector names its table and columns and
+// maps rows to its own item type.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
@@ -22,11 +22,13 @@ function assertColumns(names: readonly string[]): void {
   }
 }
 
-// The driver returns each column by its stored affinity; the connector's rowToItem coerces every field.
+// The driver returns each column by its stored affinity; the connector's rowToItem coerces every
+// field.
 type DlqRawValue = string | number | bigint | null;
 type DlqRawRow = Record<string, DlqRawValue>;
 
-/** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in insert order. */
+/** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in
+ * insert order. */
 function insertDlqRow(
   db: DatabaseSyncLike,
   table: DlqTable,
@@ -90,7 +92,8 @@ function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, tenantId: string,
 
 type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';
 
-/** One DLQ column: the item field it fills, its kind, and whether insert writes it (the database sets the rest). */
+/** One DLQ column: the item field it fills, its kind, and whether insert writes it (the database
+ * sets the rest). */
 export interface DlqColumn {
   field: string;
   column: string;

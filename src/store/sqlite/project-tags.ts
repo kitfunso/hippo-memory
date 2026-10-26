@@ -1,5 +1,5 @@
-// hippo.db's ProjectTags group: the reads `hippo projects` plans from, and the merge and repair, each one transaction
-// backed up first.
+// hippo.db's ProjectTags group: the reads `hippo projects` plans from, and the merge and repair,
+// each one transaction backed up first.
 import {
   getMeta,
   setMeta,
@@ -49,7 +49,8 @@ import { META_KEY } from '../../db/meta.js';
 
 const TX_LABEL = 'merge_projects';
 
-/** A rewrite's answer plus the ids whose mirrors are rewritten, and those whose mirrors go, once it commits. */
+/** A rewrite's answer plus the ids whose mirrors are rewritten, and those whose mirrors go, once
+ * it commits. */
 interface TagRewrite<T> {
   readonly result: T;
   readonly rewrite: readonly string[];
@@ -67,7 +68,8 @@ function rewrite<T>(
   const done = withBackup(db, files.hippoRoot, backupLabel, (backup) =>
     withWriteScope(db, TX_LABEL, () => body(backup)),
   );
-  // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild.
+  // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the
+  // next rebuild.
   for (const entry of readEntriesByIds(db, done.rewrite, tenantId).values()) {
     writeEntryMirrors(files.hippoRoot, entry);
   }
@@ -81,15 +83,16 @@ function rowsWhere(db: DatabaseSyncLike, filter: EntryFilter): Iterable<MemoryEn
   );
 }
 
-/** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into` already holds. */
+/** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into`
+ * already holds. */
 function fold(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   { from, into }: ProjectFold,
 ): FoldResult {
-  // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already holds would show
-  // twice.
+  // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already
+  // holds would show twice.
   const held = new Set<string>();
   const imports = {
     tenantId,
@@ -102,7 +105,8 @@ function fold(
   }
   const setAside: string[] = [];
   const restamped: string[] = [];
-  // A row set aside sits at or before the page cursor, so the write never moves a row the walk has yet to read.
+  // A row set aside sits at or before the page cursor, so the write never moves a row the walk has
+  // yet to read.
   for (const row of rowsWhere(db, { tenantId, origins: [from] })) {
     const tag = toolTag(row.source);
     const live = isImport(row.source) && !row.supersededBy && row.kind !== 'raw';
@@ -168,8 +172,8 @@ function setAsideCopies(
   return done;
 }
 
-/** The planned sleep merges still live and user-global; the plan chose each by its parents, so one re-tagged since
- * stays as it is. */
+/** The planned sleep merges still live and user-global; the plan chose each by its parents, so
+ * one re-tagged since stays as it is. */
 function userGlobalMerges(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -247,8 +251,8 @@ const markBodies: Bodies<Pick<ProjectTags, 'markRepairedOnce'>> = {
   markRepairedOnce: (db) => setMeta(db, META_KEY.projectRepairAuto, '1'),
 };
 
-/** `readOpener` opens the reads' handles: hippo.db's own open, which migrates an older schema first, unless a check
- * that must leave the store as it found it names a read-only one. */
+/** `readOpener` opens the reads' handles: hippo.db's own open, which migrates an older schema
+ * first, unless a check that must leave the store as it found it names a read-only one. */
 export function sqliteProjectTags({ on, files }: Handles, readOpener?: HandleOpener): ProjectTags {
   return {
     ...bound(on, readsBodies, readOpener),

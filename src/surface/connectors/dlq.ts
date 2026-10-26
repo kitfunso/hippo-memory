@@ -1,5 +1,5 @@
-// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of
-// defaults, one replay result.
+// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel,
+// one set of defaults, one replay result.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
@@ -36,8 +36,8 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the queue its rows live in and the letter that parks a row there. `Own` is the columns
- * only its table has. */
+/** What one connector supplies: the queue its rows live in and the letter that parks a row
+ * there. `Own` is the columns only its table has. */
 export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends string> {
   readonly connector: C;
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
@@ -72,7 +72,8 @@ export function listDlq<C extends DeadLetterConnector>(
   });
 }
 
-/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome itself. */
+/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome
+ * itself. */
 export type ReplayStatus =
   | 'not_found'
   | 'sig_missing'
@@ -100,7 +101,8 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
   return { ok: false, status, memoryId: null, retryCount, reason };
 }
 
-/** A replay that failed after the row was read: counts it exactly once, then reports the new count. */
+/** A replay that failed after the row was read: counts it exactly once, then reports the new
+ * count. */
 async function failAndBump(
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
   store: HippoStore,
@@ -111,8 +113,8 @@ async function failAndBump(
   return replayFailed(failure.status, row.retryCount + 1, failure.reason);
 }
 
-/** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay routes it. Another
- * tenant's row reads as absent. */
+/** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay
+ * routes it. Another tenant's row reads as absent. */
 async function replayableRow<C extends DeadLetterConnector>(
   store: HippoStore,
   connector: C,
@@ -127,7 +129,8 @@ async function replayableRow<C extends DeadLetterConnector>(
   return unroutable ?? null;
 }
 
-/** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force can get it through. */
+/** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force
+ * can get it through. */
 export interface SignatureRefusal {
   readonly status: 'sig_missing' | 'sig_fail';
   readonly reason: string;
@@ -157,8 +160,8 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
   readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a missing
- * signature. */
+/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted
+ * once, except a missing signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
   store: HippoStore,

@@ -1,30 +1,36 @@
-// Bounds on the scrypt work a bearer key check may start: how many derive at once, how many of those one key id holds,
-// how many one address holds, and how many one address starts for one key id.
+// Bounds on the scrypt work a bearer key check may start: how many derive at once, how many of
+// those one key id holds, how many one address holds, and how many one address starts for one key
+// id.
 import { HttpError } from '../../base/errors/http-errors.js';
 import { createRateLimiter } from './rate-limit.js';
 
 // libuv runs scrypt on a pool of four threads by default, so two stay free for file and DNS work.
 const MAX_IN_FLIGHT = 2;
-// Four rounds of two, so a burst of unproved keys waits its turn and no wait is longer than four derivations.
+// Four rounds of two, so a burst of unproved keys waits its turn and no wait is longer than four
+// derivations.
 const MAX_WAITING = 8;
-// Key ids are not secret, so one key id flooded from many addresses keeps a slot and two waits, never the whole queue.
-// A proved key's concurrent checks share one derivation, so its own first use never needs a second slot.
+// Key ids are not secret, so one key id flooded from many addresses keeps a slot and two waits,
+// never the whole queue. A proved key's concurrent checks share one derivation, so its own first
+// use never needs a second slot.
 const KEY_MAX_IN_FLIGHT = 1;
 const KEY_MAX_WAITING = 2;
-// Many addresses on a few known key ids could fill the queue key by key; one address holds at most two slots.
+// Many addresses on a few known key ids could fill the queue key by key; one address holds at most
+// two slots.
 const ADDRESS_MAX_HELD = 2;
-// Room for a mistyped or rotated secret; a secret is 160 random bits, so this bounds CPU, not guessing.
+// Room for a mistyped or rotated secret; a secret is 160 random bits, so this bounds CPU, not
+// guessing.
 const KEY_ADDRESS_BURST = 5;
-// One more try every 12 s: past its burst, an address starts at most five derivations a minute for one key id.
+// One more try every 12 s: past its burst, an address starts at most five derivations a minute for
+// one key id.
 const KEY_ADDRESS_TRIES_PER_SEC = 5 / 60;
 
 export interface KeyCheckBounds {
-  /** Throws the 429 a refused key check answers, before any derivation: no room left to wait, or `keyId` already holds
-   * its share of the queue, or `address` already holds two slots (Retry-After 1), or `address` has spent its tries on
-   * `keyId` (Retry-After 12). */
+  /** Throws the 429 a refused key check answers, before any derivation: no room left to wait, or
+   * `keyId` already holds its share of the queue, or `address` already holds two slots
+   * (Retry-After 1), or `address` has spent its tries on `keyId` (Retry-After 12). */
   admit(keyId: string, address: string): void;
-  /** Runs `derive` for `keyId` now or once a slot frees that the key may take, counting the slot to `address`; `admit`
-   * in the same tick keeps the queue within its caps. */
+  /** Runs `derive` for `keyId` now or once a slot frees that the key may take, counting the slot
+   * to `address`; `admit` in the same tick keeps the queue within its caps. */
   run<T>(keyId: string, address: string, derive: () => Promise<T>): Promise<T>;
 }
 
@@ -33,7 +39,8 @@ interface Waiter {
   readonly start: () => void;
 }
 
-/** Derivations running and waiting, in total and per key id; a slot goes to the oldest waiter whose key has room. */
+/** Derivations running and waiting, in total and per key id; a slot goes to the oldest waiter
+ * whose key has room. */
 function fairQueue() {
   let inFlight = 0;
   const running = new Map<string, number>();
@@ -88,8 +95,8 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
   };
   return {
     admit(keyId, address) {
-      // Each answers in the words an existing limit uses: the request limit's for a full queue or a key or address past
-      // its share, the address's scrypt bucket's for spent tries.
+      // Each answers in the words an existing limit uses: the request limit's for a full queue or a
+      // key or address past its share, the address's scrypt bucket's for spent tries.
       if (
         queue.full() ||
         queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING ||

@@ -29,7 +29,8 @@ import type { HippoStore } from '../../base/ports/store.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
-/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
+/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the
+ * policy hides. */
 async function noteScopeHidden(
   ctx: ReturnType<typeof cliApiContext>,
   global: HippoStore | undefined,
@@ -44,7 +45,8 @@ async function noteScopeHidden(
   }
 }
 
-/** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned after the await. */
+/** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned
+ * after the await. */
 interface InspectedSlot {
   rank?: RankRecallResult;
 }
@@ -67,7 +69,8 @@ async function explainQuery(
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
-  // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
+  // Unlike recall, explain reads the global store whenever it exists, even when it is the local
+  // root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;
   await noteScopeHidden(

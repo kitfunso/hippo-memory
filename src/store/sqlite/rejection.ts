@@ -1,6 +1,7 @@
-/** Rejected-value tombstone: a human can refuse byte-stable re-ingestion of a rejected fact (exact normalized value);
- * paraphrase matching is out of scope. db-agnostic (helpers take a `DatabaseSyncLike`) and imports nothing from the
- * store layer above it, which imports this (the reverse is a cycle). */
+/** Rejected-value tombstone: a human can refuse byte-stable re-ingestion of a rejected fact
+ * (exact normalized value); paraphrase matching is out of scope. db-agnostic (helpers take a
+ * `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the
+ * reverse is a cycle). */
 
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
@@ -10,7 +11,8 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { orderSql, REJECTED_ORDER } from '../rules/order.js';
 
-// SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects REJECTED_VALUE_COLUMNS; scripts/check-row-casts.mjs
+// proves it.
 interface RawRejectedValueRow {
   tenant_id: string;
   digest: string;
@@ -35,8 +37,8 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
   };
 }
 
-/** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
- * guard. */
+/** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case
+ * cost; a miss ends the guard. */
 export function readRejectedValue(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -68,8 +70,8 @@ export function rejectedValues(
   return found;
 }
 
-/** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject` verb and
- * `resolveConflict`'s `rejectLoserValue`). */
+/** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject`
+ * verb and `resolveConflict`'s `rejectLoserValue`). */
 export function insertRejectedValue(
   db: DatabaseSyncLike,
   opts: {
@@ -127,9 +129,10 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
   return rows.map(rowToRejectedValue);
 }
 
-/** Write-path guard check: fires when the digest matches a tombstone AND the write introduces that content (a new row,
- * or a same-id UPSERT changing it). Unchanged same-id re-persists (recall boost, decay, star toggle) are exempt. A miss
- * costs ONE indexed point query; only a hit SELECTs the stored row. */
+/** Write-path guard check: fires when the digest matches a tombstone AND the write introduces
+ * that content (a new row, or a same-id UPSERT changing it). Unchanged same-id re-persists
+ * (recall boost, decay, star toggle) are exempt. A miss costs ONE indexed point query; only a
+ * hit SELECTs the stored row. */
 export function checkRejectionGuard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -140,8 +143,8 @@ export function checkRejectionGuard(
   const tombstone = readRejectedValue(db, tenantId, incomingDigest);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
-  // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a
-  // tenantId-only upsert introduces content there.
+  // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is
+  // read as a tenantId-only upsert introduces content there.
   const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(
     entryId,
   ) as StoredContentRow | undefined;
@@ -157,8 +160,9 @@ interface StoredContentRow {
   readonly tenant_id: string | null;
 }
 
-/** True when writing content of `digest` under `tenantId` over `stored`, the row the id holds now, introduces it: a new
- * row, a move to the tenant, or changed content. The guard refuses only these. */
+/** True when writing content of `digest` under `tenantId` over `stored`, the row the id holds
+ * now, introduces it: a new row, a move to the tenant, or changed content. The guard refuses
+ * only these. */
 export function introducesContent(
   stored: StoredContentRow | undefined,
   tenantId: string,

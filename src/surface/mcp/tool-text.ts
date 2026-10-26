@@ -89,7 +89,8 @@ export interface RenderedRecall {
   list: SearchResult[];
 }
 
-// api.retrieveRanking hands the ranking to a callback, so the render it produces comes back through this slot.
+// api.retrieveRanking hands the ranking to a callback, so the render it produces comes back through
+// this slot.
 export interface RenderSlot {
   rendered?: RenderedRecall;
 }
@@ -100,7 +101,8 @@ export const memoryCostAt =
   (r: Pick<SearchResult, 'entry'>): number =>
     printedTokens(formatMemory(r, now));
 
-// The widest heading or the empty-list line, whichever costs more, so either prints inside the budget.
+// The widest heading or the empty-list line, whichever costs more, so either prints inside the
+// budget.
 export function memoriesReserve(budget: number): number {
   return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
 }
@@ -130,7 +132,8 @@ export function trailPiece(events: readonly SessionEvent[]): string {
   return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
 }
 
-// Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed before any memory.
+// Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed
+// before any memory.
 export const contextCostAt = (now: Date): ContextCost => ({
   entry: memoryCostAt(now),
   fixed: (budget) => memoriesReserve(budget),
@@ -139,7 +142,8 @@ export const contextCostAt = (now: Date): ContextCost => ({
   trail: (events) => estimateTokens(trailPiece(events)),
 });
 
-// Rows the ranked list already shows drop out of this section, so pricing every row bounds what it prints.
+// Rows the ranked list already shows drop out of this section, so pricing every row bounds what it
+// prints.
 export function tailSection(rows: RecallResultItem[]): string {
   if (rows.length === 0) return '';
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
@@ -155,7 +159,8 @@ export function tailSection(rows: RecallResultItem[]): string {
   return '\n' + lines.join('\n');
 }
 
-// The hint depends on the query alone, so the ranker's copy is the one shown; JSON.stringify fences the phrase.
+// The hint depends on the query alone, so the ranker's copy is the one shown; JSON.stringify fences
+// the phrase.
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;

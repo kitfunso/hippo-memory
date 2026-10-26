@@ -1,5 +1,6 @@
-// One session-end worker per session at a time, plus how far turn capture has read that session's transcript.
-// Two fast replies would otherwise start two workers that both read the dedupe keys before either writes.
+// One session-end worker per session at a time, plus how far turn capture has read that session's
+// transcript. Two fast replies would otherwise start two workers that both read the dedupe keys
+// before either writes.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
@@ -33,8 +34,8 @@ function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   return { lock: `${base}.lock`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
-/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely waits more than minutes
- * on a busy store. */
+/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely
+ * waits more than minutes on a busy store. */
 const STALE_LOCK_MS = 15 * MINUTE_MS;
 
 const heldHere = new Set<string>();
@@ -47,7 +48,8 @@ function lockHeld(lock: string): boolean {
     text = fs.readFileSync(lock, 'utf8');
     mtimeMs = fs.statSync(lock).mtimeMs;
   } catch (err) {
-    // Gone means released; any other read error is taken as held, so two workers never run on a guess.
+    // Gone means released; any other read error is taken as held, so two workers never run on a
+    // guess.
     return errorCode(err) !== 'ENOENT';
   }
   const held = /^(\d+):(\d+)$/.exec(text.trim());
@@ -55,7 +57,8 @@ function lockHeld(lock: string): boolean {
   // Empty or torn: its taker is between the create and the write, so it is held.
   if (!held) return true;
   const pid = Number(held[1]);
-  // Our own pid is live only while this process holds the lock; a leftover from a dead run that reused the pid is not.
+  // Our own pid is live only while this process holds the lock; a leftover from a dead run that
+  // reused the pid is not.
   return holderAlive(pid, () => heldHere.has(lock));
 }
 
@@ -64,8 +67,8 @@ type Take = 'taken' | 'held' | 'unusable';
 // The error that made a lock unusable, kept so the one warning can name its errno.
 const unusableCause = new Map<string, unknown>();
 
-// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the lock; an atomic
-// link-based take if that shows up.
+// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the
+// lock; an atomic link-based take if that shows up.
 function takeSessionLock(lock: string): Take {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -109,13 +112,14 @@ function releaseSessionLock(lock: string): void {
   try {
     fs.rmSync(lock, { force: true });
   } catch (err) {
-    // A lock left behind names this pid, which is dead once the worker exits, so the next taker clears it.
+    // A lock left behind names this pid, which is dead once the worker exits, so the next taker
+    // clears it.
     logger.debug(`session lock not removed: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
-/** False when the request could not be queued; the caller then refuses the run, since an unlocked worker could race a
- * live one. */
+/** False when the request could not be queued; the caller then refuses the run, since an
+ * unlocked worker could race a live one. */
 function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
     fs.mkdirSync(path.dirname(files.queued), PRIVATE_DIR);
@@ -128,7 +132,8 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
     return false;
   }
   try {
-    // A full close outranks a turn close: it overwrites a queued turn, and a turn never replaces a queued full close.
+    // A full close outranks a turn close: it overwrites a queued turn, and a turn never replaces a
+    // queued full close.
     if (mode === 'full') fs.writeFileSync(files.queued, 'full');
     else fs.writeFileSync(files.queued, 'turn', { flag: 'wx' });
     return true;
@@ -142,13 +147,15 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   }
 }
 
-/** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh file. */
+/** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
+ * file. */
 function takeQueued(queued: string): WorkerMode | null {
   const taken = `${queued}.${process.pid}`;
   try {
     fs.renameSync(queued, taken);
   } catch (err) {
-    // ENOENT means nothing is queued; any other refusal leaves the request queued for the next round, but is told.
+    // ENOENT means nothing is queued; any other refusal leaves the request queued for the next
+    // round, but is told.
     if (errorCode(err) !== 'ENOENT') {
       logger.warn(
         `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
@@ -164,8 +171,8 @@ function takeQueued(queued: string): WorkerMode | null {
   }
 }
 
-/** Runs `work` unless a live worker holds this session, which then runs the request after its own so the last reply is
- * never dropped. */
+/** Runs `work` unless a live worker holds this session, which then runs the request after its
+ * own so the last reply is never dropped. */
 export async function runSessionWorker(
   sessionId: string | null,
   mode: WorkerMode,
@@ -206,7 +213,8 @@ export function turnPosition(turns: readonly SessionTurn[]): string {
   return turns.length === 0 ? '0:' : `${turns.length}:${turnKey(turns[turns.length - 1])}`;
 }
 
-/** The turns after `position`; all of them when it is null or its last turn is no longer in view. */
+/** The turns after `position`; all of them when it is null or its last turn is no longer in
+ * view. */
 export function turnsAfter(
   turns: readonly SessionTurn[],
   position: string | null,
@@ -216,16 +224,16 @@ export function turnsAfter(
   const count = Number(countText);
   if (!Number.isInteger(count) || count <= 0) return turns;
   if (count <= turns.length && turnKey(turns[count - 1]) === key) return turns.slice(count);
-  // A transcript too big to read whole is read from its tail, so the count shifts; the last turn's text still marks the
-  // place.
+  // A transcript too big to read whole is read from its tail, so the count shifts; the last turn's
+  // text still marks the place.
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turnKey(turns[i]) === key) return turns.slice(i + 1);
   }
   return turns;
 }
 
-/** The saved position for this session's transcript; null when none was saved, it names another file, or it is
- * unreadable. */
+/** The saved position for this session's transcript; null when none was saved, it names another
+ * file, or it is unreadable. */
 export function loadTurnPosition(sessionId: string, transcriptPath: string): string | null {
   const file = sessionStateFiles(sessionId)?.cursor;
   if (!file || !fs.existsSync(file)) return null;
@@ -245,7 +253,8 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
   }
 }
 
-// SHORTCUT: one small cursor file per chat is never pruned; prune by age at sleep if the folder grows.
+// SHORTCUT: one small cursor file per chat is never pruned; prune by age at sleep if the folder
+// grows.
 export function saveTurnPosition(
   sessionId: string,
   transcriptPath: string,
@@ -267,8 +276,8 @@ export function saveTurnPosition(
     fs.writeFileSync(tmp, JSON.stringify(cursor));
     fs.renameSync(tmp, file);
   } catch (err) {
-    // Windows refuses the rename (EPERM) while another process has the cursor open; the next reply re-reads these
-    // turns, which the dedupe keys absorb.
+    // Windows refuses the rename (EPERM) while another process has the cursor open; the next reply
+    // re-reads these turns, which the dedupe keys absorb.
     log(`cursor not saved: ${errorMessage(err)}`);
   }
 }

@@ -1,4 +1,5 @@
-// Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that projects.json names.
+// Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that
+// projects.json names.
 import path from 'node:path';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';

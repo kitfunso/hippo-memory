@@ -1,4 +1,5 @@
-// The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed failure out.
+// The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed
+// failure out.
 
 import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
@@ -36,7 +37,9 @@ export function anthropicLlm(connection: AnthropicConnection): Llm {
 }
 
 /**
- * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the body cannot be read.
+ * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the
+ * body cannot be read.
+ *
  */
 async function errorSnippet(res: Response): Promise<string> {
   // The status is the failure reported; a body that cannot be read only costs its snippet.
@@ -53,7 +56,8 @@ async function errorSnippet(res: Response): Promise<string> {
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }
 
-/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'. Never throws. */
+/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'.
+ * Never throws. */
 async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Promise<LlmReply> {
   const timeoutMs = llmTimeoutMs(envLlmTimeoutMs());
   let res: Response;
@@ -74,7 +78,8 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
         }),
         signal: withRequestSignal(),
       },
-      // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429 is.
+      // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429
+      // is.
       {
         timeoutMs,
         totalMs: llmTotalMs(timeoutMs),

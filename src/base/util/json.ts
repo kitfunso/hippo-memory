@@ -29,7 +29,8 @@ export function isJsonObject(value: JsonValue | undefined): value is { [key: str
   );
 }
 
-/** Like `isJsonObject`, but also false for an object whose own `constructor` key shadows `Object`. */
+/** Like `isJsonObject`, but also false for an object whose own `constructor` key shadows
+ * `Object`. */
 export function isJsonObjectLiteral(
   value: JsonValue | undefined,
 ): value is { [key: string]: JsonValue } {
@@ -38,12 +39,14 @@ export function isJsonObjectLiteral(
   );
 }
 
-/** `JSON.parse` typed as the values it can produce, so a reader narrows with the guards above instead of a cast. */
+/** `JSON.parse` typed as the values it can produce, so a reader narrows with the guards above
+ * instead of a cast. */
 export function parseJson(text: string): JsonValue {
   return JSON.parse(text);
 }
 
-/** The parsed value, or undefined when the text is not JSON; only the parser's SyntaxError is absorbed. */
+/** The parsed value, or undefined when the text is not JSON; only the parser's SyntaxError is
+ * absorbed. */
 export function tryParseJson(text: string): JsonValue | undefined {
   try {
     return JSON.parse(text);

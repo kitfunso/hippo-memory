@@ -75,12 +75,13 @@ export function pathEquals(a: string, b: string): boolean {
   return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 }
 
-// The launchers detectRealCodexPath looks for, so the only originals the installer can have recorded.
+// The launchers detectRealCodexPath looks for, so the only originals the installer can have
+// recorded.
 export const CODEX_LAUNCHER_NAMES: readonly string[] =
   process.platform === 'win32' ? ['codex.cmd', 'codex.ps1', 'codex.exe', 'codex'] : ['codex'];
 
-/** Metadata the installer could have written: each path is the install plan of one codex launcher, so the one rename it
- * can drive is `codex.hippo-real<ext>` back onto that launcher. */
+/** Metadata the installer could have written: each path is the install plan of one codex
+ * launcher, so the one rename it can drive is `codex.hippo-real<ext>` back onto that launcher. */
 export function namesInstallerPaths(metadata: CodexWrapperMetadata): boolean {
   const { originalCodexPath, realCodexPath, commandPath, backupPath } = metadata;
   if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString))
@@ -134,8 +135,8 @@ export function resolveCodexInstallPlan(originalCodexPath: string) {
   };
 }
 
-/** The wrapper script for a launcher at `commandPath`: PowerShell for .ps1, cmd for .cmd or .bat on Windows, else sh;
- * each runs `hippo codex-run` with the user's arguments. */
+/** The wrapper script for a launcher at `commandPath`: PowerShell for .ps1, cmd for .cmd or .bat
+ * on Windows, else sh; each runs `hippo codex-run` with the user's arguments. */
 export function codexLauncherWrapperText(
   commandPath: string,
   nodePath: string,
@@ -179,8 +180,8 @@ export function installResult(
   };
 }
 
-/** Why a repair must not re-point the user's launcher, or null when it may: only the CLI the user opted in may, and
- * never a checkout, whose folder may be deleted. */
+/** Why a repair must not re-point the user's launcher, or null when it may: only the CLI the
+ * user opted in may, and never a checkout, whose folder may be deleted. */
 export function repairRefusal(
   metadata: CodexWrapperMetadata,
   hippoCliPath: string,

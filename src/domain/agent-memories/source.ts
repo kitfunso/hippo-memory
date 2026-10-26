@@ -13,8 +13,9 @@ export const MIN_ITEM_CHARS = 10;
 export type ContainerMachine = Pick<Machine, 'platform' | 'files'>;
 
 /**
- * `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects sharing a folder in the
- * global store.
+ * `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects
+ * sharing a folder in the global store.
+ *
  */
 export function containerId(
   dir: string,
@@ -37,7 +38,8 @@ export function itemSource(prefix: string, key: string, text: string): string {
   return `${prefix}${key}#${itemHash(text)}`;
 }
 
-/** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name may hold one too. */
+/** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name
+ * may hold one too. */
 export function splitSource(
   source: string,
   prefix: string,
@@ -48,8 +50,9 @@ export function splitSource(
 }
 
 /**
- * The text as stored: emails masked as on every capture path, then the old Claude import's cap; the hash still sees the
- * raw note.
+ * The text as stored: emails masked as on every capture path, then the old Claude import's cap; the
+ * hash still sees the raw note.
+ *
  */
 export function storedText(text: string): string {
   const masked = maskEmails(text);

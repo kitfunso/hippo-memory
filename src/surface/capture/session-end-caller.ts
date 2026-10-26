@@ -1,5 +1,5 @@
-// SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for the session closed,
-// both under its tenant and project.
+// SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for
+// the session closed, both under its tenant and project.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
@@ -13,7 +13,8 @@ export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'tes
 export interface CallerSessionEndRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
-  /** Read off the transcript at session end; the handoff's source when the owner has no snapshot for the session. */
+  /** Read off the transcript at session end; the handoff's source when the owner has no snapshot
+   * for the session. */
   readonly workingState: WorkingState | null;
   /** The git state the caller saw when the session ended. */
   readonly evidence: CallerEvidence | null;
@@ -45,8 +46,9 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
 }
 
 /**
- * Call on a session's final end only, since it closes the snapshot. A failed close throws so the sender retries, and
- * the retry writes no second handoff.
+ * Call on a session's final end only, since it closes the snapshot. A failed close throws so the
+ * sender retries, and the retry writes no second handoff.
+ *
  */
 export async function sessionEndHandoffForCaller(
   given: EntryContext,

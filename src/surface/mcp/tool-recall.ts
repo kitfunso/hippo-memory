@@ -1,5 +1,5 @@
-// The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the hints and the Cutoff
-// block that describe that list.
+// The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the
+// hints and the Cutoff block that describe that list.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
@@ -43,7 +43,9 @@ import type {
 } from '../../api/recall/types.js';
 
 /**
- * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.
+ * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands
+ * back its hint rows.
+ *
  */
 interface RecallPresenterOptions {
   readonly config: HintConfig;
@@ -99,7 +101,8 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by text. */
+/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by
+ * text. */
 function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
@@ -112,8 +115,8 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
   const { config, includeContinuity, anchorRing, queryHash, out, hintRows, now } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
-    // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
-    // whole.
+    // Sections are paid in print order, ahead of the memories and after the heading; one that does
+    // not fit is dropped whole.
     const purse = tokenPurse(budget - memoriesReserve(budget));
     const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
     const hintPool = availabilityPool(config, () => pool);
@@ -127,7 +130,8 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
         : '';
     const showContinuity = continuityPiece !== '' && pays(continuityPiece);
 
-    // The hints and Cutoff block describe the list the tool shows, not the window band in apiResult.
+    // The hints and Cutoff block describe the list the tool shows, not the window band in
+    // apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
       // After every cut, so a merged row cut here never hides its sources.
       const list = dropHeldCopies(cut, (r) => r.entry);
@@ -140,12 +144,13 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
       const tail = showTail ? unshownTail(list, tailRows) : [];
       const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
       const s = suppressionSummary(counts, anchoring);
-      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads
-      // it.
+      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list,
+      // where the agent reads it.
       let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);
-      // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields go unanswered.
+      // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields
+      // go unanswered.
       text +=
         formatMemories(list, now) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
@@ -166,12 +171,13 @@ export interface ToolRecallRequest {
   readonly opts: SharedRecallOptions;
   /** The caller's token budget; the store's defaultBudget when absent. */
   readonly budget: number | undefined;
-  /** The caller's project on a shared store, which keeps the list to its rows and user-global ones. */
+  /** The caller's project on a shared store, which keeps the list to its rows and user-global
+   * ones. */
   readonly project: CallerProject | undefined;
 }
 
-/** hippo_recall's text. The tool keeps its own band size and search mode, and a RecallContractError reaches the caller
- * raw, as mcp-recall-fresh-tail-policy.test.ts pins. */
+/** hippo_recall's text. The tool keeps its own band size and search mode, and a
+ * RecallContractError reaches the caller raw, as mcp-recall-fresh-tail-policy.test.ts pins. */
 export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Promise<string> {
   const { opts, project } = req;
   const {
@@ -191,7 +197,8 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
       mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
       filter: { ...opts.filter, keepHeldCopies: true, project },
-      // The hint is computed below over the list the tool shows; the window's copy would emit its audit row twice.
+      // The hint is computed below over the list the tool shows; the window's copy would emit its
+      // audit row twice.
       hints: { suppressAvailabilityHint: true },
       trace: { recordAs: RECALL_RECORDING.mcp },
     },

@@ -25,12 +25,13 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOptions {
   label?: string;
-  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
-   * by name. */
+  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin
+   * key has to be asked for by name. */
   role?: 'admin' | 'member';
   /** Days until the key expires: above 0 and at most 3650. Defaults to 90. */
   ttlDays?: number;
-  /** True mints a key that never expires, which has to be asked for by name; refused together with `ttlDays`. */
+  /** True mints a key that never expires, which has to be asked for by name; refused together
+   * with `ttlDays`. */
   noExpiry?: boolean;
 }
 
@@ -44,11 +45,12 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
- * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
- * mints members. */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A
+ * could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a key never outranks
+ * its minter: a resolver admin is tenant-only, so it mints members. */
 export async function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
-  // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
+  // The key and its auth_create row commit together on every store, so a failed audit write leaves
+  // no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
   await keyWrites.changeApiKey('create', mint);
@@ -112,7 +114,8 @@ function adminKeyMint(ctx: Context, opts: AuthCreateOptions): KeyMintPlan<KeyMin
   const label = opts.label ?? null;
   const expiresAt = mintExpiry(opts, ctx.infra.clock());
   const { plaintext, key } = newKey(ctx, { label, role, ownerSubject: null, expiresAt });
-  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long, keyId is non-secret.
+  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long,
+  // keyId is non-secret.
   return {
     plaintext,
     mint: { key, actor: ctx.actor.subject, metadata: { label, role, expiresAt } },
@@ -142,8 +145,8 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
   expiresAt: string;
 }
 
-/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a
- * departed user's key short-lived. */
+/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps
+ * toISOString in range and a departed user's key short-lived. */
 function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): void {
   if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
     throw new RangeError(
@@ -157,8 +160,8 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): voi
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's
- * revokes, the mint and its audit rows commit or fail together. */
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary
+ * floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export async function authCreateSelf(
   ctx: Context,
   opts: AuthCreateSelfOptions,
@@ -179,7 +182,8 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<Sel
   const { subject } = ctx.actor;
   const label = opts.label ?? null;
   const expiresAt = new Date(ctx.infra.clock().getTime() + opts.ttlDays * DAY_MS).toISOString();
-  // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose ownerSubject's string type.
+  // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose
+  // ownerSubject's string type.
   const made = newKey(ctx, { label, role: 'member', ownerSubject: subject, expiresAt });
   // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
   return {
@@ -205,13 +209,14 @@ function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResu
 
 type KeyListOptions = { active: boolean; limit?: number; after?: KeysetPosition };
 
-/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
+/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is
+ * built from. */
 export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
   return listRows(ctx, ctx.store, opts);
 }
 
-/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin
- * only. */
+/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own
+ * view, so the host admin only. */
 export async function authListAllTenants(ctx: Context, active: boolean): Promise<ApiKeyListItem[]> {
   requireHostAdmin(ctx, "Listing every tenant's keys");
   const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: ALL_TENANTS });
@@ -232,13 +237,14 @@ async function listRows(
     : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
 }
 
-/** The key id of a member API key caller, whose owner decides what it lists; null for any other caller. */
+/** The key id of a member API key caller, whose owner decides what it lists; null for any other
+ * caller. */
 function memberKeyIdOf(actor: Actor): string | null {
   return actor.role === 'admin' || actor.viaAuthResolver ? null : keyIdOfSubject(actor.subject);
 }
 
-/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole
- * tenant; null means no keys. */
+/** A member sees only the keys its person minted, or just its own key when that has no owner; an
+ * admin sees the whole tenant; null means no keys. */
 function memberListFilter(
   actor: Actor,
   owner: string | null | undefined,
@@ -250,8 +256,8 @@ function memberListFilter(
   return owner ? { ownerSubject: owner } : { keyId };
 }
 
-/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot
- * probe key ids. */
+/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or
+ * unowned key, so it cannot probe key ids. */
 function assertMayRevoke(
   ctx: EntryContext,
   keyId: string,
@@ -319,8 +325,8 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
     : undefined;
 }
 
-/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants, so the
- * local CLI can run revoke and grant in the key's own tenant. */
+/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads
+ * across tenants, so the local CLI can run revoke and grant in the key's own tenant. */
 export async function authKeyTenant(ctx: Context, keyId: string): Promise<string | undefined> {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');

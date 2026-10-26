@@ -1,7 +1,7 @@
 /**
- * Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature metrics and regression
- * detection against a saved baseline.
- * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
+ * Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature
+ * metrics and regression detection against a saved baseline. Zero API calls (no LLM judge, no
+ * embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
 import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankBm25 } from '../search/bm25-search.js';
@@ -518,7 +518,8 @@ export async function runFeatureEval(
 }
 
 const REGRESSION_THRESHOLD = 0.05;
-// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the whole ranking.
+// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the
+// whole ranking.
 const EVAL_TOKEN_BUDGET = 50000;
 
 export function detectRegressions(
@@ -565,8 +566,8 @@ export function detectRegressions(
 }
 
 export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
-  // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every category in
-  // buildSyntheticCorpus's cases.
+  // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every
+  // category in buildSyntheticCorpus's cases.
   const features: EvalBaseline['features'] = {} as EvalBaseline['features'];
   for (const f of result.features) {
     features[f.category] = { mrr: f.mrr, recallAt5: f.recallAt5, ndcgAt5: f.ndcgAt5 };

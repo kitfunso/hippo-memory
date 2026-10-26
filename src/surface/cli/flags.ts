@@ -1,8 +1,10 @@
-// Each flag's kind, read from the verb table's flags: parseArgs needs a flag's kind before the verb's module loads.
+// Each flag's kind, read from the verb table's flags: parseArgs needs a flag's kind before the
+// verb's module loads.
 
 import { COMMANDS } from './verbs.js';
 
-// A value on a switch is refused, as `--fix=false` reads as on under Boolean() and `--pin=true` as off under === true.
+// A value on a switch is refused, as `--fix=false` reads as on under Boolean() and `--pin=true` as
+// off under === true.
 export type FlagKind = 'switch' | 'value' | 'number' | 'list';
 
 /** One verb's flags by kind: a number is refused unless numeric, and a list collects repeats. */
@@ -34,8 +36,8 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   ]),
 );
 
-// A flag typed on a verb that does not declare it still has to parse: it takes the kind its declaring verbs agree on,
-// and where they differ it is a plain value.
+// A flag typed on a verb that does not declare it still has to parse: it takes the kind its
+// declaring verbs agree on, and where they differ it is a plain value.
 const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   const shared = new Map<string, FlagKind>();
   for (const kinds of DECLARED.values()) {
@@ -45,7 +47,8 @@ const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   return shared;
 })();
 
-/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the table lacks. */
+/** How parseArgs reads `--name` on the verb with these flags; `undefined` is a command the table
+ * lacks. */
 export function flagKind(verb: VerbFlags | undefined, name: string): FlagKind {
   return (verb ? DECLARED.get(verb)?.get(name) : undefined) ?? SHARED_KIND.get(name) ?? 'value';
 }

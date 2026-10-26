@@ -19,7 +19,8 @@ export interface QuarantineListItem {
 
 const QUARANTINE_PREVIEW_CHARS = 200;
 
-/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
+/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review
+ * queue). */
 export async function quarantineList(
   ctx: Context,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
@@ -46,8 +47,8 @@ function refusalError(id: string, refusal: QuarantineRefusal): Error {
   return new ConflictError(`${id} is already ${refusal.status}`);
 }
 
-/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row moved since (mirrors
- * dormantRestore). */
+/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row
+ * moved since (mirrors dormantRestore). */
 export async function quarantineApprove(ctx: Context, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
@@ -65,7 +66,8 @@ export async function quarantineApprove(ctx: Context, id: string): Promise<void>
   throw refusalError(id, result);
 }
 
-/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched (append-only). */
+/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched
+ * (append-only). */
 export async function quarantineReject(ctx: Context, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');

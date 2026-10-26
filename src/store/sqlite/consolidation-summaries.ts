@@ -1,5 +1,5 @@
-// hippo.db's DAG summary reads and the one write that settles a dirty summary; what a summary settles to is decided in
-// src/domain/consolidate/dag.ts.
+// hippo.db's DAG summary reads and the one write that settles a dirty summary; what a summary
+// settles to is decided in src/domain/consolidate/dag.ts.
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
@@ -20,8 +20,8 @@ import type {
 } from '../../base/ports/store/consolidation.js';
 import type { AppendAuditOptions, EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 
-/** One keyset page of the L2 topic summaries without an L3 parent, across all tenants; a SQL filter, since sleep's
- * survivors lack the L2s its own DAG pass just wrote. */
+/** One keyset page of the L2 topic summaries without an L3 parent, across all tenants; a SQL
+ * filter, since sleep's survivors lack the L2s its own DAG pass just wrote. */
 export function listL2SummariesPage(
   db: DatabaseSyncLike,
   page: { readonly limit: number; readonly after?: EntryCursor },
@@ -46,8 +46,9 @@ export function listL2SummariesPage(
   return { entries: kept.rows.map(rowToEntry), next: kept.next };
 }
 
-/** The `limit` dirty summaries of every tenant changed last (latest_at DESC NULLS LAST, id ASC), each with its live
- * children; one row past the limit tells whether more were waiting without reading the rest. */
+/** The `limit` dirty summaries of every tenant changed last (latest_at DESC NULLS LAST, id ASC),
+ * each with its live children; one row past the limit tells whether more were waiting without
+ * reading the rest. */
 export function dirtySummaries(db: DatabaseSyncLike, limit: number): DirtySummaries {
   const rows = cachedStatement(
     db,
@@ -68,8 +69,8 @@ export function dirtySummaries(db: DatabaseSyncLike, limit: number): DirtySummar
   };
 }
 
-/** The live children of each summary in one IN query per tenant chunk: one list per summary in the order given, each
- * by created then id; tenant-scoped as defence in depth. */
+/** The live children of each summary in one IN query per tenant chunk: one list per summary in
+ * the order given, each by created then id; tenant-scoped as defence in depth. */
 function childrenOfSummaries(
   db: DatabaseSyncLike,
   summaries: ReadonlyArray<{ id: string; tenantId: string }>,
@@ -111,7 +112,8 @@ function childrenKey(tenantId: string, summaryId: string): string {
   return `${tenantId}\u0000${summaryId}`;
 }
 
-// `summary_dirty = 1` makes a concurrent sleep's second write a no-op; RETURNING feeds the full-text row.
+// `summary_dirty = 1` makes a concurrent sleep's second write a no-op; RETURNING feeds the
+// full-text row.
 const STILL_DIRTY = `WHERE id = ?
               AND tenant_id = ?
               AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
@@ -135,13 +137,15 @@ const SETTLE_FIELDS_SQL = `UPDATE memories
             ${STILL_DIRTY}`;
 const SETTLE_CLEAN_SQL = `UPDATE memories SET summary_dirty = 0 ${STILL_DIRTY}`;
 
-// SAFETY: every read cast to this row returns content and tags_json; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row returns content and tags_json; scripts/check-row-casts.mjs
+// proves it.
 interface SettledRow {
   content: string;
   tags_json: string;
 }
 
-/** Lands the settle in one write scope when it carries fields, as a rebuild always has; a bare clean is one UPDATE. */
+/** Lands the settle in one write scope when it carries fields, as a rebuild always has; a bare
+ * clean is one UPDATE. */
 export function settleSummary(db: DatabaseSyncLike, settle: SummarySettle): SummarySettled {
   assertTenantId('settleSummary', settle.tenantId);
   return settle.fields
@@ -164,7 +168,8 @@ function settleFields(
 ): SummarySettled {
   const { id, tenantId } = settle;
   const { content, descendantCount, earliestAt, latestAt } = fields;
-  // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the same transaction.
+  // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the same
+  // transaction.
   const tombstone = content ? readRejectedValue(db, tenantId, rejectionDigest(content.text)) : null;
   const at = [descendantCount, earliestAt, latestAt] as const;
   const row =
