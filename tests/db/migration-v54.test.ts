@@ -8,7 +8,7 @@ import {
   getSchemaVersion,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
+import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/required-objects.js';
 import { v54 } from '../../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

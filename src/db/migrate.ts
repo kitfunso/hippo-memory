@@ -5,15 +5,9 @@ import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
 import { tableExists } from './tables.js';
 import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion, META_KEY } from './meta.js';
-import {
-  MEMORIES_FTS_DDL,
-  REQUIRED_SCHEMA_OBJECTS,
-  ensureContinuityIndexes,
-  ensureContinuityTables,
-  ensureTrigramIndex,
-  isFtsMissing,
-  rebuildTrigramIndex,
-} from './continuity.js';
+import { ensureContinuityIndexes, ensureContinuityTables } from './continuity-tables.js';
+import { MEMORIES_FTS_DDL, ensureTrigramIndex, isFtsMissing, rebuildTrigramIndex } from './fts-index.js';
+import { REQUIRED_SCHEMA_OBJECTS } from './required-objects.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
 import { placeholders } from './sql.js';
 import { cachedStatement } from './statement-cache.js';

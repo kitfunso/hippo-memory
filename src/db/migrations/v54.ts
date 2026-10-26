@@ -1,4 +1,3 @@
-import { SESSION_OWNERS_DDL } from '../continuity.js';
 import { tableHasColumn, tableExists } from '../tables.js';
 import type { Migration } from './types.js';
 
@@ -12,6 +11,17 @@ const OWNER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['compactions', 'request_id'],
   ['failure_log', 'request_id'],
 ];
+
+// A session id belongs to the first owner that binds it.
+const SESSION_OWNERS_DDL = `
+    CREATE TABLE IF NOT EXISTS session_owners (
+      tenant_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      owner_subject TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, session_id)
+    )
+  `;
 
 export const v54: Migration = {
   version: 54,

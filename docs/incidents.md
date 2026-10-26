@@ -216,8 +216,8 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `partitionL2sByTenant`: independent-review HIGH #1 fold: cluster ONLY within-tenant. clusterFacts has no tenant awareness; without this partition step a multi-tenant host could form a cluster spanning tenants and produce a single L3 with tenantId='default' that doesn't belong to either child tenant. Fix: bucket by tenantId, run clusterFacts per-tenant, pass tenantId to createMemory.
 - `createProfileEntry`: HIGH #1 fold: thread tenant explicitly
 
-### src/db/continuity.ts
-- `ensureContinuityTables`: Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15 incident) is never re-migrated, and v4/v16/v22 ALTER or read it.
+### src/db/continuity-tables.ts
+- `ensureContinuityTables`: Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15 incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Since wave 1020n the heal builds each missing table from the migration chain on an in-memory database, so it keeps no second copy of the DDL.
 
 ### src/db/migrations/v15.ts
 - migration v15: A3 hardening (post-review): close the NULL-kind bypass and add raw_archive dedup safety. Both findings landed in /review on commits 41b1f4d..6456e7d.
