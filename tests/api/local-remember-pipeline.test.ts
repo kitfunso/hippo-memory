@@ -269,7 +269,12 @@ describe('extractRememberedFacts', () => {
       requested: true,
     });
     expect(outcome).toEqual({ status: 'ran', facts: 2, failures: [] });
-    expect(extracted(ctx, entry).map((row) => row.content)).toEqual(FACTS.map((fact) => fact.content));
+    // Both facts share the run's instant, so the read order between them is the id's, not the model's.
+    expect(
+      extracted(ctx, entry)
+        .map((row) => row.content)
+        .sort(),
+    ).toEqual(FACTS.map((fact) => fact.content).sort());
     expect(extracted(ctx, entry)[0]?.tags).toContain('scope:eng');
   });
 
