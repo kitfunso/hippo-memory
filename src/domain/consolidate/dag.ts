@@ -338,27 +338,32 @@ export async function rebuildDirtySummaries(
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    try {
-      await rebuildOneSummary({
-        store,
-        summary,
-        opts,
-        result,
-        preloaded: children,
-        rebuiltContent,
-      });
-    } catch (err) {
-      // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O,
-      // prepare), since audit() already catches its own.
-      result.failed++;
-      log.error(
-        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${errorMessage(err)}`,
-        errorFields(err),
-      );
-    }
+    await rebuildIsolated({
+      store,
+      summary,
+      opts,
+      result,
+      preloaded: children,
+      rebuiltContent,
+    });
   }
 
   return result;
+}
+
+async function rebuildIsolated(options: RebuildOneSummaryOptions): Promise<void> {
+  const { summary, result } = options;
+  try {
+    await rebuildOneSummary(options);
+  } catch (err) {
+    // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O,
+    // prepare), since audit() already catches its own.
+    result.failed++;
+    log.error(
+      `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+  }
 }
 
 export interface EntityProfilesBuildResult {

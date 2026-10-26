@@ -222,7 +222,7 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
     archive: (id, reason) =>
       send(
         async () => {
-          await client.postArchiveRaw(server.url, apiKey, id, reason);
+          await client.postArchiveRaw(server.url, apiKey, { id, reason });
         },
         (err) => fail(archiveRefusal(id, servedReason(err))),
         () => local.archive(id, reason),

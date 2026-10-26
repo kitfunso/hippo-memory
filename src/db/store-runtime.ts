@@ -106,8 +106,9 @@ export class StoreRuntime {
   /** An open idle handle for `poolKey`, or undefined. */
   takeIdle(poolKey: string): DatabaseSyncLike | undefined {
     const idle = this.#idle.get(poolKey);
-    for (let db = idle?.pop(); db !== undefined; db = idle?.pop())
+    for (let db = idle?.pop(); db !== undefined; db = idle?.pop()) {
       if (db.isOpen !== false) return db;
+    }
     return undefined;
   }
 

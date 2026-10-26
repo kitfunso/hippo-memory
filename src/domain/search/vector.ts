@@ -14,7 +14,6 @@ import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 /**
  * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact
  * private regex, entry filters).
- *
  */
 export type HybridVectorCandidates = VectorCandidateSpec & {
   admit?: (entry: MemoryEntry) => boolean;
@@ -56,7 +55,6 @@ const QUERY_EMBED_BUDGET_MS = 5_000;
 /**
  * How long one recall waits for its query vector, retries included; the root's
  * HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default.
- *
  */
 function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
@@ -71,7 +69,6 @@ export function startQueryEmbedDeadline(configuredMs?: number): AbortSignal {
 /**
  * The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model
  * still downloading. Any other failure throws.
- *
  */
 export async function embedQueryBy(
   deadline: AbortSignal,
@@ -153,32 +150,11 @@ async function fillVectorArm(
   const { store } = source;
   const provider = source.provider();
   if (!provider.isAvailable()) return;
-  const index = await store.vectors.embeddingIndexState();
-  if (indexNeedsRebuild(indexedModel(index), provider.id)) {
-    warnBm25Fallback('reindex', reindexHint(source));
-    return;
-  }
   const spec = options.vectorCandidates;
-  const vectors = await store.vectors.stored(
-    'vectors',
-    arm.entries.map((e) => e.id),
-  );
-  // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search
-  // can use.
-  if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
-  const configuredMs = options.runtime?.queryEmbedTimeoutMs;
-  const vec = await embedQueryBy(
-    options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs),
-    provider,
-    query,
-  );
-  if (vec === null) {
-    warnBm25Fallback(
-      'query-embed-budget',
-      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(configuredMs)} ms`,
-    );
-    return;
-  }
+  const vectors = await usableVectors(arm, source, provider, spec);
+  if (vectors === null) return;
+  const vec = await embedWithinBudget(query, provider, options);
+  if (vec === null) return;
   arm.queryVector = vec;
   if (arm.queryVector.length === 0) {
     warnBm25Fallback(
@@ -202,6 +178,50 @@ async function fillVectorArm(
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;
+}
+
+/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can be used. */
+async function usableVectors(
+  arm: VectorArm,
+  source: VectorSource,
+  provider: EmbeddingProvider,
+  spec: HybridVectorCandidates | undefined,
+): Promise<Map<string, ArrayLike<number>> | null> {
+  const { store } = source;
+  const index = await store.vectors.embeddingIndexState();
+  if (indexNeedsRebuild(indexedModel(index), provider.id)) {
+    warnBm25Fallback('reindex', reindexHint(source));
+    return null;
+  }
+  const vectors = await store.vectors.stored(
+    'vectors',
+    arm.entries.map((e) => e.id),
+  );
+  // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search
+  // can use.
+  if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return null;
+  return vectors;
+}
+
+/** The query's vector, or null once the embedding budget ran out. */
+async function embedWithinBudget(
+  query: string,
+  provider: EmbeddingProvider,
+  options: VectorArmOptions,
+): Promise<number[] | null> {
+  const configuredMs = options.runtime?.queryEmbedTimeoutMs;
+  const vec = await embedQueryBy(
+    options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs),
+    provider,
+    query,
+  );
+  if (vec === null) {
+    warnBm25Fallback(
+      'query-embed-budget',
+      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(configuredMs)} ms`,
+    );
+  }
+  return vec;
 }
 
 export interface DenseScores {

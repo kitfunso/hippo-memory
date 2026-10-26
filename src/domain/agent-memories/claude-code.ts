@@ -26,7 +26,6 @@ const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or
  * the folder itself outside a repository.
- *
  */
 function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<string> {
   const roots = [projectRoot, ctx.files.realPath(projectRoot)];
@@ -48,7 +47,6 @@ function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayou
 /**
  * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters
  * cut to 200 plus a base-36 hash of the whole path.
- *
  */
 export function claudeFolderName(root: string): string {
   const full = path.resolve(root);
@@ -78,7 +76,6 @@ export const claudeCodeAdapter: Adapter = {
 /**
  * A session's own notes folder and nothing else, with no git call, so post-compact can read it
  * inside the hook's time limit.
- *
  */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
   const config = claudeConfigDir(ctx.home, ctx.env);
@@ -130,7 +127,6 @@ const START_SCAN_BYTES = 64 * 1024;
 /**
  * The cwd on the transcript's first line that has one: the folder Claude named the session folder
  * for, which a folder name alone cannot give back.
- *
  */
 function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string | null {
   // A transcript that is not there names no start folder; any other failure is the caller's to see.

@@ -4,6 +4,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
+import type { OriginMoveOptions } from './entry-writes.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -77,14 +78,19 @@ export function compactionRowsByRequest(
   return listRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }
 
+/** A session's start window, both bounds ISO strings. */
+interface LatestStartedOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly notAfter: string;
+  readonly notBefore: string;
+}
+
 /** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO
  * strings. */
 export function latestStartedRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  notAfter: string,
-  notBefore: string,
+  { tenantId, sessionId, notAfter, notBefore }: LatestStartedOptions,
 ): CompactionRow[] {
   return listRows(
     db,
@@ -111,13 +117,18 @@ export function stalledSummarizedRows(
   );
 }
 
+/** A tenant's open start window, both bounds ISO strings. */
+interface OpenTranscriptOptions {
+  readonly tenantId: string;
+  readonly startedBefore: string;
+  readonly startedAfter: string;
+}
+
 /** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`,
  * oldest first. */
 export function openTranscriptRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  startedBefore: string,
-  startedAfter: string,
+  { tenantId, startedBefore, startedAfter }: OpenTranscriptOptions,
 ): CompactionRow[] {
   return listRows(
     db,
@@ -248,11 +259,16 @@ export function closeStartedWithoutSummary(
   return Number(result.changes ?? 0);
 }
 
+/** A session and the ISO start its next compaction must follow. */
+interface NextCompactionOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly after: string;
+}
+
 export function nextCompactionStart(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  after: string,
+  { tenantId, sessionId, after }: NextCompactionOptions,
 ): string | null {
   const row = cachedStatement(
     db,
@@ -278,9 +294,7 @@ export function heldMemoryRows(
 
 export function restampCompactionOrigin(
   db: DatabaseSyncLike,
-  tenantId: string,
-  from: string,
-  into: string,
+  { tenantId, from, into }: OriginMoveOptions,
 ): number {
   return Number(
     cachedStatement(

@@ -47,16 +47,17 @@ export function decidePlanningFallacy(
   tenantId: string,
   actor: string,
 ): PlanningFallacyDecision {
+  const by = { tenantId, actor };
   if (evidence.tiebreak) {
     // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets
     // the caller render "watching but no baserate (tiebreak)"; the audit channel stays the source
     // of truth.
-    return watchingWithAudit(tenantId, actor, match, 'tiebreak', TIEBREAK_SUGGESTION);
+    return watchingWithAudit(match, 'tiebreak', TIEBREAK_SUGGESTION, by);
   }
   if (!evidence.classTag) {
     // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real
     // forward-claims with no class signal, the case for an embedding fallback.
-    return watchingWithAudit(tenantId, actor, match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION);
+    return watchingWithAudit(match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION, by);
   }
   const baserate = evidence.baserate;
   if (!baserate || baserate.nClosed === 0) return { output: {} }; // Silent — wait for closed data.
@@ -92,12 +93,16 @@ const NO_CLASS_MATCH_SUGGESTION =
   'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to ' +
   'start tracking this class.';
 
+interface WatchingAuditOptions {
+  readonly tenantId: string;
+  readonly actor: string;
+}
+
 function watchingWithAudit(
-  tenantId: string,
-  actor: string,
   match: ForwardClaimMatch,
   reason: PlanningFallacyWatching['reason'],
   suggestion: string,
+  { tenantId, actor }: WatchingAuditOptions,
 ): PlanningFallacyDecision {
   return {
     output: {

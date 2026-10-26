@@ -46,6 +46,13 @@ const COPILOT_NOTES =
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
+  return [...detectClaudeToCodex(home, exists), ...detectCopilotToPi(exists)];
+}
+
+type HomeHas = (...parts: string[]) => boolean;
+
+/** Claude Code, the two plugin hosts and Codex, in setup's order. */
+function detectClaudeToCodex(home: string, exists: HomeHas): ToolDetection[] {
   const claudeDir = claudeConfigDir(os.homedir(), processEnv());
   return [
     {
@@ -76,6 +83,12 @@ export function detectInstalledTools(): ToolDetection[] {
       notes:
         'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation',
     },
+  ];
+}
+
+/** Copilot and the two tools with no hook API, in setup's order. */
+function detectCopilotToPi(exists: HomeHas): ToolDetection[] {
+  return [
     {
       name: 'copilot',
       configDir: copilotHomeDir(processHomes()),

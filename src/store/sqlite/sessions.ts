@@ -77,14 +77,19 @@ function clearActiveTaskSnapshot(
   return 1;
 }
 
+/** An ending session and the status its active snapshots close with. */
+interface CloseSnapshotsOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly status: string;
+}
+
 /** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on
  * `session_id` too so an ending session can never close a newer session's snapshot. Returns the
  * number of rows closed. */
 function closeTaskSnapshotsForSession(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  status: string,
+  { tenantId, sessionId, status }: CloseSnapshotsOptions,
   key: ContinuityKey | null | undefined,
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
@@ -259,13 +264,18 @@ function readSessionOwner(
   return row?.owner_subject ?? null;
 }
 
+/** A session's first owner and when it was bound. */
+interface OwnerRowOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly owner: string;
+  readonly createdAt: string;
+}
+
 /** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
 function insertOwnerRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  owner: string,
-  createdAt: string,
+  { tenantId, sessionId, owner, createdAt }: OwnerRowOptions,
 ): number {
   const result = cachedStatement(
     db,
@@ -298,7 +308,8 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     db,
     'bind_session_owner',
     () => {
-      const bound = insertOwnerRow(db, tenantId, sessionId, owner, handleStamp(db));
+      const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
+      const bound = insertOwnerRow(db, row);
       // An older binary supersedes across owners, so the first binding shuts it out in the same
       // transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
@@ -502,9 +513,11 @@ function clearAny(
   ...[tenantId, kind, close, key]: SessionClearArgs
 ) {
   if (kind === 'working_memory') return wmClear(db, tenantId, close);
-  if (close.sessionId === undefined)
+  if (close.sessionId === undefined) {
     return clearActiveTaskSnapshot(db, files, tenantId, close.status);
-  return closeTaskSnapshotsForSession(db, tenantId, close.sessionId, close.status, key);
+  }
+  const closing = { tenantId, sessionId: close.sessionId, status: close.status };
+  return closeTaskSnapshotsForSession(db, closing, key);
 }
 
 // Each kind writes or reads the session's mirror files beside hippo.db as well as its rows.

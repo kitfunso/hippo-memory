@@ -63,7 +63,6 @@ export type LocalRememberOutcome =
 /**
  * The row `remember` just wrote, as the store holds it: the report, the embedding and the
  * extraction all work on that.
- *
  */
 async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);

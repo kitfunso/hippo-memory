@@ -77,14 +77,21 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
 const ARCHIVE_REASON_REQUIRED =
   'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
+interface PreviewForgetOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly id: string;
+  readonly archive: boolean;
+}
+
 // Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a
 // guess.
-async function previewForget(
-  hippoRoot: string,
-  tenantId: string,
-  id: string,
-  archive: boolean,
-): Promise<void> {
+async function previewForget({
+  hippoRoot,
+  tenantId,
+  id,
+  archive,
+}: PreviewForgetOptions): Promise<void> {
   requireInit(hippoRoot);
   const ctx = cliApiContext(hippoRoot, tenantId);
   let entry: MemoryEntry;
@@ -130,9 +137,11 @@ export async function handleConflicts({
 
   console.log(`Found ${total} memory conflict${total === 1 ? '' : 's'}\n`);
   printConflictLines(first.conflicts);
-  if (first.next)
-    for await (const page of api.conflictPages(read, first.next))
+  if (first.next) {
+    for await (const page of api.conflictPages(read, first.next)) {
       printConflictLines(page.conflicts);
+    }
+  }
 }
 
 async function* wirePages(pages: AsyncIterable<api.ConflictPage>) {
@@ -534,7 +543,7 @@ export async function handleForget({
     fail(ARCHIVE_REASON_REQUIRED);
   }
   if (boolFlag(flags, 'dry-run')) {
-    await previewForget(hippoRoot, tenantId, id, archive);
+    await previewForget({ hippoRoot, tenantId, id, archive });
     return;
   }
   const writes = await pickWrites(hippoRoot, tenantId);
@@ -624,7 +633,10 @@ export async function handleInvalidate({
     dryRun,
     onlyId,
   });
-  const label = target ? `"${target}"` : `--id ${onlyId}`;
+  printInvalidateResult(result, target ? `"${target}"` : `--id ${onlyId}`);
+}
+
+function printInvalidateResult(result: api.InvalidationResult, label: string): void {
   if (result.dryRun) {
     if (result.invalidated === 0) {
       console.log(`DRY RUN - no memories would match ${label}.`);

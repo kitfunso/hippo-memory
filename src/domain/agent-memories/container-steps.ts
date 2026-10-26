@@ -65,7 +65,7 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
     {
       layer: Layer.Episodic,
       tags: [w.tool.tag],
-      source: itemSource(w.prefix, item.key, item.text),
+      source: itemSource(w.prefix, item),
       confidence: 'observed',
       kind: 'distilled',
       tenantId: s.tenantId,
@@ -111,9 +111,9 @@ function addOutcome(tally: Tally, step: ImportStep, outcome: StepOutcome): void 
   else if (step.kind === 'move') tally.renamed++;
   else if (step.kind === 'retag') tally.retagged++;
   else if (step.kind === 'supersede' && outcome === 'done') tally.collapsed++;
-  else if (step.kind === 'write')
+  else if (step.kind === 'write') {
     addWrite(tally, outcome, step.supersedes.length > 0 ? 'replaced' : 'imported');
-  else if (step.kind === 'restore' && outcome === 'restored') tally.restored++;
+  } else if (step.kind === 'restore' && outcome === 'restored') tally.restored++;
   else if (step.kind === 'restore') addWrite(tally, outcome, 'imported');
   else if (step.kind === 'setAside') tally[outcome === 'untagged' ? 'untagged' : 'setAside']++;
 }

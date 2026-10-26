@@ -203,8 +203,9 @@ export function sqliteDormant({ on, files }: Handles): Dormant {
               actor,
               admit: touchableScopeSql('', ownScope),
             })
-          )
+          ) {
             return false;
+          }
           // Counted like every other permanent removal (forget, archiveRaw).
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
           return true;

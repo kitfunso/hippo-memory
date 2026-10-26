@@ -2,7 +2,6 @@
  * Hippo public API: re-exports for programmatic use, each from the src/entry barrel that owns it.
  * Search, importers and the eval suite have their own subpaths: hippo-memory/search,
  * hippo-memory/importers and hippo-memory/eval.
- *
  */
 export {
   MemoryEntry,

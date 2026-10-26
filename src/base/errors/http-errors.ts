@@ -15,7 +15,6 @@ export class HttpError extends Error {
 /**
  * A request, or a store call it waited on, ran past the request's deadline; the reply carries
  * `code` so a client branches without parsing prose.
- *
  */
 export class DeadlineExceededError extends HttpError {
   readonly code = 'deadline_exceeded';

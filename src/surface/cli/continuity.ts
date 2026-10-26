@@ -264,16 +264,22 @@ export async function handleSession({
   if (subcommand === 'show') return sessionShow(hippoRoot, tenantId, s, flags);
   if (subcommand === 'latest') return sessionLatest(hippoRoot, tenantId, s, flags);
   if (subcommand === 'complete') return sessionComplete(hippoRoot, tenantId, s, flags);
-  if (subcommand === 'resume') return sessionResume(hippoRoot, tenantId, sessionId);
+  if (subcommand === 'resume') return sessionResume({ hippoRoot, tenantId, sessionId });
 
   fail('Usage: hippo session <log|show|latest|resume|complete>');
 }
 
-async function sessionResume(
-  hippoRoot: string,
-  tenantId: string,
-  sessionId: string,
-): Promise<void> {
+interface SessionResumeOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly sessionId: string;
+}
+
+async function sessionResume({
+  hippoRoot,
+  tenantId,
+  sessionId,
+}: SessionResumeOptions): Promise<void> {
   const query = { sessionId: sessionId || null };
   const handoff = await cliStore(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
   if (!handoff) {
@@ -326,12 +332,27 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     fail(HANDOFF_CREATE_USAGE);
   }
 
+  const handoff = handoffFromFlags(flags, summary, handoffOutcomeFlag(flags));
+  printCreatedHandoff(
+    await cliStore(hippoRoot).sessions.save(tenantId, 'handoff', { handoff }, null),
+  );
+}
+
+function handoffOutcomeFlag(flags: CliFlags): HandoffOutcome | undefined {
   const outcomeRaw = stringFlag(flags, 'outcome');
   if (hasFlag(flags, 'outcome') && !isHandoffOutcome(outcomeRaw)) {
     // A bare --outcome parses as true, and the message has always echoed it.
     fail(`Invalid outcome: "${outcomeRaw ?? 'true'}". Must be one of: success, failure, partial.`);
   }
+  // SAFETY: isHandoffOutcome above already refused any non-matching value.
+  return outcomeRaw as HandoffOutcome | undefined;
+}
 
+function handoffFromFlags(
+  flags: CliFlags,
+  summary: string,
+  outcome: HandoffOutcome | undefined,
+): Omit<SessionHandoff, 'updatedAt'> {
   const sessionId =
     (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') ||
     `fallback-${Date.now()}-${process.pid}`;
@@ -347,7 +368,7 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
   );
 
-  const handoff: Omit<SessionHandoff, 'updatedAt'> = {
+  return {
     version: 1,
     sessionId,
     repoRoot: process.cwd(),
@@ -357,14 +378,10 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     artifacts,
     constraints,
     evidence,
-    // SAFETY: isHandoffOutcome above already refused any non-matching value.
-    outcome: outcomeRaw as HandoffOutcome | undefined,
+    outcome,
     targetRuntime,
     cardId,
   };
-  printCreatedHandoff(
-    await cliStore(hippoRoot).sessions.save(tenantId, 'handoff', { handoff }, null),
-  );
 }
 
 function printCreatedHandoff(handoff: SessionHandoff): void {

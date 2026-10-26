@@ -73,8 +73,9 @@ export interface ContinuityStamp {
  * reader. */
 export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined)
+  if (key.owner === '' || origin === undefined) {
     throw new Error('continuity key needs an owner and a project');
+  }
   return { owner: key.owner, origin };
 }
 
@@ -97,7 +98,6 @@ export interface PredictionBaserate {
   /**
    * Count of closed predictions with a numeric actual_value (excludes open + closed-unknown). The
    * denominator for MAE.
-   *
    */
   nClosed: number;
   /** Count of closed rows where estimate_value > 0 (i.e. ratio is defined).

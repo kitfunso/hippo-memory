@@ -22,7 +22,6 @@ export interface ServerInfo {
   /**
    * Pidfile schema version; absent on pidfiles written before the field existed, which detectServer
    * treats as legacy and still accepts.
-   *
    */
   schema?: number;
   pid: number;
@@ -49,7 +48,6 @@ const HEALTH_BODY_MAX_BYTES = 64 * 1024;
 /**
  * Loopback hosts a recorded pidfile url may point at (serve() only binds these); any other host is
  * malformed or forged and is not probed.
- *
  */
 const PIDFILE_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
@@ -123,7 +121,6 @@ async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string 
 /**
  * True when fetch failed because nothing listens on the port (the error or its cause, or any
  * address tried, is ECONNREFUSED).
- *
  */
 function isConnectionRefused<E>(err: E): boolean {
   if (errorCode(err) === 'ECONNREFUSED') return true;
@@ -215,8 +212,9 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     // claimant keeps the file.
     if (startingClaim(path)) return null;
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
-    if (!isServerInfo(parsed))
+    if (!isServerInfo(parsed)) {
       throw new TypeError('it is not a JSON object with a pid, port, url and started_at');
+    }
     info = parsed;
   } catch (err) {
     log.warn(
@@ -288,7 +286,6 @@ function startingClaim(path: string): ServerInfo | undefined {
  * create, so of two boots started together exactly one wins. On a clash a live or still-starting
  * server refuses, and a stale pidfile is removed by detectServer and the create retried once.
  * Throws ServerAlreadyRunningError.
- *
  */
 export async function claimPidfile(hippoRoot: string, startedAt: string): Promise<void> {
   const path = join(hippoRoot, PIDFILE);
@@ -344,7 +341,6 @@ function removePidfile(hippoRoot: string): void {
  * Removes the pidfile ONLY when both `pid` and `started_at` match `owner`, so an older
  * shutting-down server cannot orphan a newer one; never throws. Anything unreadable or malformed is
  * "not provably mine" and left alone (detectServer unlinks it). Returns true iff removed.
- *
  */
 export function removePidfileIfOwned(
   hippoRoot: string,
@@ -354,16 +350,18 @@ export function removePidfileIfOwned(
   const info = tryReadJsonFile(path);
   // A missing, unreadable, malformed or non-object pidfile, or one another server now owns, is not
   // provably mine.
-  if (!isJsonObject(info) || info.pid !== owner.pid || info.started_at !== owner.startedAt)
+  if (!isJsonObject(info) || info.pid !== owner.pid || info.started_at !== owner.startedAt) {
     return false;
+  }
   try {
     unlinkSync(path);
     return true;
   } catch (err) {
     // Gone since the read means another process removed it; any other failure leaves a file the
     // caller should hear of.
-    if (errorCode(err) !== 'ENOENT')
+    if (errorCode(err) !== 'ENOENT') {
       log.warn(`could not remove the server pidfile ${path}`, errorFields(err));
+    }
     return false;
   }
 }

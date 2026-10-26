@@ -44,8 +44,9 @@ const CHILD_ENTRY = fileURLToPath(
  * define. */
 export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   if (typeof message !== 'object' || message === null || !('ok' in message)) return false;
-  if (message.ok === true)
+  if (message.ok === true) {
     return 'result' in message && typeof message.result === 'object' && message.result !== null;
+  }
   return (
     message.ok === false &&
     'busy' in message &&
@@ -60,8 +61,9 @@ function failureOf<R>(
   code: number | null,
   signal: NodeJS.Signals | null,
 ): Error {
-  if (!reply || reply.ok)
+  if (!reply || reply.ok) {
     return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
+  }
   // A lock the child could not get is the same retryable 503 an in-process sleep gave.
   if (reply.busy) return new StoreBusyError(reply.message);
   const failure = new Error(reply.message);
@@ -118,23 +120,37 @@ function childAnswer<R>(job: SleepJob, ended: () => void): Promise<R> {
       clearTimeout(timer);
       ended();
       if (reply?.ok) return;
-      if (timedOut) {
-        reject(
-          new HttpError(
-            504,
-            `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
-          ),
-        );
-      } else if (malformed) {
-        reject(
-          new Error(
-            `sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`,
-          ),
-        );
-      } else reject(failureOf(reply, code, signal));
+      reject(unansweredFailure(reply, code, signal, { timedOut, malformed, deadlineMs }));
     });
     child.send({ ...job, deadline: Date.now() + deadlineMs } satisfies SleepMessage);
   });
+}
+
+interface ChildEnd {
+  readonly timedOut: boolean;
+  readonly malformed: boolean;
+  readonly deadlineMs: number;
+}
+
+/** Why a child that closed without a good reply failed, the deadline first. */
+function unansweredFailure<R>(
+  reply: SleepReply<R> | undefined,
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  { timedOut, malformed, deadlineMs }: ChildEnd,
+): Error {
+  if (timedOut) {
+    return new HttpError(
+      504,
+      `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
+    );
+  }
+  if (malformed) {
+    return new Error(
+      `sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`,
+    );
+  }
+  return failureOf(reply, code, signal);
 }
 
 // One running and one waiting: each further sleep would only hold a request open behind work the
@@ -158,6 +174,35 @@ export interface SleepQueue {
 /** The queue of the server on `hippoRoot`, whose child reopens that folder; `onHippoDb` says the
  * served store is it. */
 export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQueue {
+  const { inTurn, settled } = sleepLine();
+  return {
+    // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups
+    // gets 501 as before.
+    sleep: (ctx, opts) =>
+      onHippoDb
+        ? inTurn<SleepResult>({
+            kind: 'sleep',
+            hippoRoot,
+            tenantId: ctx.tenantId,
+            actor: ctx.actor,
+            opts,
+          })
+        : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
+    // The child logs the run's skipped passes to its stderr, which is this server's log.
+    consolidate: async () => {
+      await inTurn<unknown>({ kind: 'consolidate', hippoRoot });
+    },
+    settled,
+  };
+}
+
+/** The line a queue's jobs wait in, and the end of its current turn. */
+interface SleepLine {
+  readonly inTurn: <R>(job: SleepJob) => Promise<R>;
+  readonly settled: () => Promise<void>;
+}
+
+function sleepLine(): SleepLine {
   let turn: Promise<void> = Promise.resolve();
   let inLine = 0;
   const inTurn = <R>(job: SleepJob): Promise<R> => {
@@ -183,23 +228,5 @@ export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQu
       });
     return child.then((run) => run.answer);
   };
-  return {
-    // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups
-    // gets 501 as before.
-    sleep: (ctx, opts) =>
-      onHippoDb
-        ? inTurn<SleepResult>({
-            kind: 'sleep',
-            hippoRoot,
-            tenantId: ctx.tenantId,
-            actor: ctx.actor,
-            opts,
-          })
-        : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
-    // The child logs the run's skipped passes to its stderr, which is this server's log.
-    consolidate: async () => {
-      await inTurn<unknown>({ kind: 'consolidate', hippoRoot });
-    },
-    settled: () => turn,
-  };
+  return { inTurn, settled: () => turn };
 }

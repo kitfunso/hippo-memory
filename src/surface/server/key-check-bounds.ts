@@ -77,22 +77,34 @@ function fairQueue() {
   };
 }
 
-export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
+function keyAddressLimiter(maxKeys: number): ReturnType<typeof createRateLimiter> {
   // A bucket idle for a full refill is back at its burst, so dropping it then gives nothing away.
   const idleEvictMs = (KEY_ADDRESS_BURST / KEY_ADDRESS_TRIES_PER_SEC) * 1000;
-  const perKeyAddress = createRateLimiter({
+  return createRateLimiter({
     ratePerSec: KEY_ADDRESS_TRIES_PER_SEC,
     burst: KEY_ADDRESS_BURST,
     idleEvictMs,
     maxKeys,
   });
-  const queue = fairQueue();
+}
+
+/** The slots each address holds, running or waiting. */
+function addressHolds() {
   const heldByAddress = new Map<string, number>();
-  const hold = (address: string, by: number): void => {
-    const next = (heldByAddress.get(address) ?? 0) + by;
-    if (next === 0) heldByAddress.delete(address);
-    else heldByAddress.set(address, next);
+  return {
+    held: (address: string): number => heldByAddress.get(address) ?? 0,
+    hold(address: string, by: number): void {
+      const next = (heldByAddress.get(address) ?? 0) + by;
+      if (next === 0) heldByAddress.delete(address);
+      else heldByAddress.set(address, next);
+    },
   };
+}
+
+export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
+  const perKeyAddress = keyAddressLimiter(maxKeys);
+  const queue = fairQueue();
+  const addresses = addressHolds();
   return {
     admit(keyId, address) {
       // Each answers in the words an existing limit uses: the request limit's for a full queue or a
@@ -100,7 +112,7 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
       if (
         queue.full() ||
         queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING ||
-        (heldByAddress.get(address) ?? 0) >= ADDRESS_MAX_HELD
+        addresses.held(address) >= ADDRESS_MAX_HELD
       ) {
         throw new HttpError(429, 'rate limit exceeded', 1);
       }
@@ -113,7 +125,7 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
       }
     },
     async run(keyId, address, derive) {
-      hold(address, 1);
+      addresses.hold(address, 1);
       try {
         await queue.enter(keyId);
         try {
@@ -122,7 +134,7 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
           queue.leave(keyId);
         }
       } finally {
-        hold(address, -1);
+        addresses.hold(address, -1);
       }
     },
   };

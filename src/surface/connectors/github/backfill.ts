@@ -133,23 +133,15 @@ async function drainStream(
 
     for (const item of page.items) {
       // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't
-      // loop forever. SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this
-      // stream returns.
-      const updatedAt = isJsonObject(item)
-        ? ((item.updated_at as string | undefined) ?? null)
-        : null;
+      // loop forever.
+      const updatedAt = itemUpdatedAt(item);
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
         maxUpdatedAt = updatedAt;
       }
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      const r = await ingestEvent(ctx, {
-        event: evt,
-        rawBody: JSON.stringify(item),
-        deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
-      });
-      if (r.status === 'ingested' || r.status === 'skipped') ingested++;
+      if (await ingestBackfillItem(ctx, item, evt, updatedAt)) ingested++;
 
       if (maxItems && ingested >= maxItems) {
         // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
@@ -161,6 +153,26 @@ async function drainStream(
   }
 
   return { ingested, pages, maxUpdatedAt, drained: true };
+}
+
+function itemUpdatedAt(item: JsonValue): string | null {
+  // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
+  return isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
+}
+
+/** True when the item counts toward the stream's ingested total. */
+async function ingestBackfillItem(
+  ctx: Context,
+  item: JsonValue,
+  evt: IngestEvent,
+  updatedAt: string | null,
+): Promise<boolean> {
+  const r = await ingestEvent(ctx, {
+    event: evt,
+    rawBody: JSON.stringify(item),
+    deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
+  });
+  return r.status === 'ingested' || r.status === 'skipped';
 }
 
 // A reset hours away must fail the run for a later rerun; sleeping through it would hold the

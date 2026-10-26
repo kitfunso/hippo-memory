@@ -32,7 +32,7 @@ export async function handleCodexSessionEndWorker({
   }
 
   await sleepCodexProjectStore(hippoRoot, tenantId, logFile);
-  await captureCodexTranscript(hippoRoot, tenantId, store, flags, logFile);
+  await captureCodexTranscript({ hippoRoot, tenantId, store, flags, logFile });
 }
 
 async function sleepCodexProjectStore(
@@ -63,53 +63,75 @@ async function sleepCodexProjectStore(
   }
 }
 
-async function captureCodexTranscript(
-  hippoRoot: string,
-  tenantId: string,
-  store: string,
-  flags: CliFlags,
-  logFile: string | null,
-): Promise<void> {
+interface CodexStoreOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly store: string;
+  readonly logFile: string | null;
+}
+
+interface CaptureCodexTranscriptOptions extends CodexStoreOptions {
+  readonly flags: CliFlags;
+}
+
+async function captureCodexTranscript({
+  hippoRoot,
+  tenantId,
+  store,
+  flags,
+  logFile,
+}: CaptureCodexTranscriptOptions): Promise<void> {
   try {
-    const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
-    const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
-    const startOffsetBytes = parseCountFlag(flags, 'start-offset');
-    const startedAtMs = parseCountFlag(flags, 'started-at') || Date.now();
-    const transcriptPath =
-      resolveCodexSessionTranscript({
-        codexHome,
-        historyPath,
-        startOffsetBytes,
-        startedAtMs,
-      }) ?? undefined;
+    const transcriptPath = codexTranscriptPath(flags);
     // No Codex transcript must not fall through to the scan of Claude Code projects.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile, 'skip capture: no Codex transcript for this session');
       return;
     }
-
-    const digestLog = (message: string): void => appendSessionEndCloseLog(logFile, message);
-    const scan = readSessionScan(transcriptPath, digestLog);
-    const captureOpts: CaptureOptions = {
-      source: 'last-session',
-      transcriptPath,
-      logFile,
-      dryRun: false,
-      global: false,
-      tenantId,
-      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
-      sessionTurns: scan?.turns,
-    };
-    try {
-      await runCapture(captureTarget(store), captureOpts);
-    } catch (err) {
-      reportSessionEndFailure(logFile, 'codex session-end: capture', err);
-    }
-    // The Codex wrapper passes no session id, so the rollout file names the session.
-    const digestKey = path.basename(transcriptPath, '.jsonl');
-    const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
-    await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);
+    await captureCodexRollout({ hippoRoot, tenantId, store, logFile }, transcriptPath);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: transcript scan or digest', err);
   }
+}
+
+function codexTranscriptPath(flags: CliFlags): string | undefined {
+  const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
+  const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
+  const startOffsetBytes = parseCountFlag(flags, 'start-offset');
+  const startedAtMs = parseCountFlag(flags, 'started-at') || Date.now();
+  return (
+    resolveCodexSessionTranscript({
+      codexHome,
+      historyPath,
+      startOffsetBytes,
+      startedAtMs,
+    }) ?? undefined
+  );
+}
+
+async function captureCodexRollout(
+  { hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
+  transcriptPath: string,
+): Promise<void> {
+  const digestLog = (message: string): void => appendSessionEndCloseLog(logFile, message);
+  const scan = readSessionScan(transcriptPath, digestLog);
+  const captureOpts: CaptureOptions = {
+    source: 'last-session',
+    transcriptPath,
+    logFile,
+    dryRun: false,
+    global: false,
+    tenantId,
+    originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
+    sessionTurns: scan?.turns,
+  };
+  try {
+    await runCapture(captureTarget(store), captureOpts);
+  } catch (err) {
+    reportSessionEndFailure(logFile, 'codex session-end: capture', err);
+  }
+  // The Codex wrapper passes no session id, so the rollout file names the session.
+  const digestKey = path.basename(transcriptPath, '.jsonl');
+  const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
+  await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);
 }

@@ -16,7 +16,6 @@ export interface Page<T> {
 /**
  * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null
  * on the last page.
- *
  */
 export function pageOf<T>(
   rows: readonly T[],
@@ -30,7 +29,6 @@ export function pageOf<T>(
 /**
  * Rows ordered by (created_at DESC, id DESC): the decision, incident, process, policy, skill,
  * brief, note and prediction tables.
- *
  */
 export function byCreatedAt(row: { createdAt: string; id: number }): KeysetPosition {
   return { key: row.createdAt, id: row.id };

@@ -48,7 +48,6 @@ present.</p>
 /**
  * Moves the browser off the URL that carries the ticket, so the page's own address holds no spent
  * secret.
- *
  */
 function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSearchParams): void {
   const rest = new URLSearchParams(query);

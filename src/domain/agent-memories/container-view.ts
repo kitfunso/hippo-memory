@@ -100,7 +100,7 @@ async function adoptLegacy(s: StoreSession, w: ContainerWork, draft: Draft): Pro
   for (const [key, rows] of w.adopt) {
     const item = w.container.items.find((i) => i.key === key);
     if (item === undefined) continue;
-    const source = itemSource(w.prefix, key, item.text);
+    const source = itemSource(w.prefix, { key, text: item.text });
     for (const { id, source: from } of rows) {
       const row = standing.get(id);
       if (row === undefined) continue;

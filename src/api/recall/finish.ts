@@ -60,7 +60,6 @@ export interface DetectAnchoringOptions {
   /**
    * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within
    * this many history entries. Default 3.
-   *
    */
   cooldown?: number;
 }
@@ -109,7 +108,6 @@ function fnv1a32(text: string): number {
  * Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both
  * rules fire, since it spans DIFFERENT queries. Cooldown is per memory: a hint on the SAME
  * topMemoryId within `cooldown=3` history entries is suppressed. Returns an AnchoringHint or null.
- *
  */
 export function detectAnchoring(
   history: RecallHistorySnapshot,
@@ -124,12 +122,7 @@ export function detectAnchoring(
 
   // Cooldown gate: was the most-recent hint (across the last `cooldown` entries) for THIS memory?
   // If yes, suppress regardless of rule.
-  const cooldownSlice = history.slice(-cooldown);
-  for (const entry of cooldownSlice) {
-    if (entry.anchoredOn === currentTopMemoryId) {
-      return null;
-    }
-  }
+  if (onCooldown(history, cooldown, currentTopMemoryId)) return null;
 
   // memory_dominance check FIRST (wins on tie).
   const queryCount = countDistinctQueries(history, currentQueryHash, currentTopMemoryId);
@@ -146,17 +139,28 @@ export function detectAnchoring(
   }
 
   if (isRecentRepeat(history, recentRepeatWindow, currentQueryHash, currentTopMemoryId)) {
-    return {
-      reason: 'query_repeat',
-      memoryId: currentTopMemoryId,
-      summary:
-        `Same query phrasing as a recent recall returned the same top result (${currentTopMemoryId}); you may ` +
-        `be re-asking the same question.`,
-      source: 'j1-recurrence',
-    };
+    return queryRepeatHint(currentTopMemoryId);
   }
 
   return null;
+}
+
+function onCooldown(history: RecallHistorySnapshot, cooldown: number, memoryId: string): boolean {
+  for (const entry of history.slice(-cooldown)) {
+    if (entry.anchoredOn === memoryId) return true;
+  }
+  return false;
+}
+
+function queryRepeatHint(memoryId: string): AnchoringHint {
+  return {
+    reason: 'query_repeat',
+    memoryId,
+    summary:
+      `Same query phrasing as a recent recall returned the same top result (${memoryId}); you may ` +
+      `be re-asking the same question.`,
+    source: 'j1-recurrence',
+  };
 }
 
 // Count distinct queryHashes in history where topMemoryId === the current top (excluding null
@@ -197,7 +201,6 @@ const DEFAULT_MAX_SESSIONS = 1000;
 /**
  * Bounded FIFO ring of RecallHistoryEntry (oldest evicted when full); a thin array wrapper so
  * snapshotRing returns a readonly view without copying.
- *
  */
 export class RingBuffer {
   private entries: RecallHistoryEntry[] = [];
@@ -252,7 +255,6 @@ export function getOrCreateRing(
 /**
  * Appends a recall to a ring; `anchoredOn` is the memoryId of the hint that fired on THIS recall
  * (or undefined), read by detectAnchoring for cooldown.
- *
  */
 export function appendRecall(
   ring: RingBuffer,
@@ -321,7 +323,6 @@ export function sessionRing(
 /**
  * The session's history, read without creating or touching its ring, so a request that then fails
  * evicts no live session.
- *
  */
 function peekSessionRing(
   owner: RingOwner,
@@ -385,7 +386,6 @@ export function recallAuditMetadata(query: string, results: number) {
 /**
  * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy
  * to reverse on short queries.
- *
  */
 export function anchorSkippedRows(
   config: HintConfig,
@@ -446,7 +446,6 @@ export interface ShownRecall {
 /**
  * The hint rows for a list a surface showed, so a surface on the store port can hand them to the
  * recall's one write.
- *
  */
 export function shownRecallRows(
   config: HintConfig,
@@ -532,8 +531,9 @@ export async function recordShownRecall(
   // A surface that only peeked has its ring created here, after the write, so a recall that fails
   // cannot LRU-evict a live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
-  if (ring)
+  if (ring) {
     noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn, ctx.infra.clock());
+  }
   const items = how.counts === 'none' ? 0 : shown.ids.length;
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
   if (shown.written && (how.counts === 'every' || items > 0)) await store.bumpRecallStats(items);

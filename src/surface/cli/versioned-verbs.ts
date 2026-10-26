@@ -98,8 +98,9 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     }
     if (sub === 'get') return getVersion(ctx, kind, args);
     if (sub === 'supersede') return supersedeVersion(ctx, kind, args, flags);
-    if (sub === 'close')
+    if (sub === 'close') {
       return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
+    }
     // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
     await createVersion(ctx, kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };

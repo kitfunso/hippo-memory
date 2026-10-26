@@ -1,7 +1,6 @@
 /**
  * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in
  * SQLite, with BLOB columns for 384-dim vectors.
- *
  */
 
 import type { DatabaseSyncLike } from './index.js';

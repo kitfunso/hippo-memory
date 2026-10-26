@@ -46,6 +46,21 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly closeOnExit: () => void;
 }
 
+function servedStores(
+  hippoRoot: string,
+  given: HippoStore | undefined,
+  executorOpts: ExecutorOptions,
+) {
+  const served =
+    given ??
+    workerSqliteStore(hippoRoot, createSqliteExecutor(hippoRoot, executorOpts), executorOpts);
+  return {
+    store: served,
+    globalStores: globalStoresFor(served, executorOpts),
+    holder: createStoreHolder(hippoRoot, served),
+  };
+}
+
 /** hippo.db under `hippoRoot` as a server runs it: `opts.store` when given, else a worker store
  * on `opts`' executor. */
 export function sqliteServerRuntime(
@@ -58,16 +73,9 @@ export function sqliteServerRuntime(
   const joined = currentStoreRuntime();
   const stores = joined ?? new StoreRuntime();
   // Built inside the runtime, so the executor and the holder share its checkpoint state.
-  const { store, globalStores, holder } = stores.run(() => {
-    const served =
-      given ??
-      workerSqliteStore(hippoRoot, createSqliteExecutor(hippoRoot, executorOpts), executorOpts);
-    return {
-      store: served,
-      globalStores: globalStoresFor(served, executorOpts),
-      holder: createStoreHolder(hippoRoot, served),
-    };
-  });
+  const { store, globalStores, holder } = stores.run(() =>
+    servedStores(hippoRoot, given, executorOpts),
+  );
   return {
     store,
     host,

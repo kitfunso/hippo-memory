@@ -85,7 +85,6 @@ export interface Pass {
 /**
  * The variable when set (empty or `none` is off); else the tools both the invoking and the target
  * store's config allow.
- *
  */
 export function allowedTools(
   opts: Pick<SyncOptions, 'machine' | 'configAt'>,
@@ -106,8 +105,9 @@ export function allowedTools(
     // The value is never echoed: a secret set in this variable by mistake would reach the log.
     let unknown = 0;
     const known = knownTools(listed, () => unknown++);
-    if (unknown > 0)
+    if (unknown > 0) {
       warnings.push(unknownToolsIgnored(TOOLS_ENV, plural(unknown, 'unknown agent memory tool')));
+    }
     return known;
   }
   const mine = configuredTools(opts, invoking, warnings);
@@ -166,8 +166,9 @@ export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportRepo
   } finally {
     await store?.store.close();
   }
-  if (pass.handover && !opts.dryRun)
+  if (pass.handover && !opts.dryRun) {
     await handOver(synced, path.dirname(pass.target), opts, report);
+  }
   return report;
 }
 

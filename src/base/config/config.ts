@@ -1,7 +1,6 @@
 /**
  * Hippo's config: its shape, its defaults and the rule for each key of .hippo/config.json. src/host
  * reads the file.
- *
  */
 
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';

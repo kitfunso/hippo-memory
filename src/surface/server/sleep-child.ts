@@ -68,11 +68,12 @@ async function saveGraphAfter(job: SleepMessage): Promise<void> {
 function sendReply(reply: SleepReply<JobResult>): Promise<number> {
   return new Promise((resolve) => {
     process.send?.(reply, (sendErr: Error | null) => {
-      if (sendErr)
+      if (sendErr) {
         log.error(
           `sleep child: sending the reply failed: ${errorMessage(sendErr)}`,
           errorFields(sendErr),
         );
+      }
       resolve(sendErr ? 1 : 0);
     });
   });

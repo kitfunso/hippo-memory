@@ -48,8 +48,9 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
 
 function readAuditLimit(flags: CliFlags): number {
   const limit = parseListLimit(flags);
-  if (limit > MAX_AUDIT_LIMIT)
+  if (limit > MAX_AUDIT_LIMIT) {
     fail(`--limit must be between 1 and ${MAX_AUDIT_LIMIT} (got ${limit}).`);
+  }
   return limit;
 }
 
@@ -177,8 +178,9 @@ async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags)
     console.log(
       `Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`,
     );
-  } else if (apply && result.supported)
+  } else if (apply && result.supported) {
     console.log('Nothing moved: no unprotected memory has a certain defect.');
+  }
   for (const warning of result.warnings) console.log(`Warning: ${warning}`);
   if (!apply) {
     console.log(

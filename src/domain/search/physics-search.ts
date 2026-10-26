@@ -7,6 +7,7 @@ import {
   physicsScore as computePhysicsScores,
   computeMass,
   type PhysicsParticle,
+  type ScoredPhysicsResult,
 } from '../../base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
@@ -95,7 +96,6 @@ interface PhysicsScoring {
 /**
  * Scores memories by gravity, momentum and cluster amplification on the store `source` names; rows
  * without physics state rank through hybridSearch.
- *
  */
 export async function rankPhysics(
   query: string,
@@ -129,27 +129,47 @@ export async function rankPhysics(
   );
   const physicsMap = await loadCandidateParticles(store.vectors, pool);
   if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
+  return rankByParticles(query, pool, physicsMap, {
+    queryVector,
+    hybrid: { ...hybrid, queryEmbedDeadline },
+    scoring,
+  });
+}
 
-  const pools = splitByParticle(pool, physicsMap, queryVector, now, rankStrength(options));
-  const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
+interface ParticleRanking {
+  readonly queryVector: number[];
+  /** The options every hybrid ranking in this search shares, its query deadline included. */
+  readonly hybrid: PhysicsRankOptions & RankTime & { readonly queryEmbedDeadline: AbortSignal };
+  readonly scoring: PhysicsScoring;
+}
+
+/** Physics scores for rows with a usable particle, hybrid for the rest, merged under the budget. */
+async function rankByParticles(
+  query: string,
+  pool: MemoryEntry[],
+  physicsMap: Map<string, PhysicsParticle>,
+  ranking: ParticleRanking,
+): Promise<SearchResult[]> {
+  const { queryVector, hybrid, scoring } = ranking;
+  const pools = splitByParticle(pool, physicsMap, queryVector, scoring.now, rankStrength(hybrid));
+  const config = hybrid.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults =
     pools.classic.length > 0
       ? await hybridSearch(query, pools.classic, {
           ...hybrid,
-          queryEmbedDeadline,
           vectorCandidates: undefined,
           budget: Infinity,
-          explain,
+          explain: scoring.explain,
         })
       : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
   return fitBudget(
     merged,
-    options.budget ?? DEFAULT_RECALL_BUDGET,
-    options.minResults ?? 1,
-    options.cost,
+    hybrid.budget ?? DEFAULT_RECALL_BUDGET,
+    hybrid.minResults ?? 1,
+    hybrid.cost,
   );
 }
 
@@ -279,35 +299,53 @@ function scorePhysicsPool(
     if (s.finalScore <= 0) continue;
     const entry = entryMap.get(s.memoryId);
     if (!entry) continue;
-    const summary = summaryMultipliers(entry, scoring.now, scoring.summary);
-    const churnStaleMultiplier = churnStaleFactor(entry);
-    const finalScore = s.finalScore * summary.deboost * summary.freshness * churnStaleMultiplier;
-    if (finalScore <= 0) continue;
-    const result: SearchResult = {
-      entry,
-      score: finalScore,
-      bm25: 0,
-      cosine: s.baseScore,
-      tokens: estimateTokens(entry.content),
-    };
-    if (scoring.explain) {
-      result.breakdown = addDagFields(
-        physicsBreakdown(entry, s.baseScore, finalScore, churnStaleMultiplier, scoring.now),
-        entry,
-        summary.deboost,
-        summary.freshness,
-      );
-    }
-    results.push(result);
+    const result = physicsResult(s, entry, scoring);
+    if (result) results.push(result);
   }
   return results;
 }
 
+/** One physics hit after its summary and churn multipliers; null when they bring it to zero. */
+function physicsResult(
+  s: ScoredPhysicsResult,
+  entry: MemoryEntry,
+  scoring: PhysicsScoring,
+): SearchResult | null {
+  const summary = summaryMultipliers(entry, scoring.now, scoring.summary);
+  const churnStaleMultiplier = churnStaleFactor(entry);
+  const finalScore = s.finalScore * summary.deboost * summary.freshness * churnStaleMultiplier;
+  if (finalScore <= 0) return null;
+  const result: SearchResult = {
+    entry,
+    score: finalScore,
+    bm25: 0,
+    cosine: s.baseScore,
+    tokens: estimateTokens(entry.content),
+  };
+  if (scoring.explain) {
+    result.breakdown = addDagFields(
+      physicsBreakdown(
+        entry,
+        { baseScore: s.baseScore, final: finalScore, churnStaleMultiplier },
+        scoring.now,
+      ),
+      entry,
+      summary.deboost,
+      summary.freshness,
+    );
+  }
+  return result;
+}
+
+interface PhysicsBreakdownScores {
+  readonly baseScore: number;
+  readonly final: number;
+  readonly churnStaleMultiplier: number;
+}
+
 function physicsBreakdown(
   entry: MemoryEntry,
-  baseScore: number,
-  final: number,
-  churnStaleMultiplier: number,
+  { baseScore, final, churnStaleMultiplier }: PhysicsBreakdownScores,
   now: Date,
 ): ScoreBreakdown {
   return {

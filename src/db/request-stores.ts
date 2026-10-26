@@ -19,13 +19,11 @@ export interface RequestStoresOptions {
   /**
    * Set for hook scopes: after one lock wait runs out, {@link RequestStores.noteBusy} makes the
    * scope's later writes skip at once.
-   *
    */
   readonly failFastWhenBusy?: boolean;
   /**
    * The store whose open-time setup another connection has already run, so an open in this scope
    * skips it: a store worker's reader, which cannot write it.
-   *
    */
   readonly setupDoneFor?: string;
 }
@@ -139,15 +137,15 @@ export class RequestStores implements RequestScope {
     }
     this.#handles.clear();
     if (failures.length === 1) throw failures[0];
-    if (failures.length > 1)
+    if (failures.length > 1) {
       throw new AggregateError(failures, `${failures.length} request stores did not close`);
+    }
   }
 }
 
 /**
  * Runs `fn` in a request scope whose handles close when `fn` settles; inside an open scope `fn`
  * joins it and `opts` is ignored.
- *
  */
 export async function runWithRequestStores<T>(
   fn: () => T | Promise<T>,
@@ -168,7 +166,6 @@ export async function runWithRequestStores<T>(
 /**
  * runWithRequestStores for a synchronous `fn`, so a batch called from outside any request still
  * opens each store once.
- *
  */
 export function withRequestStoresSync<T>(fn: () => T): T {
   const outer = currentRequestStores();
@@ -191,7 +188,6 @@ export function currentRequestStores(): RequestStores | undefined {
 /**
  * Runs `fn` outside every store scope, for a connection that must outlive the request that happens
  * to open it; its log lines keep the request's id.
- *
  */
 export function outsideRequestStores<T>(fn: () => T): T {
   return requestScopes.run({ requestId: currentRequestId() }, fn);

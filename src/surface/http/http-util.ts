@@ -40,7 +40,6 @@ const DEFAULT_BODY_DEADLINE_MS = 30_000;
 /**
  * How long any route waits for a request body, so a client that sends headers and then stalls
  * cannot hold a request open: 30 s, or the HIPPO_BODY_TIMEOUT_MS value the root read.
- *
  */
 export function bodyDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_BODY_DEADLINE_MS;
@@ -64,7 +63,6 @@ export async function readBody(
 /**
  * The body as sent, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow
  * sender cannot tie up the server.
- *
  */
 function readBodyBytes(
   req: IncomingMessage,
@@ -149,7 +147,6 @@ const WEBHOOK_BODY_DEADLINE_MS = 10_000;
 /**
  * Call before refusing a webhook unread: a caller still sending its body loses the socket once the
  * reply is out, as it does after a 413.
- *
  */
 export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
   res.once('finish', () => {
@@ -160,7 +157,6 @@ export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
 /**
  * A webhook's raw bytes, exactly as sent, for the receiver's HMAC check; call it only once a secret
  * is configured and the signature headers are present.
- *
  */
 export function readWebhookBody({ req, opts }: WebhookRequest): Promise<Buffer> {
   return readBodyBytes(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });

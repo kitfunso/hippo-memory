@@ -9,9 +9,11 @@ import {
   calculateStrength,
   calculateRewardFactor,
   resolveConfidence,
+  type StrengthModel,
 } from '../../base/memory/strength.js';
 import { strengthOf } from '../../api/types.js';
-import { Layer } from '../../base/memory/entry.js';
+import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
@@ -30,7 +32,7 @@ import {
   vectorSummary,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
-import type { ParticleStats } from '../../base/ports/store.js';
+import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
 import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
 const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
@@ -92,15 +94,7 @@ async function printEmbeddingStatus(
   ctx: CliContext,
   counts: Pick<StatusCounts, 'total' | 'embedded'>,
 ): Promise<void> {
-  const embedProvider = (() => {
-    try {
-      return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
-    } catch (err) {
-      // Status reports a bad provider config as "misconfigured" below instead of failing.
-      log.warn('status: the embedding provider config is not usable', errorFields(err));
-      return null;
-    }
-  })();
+  const embedProvider = statusEmbedProvider(ctx);
   console.log('');
   if (!embedProvider) {
     console.log(
@@ -125,18 +119,35 @@ async function printEmbeddingStatus(
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed),
   // so the user still sees what is already indexed.
-  const { vectors, dims } = await vectorSummary(ctx);
-  if (!embAvail && vectors === 0) return;
-  const orphaned = vectors - counts.embedded;
-  let line = `Embedded:          ${counts.embedded}/${counts.total} memories`;
-  if (dims) line += ` (${dims}-dim)`;
-  if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
-  console.log(line);
+  const summary = await vectorSummary(ctx);
+  if (!embAvail && summary.vectors === 0) return;
+  console.log(embeddedLine(counts, summary));
   // No index argument: the check then asks hippo.db whether any vector exists instead of loading
   // them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
+}
+
+function statusEmbedProvider(ctx: CliContext): EmbeddingProvider | null {
+  try {
+    return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
+  } catch (err) {
+    // Status reports a bad provider config as "misconfigured" below instead of failing.
+    log.warn('status: the embedding provider config is not usable', errorFields(err));
+    return null;
+  }
+}
+
+function embeddedLine(
+  counts: Pick<StatusCounts, 'total' | 'embedded'>,
+  { vectors, dims }: StoredVectorSummary,
+): string {
+  const orphaned = vectors - counts.embedded;
+  let line = `Embedded:          ${counts.embedded}/${counts.total} memories`;
+  if (dims) line += ` (${dims}-dim)`;
+  if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
+  return line;
 }
 
 // The all-pairs energy sum is quadratic, so a large particle set skips it.
@@ -167,7 +178,13 @@ export function physicsEnergyText(
   return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
 }
 
-async function inspectMemory(hippoRoot: string, tenantId: string, id: string): Promise<void> {
+interface InspectMemoryOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly id: string;
+}
+
+async function inspectMemory({ hippoRoot, tenantId, id }: InspectMemoryOptions): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -175,9 +192,10 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   if (!entry) {
     fail(`Memory not found: ${id}`);
   }
+  printMemoryDetail(entry, ctx.infra.clock(), strengthOf(ctx));
+}
 
-  const now = ctx.infra.clock();
-  const rules = strengthOf(ctx);
+function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel): void {
   const currentStrength = calculateStrength(entry, now, rules);
   const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
@@ -201,12 +219,7 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  const rewardFactor = calculateRewardFactor(entry, rules);
-  const pos = entry.outcomePositive ?? 0;
-  const neg = entry.outcomeNegative ?? 0;
-  const outcomeLabel =
-    pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
-  console.log(`Outcomes:         ${outcomeLabel}`);
+  console.log(`Outcomes:         ${outcomeLabel(entry, rules)}`);
   if (entry.conflictsWith.length > 0) {
     console.log(`Conflicts with:   ${entry.conflictsWith.join(', ')}`);
   }
@@ -214,6 +227,15 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   console.log('Content:');
   console.log('-'.repeat(40));
   console.log(entry.content);
+}
+
+function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {
+  const rewardFactor = calculateRewardFactor(entry, rules);
+  const pos = entry.outcomePositive ?? 0;
+  const neg = entry.outcomeNegative ?? 0;
+  return pos === 0 && neg === 0
+    ? 'none'
+    : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
 }
 
 /** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved
@@ -233,6 +255,10 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
     console.log(`No memory text recorded in the last ${windowDays} days.`);
     return;
   }
+  printTokenReport(summary, windowDays);
+}
+
+function printTokenReport(summary: api.TokenSummary, windowDays: number): void {
   console.log(
     `Memory text handed to agents, last ${windowDays} days (estimated tokens, characters / 4)\n`,
   );
@@ -296,6 +322,13 @@ export async function handleFailures({
     console.log(`No failed tool calls recorded in the last ${windowDays} days${kept}.`);
     return;
   }
+  printFailureReport(
+    summary,
+    `Failed tool calls seen by the capture-error hook, last ${windowDays} days${kept}\n`,
+  );
+}
+
+function printFailureReport(summary: api.FailureSummary, heading: string): void {
   const o = summary.outcomes;
   const errors = o.stored + o.duplicate + o['store-failed'];
   const unsaved = o['store-failed'] > 0 ? `, ${o['store-failed']} could not be saved` : '';
@@ -305,7 +338,7 @@ export async function handleFailures({
     ['interrupted', o['skipped-interrupt'], ''],
     ['unreadable', o['skipped-invalid'], ''],
   ];
-  console.log(`Failed tool calls seen by the capture-error hook, last ${windowDays} days${kept}\n`);
+  console.log(heading);
   for (const [label, count, note] of rows) {
     console.log(`  ${label.padEnd(13)}${String(count).padStart(6)}  ${note}`.trimEnd());
   }
@@ -437,5 +470,5 @@ export async function handleInspect({ hippoRoot, tenantId, args }: CommandContex
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  await inspectMemory(hippoRoot, tenantId, id);
+  await inspectMemory({ hippoRoot, tenantId, id });
 }

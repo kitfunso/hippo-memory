@@ -36,7 +36,6 @@ function renameOnto(tmp: string, target: string): void {
 /**
  * Where a write to `file` lands: through any symlink, a dangling one included, so a dotfile
  * manager's link survives.
- *
  */
 function writeTarget(file: string): string {
   let target = file;
@@ -70,7 +69,6 @@ function removeTemp(tmp: string): void {
 /**
  * Flushed before the rename, or a crash soon after could leave the file's name on bytes that never
  * reached the disk.
- *
  */
 function writeFlushed(
   tmp: string,
@@ -181,8 +179,9 @@ export function writeFileAtomic(
   try {
     replaceViaTemp(target, data, old, write);
   } catch (err) {
-    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errorCode(err)))
+    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errorCode(err))) {
       throw err;
+    }
     log.warn(
       `${target} could not be replaced by a rename (${errorCode(err)}), so it is ` +
         `written in place: not atomic, a crash mid-write can leave it truncated`,

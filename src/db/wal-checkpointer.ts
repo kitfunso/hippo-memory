@@ -102,55 +102,65 @@ function newCheckpointWorker(
   return { worker: started, exited };
 }
 
+/** What one checkpointer's response counter and worker stand at. */
+interface CheckpointerState {
+  worker?: Worker;
+  exited?: Promise<void>;
+  running: boolean;
+  stopped: boolean;
+  responses: number;
+  due: number;
+}
+
+function spawnCheckpointWorker(key: string, state: CheckpointerState, end: () => void): Worker {
+  const settle = (settled: boolean): void => {
+    state.running = false;
+    state.due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
+  };
+  const started = newCheckpointWorker(key, settle, end);
+  state.exited = started.exited;
+  return started.worker;
+}
+
 /**
  * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first
  * checkpoint that is due. Connections `runtime` opens meanwhile leave checkpoints to it; outside a
  * runtime they still checkpoint inline.
- *
  */
 export function startWalCheckpointer(
   dbPath: string,
   runtime = currentStoreRuntime(),
 ): WalCheckpointer {
   const key = path.resolve(dbPath);
-  let worker: Worker | undefined;
-  let exited: Promise<void> | undefined;
-  let running = false;
-  let stopped = false;
-  let responses = 0;
-  let due = RESPONSES_PER_CHECKPOINT;
+  const state: CheckpointerState = {
+    running: false,
+    stopped: false,
+    responses: 0,
+    due: RESPONSES_PER_CHECKPOINT,
+  };
   runtime?.markBackground(key, true);
 
   const end = (): void => {
-    stopped = true;
+    state.stopped = true;
     runtime?.markBackground(key, false);
-  };
-  const spawn = (): Worker => {
-    const settle = (settled: boolean): void => {
-      running = false;
-      due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
-    };
-    const started = newCheckpointWorker(key, settle, end);
-    exited = started.exited;
-    return started.worker;
   };
 
   return {
     noteResponse(): void {
-      if (stopped || ++responses < due || running) return;
-      responses = 0;
-      running = true;
-      worker ??= spawn();
-      worker.postMessage('checkpoint');
+      if (state.stopped || ++state.responses < state.due || state.running) return;
+      state.responses = 0;
+      state.running = true;
+      state.worker ??= spawnCheckpointWorker(key, state, end);
+      state.worker.postMessage('checkpoint');
     },
     async stop(): Promise<void> {
-      const live = !stopped;
+      const live = !state.stopped;
       end();
       // The idle worker is unreferenced, so without this a process with nothing else open ends
       // inside the await.
-      worker?.ref();
-      if (live) worker?.postMessage('stop');
-      await exited;
+      state.worker?.ref();
+      if (live) state.worker?.postMessage('stop');
+      await state.exited;
     },
   };
 }

@@ -39,7 +39,7 @@ import {
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requireInit, learnFromRepo } from './shared.js';
+import { requireInit, learnFromRepo, type LearnFromRepoOptions } from './shared.js';
 import { fmt } from './print.js';
 import {
   type CliFlags,
@@ -122,28 +122,41 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
   const reposFlag = nonEmptyStringFlag(flags, 'repos');
   if (reposFlag) {
-    const repos = reposFlag
-      .split(',')
-      .map((r) => r.trim())
-      .filter(Boolean);
-    let totalAdded = 0;
-    let totalSkipped = 0;
-
-    for (const repo of repos) {
-      const label = path.basename(repo);
-      const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, repo, days, label);
-      totalAdded += added;
-      totalSkipped += skipped;
-    }
-
-    console.log(
-      `Git learn complete: ${totalAdded} new lessons added, ` +
-        `${totalSkipped} duplicates skipped across ${repos.length} repos.`,
-    );
+    await learnFromRepos(reposFlag, { hippoRoot, tenantId, days });
   } else {
-    const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
+    const { added, skipped } = await learnFromRepo({
+      hippoRoot,
+      tenantId,
+      repoPath: process.cwd(),
+      days,
+    });
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
+}
+
+/** `--repos a,b`: learns each repo under its folder name, then prints the totals. */
+async function learnFromRepos(
+  reposFlag: string,
+  base: Omit<LearnFromRepoOptions, 'repoPath' | 'label'>,
+): Promise<void> {
+  const repos = reposFlag
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  let totalAdded = 0;
+  let totalSkipped = 0;
+
+  for (const repo of repos) {
+    const label = path.basename(repo);
+    const { added, skipped } = await learnFromRepo({ ...base, repoPath: repo, label });
+    totalAdded += added;
+    totalSkipped += skipped;
+  }
+
+  console.log(
+    `Git learn complete: ${totalAdded} new lessons added, ` +
+      `${totalSkipped} duplicates skipped across ${repos.length} repos.`,
+  );
 }
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how
@@ -191,15 +204,41 @@ export async function handleImport({
 
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
-  if (boolFlag(flags, 'agents'))
+  if (boolFlag(flags, 'agents')) {
     return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  }
 
   if (useGlobal) {
     cliInitGlobal();
   } else {
     requireInit(hippoRoot);
   }
+  await importIntoStore({
+    hippoRoot,
+    tenantId,
+    targetRoot,
+    args,
+    flags,
+    useGlobal,
+    dryRun,
+    extraTags,
+  });
+}
 
+interface ImportRun {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly targetRoot: string;
+  readonly args: string[];
+  readonly flags: CliFlags;
+  readonly useGlobal: boolean;
+  readonly dryRun: boolean;
+  readonly extraTags: string[];
+}
+
+/** A vault folder or one file, written to the store `--global` picked. */
+async function importIntoStore(run: ImportRun): Promise<void> {
+  const { hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
   const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
@@ -320,15 +359,19 @@ function importFromFile(
   }
 
   const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
-  printFileImportSummary(result, importerName, filePath, storeLabel, dryRun);
+  printFileImportSummary(result, { importerName, filePath, storeLabel, dryRun });
+}
+
+interface FileImportSummary {
+  readonly importerName: string;
+  readonly filePath: string;
+  readonly storeLabel: string;
+  readonly dryRun: boolean;
 }
 
 function printFileImportSummary(
   result: ImportResult,
-  importerName: string,
-  filePath: string,
-  storeLabel: string,
-  dryRun: boolean,
+  { importerName, filePath, storeLabel, dryRun }: FileImportSummary,
 ): void {
   console.log(`\nImport ${importerName}: ${filePath}`);
   console.log(`  Source entries found:  ${result.total}`);
@@ -482,29 +525,7 @@ export async function handleShare({
 }: CommandContext): Promise<void> {
   const shareId = args[0];
   if (shareId === '--auto' || boolFlag(flags, 'auto')) {
-    requireInit(hippoRoot);
-    const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
-    const dryRun = boolFlag(flags, 'dry-run');
-    const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), {
-      minScore,
-      dryRun,
-    });
-    if (results.length === 0) {
-      console.log('No memories meet the sharing threshold.');
-    } else if (dryRun) {
-      console.log(`Would share ${results.length} memories:\n`);
-      for (const e of results) {
-        const score = api.transferScore(e);
-        console.log(
-          `  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`,
-        );
-      }
-    } else {
-      console.log(`Shared ${results.length} memories to global store.`);
-      for (const e of results) {
-        console.log(`  ${e.id} <- ${e.source}`);
-      }
-    }
+    await shareAuto(hippoRoot, tenantId, flags);
   } else if (shareId) {
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
@@ -525,6 +546,33 @@ export async function handleShare({
     }
   } else {
     fail('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
+  }
+}
+
+/** `hippo share --auto`: shares every memory at or above the transfer threshold. */
+async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+  requireInit(hippoRoot);
+  const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
+  const dryRun = boolFlag(flags, 'dry-run');
+  const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), {
+    minScore,
+    dryRun,
+  });
+  if (results.length === 0) {
+    console.log('No memories meet the sharing threshold.');
+  } else if (dryRun) {
+    console.log(`Would share ${results.length} memories:\n`);
+    for (const e of results) {
+      const score = api.transferScore(e);
+      console.log(
+        `  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`,
+      );
+    }
+  } else {
+    console.log(`Shared ${results.length} memories to global store.`);
+    for (const e of results) {
+      console.log(`  ${e.id} <- ${e.source}`);
+    }
   }
 }
 

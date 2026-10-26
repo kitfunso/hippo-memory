@@ -30,7 +30,8 @@ function rejectLegacyTenantKey(entry: MemoryEntry): void {
 
 export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
-  checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+  const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
+  checkRejectionGuard(db, { tenantId, entryId: entry.id, content: entry.content });
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 

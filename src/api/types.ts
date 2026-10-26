@@ -105,8 +105,9 @@ export function contextReach(
     return last.config;
   };
   let withConfig: ContextReach = rest;
-  if (global !== undefined)
+  if (global !== undefined) {
     withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  }
   if (globalTarget !== undefined) {
     withConfig = {
       ...withConfig,

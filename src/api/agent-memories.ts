@@ -20,7 +20,6 @@ export type { SyncOptions };
 /**
  * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the
  * user pass; the global store the user pass only.
- *
  */
 export async function importForStore(root: string, opts: SyncOptions): Promise<ImportReport> {
   if (opts.machine.isGlobalRoot(root)) return importUserMemories(root, opts);

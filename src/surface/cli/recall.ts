@@ -131,8 +131,9 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   const nameRaw = stringFlag(flags, 'reranker');
-  if (hasFlag(flags, 'reranker') && nameRaw === undefined)
+  if (hasFlag(flags, 'reranker') && nameRaw === undefined) {
     return { fail: failLater('--reranker requires a value.') };
+  }
   const name = nameRaw?.trim() ?? '';
   let picked: RecallRerankerPick | null;
   try {
@@ -206,13 +207,21 @@ function parseStageFlags(flags: CliFlags): RecallStageFlags {
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter,
  * `retrieveWithCliCore` ranks and records, then the block prints. */
-async function printRecall(
-  hippoRoot: string,
-  tenantId: string,
-  query: string,
-  flags: CliFlags,
-  callers: CallerState | undefined,
-): Promise<void> {
+interface PrintRecallOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly query: string;
+  readonly flags: CliFlags;
+  readonly callers: CallerState | undefined;
+}
+
+async function printRecall({
+  hippoRoot,
+  tenantId,
+  query,
+  flags,
+  callers,
+}: PrintRecallOptions): Promise<void> {
   requireInit(hippoRoot);
   const ctx = cliApiContext(hippoRoot, tenantId, callers);
   const parsed = parseRecallFlags(ctx, flags);
@@ -444,8 +453,9 @@ function renderRecallBlock(
     // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list,
     // where a reader sees it.
     const lines = [...continuity];
-    if (hints.anchoring)
+    if (hints.anchoring) {
       lines.push(`[anchored_on: ${hints.anchoring.memoryId}] ${hints.anchoring.summary}`, '');
+    }
     if (hints.availability) {
       const { recentCount, returnedCount, summary } = hints.availability;
       lines.push(`Availability bias (${recentCount}/${returnedCount} recent): ${summary}`, '');
@@ -520,40 +530,26 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   // not fit is dropped.
   const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
   const { continuity, continuityTokens } = payContinuity(loaded, sectionBudget);
-  let left = sectionBudget - continuityTokens;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = continuity;
   const hasContinuity =
     activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
 
-  // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this
-  // only prices the line.
-  const planText = planningLine(planning);
-  const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
-  const showPlan = planText !== null && planTokens <= left;
-  if (showPlan) left -= planTokens;
-  const planningFallacyHint = showPlan ? (planning.hint ?? null) : null;
-  const planningFallacyWatching = showPlan ? (planning.watching ?? null) : null;
+  const plan = payPlanLine(planning, sectionBudget - continuityTokens);
+  const { planningFallacyHint, planningFallacyWatching } = plan;
 
   const hintsFor = recallHinter(ctx, query, parsed, ranked.rank);
   const view: RecallRenderView = {
     query,
     showWhy: parsed.showWhy,
-    showPlan,
-    planText,
+    showPlan: plan.showPlan,
+    planText: plan.planText,
     hasContinuity,
     continuity,
     entryText: ranked.entryText,
   };
-  const { results, hints, recallText } = fitRecall(ranked.rank.results, {
-    room: left,
-    budget,
-    // The first --min-results are kept whatever they cost (the documented exception); the rest skip
-    // and continue.
-    floor: parsed.minResults ?? 1,
-    cost: ranked.printCost,
-    render: (rows) => renderRows(rows, hintsFor, view),
-    textOf: (r) => r.recallText,
-  });
+  const { results, hints, recallText } = fitMemories(ranked, parsed, plan.room, (rows) =>
+    renderRows(rows, hintsFor, view),
+  );
   return {
     results,
     hints,
@@ -563,6 +559,48 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
     planningFallacyHint,
     planningFallacyWatching,
   };
+}
+
+/** The plan line and its hints when they fit `left`, and the room the memories keep. */
+interface PaidPlanLine {
+  readonly planText: string | null;
+  readonly showPlan: boolean;
+  readonly room: number;
+  readonly planningFallacyHint: PlanningFallacyHint | null;
+  readonly planningFallacyWatching: PlanningFallacyWatching | null;
+}
+
+function payPlanLine(planning: PlanningFallacyOutput, left: number): PaidPlanLine {
+  // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this
+  // only prices the line.
+  const planText = planningLine(planning);
+  const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
+  const showPlan = planText !== null && planTokens <= left;
+  return {
+    planText,
+    showPlan,
+    room: showPlan ? left - planTokens : left,
+    planningFallacyHint: showPlan ? (planning.hint ?? null) : null,
+    planningFallacyWatching: showPlan ? (planning.watching ?? null) : null,
+  };
+}
+
+function fitMemories(
+  ranked: RankedRecall,
+  parsed: ParsedRecallFlags,
+  room: number,
+  render: (rows: SearchResult[]) => RenderedRecall,
+): RenderedRecall {
+  return fitRecall(ranked.rank.results, {
+    room,
+    budget: parsed.budget,
+    // The first --min-results are kept whatever they cost (the documented exception); the rest skip
+    // and continue.
+    floor: parsed.minResults ?? 1,
+    cost: ranked.printCost,
+    render,
+    textOf: (r) => r.recallText,
+  });
 }
 
 /** The printed block and what `retrieveWithCliCore` records of it. */
@@ -677,5 +715,5 @@ export async function handleRecall({
   if (!query) {
     fail('Please provide a search query.');
   }
-  await printRecall(hookStoreRoot(hippoRoot), tenantId, query, flags, callers);
+  await printRecall({ hippoRoot: hookStoreRoot(hippoRoot), tenantId, query, flags, callers });
 }

@@ -27,7 +27,6 @@ the session as you work, so there is nothing to run before you finish.
 /**
  * Every Copilot text a release has written, so install upgrades an old block and uninstall still
  * removes it; add the old text when the text changes.
- *
  */
 const SHIPPED_COPILOT_INSTRUCTIONS: readonly string[] = [
   COPILOT_INSTRUCTIONS,
@@ -235,8 +234,9 @@ export interface InstructionsRemovalPlan {
 /** Splices out only hippo's own Copilot block and keeps every other byte. */
 export function planInstructionsRemoval(old: string): InstructionsRemovalPlan {
   const found = hippoBlock(old);
-  if (found === null)
+  if (found === null) {
     return { status: old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent', left: old };
+  }
   if (!isCopilotBlock(found.inner)) return { status: 'kept', left: old };
   const left = withoutCopilotBlock(old, found);
   return { status: 'removed', left: left.trim() === '' ? null : left };

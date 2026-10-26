@@ -11,7 +11,6 @@ export const EXPIRING_KEYS_MIN_BINARY = '1.64.0';
 /**
  * The floor a store takes on its first session bind or owner snapshot: first release with v54; set
  * by hand in that release.
- *
  */
 export const TASK_OWNER_MIN_BINARY = '1.64.0';
 

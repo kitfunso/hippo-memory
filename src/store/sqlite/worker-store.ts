@@ -163,8 +163,9 @@ export function globalStoresFor(
   served: HippoStore,
   executorOpts: ExecutorOptions = {},
 ): GlobalStores {
-  if (!runsOffLoop(served))
+  if (!runsOffLoop(served)) {
     return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
+  }
   const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {

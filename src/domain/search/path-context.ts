@@ -48,7 +48,6 @@ export function pathTagsOf(cwd: string | undefined): string[] {
 /** Path overlap score in 0..1 (1 = perfect match), normalized by the MORE SPECIFIC side (the larger
  * tag set), so a bare/generic path tag cannot score 1.0 against a deeply nested cwd just because
  * its tiny tag set is contained in the query's.
- *
  */
 export function pathOverlapScore(memoryPathTags: string[], currentPathTags: string[]): number {
   if (memoryPathTags.length === 0 || currentPathTags.length === 0) return 0;
@@ -67,7 +66,6 @@ const PATH_BOOST_WEIGHT = 0.3;
 /**
  * Multiplier (1.0..1.3) applied to a composite recall score for path locality; filters the memory's
  * tags to path:* itself so call sites cannot drift.
- *
  */
 export function pathBoostMultiplier(memoryTags: string[], currentPathTags: string[]): number {
   const memPathTags = memoryTags.filter((t) => t.startsWith('path:'));

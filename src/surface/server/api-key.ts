@@ -58,7 +58,6 @@ const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP);
 /**
  * A caller's limit on scrypt work, called once per derivation: it may throw to refuse `derive` or
  * hold it in a queue.
- *
  */
 type DerivationBound = (keyId: string, derive: () => Promise<Buffer>) => Promise<Buffer>;
 
@@ -69,9 +68,7 @@ const checksInFlight = new Map<string, Promise<boolean>>();
 /** Whether `plaintext` is the secret `keyHash` was minted from: a proved token skips scrypt, any
  * other derives on the thread pool. */
 async function secretMatches(
-  keyId: string,
-  plaintext: string,
-  keyHash: string,
+  { keyId, plaintext, keyHash }: { keyId: string; plaintext: string; keyHash: string },
   bound?: DerivationBound,
 ): Promise<boolean> {
   if (verifiedKeys.has(keyHash, plaintext)) return true;
@@ -114,7 +111,7 @@ export async function verifyApiKeyCached(
     onUnusable?.();
     return null;
   }
-  return (await secretMatches(keyId, plaintext, record.keyHash, bound))
+  return (await secretMatches({ keyId, plaintext, keyHash: record.keyHash }, bound))
     ? verifiedKeyOf(keyId, record)
     : null;
 }

@@ -12,7 +12,6 @@ const COMMAND_HEAD_WORDS = 2;
 /**
  * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key
  * (untruncated, command head).
- *
  */
 export type FailureReading =
   | { text: string; detail: string }
@@ -123,15 +122,15 @@ export function lessonFromFailure(
   if (OS_PERMISSION.test(error)) return routine('os-permission');
   if (NO_MATCH.test(error)) return routine('no-match');
   if (SEARCH_TOOLS.has(tool)) return routine('search-tool');
-  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error))
+  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) {
     return routine('quiet-exit');
+  }
   return { text, detail };
 }
 
 /**
  * A failure as it may leave the machine: the capped lesson text and the detail's hash, never the
  * untruncated detail.
- *
  */
 export interface FailureReport {
   /** The payload's tool name; null when it named none. */

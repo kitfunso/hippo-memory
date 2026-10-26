@@ -54,7 +54,6 @@ export async function vectorSummary(
 /**
  * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so
  * the host admin only.
- *
  */
 export async function embeddingReindexNeeded(
   ctx: ContextWith<'embeddingIndex'>,

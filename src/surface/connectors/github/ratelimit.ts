@@ -10,7 +10,6 @@ export interface RateLimitInfo {
 /**
  * Parse the rate-limit signal from a GitHub response; `headers` are lower-cased and `now` (epoch
  * seconds) is for deterministic tests.
- *
  */
 export function parseRateLimit(
   headers: Record<string, string | undefined>,

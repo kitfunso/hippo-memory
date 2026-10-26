@@ -17,6 +17,7 @@ import {
   autodebiasMode,
   decidePlanningFallacy,
   detectPlanningClaim,
+  type PlanningFallacyDecision,
 } from '../../domain/predictions/planning-fallacy.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
@@ -153,19 +154,14 @@ export function composeRecall(
   opts: RecallOptions,
   options: ComposeRecallOptions,
 ): ComposedRecall {
-  const { windowSize, all, plan, reads, auditWindow = true } = options;
+  const { plan, reads, auditWindow = true } = options;
   const { window } = plan;
   const bands = rankBands(opts, plan, reads);
   const rankedOut = bands.rankedOut;
   const continuity = reads.continuity
     ? scopeContinuity(reads.continuity, opts.filter?.scope, plan.personalScope)
     : undefined;
-  // Query-derived, so MCP and CLI read this one hint instead of recomputing; HIPPO_AUTODEBIAS=off
-  // disables it.
-  const planning =
-    plan.claim && reads.planning
-      ? decidePlanningFallacy(plan.claim, reads.planning, ctx.tenantId, ctx.actor.subject)
-      : null;
+  const planning = planningDecision(ctx, plan, reads);
   const { anchoringHint, suppressedByInterference } = detectRecallAnchoring(
     ctx,
     opts,
@@ -173,22 +169,7 @@ export function composeRecall(
   );
   const availabilityHint = detectRecallAvailability(ctx, opts, bands.baseSlice, window.entries);
 
-  const result: RecallResult = {
-    results: rankedOut,
-    total: window.entries.length,
-    tokens: rankedOut.reduce((acc, r) => acc + estimateTokens(r.content), 0),
-    continuity,
-    continuityTokens: continuity ? continuityTokensOf(continuity) : undefined,
-    windowSize,
-    suppressionSummary: {
-      totalCandidates: all.length,
-      droppedPreRank: window.droppedPreRank + bands.heldDropped,
-      droppedByBudget: window.droppedByBudget,
-      summarySubstitutionsAdded: bands.summarySubstitutions,
-      freshTailAdded: bands.freshTailAdded,
-      suppressedByInterference,
-    } satisfies RecallSuppressionSummary,
-  };
+  const result = recallResult(options, bands, continuity, suppressedByInterference);
   // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out
   // as optional fields.
   if (planning?.output.hint) result.planningFallacyHint = planning.output.hint;
@@ -205,6 +186,45 @@ export function composeRecall(
   return {
     result,
     writes: { goalLog: bands.goalLog, audit, trace: recallTrace(ctx, opts, rankedOut) },
+  };
+}
+
+// Query-derived, so MCP and CLI read this one hint instead of recomputing; HIPPO_AUTODEBIAS=off
+// disables it.
+function planningDecision(
+  ctx: Context,
+  plan: RecallPlan,
+  reads: RecallReads,
+): PlanningFallacyDecision | null {
+  return plan.claim && reads.planning
+    ? decidePlanningFallacy(plan.claim, reads.planning, ctx.tenantId, ctx.actor.subject)
+    : null;
+}
+
+function recallResult(
+  options: ComposeRecallOptions,
+  bands: RankedBands,
+  continuity: ContinuityBlock | undefined,
+  suppressedByInterference: number,
+): RecallResult {
+  const { windowSize, all, plan } = options;
+  const { window } = plan;
+  const { rankedOut } = bands;
+  return {
+    results: rankedOut,
+    total: window.entries.length,
+    tokens: rankedOut.reduce((acc, r) => acc + estimateTokens(r.content), 0),
+    continuity,
+    continuityTokens: continuity ? continuityTokensOf(continuity) : undefined,
+    windowSize,
+    suppressionSummary: {
+      totalCandidates: all.length,
+      droppedPreRank: window.droppedPreRank + bands.heldDropped,
+      droppedByBudget: window.droppedByBudget,
+      summarySubstitutionsAdded: bands.summarySubstitutions,
+      freshTailAdded: bands.freshTailAdded,
+      suppressedByInterference,
+    } satisfies RecallSuppressionSummary,
   };
 }
 
@@ -239,22 +259,33 @@ function admitCandidates(
   return { entries, baseSlice, droppedPreRank, droppedByBudget: entries.length - baseSlice.length };
 }
 
+/** The primary band in window order, goal-boosted when the plan asks, and the explain trace
+ * the boost wrote to. */
+interface BoostedBase {
+  baseScored: ScoredEntry[];
+  goalLog: GoalRecallLogRow[];
+  explainTrace: Map<string, RerankStep> | undefined;
+}
+
 // The goal-stack boost touches the primary band only; the fresh-tail and summary bands keep their
 // fixed placement.
-function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): RankedBands {
-  const { window, limit, personalScope } = plan;
-  let baseScored: ScoredEntry[] = window.baseSlice.map((entry, idx) => ({
+function boostBase(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): BoostedBase {
+  const { window, limit } = plan;
+  const baseScored: ScoredEntry[] = window.baseSlice.map((entry, idx) => ({
     entry,
     score: Math.max(0, 1 - idx / Math.max(1, limit)),
   }));
   // Allocated only under explain, so the boost's default-path math stays byte-identical.
   const explainTrace = opts.trace?.explain ? new Map<string, RerankStep>() : undefined;
-  let goalLog: GoalRecallLogRow[] = [];
-  if (plan.goalBoost && reads.goals) {
-    const boost = boostByGoals(baseScored, reads.goals, { ...plan.goalBoost, trace: explainTrace });
-    baseScored = boost.results;
-    goalLog = boost.log;
-  }
+  if (!plan.goalBoost || !reads.goals) return { baseScored, goalLog: [], explainTrace };
+  const boost = boostByGoals(baseScored, reads.goals, { ...plan.goalBoost, trace: explainTrace });
+  return { baseScored: boost.results, goalLog: boost.log, explainTrace };
+}
+
+function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): RankedBands {
+  const { limit, personalScope } = plan;
+  const boosted = boostBase(opts, plan, reads);
+  let baseScored = boosted.baseScored;
   let substituted = substituteOverflow(opts, {
     overflowByParent: plan.overflow,
     parents: reads.parents,
@@ -267,7 +298,7 @@ function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): R
     ({ heldDropped, base: baseScored, summaries: substituted } = kept);
   }
   const baseSlice = baseScored.map((r) => r.entry);
-  const baseRanked = baseScored.map((r) => baseItem(r, opts, explainTrace));
+  const baseRanked = baseScored.map((r) => baseItem(r, opts, boosted.explainTrace));
   const summaryRanked = substituted.map((s) => summaryItem(s, opts));
   const freshRanked =
     (opts.window?.freshTailCount ?? 0) > 0
@@ -287,7 +318,7 @@ function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): R
     heldDropped,
     summarySubstitutions: substituted.length,
     freshTailAdded: freshRanked.length,
-    goalLog,
+    goalLog: boosted.goalLog,
   };
 }
 
@@ -340,7 +371,6 @@ function substituteOverflow(
 /**
  * Overflowed leaf rows by summary parent, kept only for a parent with 2+ of them that is not
  * already in the base band.
- *
  */
 function overflowGroups(window: CandidateWindow, limit: number): Map<string, MemoryEntry[]> {
   // The goal boost only re-scores the base band, so its ids are known before the boost runs.
@@ -522,8 +552,9 @@ function detectRecallAnchoring(
   topMemoryId: string | null,
 ): AnchoringOutcome {
   const history = opts.hints?.recallHistory;
-  if (!biasHintEnabled(config, 'anchoring') || !history)
+  if (!biasHintEnabled(config, 'anchoring') || !history) {
     return { anchoringHint: null, suppressedByInterference: 0 };
+  }
   const queryHash = hashQueryText(opts.query);
   const anchoringHint = detectAnchoring(history, queryHash, topMemoryId);
   return {
@@ -541,8 +572,9 @@ function detectRecallAvailability(
   baseSlice: MemoryEntry[],
   entries: MemoryEntry[],
 ): AvailabilityHint | null {
-  if (!biasHintEnabled(ctx.config, 'availability') || opts.hints?.suppressAvailabilityHint)
+  if (!biasHintEnabled(ctx.config, 'availability') || opts.hints?.suppressAvailabilityHint) {
     return null;
+  }
   return detectAvailabilityBias({
     topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
     pool: entries.map((e) => ({ id: e.id, created: e.created })),

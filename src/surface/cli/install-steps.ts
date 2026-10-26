@@ -19,7 +19,6 @@ import {
 /**
  * Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder,
  * since Codex skips an untrusted hook.
- *
  */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
@@ -61,12 +60,10 @@ export function warnClaudeSettingsUnusable(
 /**
  * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a
  * scheduled task on Windows; skips if installed.
- *
  */
 /**
  * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo
  * init` or `hippo setup`.
- *
  */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
 // Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the
@@ -89,7 +86,6 @@ type RunScheduler = (
 /**
  * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the
  * scheduler refused or is missing.
- *
  */
 function schedulerTimedOut<E>(err: E): boolean {
   return errorCode(err) === 'ETIMEDOUT';

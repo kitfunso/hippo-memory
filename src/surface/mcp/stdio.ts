@@ -33,61 +33,70 @@ function send(msg: McpResponse): void {
 
 // ── Stdio transport ──
 
-/** Splits one stream's chunks into frame bodies; the stream owns its half-read frame, so no
- * module holds one. */
+/** One stream's half-read frame; the stream owns it, so no module holds one. */
+interface ReaderState {
+  pending: Uint8Array[];
+  pendingBytes: number;
+  /** Set when the pending bytes hold a Content-Length header whose body has not fully arrived. */
+  needs: number | undefined;
+  /** The part of a refused frame still on its way, dropped as it arrives so it is never buffered
+   * or read as a new frame. */
+  refused: FrameRemainder;
+}
+
+/** Splits one stream's chunks into frame bodies. */
 function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
-  let pending: Uint8Array[] = [];
-  let pendingBytes = 0;
-  // Set when the pending bytes hold a Content-Length header whose body has not fully arrived.
-  let needs: number | undefined;
-  // The part of a refused frame still on its way, dropped as it arrives so it is never buffered or
-  // read as a new frame.
-  let refused: FrameRemainder = 0;
-
-  const withoutRefused = (chunk: Buffer): Buffer => {
-    if (refused === 'line') {
-      const newline = chunk.indexOf(0x0a);
-      if (newline === -1) return chunk.subarray(chunk.length);
-      refused = 0;
-      return chunk.subarray(newline + 1);
-    }
-    const dropped = Math.min(refused, chunk.length);
-    refused -= dropped;
-    return chunk.subarray(dropped);
-  };
-
+  const s: ReaderState = { pending: [], pendingBytes: 0, needs: undefined, refused: 0 };
   return (raw) => {
-    const chunk = withoutRefused(raw);
-    pending.push(chunk);
-    pendingBytes += chunk.length;
+    const chunk = withoutRefused(s, raw);
+    s.pending.push(chunk);
+    s.pendingBytes += chunk.length;
     // Joining on every chunk would copy the whole pending frame each time; wait until a frame can
     // have ended.
     if (
-      needs === undefined
-        ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES
-        : pendingBytes < needs
-    )
+      s.needs === undefined
+        ? !chunk.includes(0x0a) && s.pendingBytes <= MAX_BODY_BYTES
+        : s.pendingBytes < s.needs
+    ) {
       return;
-    let buffer: Buffer = Buffer.concat(pending, pendingBytes);
-    needs = undefined;
-    while (true) {
-      const result = parseFrame(buffer);
-      if (result.kind === 'incomplete') {
-        needs = result.needs;
-        break;
-      }
-      buffer = result.rest;
-      if (result.kind === 'oversize') {
-        refused = result.remainder;
-        log.warn('mcp: refused a frame over the size cap with a parse error');
-        send(errorReply(null, PARSE_ERROR, 'Parse error: frame exceeds 1MB'));
-        continue;
-      }
-      if (result.kind === 'message') onBody(result.body);
     }
-    pending = buffer.length > 0 ? [buffer] : [];
-    pendingBytes = buffer.length;
+    const buffer = readFrames(s, Buffer.concat(s.pending, s.pendingBytes), onBody);
+    s.pending = buffer.length > 0 ? [buffer] : [];
+    s.pendingBytes = buffer.length;
   };
+}
+
+function withoutRefused(s: ReaderState, chunk: Buffer): Buffer {
+  if (s.refused === 'line') {
+    const newline = chunk.indexOf(0x0a);
+    if (newline === -1) return chunk.subarray(chunk.length);
+    s.refused = 0;
+    return chunk.subarray(newline + 1);
+  }
+  const dropped = Math.min(s.refused, chunk.length);
+  s.refused -= dropped;
+  return chunk.subarray(dropped);
+}
+
+/** Hands each whole frame to `onBody` and returns the bytes after the last one. */
+function readFrames(s: ReaderState, joined: Buffer, onBody: (body: string) => void): Buffer {
+  let buffer = joined;
+  s.needs = undefined;
+  while (true) {
+    const result = parseFrame(buffer);
+    if (result.kind === 'incomplete') {
+      s.needs = result.needs;
+      return buffer;
+    }
+    buffer = result.rest;
+    if (result.kind === 'oversize') {
+      s.refused = result.remainder;
+      log.warn('mcp: refused a frame over the size cap with a parse error');
+      send(errorReply(null, PARSE_ERROR, 'Parse error: frame exceeds 1MB'));
+      continue;
+    }
+    if (result.kind === 'message') onBody(result.body);
+  }
 }
 
 // Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP
@@ -222,19 +231,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   }
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
-    const stopWatching = watchDeadline(req, false, abort);
-    track(
-      req.method,
-      handleFrame(req, host)
-        .then(() => {})
-        .catch((err) => {
-          log.error(
-            `mcp notification ${req.method} failed: ${errorMessage(err)}`,
-            errorFields(err),
-          );
-        })
-        .finally(stopWatching),
-    );
+    dispatchNotification(req, abort, host);
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
@@ -255,6 +252,19 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
           );
         } else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
       }),
+  );
+}
+
+function dispatchNotification(req: McpRequest, abort: AbortController, host: McpHost): void {
+  const stopWatching = watchDeadline(req, false, abort);
+  track(
+    req.method,
+    handleFrame(req, host)
+      .then(() => {})
+      .catch((err) => {
+        log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
+      })
+      .finally(stopWatching),
   );
 }
 

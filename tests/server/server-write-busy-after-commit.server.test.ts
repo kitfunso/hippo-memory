@@ -162,7 +162,9 @@ describe('routed writes under a busy store', () => {
         kind: 'raw',
         force: true,
       });
-      await expect(landedOnRetry(home, () => client.postArchiveRaw(url, adminKey, id, 'test'))).resolves.toMatchObject({
+      await expect(
+        landedOnRetry(home, () => client.postArchiveRaw(url, adminKey, { id, reason: 'test' })),
+      ).resolves.toMatchObject({
         result: { ok: true },
         statuses: [503, 200],
       });

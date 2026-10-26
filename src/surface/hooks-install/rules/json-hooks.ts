@@ -169,8 +169,12 @@ function hookArrayContains(hookArray: JsonValue | undefined, marker: string): bo
 }
 
 function addIncludeRecentToPinnedCommand(command: string): string {
-  if (!isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) || command.includes('--include-recent'))
+  if (
+    !isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) ||
+    command.includes('--include-recent')
+  ) {
     return command;
+  }
   return command.includes(' --format ')
     ? command.replace(' --format ', ' --include-recent 5 --format ')
     : `${command} --include-recent 5`;
@@ -247,8 +251,9 @@ export interface HookInstallPlan {
  * only appends and never edits an entry. */
 function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallPlan {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObjectLiteral(settings))
+  if (!isJsonObjectLiteral(settings)) {
     return { result: { ...result, invalidJson: true }, write: null };
+  }
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
   if (hooks === null) return { result: { ...result, invalidJson: true }, write: null };
   const append = (event: string, marker: string, group: JsonObject): boolean => {
@@ -351,7 +356,11 @@ export function planJsonHooks(
   if (settings === undefined) return invalid;
   if (target === 'codex') return planCodexHooks(paths.settings, settings);
   if (!isJsonObjectLiteral(settings)) return invalid;
-  return planClaudeCodeHooks(paths.settings, settings, paths.logFile, compactLog);
+  return planClaudeCodeHooks(settings, {
+    settingsPath: paths.settings,
+    logFile: paths.logFile,
+    compactLog,
+  });
 }
 
 type ClaudeHooks = Record<string, JsonValue[]>;
@@ -492,19 +501,19 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
+/** Where Claude Code's settings live and where its session and compaction hooks log. */
+interface ClaudeHookPaths {
+  readonly settingsPath: string;
+  readonly logFile: string;
+  readonly compactLog: string;
+}
+
 function planClaudeCodeHooks(
-  settingsPath: string,
   settings: JsonObject,
-  logFile: string,
-  compactLog: string,
+  { settingsPath, logFile, compactLog }: ClaudeHookPaths,
 ): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
-  if (merge === null) {
-    return {
-      result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true },
-      write: null,
-    };
-  }
+  if (merge === null) return invalidClaudeSettings(settingsPath);
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
@@ -517,16 +526,7 @@ function planClaudeCodeHooks(
   } = appendSessionHooks(hooks, logFile);
   const { installedPreCompact, installedCompactResume, installedPostCompact } =
     appendCompactionHooks(hooks, compactLog);
-
-  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error`
-  // drops routine failures (interrupts, declined permissions, empty searches) and repeats. Same
-  // hook the plugin ships.
-  const installedCaptureError = appendHookIfMissing(
-    hooks,
-    'PostToolUseFailure',
-    HIPPO_CAPTURE_ERROR_MARKER,
-    claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
-  );
+  const installedCaptureError = appendCaptureErrorHook(hooks);
 
   const result: InstallResult = {
     target: 'claude-code',
@@ -543,6 +543,25 @@ function planClaudeCodeHooks(
     invalidJson: false,
   };
   return { result, write: Object.values(result).some((v) => v === true) ? settings : null };
+}
+
+function invalidClaudeSettings(settingsPath: string): HookInstallPlan {
+  return {
+    result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true },
+    write: null,
+  };
+}
+
+function appendCaptureErrorHook(hooks: ClaudeHooks): boolean {
+  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error`
+  // drops routine failures (interrupts, declined permissions, empty searches) and repeats. Same
+  // hook the plugin ships.
+  return appendHookIfMissing(
+    hooks,
+    'PostToolUseFailure',
+    HIPPO_CAPTURE_ERROR_MARKER,
+    claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
+  );
 }
 
 /** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */
@@ -584,8 +603,9 @@ export function planHookRemoval(
   target: 'claude-code' | 'codex',
   settings: JsonValue,
 ): HookRemovalPlan {
-  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks))
+  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) {
     return { write: null, kept: [] };
+  }
   const hooks = settings.hooks;
   const changed = target === 'codex' ? uninstallCodexHooks(hooks) : uninstallClaudeCodeHooks(hooks);
   const kept = target === 'claude-code' ? keptHippoHandlers(hooks) : [];

@@ -23,7 +23,10 @@ export function tryParseUrl(raw: string): URL | undefined {
 /** An endpoint that gets a key or memory text: https, or http only to this machine, and no
  * userinfo, which fetch echoes in its error text. Throws naming `setting`, and `keySetting` as
  * the home for a credential. */
-export function parseOutboundUrl(raw: string, setting: string, keySetting?: string): URL {
+export function parseOutboundUrl(
+  raw: string,
+  { setting, keySetting }: { readonly setting: string; readonly keySetting?: string },
+): URL {
   const parsed = tryParseUrl(raw);
   if (parsed === undefined) throw new Error(`${setting} is not a valid URL`);
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {

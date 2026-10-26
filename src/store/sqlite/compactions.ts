@@ -21,7 +21,8 @@ function writeCallerItems(
   req: CallerItems,
   log: Log,
 ): number {
-  const earlier = compactionByRequest(db, tenantId, req.requestId, req.sessionId);
+  const request = { tenantId, requestId: req.requestId, sessionId: req.sessionId };
+  const earlier = compactionByRequest(db, request);
   if (earlier !== null && earlier.status !== 'summarised') return earlier.itemsWritten;
   const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };
   const text = { summary: '', items: [...req.items] };

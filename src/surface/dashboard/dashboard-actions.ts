@@ -95,8 +95,9 @@ export async function resolveOpenConflict(
     if (err instanceof ConflictError) {
       return { status: 409, body: { error: 'This conflict is already resolved' }, changed: false };
     }
-    if (err instanceof BadRequestError)
+    if (err instanceof BadRequestError) {
       throw new ParamError('keep must be one of the two memories in the conflict');
+    }
     throw err;
   }
 }

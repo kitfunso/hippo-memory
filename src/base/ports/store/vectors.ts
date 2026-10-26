@@ -46,7 +46,6 @@ export const VECTOR_CANDIDATE_LIMIT = 50;
 /**
  * Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules
  * as the lexical load.
- *
  */
 export interface VectorCandidateSpec {
   tenantId: TenantId;

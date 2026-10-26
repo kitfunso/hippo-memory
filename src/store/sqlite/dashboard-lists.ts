@@ -94,10 +94,17 @@ function firstHolding(holds: (ms: number) => boolean): number {
   return lo;
 }
 
+/** A brush's age range in days, and the instant each age counts back from. */
+interface AgeBindsOptions {
+  readonly minAgeDays: number;
+  readonly maxAgeDays: number;
+  readonly nowMs: number;
+}
+
 /** AGE_KEPT's parameters: a plain created is kept from createdFrom to createdTo, the instants
  * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's two
  * tests. */
-function ageBinds(min: number, max: number, nowMs: number) {
+function ageBinds({ minAgeDays: min, maxAgeDays: max, nowMs }: AgeBindsOptions) {
   const age = (ms: number): number => Math.max(0, (nowMs - ms) / DAY_MS);
   const from = firstHolding((ms) => age(ms) <= max);
   const to = firstHolding((ms) => !(age(ms) >= min)) - 1;
@@ -172,7 +179,7 @@ function listScan(
     origin: query.origin,
     now: nowMs,
     ...Object.fromEntries(layers),
-    ...ageBinds(query.minAgeDays, query.maxAgeDays, nowMs),
+    ...ageBinds(query),
     ...holds.binds,
     chip: query.chip,
     list,

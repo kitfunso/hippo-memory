@@ -53,8 +53,9 @@ export function deferDueMirrors(hippoRoot: string): void {
  * nothing more. */
 export function recoverDueMirrors(hippoRoot: string, db: DatabaseSyncLike, due?: boolean): void {
   oncePerStore(hippoRoot, 'due-mirrors', () => {
-    if (due ?? dueMarks(db, DUE).length > 0)
+    if (due ?? dueMarks(db, DUE).length > 0) {
       mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
+    }
   });
 }
 

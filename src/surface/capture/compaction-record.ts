@@ -132,8 +132,9 @@ export async function saveCompaction(
     baseHalfLifeDays: defaultHalfLifeDays,
   });
   writeNotes(log, notes);
-  if (spoolReason !== null)
+  if (spoolReason !== null) {
     spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
+  }
   return result;
 }
 
@@ -141,8 +142,9 @@ export async function saveCompaction(
 export function postCompactLine(result: CompactionSaveResult): string | null {
   if (result.deferred) return 'Hippo will finish saving this compaction at the next sleep.';
   if (result.written === null) return null;
-  if (result.written === 0)
+  if (result.written === 0) {
     return "Hippo kept this compaction's summary; it listed no new memories.";
+  }
   const noun = result.written === 1 ? 'memory' : 'memories';
   const restored = result.snapshotSaved ? ' and restored your task snapshot' : '';
   return `Hippo saved ${result.written} ${noun} from this compaction${restored}.`;

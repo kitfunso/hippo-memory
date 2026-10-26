@@ -37,8 +37,9 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
   assertCallerProject(req.project);
   if (req.texts.length > MAX_TEXTS) throw new BadRequestError(`texts: at most ${MAX_TEXTS}`);
   const sizes = req.texts.map((t) => Buffer.byteLength(t, 'utf8'));
-  if (sizes.some((n) => n > MAX_TEXT_BYTES))
+  if (sizes.some((n) => n > MAX_TEXT_BYTES)) {
     throw new BadRequestError(`each text: at most ${MAX_TEXT_BYTES} bytes`);
+  }
   if (sizes.reduce((a, b) => a + b, 0) > MAX_TOTAL_BYTES) {
     throw new BadRequestError(`texts: at most ${MAX_TOTAL_BYTES} bytes in all`);
   }
@@ -49,7 +50,6 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
  * text a row the caller can see already holds. The write reads those rows again in its own
  * transaction, so no other write lands between the dedup and the write. No console output and no
  * process.exit.
- *
  */
 export async function captureSessionTexts(
   given: CaptureContext,

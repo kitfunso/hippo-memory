@@ -114,15 +114,21 @@ async function learnBeforeSleep(
   } else if (learn) {
     const config = cliConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(processGit, process.cwd())) {
-      const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
+      const { added } = await learnFromRepo({
+        hippoRoot,
+        tenantId,
+        repoPath: process.cwd(),
+        days: 1,
+      });
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
       for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, false)) {
-        if (result.marked > 0)
+        if (result.marked > 0) {
           console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
+        }
         if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       }
     }

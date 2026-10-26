@@ -1,7 +1,6 @@
 /**
  * Physics engine configuration for Hippo memory-as-physics. All constants are tunable; defaults
  * calibrated for ~500 memory corpus.
- *
  */
 
 export interface PhysicsConfig {

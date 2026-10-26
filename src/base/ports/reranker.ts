@@ -7,7 +7,6 @@ import type { ClefSettings } from '../config/config.js';
  * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so
  * it sees the full diverse pool. MUST be deterministic for a given (query, results) unless
  * documented stochastic (LLM track, hosted jev): paired A/B and the validity gate need it.
- *
  */
 export type RerankerFn = (
   query: string,

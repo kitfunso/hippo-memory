@@ -17,7 +17,6 @@ export function clock(): number {
 /**
  * Waits until GAP_MS have passed since the last commit; always yields once, so timers and requests
  * run between chunks.
- *
  */
 export async function pauseForWaiters(lastCommitAt: number): Promise<void> {
   await delay(Math.max(0, GAP_MS - (clock() - lastCommitAt)));
@@ -26,7 +25,6 @@ export async function pauseForWaiters(lastCommitAt: number): Promise<void> {
 /**
  * The hold, clock and pause a chunked write runs on; a test passes its own to force chunk
  * boundaries without real waits.
- *
  */
 export interface WriteBudget {
   readonly holdMs: number;

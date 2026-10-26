@@ -1,7 +1,6 @@
 /**
  * Salience gate: decides at memory creation whether content is stored at full strength, starts
  * weakened, or is skipped.
- *
  */
 
 import type { MemoryEntry } from './entry.js';
@@ -68,23 +67,7 @@ export function computeSalience(
 
   const duplicateMatch = findBestOverlap(trimmed, window);
   if (duplicateMatch.overlap > opts.overlapThreshold) {
-    if (isError) {
-      const recentErrors = countRecentErrors(window);
-      if (recentErrors >= opts.maxRepeatErrors) {
-        return {
-          decision: 'start_weak',
-          reason:
-            `repeat_error (${recentErrors} recent errors, overlap ` +
-            `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
-          score: REPEAT_ERROR_SCORE,
-        };
-      }
-      return {
-        decision: 'store',
-        reason: 'error_despite_overlap',
-        score: ERROR_DESPITE_OVERLAP_SCORE,
-      };
-    }
+    if (isError) return judgeOverlappingError(window, duplicateMatch, opts.maxRepeatErrors);
     return judgeOverlappingNonError(trimmed, window, duplicateMatch);
   }
 
@@ -93,6 +76,28 @@ export function computeSalience(
   }
 
   return scoreNovel(trimmed, tags);
+}
+
+function judgeOverlappingError(
+  window: MemoryEntry[],
+  duplicateMatch: ReturnType<typeof findBestOverlap>,
+  maxRepeatErrors: number,
+): SalienceResult {
+  const recentErrors = countRecentErrors(window);
+  if (recentErrors >= maxRepeatErrors) {
+    return {
+      decision: 'start_weak',
+      reason:
+        `repeat_error (${recentErrors} recent errors, overlap ` +
+        `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
+      score: REPEAT_ERROR_SCORE,
+    };
+  }
+  return {
+    decision: 'store',
+    reason: 'error_despite_overlap',
+    score: ERROR_DESPITE_OVERLAP_SCORE,
+  };
 }
 
 function judgeOverlappingNonError(

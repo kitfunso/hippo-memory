@@ -15,7 +15,6 @@ export type ContainerMachine = Pick<Machine, 'platform' | 'files'>;
 /**
  * `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects
  * sharing a folder in the global store.
- *
  */
 export function containerId(
   dir: string,
@@ -34,7 +33,10 @@ export function containerPrefix(tool: ToolId, container: string): string {
   return `${toolSourcePrefix(tool)}${container}/`;
 }
 
-export function itemSource(prefix: string, key: string, text: string): string {
+export function itemSource(
+  prefix: string,
+  { key, text }: { readonly key: string; readonly text: string },
+): string {
   return `${prefix}${key}#${itemHash(text)}`;
 }
 
@@ -52,7 +54,6 @@ export function splitSource(
 /**
  * The text as stored: emails masked as on every capture path, then the old Claude import's cap; the
  * hash still sees the raw note.
- *
  */
 export function storedText(text: string): string {
   const masked = maskEmails(text);

@@ -118,8 +118,9 @@ function rememberScope(ctx: Context, opts: RememberOptions): string | null {
     }
     return scope;
   }
-  if (opts.untrusted)
+  if (opts.untrusted) {
     throw new Error('personal memories come from their owner, never from a connector');
+  }
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
@@ -288,8 +289,9 @@ export async function remember(
 ): Promise<RememberResult | RememberSkipped> {
   const verdict =
     'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
-  if (verdict?.decision === 'skip')
+  if (verdict?.decision === 'skip') {
     return { skipped: { reason: verdict.reason, score: verdict.score } };
+  }
   const startedWeak =
     verdict?.decision === 'start_weak'
       ? { reason: verdict.reason, strength: verdict.score }

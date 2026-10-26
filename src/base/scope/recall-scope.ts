@@ -3,7 +3,6 @@
  * rule to searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports
  * these and re-exports them for back-compat (`api.isPrivateScope`, tests importing
  * `passesScopeFilterForRecall`).
- *
  */
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
@@ -13,7 +12,6 @@ import { MAX_ID_LEN } from '../util/limits.js';
  * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by
  * the SQL clause in `listSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty,
  * or quarantine scopes would pass both paths silently (the module-load assertion below pins this).
- *
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
@@ -32,7 +30,6 @@ assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
  * Source-agnostic private-scope detector: private means `<lowercase-source>:private:<rest>`
  * (`slack:private:Cabc`; not `slack:public:x`, null, '', 'private:foo'). The single source of truth
  * for api.recall, the MCP server, the CLI and search-both.ts, so connector work cannot drift.
- *
  */
 export const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
 
@@ -114,7 +111,6 @@ export function ownScopeTouches(ownScope: string | null, scope: string | null): 
 /** JS half of the recall default-deny rule (SQL half: `listSearchRows`). A non-empty `requested`
  * needs an exact match; otherwise `<source>:private:*` and `RECALL_DEFAULT_DENY_SCOPES` buckets are
  * denied, while null, public scopes and the caller's `ownScope` pass.
- *
  */
 export function passesScopeFilterForRecall(
   scope: string | null,
@@ -131,7 +127,6 @@ export function passesScopeFilterForRecall(
  * CLI `--scope` variant: an explicit `--scope X` UNLOCKS scope X on top of the default-admitted set
  * rather than narrowing to X (api.recall keeps 'exact'). Includes private/quarantine scopes (owner
  * access); a named personal scope never unlocks: the CLI has no caller identity.
- *
  */
 export function passesCliRecallScopeFilter(
   scope: string | null,

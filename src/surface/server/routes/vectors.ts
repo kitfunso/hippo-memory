@@ -46,8 +46,9 @@ function idText(raw: JsonValue | undefined, field: string): string {
 function specOf(raw: JsonValue | undefined): VectorCandidateSpec {
   if (raw === undefined || !isJsonObject(raw)) throw new HttpError(400, 'spec must be an object');
   const { tenantId, includeSuperseded, limit, scope, origin } = raw;
-  if (!isJsonBoolean(includeSuperseded))
+  if (!isJsonBoolean(includeSuperseded)) {
     throw new HttpError(400, 'spec.includeSuperseded must be a boolean');
+  }
   if (
     limit !== undefined &&
     !(Number.isInteger(limit) && Number(limit) >= 1 && Number(limit) <= MAX_LIST_LIMIT)
@@ -72,8 +73,9 @@ function scopeOf(raw: JsonValue): RecallScopeFilter {
   if (raw['mode'] === 'default-deny') return { mode: 'default-deny', ...own };
   const value = idText(raw['value'], 'spec.scope.value');
   if (raw['mode'] === 'exact') return { mode: 'exact', value };
-  if (raw['mode'] === 'default-deny-or-exact')
+  if (raw['mode'] === 'default-deny-or-exact') {
     return { mode: 'default-deny-or-exact', value, ...own };
+  }
   throw new HttpError(400, 'spec.scope.mode must be default-deny, exact or default-deny-or-exact');
 }
 

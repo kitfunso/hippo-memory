@@ -81,8 +81,9 @@ export function planContainer(input: PlanInput): ContainerPlan {
     duplicates: 0,
     refused: 0,
   };
-  for (const item of input.items)
+  for (const item of input.items) {
     planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
+  }
 
   const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
   const gone = new Map<string, string[]>();

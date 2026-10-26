@@ -23,7 +23,6 @@ function isCorePath(method: string, path: string): boolean {
 /**
  * Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on
  * shadows a core route or hides from dispatch.
- *
  */
 export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
@@ -40,8 +39,9 @@ export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
       );
     }
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
-    if (isCorePath('POST', path))
+    if (isCorePath('POST', path)) {
       throw new Error(`add-on route '${path}' is already served by core`);
+    }
     seen.add(path);
   }
 }
@@ -60,12 +60,14 @@ export function assertPublicJson(
         `public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`,
       );
     }
-    if (isCorePath('GET', path))
+    if (isCorePath('GET', path)) {
       throw new Error(`public JSON path '${path}' is already served by core`);
+    }
     const text = JSON.stringify(value);
     if (text === undefined) throw new Error(`public JSON at '${path}' is not JSON`);
-    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES)
+    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES) {
       throw new Error(`public JSON at '${path}' is over 64 KiB`);
+    }
     bodies.set(path, text);
   }
   return bodies;

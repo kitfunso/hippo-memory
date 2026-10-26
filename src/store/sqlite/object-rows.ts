@@ -209,7 +209,6 @@ interface RowSpec<K extends ObjectKind> {
   /**
    * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the
    * object's graph rows.
-   *
    */
   readonly graphType?: SourceObjectType;
 }

@@ -303,8 +303,7 @@ const MEMORY_COLUMN_NAMES = [
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
 export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 
-/** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
-function storedColumnsOf(row: MemoryRow): StoredColumns {
+function retrievalColumnsOf(row: MemoryRow) {
   const site = (column: string): StoredJsonSite => ({ table: 'memories', id: row.id, column });
   // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes
   // from MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS, and the DB layer writes these columns only
@@ -331,12 +330,18 @@ function storedColumnsOf(row: MemoryRow): StoredColumns {
     parents: parseJsonArray(row.parents_json, site('parents_json')),
     starred: row.starred,
     traceOutcome: row.trace_outcome as MemoryEntry['traceOutcome'],
+  } satisfies Partial<StoredColumns>;
+}
+
+function placementColumnsOf(row: MemoryRow) {
+  return {
     sourceSessionId: row.source_session_id,
     validFrom: row.valid_from,
     supersededBy: row.superseded_by,
     extractedFrom: row.extracted_from,
     dagLevel: row.dag_level,
     dagParentId: row.dag_parent_id,
+    // SAFETY: the DB layer writes `kind` only from MemoryKind.
     kind: row.kind as MemoryKind | null,
     scope: row.scope,
     owner: row.owner,
@@ -350,7 +355,12 @@ function storedColumnsOf(row: MemoryRow): StoredColumns {
     lastRebuiltAt: row.last_rebuilt_at,
     rebuildCount: row.rebuild_count,
     dagLevel3BuiltAt: row.dag_level_3_built_at,
-  };
+  } satisfies Partial<StoredColumns>;
+}
+
+/** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
+function storedColumnsOf(row: MemoryRow): StoredColumns {
+  return { ...retrievalColumnsOf(row), ...placementColumnsOf(row) };
 }
 
 export function rowToEntry(row: MemoryRow): MemoryEntry {

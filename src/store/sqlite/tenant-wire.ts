@@ -21,8 +21,9 @@ export function markAllTenants(args: readonly unknown[]): MarkedArgs {
       allTenants.push([i, null]);
       return null;
     }
-    if (arg === null || arg === undefined || Object.getPrototypeOf(arg) !== Object.prototype)
+    if (arg === null || arg === undefined || Object.getPrototypeOf(arg) !== Object.prototype) {
       return arg;
+    }
     const keys = Object.entries(arg).flatMap(([key, value]) =>
       value === ALL_TENANTS ? [key] : [],
     );

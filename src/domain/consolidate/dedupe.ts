@@ -3,7 +3,6 @@
  * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
  * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
  * candidates.
- *
  */
 
 import { textOverlap } from '../../base/util/tokenize.js';
@@ -36,7 +35,6 @@ export interface DedupResult {
 /**
  * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of
  * an abs-diff threshold, so the tiebreak is transitive.
- *
  */
 const STRENGTH_TIE_EPSILON = 0.01;
 

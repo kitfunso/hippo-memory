@@ -34,8 +34,9 @@ export async function rememberWithEventLog(
     const result = await remember(ctx, { ...opts, untrusted: true, event });
     // Another worker logged this key between the pre-check and the write: its memory stands and
     // ours was not stored.
-    if (result.duplicate)
+    if (result.duplicate) {
       return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
+    }
     return { status: 'ingested', memoryId: result.id };
   } catch (e) {
     // A tombstone refusal is permanent, so a DLQ retry would hit it forever.

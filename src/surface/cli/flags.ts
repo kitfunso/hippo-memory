@@ -41,8 +41,9 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
 const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   const shared = new Map<string, FlagKind>();
   for (const kinds of DECLARED.values()) {
-    for (const [name, kind] of kinds)
+    for (const [name, kind] of kinds) {
       shared.set(name, (shared.get(name) ?? kind) === kind ? kind : 'value');
+    }
   }
   return shared;
 })();

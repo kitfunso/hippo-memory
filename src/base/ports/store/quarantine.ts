@@ -35,7 +35,6 @@ export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineR
 /**
  * The review queue behind the quarantine routes. A refusal is a resolved value, never a rejection,
  * and writes nothing.
- *
  */
 export interface Quarantine {
   /** At most `limit` of the tenant's records, newest first (quarantinedAt as text in byte order,

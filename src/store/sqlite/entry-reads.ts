@@ -57,7 +57,6 @@ export function readEntry(
 /**
  * Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is
  * absent from the map.
- *
  */
 export function readEntriesByIds(
   db: DatabaseSyncLike,
@@ -605,8 +604,9 @@ export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
       if (keys.length < DUPLICATE_KEYS_PAGE) break;
       after = keys[keys.length - 1]!.k;
     }
-    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE))
+    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE)) {
       rows.push(...rowsWithHashes(db, hashes));
+    }
     // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII
     // stamps and ids.
     rows.sort(byCreatedThenId);

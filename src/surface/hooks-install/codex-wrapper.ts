@@ -106,7 +106,11 @@ function isCodexWrapperMetadataValid(
 function writeCodexLauncherWrapper(commandPath: string): void {
   writeExecutableFile(
     commandPath,
-    codexLauncherWrapperText(commandPath, process.execPath, resolveHippoCliPath()),
+    codexLauncherWrapperText({
+      commandPath,
+      nodePath: process.execPath,
+      hippoCliPath: resolveHippoCliPath(),
+    }),
   );
 }
 
@@ -178,14 +182,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   }
 
   const paths = resolveCodexWrapperPaths();
-  // These live under ~/.hippo, which this may be the first write to make.
-  for (const dir of [
-    path.dirname(paths.metadataPath),
-    path.dirname(paths.logFile),
-    paths.runsDir,
-  ]) {
-    fs.mkdirSync(dir, PRIVATE_DIR);
-  }
+  makeWrapperDirs(paths);
   cleanupLegacyCodexPathWrappers(paths);
 
   const plan = resolveCodexInstallPlan(resolvedRealCodexPath);
@@ -195,15 +192,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     uninstallCodexWrapper();
   }
 
-  // A launcher that is not our wrapper is the current codex, so it replaces any older backup a
-  // Codex update left.
-  if (!isHippoCodexWrapperFile(resolvedRealCodexPath)) {
-    fs.renameSync(resolvedRealCodexPath, plan.backupPath);
-  } else if (!fs.existsSync(plan.backupPath)) {
-    throw new Error(
-      `${resolvedRealCodexPath} is hippo's wrapper and the Codex it wrapped is gone; reinstall Codex.`,
-    );
-  }
+  backUpRealLauncher(resolvedRealCodexPath, plan.backupPath);
   writeCodexLauncherWrapper(plan.commandPath);
 
   const metadata: CodexWrapperMetadata = {
@@ -219,6 +208,29 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   writeFileAtomic(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n');
 
   return installResult(paths.metadataPath, metadata);
+}
+
+function makeWrapperDirs(paths: CodexWrapperPaths): void {
+  // These live under ~/.hippo, which this may be the first write to make.
+  for (const dir of [
+    path.dirname(paths.metadataPath),
+    path.dirname(paths.logFile),
+    paths.runsDir,
+  ]) {
+    fs.mkdirSync(dir, PRIVATE_DIR);
+  }
+}
+
+function backUpRealLauncher(realCodexPath: string, backupPath: string): void {
+  // A launcher that is not our wrapper is the current codex, so it replaces any older backup a
+  // Codex update left.
+  if (!isHippoCodexWrapperFile(realCodexPath)) {
+    fs.renameSync(realCodexPath, backupPath);
+  } else if (!fs.existsSync(backupPath)) {
+    throw new Error(
+      `${realCodexPath} is hippo's wrapper and the Codex it wrapped is gone; reinstall Codex.`,
+    );
+  }
 }
 
 /** Moves files only along the install plan of the recorded launcher, and never puts the backup

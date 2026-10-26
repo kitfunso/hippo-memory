@@ -101,7 +101,6 @@ export interface IntRange {
  * A whole-number flag within `range`: {} when absent, else the number or the refusal to raise. A
  * value-less flag is refused apart from a junk one, because Number(true) is 1 and would quietly run
  * a 1-hop expansion.
- *
  */
 export function intFlagInRange(
   flags: CliFlags,

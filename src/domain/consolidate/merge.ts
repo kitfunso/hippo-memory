@@ -33,8 +33,9 @@ export async function retireHeldTexts(run: SleepRun): Promise<void> {
   // page past.
   const held: Array<readonly [number, string]> = [];
   for await (const [index, row] of survivors.indexed()) {
-    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row))
+    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row)) {
       held.push([index, row.id]);
+    }
   }
   // From the last place back, so dropping a survivor never moves one still to come.
   for (let end = held.length; end > 0; end -= run.rows.pageRows) {
@@ -179,8 +180,9 @@ export async function mergePass(run: SleepRun): Promise<number> {
       const cluster: number[] = [];
       let clusterChars = 0;
       for (const k of related) {
-        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + lengths[k] > MERGE_MAX_CHARS)
+        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + lengths[k] > MERGE_MAX_CHARS) {
           continue;
+        }
         cluster.push(k);
         clusterChars += lengths[k];
       }
@@ -189,8 +191,9 @@ export async function mergePass(run: SleepRun): Promise<number> {
       const relatedRows = await run.survivors.get(related.map((k) => ids[k]));
       const clusterIds = new Set(cluster.map((k) => ids[k]));
       const clusterRows = relatedRows.filter((e) => clusterIds.has(e.id));
-      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used)))
+      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used))) {
         mergesSkippedRejected++;
+      }
     }
   }
   return mergesSkippedRejected;
@@ -339,8 +342,9 @@ function legacyMergeContents(entries: MemoryEntry[]): string {
   const sorted = [...entries].sort(
     (a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b),
   );
-  if (entries.length === 2)
+  if (entries.length === 2) {
     return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
+  }
   const bullets = sorted
     .map((e) => `- ${e.content.split('\n')[0].slice(0, LEGACY_BULLET_CHARS)}`)
     .join('\n');

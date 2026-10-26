@@ -74,8 +74,13 @@ type HalfLifeFields = Pick<
 /** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each
  * recall added 2 days. */
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
-  if (entry.supersededBy || entry.tags.includes('invalidated') || entry.tags.includes('superseded'))
+  if (
+    entry.supersededBy ||
+    entry.tags.includes('invalidated') ||
+    entry.tags.includes('superseded')
+  ) {
     return null;
+  }
   const bonus = entry.halfLifeDays - written;
   const k = Math.round(bonus / 2);
   return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrievalCount ? bonus : null;

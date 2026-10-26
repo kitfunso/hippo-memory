@@ -95,8 +95,14 @@ function cardRunFlag(flags: CliFlags): number | undefined {
   return n;
 }
 
+interface CardRefusalOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly id: string;
+}
+
 // Reads after the store already refused, so this only explains the refusal, never changes it.
-async function cardRefusal(hippoRoot: string, tenantId: string, id: string): Promise<string> {
+async function cardRefusal({ hippoRoot, tenantId, id }: CardRefusalOptions): Promise<string> {
   const detail = await cliStore(hippoRoot).cards.detail(tenantId, id);
   const liveRun = detail?.runs.find((r) => !r.ended);
   return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
@@ -304,7 +310,7 @@ async function cardHeartbeat(
     fail(errorMessage(error));
   }
   if (!card) {
-    fail(`Could not heartbeat card ${id} (${await cardRefusal(hippoRoot, tenantId, id)}).`);
+    fail(`Could not heartbeat card ${id} (${await cardRefusal({ hippoRoot, tenantId, id })}).`);
   }
   console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
 }
@@ -328,7 +334,8 @@ async function cardBlock(
     fail(errorMessage(error));
   }
   if (!card) {
-    const why = runId === undefined ? 'not running' : await cardRefusal(hippoRoot, tenantId, id);
+    const why =
+      runId === undefined ? 'not running' : await cardRefusal({ hippoRoot, tenantId, id });
     fail(`Could not block card ${id} (${why}).`);
   }
   console.log(`Blocked card ${card.id}`);
@@ -352,7 +359,8 @@ async function cardReview(
     fail(errorMessage(error));
   }
   if (!card) {
-    const why = runId === undefined ? 'not running' : await cardRefusal(hippoRoot, tenantId, id);
+    const why =
+      runId === undefined ? 'not running' : await cardRefusal({ hippoRoot, tenantId, id });
     fail(`Could not move card ${id} to review (${why}).`);
   }
   console.log(`Card ${card.id} moved to review`);
@@ -377,7 +385,8 @@ async function cardComplete(
     fail(errorMessage(error));
   }
   if (!result) {
-    const why = runId === undefined ? 'not in review' : await cardRefusal(hippoRoot, tenantId, id);
+    const why =
+      runId === undefined ? 'not in review' : await cardRefusal({ hippoRoot, tenantId, id });
     fail(`Could not complete card ${id} (${why}).`);
   }
   console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);

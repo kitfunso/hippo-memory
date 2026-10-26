@@ -357,8 +357,9 @@ export function writeSessionEndHandoff(
     sessionOutcome(db, tenantId, sessionId),
   );
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (source.fromTranscript && inPlace && existing)
+  if (source.fromTranscript && inPlace && existing) {
     return replaceTranscriptHandoff(db, tenantId, handoff, key);
+  }
   return saveSessionHandoff(db, tenantId, handoff, key);
 }
 

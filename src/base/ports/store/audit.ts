@@ -72,7 +72,6 @@ export interface AuditPrune {
 /**
  * One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot
  * be changed safely.
- *
  */
 export interface QualityRepairResult {
   readonly root: string;

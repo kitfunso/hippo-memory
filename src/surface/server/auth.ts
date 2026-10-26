@@ -41,7 +41,6 @@ function proxyHeaderOf(req: IncomingMessage): string | undefined {
 /**
  * A page in a browser on this machine: another site's request, or a hostile name resolved to
  * loopback (DNS rebinding).
- *
  */
 export function isForeignPage(req: IncomingMessage): boolean {
   const host = req.headers.host;
@@ -262,6 +261,14 @@ async function resolveBearer(
     // A resolver vouches for a person, never names one.
     return { ...clean, viaAuthResolver: true, owner: clean.subject };
   }
+  return resolveApiKey(req, token, opts);
+}
+
+async function resolveApiKey(
+  req: IncomingMessage,
+  token: string,
+  opts: AuthOptions,
+): Promise<BearerIdentity> {
   const address = clientLimitKey(req);
   const key = await verifyApiKeyCached(
     token,
@@ -315,7 +322,15 @@ const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
 const CALLER_WARN_EVERY_MS = MINUTE_MS;
 const callerWarnedAt = new Map<string, number>();
 
-function warnCallerLimited(key: string, tenantId: string, person: string): void {
+function warnCallerLimited({
+  key,
+  tenantId,
+  person,
+}: {
+  key: string;
+  tenantId: string;
+  person: string;
+}): void {
   const now = Date.now();
   const last = callerWarnedAt.get(key);
   if (last !== undefined && now - last < CALLER_WARN_EVERY_MS) return;
@@ -337,7 +352,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
   const person = ownerOrSubject(actor);
   const key = `${tenantId}\u0000${person}`;
   if (limiter.check(key)) return;
-  warnCallerLimited(key, tenantId, person);
+  warnCallerLimited({ key, tenantId, person });
   throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
 }
 
@@ -404,8 +419,9 @@ export async function heartbeatVerdict(
     await checkAuth(req, opts);
     return 'ok';
   } catch (err) {
-    if (!(err instanceof HttpError))
+    if (!(err instanceof HttpError)) {
       log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
+    }
     return err instanceof HttpError && err.status < 500 && err.status !== 429
       ? 'revoked'
       : 'unavailable';

@@ -155,7 +155,8 @@ function deleteTargetRow(
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this
   // fails.
   if (row.dag_parent_id) {
-    markSummaryDirtyInTx(db, row.dag_parent_id, tenantId, opts?.actor ?? CLI_ACTOR);
+    const actor = opts?.actor ?? CLI_ACTOR;
+    markSummaryDirtyInTx(db, { summaryId: row.dag_parent_id, tenantId, actor });
   }
   return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
@@ -185,7 +186,7 @@ export function deleteEntriesInBatches(
     });
     for (const id of deleted) {
       gone.add(id);
-      purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
+      purgeMirrorBestEffort(hippoRoot, { id, isRaw: false, logPrefix: 'deleteEntry' });
     }
   }
   return targets.map((target) => gone.delete(target.id));
@@ -209,12 +210,20 @@ function readDeleteTargets(
 // The child fields a level-2/3 summary is built from (listChildrenOfSummary, generateDagSummary).
 const SUMMARY_INPUTS = ['content', 'created', 'dagParentId', 'kind'] as const;
 
-function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry): MemoryEntry {
+/** The row as loaded, as this write wants it, and as it stands now. */
+interface MergeOwnChangesOptions {
+  readonly base: MemoryEntry;
+  readonly ours: MemoryEntry;
+  readonly live: MemoryEntry;
+}
+
+function mergeOwnChanges({ base, ours, live }: MergeOwnChangesOptions): MemoryEntry {
   const row: MemoryEntry = { ...live };
   const loaded = new Map(Object.entries(base));
   for (const [key, value] of Object.entries(ours)) {
-    if (JSON.stringify(value) !== JSON.stringify(loaded.get(key)))
+    if (JSON.stringify(value) !== JSON.stringify(loaded.get(key))) {
       Object.assign(row, { [key]: value });
+    }
   }
   return row;
 }
@@ -256,7 +265,6 @@ function noteFailedComponent(err: Error, component: FlushComponent | undefined):
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole,
  * closing the transaction at the first component boundary after `holdMs`. Returns the next
  * component's index and the ids that left `memories`.
- *
  */
 function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
@@ -288,12 +296,11 @@ function batchWriteAndDeleteOn(
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the dirty flag commits
     // atomically with the writes and deletes.
     for (const parentId of out.dirty.parents) {
-      markSummaryDirtyInTx(
-        db,
-        parentId,
-        out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID,
-        'batch',
-      );
+      markSummaryDirtyInTx(db, {
+        summaryId: parentId,
+        tenantId: out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID,
+        actor: 'batch',
+      });
     }
   });
   reportChunk(files.hippoRoot, out);
@@ -368,8 +375,9 @@ function applyComponent(
   const deletableIds: string[] = [];
   if (component.deletes.length > 0) {
     // A row pinned after the caller decided to delete it survives.
-    for (const row of readAutoDeletableRows(db, component.deletes, out.dirty))
+    for (const row of readAutoDeletableRows(db, component.deletes, out.dirty)) {
       deletableIds.push(row.id);
+    }
   }
   applyPlannedWrites(db, writes, refused, out);
   moveDormantAndDelete(db, component.dormant, deletableIds, out);
@@ -401,8 +409,9 @@ function reportChunk(hippoRoot: string, out: ChunkLog): void {
   // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the
   // DB.
   writeMarkdownMirrors(hippoRoot, out.written);
-  for (const id of out.removedIds)
-    purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
+  for (const id of out.removedIds) {
+    purgeMirrorBestEffort(hippoRoot, { id, isRaw: false, logPrefix: 'batchWriteAndDelete' });
+  }
 }
 
 /** Moves eligible dormant rows out, then deletes them with the doomed rows, recording every
@@ -417,8 +426,9 @@ function moveDormantAndDelete(
   const movable: DormantMove[] = [];
   if (dormantMoves.length > 0) {
     const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-    for (const row of readAutoDeletableRows(db, [...byId.keys()], out.dirty))
+    for (const row of readAutoDeletableRows(db, [...byId.keys()], out.dirty)) {
       movable.push(byId.get(row.id)!);
+    }
   }
   for (const move of movable) {
     insertDormantRow(db, move);
@@ -468,7 +478,7 @@ function batchRow(
   live: MemoryEntry | undefined,
 ): MemoryEntry | undefined {
   if (!('content' in op)) return live && { ...live, strength: op.strength };
-  return base && live ? mergeOwnChanges(base, op, live) : op;
+  return base && live ? mergeOwnChanges({ base, ours: op, live }) : op;
 }
 
 /** The writes of components [from, until), planned on their live rows and tombstones read
@@ -582,15 +592,17 @@ function refusedWrites(
     const tombstones = rejectedValues(db, tenantId, digests);
     writes.forEach((write, i) => {
       const tombstone = tombstones.get(digests[i]!);
-      if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!))
+      if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!)) {
         refused.set(write.row.id, tombstone);
+      }
     });
   }
   return refused;
 }
 
 function auditRefusal(db: DatabaseSyncLike, row: MemoryEntry, tombstone: RejectedValueRow): void {
-  const refused = refusalAudit(tombstone.tenantId, 'sleep-batch', row.id, tombstone);
+  const target = { tenantId: tombstone.tenantId, actor: 'sleep-batch', targetId: row.id };
+  const refused = refusalAudit(target, tombstone);
   audit(db, refused.op, refused);
 }
 

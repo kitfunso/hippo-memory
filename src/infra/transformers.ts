@@ -30,7 +30,6 @@ export interface ModelLoadPolicy {
   /**
    * How long one load may run before it counts as failed; nothing can cancel it, so it keeps
    * running and a late model is still kept.
-   *
    */
   readonly timeoutMs: number;
   /** How long a failure is answered from memory before the next call loads again. */
@@ -49,7 +48,6 @@ export interface ModelLoads<T> {
   /**
    * The model under `key`: the loaded one, the load in flight, the failure inside its backoff
    * window, or a new `start()`.
-   *
    */
   load(key: string, start: () => Promise<T>): Promise<T>;
 }
@@ -87,7 +85,6 @@ function loadWithTimeout<T>(
 /**
  * One load per key at a time, bounded by the policy's timeout; `onFailure` hears each failed
  * attempt, so once per backoff window.
- *
  */
 export function createModelLoads<T>(
   policy: ModelLoadPolicy,

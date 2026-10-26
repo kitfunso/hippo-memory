@@ -20,7 +20,6 @@ export interface TraceRecord {
 /**
  * Render a trace record as agent-readable markdown: `Task:`, `Outcome:`, then numbered `Steps:`
  * with each observation on an arrow line (omitted if empty).
- *
  */
 export function renderTraceContent(rec: TraceRecord): string {
   const lines: string[] = [];

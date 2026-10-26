@@ -99,15 +99,7 @@ async function handleRequest(
 
   const routeRequest: RouteRequest = { req, res, opts, query };
   const request = { method, path };
-  const { health, ready, mcpStream } = HOST_ROUTES;
-  if (
-    await dispatchHostRoute(routeRequest, request, health, async () =>
-      sendHealth(req, res, options),
-    )
-  )
-    return;
-  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store)))
-    return;
+  if (await dispatchProbeRoute(routeRequest, request, options)) return;
 
   enforceRateLimit(req, path, limiter);
 
@@ -117,7 +109,7 @@ async function handleRequest(
   // the key check and every heartbeat wait that long. Store-ready: the stream only authenticates,
   // through the port.
   if (
-    await dispatchHostRoute(routeRequest, request, mcpStream, () =>
+    await dispatchHostRoute(routeRequest, request, HOST_ROUTES.mcpStream, () =>
       handleMcpStream(req, res, opts, streamSlots),
     )
   ) {
@@ -126,6 +118,19 @@ async function handleRequest(
 
   res.writeHead(404, JSON_HEADERS);
   res.end(JSON.stringify({ error: 'not found' }));
+}
+
+/** GET /health then /ready; false when the request is neither. */
+async function dispatchProbeRoute(
+  r: RouteRequest,
+  request: { method: string; path: string },
+  options: HandleRequestOptions,
+): Promise<boolean> {
+  const { health, ready } = HOST_ROUTES;
+  if (await dispatchHostRoute(r, request, health, async () => sendHealth(r.req, r.res, options))) {
+    return true;
+  }
+  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, r.opts.store));
 }
 
 /** Every route that runs inside a request scope, so it opens each store once: the /v1 table with
@@ -287,10 +292,7 @@ interface BootPlan {
 
 /** Everything after the pidfile claim; a throw here releases the claim in serve(). */
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
-  const { host, requestedPort, limiters, startedAt } = plan;
-
-  // Open /mcp/stream count per client key, so the cap is per server rather than per process.
-  const streamSlots = new Map<string, number>();
+  const { host, requestedPort, startedAt } = plan;
 
   const runtime = defaultServerRuntime(opts.hippoRoot, {
     store: opts.store,
@@ -301,14 +303,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
   const served = servedOptsFor(opts, plan, runtime);
 
   const inflight = new Set<ServerResponse>();
-  const { workerCounts } = runtime;
-  const options = {
-    startedAt,
-    streamSlots,
-    limiter: limiters.perAddress,
-    counts: served.counts,
-    workerCounts,
-  };
+  const options = requestOptionsFor(plan, served, runtime);
   const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);
@@ -330,10 +325,26 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     await runtime.close();
   };
 
-  if (opts.handleSignals)
+  if (opts.handleSignals) {
     exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
+  }
 
   return { port: actualPort, url, stop, server };
+}
+
+function requestOptionsFor(
+  { startedAt, limiters }: BootPlan,
+  served: ResolvedServeOptions,
+  { workerCounts }: ServerRuntime,
+): HandleRequestOptions {
+  return {
+    startedAt,
+    // Open /mcp/stream count per client key, so the cap is per server rather than per process.
+    streamSlots: new Map<string, number>(),
+    limiter: limiters.perAddress,
+    counts: served.counts,
+    workerCounts,
+  };
 }
 
 function frozenAddonRoutes(

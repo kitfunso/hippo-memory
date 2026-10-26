@@ -3,7 +3,6 @@
  * the nearest-vector read; every other command opens the store directly. Server errors rethrow with
  * the message verbatim so CLI substring matches still work; network errors propagate as the native
  * fetch failure.
- *
  */
 
 import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
@@ -21,14 +20,12 @@ const SERVER_TIMEOUT_MS = 30_000;
 /**
  * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the
  * server answered busy with 503.
- *
  */
 const STORE_BUSY_ATTEMPTS = 5;
 
 /**
  * The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the
  * auth-provider 503 has none.
- *
  */
 function isStoreBusy(res: Response): boolean {
   return res.status === 503 && res.headers.has('retry-after');
@@ -56,7 +53,6 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
 /**
  * An error the server answered with, not one the transport raised, so the transport classifier can
  * skip it by class.
- *
  */
 export class HttpResponseError extends Error {
   constructor(
@@ -102,7 +98,6 @@ export class MalformedReplyError extends Error {
 /**
  * A 2xx reply's body, read under the cap; it must be a JSON object, and `guard` narrows it further
  * where the shape is known.
- *
  */
 async function readReply<T>(
   res: Response,
@@ -179,11 +174,16 @@ export async function postPromote(
   );
 }
 
+/** Which raw row to archive and the reason the archive records. */
+export interface ArchiveRawOptions {
+  readonly id: string;
+  readonly reason: string;
+}
+
 export async function postArchiveRaw(
   serverUrl: string,
   apiKey: string | undefined,
-  id: string,
-  reason: string,
+  { id, reason }: ArchiveRawOptions,
 ): Promise<{ ok: true; archivedAt: string }> {
   const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/archive`, {
     method: 'POST',
@@ -233,7 +233,6 @@ export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 /**
  * The syscall code Node puts on a system error itself (`http` errors) or on the `cause` of a fetch
  * `TypeError`; '' when there is none.
- *
  */
 function transportCode(err: Error): string {
   if ('code' in err) return String(err.code);

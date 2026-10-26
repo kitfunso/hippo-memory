@@ -76,7 +76,6 @@ function splitMarkdown(content: string): string[] {
 /**
  * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the
  * chunk still open.
- *
  */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
@@ -167,21 +166,13 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    if (/^\d+\.\s+/.test(trimmed)) {
+    const ruleStart = cursorRuleStart(trimmed);
+    if (ruleStart !== null) {
       if (current.trim()) {
         chunks.push(current.trim());
         current = '';
       }
-      current = trimmed.replace(/^\d+\.\s+/, '').trim();
-      continue;
-    }
-
-    if (/^[-*]\s+/.test(trimmed)) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^[-*]\s+/, '').trim();
+      current = ruleStart;
       continue;
     }
 
@@ -195,6 +186,13 @@ function parseCursorFile(content: string): string[] {
     const parts = c.split(/\n{2,}/);
     return parts.map((p) => p.trim()).filter(Boolean);
   });
+}
+
+/** The rule text a numbered item or bullet opens, or null when the line opens no rule. */
+function cursorRuleStart(trimmed: string): string | null {
+  if (/^\d+\.\s+/.test(trimmed)) return trimmed.replace(/^\d+\.\s+/, '').trim();
+  if (/^[-*]\s+/.test(trimmed)) return trimmed.replace(/^[-*]\s+/, '').trim();
+  return null;
 }
 
 const CURSOR_RULE_FILE = /\.mdc?$/i;
@@ -216,7 +214,6 @@ export function importCursorInto(sourcePath: string, options: TargetedImport): I
 /**
  * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines
  * or one per line.
- *
  */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');

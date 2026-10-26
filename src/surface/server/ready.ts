@@ -10,7 +10,6 @@ export type ReadyProbe = () => Promise<boolean>;
 /**
  * True when the store answered; one read per window whatever the caller count, and a failed read is
  * remembered for the same window.
- *
  */
 function createReadyProbe(
   readiness: { ping(): Promise<void> },
@@ -32,8 +31,9 @@ function createReadyProbe(
   }
 
   return () => {
-    if (answer !== undefined && now() - answer.at < READY_WINDOW_MS)
+    if (answer !== undefined && now() - answer.at < READY_WINDOW_MS) {
       return Promise.resolve(answer.ok);
+    }
     inFlight ??= read().finally(() => {
       inFlight = undefined;
     });

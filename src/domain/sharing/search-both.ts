@@ -101,44 +101,70 @@ export async function searchBothHybrid(
   global: ConfiguredFolder<SharingStore>,
   options: BothStoresSearch,
 ): Promise<SearchResult[]> {
-  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope, embedderFor } = options;
+  const { embedderFor } = options;
+  const admit = scopeAdmission(options);
+  const loaded = await Promise.all([
+    loadStoreEntries(query, local.store, options),
+    loadStoreEntries(query, global.store, options),
+  ]);
+  const [localEntries, globalEntries] = loaded.map((entries) => entries.filter(admit));
+  const sources = {
+    local: folderVectorSource(local, embedderFor),
+    global: folderVectorSource(global, embedderFor),
+  };
+  return rankBothStores(
+    query,
+    sources,
+    { local: localEntries, global: globalEntries },
+    recallVectorCandidates(options, admit),
+    options,
+  );
+}
 
+// Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows
+// never enter the candidates, shadow duplicates or use budget. The JS post-filter in
+// scopeAdmission is the regex-only `<source>:private:*` half plus defense in depth on exact match.
+async function loadStoreEntries(
+  query: string,
+  store: SharingStore,
+  options: BothStoresSearch,
+): Promise<MemoryEntry[]> {
+  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
   // With an admission filter, lift the per-store candidate cap (DEFAULT_SEARCH_CANDIDATE_LIMIT) to
   // a bounded window: excluded rows could otherwise fill it first.
   const searchWindow = entryFilter ? FILTERED_SEARCH_WINDOW : undefined;
-  // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows
-  // never enter the candidates, shadow duplicates or use budget. The JS post-filter below is the
-  // regex-only `<source>:private:*` half plus defense in depth on exact match.
-  const loadEntries = async ({
-    store,
-  }: {
-    readonly store: SharingStore;
-  }): Promise<MemoryEntry[]> => {
-    const { sharing } = store;
-    if (!(await store.folderFiles.home()).exists) return [];
-    return recallScope
-      ? sharing.recallEntries(query, {
-          limit: searchWindow,
-          tenantId,
-          requestedScope: recallScope.requested,
-          explicitScopeMode: recallScope.additive ? 'additive' : 'exact',
-          includeSuperseded: Boolean(includeSuperseded) || Boolean(asOf),
-          ownScope: recallScope.ownScope,
-        })
-      : sharing.searchEntries(query, searchWindow, tenantId);
-  };
+  const { sharing } = store;
+  if (!(await store.folderFiles.home()).exists) return [];
+  return recallScope
+    ? sharing.recallEntries(query, {
+        limit: searchWindow,
+        tenantId,
+        requestedScope: recallScope.requested,
+        explicitScopeMode: recallScope.additive ? 'additive' : 'exact',
+        includeSuperseded: Boolean(includeSuperseded) || Boolean(asOf),
+        ownScope: recallScope.ownScope,
+      })
+    : sharing.searchEntries(query, searchWindow, tenantId);
+}
+
+function scopeAdmission(options: BothStoresSearch): (e: MemoryEntry) => boolean {
+  const { entryFilter, recallScope } = options;
   const passesScope = (e: MemoryEntry): boolean =>
     !recallScope ||
     (recallScope.additive
       ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) ||
         passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
       : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
-  const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
-  const loaded = await Promise.all([loadEntries(local), loadEntries(global)]);
-  const [localEntries, globalEntries] = loaded.map((entries) => entries.filter(admit));
+  return (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
+}
 
-  // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
-  const vectorCandidates: HybridVectorCandidates = {
+// The vector arm loads under the same SQL rules as loadStoreEntries, then the same JS admission.
+function recallVectorCandidates(
+  options: BothStoresSearch,
+  admit: (e: MemoryEntry) => boolean,
+): HybridVectorCandidates {
+  const { includeSuperseded, asOf, tenantId, recallScope } = options;
+  return {
     tenantId,
     scope: recallScope
       ? recallScopeFilter(
@@ -150,17 +176,6 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const sources = {
-    local: folderVectorSource(local, embedderFor),
-    global: folderVectorSource(global, embedderFor),
-  };
-  return rankBothStores(
-    query,
-    sources,
-    { local: localEntries, global: globalEntries },
-    vectorCandidates,
-    options,
-  );
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
@@ -221,24 +236,50 @@ export async function rankBothStores(
 ): Promise<SearchResult[]> {
   const {
     budget = DEFAULT_RECALL_BUDGET,
+    localBump = DEFAULT_LOCAL_BUMP,
+    minResults,
+    cost,
+  } = options;
+  if (entries.local.length === 0 && entries.global.length === 0) return [];
+  const shared = sharedRanking(options, vectorCandidates);
+  const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
+  const localResults = await hybridSearch(query, entries.local, {
+    ...side(false),
+    source: sources.local,
+  });
+  const globalResults = await hybridSearch(query, entries.global, {
+    ...side(true),
+    source: sources.global,
+  });
+  return fitBudget(
+    mergeStoreResults(localResults, globalResults, localBump),
+    budget,
+    minResults ?? 1,
+    cost,
+  );
+}
+
+// One deadline for both stores, so a provider that stalls on the first is not waited on again for
+// the second.
+function sharedRanking(
+  options: HybridSearchOptions & RankTime,
+  vectorCandidates: HybridVectorCandidates,
+) {
+  const {
+    budget = DEFAULT_RECALL_BUDGET,
     switches,
     embeddingWeight,
     explain,
     mmr,
     mmrLambda,
-    localBump = DEFAULT_LOCAL_BUMP,
     minResults,
-    cost,
     scope,
     includeSuperseded,
     asOf,
     summaryDeboost,
     summaryFreshness,
   } = options;
-  if (entries.local.length === 0 && entries.global.length === 0) return [];
-  // One deadline for both stores, so a provider that stalls on the first is not waited on again for
-  // the second.
-  const shared = {
+  return {
     budget,
     now: options.now,
     switches,
@@ -257,19 +298,4 @@ export async function rankBothStores(
     vectorCandidates,
     queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
   };
-  const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await hybridSearch(query, entries.local, {
-    ...side(false),
-    source: sources.local,
-  });
-  const globalResults = await hybridSearch(query, entries.global, {
-    ...side(true),
-    source: sources.global,
-  });
-  return fitBudget(
-    mergeStoreResults(localResults, globalResults, localBump),
-    budget,
-    minResults ?? 1,
-    cost,
-  );
 }

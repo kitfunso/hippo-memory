@@ -29,8 +29,9 @@ export async function compactResumeForCaller(
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId)))
+  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) {
     return { stdout: '' };
+  }
   const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);

@@ -1,7 +1,6 @@
 /** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`. Any
  * non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty
  * page would be a silent empty backfill.
- *
  */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
@@ -56,7 +55,6 @@ const GITHUB_MAX_REPLY_BYTES = 32 * 1024 * 1024;
 /**
  * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array
  * throws, so it never reaches ingest as items.
- *
  */
 async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   // The path only: a `next` link comes from the server, so its query string is not ours to print.
@@ -67,8 +65,9 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   } catch (err) {
     throw new GitHubFetchError(res.status, errorMessage(err), path, { cause: err });
   }
-  if (!Array.isArray(body))
+  if (!Array.isArray(body)) {
     throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
+  }
   return body;
 }
 

@@ -29,7 +29,6 @@ export interface RefineOptions {
   /**
    * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return
    * null and are skipped.
-   *
    */
   tenantId?: string;
 }
@@ -45,7 +44,6 @@ export interface RefineResult {
 /**
  * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns
  * null when the API call failed.
- *
  */
 async function refineSemanticMemory(
   merged: string,
@@ -114,7 +112,6 @@ function isConsolidated(entry: MemoryEntry): boolean {
 /**
  * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so
  * reruns skip it (unless `all`).
- *
  */
 export async function refineStore(hippoRoot: string, opts: RefineOptions): Promise<RefineResult> {
   const result: RefineResult = {

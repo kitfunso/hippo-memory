@@ -190,34 +190,23 @@ export async function contextGet(ctx: Context, opts: ContextOptions): Promise<Co
 export async function assembleContext(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
-  if (budget <= 0) {
-    return { entries: [], tokens: 0 };
-  }
+  if (budget <= 0) return { entries: [], tokens: 0 };
 
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
-  const pools = await loadPools(
-    ctx,
-    plan,
-    admission,
-    promptRecallRequest(opts, plan),
-    sections.left,
-  );
+  const recall = promptRecallRequest(opts, plan);
+  const pools = await loadPools(ctx, plan, admission, recall, sections.left);
   const noSections =
     !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
-  if (nothingToInject(plan, pools, noSections)) {
-    return { entries: [], tokens: 0 };
-  }
+  if (nothingToInject(plan, pools, noSections)) return { entries: [], tokens: 0 };
 
   const picked = plan.pinnedOnly
     ? selectPinned(opts, plan, sections.left, pools, admission)
     : plan.query === NO_QUERY
       ? selectStrongest(plan, sections.left, pools)
       : await selectBySearch(ctx, plan, sections.left, pools, admission);
-  if (picked === null) {
-    return { entries: [], tokens: 0 };
-  }
+  if (picked === null) return { entries: [], tokens: 0 };
 
   const { items, tokens } = finalizeSelection(picked, plan);
   if (items.length === 0 && noSections) {
@@ -232,7 +221,14 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
   const recorded = plan.pinnedOnly
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
+  return contextResult(recorded, tokens, sections);
+}
 
+function contextResult(
+  recorded: RecordedRetrieval,
+  tokens: number,
+  sections: TaskSections,
+): ContextResult {
   return {
     entries: recorded.items,
     tokens,
@@ -259,7 +255,6 @@ const isolationWarned = new WeakSet<HippoStore>();
 /**
  * A laptop config copied onto a team store must not open every member's rows to every prompt, so
  * the flag loses there.
- *
  */
 function warnIsolationIgnored(store: HippoStore): void {
   if (isolationWarned.has(store)) return;
@@ -314,32 +309,48 @@ function entryPricer(
       : estimateTokens(entry.content);
 }
 
-function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): ContextPlan {
-  const pinnedOnly = opts.pinnedOnly === true;
-  const { hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(
-    ctx,
-    opts,
-  );
-  const query = (opts.q ?? '').trim() || NO_QUERY;
+type StoreReach = ReturnType<typeof storesInReach>;
 
-  // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories
-  // are excluded unless the caller asks for them (crossProject) or isolation is disabled.
-  const config = ctx.config;
-  const isolationEnabled = config.contextProjectIsolation !== false;
-  const currentProject = opts.currentProject;
+function reachFields(
+  reach: StoreReach,
+): Pick<
+  ContextPlan,
+  'hasLocal' | 'hasGlobal' | 'globalRoot' | 'primaryIsGlobal' | 'hasLocalTaskState' | 'sharedStore'
+> {
+  return {
+    hasLocal: reach.hasLocal,
+    hasGlobal: reach.hasGlobal,
+    globalRoot: reach.globalRoot,
+    primaryIsGlobal: reach.primaryIsGlobal,
+    hasLocalTaskState: reach.hasLocal && !reach.primaryIsGlobal,
+    sharedStore: reach.sharedStore,
+  };
+}
+
+// opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories
+// are excluded unless the caller asks for them (crossProject) or isolation is disabled.
+function readsCrossProject(ctx: Context, opts: ContextOptions, sharedStore: boolean): boolean {
+  const isolationEnabled = ctx.config.contextProjectIsolation !== false;
   // A caller with no project reads every row as its own; on a shared store those rows are other
   // people's.
-  if (sharedStore && projectId(currentProject).trim() === '') {
+  if (sharedStore && projectId(opts.currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
   if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.store);
-  const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
+  return opts.crossProject === true || (!isolationEnabled && !sharedStore);
+}
 
+function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): ContextPlan {
+  const pinnedOnly = opts.pinnedOnly === true;
+  const reach = storesInReach(ctx, opts);
+  const query = (opts.q ?? '').trim() || NO_QUERY;
+  const config = ctx.config;
+  const currentProject = opts.currentProject;
+  const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their
   // connection.
   const promptRecallPending =
     pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
-
   const cost = opts.cost;
   const price = entryPricer(cost, currentProject);
   return {
@@ -351,12 +362,7 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
     exactScope: opts.exactScope || undefined,
     ownScope: personalScopeOf(ctx.actor) ?? undefined,
     query,
-    hasLocal,
-    hasGlobal,
-    globalRoot,
-    primaryIsGlobal,
-    hasLocalTaskState: hasLocal && !primaryIsGlobal,
-    sharedStore,
+    ...reachFields(reach),
     config,
     currentProject,
     includeCrossProject,
@@ -387,11 +393,10 @@ function promptRecallRequest(
     ? {
         terms: promptRecallTerms,
         limit: Math.floor(
-          finiteOr(
-            pinnedInject.promptRecallCandidates,
-            DEFAULT_CONFIG.pinnedInject.promptRecallCandidates,
-            1,
-          ),
+          finiteOr(pinnedInject.promptRecallCandidates, {
+            fallback: DEFAULT_CONFIG.pinnedInject.promptRecallCandidates,
+            min: 1,
+          }),
         ),
         ownScope: plan.ownScope,
       }
@@ -451,8 +456,9 @@ async function loadRawTaskState(
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that
   // snapshot is fresh.
-  if (snapshot?.sessionId)
+  if (snapshot?.sessionId) {
     return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
+  }
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an
   // older eligible one.
   const unfinished = {
@@ -536,11 +542,11 @@ function ambientAdmission(
 /**
  * Origins the recent backfill may read past its first window; on a shared store, only the caller's
  * own project rows.
- *
  */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
-  if (plan.sharedStore)
+  if (plan.sharedStore) {
     return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
+  }
   return plan.originProject && { names: plan.originProject, userGlobal: true };
 }
 
@@ -551,31 +557,13 @@ async function loadPools(
   recallRequest: AmbientRecallRequest | undefined,
   left: number,
 ): Promise<ContextPools> {
-  const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope, ownScope } = plan;
+  const { obs, pinnedOnly, primaryIsGlobal, hasGlobal } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
   const searches = plan.query !== NO_QUERY && !pinnedOnly;
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
   const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
   const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
-  // With prompt recall on, eligibility reports a row the quality floor drops.
-  const refusedBy = (isGlobal: boolean): ((refusal: AmbientRefusal) => void) | undefined =>
-    obs &&
-    ((r) => {
-      if (r.reason === 'admission') obs.filtered(r.id);
-      else if (!plan.promptRecallPending) obs.qualityDropped(r.id, isGlobal);
-    });
-
-  // The window's predicates are ones admit applies anyway, so below the cap the admitted rows are
-  // unchanged.
-  const window: ContextCandidateFilter | ContextQueryWindow = searches
-    ? { query: plan.query, exactScope, ownScope, project: plan.originProject }
-    : {
-        exactScope,
-        ownScope,
-        project: plan.originProject,
-        cap: contextCandidatePage(left, plan.limit),
-        now: plan.now,
-      };
+  const window = candidateWindow(plan, searches, left);
   // Tenant-scoped loads: never resolveTenantId({}) here.
   const read = {
     pinnedOnly,
@@ -589,17 +577,51 @@ async function loadPools(
   const local: AmbientLoadResult = plan.hasLocal
     ? await loadAmbientEntries(plan.local, ctx.tenantId, {
         ...read,
-        onRefused: refusedBy(primaryIsGlobal),
+        onRefused: refusalReporter(plan, primaryIsGlobal),
       })
     : { entries: [] };
   const global: AmbientLoadResult =
     hasGlobal && !primaryIsGlobal
       ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, {
           ...read,
-          onRefused: refusedBy(true),
+          onRefused: refusalReporter(plan, true),
         })
       : { entries: [] };
   return { local, global };
+}
+
+// With prompt recall on, eligibility reports a row the quality floor drops.
+function refusalReporter(
+  plan: ContextPlan,
+  isGlobal: boolean,
+): ((refusal: AmbientRefusal) => void) | undefined {
+  const { obs } = plan;
+  return (
+    obs &&
+    ((r) => {
+      if (r.reason === 'admission') obs.filtered(r.id);
+      else if (!plan.promptRecallPending) obs.qualityDropped(r.id, isGlobal);
+    })
+  );
+}
+
+// The window's predicates are ones admit applies anyway, so below the cap the admitted rows are
+// unchanged.
+function candidateWindow(
+  plan: ContextPlan,
+  searches: boolean,
+  left: number,
+): ContextCandidateFilter | ContextQueryWindow {
+  const { exactScope, ownScope } = plan;
+  return searches
+    ? { query: plan.query, exactScope, ownScope, project: plan.originProject }
+    : {
+        exactScope,
+        ownScope,
+        project: plan.originProject,
+        cap: contextCandidatePage(left, plan.limit),
+        now: plan.now,
+      };
 }
 
 interface FinalSelection {
@@ -610,21 +632,7 @@ interface FinalSelection {
 /** The `limit` cut, then the held-copy drop, then each entry's origin annotation. */
 function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): FinalSelection {
   const { obs } = plan;
-  // Ranking reports nothing itself, so its results are offered here and the cuts below can name
-  // what they drop.
-  if (!plan.pinnedOnly && obs) {
-    const pool = plan.query === NO_QUERY ? 'strength' : 'search';
-    obs.offer(
-      picked.filter((r) => r.isGlobal !== true).map((r) => r.entry),
-      false,
-      pool,
-    );
-    obs.offer(
-      picked.filter((r) => r.isGlobal === true).map((r) => r.entry),
-      true,
-      pool,
-    );
-  }
+  offerRanked(picked, plan);
   let selected = picked;
   if (plan.limit < selected.length) {
     const cut = selected.slice(0, plan.limit);
@@ -656,6 +664,24 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   }));
   obs?.selected(selected);
   return { items: selected, tokens };
+}
+
+// Ranking reports nothing itself, so its results are offered here and the cuts after can name
+// what they drop.
+function offerRanked(picked: ContextResultEntry[], plan: ContextPlan): void {
+  const { obs } = plan;
+  if (plan.pinnedOnly || !obs) return;
+  const pool = plan.query === NO_QUERY ? 'strength' : 'search';
+  obs.offer(
+    picked.filter((r) => r.isGlobal !== true).map((r) => r.entry),
+    false,
+    pool,
+  );
+  obs.offer(
+    picked.filter((r) => r.isGlobal === true).map((r) => r.entry),
+    true,
+    pool,
+  );
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.

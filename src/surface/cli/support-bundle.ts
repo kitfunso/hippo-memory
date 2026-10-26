@@ -147,8 +147,9 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
 
   const globalDir = hippoHomeDir();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
-  if (isInitialized(globalDir) && !alreadyListed)
+  if (isInitialized(globalDir) && !alreadyListed) {
     stores.push(await buildStoreEntry(opts, 'global', globalDir));
+  }
 
   return stores;
 }

@@ -2,7 +2,7 @@
 // promptHookContext (a remote hook route's call). promptHookContext keeps the server-side copy of
 // the CLI's contextGet flags (surface/cli/context.ts); only the CLI parity case in
 // tests/store/prompt-hook-context.process.test.ts ties the two.
-import type { Context, ContextResult, ContextResultEntry } from './index.js';
+import type { Context, ContextOptions, ContextResult, ContextResultEntry } from './index.js';
 import { assembleContext } from './context.js';
 import { sharedStoreOf, strengthOf } from './types.js';
 import type { StrengthModel } from '../base/memory/strength.js';
@@ -113,8 +113,9 @@ export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput |
 /** Writes the recorder's event on a connection of its own; a second flush is a no-op. */
 export async function flushDeliveryRecorder(rec: DeliveryRecorder | null): Promise<void> {
   const event = takeDelivery(rec);
-  if (rec !== null && event !== undefined)
+  if (rec !== null && event !== undefined) {
     await rec.ledger.recordTurn({ uses: [], delivery: event });
+  }
 }
 
 /** What one render needs once api.contextGet has answered. */
@@ -232,8 +233,15 @@ function renderRecallBlock(
   );
 }
 
-async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
-  const { result, rec, framing } = view;
+interface RenderedBlocks {
+  readonly staticItems: RenderItem[];
+  readonly recallItems: RenderItem[];
+  readonly staticBlock: string;
+  readonly recallBlock: string;
+}
+
+function renderBlocks(view: ContextView): RenderedBlocks {
+  const { result, framing } = view;
   const staticEntries = result.entries.filter(
     (r) => r.category !== 'cross-project' && !r.promptRecall,
   );
@@ -242,9 +250,17 @@ async function renderAdditionalContext(view: ContextView): Promise<RenderedConte
   );
   const staticItems = toRenderItems(staticEntries);
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
+  return {
+    staticItems,
+    recallItems,
+    staticBlock: renderStaticBlock(view, staticItems, staticCrossEntries),
+    recallBlock: renderRecallBlock(recallItems, framing, view.now),
+  };
+}
 
-  const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
-  const recallBlock = renderRecallBlock(recallItems, framing, view.now);
+async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
+  const { rec } = view;
+  const { staticItems, recallItems, staticBlock, recallBlock } = renderBlocks(view);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
@@ -296,8 +312,9 @@ async function skipUnchangedStatic(
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block
   // again.
-  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start')
+  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
     return false;
+  }
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
@@ -375,7 +392,6 @@ const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 /**
  * The project a hook caller runs in: its id, the folder name its older rows carry, and any other
  * names it resolves to.
- *
  */
 export interface CallerProject {
   readonly name: string;
@@ -443,19 +459,8 @@ export async function buildPromptHookContext(
   const armOpts = { reach, ownTenantOnly: true };
   const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
-  const prompt = payload?.prompt;
   const now = ctx.infra.clock();
-  const result = await assembleContext(ctx, {
-    budget: HOOK_BUDGET,
-    pinnedOnly: true,
-    includeRecent: HOOK_INCLUDE_RECENT,
-    // The project comes from the caller, never from where the store sits or the daemon's cwd.
-    currentProject: req.project,
-    currentSessionId: sessionId,
-    prompt: isJsonString(prompt) ? prompt : undefined,
-    cost: contextCost('additional-context', HOOK_FRAMING, now),
-    sharedStore,
-  });
+  const result = await assembleContext(ctx, hookContextOptions(req, now, sharedStore));
   const rendered = hasContextData(result)
     ? await renderAdditionalContext({
         config: ctx.config,
@@ -474,4 +479,23 @@ export async function buildPromptHookContext(
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.
   return { arm, stdout: rendered.stdout, staticHash: subagent ? null : rendered.staticHash };
+}
+
+function hookContextOptions(
+  req: PromptHookRequest,
+  now: Date,
+  sharedStore: PromptHookOptions['sharedStore'],
+): ContextOptions {
+  const prompt = req.payload?.prompt;
+  return {
+    budget: HOOK_BUDGET,
+    pinnedOnly: true,
+    includeRecent: HOOK_INCLUDE_RECENT,
+    // The project comes from the caller, never from where the store sits or the daemon's cwd.
+    currentProject: req.project,
+    currentSessionId: req.sessionId,
+    prompt: isJsonString(prompt) ? prompt : undefined,
+    cost: contextCost('additional-context', HOOK_FRAMING, now),
+    sharedStore,
+  };
 }

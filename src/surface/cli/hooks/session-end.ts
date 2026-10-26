@@ -57,15 +57,35 @@ export async function handleSessionEnd({
       ? await startSessionEndRecorder(root, tenantId, stdinText, runtime)
       : null;
   const sessionId = input?.sessionId ?? null;
+  const transcriptPath = workerTranscriptPath(input, runtime);
+
+  const worker: SessionEndWorkerInput = { logFile, transcriptPath, sessionId, turn };
+  await runSessionEndWorker(worker, { root, tenantId, flags, rec });
+}
+
+function workerTranscriptPath(input: CaptureInput | null, runtime: HookRuntime): string | null {
+  const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it
   // is handed. Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot
   // CLI's sessionEnd names no transcript, so its log is found by id.
   const named = input?.transcriptPath ?? null;
-  const transcriptPath =
+  return (
     (named !== null && fs.existsSync(named) ? named : null) ??
-    (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null);
+    (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null)
+  );
+}
 
-  const worker: SessionEndWorkerInput = { logFile, transcriptPath, sessionId, turn };
+interface SessionEndRun {
+  readonly root: string;
+  readonly tenantId: string;
+  readonly flags: CliFlags;
+  readonly rec: DeliveryRecorder | null;
+}
+
+async function runSessionEndWorker(
+  worker: SessionEndWorkerInput,
+  { root, tenantId, flags, rec }: SessionEndRun,
+): Promise<void> {
   try {
     spawnSessionEndWorker(sessionEndWorkerArgs(worker));
   } catch (err) {

@@ -61,8 +61,9 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
   const explicitScope = stringArg(args, 'scope', MAX_ID_LEN) || undefined;
   const assembleExtra: AssembleExtraOptions = {};
   if (budget !== undefined && budget > 0) assembleExtra.budget = budget;
-  if (freshTailCount !== undefined && freshTailCount >= 0)
+  if (freshTailCount !== undefined && freshTailCount >= 0) {
     assembleExtra.freshTailCount = freshTailCount;
+  }
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
     summarizeOlder,

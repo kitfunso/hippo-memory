@@ -249,8 +249,9 @@ export function searchView(
   query: Float32Array,
   opts: SearchOptions & { vectorOf: VectorLookup },
 ): SearchResult {
-  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim)
+  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) {
     return { aborted: false, hits: [], visited: 0 };
+  }
   const qNorm = norm(query);
   const vectorOf = opts.vectorOf;
   // A directionless query or row scores 0, where the full scan in vector-store.ts drops it.
@@ -300,11 +301,16 @@ function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): 
   return kept;
 }
 
+/** A link from node `from` to node `to` at `level`. */
+interface BackLinkOptions {
+  readonly from: number;
+  readonly to: number;
+  readonly level: number;
+}
+
 function addBackLink(
   graph: VectorGraph,
-  from: number,
-  to: number,
-  level: number,
+  { from, to, level }: BackLinkOptions,
   unitFor: VectorLookup,
 ): void {
   const data = graph.nodes.get(from);
@@ -329,8 +335,9 @@ function unreachable(): never {
 /** Add one node. A vector already of unit length is kept as given, not copied, so the caller
  * must not change it. */
 export function insertNode(graph: VectorGraph, node: number, vector: Float32Array): void {
-  if (vector.length !== graph.dim)
+  if (vector.length !== graph.dim) {
     throw new Error(`vector graph: expected dim ${graph.dim}, got ${vector.length}`);
+  }
   if (graph.nodes.has(node)) throw new Error(`vector graph: node ${node} already inserted`);
   const q = Math.abs(dot(vector, vector) - 1) < UNIT_TOLERANCE ? vector : toUnit(vector);
   const level = Math.min(
@@ -360,7 +367,7 @@ export function insertNode(graph: VectorGraph, node: number, vector: Float32Arra
   }
   graph.nodes.set(node, data);
   for (let l = 0; l <= Math.min(level, graph.maxLevel); l++) {
-    for (const n of data.links[l]) addBackLink(graph, n, node, l, unitFor);
+    for (const n of data.links[l]) addBackLink(graph, { from: n, to: node, level: l }, unitFor);
   }
   if (level > graph.maxLevel) {
     graph.maxLevel = level;

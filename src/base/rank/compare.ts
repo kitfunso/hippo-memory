@@ -19,7 +19,6 @@ export interface EntryIdentity {
  * source, id; plain `<`/`>`, never `localeCompare`. `content` is the cross-ingest-stable key; `id`
  * is random per instance, so it is only the terminal key. Metadata keys are computed only on a
  * content tie.
- *
  */
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
   return (
@@ -77,7 +76,6 @@ export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): nu
 /**
  * Larger first, NaN after every number, 0 for equal scores. Not a subtraction: two infinities, or
  * any NaN, subtract to NaN, which a sort reads as a tie.
- *
  */
 export function compareScoresDesc(a: number, b: number): number {
   if (a > b) return -1;
@@ -90,7 +88,6 @@ export function compareScoresDesc(a: number, b: number): number {
  * default memoryId key is per-instance determinism only. Cross-ingest stability needs `tieKeyOf`
  * (content), since the baseScore tie order picks the clusterTopK set. A factory, as two fields sort
  * in turn.
- *
  */
 export function comparePhysicsResultsBy<T extends { memoryId: string }>(
   scoreOf: (r: T) => number,

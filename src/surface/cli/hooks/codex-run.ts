@@ -138,7 +138,6 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
 /**
  * Resolves true once the detached worker is running, false when the spawn fails, whether it throws
  * or reports later.
- *
  */
 function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
   return new Promise((resolve) => {

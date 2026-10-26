@@ -120,8 +120,9 @@ function echoWindows(texts: readonly string[]): Set<string> {
   const windows = new Set<string>();
   for (const text of texts) {
     const tokens = echoTokens(text);
-    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++)
+    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++) {
       windows.add(tokens.slice(i, i + ECHO_WINDOW).join(' '));
+    }
   }
   return windows;
 }

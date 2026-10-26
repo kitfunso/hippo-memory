@@ -32,8 +32,9 @@ export function parseLimitParam(
     defaultLimit,
     maxLimit,
   );
-  if (limit === undefined)
+  if (limit === undefined) {
     throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
+  }
   return limit;
 }
 
@@ -161,8 +162,9 @@ export function getStringArray(
   const notArray = messages.notArray ?? `${key} must be an array of strings`;
   if (v === undefined || (v === null && !rule.rejectNull)) return undefined;
   if (!Array.isArray(v)) throw new HttpError(400, notArray);
-  if (v.length > maxItems)
+  if (v.length > maxItems) {
     throw new HttpError(400, messages.count ?? `${key} exceeds ${maxItems}-item cap`);
+  }
   const items: string[] = [];
   for (const item of v) {
     if (!isJsonString(item)) throw new HttpError(400, messages.itemType ?? notArray);
@@ -183,7 +185,6 @@ export function getStringArray(
 /**
  * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never
  * become a row's origin.
- *
  */
 export function getCallerProject(body: Record<string, JsonValue>): RememberOptions['project'] {
   const v = body.project;
@@ -191,8 +192,9 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
   if (!isJsonObject(v) || !isJsonString(v.name)) {
     throw new HttpError(400, 'project must be an object with a "name" string');
   }
-  if (v.name.length > MAX_ID_LEN)
+  if (v.name.length > MAX_ID_LEN) {
     throw new HttpError(400, `project.name exceeds ${MAX_ID_LEN}-character cap`);
+  }
   if (v.aliases === undefined) return { name: v.name };
   if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
     throw new HttpError(400, 'project.aliases must be an array of strings');
@@ -206,13 +208,13 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
  * empty/overlong/illegal ids get a 400, not "not found". Allows every production id notArray
  * (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops
  * `%2F` smuggling.
- *
  */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
-  if (id.length > MAX_ID_LEN)
+  if (id.length > MAX_ID_LEN) {
     throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);
+  }
   if (!ID_SEGMENT_RE.test(id)) {
     throw new HttpError(
       400,

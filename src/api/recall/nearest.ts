@@ -16,8 +16,9 @@ export async function nearestMemoryIds(
   vector: readonly number[],
   spec: VectorCandidateSpec,
 ): Promise<string[]> {
-  if (spec.tenantId !== ctx.tenantId)
+  if (spec.tenantId !== ctx.tenantId) {
     throw new ForbiddenError("a nearest-row read reaches only the caller's tenant");
+  }
   for (const scope of namedScopes(spec.scope)) assertScopeRequestAllowed(ctx.actor, scope);
   if (sharedStoreOf(ctx) && spec.origin === undefined) {
     throw new BadRequestError(

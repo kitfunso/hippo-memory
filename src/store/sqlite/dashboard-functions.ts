@@ -172,8 +172,9 @@ export interface TextFilter {
 export function textFilter(db: DatabaseSyncLike, text: string | null): TextFilter {
   const { probe, wide } = holdsTextBinds(text);
   const binds = { text, probe, wide };
-  if (probe === null || probe.length < MIN_PROBE_CHARS || !isFtsAvailable(db))
+  if (probe === null || probe.length < MIN_PROBE_CHARS || !isFtsAvailable(db)) {
     return { sql: HOLDS_TEXT, binds };
+  }
   // PROBE_BREAK leaves no `"` in a probe, so quoting it makes one FTS5 phrase.
   return {
     sql: `(rowid IN (${TEXT_CANDIDATES}) AND ${HOLDS_TEXT})`,

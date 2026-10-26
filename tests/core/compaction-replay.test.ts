@@ -185,7 +185,7 @@ describe('replay of records a killed hook left', () => {
     run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`);
     const db = openHippoDb(s.hippoRoot);
     try {
-      expect(compactionByRequest(db, 'default', 'req-1', 's1')).toBeNull();
+      expect(compactionByRequest(db, { tenantId: 'default', requestId: 'req-1', sessionId: 's1' })).toBeNull();
     } finally {
       closeHippoDb(db);
     }

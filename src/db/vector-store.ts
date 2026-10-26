@@ -1,7 +1,6 @@
 /**
  * Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the
  * one-time import of the old JSON index.
- *
  */
 
 import * as fs from 'node:fs';
@@ -230,7 +229,6 @@ export interface VectorRow {
  * The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order
  * never changes the top k. The query rounds to Float32 as stored vectors are, and scores add up in
  * float64, so every store that feeds it the same bytes ranks alike.
- *
  */
 export function rankVectorRows(
   query: readonly number[],
@@ -476,7 +474,6 @@ const RENAME_BLOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 /**
  * Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are
  * kept either way.
- *
  */
 function moveAside(fp: string, aside: string): boolean {
   try {
@@ -519,7 +516,6 @@ function parseLegacyIndex(raw: string): Map<string, number[]> | null {
 /** Move a legacy `embeddings.json` into `memory_vectors`, then keep the file as
  * `embeddings.json.imported-<stamp>`. Runs after the migration commits, so the rename never
  * outlives rolled-back rows; a file an older binary writes later imports the same way.
- *
  */
 export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: string): void {
   const fp = path.join(hippoRoot, LEGACY_EMBEDDINGS_FILE);

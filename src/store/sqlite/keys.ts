@@ -42,8 +42,9 @@ function assertGrantable(
   { op, keyId }: Pick<ScopeGrantChange, 'op' | 'keyId'>,
   revokedAt: string | null,
 ): void {
-  if (op === 'auth_grant' && revokedAt)
+  if (op === 'auth_grant' && revokedAt) {
     throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
+  }
 }
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */

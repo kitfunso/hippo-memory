@@ -282,8 +282,16 @@ export function listAmbientCandidates(
   // order is load-bearing downstream.
   const entries = [...byId.values()].sort(oldestFirst);
   if (!recall) return { entries, refused };
+  return { entries, recall: promptRecallEntries(db, tenantId, recall), refused };
+}
+
+function promptRecallEntries(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  recall: NonNullable<AmbientLoad['recall']>,
+): MemoryEntry[] {
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
-  const recallEntries = ftsQuery
+  return ftsQuery
     ? listRecallEntries(db, ftsQuery, {
         limit: recall.limit,
         tenantId,
@@ -291,7 +299,6 @@ export function listAmbientCandidates(
         ownScope: recall.ownScope,
       })
     : [];
-  return { entries, recall: recallEntries, refused };
 }
 
 // calculateStrength's decay exponent with its reward factor under `model`: the strongest rows,
@@ -471,8 +478,9 @@ export function schemaFit(
     const tagCounts = new Map<string, number>();
     for (const group of groups) {
       rows += group.n;
-      for (const tag of parseJsonArray(group.tags_json))
+      for (const tag of parseJsonArray(group.tags_json)) {
         tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
+      }
     }
     // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored
     // per-tenant tag and token tally is the upgrade.
@@ -589,7 +597,6 @@ function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
 /**
  * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no
  * row array is built.
- *
  */
 export function statusCounts(
   db: DatabaseSyncLike,

@@ -38,7 +38,6 @@ const INJECTED_SOURCE_PREFIXES = ['skill-', 'agent-'];
 /**
  * The Copilot CLI log for a session, `<copilotHome>/session-state/<id>/events.jsonl`; null for an
  * unsafe id or a missing file.
- *
  */
 export function copilotTranscriptFor(sessionId: string): string | null {
   if (!SESSION_ID_RE.test(sessionId)) return null;
@@ -55,7 +54,6 @@ export function copilotTranscriptFor(sessionId: string): string | null {
  * True for VS Code's own chat log,
  * `<workspaceStorage>/<id>/github.copilot-chat/transcripts/<session id>.jsonl`, in either slash and
  * any case.
- *
  */
 export function isVscodeTranscript(file: string | null): boolean {
   if (!file) return false;

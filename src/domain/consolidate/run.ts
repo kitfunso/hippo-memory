@@ -70,7 +70,6 @@ export type ConsolidationStore = StoreWith<'consolidation' | 'learning'>;
 /**
  * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of
  * `units` whole in one transaction.
- *
  */
 export interface SleepRun {
   /** The caller's tenant, whose completed sessions become traces. */
@@ -88,7 +87,6 @@ export interface SleepRun {
   /**
    * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so
    * both check tombstones here first.
-   *
    */
   tombstones: TombstoneChecks;
   survivors: Survivors;

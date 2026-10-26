@@ -89,11 +89,15 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
 /**
  * The working state of a session's raw last user turn, summary and last reply: secrets scrubbed
  * and capped, '' where none; null when all three are blank. */
-export function workingStateOf(
-  rawTask: string,
-  rawSummary: string,
-  rawNextStep: string,
-): WorkingState | null {
+export function workingStateOf({
+  rawTask,
+  rawSummary,
+  rawNextStep,
+}: {
+  readonly rawTask: string;
+  readonly rawSummary: string;
+  readonly rawNextStep: string;
+}): WorkingState | null {
   if (!rawTask.trim() && !rawSummary.trim() && !rawNextStep.trim()) return null;
   // These fields skip the capture content gate and reach a prompt, so the strict scrub runs. The
   // caps protect the re-injection token budget and never split a surrogate pair; `hippo snapshot

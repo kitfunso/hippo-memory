@@ -1,7 +1,6 @@
 /**
  * Session handoff types and helpers: a handoff captures a session's state so a successor session or
  * another agent can pick up where it left off.
- *
  */
 
 import { isJsonString, type JsonValue } from '../util/json.js';
@@ -19,7 +18,6 @@ export interface HandoffEvidence {
   /**
    * 'transcript' when hippo read the handoff off the session's transcript at session end; a later
    * exit may replace it.
-   *
    */
   derivedFrom?: 'transcript';
 }

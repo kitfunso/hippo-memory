@@ -49,8 +49,9 @@ function isRejection(v: ClefScores | string): v is string {
 // fetch quotes a rejected header value in its error, so a token it would reject must never reach
 // it.
 function checkHeaderSafe(name: string, token: string): void {
-  if (!/^[\x21-\x7e]+$/.test(token))
+  if (!/^[\x21-\x7e]+$/.test(token)) {
     throw new Error(`${name} has characters a header cannot carry`);
+  }
 }
 
 /** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted
@@ -58,7 +59,10 @@ function checkHeaderSafe(name: string, token: string): void {
 export function resolveClefRoute(model: ClefModel, settings: ClefSettings | undefined): ClefRoute {
   const endpoint = settings?.endpoint;
   if (endpoint) {
-    const parsed = parseOutboundUrl(endpoint, 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN');
+    const parsed = parseOutboundUrl(endpoint, {
+      setting: 'HIPPO_CLEF_ENDPOINT',
+      keySetting: 'HIPPO_CLEF_ENDPOINT_TOKEN',
+    });
     const endpointToken = settings?.endpointToken;
     if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
     return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
@@ -66,8 +70,9 @@ export function resolveClefRoute(model: ClefModel, settings: ClefSettings | unde
   const account = settings?.cloudflareAccountId;
   const token = settings?.cloudflareApiToken;
   if (!account || !token) throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set');
-  if (!ACCOUNT_ID.test(account))
+  if (!ACCOUNT_ID.test(account)) {
     throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
+  }
   checkHeaderSafe('CLOUDFLARE_API_TOKEN', token);
   return {
     url: `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${model}`,
@@ -79,7 +84,6 @@ export function resolveClefRoute(model: ClefModel, settings: ClefSettings | unde
 /**
  * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and
  * `c1..cN`; a string is the rejection reason.
- *
  */
 export function parseClefReply(
   body: JsonValue,
@@ -104,8 +108,9 @@ export function parseClefReply(
   const scores: number[] = [];
   for (let i = 1; i <= n; i++) {
     const a = answers[`c${i}`];
-    if (!isJsonObject(a) || (a.type !== undefined && a.type !== 'noul'))
+    if (!isJsonObject(a) || (a.type !== undefined && a.type !== 'noul')) {
       return 'incomplete or out-of-range answers';
+    }
     const v = a.noul;
     if (!isNumber(v) || v < 0 || v > 1) return 'incomplete or out-of-range answers';
     scores.push(v);
@@ -176,7 +181,6 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
 /**
  * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order
  * (never paid Jev) and warns.
- *
  */
 export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
   const outage = createOutageWarning(model, 'keeping the native order');

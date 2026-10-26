@@ -210,8 +210,9 @@ function readCodexFunctionCall(item: TranscriptItem, state: ScanState): void {
   const args: unknown = tryParseJson(item.arguments);
   if (!isObjectLike(args)) return;
   if (item.name === 'apply_patch') {
-    if ('input' in args && isStringValue(args.input))
+    if ('input' in args && isStringValue(args.input)) {
       addPatch(state, item.call_id, args.input, state.cwd);
+    }
     return;
   }
   const command = 'command' in args ? args.command : 'cmd' in args ? args.cmd : undefined;
@@ -282,7 +283,6 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
 /**
  * One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message,
  * and the edits that landed.
- *
  */
 export function scanSessionTranscript(jsonl: string): SessionScan {
   const state: ScanState = {
@@ -316,7 +316,7 @@ export function readSessionTranscript(
     const size = fs.fstatSync(fd).size;
     if (size <= READ_CAP_BYTES) return fs.readFileSync(fd, 'utf8');
     log(`digest: transcript is ${size} bytes, reading its last ${READ_CAP_BYTES}`);
-    return readOpenTranscriptTail(fd, size, READ_CAP_BYTES);
+    return readOpenTranscriptTail(fd, { size, capBytes: READ_CAP_BYTES });
   } finally {
     fs.closeSync(fd);
   }
@@ -344,7 +344,6 @@ function isNetworkPath(p: string): boolean {
 /**
  * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its
  * own. Null for a network path.
- *
  */
 function realFsPath(p: string): string | null {
   if (isNetworkPath(p)) return null;
@@ -364,7 +363,6 @@ function realFsPath(p: string): string | null {
 /**
  * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the
  * path cannot be resolved.
- *
  */
 function repoRelative(p: string, repoRoot: string): string | null {
   let real: string | null;

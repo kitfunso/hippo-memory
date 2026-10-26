@@ -96,8 +96,9 @@ export async function conflictResolve(
   // stays a 404.
   const row = await touchableConflict(ctx, conflictId);
   if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
-  if (row.conflict.status !== 'open')
+  if (row.conflict.status !== 'open') {
     throw new ConflictError(`conflict ${conflictId} is already resolved`);
+  }
   const { keep, loser } = sidesOf(row, opts.keepId);
   if (!isLive(row.a) || !isLive(row.b)) {
     throw new NotFoundError(

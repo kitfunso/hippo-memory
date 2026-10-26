@@ -70,7 +70,10 @@ function callArgs(text: string, open: number): string[] | null {
     else if (c === '{') stack.push('}');
     else if (c === top) {
       stack.pop();
-      if (stack.length === 0) return [...args, text.slice(start, i).trim()];
+      if (stack.length === 0) {
+        const last = text.slice(start, i).trim();
+        return last === '' ? args : [...args, last];
+      }
     } else if (c === ',' && stack.length === 1) {
       args.push(text.slice(start, i).trim());
       start = i + 1;
@@ -87,8 +90,9 @@ function unexplained429s(file: string, text: string): string[] {
     const before = text.slice(lineStart, m.index);
     if (/^\s*(\*|\/\*)/.test(before) || before.includes('//')) continue;
     if (/[!=]==\s*$/.test(before) || /^\s*[!=]==/.test(text.slice(m.index + 3))) continue;
-    const call = /HttpError\(\s*$/.exec(before);
-    const args = call ? callArgs(text, lineStart + call.index + 'HttpError'.length) : null;
+    // The formatter may put `HttpError(` on the line above the status.
+    const head = text.slice(0, m.index).trimEnd();
+    const args = head.endsWith('HttpError(') ? callArgs(text, head.length - 1) : null;
     if (args?.length === 3 && args[2] !== 'undefined' && args[2] !== 'void 0') continue;
     out.push(`${file}:${text.slice(0, m.index).split('\n').length}`);
   }

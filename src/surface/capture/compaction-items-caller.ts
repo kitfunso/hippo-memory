@@ -25,7 +25,6 @@ export interface CallerItemsResult {
 /**
  * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled
  * or deferred here.
- *
  */
 export async function saveCompactionItemsForCaller(
   given: EntryContext,

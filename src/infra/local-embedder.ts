@@ -19,7 +19,6 @@ interface FetchGate {
 /**
  * The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of
  * its tensor it reads.
- *
  */
 interface EmbeddingPipeline {
   (
@@ -192,8 +191,9 @@ function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
 function rejectOnAbort(signal: AbortSignal, done: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     if (signal.aborted) reject(signal.reason);
-    else
+    else {
       signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: done });
+    }
   });
 }
 

@@ -14,7 +14,6 @@ export interface ProjectFacts {
 /**
  * A shared store's folder is no caller's project, so the caller names it; with none, contextGet
  * refuses. Any other store is the project of the folder it sits in.
- *
  */
 export function contextProjectFor(
   ctx: Context,

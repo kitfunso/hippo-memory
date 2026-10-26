@@ -13,7 +13,6 @@ import type {
  * usable body so the caller marks it seen and skips the insert. artifact_ref formats
  * (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion
  * looks rows up by them.
- *
  */
 
 const UNKNOWN_REPO = 'unknown/unknown';

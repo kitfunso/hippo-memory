@@ -172,7 +172,6 @@ export function readClaudeCodePreCompact(
 /**
  * Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI
  * agentStop the same snake_case keys.
- *
  */
 export function readVscodeStop(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
   if (isBlank(stdinText)) {

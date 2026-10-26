@@ -20,8 +20,9 @@ export const v54: Migration = {
     // raise here: the first session bind or owner snapshot raises it, so an unused store stays open
     // to older binaries.
     for (const [t, c] of OWNER_COLUMNS) {
-      if (tableExists(db, t) && !tableHasColumn(db, t, c))
+      if (tableExists(db, t) && !tableHasColumn(db, t, c)) {
         db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
+      }
     }
     db.exec(SESSION_OWNERS_DDL);
   },

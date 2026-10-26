@@ -25,7 +25,6 @@ export interface ScoringRequest {
 /**
  * POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes
  * nothing on the far side.
- *
  */
 export async function postScoring(
   http: Http,

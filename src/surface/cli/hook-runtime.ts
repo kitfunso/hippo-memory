@@ -29,12 +29,10 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 /**
  * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one
  * stage failing does not block the other.
- *
  */
 /**
  * A folder without its own store never sleeps at session end, so its project's agent notes go to
  * the global store here.
- *
  */
 export async function logSessionEndImport(
   logFile: string | null,
@@ -46,8 +44,9 @@ export async function logSessionEndImport(
     const report = await importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
-    for (const warning of report.warnings)
+    for (const warning of report.warnings) {
       appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
+    }
   } catch (err) {
     appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
   }
@@ -89,7 +88,6 @@ export async function flushingOnExit(held: HeldLog, run: () => Promise<void>): P
 /**
  * A session-end step that failed: one warn line, and the same text in the session log, the only
  * place a detached worker's output survives.
- *
  */
 export function reportSessionEndFailure<E>(logFile: string | null, step: string, err: E): void {
   const line = `${step} failed: ${errorMessage(err)}`;
@@ -142,7 +140,6 @@ export function hookStoreRoot(hippoRoot: string): string {
 /**
  * `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag
  * decides, never the payload.
- *
  */
 export function hookRuntime(flags: CliFlags): HookRuntime {
   return stringFlag(flags, 'runtime') === 'copilot' || stringFlag(flags, 'format') === 'copilot'
@@ -153,7 +150,6 @@ export function hookRuntime(flags: CliFlags): HookRuntime {
 /**
  * A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in
  * the home folder; other runtimes keep `hippoRoot`.
- *
  */
 export function payloadCwdRoot(
   hippoRoot: string,

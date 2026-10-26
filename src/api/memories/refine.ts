@@ -10,7 +10,6 @@ export const REFINED_TAG = 'llm-refined';
 /**
  * Store a model's rewrite of a merged memory: the new text replaces the old one, and the row gains
  * the refined tag once.
- *
  */
 export async function storeRefinement(
   ctx: Context,

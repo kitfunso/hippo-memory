@@ -1,7 +1,6 @@
 /**
  * Errors whose HTTP status is part of the API contract; the server maps by class, so message text
  * can change freely.
- *
  */
 
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
@@ -63,7 +62,6 @@ export class CrossTenantIdError extends ConflictError {
  * introduce a tombstoned value; carries what the transaction-owner catch blocks (writeEntry,
  * api.supersede) need to write the post-rollback `reject_refusal` audit row via
  * `auditRejectionRefusal`.
- *
  */
 export class RejectedValueError extends BadRequestError {
   readonly digest: string;

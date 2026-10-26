@@ -59,7 +59,6 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
 /**
  * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a
  * fixed number of rows.
- *
  */
 export const CONSOLIDATION_RUNS_KEPT = 50;
 

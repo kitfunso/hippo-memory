@@ -4,7 +4,6 @@
  * do NOT tune it without a cross-corpus eval. Generic over the id type (hybridSearch uses number,
  * the LongMemEval benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch
  * code it replaced; tests/search/rrf.test.ts is the contract.
- *
  */
 
 export const RRF_K = 60;

@@ -61,8 +61,9 @@ export function dashboardTickets(): DashboardTickets {
     },
     redeem(given, nowMs) {
       dropLate(nowMs);
-      for (const ticket of minted.keys())
+      for (const ticket of minted.keys()) {
         if (sameSecret(given, ticket)) return minted.delete(ticket);
+      }
       return false;
     },
   };
@@ -129,7 +130,8 @@ export function passDashboardSession(
     );
     return 'ticket';
   }
-  if (liveSession(cookieValue(req.headers.cookie, cookieName), access.token, port, now()))
+  if (liveSession(cookieValue(req.headers.cookie, cookieName), access.token, port, now())) {
     return 'cookie';
+  }
   throw new HttpError(401, UNAUTHORIZED);
 }

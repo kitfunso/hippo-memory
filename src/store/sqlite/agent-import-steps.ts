@@ -78,8 +78,9 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
       row === undefined ||
       row.source !== want.source ||
       row.tags.includes(plan.tag) !== want.tagged
-    )
+    ) {
       return null;
+    }
   }
   const outside = [...new Set(plan.steps.flatMap(namedIds))].filter((id) => !rows.has(id));
   for (const ids of chunked(outside)) {
@@ -143,7 +144,12 @@ class ContainerSteps {
 
   private adopt(step: AdoptStep): StepOutcome {
     const row = this.row(step.id);
-    renameEntrySource(this.db, row.tenantId, row.id, step.from, step.to);
+    renameEntrySource(this.db, {
+      tenantId: row.tenantId,
+      id: row.id,
+      from: step.from,
+      to: step.to,
+    });
     return this.moved({ ...row, source: step.to });
   }
 
@@ -185,8 +191,12 @@ class ContainerSteps {
    * superseded it first. */
   private supersede(id: string, by: string): boolean {
     const old = this.rows.get(id);
-    if (old === undefined || !supersedeEntry(this.db, old.tenantId, old.id, by)) return false;
-    if (old.dagParentId) markSummaryDirtyInTx(this.db, old.dagParentId, old.tenantId, SYNC_ACTOR);
+    if (old === undefined) return false;
+    if (!supersedeEntry(this.db, { tenantId: old.tenantId, id: old.id, newId: by })) return false;
+    if (old.dagParentId) {
+      const mark = { summaryId: old.dagParentId, tenantId: old.tenantId, actor: SYNC_ACTOR };
+      markSummaryDirtyInTx(this.db, mark);
+    }
     appendAuditEvents(this.db, [
       {
         tenantId: old.tenantId,

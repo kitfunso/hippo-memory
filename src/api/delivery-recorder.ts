@@ -70,7 +70,6 @@ export interface DeliveryObserver {
   /**
    * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility
    * reports it instead.
-   *
    */
   qualityDropped(id: string, isGlobal: boolean): void;
   disabled(): void;
@@ -136,7 +135,6 @@ export interface DeliveryRecorderInit {
   /**
    * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference
    * would say claude-code.
-   *
    */
   runtime?: DeliveryRuntime;
   /** Set by hooks that are not prompt or context calls; without it the payload's hook event
@@ -332,6 +330,56 @@ function deliveryCounts(
   };
 }
 
+function inferRuntime(payload: PayloadFacts): DeliveryRuntime {
+  return payload.hostTurnId !== null
+    ? 'codex'
+    : payload.hookEvent !== null
+      ? 'claude-code'
+      : 'unknown';
+}
+
+function promptFields(
+  payload: PayloadFacts,
+  eventType: DeliveryEventType,
+): Pick<DeliveryEventInput, 'promptHash' | 'promptLength'> {
+  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by
+  // its prompt.
+  const prompt = carriesPrompt(eventType) ? payload.prompt : null;
+  return {
+    promptHash: prompt !== null ? blockHash(prompt) : null,
+    promptLength: prompt?.length ?? 0,
+  };
+}
+
+type SentFields = Pick<
+  DeliveryEventInput,
+  | 'sectionsShown'
+  | 'sectionsDropped'
+  | 'budgetTokens'
+  | 'selectedTokens'
+  | 'injectedTokens'
+  | 'staticHash'
+  | 'recallHash'
+  | 'emittedHash'
+  | 'elapsedMs'
+>;
+
+function sentFields(state: RecorderState, startedMs: number): SentFields {
+  const { facts, outcome } = state;
+  const emitted = outcome.emittedText ?? null;
+  return {
+    sectionsShown: state.shown,
+    sectionsDropped: state.dropped,
+    budgetTokens: facts?.budgetTokens ?? 0,
+    selectedTokens: [...state.picked.values()].reduce((sum, p) => sum + p.tokens, 0),
+    injectedTokens: emitted !== null ? estimateTokens(emitted) : 0,
+    staticHash: outcome.staticHash ?? null,
+    recallHash: outcome.recallHash ?? null,
+    emittedHash: emitted !== null ? blockHash(emitted) : null,
+    elapsedMs: Math.max(0, Date.now() - startedMs),
+  };
+}
+
 function buildEvent(
   init: DeliveryRecorderInit,
   payload: PayloadFacts,
@@ -343,23 +391,13 @@ function buildEvent(
   const picked = pickedRows(state);
   const rejected = rejectedRows(state);
   const rows = [...picked, ...rejected.rows];
-  const emitted = outcome.emittedText ?? null;
   const eventType =
     init.eventType ??
     (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
-  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by
-  // its prompt.
-  const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
     ts,
     tenantId: init.tenantId,
-    runtime:
-      init.runtime ??
-      (payload.hostTurnId !== null
-        ? 'codex'
-        : payload.hookEvent !== null
-          ? 'claude-code'
-          : 'unknown'),
+    runtime: init.runtime ?? inferRuntime(payload),
     eventType,
     surface: eventType === 'context' ? 'context' : 'hook',
     storeHash: init.storeHash,
@@ -368,22 +406,13 @@ function buildEvent(
     sessionId: payload.payloadSession ?? payload.envSession,
     sessionState: payload.sessionState,
     hostTurnId: payload.hostTurnId,
-    promptHash: prompt !== null ? blockHash(prompt) : null,
-    promptLength: prompt?.length ?? 0,
+    ...promptFields(payload, eventType),
     queryHash: state.queryHash,
     recallTraceId: state.recallTraceId,
     blockState: state.disabledSeen ? 'disabled' : outcome.state,
     promptRecall: facts?.promptRecall === true,
     ...deliveryCounts(state, rows, rejected),
-    sectionsShown: state.shown,
-    sectionsDropped: state.dropped,
-    budgetTokens: facts?.budgetTokens ?? 0,
-    selectedTokens: [...state.picked.values()].reduce((sum, p) => sum + p.tokens, 0),
-    injectedTokens: emitted !== null ? estimateTokens(emitted) : 0,
-    staticHash: outcome.staticHash ?? null,
-    recallHash: outcome.recallHash ?? null,
-    emittedHash: emitted !== null ? blockHash(emitted) : null,
-    elapsedMs: Math.max(0, Date.now() - startedMs),
+    ...sentFields(state, startedMs),
     toolUseId: eventType === 'tool-failure' ? payload.toolUseId : null,
     failureId: eventType === 'tool-failure' ? state.failureId : null,
     candidates: rows,
@@ -440,6 +469,24 @@ function offerEntries(
   }
 }
 
+function rejectGated(
+  state: RecorderState,
+  ...[prompt, items, gate, kept]: Parameters<DeliveryObserver['gated']>
+): void {
+  const keptIds = new Set(kept.map((g) => g.item.id));
+  for (const c of items) {
+    if (keptIds.has(c.id)) continue;
+    const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
+    const cleared = score >= gate.threshold && shared >= gate.minShared;
+    rejectId(state, c.id, {
+      stage: 'gate',
+      reason: cleared ? 'gate-max-items' : 'gate-below-threshold',
+      score,
+      tokens: null,
+    });
+  }
+}
+
 /** The candidate-tracking half of the observer, each method run through `guard`. */
 function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods {
   return {
@@ -456,21 +503,7 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
           if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
         }
       }),
-    gated: (prompt, items, gate, kept) =>
-      guard(() => {
-        const keptIds = new Set(kept.map((g) => g.item.id));
-        for (const c of items) {
-          if (keptIds.has(c.id)) continue;
-          const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
-          const cleared = score >= gate.threshold && shared >= gate.minShared;
-          rejectId(state, c.id, {
-            stage: 'gate',
-            reason: cleared ? 'gate-max-items' : 'gate-below-threshold',
-            score,
-            tokens: null,
-          });
-        }
-      }),
+    gated: (...args) => guard(() => rejectGated(state, ...args)),
     selected: (items) =>
       guard(() => {
         state.picked.clear();
@@ -521,6 +554,22 @@ type StateMethods = Pick<
   | 'logged'
 >;
 
+function watchedAdmit(
+  state: RecorderState,
+  guard: Guard,
+  admit: (e: MemoryEntry) => boolean,
+): (e: MemoryEntry) => boolean {
+  return (e) => {
+    const ok = admit(e);
+    if (!ok) {
+      guard(() => {
+        state.filtered.add(e.id);
+      });
+    }
+    return ok;
+  };
+}
+
 function stateMethods(state: RecorderState, guard: Guard): StateMethods {
   return {
     facts: (f) =>
@@ -532,15 +581,7 @@ function stateMethods(state: RecorderState, guard: Guard): StateMethods {
         state.shown = s;
         state.dropped = d;
       }),
-    watchAdmit: (admit) => (e) => {
-      const ok = admit(e);
-      if (!ok) {
-        guard(() => {
-          state.filtered.add(e.id);
-        });
-      }
-      return ok;
-    },
+    watchAdmit: (admit) => watchedAdmit(state, guard, admit),
     filtered: (id) =>
       guard(() => {
         state.filtered.add(id);

@@ -75,8 +75,9 @@ export function shellPatch(command: readonly string[] | string): ShellPatch | nu
     script = command;
   } else {
     const exe = path.basename(command[0] ?? '').toLowerCase();
-    if (command.length === 2 && (exe === 'apply_patch' || exe === 'applypatch'))
+    if (command.length === 2 && (exe === 'apply_patch' || exe === 'applypatch')) {
       return { body: command[1], cd: null };
+    }
     script = shellScript(command);
   }
   const match = script === null ? null : HEREDOC.exec(script);

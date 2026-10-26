@@ -119,7 +119,7 @@ function fold(
       setAside.push(row.id);
     } else restamped.push(row.id);
   }
-  restampOriginProject(db, tenantId, from, into);
+  restampOriginProject(db, { tenantId, from, into });
   const gone = new Set(setAside);
   const dormantRestamped: string[] = [];
   for (const snap of dormantSnapshotsWhere(db, { tenantId, origins: [from] })) {
@@ -127,7 +127,7 @@ function fold(
     replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, originProject: into });
     dormantRestamped.push(snap.entry.id);
   }
-  const compactions = restampCompactionOrigin(db, tenantId, from, into);
+  const compactions = restampCompactionOrigin(db, { tenantId, from, into });
   return { setAside, restamped, dormantRestamped, compactions };
 }
 
@@ -165,8 +165,9 @@ function setAsideCopies(
   for (const { id, origin } of copies) {
     const row = rows.get(id);
     const tag = row ? toolTag(row.source) : null;
-    if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin)
+    if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin) {
       continue;
+    }
     if (setAsideRow(db, tag, row, 'project-repair', files).kind === 'dormant') done.push(id);
   }
   return done;

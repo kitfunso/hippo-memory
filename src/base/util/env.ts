@@ -63,8 +63,9 @@ function boolOff(name: FlagName): () => boolean {
 export function validateFlags(): string[] {
   const bad: string[] = [];
   for (const name of Object.keys(FLAGS)) {
-    if (flagState(name) === 'unknown')
+    if (flagState(name) === 'unknown') {
       bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
+    }
   }
   return bad;
 }
@@ -110,7 +111,6 @@ function strictPosInt(name: string): () => number | undefined {
 /**
  * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner
  * checks, support bundles).
- *
  */
 export function processEnv(): NodeJS.ProcessEnv {
   return process.env;
@@ -241,7 +241,6 @@ export const envPort = text('HIPPO_PORT');
 /**
  * How long a client waits for a running server's /health before writing to the store directly;
  * server-detect.ts holds the default.
- *
  */
 export const envHealthProbeMs = posInt('HIPPO_HEALTH_PROBE_MS');
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
@@ -260,7 +259,6 @@ export const envRequestDeadlineMs = nonNegInt('HIPPO_REQUEST_DEADLINE_MS');
 /**
  * How many store calls may wait for one worker thread before the next is refused; the adapter's
  * executor.ts holds the default.
- *
  */
 export const envStoreQueueMax = posInt('HIPPO_STORE_QUEUE_MAX');
 /** How long the daily runner lets one child `hippo` step run; surface/cli/setup.ts holds the

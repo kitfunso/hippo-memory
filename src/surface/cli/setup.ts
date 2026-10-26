@@ -335,11 +335,13 @@ function printCopilotInstall(result: CopilotInstallResult, indent: string): void
 
 /** The lines for one MCP config file; empty when hippo's server was not there. */
 function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string[] {
-  if (isMcpFailure(mcp))
+  if (isMcpFailure(mcp)) {
     return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];
+  }
   if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
-  if (mcp === 'user-owned')
+  if (mcp === 'user-owned') {
     return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
+  }
   if (mcp === 'unreadable') {
     return [
       `WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
@@ -361,8 +363,9 @@ function printCopilotUninstall(result: CopilotUninstallResult): void {
   }
   const printed = lines.filter((line) => line !== '');
   for (const line of printed) console.log(line);
-  if (printed.length === 0)
+  if (printed.length === 0) {
     console.log('No hippo Copilot hooks, MCP server or instructions found.');
+  }
 }
 
 function hookUninstall(target: string | undefined): void {
@@ -619,7 +622,6 @@ const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 /**
  * Why a child step failed; a child killed at the deadline says so, since its own message is only
  * the spawn error code.
- *
  */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   if (errorCode(err) === 'ETIMEDOUT') {
@@ -632,49 +634,14 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   const globalRoot = hippoHomeDir();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact
   // into it.
-  if (isInitialized(globalRoot)) {
-    const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = await replayCompactions(
-      { root: globalRoot, store: cliStore(globalRoot), tenantId },
-      warn,
-    );
-    if (finished > 0) {
-      console.log(
-        `Finished saving ${plural(finished, 'compaction')} left over in the global store.`,
-      );
-    }
-    await repairQualityOnce(globalRoot, tenantId);
-  }
+  if (isInitialized(globalRoot)) await finishGlobalCompactions(globalRoot, tenantId);
   printAgentImport(
     await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
     '',
   );
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
-  let processed = 0;
-  let failed = 0;
-  const timeout = envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS;
-  const runStep = (cwd: string, args: string[]): void => {
-    try {
-      execFileSync(process.execPath, [process.argv[1], ...args], {
-        cwd,
-        stdio: 'inherit',
-        windowsHide: true,
-        timeout,
-      });
-      if (args[0] === 'sleep') processed++;
-    } catch (err) {
-      failed++;
-      const action = args.join(' ');
-      log.error(
-        `daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`,
-        {
-          workspace: cwd,
-          ...errorFields(err),
-        },
-      );
-    }
-  };
+  const { runStep, counts } = dailyStepRunner(envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS);
   // Before the no-workspace return: a box with no workspaces still has a global store that hooks
   // write to.
   if (isInitialized(globalRoot)) await sleepGlobalStore(globalRoot, tenantId, runStep);
@@ -687,7 +654,51 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     );
     runDailyMaintenance(workspaces, runStep, globalRoot);
   }
-  reportDailyRun(processed, failed);
+  reportDailyRun(counts.processed, counts.failed);
+}
+
+async function finishGlobalCompactions(globalRoot: string, tenantId: string): Promise<void> {
+  const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
+  const finished = await replayCompactions(
+    { root: globalRoot, store: cliStore(globalRoot), tenantId },
+    warn,
+  );
+  if (finished > 0) {
+    console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
+  }
+  await repairQualityOnce(globalRoot, tenantId);
+}
+
+interface DailyStepRunner {
+  readonly runStep: (cwd: string, args: string[]) => void;
+  /** Mutated by runStep, so the closing report reads the totals of every step it ran. */
+  readonly counts: { processed: number; failed: number };
+}
+
+function dailyStepRunner(timeout: number): DailyStepRunner {
+  const counts = { processed: 0, failed: 0 };
+  const runStep = (cwd: string, args: string[]): void => {
+    try {
+      execFileSync(process.execPath, [process.argv[1], ...args], {
+        cwd,
+        stdio: 'inherit',
+        windowsHide: true,
+        timeout,
+      });
+      if (args[0] === 'sleep') counts.processed++;
+    } catch (err) {
+      counts.failed++;
+      const action = args.join(' ');
+      log.error(
+        `daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`,
+        {
+          workspace: cwd,
+          ...errorFields(err),
+        },
+      );
+    }
+  };
+  return { runStep, counts };
 }
 
 const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;

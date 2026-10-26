@@ -95,7 +95,6 @@ export interface ScoreBreakdown {
   /**
    * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from
    * the slow strength path.
-   *
    */
   outcomeBoost: number;
   /** CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */

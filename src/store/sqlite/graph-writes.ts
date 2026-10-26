@@ -155,11 +155,7 @@ export function insertEntityRow(
   opts: InsertEntityOptions,
 ): Entity {
   assertTenantId('insertEntity', tenantId);
-  if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
-    throw new Error(
-      `insertEntity: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`,
-    );
-  }
+  assertEntityType(opts.entityType);
   const name = checkedName('insertEntity', opts.name);
   const now = handleStamp(db);
   const memoryId = opts.memoryId ?? null;
@@ -188,7 +184,19 @@ export function insertEntityRow(
     sourceObject?.id ?? null,
     now,
   );
-  const id = Number(result.lastInsertRowid ?? 0);
+  return reloadEntity(db, Number(result.lastInsertRowid ?? 0));
+}
+
+function assertEntityType(entityType: InsertEntityOptions['entityType']): void {
+  if (!GRAPH_ENTITY_TYPES.has(entityType)) {
+    throw new Error(
+      `insertEntity: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${entityType}`,
+    );
+  }
+}
+
+function reloadEntity(db: DatabaseSyncLike, id: number): Entity {
+  // SAFETY: the SELECT names ENTITY_COLS, the columns of an EntityRow.
   const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as
     | EntityRow
     | undefined;
@@ -275,16 +283,7 @@ export function insertRelationRow(
       `insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`,
     );
   }
-  const row: Omit<RelationRow, 'id'> = {
-    tenant_id: tenantId,
-    from_entity_id: opts.fromEntityId,
-    to_entity_id: opts.toEntityId,
-    rel_type: opts.relType,
-    ...relationSource(db, tenantId, opts),
-    source_object_type: opts.sourceObject?.type ?? null,
-    source_object_id: opts.sourceObject?.id ?? null,
-    created_at: handleStamp(db),
-  };
+  const row = relationRowOf(db, tenantId, opts);
   const insert = cachedStatement(
     db,
     `INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
@@ -311,6 +310,23 @@ export function insertRelationRow(
   return rowToRelation({ id, ...row });
 }
 
+function relationRowOf(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: InsertRelationOptions,
+): Omit<RelationRow, 'id'> {
+  return {
+    tenant_id: tenantId,
+    from_entity_id: opts.fromEntityId,
+    to_entity_id: opts.toEntityId,
+    rel_type: opts.relType,
+    ...relationSource(db, tenantId, opts),
+    source_object_type: opts.sourceObject?.type ?? null,
+    source_object_id: opts.sourceObject?.id ?? null,
+    created_at: handleStamp(db),
+  };
+}
+
 function relationSource(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -329,7 +345,6 @@ function relationSource(
 /**
  * The source object still holds the loader's rule (active or superseded); a closed or gone one gets
  * no new graph row.
- *
  */
 export function objectInForce(
   db: DatabaseSyncLike,
@@ -387,7 +402,6 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
 /** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds
  * serialize instead of interleaving and a throw rolls back the whole chunk. The sole sanctioned
  * place to wrap graph writes in a transaction.
- *
  */
 export function runGraphRebuildTransaction<T>(
   db: DatabaseSyncLike,

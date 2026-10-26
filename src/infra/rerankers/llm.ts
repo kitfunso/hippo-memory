@@ -25,7 +25,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost. Timeout is 30s for the whole
  * call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity
  * ordering, so recall never hangs.
- *
  */
 export function createLlmReranker(http: Http): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
@@ -72,7 +71,10 @@ async function requestPermutation(
   query: string,
   head: readonly SearchResult[],
 ): Promise<number[]> {
-  parseOutboundUrl(url, 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY');
+  parseOutboundUrl(url, {
+    setting: 'HIPPO_LLM_RERANKER_URL',
+    keySetting: 'HIPPO_LLM_RERANKER_KEY',
+  });
   const key = envLlmRerankerKey();
   const prompt = [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +

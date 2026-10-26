@@ -6,7 +6,6 @@ export interface RateLimiter {
   /**
    * Consume one token for `key`: true if allowed, false if the bucket is exhausted; `now` (epoch
    * ms) is injectable for deterministic tests.
-   *
    */
   check(key: string, now?: number): boolean;
   readonly retryAfterSec: number;
@@ -29,19 +28,25 @@ interface Bucket {
   last: number;
 }
 
+/** A bucket's refill terms at the instant `now`. */
+interface RefillOptions {
+  now: number;
+  ratePerSec: number;
+  burst: number;
+}
+
 /** The tokens `b` holds at `now`; a clock stepped back refills nothing. */
-function tokensAt(b: Bucket, now: number, ratePerSec: number, burst: number): number {
+function tokensAt(b: Bucket, { now, ratePerSec, burst }: RefillOptions): number {
   return Math.min(burst, b.tokens + (Math.max(0, now - b.last) / 1000) * ratePerSec);
 }
 
 /**
  * Brings `b` up to `now` and returns it; keeping the later time stops a clock that stepped back and
  * forward again refilling that span twice.
- *
  */
-function refill(b: Bucket, now: number, ratePerSec: number, burst: number): Bucket {
-  b.tokens = tokensAt(b, now, ratePerSec, burst);
-  b.last = Math.max(b.last, now);
+function refill(b: Bucket, at: RefillOptions): Bucket {
+  b.tokens = tokensAt(b, at);
+  b.last = Math.max(b.last, at.now);
   return b;
 }
 
@@ -64,7 +69,7 @@ function makeRoom(buckets: Map<string, Bucket>, now: number, opts: RateLimiterOp
   let read = 0;
   for (const [key, b] of buckets) {
     oldest ??= key;
-    const tokens = tokensAt(b, now, opts.ratePerSec, opts.burst);
+    const tokens = tokensAt(b, { now, ratePerSec: opts.ratePerSec, burst: opts.burst });
     if (tokens >= opts.burst) {
       buckets.delete(key);
       return;
@@ -104,7 +109,7 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
         // least-recently-used.
         buckets.delete(key);
         buckets.set(key, existing);
-        return spend(refill(existing, now, ratePerSec, burst));
+        return spend(refill(existing, { now, ratePerSec, burst }));
       }
       makeRoom(buckets, now, opts);
       // Unseen key: a full bucket, so a fresh client's first request passes.

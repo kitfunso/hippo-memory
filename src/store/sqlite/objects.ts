@@ -142,12 +142,17 @@ function createAudit<K extends SavableKind>(
   return { op: `${kind}_create`, targetId: String(id), metadata };
 }
 
+/** The object id `replaced`, the id that replaces it and that row's version. */
+interface SupersedeAuditOptions {
+  readonly replaced: number;
+  readonly id: number;
+  readonly version: number;
+}
+
 /** The row for `replaced` giving way to `id`, which holds `version`. */
 function supersedeAudit<K extends SavableKind>(
   kind: K,
-  replaced: number,
-  id: number,
-  version: number,
+  { replaced, id, version }: SupersedeAuditOptions,
   fields: ObjectFields[K],
 ): ObjectAudit {
   const rule = SAVE_RULES[kind];
@@ -207,8 +212,9 @@ function closeAny(on: OnHandle, ...[tenantId, kind, id, change]: ObjectCloseArgs
 
 function saveAny(on: OnHandle, files: StoreFiles, ...[tenantId, kind, object]: ObjectSaveArgs) {
   // The prediction writes its mirror files too, so it opens the store as every mirrored save does.
-  if (kind === 'prediction')
+  if (kind === 'prediction') {
     return on((db) => writePrediction(db, files, tenantId, object), openStore);
+  }
   if (kind === 'incident') return openIncident(on, tenantId, object);
   return save(on, tenantId, kind, object);
 }
@@ -391,7 +397,8 @@ function supersedeRow<K extends SavableKind>(
   `,
   ).run(id, row.save.at, replaced, row.tenantId, id);
   if (updated.changes === 0) return false;
-  const audit = supersedeAudit(row.kind, replaced, id, row.version, row.save.fields);
+  const ids = { replaced, id, version: row.version };
+  const audit = supersedeAudit(row.kind, ids, row.save.fields);
   appendAuditEvents(db, [{ tenantId: row.tenantId, actor: row.save.actor, ...audit }]);
   return true;
 }
@@ -595,7 +602,6 @@ function resolveRow(
 /**
  * The successor is joined in so a superseded version is kept only while the row that replaced it is
  * not yet in force.
- *
  */
 function policiesInForce(
   db: DatabaseSyncLike,

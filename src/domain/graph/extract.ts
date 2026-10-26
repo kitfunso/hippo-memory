@@ -84,8 +84,9 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
  *  unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
-  if (!type)
+  if (!type) {
     throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
+  }
   return { type, id: e2Id };
 }
 

@@ -34,14 +34,14 @@ export function mergedText(header: string, texts: readonly string[]): string {
 /**
  * Each source text a sleep-merged row holds; a two-row merge by an older release kept one text
  * whole after its header.
- *
  */
 export function heldTexts(entry: Text): string[] {
   const cut = entry.content.indexOf('\n\n');
   if (entry.source !== 'consolidation' || cut < 0) return [];
   const body = entry.content.slice(cut + 2);
-  if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut)))
+  if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut))) {
     return [body];
+  }
   return `\n${body}`
     .split('\n- ')
     .slice(1)
@@ -63,7 +63,6 @@ export function storedTextKeys(entries: Iterable<Text>): Set<string> {
 /**
  * A final result list without copies: drops each unpinned row a sleep-merged row in the list holds
  * word for word, and each later unpinned copy of a text.
- *
  */
 export function dropHeldCopies<T>(rows: readonly T[], textOf: (row: T) => Text): T[] {
   const held = new Set(rows.flatMap((r) => heldTextKeys(textOf(r)).slice(1)));

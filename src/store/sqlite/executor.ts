@@ -56,7 +56,6 @@ export interface CallOptions {
   /**
    * Epoch milliseconds by which the call's request must be answered; absent means the call waits as
    * long as it takes.
-   *
    */
   readonly deadlineAt?: number | undefined;
   /** Aborts when the request is abandoned; a call still queued then is dropped and never runs. */
@@ -84,7 +83,6 @@ export interface SqliteExecutor {
   /**
    * Runs `op` of the synchronous store on a worker thread. A throw there rejects here as an
    * instance of its own class.
-   *
    */
   call<T>(op: string, args: readonly unknown[], opts: CallOptions): Promise<T>;
   /** Resolves once every thread has exited: Windows cannot delete a store folder while a thread
@@ -486,8 +484,9 @@ class WorkerPool implements SqliteExecutor {
       );
     }
     // The server answers this class as its retryable 503.
-    for (const pending of lost)
+    for (const pending of lost) {
       finish(pending, () => pending.fail(new StoreBusyError(WORKER_GONE, { cause })));
+    }
   }
 }
 

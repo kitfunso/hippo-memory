@@ -88,12 +88,17 @@ function orderedProjects(tallies: readonly ProjectTally[]): Ordered[] {
     );
 }
 
-function healthKpis(
-  openConflicts: number,
-  coverage: number,
-  total: number,
-  withConflicts: number,
-): Kpi[] {
+function healthKpis({
+  openConflicts,
+  coverage,
+  total,
+  withConflicts,
+}: {
+  readonly openConflicts: number;
+  readonly coverage: number;
+  readonly total: number;
+  readonly withConflicts: number;
+}): Kpi[] {
   const embedded = Math.round(coverage * total);
   return [
     {
@@ -175,7 +180,7 @@ export async function buildOverview(
   const withConflicts = ordered.filter((p) => p.summary.openConflicts > 0).length;
   const kpis = [
     ...countKpis(ordered, total, stamp.nowMs),
-    ...healthKpis(totals.openConflicts, coverage, total, withConflicts),
+    ...healthKpis({ openConflicts: totals.openConflicts, coverage, total, withConflicts }),
   ];
   return {
     snapshotId: stamp.id,

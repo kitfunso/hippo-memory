@@ -81,12 +81,15 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
     case 'number':
     case 'integer':
       if (value === null || !isArgNumber(value)) return `${name} must be a number${got}`;
-      if (schema.type === 'integer' && !Number.isInteger(value))
+      if (schema.type === 'integer' && !Number.isInteger(value)) {
         return `${name} must be an integer${got}`;
-      if (schema.minimum !== undefined && value < schema.minimum)
+      }
+      if (schema.minimum !== undefined && value < schema.minimum) {
         return `${name} must be >= ${schema.minimum}${got}`;
-      if (schema.maximum !== undefined && value > schema.maximum)
+      }
+      if (schema.maximum !== undefined && value > schema.maximum) {
         return `${name} must be <= ${schema.maximum}${got}`;
+      }
       break;
   }
   if (schema.enum !== undefined && !schema.enum.some((allowed) => allowed === value)) {
@@ -98,7 +101,6 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
 /**
  * One message per violation; undeclared properties pass, and `checkedDownstream` names keep the API
  * layer's own error contract.
- *
  */
 export function validateToolArgs(
   schema: ToolInputSchema,

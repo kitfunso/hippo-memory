@@ -23,7 +23,6 @@ function resolveRequestId(header: string | string[] | undefined): string {
  * One line per failed request, naming the route template since a path can hold caller data; 4xx is
  * the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none
  * logs as an error.
- *
  */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
   const message = errorMessage(err);
@@ -93,7 +92,6 @@ const UNMATCHED_ROUTE = 'unmatched';
 /**
  * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the
  * request's access line.
- *
  */
 export function noteAccess(req: IncomingMessage, note: AccessNote): void {
   const held = accessNotes.get(req);
@@ -109,7 +107,6 @@ export function accessRouteOf(req: IncomingMessage): string {
 /**
  * One info line per finished request. A path id and a query string can both hold caller data, so
  * the line carries neither.
- *
  */
 function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
   const note: AccessNote = {};
@@ -130,7 +127,6 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
 /**
  * The request's id, after stamping the headers every reply carries and starting the slow-request
  * watchdog and the access line.
- *
  */
 export function openRequest(
   req: IncomingMessage,

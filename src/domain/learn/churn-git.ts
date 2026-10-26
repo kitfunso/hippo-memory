@@ -128,7 +128,6 @@ export function resolveCommitBefore(repo: ChurnRepo, beforeIso: string): string 
 /**
  * package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git
  * failures throw GitReadError.
- *
  */
 export function packageScriptsAt(repo: ChurnRepo, rev: string): Record<string, string> | null {
   if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repo).trim() === '') return {};

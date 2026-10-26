@@ -97,13 +97,15 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
  * in. */
 function skipReason(req: SessionDigestRequest): { reason: string } | { root: string } {
   if (req.prompts.length === 0) return { reason: 'no human prompt' };
-  if (!req.finalText.trim() && req.editCount === 0)
+  if (!req.finalText.trim() && req.editCount === 0) {
     return { reason: 'no final message and no edits' };
+  }
   if (!req.cwd) return { reason: 'the transcript names no working directory' };
   const root = req.repo.root();
   if (root === null) return { reason: 'the repo is on a network path' };
-  if (req.repo.relative(req.cwd, root) === null)
+  if (req.repo.relative(req.cwd, root) === null) {
     return { reason: 'the session ran outside this repo' };
+  }
   return { root };
 }
 

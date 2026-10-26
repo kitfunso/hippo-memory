@@ -33,8 +33,9 @@ export class SleepRows {
       const byId = new Map(
         (await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]),
       );
-      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()]))
+      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()])) {
         this.backed.add(id);
+      }
       for (const id of page) {
         const row = byId.get(id);
         if (row) out.push(this.loaded(row));

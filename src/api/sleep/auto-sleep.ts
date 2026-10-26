@@ -12,7 +12,6 @@ import { strengthOf, type Context, type ContextWith } from '../types.js';
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
  * one that runs it off its event loop, in a child process; stdio passes one that runs it in its
  * own.
- *
  */
 export type AutoSleepRunner = () => Promise<void>;
 
@@ -39,7 +38,6 @@ export async function autoSleepDue(
  * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide, so
  * only the host tenant's writes start one, one per store at a time. Never rejects: the write it
  * follows has landed.
- *
  */
 export async function autoSleepAfterWrite(
   ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers' | 'infra'>,

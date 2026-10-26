@@ -261,7 +261,6 @@ type Provenance = Pick<
 /**
  * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a
  * person's edit or restore verified.
- *
  */
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
@@ -278,7 +277,6 @@ export function isAutomaticEntry(entry: Provenance): boolean {
 /**
  * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only
  * when every part is.
- *
  */
 function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
   return BUNDLE_HEADER.test(entry.content)
@@ -294,7 +292,6 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
 /**
  * The audit's check: a person's row is never judged, and a bundle is flagged only when every part
  * is, as reuse and recent context judge it.
- *
  */
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
@@ -308,7 +305,6 @@ export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null
 /**
  * Whether sleep may derive from a row or share it: a person's text and watch failures always,
  * hippo's own text only without a certain defect.
- *
  */
 export function isReusable(entry: Provenance): boolean {
   return !isAutomaticEntry(entry) || !hasCertainDefect(entry);

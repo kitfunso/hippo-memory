@@ -3,7 +3,6 @@
  * condemned set); mirrors benchmarks/memory-value/*.mjs. rescueSet rescues a condemned entry iff it
  * ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts
  * guards parity.
- *
  */
 
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
@@ -59,7 +58,6 @@ export interface MvFeatureVector {
  * `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no DecayOptions, as in the
  * weights' training; passing the production decay basis would silently break parity with the frozen
  * weights.
- *
  */
 function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
@@ -116,7 +114,6 @@ export function validateWeights(
  * dot(weights, normalized); callers set the scope. An entry with any non-finite feature (NaN from a
  * malformed `created`) is excluded from normalization and scores -Infinity, so it can never be
  * rescued.
- *
  */
 export function scoreEntries(
   entries: MemoryEntry[],
@@ -178,7 +175,6 @@ function scoreFeatures(
 /**
  * Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and
  * the consolidate audit-row metadata read.
- *
  */
 export interface MvRankInfo {
   tenantId: string;
@@ -296,8 +292,9 @@ function tieGroups(
       // A non-finite row is always wanted: the caller names every one in a warning, in rank order.
       const want = (id: string): boolean => wanted(id) || score === -Infinity;
       const tied = ids.slice(start, end);
-      if (tied.some(want))
+      if (tied.some(want)) {
         groups.push({ tenantId, score, start, tied, total: ids.length, keepN, want });
+      }
     }
   }
   return groups;
@@ -366,7 +363,6 @@ export interface RescueSetOptions {
  * Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned
  * set by learned score. Pass `precomputedRanks` to skip the internal ranking so the whole-store
  * pass runs once per sleep; `weights`/`digest` overrides exist for tests only.
- *
  */
 export function rescueSet(
   entries: MemoryEntry[],

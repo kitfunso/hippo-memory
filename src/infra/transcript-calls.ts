@@ -39,8 +39,9 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
         !isJsonObjectLiteral(message.usage) ||
         isSyntheticMessage(message) ||
         !isJsonString(message.id)
-      )
+      ) {
         continue;
+      }
       if (seen.has(message.id)) continue;
       seen.add(message.id);
       const at = isJsonString(entry.timestamp) ? Date.parse(entry.timestamp) : Number.NaN;

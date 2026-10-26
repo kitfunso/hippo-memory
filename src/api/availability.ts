@@ -25,7 +25,6 @@ export interface AvailabilityHint {
   /**
    * Count of pool entries older than the top-K median age that were NOT returned (older relevant
    * matches passed over).
-   *
    */
   olderCandidatesPassedOver: number;
   /** Human-readable summary surfaced to the agent. */
@@ -92,28 +91,46 @@ export function detectAvailabilityBias(
   const poolMedianAgeDays = median(pool.map((e) => (now - e.ts) / DAY_MS));
   if (poolMedianAgeDays <= topKMedianAgeDays) return null;
 
-  const topKIds = new Set(topK.map((e) => e.id));
-  const olderCandidatesPassedOver = pool.filter(
-    (e) => !topKIds.has(e.id) && (now - e.ts) / DAY_MS > topKMedianAgeDays,
-  ).length;
+  const olderCandidatesPassedOver = countOlderPassedOver(pool, topK, now, topKMedianAgeDays);
   if (olderCandidatesPassedOver < minOlderPassedOver) return null;
 
-  const pct = Math.round(recentFraction * 100);
+  return availabilityHint(
+    {
+      recentCount,
+      returnedCount: topK.length,
+      recentFraction,
+      topKMedianAgeDays,
+      poolMedianAgeDays,
+      olderCandidatesPassedOver,
+    },
+    recencyWindowMs,
+  );
+}
+
+type Stamped = { id: string; ts: number };
+
+function countOlderPassedOver(
+  pool: readonly Stamped[],
+  topK: readonly Stamped[],
+  now: number,
+  topKMedianAgeDays: number,
+): number {
+  const topKIds = new Set(topK.map((e) => e.id));
+  return pool.filter((e) => !topKIds.has(e.id) && (now - e.ts) / DAY_MS > topKMedianAgeDays).length;
+}
+
+function availabilityHint(
+  figures: Omit<AvailabilityHint, 'summary' | 'source'>,
+  recencyWindowMs: number,
+): AvailabilityHint {
+  const { recentCount, returnedCount, olderCandidatesPassedOver } = figures;
+  const pct = Math.round(figures.recentFraction * 100);
   const windowHours = Math.round(recencyWindowMs / HOUR_MS);
   const summary =
-    `Availability bias risk: ${recentCount} of ${topK.length} returned results are from the ` +
+    `Availability bias risk: ${recentCount} of ${returnedCount} returned results are from the ` +
     `last ${windowHours}h (${pct}%), but ${olderCandidatesPassedOver} older matched memories ` +
-    `were passed over. Returned median age ${topKMedianAgeDays.toFixed(1)}d vs pool median ` +
-    `${poolMedianAgeDays.toFixed(1)}d. The most relevant answer may not be the most recent.`;
-
-  return {
-    recentCount,
-    returnedCount: topK.length,
-    recentFraction,
-    topKMedianAgeDays,
-    poolMedianAgeDays,
-    olderCandidatesPassedOver,
-    summary,
-    source: 'j2-recency',
-  };
+    `were passed over. Returned median age ${figures.topKMedianAgeDays.toFixed(1)}d vs pool ` +
+    `median ${figures.poolMedianAgeDays.toFixed(1)}d. The most relevant answer may not be the ` +
+    `most recent.`;
+  return { ...figures, summary, source: 'j2-recency' };
 }

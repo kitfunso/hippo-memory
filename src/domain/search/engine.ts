@@ -11,7 +11,6 @@ import type { VectorSource } from './vector.js';
 /**
  * Physics scoring when `physics` holds its config, hybrid otherwise, both on the store `source`
  * names; each caller keeps its own options.
- *
  */
 export function searchByEngine(
   source: VectorSource,

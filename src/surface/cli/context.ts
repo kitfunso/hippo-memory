@@ -25,6 +25,7 @@ import {
 import {
   additionalContextOutput,
   type ContextView,
+  type HookEnvelope,
   flushDeliveryRecorder,
   hasContextData,
   startDeliveryRecorder,
@@ -53,13 +54,15 @@ import {
   inPilotHoldout,
 } from './hook-runtime.js';
 
-async function printContext(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-  stdinText?: string,
-): Promise<void> {
+type PrintContextOptions = Omit<RenderContextOptions, 'rec'>;
+
+async function printContext({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+  stdinText,
+}: PrintContextOptions): Promise<void> {
   const rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
     stdinText,
     runtime: hookRuntime(flags),
@@ -152,7 +155,6 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const gate = await contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;
-  const { ledgerSessionId, payloadSessionId } = session;
 
   // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls
   // back to '*'.
@@ -162,39 +164,38 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
   const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const now = ctx.infra.clock();
-  const opts = buildContextOpts(flags, {
-    query,
-    budget,
-    pinnedOnly,
-    format,
-    framing,
-    session,
-    rec,
-    now,
-  });
+  const input: ContextOptsInput = { query, budget, pinnedOnly, format, framing, session, rec, now };
 
-  const result = await api.contextGet(ctx, opts);
+  const result = await api.contextGet(ctx, buildContextOpts(flags, input));
   if (!hasContextData(result)) {
     rec?.delivered({ state: 'empty' });
     return;
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  const view: ContextView = {
+  await renderContextView(contextView(ctx, input, result, envelope), format, query);
+}
+
+function contextView(
+  ctx: api.Context,
+  input: ContextOptsInput,
+  result: api.ContextResult,
+  envelope: HookEnvelope | undefined,
+): ContextView {
+  return {
     config: ctx.config,
     tenantId: ctx.tenantId,
-    ledgerSessionId,
-    payloadSessionId,
-    pinnedOnly,
-    framing,
-    rec,
+    ledgerSessionId: input.session.ledgerSessionId,
+    payloadSessionId: input.session.payloadSessionId,
+    pinnedOnly: input.pinnedOnly,
+    framing: input.framing,
+    rec: input.rec,
     result,
     reach: ledgerReachOf(ctx),
     envelope,
-    now,
+    now: input.now,
     strength: strengthOf(ctx),
   };
-  await renderContextView(view, format, query);
 }
 
 function contextQuery(args: string[], flags: CliFlags): string {
@@ -355,5 +356,7 @@ export async function handleContext({
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await cliHookRequest(() => printContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
+  await cliHookRequest(() =>
+    printContext({ hippoRoot: hookStoreRoot(root), tenantId, args, flags, stdinText }),
+  );
 }

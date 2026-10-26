@@ -177,37 +177,9 @@ export async function handleRejectQuarantine(
 // GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so
 // an invalid value is a 400 before the DB is hit.
 export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
-  const opRaw = query.get('op');
-  let op: AuditOp | undefined;
-  if (opRaw !== null) {
-    if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
-      throw new HttpError(400, `op must be one of: ${[...VALID_AUDIT_OPS].join(' | ')}`);
-    }
-    op = opRaw;
-  }
-  const sinceRaw = query.get('since');
-  let since: string | undefined;
-  if (sinceRaw !== null) {
-    const parsed = Date.parse(sinceRaw);
-    if (!Number.isFinite(parsed)) {
-      throw new HttpError(400, 'since must be an ISO 8601 date');
-    }
-    since = sinceRaw;
-  }
-  const limitRaw = query.get('limit');
-  let limit = DEFAULT_LIST_LIMIT;
-  if (limitRaw !== null) {
-    const parsed = Number(limitRaw);
-    if (
-      !Number.isFinite(parsed) ||
-      !Number.isInteger(parsed) ||
-      parsed < 1 ||
-      parsed > MAX_AUDIT_LIMIT
-    ) {
-      throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
-    }
-    limit = parsed;
-  }
+  const op = auditOpParam(query.get('op'));
+  const since = auditSinceParam(query.get('since'));
+  const limit = auditLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
   // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
   const tenantOverride = query.get('tenant');
@@ -227,4 +199,34 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): 
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items);
   return;
+}
+
+function auditOpParam(raw: string | null): AuditOp | undefined {
+  if (raw === null) return undefined;
+  if (!isSetMember(VALID_AUDIT_OPS, raw)) {
+    throw new HttpError(400, `op must be one of: ${[...VALID_AUDIT_OPS].join(' | ')}`);
+  }
+  return raw;
+}
+
+function auditSinceParam(raw: string | null): string | undefined {
+  if (raw === null) return undefined;
+  if (!Number.isFinite(Date.parse(raw))) {
+    throw new HttpError(400, 'since must be an ISO 8601 date');
+  }
+  return raw;
+}
+
+function auditLimitParam(raw: string | null): number {
+  if (raw === null) return DEFAULT_LIST_LIMIT;
+  const parsed = Number(raw);
+  if (
+    !Number.isFinite(parsed) ||
+    !Number.isInteger(parsed) ||
+    parsed < 1 ||
+    parsed > MAX_AUDIT_LIMIT
+  ) {
+    throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
+  }
+  return parsed;
 }

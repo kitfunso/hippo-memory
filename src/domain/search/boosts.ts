@@ -55,8 +55,11 @@ function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): nu
 
 /** A multiplier near 1 that follows the net outcome score through tanh, kept inside [min, max].
  * The always-on boost and the value-aware rank differ only in these four inputs. */
-export function outcomeNudge(net: number, slope: number, min: number, max: number): number {
-  return clamp(1 + slope * Math.tanh(net), min, max);
+export function outcomeNudge(
+  net: number,
+  { slope, min, max }: { readonly slope: number; readonly min: number; readonly max: number },
+): number {
+  return clamp(1 + slope * Math.tanh(net), { min, max });
 }
 
 /** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it
@@ -65,7 +68,11 @@ export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number 
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
-  return outcomeNudge((pos - neg) / 2, OUTCOME_NUDGE_SLOPE, OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX);
+  return outcomeNudge((pos - neg) / 2, {
+    slope: OUTCOME_NUDGE_SLOPE,
+    min: OUTCOME_NUDGE_MIN,
+    max: OUTCOME_NUDGE_MAX,
+  });
 }
 
 /** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same

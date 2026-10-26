@@ -5,7 +5,7 @@ import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAG_LEVEL } from '../../base/memory/entry.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { summaryDirtyAudit } from '../rules/audit-rows.js';
+import { summaryDirtyAudit, type SummaryDirtyOptions } from '../rules/audit-rows.js';
 
 const MARK_DIRTY_WHERE = `tenant_id = ?
        AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
@@ -16,9 +16,7 @@ const MARK_DIRTY_WHERE = `tenant_id = ?
  * only a 0 to 1 flip is audited. */
 export function markSummaryDirtyInTx(
   db: DatabaseSyncLike,
-  summaryId: string,
-  tenantId: string,
-  actor: string,
+  { summaryId, tenantId, actor }: SummaryDirtyOptions,
 ): void {
   const result = cachedStatement(
     db,
@@ -32,7 +30,7 @@ export function markSummaryDirtyInTx(
   ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
-    appendAuditEvents(db, [summaryDirtyAudit(summaryId, tenantId, actor, result.dag_level)]);
+    appendAuditEvents(db, [summaryDirtyAudit({ summaryId, tenantId, actor }, result.dag_level)]);
   } catch (error) {
     // The mark has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure('summary_marked_dirty', error, summaryId);

@@ -11,7 +11,6 @@ import type { ProjectRef } from '../base/scope/project-identity.js';
  * Options for `contextGet`: a budget-bounded bundle of recalled memories, active task snapshot,
  * handoff and recent events. Rendering opts (`format`, `framing`, `rendered`) and host-side opts
  * (`auto`) stay in the CLI, whose print helpers are shared.
- *
  */
 export interface ContextOptions {
   q?: string;
@@ -23,27 +22,23 @@ export interface ContextOptions {
   /**
    * Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the
    * actor's scope check.
-   *
    */
   exactScope?: string;
   /**
    * With `pinnedOnly`, also inject the N most recent writes that pass the quality floor
    * (`isWorthSurfacing`); pinned entries bypass it. Filtering happens BEFORE the take-N, so asking
    * for 5 gets 5 qualifying entries. Ignored when `pinnedOnly` is false.
-   *
    */
   includeRecent?: number;
   /**
    * Re-include other-project memories the origin partition excludes by default; they come back
    * tagged `category: 'cross-project'`.
-   *
    */
   crossProject?: boolean;
   /**
    * The active project for the origin partition ('' = not in a project): a name, or an identity
    * whose rows may carry its legacy folder name. The surface names it (the CLI from its cwd, a
    * route or hook from its caller), so the api reads no working folder.
-   *
    */
   currentProject: ProjectRef;
   /**
@@ -51,7 +46,6 @@ export interface ContextOptions {
    * active snapshot's `session_id` the read is unbounded; otherwise the snapshot must pass the
    * freshness bound. Absent (undefined/null/'') never matches. Host-resolved, so this stays
    * host-agnostic.
-   *
    */
   currentSessionId?: string | null;
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on
@@ -99,7 +93,6 @@ export interface ContextResultEntry {
   /**
    * How the origin relates to the active project; 'cross-project' appears only when `crossProject`
    * was set (or isolation is disabled).
-   *
    */
   category?: 'project' | 'user-global' | 'cross-project';
 }
@@ -113,7 +106,6 @@ export interface ContextResult {
   /** The ambient landscape summary over every live row the read may see in the local and global
    * stores, not just the rows loaded. Present only when ambient config is on, the caller is not
    * pinned-only, and an entry was returned.
-   *
    */
   ambientState?: AmbientState;
 }

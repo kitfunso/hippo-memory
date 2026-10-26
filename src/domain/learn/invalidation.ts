@@ -218,23 +218,31 @@ function weakenMatches(
       continue;
     }
 
-    result.invalidated++;
-    result.targets.push(entry.id);
-    result.preview.push({
-      id: entry.id,
-      headline: entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS),
-    });
+    countTarget(result, entry);
     if (dryRun) continue;
 
-    entry.halfLifeDays = Math.max(1, Math.floor(entry.halfLifeDays / 2));
-    entry.confidence = 'stale';
-    if (!entry.tags.includes('invalidated')) {
-      entry.tags.push('invalidated');
-    }
+    weakenEntry(entry);
     weakened.push(entry);
   }
 
   return { result, weakened };
+}
+
+function countTarget(result: InvalidationResult, entry: MemoryEntry): void {
+  result.invalidated++;
+  result.targets.push(entry.id);
+  result.preview.push({
+    id: entry.id,
+    headline: entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS),
+  });
+}
+
+function weakenEntry(entry: MemoryEntry): void {
+  entry.halfLifeDays = Math.max(1, Math.floor(entry.halfLifeDays / 2));
+  entry.confidence = 'stale';
+  if (!entry.tags.includes('invalidated')) {
+    entry.tags.push('invalidated');
+  }
 }
 
 function invalidationTokenize(text: string): string[] {
@@ -367,10 +375,9 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
 // rather than in the pure extractor.
 function resolveTrackedPath(
   token: string,
-  repoRoot: string,
-  projectName: string,
-  index: TrackedIndex,
+  git: Pick<ChurnGitView, 'repoRoot' | 'projectName' | 'trackedIndex'>,
 ): string | null {
+  const { repoRoot, projectName, trackedIndex: index } = git;
   let candidate = token;
   const isAbsUnix = candidate.startsWith('/');
   const isAbsWin = /^[A-Za-z]:\//.test(candidate);
@@ -545,7 +552,7 @@ function pathEvidence(
   anchorTime: number,
 ): string | null {
   for (const rawPath of paths) {
-    const resolved = resolveTrackedPath(rawPath, git.repoRoot, git.projectName, git.trackedIndex);
+    const resolved = resolveTrackedPath(rawPath, git);
     if (!resolved) continue;
     if (isTrackedPath(git.headIndex, resolved)) {
       const changed = git.windowLog.some(
@@ -597,7 +604,6 @@ function scriptEvidence(
 /**
  * The first churn evidence against one candidate: a changed or deleted file, then a gone symbol,
  * then a gone script.
- *
  */
 function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): string | null {
   let evidence = pathEvidence(git, refs.paths, new Date(anchor).getTime());
@@ -692,16 +698,10 @@ async function readChurnAnchors(
   return { confirmedAt, firstReadAt, anchorOf };
 }
 
-/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
- * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
-export async function detectChurnStale(
-  { learning, reports }: StoreWith<'learning'>,
-  repo: ChurnRepo,
+async function readChurnCandidates(
+  reports: StoreWith<'learning'>['reports'],
   opts: DetectChurnStaleOptions,
-): Promise<ChurnStaleResult> {
-  const dryRun = opts.dryRun === true;
-  if (!opts.projectName) return emptyChurnResult(dryRun);
-
+): Promise<ChurnCandidates> {
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
   const current = {
     tenantId: opts.tenantId,
@@ -719,53 +719,50 @@ export async function detectChurnStale(
     candidates.push(...found.candidates);
     skippedPinned.push(...found.skippedPinned);
   }
-  if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
+  return { candidates, skippedPinned };
+}
 
-  const { confirmedAt, firstReadAt, anchorOf } = await readChurnAnchors(
-    learning,
-    opts.tenantId,
-    candidates,
-  );
-
-  const needs: ChurnNeeds = {
+function churnNeeds(candidates: readonly ChurnCandidate[]): ChurnNeeds {
+  return {
     paths: candidates.some((c) => c.refs.paths.length > 0),
     symbols: candidates.some((c) => c.refs.symbols.length > 0),
     scripts: candidates.some((c) => c.refs.scripts.length > 0),
   };
+}
+
+/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
+ * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
+export async function detectChurnStale(
+  { learning, reports }: StoreWith<'learning'>,
+  repo: ChurnRepo,
+  opts: DetectChurnStaleOptions,
+): Promise<ChurnStaleResult> {
+  const dryRun = opts.dryRun === true;
+  if (!opts.projectName) return emptyChurnResult(dryRun);
+
+  const { candidates, skippedPinned } = await readChurnCandidates(reports, opts);
+  if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
+
+  const anchors = await readChurnAnchors(learning, opts.tenantId, candidates);
+  const { confirmedAt, firstReadAt, anchorOf } = anchors;
+
+  const needs = churnNeeds(candidates);
   if (!needs.paths && !needs.symbols && !needs.scripts) {
-    return {
-      checked: candidates.length,
-      marked: 0,
-      alreadyMarked: 0,
-      skippedPinned,
-      dryRun,
-      preview: [],
-    };
+    return { ...emptyChurnResult(dryRun, skippedPinned), checked: candidates.length };
   }
 
-  const result: ChurnStaleResult = {
-    checked: 0,
-    marked: 0,
-    alreadyMarked: 0,
-    skippedPinned,
-    dryRun,
-    preview: [],
-  };
+  const result = emptyChurnResult(dryRun, skippedPinned);
 
   try {
-    const git = loadChurnGitView(
-      repo,
-      opts.legacyName ?? opts.projectName,
-      candidates,
-      anchorOf,
-      needs,
-    );
+    const gitProject = opts.legacyName ?? opts.projectName;
+    const git = loadChurnGitView(repo, gitProject, candidates, anchorOf, needs);
     // Collected here and written only after every candidate's evidence is computed, so a
     // GitReadError mid-loop cannot leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0)
+    if (!dryRun && toTag.length > 0) {
       await tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
+    }
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

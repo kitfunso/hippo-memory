@@ -48,6 +48,13 @@ interface FileIdentity {
   readonly ino: number;
 }
 
+/** Where one node's link list starts in a buffer, how many links it holds and whose it is. */
+interface LinkListOptions {
+  readonly at: number;
+  readonly count: number;
+  readonly node: number;
+}
+
 /** One graph file's bytes, decoded a record at a time as a search reaches each node; each value
  * is checked as it is read, so a bad one throws GraphFileError and never steers a read out of
  * the file. */
@@ -108,8 +115,9 @@ class GraphFileView implements GraphView {
     const known = this.#records.get(node);
     if (known) return known;
     const { nodes, recordsAt, recordBytes, highRowid, maxLevel, m, dim, upperBytes } = this.stamp;
-    if (!Number.isInteger(node) || node < 0 || node >= nodes)
+    if (!Number.isInteger(node) || node < 0 || node >= nodes) {
       throw this.#bad(`node ${node} is out of range`);
+    }
     const buf = this.#read(recordsAt + node * recordBytes, recordBytes);
     const rowid = buf.readDoubleLE(RECORD_AT.rowid);
     const [level, flags, count, upperOffset] = [
@@ -127,14 +135,15 @@ class GraphFileView implements GraphView {
       rowid <= highRowid &&
       level <= maxLevel &&
       flags <= 1;
-    if (!fits || count > 2 * m || !upperFits)
+    if (!fits || count > 2 * m || !upperFits) {
       throw this.#bad(`node ${node} has a value out of bounds`);
+    }
     const record: NodeRecord = {
       rowid,
       idHash: buf.readUInt32LE(RECORD_AT.idHash),
       level,
       replaced: isReplaced(flags),
-      links: this.#links(buf, RECORD_HEAD, count, node),
+      links: this.#links(buf, { at: RECORD_HEAD, count, node }),
       vector: new Float32Array(
         new Int8Array(buf.buffer, buf.byteOffset + RECORD_HEAD + 8 * m, dim),
       ),
@@ -147,8 +156,9 @@ class GraphFileView implements GraphView {
   linksOf(node: number, level: number): ArrayLike<number> {
     const record = this.record(node);
     if (level === 0) return record.links;
-    if (level > record.level)
+    if (level > record.level) {
       throw this.#bad(`node ${node} is linked at level ${level}, above its own`);
+    }
     const key = node * 16 + level;
     const known = this.#upper.get(key);
     if (known) return known;
@@ -159,7 +169,7 @@ class GraphFileView implements GraphView {
     );
     const count = buf.readUInt32LE(0);
     if (count > m) throw this.#bad(`node ${node} has ${count} links at level ${level}`);
-    const links = this.#links(buf, 4, count, node);
+    const links = this.#links(buf, { at: 4, count, node });
     this.#upper.set(key, links);
     return links;
   }
@@ -177,12 +187,13 @@ class GraphFileView implements GraphView {
     return lo > 0 && this.record(lo - 1).rowid === rowid ? lo - 1 : undefined;
   }
 
-  #links(buf: Buffer, at: number, count: number, node: number): Uint32Array {
+  #links(buf: Buffer, { at, count, node }: LinkListOptions): Uint32Array {
     const links = new Uint32Array(count);
     for (let j = 0; j < count; j++) {
       links[j] = buf.readUInt32LE(at + 4 * j);
-      if (links[j] >= this.stamp.nodes)
+      if (links[j] >= this.stamp.nodes) {
         throw this.#bad(`node ${node} links to node ${links[j]}, out of range`);
+      }
     }
     return links;
   }

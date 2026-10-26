@@ -6,7 +6,7 @@
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
+import type { RejectedValueRow, RejectionCheck } from '../../base/ports/store/rejections.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { orderSql, REJECTED_ORDER } from '../rules/order.js';
@@ -135,9 +135,7 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
  * hit SELECTs the stored row. */
 export function checkRejectionGuard(
   db: DatabaseSyncLike,
-  tenantId: string,
-  entryId: string,
-  content: string,
+  { tenantId, entryId, content }: RejectionCheck,
 ): void {
   const incomingDigest = rejectionDigest(content);
   const tombstone = readRejectedValue(db, tenantId, incomingDigest);

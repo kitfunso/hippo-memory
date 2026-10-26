@@ -80,8 +80,9 @@ function rebuildSteps(
       return session.token !== null;
     },
     begin: (session) => {
-      if (session.rebuild !== null)
+      if (session.rebuild !== null) {
         throw new Error('a vector rebuild is already open on this session');
+      }
       session.rebuild = beginRebuild(open);
     },
     stage: (session, { rows }) => rebuildOf(session).stage(rows),

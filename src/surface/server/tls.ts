@@ -44,7 +44,6 @@ export class CleartextBindError extends Error {
 /**
  * Throws CleartextBindError for a non-loopback bind without TLS unless the operator allowed
  * cleartext, which is then said once at boot.
- *
  */
 export function assertTlsOrCleartextAllowed(
   host: string,

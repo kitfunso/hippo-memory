@@ -130,11 +130,16 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
   ]);
 }
 
+/** Who decides on which tenant's quarantined memory. */
+interface DecisionOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly actor: string;
+}
+
 function approveQuarantineRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  memoryId: string,
-  decidedBy: string,
+  { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
 ): void {
   cachedStatement(
     db,
@@ -145,9 +150,7 @@ function approveQuarantineRow(
 
 function rejectQuarantineRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  memoryId: string,
-  decidedBy: string,
+  { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
 ): void {
   cachedStatement(
     db,
@@ -187,9 +190,7 @@ function pendingOrRefusal(
  * was quarantined. */
 function approveQuarantined(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  actor: string,
+  { tenantId, id, actor }: DecisionOptions,
 ): QuarantineApproval {
   return withWriteScopeOr<QuarantineApproval, QuarantineApproval>(
     db,
@@ -203,7 +204,7 @@ function approveQuarantined(
         `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
       ).run(row.originalScope, id, tenantId, quarantineScope);
       if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
-      approveQuarantineRow(db, tenantId, id, actor);
+      approveQuarantineRow(db, { tenantId, id, actor });
       appendAuditEvents(db, [
         {
           tenantId,
@@ -221,9 +222,7 @@ function approveQuarantined(
 /** Marks the record rejected; the memory row is left as stored. */
 function rejectQuarantined(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  actor: string,
+  { tenantId, id, actor }: DecisionOptions,
 ): QuarantineRejection {
   return withWriteScopeOr<QuarantineRejection, QuarantineRejection>(
     db,
@@ -231,7 +230,7 @@ function rejectQuarantined(
     (rollback) => {
       const row = pendingOrRefusal(db, tenantId, id);
       if ('outcome' in row) return rollback(row);
-      rejectQuarantineRow(db, tenantId, id, actor);
+      rejectQuarantineRow(db, { tenantId, id, actor });
       appendAuditEvents(db, [
         { tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} },
       ]);
@@ -259,11 +258,8 @@ function rewriteMirror(
   }
 }
 
-interface Decision {
-  readonly tenantId: string;
-  readonly id: string;
+interface Decision extends DecisionOptions {
   readonly decision: 'approve' | 'reject';
-  readonly actor: string;
 }
 
 function decide(
@@ -271,8 +267,8 @@ function decide(
   files: StoreFiles,
   { tenantId, id, decision, actor }: Decision,
 ) {
-  if (decision === 'reject') return rejectQuarantined(db, tenantId, id, actor);
-  const result = approveQuarantined(db, tenantId, id, actor);
+  if (decision === 'reject') return rejectQuarantined(db, { tenantId, id, actor });
+  const result = approveQuarantined(db, { tenantId, id, actor });
   if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
   return result;
 }

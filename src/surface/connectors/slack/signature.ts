@@ -12,7 +12,6 @@ function withinSkew(timestamp: string, now: number, skewSeconds: number): boolea
  * True for headers that could pass verifySlackSignature: a timestamp inside the skew window and a
  * `v0=` signature of 64 hex digits. Anything else is refused before the body is read, since no
  * secret can make it match.
- *
  */
 export function isWellFormedSlackRequest(
   timestamp: string,
@@ -31,7 +30,6 @@ export interface VerifyOptions {
   /**
    * Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries
    * `signingSecret` first, then this.
-   *
    */
   previousSecret?: string;
   /** Current unix seconds. Injectable for tests. */
@@ -42,11 +40,9 @@ export interface VerifyOptions {
 
 function verifyOne(
   rawBody: string | Uint8Array,
-  signature: string,
-  timestamp: string,
-  secret: string,
+  { signature, timestamp, secret }: { signature: string; timestamp: string; secret: string },
 ): boolean {
-  return matchesHmacSha256('v0=', [`v0:${timestamp}:`, rawBody], secret, signature);
+  return matchesHmacSha256([`v0:${timestamp}:`, rawBody], { prefix: 'v0=', secret, signature });
 }
 
 export function verifySlackSignature(opts: VerifyOptions): boolean {
@@ -54,7 +50,9 @@ export function verifySlackSignature(opts: VerifyOptions): boolean {
   const now = opts.now ?? Math.floor(Date.now() / 1000);
   const skew = opts.skewSeconds ?? DEFAULT_SKEW_SECONDS;
   if (!withinSkew(timestamp, now, skew)) return false;
-  if (verifyOne(rawBody, signature, timestamp, signingSecret)) return true;
-  if (previousSecret && verifyOne(rawBody, signature, timestamp, previousSecret)) return true;
+  if (verifyOne(rawBody, { signature, timestamp, secret: signingSecret })) return true;
+  if (previousSecret && verifyOne(rawBody, { signature, timestamp, secret: previousSecret })) {
+    return true;
+  }
   return false;
 }

@@ -130,7 +130,6 @@ export function writeEntriesTogether(
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store
  * rejects its value, leaving that row's refusal audit and the rest of the batch. Mirrors follow the
  * commit. Returns how many were written.
- *
  */
 export function writeEntriesSkippingRejected(
   db: DatabaseSyncLike,
@@ -235,7 +234,7 @@ export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor:
   // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes have no
   // parent, so the hot path pays one null check.
   if (entry.dagParentId) {
-    markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
+    markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
   }
 }
 
@@ -350,7 +349,9 @@ export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, act
     entry.tenantId,
   );
   deleteFtsRow(db, entry.id);
-  if (entry.dagParentId) markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
+  if (entry.dagParentId) {
+    markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
+  }
 }
 
 // The last value given for an id wins, as a row-by-row write left it: UPDATE FROM applies any one
@@ -371,12 +372,17 @@ export function setHalfLives(
   cachedStatement(db, HALF_LIFE_UPDATE_SQL).run(lastPerId(rows.map((r) => [r.id, r.halfLifeDays])));
 }
 
+/** A tenant's project `from` and the project `into` that takes its rows. */
+export interface OriginMoveOptions {
+  readonly tenantId: string;
+  readonly from: string;
+  readonly into: string;
+}
+
 /** Moves every row of `from` in a tenant to project `into`. */
 export function restampOriginProject(
   db: DatabaseSyncLike,
-  tenantId: string,
-  from: string,
-  into: string,
+  { tenantId, from, into }: OriginMoveOptions,
 ): void {
   cachedStatement(
     db,
@@ -399,14 +405,19 @@ export function stampOriginProjects(
   cachedStatement(db, ORIGIN_STAMP_SQL).run(lastPerId(rows.map((r) => [r.id, r.origin])), tenantId);
 }
 
+/** A tenant's row `id` and the source names it moves `from` and `to`. */
+interface RenameEntrySourceOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+}
+
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or
  * superseded it first. */
 export function renameEntrySource(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  from: string,
-  to: string,
+  { tenantId, id, from, to }: RenameEntrySourceOptions,
 ): number {
   const moved = cachedStatement(
     db,
@@ -432,12 +443,17 @@ export function renameEntrySourceAndOrigin(
   return Number(done.changes ?? 0);
 }
 
+/** A tenant's row `id` and the row `newId` that supersedes it. */
+interface SupersedeEntryOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly newId: string;
+}
+
 /** Marks `id` superseded by `newId`; false when another writer superseded it first. */
 export function supersedeEntry(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: string,
-  newId: string,
+  { tenantId, id, newId }: SupersedeEntryOptions,
 ): boolean {
   const result = cachedStatement(
     db,
@@ -466,7 +482,8 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
             const { id, tenantId, actor } = removal;
             if (!deleteEntryCore(db, id, tenantId, { actor })) throw notFound(id);
           });
-          purgeMirrorBestEffort(files.hippoRoot, removal.id, false, 'deleteEntry');
+          const purge = { id: removal.id, isRaw: false, logPrefix: 'deleteEntry' };
+          purgeMirrorBestEffort(files.hippoRoot, purge);
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
         },
       },
@@ -641,7 +658,7 @@ function outcomeAuditRows(
     const level = parent ? flipped.get(parent) : undefined;
     if (parent && level !== undefined && !marked.has(parent)) {
       marked.add(parent);
-      rows.push(summaryDirtyAudit(parent, entry.tenantId, actor, level));
+      rows.push(summaryDirtyAudit({ summaryId: parent, tenantId: entry.tenantId, actor }, level));
     }
     rows.push({ tenantId, actor, op: 'outcome', targetId: entry.id, metadata: { good } });
     return rows;
@@ -680,7 +697,9 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
       ).get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
       if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
       // After the CAS, so a lost race marks no parent for rebuild.
-      if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
+      if (won.dag_parent_id) {
+        markSummaryDirtyInTx(db, { summaryId: won.dag_parent_id, tenantId, actor });
+      }
       writeEntryDbOnly(db, successor, { actor });
       appendAuditEvents(db, [
         { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } },

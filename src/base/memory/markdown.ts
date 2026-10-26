@@ -15,7 +15,6 @@ type FrontmatterValue = string | number | boolean | null | string[] | number[];
 /**
  * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional
  * so they stay absent from the YAML when unset.
- *
  */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
@@ -118,10 +117,42 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
 
   if (!data['id'] || !data['layer']) return null;
 
+  return fromWire({
+    ...scoringWireOf(data, now),
+    content: content.trim(),
+    ...lineageWireOf(data, now),
+  });
+}
+
+type FrontmatterData = Record<string, FrontmatterValue>;
+
+type LineageWire = Pick<
+  MemoryWire,
+  | 'parents'
+  | 'starred'
+  | 'trace_outcome'
+  | 'source_session_id'
+  | 'valid_from'
+  | 'superseded_by'
+  | 'extracted_from'
+  | 'dag_level'
+  | 'dag_parent_id'
+  | 'kind'
+  | 'scope'
+  | 'owner'
+  | 'artifact_ref'
+  | 'tenant_id'
+  | 'origin_project'
+>;
+
+function scoringWireOf(
+  data: FrontmatterData,
+  now: Date,
+): Omit<MemoryWire, 'content' | keyof LineageWire> {
   // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
   // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
   // accept (permissive parse).
-  return fromWire({
+  return {
     id: String(data['id']),
     created: String(data['created'] ?? now.toISOString()),
     last_retrieved: String(data['last_retrieved'] ?? now.toISOString()),
@@ -142,7 +173,14 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     conflicts_with: normalizeStringArray(data['conflicts_with']),
     pinned: Boolean(data['pinned'] ?? false),
     confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
-    content: content.trim(),
+  };
+}
+
+function lineageWireOf(data: FrontmatterData, now: Date): LineageWire {
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
+  // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
+  // accept (permissive parse).
+  return {
     parents: normalizeStringArray(data['parents']),
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryWire['trace_outcome']) ?? null,
@@ -160,7 +198,7 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     artifact_ref: nullableString(data['artifact_ref']),
     tenant_id: nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
     origin_project: originProjectOf(data),
-  });
+  };
 }
 
 function originProjectOf(data: Record<string, FrontmatterValue>): string | null | undefined {

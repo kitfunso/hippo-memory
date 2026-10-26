@@ -97,7 +97,6 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
 /**
  * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F =
  * G_Q * mass * max(0, cosine(pos, query))^2.
- *
  */
 export function queryGravityMagnitude(
   particle: PhysicsParticle,
@@ -121,7 +120,6 @@ export function velocityAlignmentBonus(
  * directed along (pos_j - pos_i) projected tangent to the unit sphere at pos_i (positions are
  * re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector by default)
  * using `diff` as scratch.
- *
  */
 export function attractionForce(
   pi: PhysicsParticle,
@@ -147,7 +145,6 @@ export function attractionForce(
  * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01,
  * cosine_distance)^2, where cosine_distance = 1 - cosine_similarity. Adds into `out` (a fresh zero
  * vector by default) using `diff` as scratch.
- *
  */
 export function repulsionForce(
   pi: PhysicsParticle,
@@ -172,7 +169,6 @@ export function repulsionForce(
  * Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with
  * effectiveHalfLife from the memory's current half_life_days. Adds into `out`, a fresh zero vector
  * by default.
- *
  */
 export function dragForce(
   particle: PhysicsParticle,
@@ -351,7 +347,6 @@ export function computeSystemEnergy(particles: PhysicsParticle[], gMemory: numbe
 /**
  * Scores all particles against a query embedding; virtual force computation, so it does NOT modify
  * particle positions.
- *
  */
 export function physicsScore(
   particles: PhysicsParticle[],
@@ -430,7 +425,6 @@ function applyClusterAmplification(
 /**
  * Initialize physics state for a memory from its embedding vector; returns the new particle without
  * persisting (the caller must save).
- *
  */
 export function initializeParticle(
   entry: MemoryEntry,

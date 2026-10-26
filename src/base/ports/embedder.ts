@@ -21,7 +21,6 @@ export interface EmbeddingProvider {
   /**
    * Identity recorded in DB meta to drive reindex-on-change: bare model string for local,
    * `${kind}:${model}` for api.
-   *
    */
   readonly id: string;
   /** Known fixed output dimension, if any (undefined for local / unknown). */

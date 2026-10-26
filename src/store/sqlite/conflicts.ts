@@ -74,13 +74,22 @@ interface ConflictJoinRow extends MemoryConflictRow {
   b_origin_project: string | null;
 }
 
-function memberOf(
-  id: string | null,
-  scope: string | null,
-  kind: string | null,
-  supersededBy: string | null,
-  originProject: string | null,
-): ConflictMember | null {
+/** One member's joined columns, each null when the left join found no row. */
+interface MemberOfOptions {
+  readonly id: string | null;
+  readonly scope: string | null;
+  readonly kind: string | null;
+  readonly supersededBy: string | null;
+  readonly originProject: string | null;
+}
+
+function memberOf({
+  id,
+  scope,
+  kind,
+  supersededBy,
+  originProject,
+}: MemberOfOptions): ConflictMember | null {
   if (id === null || kind === null) return null;
   return { scope, kind, superseded_by: supersededBy, origin_project: originProject };
 }
@@ -88,8 +97,20 @@ function memberOf(
 function toConflictRow(r: ConflictJoinRow): ConflictRow {
   return {
     conflict: rowToMemoryConflict(r),
-    a: memberOf(r.a_id, r.a_scope, r.a_kind, r.a_superseded_by, r.a_origin_project),
-    b: memberOf(r.b_id, r.b_scope, r.b_kind, r.b_superseded_by, r.b_origin_project),
+    a: memberOf({
+      id: r.a_id,
+      scope: r.a_scope,
+      kind: r.a_kind,
+      supersededBy: r.a_superseded_by,
+      originProject: r.a_origin_project,
+    }),
+    b: memberOf({
+      id: r.b_id,
+      scope: r.b_scope,
+      kind: r.b_kind,
+      supersededBy: r.b_superseded_by,
+      originProject: r.b_origin_project,
+    }),
   };
 }
 
@@ -122,8 +143,9 @@ export function conflictPage(
 ): ConflictRowPage {
   const filters: SqlFragment[] = [];
   if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
-  if (after)
+  if (after) {
     filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
+  }
   const select = conflictSelect(tenantId, filters);
   const rows = cachedStatement(
     db,
@@ -394,7 +416,6 @@ const SIDE_HOLDS = 'EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = 
 /**
  * Marks the conflict resolved while it is open, names this pair and each side holds its scope;
  * false writes nothing.
- *
  */
 function claimConflict(
   db: DatabaseSyncLike,
@@ -566,8 +587,9 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope))
+    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope)) {
       continue;
+    }
     dups.push({ id: dup.id, kind: dup.kind });
   }
   const { actor, reason } = r;
@@ -592,8 +614,18 @@ function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string
   return rejectedDigest;
 }
 
+/** A tenant's row `id` and the conflict id `ref` it drops. */
+interface DropConflictRefOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly ref: string;
+}
+
 /** Drops `ref` from row `id`'s conflicts_with_json, when the row is in the tenant. */
-function dropConflictRef(db: DatabaseSyncLike, tenantId: string, id: string, ref: string): void {
+function dropConflictRef(
+  db: DatabaseSyncLike,
+  { tenantId, id, ref }: DropConflictRefOptions,
+): void {
   const row = cachedStatement(
     db,
     `SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`,
@@ -616,8 +648,8 @@ function stripConflictRefs(
   r: ConflictResolution,
   loserRemoved: boolean,
 ): void {
-  dropConflictRef(db, tenantId, r.keep.id, r.loser.id);
-  if (!loserRemoved) dropConflictRef(db, tenantId, r.loser.id, r.keep.id);
+  dropConflictRef(db, { tenantId, id: r.keep.id, ref: r.loser.id });
+  if (!loserRemoved) dropConflictRef(db, { tenantId, id: r.loser.id, ref: r.keep.id });
 }
 
 function auditConflictResolve(
@@ -665,7 +697,8 @@ function purgeRemovedLoserMirrors(
       removedId === loserId ? removal.loserWasRaw : removal.extraRemovedRawIds.includes(removedId);
     // purgeMirrorBestEffort retries once, then reports the explicit leftover paths for non-raw ids,
     // which the cleanupArchivedMirrors reaper never scans.
-    const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
+    const purge = { id: removedId, isRaw, logPrefix: 'resolveConflict' };
+    const mirrorOk = purgeMirrorBestEffort(hippoRoot, purge);
     if (mirrorOk && isRaw) {
       cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
         handleStamp(db),

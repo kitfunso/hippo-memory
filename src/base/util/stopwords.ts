@@ -77,7 +77,6 @@ export const MEMORY_QUALITY_STOPWORDS: ReadonlySet<string> = new Set([
 /**
  * The widest set: drops wh-words, prepositions and quantifiers so overlap comes from domain tokens.
  * It keeps "not" and "no", which polarity detection needs.
- *
  */
 export const CONFLICT_STOPWORDS: ReadonlySet<string> = new Set([
   'the',

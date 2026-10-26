@@ -120,8 +120,9 @@ async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
     if (await step({ kind: 'lock' })) return;
     const left = deadline - Date.now();
-    if (left <= 0)
+    if (left <= 0) {
       throw new Error('the embedding index is busy: another hippo process holds its lock');
+    }
     // The last poll lands on the deadline, so the wait never runs past the budget.
     await new Promise((r) => setTimeout(r, Math.min(wait, left)));
   }
@@ -594,8 +595,9 @@ export async function embedAll(
   if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on));
   return withEmbedLock(on, async (turn) => {
     const identity = provider.id;
-    if (await turn.step({ kind: 'reindex', providerId: identity }))
+    if (await turn.step({ kind: 'reindex', providerId: identity })) {
       return rebuildIndexForProvider(turn, provider);
+    }
 
     // Host-wide by design: embedAll backfills all tenants' entries into the per-host index;
     // per-tenant filtering would produce partial indices and break recall.

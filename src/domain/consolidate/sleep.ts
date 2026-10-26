@@ -1,7 +1,6 @@
 /**
  * Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge
  * pass (semantic summaries of overlapping episodics), stats.
- *
  */
 
 import { MemoryEntry } from '../../base/memory/entry.js';
@@ -62,11 +61,13 @@ export interface SleepRules {
   readonly strength: StrengthModel;
 }
 
+type RunConsolidationOptions = ConsolidateOptions &
+  SleepRules & { config: HippoConfig; tenantId: string; pageRows?: number };
+
 /** A full consolidation pass whose store work goes through `store.consolidation`. */
 export async function runConsolidation(
   store: ConsolidationStore,
-  options: ConsolidateOptions &
-    SleepRules & { config: HippoConfig; tenantId: string; pageRows?: number },
+  options: RunConsolidationOptions,
 ): Promise<ConsolidationResult> {
   const { now } = options;
   const dryRun = options.dryRun ?? false;
@@ -85,12 +86,30 @@ export async function runConsolidation(
   // a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
+  const run = newSleepRun(store, options, { start, result, rows });
+  await runAndFlush(run, options, start.sessions);
+  return result;
+}
+
+interface SleepRunParts {
+  readonly start: SleepStart;
+  readonly result: ConsolidationResult;
+  readonly rows: SleepRows;
+}
+
+function newSleepRun(
+  store: ConsolidationStore,
+  options: RunConsolidationOptions,
+  parts: SleepRunParts,
+): SleepRun {
+  const { tenantId, now, config } = options;
+  const dryRun = options.dryRun ?? false;
+  const { start, result, rows } = parts;
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class
   // object.
   const retirable = (entry: MemoryEntry): boolean =>
     canAutoDelete(entry) && !rows.backsObject(entry.id);
-
-  const run: SleepRun = {
+  return {
     tenantId,
     store,
     now,
@@ -111,9 +130,6 @@ export async function runConsolidation(
     parentOf: new Map(),
     units: [],
   };
-
-  await runAndFlush(run, options, start.sessions);
-  return result;
 }
 
 async function runAndFlush(

@@ -1,7 +1,6 @@
 /**
  * Splits one markdown memory file into items (a top-level bullet or a paragraph), each tagged with
  * its heading. Pure.
- *
  */
 
 export interface MarkdownItem {

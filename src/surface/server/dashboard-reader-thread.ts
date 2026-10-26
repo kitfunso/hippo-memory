@@ -74,8 +74,16 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
         return null;
     }
   };
-  // One call at a time, in the order sent, so a write's invalidation lands before the read that
-  // follows it.
+  answerInOrder(port, clock, run);
+}
+
+// One call at a time, in the order sent, so a write's invalidation lands before the read that
+// follows it.
+function answerInOrder(
+  port: MessagePort,
+  clock: { nowMs: number; wallMs: number },
+  run: (call: ReaderCall) => Promise<ReaderValue>,
+): void {
   let turn: Promise<void> = Promise.resolve();
   port.on('message', (call: ReaderCall) => {
     turn = turn.then(async () => {

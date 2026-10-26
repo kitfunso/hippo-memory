@@ -69,8 +69,9 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
   ): Promise<number[][]> {
     // A model that cannot load fails the call, as an API outage does; items then run one at a time
     // on the shared pipeline.
-    if (texts.length > 0)
+    if (texts.length > 0) {
       await this.embedder.requirePipeline(this.model, withRequestSignal(call.signal));
+    }
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await this.embedder.embed(text, this.model, role));
@@ -338,7 +339,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
 function validateBaseUrl(url: string | undefined, fallback: string): string {
   const candidate = url?.trim();
   if (!candidate) return fallback;
-  parseOutboundUrl(candidate, 'config.embeddings.apiBaseUrl');
+  parseOutboundUrl(candidate, { setting: 'config.embeddings.apiBaseUrl' });
   return candidate;
 }
 

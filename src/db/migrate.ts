@@ -239,8 +239,9 @@ function healUserVersion(
 ): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined;
   const target = Math.max(0, Math.trunc(version));
-  if (Number(row?.user_version ?? 0) < target)
+  if (Number(row?.user_version ?? 0) < target) {
     execWithBusyRetry(db, `PRAGMA user_version = ${target}`, busyWaitMs);
+  }
 }
 
 // A failed import leaves embeddings.json in place for the next open to retry; the store still

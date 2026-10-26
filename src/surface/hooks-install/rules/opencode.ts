@@ -11,7 +11,6 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  * session-end`, whose `--runtime opencode` logs to the file session.created's `hippo last-sleep`
  * reads. No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is
  * guarded and `.nothrow()` keeps a missing hippo binary from throwing.
- *
  */
 export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
@@ -67,7 +66,6 @@ export function opencodeConfigPathOn(homes: Homes): string {
  * True iff a hook entry's command starts with `hippo ` plus a verb hippo itself installs
  * (session-end, last-sleep, sleep, capture, context). Structural, not substring (`echo "remember to
  * hippo sleep"` is not ours), and per hook so user-authored hooks in the same entry survive.
- *
  */
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 

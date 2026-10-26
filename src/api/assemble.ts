@@ -87,22 +87,10 @@ export async function assemble(
   const summarizeOlder = opts.summarizeOlder ?? true;
   const own = personalScopeOf(ctx.actor) ?? undefined;
 
-  if (!sessionId) {
-    return {
-      sessionId,
-      items: [],
-      tokens: 0,
-      totalRaw: 0,
-      summarized: 0,
-      evicted: 0,
-      truncated: false,
-    };
-  }
+  if (!sessionId) return emptyResult(sessionId, 0, false);
 
   const { scoped, totalRaw, truncated } = await loadScopedRaws(ctx, sessionId, opts, own);
-  if (scoped.length === 0) {
-    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
-  }
+  if (scoped.length === 0) return emptyResult(sessionId, totalRaw, truncated);
 
   // Split newest N into fresh tail; rest is older.
   const tailStartIdx = Math.max(0, scoped.length - freshTailCount);
@@ -127,6 +115,10 @@ export async function assemble(
   const { items, tokens, evicted } = evictToBudget([...olderItems, ...tailItems], itemCost, room);
 
   return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+}
+
+function emptyResult(sessionId: string, totalRaw: number, truncated: boolean): AssembleResult {
+  return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
 }
 
 /** The session's raw rows the caller may see, newest `rowCap` at most, with the uncapped count
@@ -184,8 +176,9 @@ async function sessionRawRows(
     origins: origins === undefined ? undefined : ['', ...origins],
   } as const;
   const reports = ctx.store.reports;
-  if (cap > 0)
+  if (cap > 0) {
     return (await reports.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
+  }
   return readAll((after?: EntryCursor) =>
     reports.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
   );
@@ -226,13 +219,7 @@ async function substituteSummaries(
 ): Promise<SubstitutedOlder> {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;
-  const olderByParent = new Map<string, MemoryEntry[]>();
-  for (const r of olderRows) {
-    if (!r.dagParentId) continue;
-    const list = olderByParent.get(r.dagParentId) ?? [];
-    list.push(r);
-    olderByParent.set(r.dagParentId, list);
-  }
+  const olderByParent = groupByParent(olderRows);
   const eligibleParentIds = Array.from(olderByParent.keys()).filter(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
   );
@@ -249,14 +236,7 @@ async function substituteSummaries(
   for (const parent of parents) {
     const claimed = (olderByParent.get(parent.id) ?? []).map((r) => r.id);
     claimed.forEach((id) => claimedRawIds.add(id));
-    olderItems.push({
-      id: parent.id,
-      content: parent.content,
-      createdAt: parent.earliestAt ?? parent.created,
-      isSummary: true,
-      substitutedFor: claimed,
-      strength: parent.strength,
-    });
+    olderItems.push(summaryItem(parent, claimed));
     summarized += claimed.length;
   }
   for (const r of olderRows) {
@@ -264,6 +244,28 @@ async function substituteSummaries(
     olderItems.push(rawItem(r));
   }
   return { olderItems, summarized };
+}
+
+function groupByParent(rows: MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const byParent = new Map<string, MemoryEntry[]>();
+  for (const r of rows) {
+    if (!r.dagParentId) continue;
+    const list = byParent.get(r.dagParentId) ?? [];
+    list.push(r);
+    byParent.set(r.dagParentId, list);
+  }
+  return byParent;
+}
+
+function summaryItem(parent: MemoryEntry, claimed: string[]): AssembledContextItem {
+  return {
+    id: parent.id,
+    content: parent.content,
+    createdAt: parent.earliestAt ?? parent.created,
+    isSummary: true,
+    substitutedFor: claimed,
+    strength: parent.strength,
+  };
 }
 
 /** Drops the weakest non-fresh-tail item until the total fits `room`; fresh-tail items are never

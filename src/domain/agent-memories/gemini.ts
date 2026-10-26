@@ -24,8 +24,9 @@ export const geminiAdapter: Adapter = {
   tool: 'gemini',
   list(ctx, scope) {
     const home = path.join(ctx.env.GEMINI_CLI_HOME || ctx.home, '.gemini');
-    if (scope === 'user')
+    if (scope === 'user') {
       return { tool: 'gemini', home, containers: userContainers(ctx.files, home), warnings: [] };
+    }
     return projectListing(ctx, home);
   },
 };
@@ -113,8 +114,9 @@ function projectSlug(
 function parseIndex(text: string): JsonObject {
   const data = parseJson(text);
   const projects = isJsonObjectLiteral(data) ? data.projects : undefined;
-  if (!isJsonObjectLiteral(projects))
+  if (!isJsonObjectLiteral(projects)) {
     throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
+  }
   return projects;
 }
 

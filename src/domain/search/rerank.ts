@@ -10,7 +10,6 @@ const MMR_CANDIDATE_CAP = 100;
 /** MMR: repeatedly picks the candidate maximising lambda * relevance - (1 - lambda) * max(cos(cand,
  * picked)). Input must be sorted by relevance; strict `>` keeps ties first-wins, so a deterministic
  * input stays deterministic.
- *
  */
 export function mmrRerank(
   scored: SearchResult[],

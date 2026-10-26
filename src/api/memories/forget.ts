@@ -102,7 +102,11 @@ function applyReject(ctx: Context, opts: RejectOptions): Promise<RejectFlowResul
 /** Lifts the tombstone a digest or unambiguous prefix names, as the caller; a blank one, no
  * match or several come back as the outcome, so a caller can list the candidates. */
 export function liftRejection(ctx: Context, digestOrPrefix: string): Promise<UnrejectOutcome> {
-  return unrejectValue(ctx.store, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+  return unrejectValue(ctx.store, {
+    tenantId: ctx.tenantId,
+    digestOrPrefix,
+    actor: ctx.actor.subject,
+  });
 }
 
 /** Every tombstone of the caller's tenant. */

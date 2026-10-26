@@ -182,7 +182,7 @@ export async function briefFromReceipts(
   tenantId: string,
   repo: string,
 ): Promise<BriefDigest> {
-  const normalizedRepo = requiredRepo('briefFromReceipts', tenantId, repo);
+  const normalizedRepo = requiredRepo('briefFromReceipts', { tenantId, repo });
   const receipts = await objects.briefReceipts(
     tenantId,
     receiptTag(normalizedRepo),
@@ -196,7 +196,10 @@ export interface BriefDigest {
   receiptCount: number;
 }
 
-function requiredRepo(fn: string, tenantId: string, repo: string): string {
+function requiredRepo(
+  fn: string,
+  { tenantId, repo }: { readonly tenantId: string; readonly repo: string },
+): string {
   assertTenantId(fn, tenantId);
   return requireLine(repo, MAX_REPO_LEN, 'repo');
 }
@@ -234,7 +237,7 @@ export async function refreshedBrief(
   site: ObjectSaveSite,
   repo: string,
 ): Promise<ProjectBrief> {
-  const normalizedRepo = requiredRepo('refreshedBrief', site.tenantId, repo);
+  const normalizedRepo = requiredRepo('refreshedBrief', { tenantId: site.tenantId, repo });
   const digest = await briefFromReceipts(objects, site.tenantId, normalizedRepo);
   const [active = null] = await objects.listObjects(
     site.tenantId,

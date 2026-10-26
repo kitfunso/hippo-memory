@@ -1,7 +1,6 @@
 /**
  * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in
  * knowledge-space without retrieving specific memories.
- *
  */
 
 import type { MemoryEntry } from './entry.js';
@@ -132,8 +131,9 @@ export function foldAmbientRows(
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
-    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical')
+    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') {
       t.negative++;
+    }
     if (isErrorTagged(entry.tags)) t.errors++;
     if (entry.schemaFit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;

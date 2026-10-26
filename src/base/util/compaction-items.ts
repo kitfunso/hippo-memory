@@ -40,7 +40,6 @@ function withoutAnalysis(text: string): string {
 /**
  * `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern
  * retries the run from each character.
- *
  */
 function withoutHeadingTrailer(text: string): string {
   let end = text.length;
@@ -51,7 +50,6 @@ function withoutHeadingTrailer(text: string): string {
 /**
  * The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole
  * text trimmed when there is no <summary> tag.
- *
  */
 export function compactSummaryBody(compactSummary: string): string {
   const text = withoutAnalysis(compactSummary);
@@ -115,8 +113,9 @@ export function writableItemRows(
   note: (message: string) => void,
 ): string[] {
   const usable = items.filter((item) => !item.includes(REDACTED));
-  if (usable.length < items.length)
+  if (usable.length < items.length) {
     note(`skipped ${items.length - usable.length} item(s) as secret`);
+  }
   const { rows, tooLong, capped } = selectItemRows(usable);
   if (tooLong > 0) note(`item too long: ${tooLong} kept in the record only`);
   if (capped > 0) note(`capped: ${capped} more kept in the record only`);

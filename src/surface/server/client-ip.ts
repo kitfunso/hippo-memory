@@ -15,7 +15,6 @@ const IPV6_PREFIX_GROUPS = 3;
  * from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs), so a caller that reaches the port past the
  * proxy cannot pick its own bucket. In a comma-joined chain the key is the rightmost hop no trusted
  * proxy added.
- *
  */
 export function clientIpForRateLimit(req: IncomingMessage): string {
   const socketIp = req.socket.remoteAddress ?? 'unknown';
@@ -68,7 +67,6 @@ function proxyTrust(raw: string | undefined): BlockList | undefined {
 /**
  * serve() refused HIPPO_CLIENT_IP_HEADER with no HIPPO_TRUSTED_PROXIES: the header would be read
  * from no one, so the setting is a mistake.
- *
  */
 export class UntrustedClientIpHeaderError extends Error {
   constructor(readonly header: string) {

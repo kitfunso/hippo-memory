@@ -167,7 +167,6 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
 /**
  * "Imported 12 agent memories (Claude Code 10, Codex 2); 1 replaced, 1 set aside, 1 skipped for a
  * secret.", or null when nothing moved.
- *
  */
 export function summaryLine(report: ImportReport): string | null {
   const total = totalTally(report);
@@ -181,8 +180,9 @@ export function summaryLine(report: ImportReport): string | null {
     total.secret > 0 ? `${total.secret} skipped for a secret` : '',
     total.rejected > 0 ? `${total.rejected} skipped as rejected` : '',
   ].filter((p) => p !== '');
-  if (total.imported === 0)
+  if (total.imported === 0) {
     return parts.length === 0 ? null : `Agent memories: ${parts.join(', ')}.`;
+  }
   const byTool = report.tools
     .filter((t) => t.tally.imported > 0)
     .map((t) => `${t.label} ${t.tally.imported}`);

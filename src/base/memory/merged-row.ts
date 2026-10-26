@@ -8,7 +8,6 @@ import { duplicateKey, heldTexts, mergedText } from '../util/same-text.js';
 /**
  * The row that replaces a merged row once its retired texts leave: undefined when it holds none,
  * null when nothing else is left.
- *
  */
 export function mergedSuccessor(
   row: MemoryEntry,
@@ -37,7 +36,6 @@ export function mergedSuccessor(
 /**
  * Sleep's check on a merged row: drops texts whose source was superseded since the merge, or that a
  * rejection now covers.
- *
  */
 export function successorAfterRetirement(
   row: MemoryEntry,

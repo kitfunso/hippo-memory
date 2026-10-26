@@ -41,7 +41,6 @@ export interface CaptureOptions {
   /**
    * The caller's tenant: the dedup read counts only its memories, except under `global`, which
    * counts every tenant's.
-   *
    */
   tenantId: string;
   /** The session's project: rows are stamped with its id, and dedup reads its rows under either
@@ -152,8 +151,9 @@ async function captureFromCli(
     dedup: captureDedup(options),
     now: evalClock()(),
   };
-  if (!options.dryRun)
+  if (!options.dryRun) {
     return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
+  }
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
@@ -221,28 +221,29 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
       }
       return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0 };
     }
-    case 'last-session': {
-      let turns = options.sessionTurns;
-      if (!turns) {
-        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, {
-          mayScan: !options.stdinTimedOut,
-        });
-        if (!resolved) {
-          console.log(
-            'No transcript found. Pass --transcript <path> or run from a SessionEnd hook.',
-          );
-          return null;
-        }
-        turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
-      }
-      const { users, assistants } = sessionTail(turns);
-      if (users.length === 0 && assistants.length === 0) {
-        console.log('Transcript had no user/assistant messages to summarise.');
-        return null;
-      }
-      return { texts: [...users, ...assistants], userTexts: users.length };
-    }
+    case 'last-session':
+      return readSessionTexts(options);
   }
+}
+
+function readSessionTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
+  let turns = options.sessionTurns;
+  if (!turns) {
+    const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, {
+      mayScan: !options.stdinTimedOut,
+    });
+    if (!resolved) {
+      console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
+      return null;
+    }
+    turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
+  }
+  const { users, assistants } = sessionTail(turns);
+  if (users.length === 0 && assistants.length === 0) {
+    console.log('Transcript had no user/assistant messages to summarise.');
+    return null;
+  }
+  return { texts: [...users, ...assistants], userTexts: users.length };
 }
 
 export interface CaptureTally {

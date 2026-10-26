@@ -84,7 +84,7 @@ export interface StoredScrypt {
   matches(derived: Buffer): boolean;
 }
 
-function validCost(n: number, r: number, p: number): boolean {
+function validCost({ N: n, r, p }: Omit<ScryptParams, 'maxmem'>): boolean {
   const powerOfTwo = Number.isInteger(n) && n >= 2 && (n & (n - 1)) === 0;
   return (
     powerOfTwo &&
@@ -108,9 +108,9 @@ export function storedScrypt(stored: string): StoredScrypt | null {
   const saltHex = parts[parts.length - 2]!;
   if (parts.length === 3 && parts[0] !== 'scrypt') return null;
   if (parts.length === 6) {
-    const [n, r, p] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
-    if (parts[0] !== 'scrypt2' || !validCost(n, r, p)) return null;
-    params = { N: n, r, p, maxmem: SCRYPT_MAXMEM };
+    const cost = { N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]) };
+    if (parts[0] !== 'scrypt2' || !validCost(cost)) return null;
+    params = { ...cost, maxmem: SCRYPT_MAXMEM };
   }
   const expected = Buffer.from(hashHex, 'hex');
   return {

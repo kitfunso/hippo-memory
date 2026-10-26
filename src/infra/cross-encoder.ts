@@ -41,8 +41,9 @@ async function importModelClasses(
   const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
   const seq =
     mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
-  if (!tok || !seq)
+  if (!tok || !seq) {
     throw new Error(`${name} exports no AutoTokenizer or AutoModelForSequenceClassification`);
+  }
   return { AutoTokenizer: tok, AutoModelForSequenceClassification: seq };
 }
 

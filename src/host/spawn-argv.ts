@@ -11,8 +11,9 @@ import { isFile } from './real-path.js';
  * expand. */
 export function quoteCmdArg(arg: string): string {
   // cmd.exe ends the command line at CR or LF, so what follows would run as a new command.
-  if (/[\r\n]/.test(arg))
+  if (/[\r\n]/.test(arg)) {
     throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
+  }
   if (arg.length === 0) return '""';
   if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
   // MSVCRT reads a backslash run as literal only when no quote follows it, so a run before a quote
@@ -59,7 +60,6 @@ const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
 /**
  * The file `command` names on win32: as given when it has a folder, else the first hit on PATH
  * (never the working folder, where a project file could stand in for a tool), trying each PATHEXT.
- *
  */
 function resolveWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
@@ -84,8 +84,9 @@ function resolveWindowsCommand(command: string): string | null {
  * argument quoted for it. */
 export function spawnArgv(argv: readonly string[], options: SpawnOptions): ChildProcess {
   const [command, ...args] = argv;
-  if (command === undefined || command.length === 0)
+  if (command === undefined || command.length === 0) {
     throw new RangeError('spawnArgv needs a command: argv is empty');
+  }
   if (process.platform === 'win32') {
     const resolved = resolveWindowsCommand(command);
     const ext = resolved === null ? '' : path.extname(resolved).toLowerCase();

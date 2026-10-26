@@ -41,6 +41,6 @@ export function auditRejectionRefusal(
   err: RejectedValueError,
   actor: string,
 ): void {
-  const row = refusalAudit(err.tenantId, actor, err.entryId, err);
+  const row = refusalAudit({ tenantId: err.tenantId, actor, targetId: err.entryId }, err);
   audit(db, row.op, row);
 }

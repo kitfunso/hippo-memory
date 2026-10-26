@@ -9,7 +9,6 @@ export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 /**
  * Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to
  * every line written.
- *
  */
 export interface LogFields {
   ts?: string;
@@ -133,9 +132,9 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
   // bounded by ONCE_KEY_CAP.
   const seen = (repeatCounts.get(key) ?? 0) + 1;
   repeatCounts.set(key, seen);
-  if (seen % SAMPLE_EVERY === 0)
+  if (seen % SAMPLE_EVERY === 0) {
     write('warn', `${message} (${seen} more since the first warning)`, fields);
-  else write('debug', message, fields);
+  } else write('debug', message, fields);
 }
 
 const CAUSE_DEPTH = 5;

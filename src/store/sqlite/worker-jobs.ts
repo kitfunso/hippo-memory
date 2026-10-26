@@ -177,6 +177,22 @@ function post(port: MessagePort, reply: Reply): void {
   }
 }
 
+// Each step still closes what is left when the one before it throws, so a failed flush leaves no
+// handle on the files. Held writes run first, then the thread's scope closes, and dispose finds
+// no scope left to close twice.
+function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
+  try {
+    runtime.held.flush();
+    stores.close();
+  } finally {
+    try {
+      runtime.dispose();
+    } finally {
+      port.close();
+    }
+  }
+}
+
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with
  * no handle on the store's files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
@@ -191,21 +207,6 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   // connection at stop.
   const runtime = new StoreRuntime();
   const thread: Thread = { runtime, stores: runtime.run(() => new WorkerStores(init)) };
-  // Each step still closes what is left when the one before it throws, so a failed flush leaves no
-  // handle on the files. Held writes run first, then the thread's scope closes, and dispose finds
-  // no scope left to close twice.
-  const closeThread = (): void => {
-    try {
-      runtime.held.flush();
-      thread.stores.close();
-    } finally {
-      try {
-        runtime.dispose();
-      } finally {
-        port.close();
-      }
-    }
-  };
   // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and
   // it waits for that job's reply.
   let last: Promise<void> = Promise.resolve();
@@ -213,7 +214,7 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
     if (message === 'stop') {
       graphs?.close();
       Promise.all([last, graphs?.idle()])
-        .finally(closeThread)
+        .finally(() => closeThread(thread, port))
         .catch((err) => log.error('store worker: stopping the thread failed', errorFields(err)));
       return;
     }

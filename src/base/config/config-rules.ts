@@ -17,7 +17,17 @@ export type Reader<T> = (raw: JsonValue | undefined, path: string) => T;
 /** Reads one named field of a block. */
 export type FieldReader = <F>(field: string, reader: Reader<F>) => F;
 
-function reject(path: string, expect: string, got: JsonValue, using: string): void {
+function reject({
+  path,
+  expect,
+  got,
+  using,
+}: {
+  readonly path: string;
+  readonly expect: string;
+  readonly got: JsonValue;
+  readonly using: string;
+}): void {
   log.warn(
     `config.json's "${path}" must be ${expect} (got ${JSON.stringify(got)}) - using ${using}.`,
   );
@@ -34,7 +44,12 @@ export function check<T extends JsonValue | undefined>(
   return (raw, path) => {
     if (raw === undefined) return absent;
     if (ok(raw)) return raw;
-    reject(path, expect, raw, fallback === undefined ? 'nothing' : JSON.stringify(fallback));
+    reject({
+      path,
+      expect,
+      got: raw,
+      using: fallback === undefined ? 'nothing' : JSON.stringify(fallback),
+    });
     return fallback;
   };
 }
@@ -49,7 +64,7 @@ export function block<T extends object>(
   return (raw, path) => {
     if (raw === undefined) return { ...fallback };
     if (!isJsonObject(raw)) {
-      reject(path, expect, raw, 'the defaults');
+      reject({ path, expect, got: raw, using: 'the defaults' });
       return { ...fallback };
     }
     const named = new Set<string>();

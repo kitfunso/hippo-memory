@@ -3,7 +3,6 @@
  * (uncached input, cache write, cache read, output). Uncertainty uses paired, cluster
  * (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a
  * seed.
- *
  */
 
 import { mulberry32 } from '../../base/util/prng.js';
@@ -30,7 +29,6 @@ export interface Usage {
 /**
  * Prices in dollars per million tokens, taken from the provider's current price page for the exact
  * model; this module has no built-in prices.
- *
  */
 export interface Prices {
   inputPerMTok: number;
@@ -66,7 +64,6 @@ export function priceUsage(usage: Usage, prices: Prices): number {
  * Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent
  * tokens" when no dollar prices are given. Defaults follow Anthropic's ratios (5-minute cache write
  * 1.25x, cache read 0.1x); pass another provider's ratios when needed.
- *
  */
 export interface CacheRatios {
   write: number;
@@ -125,7 +122,6 @@ function mean(xs: number[]): number {
 /**
  * Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an
  * interval excluding zero is the bar for a real difference.
- *
  */
 export function pairedBootstrap(diffs: number[], opts: BootstrapOptions = {}): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
@@ -145,7 +141,6 @@ export function pairedBootstrap(diffs: number[], opts: BootstrapOptions = {}): E
 /**
  * Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one
  * repository), because tasks in a cluster are not independent.
- *
  */
 export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
@@ -212,7 +207,37 @@ export function costPerResolvedDelta(
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
   const c = costPerResolved(control);
   const t = costPerResolved(treatment);
-  const rand = mulberry32(opts.seed ?? 1);
+  const { deltas, relatives } = bootstrapCostDeltas(control, treatment, iterations, opts.seed ?? 1);
+  const finite = Number.isFinite(c) && Number.isFinite(t);
+  const empty = { low: Number.NaN, high: Number.NaN };
+  return {
+    control: c,
+    treatment: t,
+    delta: {
+      estimate: finite ? t - c : Number.NaN,
+      ...(deltas.length > 0 ? percentileInterval(deltas, alpha) : empty),
+      iterations: deltas.length,
+    },
+    relative: {
+      estimate: finite ? (t - c) / c : Number.NaN,
+      ...(relatives.length > 0 ? percentileInterval(relatives, alpha) : empty),
+      iterations: relatives.length,
+    },
+  };
+}
+
+interface CostDeltaSamples {
+  deltas: number[];
+  relatives: number[];
+}
+
+function bootstrapCostDeltas(
+  control: ArmOutcome[],
+  treatment: ArmOutcome[],
+  iterations: number,
+  seed: number,
+): CostDeltaSamples {
+  const rand = mulberry32(seed);
   const n = control.length;
   const deltas: number[] = [];
   const relatives: number[] = [];
@@ -230,22 +255,7 @@ export function costPerResolvedDelta(
     deltas.push(tt - cc);
     relatives.push((tt - cc) / cc);
   }
-  const finite = Number.isFinite(c) && Number.isFinite(t);
-  const empty = { low: Number.NaN, high: Number.NaN };
-  return {
-    control: c,
-    treatment: t,
-    delta: {
-      estimate: finite ? t - c : Number.NaN,
-      ...(deltas.length > 0 ? percentileInterval(deltas, alpha) : empty),
-      iterations: deltas.length,
-    },
-    relative: {
-      estimate: finite ? (t - c) / c : Number.NaN,
-      ...(relatives.length > 0 ? percentileInterval(relatives, alpha) : empty),
-      iterations: relatives.length,
-    },
-  };
+  return { deltas, relatives };
 }
 
 /** pass@k: share of tasks with at least one success in their first k runs.
@@ -407,8 +417,9 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
 
 /** A win must hold under both codings of not-applicable, while a loss under either is reported. */
 export function combineCodings(a: VerdictResult, b: VerdictResult): VerdictResult {
-  if (a.verdict === 'loss' || b.verdict === 'loss')
+  if (a.verdict === 'loss' || b.verdict === 'loss') {
     return { verdict: 'loss', reachesMinimum: false };
+  }
   if (a.verdict === 'win' && b.verdict === 'win') {
     return { verdict: 'win', reachesMinimum: a.reachesMinimum && b.reachesMinimum };
   }

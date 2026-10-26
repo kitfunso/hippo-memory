@@ -8,7 +8,6 @@ export interface SessionArmOptions {
   /**
    * Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot
    * claim that session's arm.
-   *
    */
   readonly ownTenantOnly?: boolean;
 }

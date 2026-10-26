@@ -376,11 +376,31 @@ function completeGoal(
       const multiplier = goalOutcomeMultiplier(score);
 
       if (multiplier !== 1) {
-        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id)
-        // gives one adjustment per pair.
-        cachedStatement(
-          db,
-          `
+        const since = goalRow.created_at;
+        scaleGoalRecalls(db, { tenantId, goalId, multiplier, since, until: completedAt });
+      }
+    }
+  });
+}
+
+/** A completed goal, its outcome multiplier and the start and end of its active life. */
+interface ScaleGoalRecallsOptions {
+  readonly tenantId: string;
+  readonly goalId: string;
+  readonly multiplier: number;
+  readonly since: string;
+  readonly until: string;
+}
+
+// Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives
+// one adjustment per pair.
+function scaleGoalRecalls(
+  db: DatabaseSyncLike,
+  { tenantId, goalId, multiplier, since, until }: ScaleGoalRecallsOptions,
+): void {
+  cachedStatement(
+    db,
+    `
           UPDATE memories
           SET strength = MIN(1.0, MAX(0.0, strength * ?))
           WHERE tenant_id = ? AND id IN (
@@ -390,10 +410,7 @@ function completeGoal(
               AND recalled_at <= ?
           )
         `,
-        ).run(multiplier, tenantId, goalId, goalRow.created_at, completedAt);
-      }
-    }
-  });
+  ).run(multiplier, tenantId, goalId, since, until);
 }
 
 function suspendGoal(db: DatabaseSyncLike, tenantId: string, goalId: string): void {

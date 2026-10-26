@@ -473,16 +473,21 @@ export function computePredictionBaserate(
   );
   // An empty class is audited too, since an agent probing one is a signal; the recall path passes
   // false and audits its own hint.
-  if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
+  if (emitAudit) auditBaserateRead(db, { tenantId, actor, classTag, nClosed: baserate.nClosed });
   return baserate;
+}
+
+/** Who read which class's base rate, and how many closed predictions it held. */
+interface BaserateReadOptions {
+  readonly tenantId: string;
+  readonly actor: string;
+  readonly classTag: string;
+  readonly nClosed: number;
 }
 
 function auditBaserateRead(
   db: DatabaseSyncLike,
-  tenantId: string,
-  actor: string,
-  classTag: string,
-  nClosed: number,
+  { tenantId, actor, classTag, nClosed }: BaserateReadOptions,
 ): void {
   appendAuditEvents(db, [
     {

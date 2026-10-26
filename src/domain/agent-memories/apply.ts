@@ -75,18 +75,10 @@ async function planWrites(s: StoreSession, w: ContainerWork): Promise<PlannedCon
     })),
     skipped: w.container.skipped,
     live,
-    dormant: dormant.map((snap): DormantRow => ({
-      id: snap.entry.id,
-      ...splitSource(snap.entry.source, w.prefix),
-      dormantAt: snap.dormantAt,
-    })),
+    dormant: dormant.map((snap) => dormantRow(snap, w)),
     legacy: new Map([...w.replace].map(([key, rows]) => [key, rows.map((r) => r.id)])),
   });
-  const tally = emptyTally();
-  for (const reason of refusals.values()) tally[reason]++;
-  tally.unread += w.container.skipped.length;
-  tally.unchanged += plan.unchanged;
-  tally.duplicate += plan.duplicates;
+  const tally = planTally(refusals, w, plan);
   const rows = {
     live: new Map(view.live.map((r) => [r.id, r])),
     dormant: new Map(dormant.map((d) => [d.entry.id, d])),
@@ -112,6 +104,23 @@ function liveRow(row: MemoryEntry, w: ContainerWork): LiveRow {
     tagged: row.tags.includes(w.tool.tag),
     created: row.created,
   };
+}
+
+function dormantRow(snap: DormantSnapshot, w: ContainerWork): DormantRow {
+  return {
+    id: snap.entry.id,
+    ...splitSource(snap.entry.source, w.prefix),
+    dormantAt: snap.dormantAt,
+  };
+}
+
+function planTally(refusals: Map<string, Refusal>, w: ContainerWork, plan: ContainerPlan): Tally {
+  const tally = emptyTally();
+  for (const reason of refusals.values()) tally[reason]++;
+  tally.unread += w.container.skipped.length;
+  tally.unchanged += plan.unchanged;
+  tally.duplicate += plan.duplicates;
+  return tally;
 }
 
 // The rejection lookup reads the capped text, as the write would store it, so a rejected note

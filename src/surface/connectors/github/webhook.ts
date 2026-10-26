@@ -91,18 +91,8 @@ export async function handleGitHubEventsWebhook(
   // Secret and signature header before the body, so a caller with neither cannot make the server
   // buffer one.
   const secret = envGitHubWebhookSecret();
-  if (!secret) {
-    closeIfBodyUnread(request);
-    res.writeHead(404, JSON_HEADERS);
-    res.end(JSON.stringify({ error: 'not found' }));
-    return;
-  }
-  const sigHdr = req.headers['x-hub-signature-256'];
-  const eventHdr = req.headers['x-github-event'];
-  const deliveryHdr = req.headers['x-github-delivery'];
-  const sigStr = isHeaderString(sigHdr) ? sigHdr : null;
-  const eventName = isHeaderString(eventHdr) ? eventHdr : null;
-  const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
+  if (!secret) return refuseUnconfigured(request);
+  const { sigStr, eventName, deliveryId } = readGitHubHeaders(req);
 
   if (sigStr === null || !isWellFormedGitHubSignature(sigStr)) {
     closeIfBodyUnread(request);
@@ -133,6 +123,30 @@ export async function handleGitHubEventsWebhook(
   }
 }
 
+function refuseUnconfigured(request: WebhookRequest): void {
+  closeIfBodyUnread(request);
+  request.res.writeHead(404, JSON_HEADERS);
+  request.res.end(JSON.stringify({ error: 'not found' }));
+}
+
+/** Each GitHub header, or null unless it came as a single string. */
+interface GitHubHeaders {
+  readonly sigStr: string | null;
+  readonly eventName: string | null;
+  readonly deliveryId: string | null;
+}
+
+function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
+  const sigHdr = req.headers['x-hub-signature-256'];
+  const eventHdr = req.headers['x-github-event'];
+  const deliveryHdr = req.headers['x-github-delivery'];
+  return {
+    sigStr: isHeaderString(sigHdr) ? sigHdr : null,
+    eventName: isHeaderString(eventHdr) ? eventHdr : null,
+    deliveryId: isHeaderString(deliveryHdr) ? deliveryHdr : null,
+  };
+}
+
 // GitHub signs no timestamp, so a captured delivery verifies forever. The event log keeps each
 // idempotency key for good, so the signature hold must not run out first: a century outlives any
 // store, and the sweep never reaches it.
@@ -140,8 +154,9 @@ const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.connectorEvents.claimDelivery(claim)))
+  if (!(await store.connectorEvents.claimDelivery(claim))) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  }
 }
 
 async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
@@ -205,16 +220,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     repoFullName: body.repository?.full_name ?? null,
   };
 
-  // Tenant resolution. Fail closed on multi-tenant installs with unknown routing - same policy as
-  // Slack.
-  const resolvedTenant = await resolveTenant(
-    d.store,
-    { connector: 'github', ...routing },
-    {
-      hostTenant: envTenant(),
-      allowUnknown: envGitHubAllowUnknownInstallationFallback(),
-    },
-  );
+  const resolvedTenant = await resolveGitHubTenant(d, routing);
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,
@@ -241,6 +247,18 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     error: `body shape did not match X-GitHub-Event=${d.eventName}`,
     bucket: 'parse_error',
   });
+}
+
+// Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
+function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<string | null> {
+  return resolveTenant(
+    d.store,
+    { connector: 'github', ...routing },
+    {
+      hostTenant: envTenant(),
+      allowUnknown: envGitHubAllowUnknownInstallationFallback(),
+    },
+  );
 }
 
 /** Answers ping and parks every unusable body; returns the envelope only when ingest should go

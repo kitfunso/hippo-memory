@@ -82,7 +82,6 @@ function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
 /**
  * Undo after a failure without letting a failed undo replace the caller's error; an idle handle
  * means SQLite already unwound the scope.
- *
  */
 function undoAfterFailure(db: DatabaseSyncLike, top: boolean, name: string): void {
   if (db.isTransaction === false) return;
@@ -105,7 +104,6 @@ export interface WriteScopeOptions {
 /** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the
  * caller's transaction. A deferred scope that reads first cannot wait out another writer, while
  * BEGIN IMMEDIATE waits the open's busy_timeout.
- *
  */
 export function withWriteScope<T>(
   db: DatabaseSyncLike,
@@ -150,7 +148,6 @@ export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
 /**
  * Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run
  * would do. Takes no write lock up front.
- *
  */
 export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
   assertSavepointName(name);

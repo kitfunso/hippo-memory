@@ -37,7 +37,6 @@ export function shutdownBoundMs(drainMs: number): number {
 /**
  * Stops accepting, ends streams at once (they never finish on their own), gives other in-flight
  * requests up to `drainMs`, then closes what is left.
- *
  */
 export async function drainAndClose(
   server: Server,

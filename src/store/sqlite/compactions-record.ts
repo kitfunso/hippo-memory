@@ -64,7 +64,6 @@ export interface CompactionRecord {
 /**
  * Where the session ran: rows written through the global store or a shared store keep the project
  * the session was in.
- *
  */
 function compactionProject({ host, hippoRoot }: StoreFiles, cwd: string | null): ProjectRef {
   if (!isGlobalStoreRoot(hippoRoot) && !host.isSharedStore(hippoRoot)) {
@@ -149,13 +148,18 @@ export function startCompaction(
   return id;
 }
 
+/** A caller's request id and the session that sent it. */
+interface CompactionRequestOptions {
+  readonly tenantId: string;
+  readonly requestId: string;
+  readonly sessionId: string;
+}
+
 /** The record a caller's request made, whatever state it reached, so a retry neither writes its
  * items twice nor starts a second record. Another session's id is a ConflictError. */
 export function compactionByRequest(
   db: DatabaseSyncLike,
-  tenantId: string,
-  requestId: string,
-  sessionId: string,
+  { tenantId, requestId, sessionId }: CompactionRequestOptions,
 ): CompactionRecord | null {
   const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
   if (record !== null && record.sessionId !== sessionId) throw otherSessionsRequest();
@@ -171,13 +175,12 @@ function latestStarted(
   at: Date,
 ): CompactionRecord | null {
   return (
-    latestStartedRows(
-      db,
+    latestStartedRows(db, {
       tenantId,
       sessionId,
-      at.toISOString(),
-      new Date(at.getTime() - REPLAY_AFTER_MS).toISOString(),
-    ).map(toRecord)[0] ?? null
+      notAfter: at.toISOString(),
+      notBefore: new Date(at.getTime() - REPLAY_AFTER_MS).toISOString(),
+    }).map(toRecord)[0] ?? null
   );
 }
 

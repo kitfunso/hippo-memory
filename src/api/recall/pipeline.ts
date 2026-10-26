@@ -279,14 +279,17 @@ async function rankStages(
 ): Promise<void> {
   if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
   reorderResults(opts, state);
-  if (opts.reranker)
+  if (opts.reranker) {
     state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
+  }
   if (profile.goalBoost.ranked) await applyGoalBoosts(ctx, opts, state);
-  if (opts.salienceThreshold !== undefined)
+  if (opts.salienceThreshold !== undefined) {
     state.results = applySalience(opts, opts.salienceThreshold, state.results);
+  }
   const { outcome, layer } = opts;
-  if (outcome)
+  if (outcome) {
     dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === outcome);
+  }
   if (layer) dropUnless(state, (r) => r.entry.layer === layer);
 }
 
@@ -366,19 +369,7 @@ function graphStreamSearch(
 ): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { mmr, mmrLambda, minResults } = search;
-  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather
-  // than no-op.
-  if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
-    ctx.note?.(
-      '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
-        '`hippo embed` first.',
-    );
-  }
-  if (ctx.global && pool.global.length > 0) {
-    ctx.note?.(
-      '[note] --graph-stream searches the local store only; global graph fusion is a follow-up.',
-    );
-  }
+  noteGraphStreamLimits(ctx, pool);
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
   // fusion.
   return hybridSearch(query, pool.local, {
@@ -403,6 +394,22 @@ function graphStreamSearch(
       seedCount: graphStream.seeds,
     },
   });
+}
+
+/** Says why the graph stream will not run as asked, rather than no-op. */
+function noteGraphStreamLimits(ctx: RankRecallCtx, pool: RecallPool): void {
+  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert.
+  if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
+    ctx.note?.(
+      '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
+        '`hippo embed` first.',
+    );
+  }
+  if (ctx.global && pool.global.length > 0) {
+    ctx.note?.(
+      '[note] --graph-stream searches the local store only; global graph fusion is a follow-up.',
+    );
+  }
 }
 
 function multihopPoolSearch(
@@ -481,27 +488,33 @@ function engineTuning<T extends { minResults: unknown; includeSuperseded: unknow
   return { minResults: all.minResults, includeSuperseded: all.includeSuperseded, asOf: all.asOf };
 }
 
-async function engineSearch(
-  ctx: RankRecallCtx,
-  opts: SettledOptions,
-  poolSearch: PoolSearch,
-): Promise<SearchResult[]> {
-  const { pool, scope } = poolSearch;
-  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
-  const { mmr, mmrLambda, minResults, explain } = search;
-  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
-  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
-  const vectorCandidates = poolVectorCandidates(ctx, opts);
-  const shared = {
-    budget,
-    cost,
-    explain,
+/** The options every engine takes the same way. */
+function engineShared(ctx: RankRecallCtx, opts: SettledOptions, scope: PoolSearch['scope']) {
+  return {
+    budget: opts.budget,
+    cost: opts.cost,
+    explain: opts.search.explain,
     scope,
     runtime: ctx.config.runtime,
     cwd: ctx.cwd,
     switches: ctx.switches,
     now: ctx.now,
   };
+}
+
+async function engineSearch(
+  ctx: RankRecallCtx,
+  opts: SettledOptions,
+  poolSearch: PoolSearch,
+): Promise<SearchResult[]> {
+  const { pool, scope } = poolSearch;
+  const { query, includeSuperseded, asOf, search } = opts;
+  const { mmr, mmrLambda, minResults, explain } = search;
+  const ranking = { mmr, mmrLambda, minResults, includeSuperseded, asOf };
+  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
+  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
+  const vectorCandidates = poolVectorCandidates(ctx, opts);
+  const shared = engineShared(ctx, opts, scope);
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it
     // rather than read both stores again.
@@ -513,26 +526,12 @@ async function engineSearch(
       },
       { local: pool.local, global: pool.global },
       vectorCandidates,
-      {
-        ...shared,
-        mmr,
-        mmrLambda,
-        localBump: search.localBump,
-        minResults,
-        includeSuperseded,
-        asOf,
-      },
+      { ...shared, ...ranking, localBump: search.localBump },
     );
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
   // asOf must reach physics, or later rows leak.
-  const tuning = engineTuning(physics !== null, explain, {
-    mmr,
-    mmrLambda,
-    minResults,
-    includeSuperseded,
-    asOf,
-  });
+  const tuning = engineTuning(physics !== null, explain, ranking);
   return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, {
     ...shared,
     vectorCandidates,
@@ -630,7 +629,11 @@ function applyValueAware(opts: RankRecallOptions, state: RankState): void {
     const pos = r.entry.outcomePositive ?? 0;
     const neg = r.entry.outcomeNegative ?? 0;
     if (pos === 0 && neg === 0) return undefined;
-    return outcomeNudge(pos - neg, VALUE_MULT_SLOPE, VALUE_MULT_MIN, VALUE_MULT_MAX);
+    return outcomeNudge(pos - neg, {
+      slope: VALUE_MULT_SLOPE,
+      min: VALUE_MULT_MIN,
+      max: VALUE_MULT_MAX,
+    });
   });
 }
 
@@ -645,8 +648,9 @@ function applyUtilityRank(opts: RankRecallOptions, state: RankState): void {
 }
 
 function reorderResults(opts: RankRecallOptions, state: RankState): void {
-  if (opts.evcAdaptive && state.results.length >= 2)
+  if (opts.evcAdaptive && state.results.length >= 2) {
     state.results = newestOnTopicFirst(opts.query, state.results);
+  }
   if (opts.filterConflicts) {
     dropUnless(state, (r) => !r.entry.supersededBy);
     demoteConflictPeers(opts, state);

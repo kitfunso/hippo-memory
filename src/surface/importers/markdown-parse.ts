@@ -85,7 +85,6 @@ export function parseWikilinks(body: string): string[] {
  * relative paths; symlinks are not followed. Skips dot-directories and the Hippo store path so a
  * vault containing the store never imports its own mirror files; importVault handles
  * root-IS-the-store.
- *
  */
 export function collectMarkdownFiles(
   root: string,

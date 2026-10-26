@@ -24,7 +24,6 @@ export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'> & {
 /**
  * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even
  * when storing throws.
- *
  */
 export async function captureToolFailure(
   target: FailureTarget,

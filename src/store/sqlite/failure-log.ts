@@ -138,7 +138,6 @@ export function requestOutcome(
 /**
  * A retry that stored what the first try could not rewrites that row, since the request id allows
  * one row per tenant.
- *
  */
 function settleFailureOutcome(
   db: DatabaseSyncLike,

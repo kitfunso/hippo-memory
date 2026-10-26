@@ -28,7 +28,6 @@ export interface ImportResult {
    * Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned
    * value is distinguishable in summaries. Optional because `ImportResult` is exported from the
    * package root and a required field breaks existing consumers; read sites use `?? 0`.
-   *
    */
   rejected?: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a dryRun this is the would-be count (a true
@@ -52,7 +51,6 @@ export interface ImportOptions {
    * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key.
    * REQUIRED by importVault (throws if missing or blank), because it keys the destructive deletion
    * sync and two vaults sharing a basename would clobber each other. LIKE-escaped by the loader.
-   *
    */
   name?: string;
   /** K1 vault import only. Memory scope stamped on every imported note. Defaults to null
@@ -103,7 +101,20 @@ export function importEntriesInto(
   const target = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;
+  const newEntry = (chunk: string): MemoryEntry =>
+    createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
 
+  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
+  // probe, shares its handle.
+  return options.target.batch(() => importChunks(chunks, target, options, newEntry));
+}
+
+function importChunks(
+  chunks: string[],
+  target: OpenImport,
+  options: TargetedImport,
+  newEntry: (chunk: string) => MemoryEntry,
+): ImportResult {
   let total = 0;
   let imported = 0;
   let skipped = 0;
@@ -111,34 +122,30 @@ export function importEntriesInto(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
-  // probe, shares its handle.
-  return options.target.batch(() => {
-    for (const raw of chunks) {
-      const { chunk, wasRedacted } = prepareImportChunk(raw);
+  for (const raw of chunks) {
+    const { chunk, wasRedacted } = prepareImportChunk(raw);
 
-      const skip = skipReason(chunk, target);
-      if (skip !== 'too-short') total++;
-      if (skip !== null) {
-        skipped++;
-        continue;
-      }
-
-      const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(target, entry, options)) {
-        rejected++;
-        continue;
-      }
-      // Add to existing so subsequent chunks dedup against freshly imported ones
-      if (!options.dryRun) target.written.add(duplicateKey(chunk));
-
-      entries.push(entry);
-      imported++;
-      if (wasRedacted) redacted++;
+    const skip = skipReason(chunk, target);
+    if (skip !== 'too-short') total++;
+    if (skip !== null) {
+      skipped++;
+      continue;
     }
 
-    return { total, imported, skipped, rejected, redacted, entries };
-  });
+    const entry = newEntry(chunk);
+    if (!writeOrProbeImport(target, entry, options)) {
+      rejected++;
+      continue;
+    }
+    // Add to existing so subsequent chunks dedup against freshly imported ones
+    if (!options.dryRun) target.written.add(duplicateKey(chunk));
+
+    entries.push(entry);
+    imported++;
+    if (wasRedacted) redacted++;
+  }
+
+  return { total, imported, skipped, rejected, redacted, entries };
 }
 
 interface OpenImport {

@@ -182,7 +182,6 @@ export interface HippoStore
   /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session
    * id and non-null `origins` (those projects and user-global rows) must narrow, by created
    * descending, then content and id ascending.
-   *
    */
   freshRawEntries(
     count: number,
@@ -210,7 +209,6 @@ export interface HippoStore
   /** Writes the goal log and audit rows in one transaction and rejects with none written if it
    * fails. Then the trace and the strengthen, each on its own: a failure there logs and still
    * resolves, since the reply is already decided.
-   *
    */
   finishRecall(writes: RecallWrites): Promise<void>;
   /** Adds `recalled` to the one store-wide total_recalled counter, no tenant. */

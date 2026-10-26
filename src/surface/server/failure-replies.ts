@@ -124,7 +124,6 @@ function replyOrClose<E>(
 /**
  * Runs `handle` under the request's id and deadline; a failure becomes the reply, unless the
  * deadline has already answered.
- *
  */
 export function answerRequest(
   req: IncomingMessage,

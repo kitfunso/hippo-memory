@@ -13,7 +13,7 @@ export function readTranscriptTail(
 ): string {
   const fd = fs.openSync(transcriptPath, 'r');
   try {
-    return readOpenTranscriptTail(fd, fs.fstatSync(fd).size, capBytes);
+    return readOpenTranscriptTail(fd, { size: fs.fstatSync(fd).size, capBytes });
   } finally {
     fs.closeSync(fd);
   }
@@ -22,9 +22,11 @@ export function readTranscriptTail(
 /**
  * {@link readTranscriptTail} for a transcript the caller opened and sized, so the size and the
  * bytes come from one file.
- *
  */
-export function readOpenTranscriptTail(fd: number, size: number, capBytes: number): string {
+export function readOpenTranscriptTail(
+  fd: number,
+  { size, capBytes }: { readonly size: number; readonly capBytes: number },
+): string {
   const start = Math.max(0, size - capBytes);
   const length = size - start;
   if (length <= 0) return '';

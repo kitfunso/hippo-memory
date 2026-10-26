@@ -143,7 +143,6 @@ export function buildWindowsTaskRun(cmd: string): string {
 /**
  * `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or
  * the end doubles, so no quote ends the argument early.
- *
  */
 export function quoteInsideWindowsArg(text: string): string {
   return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');

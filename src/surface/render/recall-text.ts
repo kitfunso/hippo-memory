@@ -20,11 +20,13 @@ export function cutoffClauses(s: RecallSuppressionSummary): string[] {
   // The residual covers rank, budget and limit drops alike, and fires with no --limit at all.
   if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
   if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
-  if (s.summarySubstitutionsAdded > 0)
+  if (s.summarySubstitutionsAdded > 0) {
     clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+  }
   if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-  if (s.suppressedByInterference > 0)
+  if (s.suppressedByInterference > 0) {
     clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  }
   return clauses;
 }
 

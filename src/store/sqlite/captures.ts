@@ -54,8 +54,9 @@ function writeCapturedEntries(
     });
   });
   for (const entry of written) writeEntryMirrors(files.hippoRoot, entry);
-  if (!opts.lean && written.length > 0)
+  if (!opts.lean && written.length > 0) {
     updateStatsOn(db, files.hippoRoot, { remembered: written.length });
+  }
   return outcomes;
 }
 

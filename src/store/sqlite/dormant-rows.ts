@@ -184,7 +184,6 @@ const snapshotColumn = (column: FilterColumn): string =>
 
 /** Readable snapshots whose entry `filter` keeps, by tenant then id; a malformed snapshot is passed
  * over, not an error.
- *
  */
 export function dormantSnapshotsWhere(
   db: DatabaseSyncLike,
@@ -249,7 +248,6 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
 /**
  * The columns a text match reads from one dormant memory; source and scope are null when its
  * snapshot will not parse.
- *
  */
 // SAFETY: every read cast to this row selects DORMANT_TEXT_COLUMNS; scripts/check-row-casts.mjs
 // proves it.
@@ -265,7 +263,6 @@ const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${
 /**
  * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a
  * text match reads.
- *
  */
 export function dormantTextsPage(
   db: DatabaseSyncLike,

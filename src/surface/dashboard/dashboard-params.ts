@@ -20,9 +20,7 @@ export const SEARCH_MAX = 200;
 function integerParam(
   params: URLSearchParams,
   name: string,
-  fallback: number,
-  min: number,
-  max: number,
+  { fallback, min, max }: { fallback: number; min: number; max: number },
 ): number {
   const raw = params.get(name);
   if (raw === null) return fallback;
@@ -69,8 +67,9 @@ function layersParam(params: URLSearchParams): number[] {
 function rangeParam(params: URLSearchParams, lo: string, hi: string): [number, number] {
   const min = finiteParam(params, lo);
   const max = finiteParam(params, hi);
-  if (min !== null && max !== null && min > max)
+  if (min !== null && max !== null && min > max) {
     throw new ParamError(`${lo} must not exceed ${hi}`);
+  }
   return [min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY];
 }
 
@@ -90,8 +89,8 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   const [smin, smax] = rangeParam(params, 'smin', 'smax');
   const sort = oneOf(params, 'sort', SORT_KEYS, 'strength');
   return {
-    offset: integerParam(params, 'offset', 0, 0, Number.MAX_SAFE_INTEGER),
-    limit: integerParam(params, 'limit', LIMIT_DEFAULT, 1, LIMIT_MAX),
+    offset: integerParam(params, 'offset', { fallback: 0, min: 0, max: Number.MAX_SAFE_INTEGER }),
+    limit: integerParam(params, 'limit', { fallback: LIMIT_DEFAULT, min: 1, max: LIMIT_MAX }),
     sort,
     // Weakest first by default, like the mockup; retrievals starts with the most.
     dir: oneOf(params, 'dir', ['asc', 'desc'], sort === 'retrievals' ? 'desc' : 'asc'),

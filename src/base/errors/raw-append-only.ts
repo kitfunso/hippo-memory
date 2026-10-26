@@ -15,9 +15,10 @@ export function rawRemovalRefusal(
   row: { readonly id: string; readonly kind: string },
   archive: boolean,
 ): Error | null {
-  if (archive)
+  if (archive) {
     return row.kind === 'raw'
       ? null
       : new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
+  }
   return row.kind === 'raw' ? new RawAppendOnlyError() : null;
 }

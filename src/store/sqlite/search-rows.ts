@@ -34,11 +34,13 @@ function recallScopeClause(
   scopeFilter: RecallScopeFilter | undefined,
 ): SqlFragment {
   if (scopeFilter === undefined) return { sql: '', params: [] };
-  if (scopeFilter.mode === 'exact')
+  if (scopeFilter.mode === 'exact') {
     return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
+  }
   const admit = scopeAdmitSql(col, scopeFilter.ownScope);
-  if (scopeFilter.mode === 'default-deny')
+  if (scopeFilter.mode === 'default-deny') {
     return { sql: ` AND ${admit.sql}`, params: admit.params };
+  }
   // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
   // included.
   return {

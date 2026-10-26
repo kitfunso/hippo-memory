@@ -17,7 +17,6 @@ export interface RejectFlowOptions {
   /**
    * The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI)
    * skips every personal row.
-   *
    */
   ownScope?: string;
 }
@@ -48,7 +47,6 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
 /**
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes
  * every row in reach that holds it.
- *
  */
 export async function rejectValue(
   store: HippoStore,
@@ -67,16 +65,19 @@ export async function rejectValue(
 
 export type UnrejectOutcome = LiftedRejection;
 
+export interface UnrejectOptions {
+  readonly tenantId: string;
+  readonly digestOrPrefix: string;
+  readonly actor: string;
+}
+
 /**
  * `hippo unreject` and `api.unreject`: lifts the one tombstone a digest or prefix names. The only
  * way to allow a rejected value again.
- *
  */
 export async function unrejectValue(
   store: HippoStore,
-  tenantId: string,
-  digestOrPrefix: string,
-  actor: string,
+  { tenantId, digestOrPrefix, actor }: UnrejectOptions,
 ): Promise<UnrejectOutcome> {
   // A blank prefix would match every digest and list the whole tombstone set as ambiguous.
   if (digestOrPrefix.trim().length === 0) {

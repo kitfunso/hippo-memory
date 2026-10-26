@@ -2,14 +2,12 @@
  * Forward-claim detector: a pure regex set plus token extraction deciding whether a recall query
  * carries a forward-prediction phrase. Calibration is HIGH-PRECISION / LOW-RECALL, since cry-wolf
  * noise dominates hint UX; `recall_autodebias_hint_no_class_match` audits are the telemetry.
- *
  */
 import { FORWARD_CLAIM_STOPWORDS } from '../../base/util/stopwords.js';
 
 /**
  * Each pattern is deliberately narrow (add one only on audit evidence); word boundaries are
  * mandatory so `ETA` never matches inside `BETAtesting`.
- *
  */
 // Shared duration suffix: needs a digit + unit (`<N> unit`, `a/an unit`, `one unit`) so 'will take
 // ownership' and 'ship in Docker' do not match.
@@ -49,13 +47,11 @@ export interface ForwardClaimMatch {
   /**
    * The regex match snippet (e.g. "will take"), surfaced in `PlanningFallacyHint.detectedPhrase` so
    * the agent sees WHY the hint appeared.
-   *
    */
   phrase: string;
   /**
    * Lower-cased non-stop-word tokens (len >= 3) from the FULL query, not just the match; the class
    * resolver scores them against class_tag tokens.
-   *
    */
   classQueryTokens: string[];
 }

@@ -23,7 +23,6 @@ const ERROR_TAG_SQL =
 /**
  * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows
  * that cannot match.
- *
  */
 function secretTaggedSql(): SqlFragment {
   const tags = [...SECRET_TAGS];
@@ -55,8 +54,9 @@ function countTags(
   const pairs = parseJson(row.pairs ?? '[]');
   const tallies = new Map<string, number>();
   for (const pair of Array.isArray(pairs) ? pairs : []) {
-    if (Array.isArray(pair) && isJsonString(pair[0]) && isJsonNumber(pair[1]))
+    if (Array.isArray(pair) && isJsonString(pair[0]) && isJsonNumber(pair[1])) {
       tallies.set(pair[0], pair[1]);
+    }
   }
   return tallies;
 }
@@ -95,8 +95,13 @@ export function countAmbient(
     MAX(0, COALESCE(MAX(COALESCE(dag_level, 0)), 0)) AS maxDagLevel
     FROM memories
     WHERE ${scope}`,
-  ).get(...args) as Record<Exclude<keyof AmbientTallies, 'tagCounts'>, number | bigint>;
-  const tagCounts = countTags(db, scope, scopeParams);
+  ).get(...args) as AmbientAggregates;
+  return talliesOf(row, countTags(db, scope, scopeParams));
+}
+
+type AmbientAggregates = Record<Exclude<keyof AmbientTallies, 'tagCounts'>, number | bigint>;
+
+function talliesOf(row: AmbientAggregates, tagCounts: Map<string, number>): AmbientTallies {
   return {
     total: Number(row.total),
     strengthSum: Number(row.strengthSum),

@@ -18,8 +18,9 @@ export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry |
  * that the id exists. */
 export async function memoryGetTouchable(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const entry = await memoryGet(ctx, id);
-  if (!canReadScope(ctx.actor, entry?.scope ?? null))
+  if (!canReadScope(ctx.actor, entry?.scope ?? null)) {
     throw new NotFoundError(`Memory not found: ${id}`);
+  }
   return entry;
 }
 
@@ -60,8 +61,9 @@ export async function memoryList(
   opts: { pageSize?: number } = {},
 ): Promise<MemoryEntry[]> {
   const all: MemoryEntry[] = [];
-  for await (const page of memoryPages(ctx.store, tenantFilter(ctx, reach), opts.pageSize))
+  for await (const page of memoryPages(ctx.store, tenantFilter(ctx, reach), opts.pageSize)) {
     all.push(...page);
+  }
   return all;
 }
 

@@ -141,12 +141,15 @@ async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
   if (baserate.meanActual !== null) {
     console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
   }
-  if (baserate.meanRatio !== null)
+  if (baserate.meanRatio !== null) {
     console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null)
+  }
+  if (baserate.p50Ratio !== null) {
     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.mae !== null)
+  }
+  if (baserate.mae !== null) {
     console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  }
 }
 
 export async function handlePredict({

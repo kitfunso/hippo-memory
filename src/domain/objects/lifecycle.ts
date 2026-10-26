@@ -82,8 +82,9 @@ function closed<K extends ObjectKind>(
   if (written.refused === 'missing') {
     throw new NotFoundError(`${d.label} ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status')
+  if (written.refused !== 'status') {
     throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
+  }
   const closable = d.closableFrom.join(' or ');
   throw new ConflictError(
     `${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,

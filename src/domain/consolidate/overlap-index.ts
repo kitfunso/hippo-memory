@@ -8,7 +8,6 @@ export type MinShared = (size: number) => number;
 /**
  * Shared >= threshold * union >= threshold * size; one token of slack covers float rounding in the
  * caller's Jaccard check.
- *
  */
 export function jaccardMinShared(threshold: number, atLeast = 1): MinShared {
   return (size) => Math.max(atLeast, Math.ceil(threshold * size) - 1);
@@ -17,7 +16,6 @@ export function jaccardMinShared(threshold: number, atLeast = 1): MinShared {
 /**
  * Maps i to each j > i, ascending, that may share `minShared` tokens with set i; a superset the
  * caller checks exactly, never a pair sharing no token.
- *
  */
 export function overlapPartners(
   sets: readonly ReadonlySet<string>[],

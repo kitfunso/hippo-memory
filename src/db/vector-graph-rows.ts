@@ -175,8 +175,9 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   if (rows.length > inlineRows) return { kind: 'behind', afterRowid };
   g.lastRowid = afterRowid;
   for (const row of rows) {
-    if (row.vector.byteLength === g.graph.dim * 4)
+    if (row.vector.byteLength === g.graph.dim * 4) {
       addRow(g, row.rowid, row.id, decodeVector(row.vector));
+    }
   }
   return { kind: 'current' };
 }

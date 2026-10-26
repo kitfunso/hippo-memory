@@ -80,7 +80,6 @@ const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
 /**
  * Copilot sends `toolArgs` as the model's raw JSON string; Claude Code and VS Code send
  * `tool_input` already parsed.
- *
  */
 function parsedToolArgs(value: JsonValue): JsonValue {
   if (!isJsonString(value)) return value;
@@ -96,8 +95,9 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
   for (const [camel, snake] of CAMEL_TO_SNAKE) {
     if (camel in payload && !(snake in payload)) added[snake] = payload[camel];
   }
-  if ('toolArgs' in payload && !('tool_input' in payload))
+  if ('toolArgs' in payload && !('tool_input' in payload)) {
     added.tool_input = parsedToolArgs(payload.toolArgs);
+  }
   const error = payload.error;
   // An error object gives its message, so readers that expect the documented string still get one.
   if (isJsonObjectLiteral(error) && isJsonString(error.message)) added.error = error.message;
@@ -120,7 +120,6 @@ export function normalizeHookPayload(text: string | undefined): string | undefin
 /**
  * The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through
  * {@link normalizeHookPayload}.
- *
  */
 export async function readHookStdin(waitMs?: number): Promise<BoundedStdin> {
   const read = await readStdinBounded(waitMs);

@@ -59,7 +59,6 @@ async function handleCreatePrediction({ req, res, ctx }: AuthedRouteRequest): Pr
 /**
  * Which rows a list reads; a status other than all or open needs a class, as no store reads one
  * closed state across classes.
- *
  */
 function listFilter(classTag: string | undefined, status: string): PredictionFilter {
   if (status === 'all') return { classTag };

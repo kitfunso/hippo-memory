@@ -41,8 +41,9 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
 
 function decodeHeaderPiece(raw: string, header: string): string {
-  if (!HEADER_PIECE.test(raw))
+  if (!HEADER_PIECE.test(raw)) {
     throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
+  }
   const decoded = tryDecodeUri(raw);
   if (decoded === undefined) throw new HttpError(400, `${header} holds a bad percent escape`);
   return decoded;
@@ -58,8 +59,9 @@ export function callerProjectFromHeaders(
   const names = req.headersDistinct['x-hippo-project'];
   const aliasHeaders = req.headersDistinct['x-hippo-project-aliases'];
   if (names === undefined) {
-    if (aliasHeaders !== undefined)
+    if (aliasHeaders !== undefined) {
       throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
+    }
     return undefined;
   }
   if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) {
@@ -199,52 +201,79 @@ function keepStreamAlive(
   const heartbeatMs = envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
   const maxAgeMs = (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
   const startedAt = Date.now();
-  let closed = false;
-  let checking = false;
-  const closeWith = (reason: string): void => {
-    if (closed) return;
-    closed = true;
-    endStreamWithReason(res, reason);
-  };
+  const beat = newStreamBeat(res, () => clearInterval(ping));
   const ping = setInterval(() => {
-    if (closed) {
+    if (beat.closed) {
       clearInterval(ping);
       return;
     }
     if (Date.now() - startedAt >= maxAgeMs) {
-      closeWith('max_age_exceeded');
+      beat.closeWith('max_age_exceeded');
       clearInterval(ping);
       return;
     }
-    if (checking) return;
-    checking = true;
-    heartbeatVerdict(req, opts)
-      .then((verdict) => {
-        checking = false;
-        if (!closed && verdict === 'unavailable')
-          log.warn('heartbeat tick skipped: auth check unavailable');
-        if (closed || verdict === 'unavailable') return;
-        if (verdict === 'revoked') {
-          closeWith('auth_revoked');
-          clearInterval(ping);
-          return;
-        }
-        if (!writePing(res)) clearInterval(ping);
-      })
-      .catch((err) => {
-        // Without the reset `checking` stays true and the heartbeat never runs again.
-        checking = false;
-        log.warn('heartbeat tick failed', errorFields(err));
-      });
+    if (beat.checking) return;
+    beat.checking = true;
+    checkHeartbeat(req, res, opts, beat);
   }, heartbeatMs);
   // Don't keep the event loop alive just for this timer; the server's listener already does that,
   // and tests want the process to exit cleanly.
   if (ping.unref instanceof Function) ping.unref();
   // res 'close' covers an early socket drop that req 'close' can miss.
   res.on('close', () => {
-    closed = true;
+    beat.closed = true;
     clearInterval(ping);
   });
+}
+
+/** One stream's heartbeat state, shared by its timer and the auth check each tick starts. */
+interface StreamBeat {
+  closed: boolean;
+  checking: boolean;
+  readonly closeWith: (reason: string) => void;
+  /** Stops the heartbeat timer. */
+  readonly stop: () => void;
+}
+
+function newStreamBeat(res: ServerResponse, stop: () => void): StreamBeat {
+  const beat: StreamBeat = {
+    closed: false,
+    checking: false,
+    closeWith: (reason) => {
+      if (beat.closed) return;
+      beat.closed = true;
+      endStreamWithReason(res, reason);
+    },
+    stop,
+  };
+  return beat;
+}
+
+function checkHeartbeat(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: ResolvedServeOptions,
+  beat: StreamBeat,
+): void {
+  heartbeatVerdict(req, opts)
+    .then((verdict) => {
+      beat.checking = false;
+      if (!beat.closed && verdict === 'unavailable') {
+        log.warn('heartbeat tick skipped: auth check unavailable');
+      }
+      if (beat.closed || verdict === 'unavailable') return;
+      if (verdict === 'revoked') {
+        beat.closeWith('auth_revoked');
+        beat.stop();
+        return;
+      }
+      if (!writePing(res)) beat.stop();
+    })
+    .catch((err) => {
+      // Without the reset `checking` stays true and the heartbeat never runs again.
+      beat.checking = false;
+      log.warn('heartbeat tick failed', errorFields(err));
+    });
 }
 
 /** False when the client hung up, so the caller stops pinging a dead socket. */

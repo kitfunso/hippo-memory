@@ -168,8 +168,9 @@ function sessionIdParam(params: RequestParams): string | undefined {
 /** Checks in a fixed order, so the first bad input is the one reported. */
 export function parseRecallRequest(params: RequestParams): ParsedRecallRequest {
   const query = params.get(params.queryName);
-  if (!isJsonString(query) || query.length === 0)
+  if (!isJsonString(query) || query.length === 0) {
     throw new RecallRequestError(`${params.queryName} is required`);
+  }
   const limit = limitParam(params);
   const mode = modeParam(params);
   const scope = stringParam(params, 'scope');
@@ -229,8 +230,9 @@ export async function retrieveWithCliCore(
   // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to
   // check here. This ranker applies the operator's scope rule and may search a second store, so no
   // bearer client may reach it.
-  if (!ctx.actor.hostAdmin)
+  if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('The CLI ranking core serves the host admin only');
+  }
   const store = ctx.store;
   const ranking = await rankRecall(
     { ...rankCtxOf(ctx), global: rankGlobal(ctx, core.sources), note: core.note },
@@ -314,19 +316,7 @@ async function recordShown(
   const audited = await finishOrReport(() =>
     finishShown(store, core.lastRecall, writes, ids.length > 0),
   );
-  if (audited) {
-    // The second store logs that it was searched, and strengthens only the rows the first does not
-    // hold.
-    if (second !== undefined) {
-      await finishOrReport(() =>
-        second.finishRecall({
-          goalLog: [],
-          audit: [recallRow],
-          strengthen: strengthenOf(ctx, heldElsewhere),
-        }),
-      );
-    }
-  }
+  if (audited && second !== undefined) await finishSecond(ctx, second, recallRow, heldElsewhere);
   // The caller prints whether or not the record was written, so the ring and the ledger still take
   // this list; `written` holds back the count.
   await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
@@ -340,12 +330,30 @@ async function recordShown(
   });
 }
 
+// The second store logs that it was searched, and strengthens only the rows the first does not
+// hold.
+function finishSecond(
+  ctx: Context,
+  second: HippoStore,
+  recallRow: AppendAuditOptions,
+  heldElsewhere: string[],
+): Promise<boolean> {
+  return finishOrReport(() =>
+    second.finishRecall({
+      goalLog: [],
+      audit: [recallRow],
+      strengthen: strengthenOf(ctx, heldElsewhere),
+    }),
+  );
+}
+
 /** The second store ranked, as the caller's own store when that is the global one, so its graph
  * walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
-  if (ctx.reach?.isGlobal === true)
+  if (ctx.reach?.isGlobal === true) {
     return { store: ctx.store, config: ctx.config, onHippoDb: true };
+  }
   return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 

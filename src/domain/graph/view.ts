@@ -141,14 +141,22 @@ function addRepulsion(
         for (const j of cells.get(gx * CELL_KEY_STRIDE + gy) ?? []) {
           if (j <= i) continue;
           visits.pairs++;
-          repel(pi, pts[j], disp[i], disp[j], k);
+          repel({ pi, pj: pts[j], di: disp[i], dj: disp[j] }, k);
         }
       }
     }
   }
 }
 
-function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number): void {
+/** Two points and the displacements their repulsion adds to. */
+interface RepelOptions {
+  readonly pi: Point;
+  readonly pj: Point;
+  readonly di: Point;
+  readonly dj: Point;
+}
+
+function repel({ pi, pj, di, dj }: RepelOptions, k: number): void {
   const { dist, ux, uy } = separation(pi, pj);
   if (dist >= REPULSION_REACH_K * k) return;
   const rep = (k * k) / dist;

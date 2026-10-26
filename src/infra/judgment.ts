@@ -40,7 +40,6 @@ const OBSERVED_CONFIDENCE_MIN = 0.8;
 /**
  * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply
  * has none of that shape.
- *
  */
 function answerNamed(reply: JsonValue, name: string): { [key: string]: JsonValue } {
   const answers = isJsonObject(reply) ? reply.answers : undefined;

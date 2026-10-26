@@ -52,8 +52,9 @@ const corpusCache = new WeakMap<MemoryEntry[], { pool: MemoryEntry[]; corpus: Co
 
 function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
   const hit = corpusCache.get(entries);
-  if (hit && hit.pool.length === pool.length && hit.pool.every((e, i) => e === pool[i]))
+  if (hit && hit.pool.length === pool.length && hit.pool.every((e, i) => e === pool[i])) {
     return hit.corpus;
+  }
   const corpus = buildCorpus(pool.map(entryText));
   corpusCache.set(entries, { pool: pool.slice(), corpus });
   return corpus;
@@ -62,7 +63,6 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
 /**
  * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings
  * or the outcome nudge.
- *
  */
 export function rankBm25(
   query: string,

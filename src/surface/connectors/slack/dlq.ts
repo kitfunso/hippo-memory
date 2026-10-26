@@ -9,7 +9,12 @@ import {
 import { ingestMessage } from './ingest.js';
 import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
+import {
+  isSlackEventEnvelope,
+  isSlackMessageEvent,
+  type SlackEventEnvelope,
+  type SlackMessageEvent,
+} from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { YEAR_S } from '../../../base/util/time.js';
@@ -109,15 +114,17 @@ async function reingest(
     { connector: 'slack', teamId: envelope.team_id },
     fallback,
   );
-  if (!tenantId)
+  if (!tenantId) {
     return {
       ok: false,
       status: 'unroutable',
       reason: `team_id ${envelope.team_id} still unroutable`,
     };
+  }
   const inner = envelope.event;
-  if (!isSlackMessageEvent(inner))
+  if (!isSlackMessageEvent(inner)) {
     return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
+  }
 
   const replayCtx: Context = {
     tenantId,
@@ -126,6 +133,14 @@ async function reingest(
     config,
     infra,
   };
+  return replayMessage(replayCtx, envelope, inner);
+}
+
+async function replayMessage(
+  replayCtx: Context,
+  envelope: JsonValue & SlackEventEnvelope,
+  inner: SlackMessageEvent,
+): Promise<Reingest> {
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
       teamId: envelope.team_id,

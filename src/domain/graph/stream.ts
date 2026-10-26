@@ -4,10 +4,9 @@
  * graph-reached, non-seed entries; scoring seeds would double-count BM25/dense. The score scale
  * only sets the order inside this stream (RRF re-ranks by 1/(k + graphRank)), so do not tune it for
  * a fused-score effect.
- *
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { Relation } from '../../base/ports/store/graph.js';
+import type { Entity, Relation } from '../../base/ports/store/graph.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
 import { DEFAULT_GRAPH_HOPS } from '../../base/rank/recall-defaults.js';
@@ -44,7 +43,6 @@ export interface GraphRankStreamOptions {
 /**
  * Pick the top `seedCount` candidates by best lexical rank (lowest position across BM25 and dense),
  * strength = 1/(bestRank + 1). Pure.
- *
  */
 export function selectGraphSeeds(
   bm25Ranked: ReadonlyArray<number>,
@@ -130,7 +128,6 @@ async function reachedEntityScores(
       ids: frontier,
       limit,
     });
-    const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(
       rels,
       frontierSet,
@@ -138,29 +135,55 @@ async function reachedEntityScores(
       frontierStrength,
       originStrength,
     );
-    // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap
-    // keeps the highest-scoring neighbors rather than whichever the store happened to return.
-    const nextFrontier: number[] = [];
-    const nextStrength = new Map<number, number>();
-    const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
-      const d = bestStrengthThisDepth.get(b)! - bestStrengthThisDepth.get(a)!;
-      return d !== 0 ? d : a - b;
+    const next = commitStrongest(bestStrengthThisDepth, {
+      visited,
+      reachedScore,
+      hopFactor: Math.pow(decay, depth),
+      maxNeighbors,
     });
-    for (const neighborId of ordered) {
-      if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
-      const seedStrength = bestStrengthThisDepth.get(neighborId)!;
-      visited.add(neighborId);
-      reachedScore.set(
-        neighborId,
-        Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor),
-      );
-      nextStrength.set(neighborId, seedStrength);
-      nextFrontier.push(neighborId);
-    }
-    frontier = nextFrontier;
-    frontierStrength = nextStrength;
+    frontier = next.frontier;
+    frontierStrength = next.strength;
   }
   return reachedScore;
+}
+
+interface CommitStrongestOptions {
+  readonly visited: Set<number>;
+  readonly reachedScore: Map<number, number>;
+  readonly hopFactor: number;
+  readonly maxNeighbors: number;
+}
+
+interface NextFrontier {
+  readonly frontier: number[];
+  readonly strength: Map<number, number>;
+}
+
+// Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap
+// keeps the highest-scoring neighbors rather than whichever the store happened to return.
+function commitStrongest(
+  bestStrengthThisDepth: ReadonlyMap<number, number>,
+  options: CommitStrongestOptions,
+): NextFrontier {
+  const { visited, reachedScore, hopFactor, maxNeighbors } = options;
+  const nextFrontier: number[] = [];
+  const nextStrength = new Map<number, number>();
+  const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
+    const d = bestStrengthThisDepth.get(b)! - bestStrengthThisDepth.get(a)!;
+    return d !== 0 ? d : a - b;
+  });
+  for (const neighborId of ordered) {
+    if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
+    const seedStrength = bestStrengthThisDepth.get(neighborId)!;
+    visited.add(neighborId);
+    reachedScore.set(
+      neighborId,
+      Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor),
+    );
+    nextStrength.set(neighborId, seedStrength);
+    nextFrontier.push(neighborId);
+  }
+  return { frontier: nextFrontier, strength: nextStrength };
 }
 
 interface AccumulateForStoreOptions {
@@ -176,7 +199,6 @@ interface AccumulateForStoreOptions {
  * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into `graphScore`; only
  * seeds whose entities live in THIS store are expanded. A neighbor's score = originSeedStrength x
  * decay^(graph distance); the seed strength is carried unchanged along each BFS path.
- *
  */
 async function accumulateForStore(
   store: GraphStore,
@@ -184,15 +206,9 @@ async function accumulateForStore(
   entries: ReadonlyArray<MemoryEntry>,
   options: AccumulateForStoreOptions,
 ): Promise<void> {
-  const { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId } = options;
+  const { hops, decay, maxNeighbors, tenantId } = options;
   if (seeds.length === 0) return;
-  // The strongest seed strength per source memory id (a memId could appear once, but guard against
-  // dup indices mapping to the same memId).
-  const strengthByMemId = new Map<string, number>();
-  for (const s of seeds) {
-    const memId = entries[s.index].id;
-    strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
-  }
+  const strengthByMemId = strongestSeedByMemId(seeds, entries);
   const seedIds = [...strengthByMemId.keys()];
   const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, {
     by: 'memory',
@@ -200,14 +216,7 @@ async function accumulateForStore(
   });
   if (seedEntities.length === 0) return;
 
-  // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the
-  // guard keeps the widened (string | null) type honest.
-  const originStrength = new Map<number, number>();
-  for (const e of seedEntities) {
-    if (e.memoryId === null) continue;
-    const st = strengthByMemId.get(e.memoryId) ?? 0;
-    originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
-  }
+  const originStrength = originStrengthOf(seedEntities, strengthByMemId);
 
   const reachedScore = await reachedEntityScores(
     store,
@@ -224,6 +233,44 @@ async function accumulateForStore(
     by: 'entity',
     ids: reachedIds,
   });
+  addPoolScores(reachedEntities, reachedScore, options);
+}
+
+// The strongest seed strength per source memory id (a memId could appear once, but guard against
+// dup indices mapping to the same memId).
+function strongestSeedByMemId(
+  seeds: ReadonlyArray<GraphSeed>,
+  entries: ReadonlyArray<MemoryEntry>,
+): Map<string, number> {
+  const strengthByMemId = new Map<string, number>();
+  for (const s of seeds) {
+    const memId = entries[s.index].id;
+    strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
+  }
+  return strengthByMemId;
+}
+
+// entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the
+// guard keeps the widened (string | null) type honest.
+function originStrengthOf(
+  seedEntities: readonly Entity[],
+  strengthByMemId: ReadonlyMap<string, number>,
+): Map<number, number> {
+  const originStrength = new Map<number, number>();
+  for (const e of seedEntities) {
+    if (e.memoryId === null) continue;
+    const st = strengthByMemId.get(e.memoryId) ?? 0;
+    originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
+  }
+  return originStrength;
+}
+
+function addPoolScores(
+  reachedEntities: readonly Entity[],
+  reachedScore: ReadonlyMap<number, number>,
+  options: Pick<AccumulateForStoreOptions, 'memIdToIndex' | 'graphScore'>,
+): void {
+  const { memIdToIndex, graphScore } = options;
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue; // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);
@@ -239,7 +286,6 @@ async function accumulateForStore(
  * lexical `seeds`; absent indices fall to rrfFuse absentRank. Returns `[]` when there are no
  * seeds/entries, the graph is empty, or nothing reached is in-pool, so the caller skips the 3rd
  * fusion list.
- *
  */
 export async function graphRankStream(
   entries: ReadonlyArray<MemoryEntry>,

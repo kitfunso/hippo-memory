@@ -84,12 +84,14 @@ export const CODEX_LAUNCHER_NAMES: readonly string[] =
  * launcher, so the one rename it can drive is `codex.hippo-real<ext>` back onto that launcher. */
 export function namesInstallerPaths(metadata: CodexWrapperMetadata): boolean {
   const { originalCodexPath, realCodexPath, commandPath, backupPath } = metadata;
-  if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString))
+  if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString)) {
     return false;
+  }
   if (!path.isAbsolute(originalCodexPath)) return false;
   const name = path.basename(originalCodexPath);
-  if (!CODEX_LAUNCHER_NAMES.includes(process.platform === 'win32' ? name.toLowerCase() : name))
+  if (!CODEX_LAUNCHER_NAMES.includes(process.platform === 'win32' ? name.toLowerCase() : name)) {
     return false;
+  }
   const plan = resolveCodexInstallPlan(originalCodexPath);
   return (
     pathEquals(backupPath, plan.backupPath) &&
@@ -137,11 +139,15 @@ export function resolveCodexInstallPlan(originalCodexPath: string) {
 
 /** The wrapper script for a launcher at `commandPath`: PowerShell for .ps1, cmd for .cmd or .bat
  * on Windows, else sh; each runs `hippo codex-run` with the user's arguments. */
-export function codexLauncherWrapperText(
-  commandPath: string,
-  nodePath: string,
-  hippoCliPath: string,
-): string {
+export function codexLauncherWrapperText({
+  commandPath,
+  nodePath,
+  hippoCliPath,
+}: {
+  commandPath: string;
+  nodePath: string;
+  hippoCliPath: string;
+}): string {
   const ext = path.extname(commandPath).toLowerCase();
   if (process.platform === 'win32' && ext === '.ps1') {
     return [
@@ -186,10 +192,12 @@ export function repairRefusal(
   metadata: CodexWrapperMetadata,
   hippoCliPath: string,
 ): 'other-install' | 'source-checkout' | null {
-  if (isJsonString(metadata.hippoCliPath) && !pathEquals(metadata.hippoCliPath, hippoCliPath))
+  if (isJsonString(metadata.hippoCliPath) && !pathEquals(metadata.hippoCliPath, hippoCliPath)) {
     return 'other-install';
+  }
   const packageDir = path.dirname(path.dirname(hippoCliPath));
-  if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules')
+  if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules') {
     return 'source-checkout';
+  }
   return null;
 }

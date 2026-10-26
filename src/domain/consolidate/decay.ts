@@ -72,8 +72,9 @@ function keepSurvivor(
   strength: number,
 ): void {
   run.survivors.keep(entry.id, strength);
-  if (!run.dryRun && strength !== entry.strength)
+  if (!run.dryRun && strength !== entry.strength) {
     run.pendingRefreshes.push({ id: entry.id, strength });
+  }
   run.result.decayed++;
 }
 

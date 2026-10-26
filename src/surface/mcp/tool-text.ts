@@ -23,8 +23,9 @@ function handoffLines(h: SessionHandoff): string[] {
   if (h.outcome) lines.push(`- Outcome: ${h.outcome}`);
   if (h.targetRuntime) lines.push(`- Target runtime: ${h.targetRuntime}`);
   if (h.cardId) lines.push(`- Card: ${h.cardId}`);
-  if ((h.constraints ?? []).length > 0)
+  if ((h.constraints ?? []).length > 0) {
     lines.push(`- Constraints: ${(h.constraints ?? []).join(', ')}`);
+  }
   if (h.evidence) lines.push(`- Evidence: ${formatHandoffEvidenceLine(h.evidence)}`);
   return lines;
 }

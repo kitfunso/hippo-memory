@@ -71,8 +71,9 @@ export function routeLookup<T extends LookupRow = Route, Q = RouteRequest>(
   );
   const walked = rows.filter((row) => exactPath(row) === undefined);
   const walkedByMethod = new Map<string, T[]>();
-  for (const row of walked)
+  for (const row of walked) {
     walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
+  }
   return (method, path) => {
     const route = literal.get(`${method} ${path}`);
     if (route !== undefined) return { route, run: matches(route, method, path)! };

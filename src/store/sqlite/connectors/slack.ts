@@ -37,8 +37,7 @@ export function slackCursor(
 /** `keepSaved` leaves a timestamp already saved as it is. */
 export function saveSlackCursor(
   db: DatabaseSyncLike,
-  tenantId: string,
-  channelId: string,
+  { tenantId, channelId }: { readonly tenantId: string; readonly channelId: string },
   latestTs: string,
   keepSaved: boolean,
 ): void {

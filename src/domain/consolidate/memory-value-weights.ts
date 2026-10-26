@@ -3,7 +3,6 @@
  * benchmarks/memory-value/weights-learned.json; never edit by hand (a sync test fails CI on drift).
  * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read
  * this as production ranking advice.
- *
  */
 
 /** The 8 live feature dims the fitter optimized over (FIT_DIMS). */

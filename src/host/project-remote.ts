@@ -124,8 +124,9 @@ export function normalizeRemote(url: string): string | null {
     /^file:/i.test(u) ||
     /^[A-Za-z]:[\\/]/.test(u) ||
     /^[./\\~]/.test(u)
-  )
+  ) {
     return null;
+  }
   let hostPath: string;
   const withScheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/]*)(.*)$/.exec(u);
   if (withScheme) {

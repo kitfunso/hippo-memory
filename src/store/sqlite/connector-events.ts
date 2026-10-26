@@ -56,7 +56,7 @@ function saveCursor(
   opts: { keepSaved?: boolean } = {},
 ): void {
   const keepSaved = opts.keepSaved === true;
-  if (key.connector === 'slack') saveSlackCursor(db, key.tenantId, key.channelId, value, keepSaved);
+  if (key.connector === 'slack') saveSlackCursor(db, key, value, keepSaved);
   else saveGitHubCursor(db, key, value, keepSaved);
 }
 

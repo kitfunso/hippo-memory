@@ -12,7 +12,6 @@ export interface AmbientAdmission {
   /**
    * A secret-flagged row passes only inside this project, and another project's row only with
    * `includeCrossProject`.
-   *
    */
   readonly currentProject: ProjectRef;
   readonly includeCrossProject: boolean;
@@ -30,7 +29,6 @@ export interface AmbientAdmission {
 /**
  * Why an ambient load leaves a row out: `admission` refused it, or it passed but is neither pinned
  * nor worth showing.
- *
  */
 export type AmbientRefusalReason = 'admission' | 'quality';
 

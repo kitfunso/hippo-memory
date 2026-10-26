@@ -78,13 +78,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   const profiles = entries.filter((e) => e.dagLevel === DAG_LEVEL.entity);
   const l2List = entries.filter((e) => e.dagLevel === DAG_LEVEL.topic);
   const orphanL2 = l2List.filter((e) => !e.dagParentId);
-  const childL2ByProfile = new Map<string, typeof l2List>();
-  for (const l2 of l2List) {
-    if (!l2.dagParentId) continue;
-    const list = childL2ByProfile.get(l2.dagParentId) ?? [];
-    list.push(l2);
-    childL2ByProfile.set(l2.dagParentId, list);
-  }
+  const childL2ByProfile = groupByParent(l2List);
 
   const childrenByParent = groupByParent(entries);
 
@@ -95,39 +89,56 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
 
   // L3 entity profiles as tree roots with their L2 children.
   for (const profile of profiles) {
-    const profileTags = profile.tags.filter((t) => t !== 'dag-entity-profile').join(', ');
-    console.log(`\n🌲 ${profile.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
-    if (profileTags) console.log(`   [${profileTags}]`);
-    const l2Children = childL2ByProfile.get(profile.id) ?? [];
-    for (const l2 of l2Children) {
-      const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
-      console.log(`   └─ 📌 ${l2.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
-      if (l2Tags) console.log(`      [${l2Tags}]`);
-      const facts = childrenByParent.get(l2.id) ?? [];
-      for (const f of facts) {
-        console.log(`      └─ ${f.content.slice(0, TREE_LEAF_PREVIEW_CHARS)}`);
-      }
-    }
+    printProfileTree(profile, childL2ByProfile.get(profile.id) ?? [], childrenByParent);
   }
 
   // Orphan L2 summaries (no L3 parent) at top level.
   for (const summary of orphanL2) {
-    const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
-    console.log(`\n📌 ${summary.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
-    if (summaryTags) console.log(`   [${summaryTags}]`);
-    const children = childrenByParent.get(summary.id) ?? [];
-    for (const child of children) {
-      console.log(`   └─ ${child.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
+    printOrphanSummary(summary, childrenByParent.get(summary.id) ?? []);
+  }
+}
+
+function printProfileTree(
+  profile: MemoryEntry,
+  l2Children: readonly MemoryEntry[],
+  childrenByParent: ReadonlyMap<string, MemoryEntry[]>,
+): void {
+  const profileTags = profile.tags.filter((t) => t !== 'dag-entity-profile').join(', ');
+  console.log(`\n🌲 ${profile.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
+  if (profileTags) console.log(`   [${profileTags}]`);
+  for (const l2 of l2Children) {
+    const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
+    console.log(`   └─ 📌 ${l2.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
+    if (l2Tags) console.log(`      [${l2Tags}]`);
+    const facts = childrenByParent.get(l2.id) ?? [];
+    for (const f of facts) {
+      console.log(`      └─ ${f.content.slice(0, TREE_LEAF_PREVIEW_CHARS)}`);
     }
   }
 }
 
-async function assembleSession(
-  hippoRoot: string,
-  tenantId: string,
-  sessionId: string,
-  flags: CliFlags,
-): Promise<void> {
+function printOrphanSummary(summary: MemoryEntry, children: readonly MemoryEntry[]): void {
+  const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
+  console.log(`\n📌 ${summary.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
+  if (summaryTags) console.log(`   [${summaryTags}]`);
+  for (const child of children) {
+    console.log(`   └─ ${child.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
+  }
+}
+
+interface AssembleSessionOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly flags: CliFlags;
+}
+
+async function assembleSession({
+  hippoRoot,
+  tenantId,
+  sessionId,
+  flags,
+}: AssembleSessionOptions): Promise<void> {
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies.
   const budget = parseBudgetFlag(flags, undefined);
@@ -172,41 +183,59 @@ function drillDepthFlag(flags: CliFlags): number | undefined {
   return depth;
 }
 
-async function drillIntoSummary(
-  hippoRoot: string,
-  tenantId: string,
-  summaryId: string,
-  flags: CliFlags,
-): Promise<void> {
+interface DrillIntoSummaryOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly summaryId: string;
+  readonly flags: CliFlags;
+}
+
+async function drillIntoSummary({
+  hippoRoot,
+  tenantId,
+  summaryId,
+  flags,
+}: DrillIntoSummaryOptions): Promise<void> {
   requireInit(hippoRoot);
-  const limit = numberFlag(flags, 'limit');
-  // Absent stays undefined so the api default applies.
-  const budget = parseBudgetFlag(flags, undefined);
-  const depth = drillDepthFlag(flags);
+  const opts = drillDownOptions(flags);
   const ctx: api.Context = {
     ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:drill'),
   };
+  const r = await api.drillDown(ctx, summaryId, opts);
+  if ('failure' in r) failDrill(r, summaryId);
+  if (boolFlag(flags, 'json')) {
+    console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+  printDrillResult(r);
+}
+
+function drillDownOptions(flags: CliFlags): api.DrillDownOptions {
+  const limit = numberFlag(flags, 'limit');
+  // Absent stays undefined so the api default applies.
+  const budget = parseBudgetFlag(flags, undefined);
+  const depth = drillDepthFlag(flags);
   const opts: api.DrillDownOptions = {};
   if (Number.isFinite(limit) && limit! > 0) opts.limit = limit;
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
   if (depth !== undefined) opts.depth = depth;
   opts.cost = drillCost;
-  const r = await api.drillDown(ctx, summaryId, opts);
-  if ('failure' in r) {
-    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
-    // and missing on purpose: telling scope_blocked apart would leak that the row exists.
-    if (r.failure === 'not_drillable') {
-      printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
-    } else {
-      printError(`No drillable summary at id=${summaryId}.`);
-    }
-    throw new CliExit(1);
+  return opts;
+}
+
+function failDrill(r: api.DrillDownFailure, summaryId: string): never {
+  // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
+  // and missing on purpose: telling scope_blocked apart would leak that the row exists.
+  if (r.failure === 'not_drillable') {
+    printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
+  } else {
+    printError(`No drillable summary at id=${summaryId}.`);
   }
-  if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify(r, null, 2));
-    return;
-  }
+  throw new CliExit(1);
+}
+
+function printDrillResult(r: api.DrillDownResult): void {
   console.log(
     `Summary ${r.summary.id} — ${r.summary.descendantCount} descendants` +
       `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`,
@@ -232,7 +261,7 @@ export async function handleDrill({
   if (!summaryId) {
     fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
-  await drillIntoSummary(hippoRoot, tenantId, summaryId, flags);
+  await drillIntoSummary({ hippoRoot, tenantId, summaryId, flags });
 }
 
 export async function handleAssemble({
@@ -247,5 +276,5 @@ export async function handleAssemble({
       'Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]',
     );
   }
-  await assembleSession(hippoRoot, tenantId, sessionId, flags);
+  await assembleSession({ hippoRoot, tenantId, sessionId, flags });
 }

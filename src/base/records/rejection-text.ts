@@ -19,12 +19,14 @@ export function rejectedText(
     | undefined,
 ): string {
   if (request.memoryId === undefined) {
-    if (request.value === undefined)
+    if (request.value === undefined) {
       throw new BadRequestError('reject requires either a memory id or a value.');
+    }
     return request.value;
   }
-  if (!row || row.tenant_id !== request.tenantId)
+  if (!row || row.tenant_id !== request.tenantId) {
     throw new Error(`memory not found: ${request.memoryId}`);
+  }
   // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
   if (isPersonalScope(row.scope)) {
     throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");

@@ -19,7 +19,6 @@ function isSlackMessage(m: JsonValue): m is { [key: string]: JsonValue } & Slack
 /**
  * The reply as a JSON object. The error names the status and the path only, since the query string
  * carries channel ids and cursors.
- *
  */
 async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]: JsonValue }> {
   const where = `slack: HTTP ${r.status} on ${url.pathname}`;
@@ -51,11 +50,13 @@ export function slackHistoryFetcher(token: string, fetchImpl?: typeof fetch): Sl
         fetchFn: fetchImpl,
       },
     );
-    if (isRetryableStatus(r.status))
+    if (isRetryableStatus(r.status)) {
       throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
+    }
     const body = await readHistoryReply(r, url);
-    if (body.ok !== true)
+    if (body.ok !== true) {
       throw new Error(`slack: ${isJsonString(body.error) ? body.error : 'unknown error'}`);
+    }
     const messages: SlackMessageEvent[] = (Array.isArray(body.messages) ? body.messages : [])
       .filter(isSlackMessage)
       // Slack returns messages without `channel`; stamp it from the request.

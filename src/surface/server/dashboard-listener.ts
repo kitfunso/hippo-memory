@@ -1,7 +1,7 @@
 // `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits,
 // error replies and the drain come from boot.ts and lifecycle.ts; only the route table and its
 // session are the dashboard's.
-import type { ServerResponse } from 'node:http';
+import type { Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
 import { configReader } from '../../host/config-file.js';
@@ -102,18 +102,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
   const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
-  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API
-  // server's.
-  const counts = { handlerDeadlines: 0 };
-  const server = createListener(undefined, (req, res) => {
-    res.once('finish', runtime.afterResponse);
-    inflight.add(res);
-    res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => answerDashboard(serving, req, res)), {
-      slowWarnMs: undefined,
-      counts,
-    });
-  });
+  const server = dashboardListener(serving, runtime, inflight);
   setKeepAliveTimeouts(server);
   // The reader thread closes before the runtime, which closes its held connection last, so that
   // close is the last.
@@ -143,4 +132,23 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
   const { port } = server.address() as AddressInfo;
   const ticket = (): string => serving.access.tickets.mint(Date.now());
   return { port, url: `http://${DASHBOARD_HOST}:${port}`, stop, server, ticket };
+}
+
+function dashboardListener(
+  serving: DashboardServing,
+  runtime: ServerRuntime,
+  inflight: Set<ServerResponse>,
+): Server {
+  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API
+  // server's.
+  const counts = { handlerDeadlines: 0 };
+  return createListener(undefined, (req, res) => {
+    res.once('finish', runtime.afterResponse);
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
+    answerRequest(req, res, () => runtime.runRequest(() => answerDashboard(serving, req, res)), {
+      slowWarnMs: undefined,
+      counts,
+    });
+  });
 }

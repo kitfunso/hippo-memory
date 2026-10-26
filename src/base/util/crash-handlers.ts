@@ -26,7 +26,6 @@ function afterFlush(leave: () => void): void {
 /**
  * Exit once stdout and stderr have drained, so the last reply and the last log line reach their
  * reader; capped at 1 s.
- *
  */
 export function exitAfterFlush(code: number): void {
   process.exitCode = code;
@@ -42,7 +41,6 @@ function killSelf(): void {
 /**
  * Runs `shutdown` for `cause`, then exits with `code`, or 1 when it threw. One still running after
  * its bound is logged and the process ended without it.
- *
  */
 function exitAfterShutdown(name: string, cause: string, shutdown: Shutdown, code: number): void {
   let ended = false;
@@ -87,7 +85,6 @@ export function installSignalHandlers(name: string, shutdown: Shutdown): void {
 /**
  * After an uncaught throw the process state is unknown: log the cause, run `shutdown` once, then
  * exit 1 for the supervisor or client to restart it.
- *
  */
 export function installCrashHandlers(name: string, shutdown?: Shutdown): void {
   let crashing = false;

@@ -160,11 +160,12 @@ function firstRows(
   for (const parentId of parents) {
     if (left <= 0) break;
     const n = at.perParent.get(parentId) ?? 0;
-    if (n >= left)
+    if (n >= left) {
       return [
         ...childrenInOrder(db, walk, whole, -1),
         ...childrenInOrder(db, walk, [parentId], left),
       ];
+    }
     whole.push(parentId);
     left -= n;
   }
@@ -220,12 +221,13 @@ function summaryWithDescendants(
   const walked =
     readable(summary) &&
     (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
-  if (page)
+  if (page) {
     return pagedDescendants(
       db,
       { tenantId, summary, depth, rows: page.rows, admit: readable },
       walked,
     );
+  }
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);
   let parents = walked ? [id] : [];

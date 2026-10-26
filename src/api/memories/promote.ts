@@ -32,13 +32,15 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null))
+  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) {
     throw new NotFoundError(`memory not found: ${id}`);
+  }
   // A root's reach sets it for a store kept in a folder, so only a context built without a reach
   // lacks it.
   const target = globalTargetOf(ctx);
-  if (target === undefined)
+  if (target === undefined) {
     throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
+  }
   assertPromotable(id, entry);
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store

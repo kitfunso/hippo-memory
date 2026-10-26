@@ -126,6 +126,36 @@ function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): Dashboar
   });
 }
 
+/** The named binds of one project's reads. */
+interface ProjectBinds {
+  readonly tenant: string;
+  readonly origin: Origin;
+  readonly now: number;
+}
+
+function scatterPoints(db: DatabaseSyncLike, binds: ProjectBinds, maxAgeDays: number): ScatterRows {
+  // SAFETY: each column is named in the SELECT; layer holds a Layer value.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
+      `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
+  ).all({ ...binds, cap: SCATTER_POINTS_MAX }) as Array<{
+    id: string;
+    layer: Layer;
+    age: number;
+    strength: number;
+    band: number;
+  }>;
+  const points = rows.map((r) => ({
+    id: r.id,
+    ageDays: r.age,
+    strength: r.strength,
+    layer: layerIndex(r.layer),
+    band: r.band,
+  }));
+  return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
+}
+
 function scatter(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -134,43 +164,13 @@ function scatter(
   tally: ProjectTally,
 ) {
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
-  if (tally.live <= SCATTER_POINTS_MAX) {
-    // SAFETY: each column is named in the SELECT; layer holds a Layer value.
-    const rows = cachedStatement(
-      db,
-      `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
-        `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
-    ).all({
-      tenant: tenantId,
-      origin,
-      now: nowMs,
-      cap: SCATTER_POINTS_MAX,
-    }) as Array<{
-      id: string;
-      layer: Layer;
-      age: number;
-      strength: number;
-      band: number;
-    }>;
-    const points = rows.map((r) => ({
-      id: r.id,
-      ageDays: r.age,
-      strength: r.strength,
-      layer: layerIndex(r.layer),
-      band: r.band,
-    }));
-    return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
-  }
+  const binds = { tenant: tenantId, origin, now: nowMs };
+  if (tally.live <= SCATTER_POINTS_MAX) return scatterPoints(db, binds, maxAgeDays);
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,
     `SELECT hippo_scatter_grid(${FACT_COLUMNS}, :now, :span) AS cells FROM memories WHERE ${IN_PROJECT}`,
-  ).get({
-    tenant: tenantId,
-    origin,
-    now: nowMs,
-    span: Math.log10(maxAgeDays + 1),
-  }) as { cells: SqlValue };
+  ).get({ ...binds, span: Math.log10(maxAgeDays + 1) }) as { cells: SqlValue };
   const t = tallyOf(row.cells);
   const cells = LAYER_ORDER.map((_, l) =>
     Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)),
@@ -256,8 +256,9 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
   let lists: MemoryLists | null = null;
   return {
     reader: () => {
-      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot)))
+      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) {
         held = openHippoDbReadOnly(hippoRoot);
+      }
       return held;
     },
     // The first list runs the open the other reads run, so a pending migration lands before it

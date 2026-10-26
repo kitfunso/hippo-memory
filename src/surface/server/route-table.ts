@@ -275,8 +275,9 @@ async function passAuthGate(
   }
   const ctx = await buildContextWithAuth(req, opts);
   if (route.unported) await notPorted();
-  if (route.auth === 'admin' && ctx.actor.role !== 'admin')
+  if (route.auth === 'admin' && ctx.actor.role !== 'admin') {
     throw new HttpError(403, `${label} requires admin role`);
+  }
   if (route.auth === 'host-admin-local') assertCrossTenantAdmin(ctx, label);
   return ctx;
 }

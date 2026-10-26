@@ -7,8 +7,9 @@ import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../base/ut
 /** The caller's row count, else the default; a 400 past the cap or below one. */
 export function pageLimit(limit: number | undefined): number {
   const resolved = resolveListLimit(limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
-  if (resolved === undefined)
+  if (resolved === undefined) {
     throw new BadRequestError(`limit must be a positive integer <= ${MAX_LIST_LIMIT}`);
+  }
   return resolved;
 }
 

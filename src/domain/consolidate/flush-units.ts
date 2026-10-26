@@ -34,8 +34,9 @@ export function groupFlush(
   const componentOf = (id: string) => {
     const root = find(id);
     let component = byRoot.get(root);
-    if (!component)
+    if (!component) {
       byRoot.set(root, (component = { refreshes: [], writes: [], deletes: [], dormant: [] }));
+    }
     return component;
   };
   for (const refresh of refreshes) componentOf(refresh.id).refreshes.push(refresh);
@@ -54,8 +55,9 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
   const up = new Map<string, string>();
   const find = (id: string): string => {
     let root = id;
-    for (let next = up.get(root); next !== undefined && next !== root; next = up.get(root))
+    for (let next = up.get(root); next !== undefined && next !== root; next = up.get(root)) {
       root = next;
+    }
     if (root !== id) up.set(id, root);
     return root;
   };
@@ -74,7 +76,6 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
 /**
  * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark
  * otherwise lands after the parent is gone.
- *
  */
 // SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can
 // pass holdMs by a family's size; split by child if a family grows large.

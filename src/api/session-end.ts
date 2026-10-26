@@ -26,7 +26,6 @@ export interface SessionClose {
   /**
    * A reply's end, not the session's: the handoff is updated in place and the snapshot stays for
    * the next compaction.
-   *
    */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
@@ -116,8 +115,9 @@ export async function bookSessionRereads(
 ): Promise<string[]> {
   if (!transcriptPath || !sessionId) return [];
   const { transcriptCalls } = ctx.infra;
-  if (transcriptCalls === undefined)
+  if (transcriptCalls === undefined) {
     return ['skip re-read count: this context reads no transcripts'];
+  }
   let read: TranscriptCalls;
   try {
     read = await transcriptCalls(transcriptPath);

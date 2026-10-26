@@ -234,8 +234,46 @@ async function writeLessons(
 ): Promise<LessonCounts> {
   const { tenantId } = ctx;
   const { profile } = opts;
-  const store = ctx.store;
-  const writes = store.lessonWrites;
+  const { batch, fitSource } = await openLessonBatch(ctx, lessons, opts);
+  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
+  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the
+  // queue first.
+  const queue: QueuedLesson[] = [];
+  for (const lesson of lessons) {
+    const key = duplicateKey(lesson);
+    if (batch.keys.has(key)) {
+      batch.counts.skipped++;
+      continue;
+    }
+    const target = profile.full ? extractInvalidationTarget(lesson) : null;
+    if (target) await invalidateAfterLanding(batch, queue, target);
+    const entry = newLessonMemory(lesson, profile, {
+      tenantId,
+      config,
+      fitSource,
+      pathTags,
+      now: ctx.infra.clock(),
+    });
+    queue.push({ entry, key });
+    if (profile.full) batch.live.push(entry);
+    batch.keys.add(key);
+  }
+  await landLessons(batch, queue.splice(0));
+  return batch.counts;
+}
+
+interface OpenedLessonBatch {
+  readonly batch: LessonBatch;
+  readonly fitSource: SchemaFitSource | undefined;
+}
+
+async function openLessonBatch(
+  ctx: Context,
+  lessons: readonly string[],
+  opts: LearnOptions,
+): Promise<OpenedLessonBatch> {
+  const { profile } = opts;
+  const writes = ctx.store.lessonWrites;
   // One pass serves the batch: invalidation matches against `live`, which follows every write
   // below. Schema fit needs every readable row, and each lesson is scored against them as they were
   // before the batch.
@@ -255,36 +293,20 @@ async function writeLessons(
     full: profile.full,
     counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
   };
-  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the
-  // queue first.
-  const queue: QueuedLesson[] = [];
-  for (const lesson of lessons) {
-    const key = duplicateKey(lesson);
-    if (batch.keys.has(key)) {
-      batch.counts.skipped++;
-      continue;
-    }
-    const target = profile.full ? extractInvalidationTarget(lesson) : null;
-    if (target) {
-      await landLessons(batch, queue.splice(0));
-      const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
-      if (invalidated > 0)
-        batch.counts.invalidations.push({ from: target.from, count: invalidated });
-    }
-    const entry = newLessonMemory(lesson, profile, {
-      tenantId,
-      config,
-      fitSource,
-      pathTags,
-      now: ctx.infra.clock(),
-    });
-    queue.push({ entry, key });
-    if (profile.full) live.push(entry);
-    batch.keys.add(key);
-  }
+  return { batch, fitSource };
+}
+
+async function invalidateAfterLanding(
+  batch: LessonBatch,
+  queue: QueuedLesson[],
+  target: InvalidationTarget,
+): Promise<void> {
+  const { store, tenantId } = batch.ctx;
   await landLessons(batch, queue.splice(0));
-  return batch.counts;
+  const { invalidated } = await invalidateMatchingAmong(store, batch.live, target, tenantId);
+  if (invalidated > 0) {
+    batch.counts.invalidations.push({ from: target.from, count: invalidated });
+  }
 }
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };

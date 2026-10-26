@@ -63,7 +63,6 @@ interface RecallTraceResultInput {
   /**
    * Per-stage rerank steps when the caller ran with explain/--why; omitted (or empty) persists
    * `rerank_json` as NULL.
-   *
    */
   rerankSteps?: RerankStep[];
 }

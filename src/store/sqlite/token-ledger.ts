@@ -79,9 +79,10 @@ export function lastSentState(
   surface: TokenSurface,
 ): LastSent | null {
   if (!sessionId) return null;
-  const anchor = latestInjectOrReset(db, tenantId, sessionId, surface);
+  const key = { tenantId, sessionId, surface };
+  const anchor = latestInjectOrReset(db, key);
   if (!anchor || anchor.event === 'reset' || !anchor.block_hash) return null;
-  const skips = countSkipsAfter(db, tenantId, sessionId, surface, anchor.id);
+  const skips = countSkipsAfter(db, key, anchor.id);
   return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
 }
 
@@ -180,7 +181,7 @@ export function recordRereads(
   return withWriteScope(db, 'record_rereads', () => {
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
-    const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
+    const add = ({ surface, at, rereads, tokens }: RereadDay): void => {
       const key = `${surface} ${new Date(at).toISOString().slice(0, DATE_PREFIX_CHARS)}`;
       const day = days.get(key) ?? { surface, at, rereads: 0, tokens: 0 };
       days.set(key, {
@@ -194,10 +195,11 @@ export function recordRereads(
       const sentAt = Date.parse(row.ts);
       // Dated by when the calls happened, so a --days window counts re-reads in it; the empty
       // send-day row keeps the session in coverage.
-      add(row.surface, sentAt, 0, 0);
+      add({ surface: row.surface, at: sentAt, rereads: 0, tokens: 0 });
       // The first carrying call is the send itself; every later one is a re-read.
-      for (const call of carryingCalls(calls, sentAt).slice(1))
-        add(row.surface, call.at, 1, Number(row.tokens));
+      for (const call of carryingCalls(calls, sentAt).slice(1)) {
+        add({ surface: row.surface, at: call.at, rereads: 1, tokens: Number(row.tokens) });
+      }
     }
     deleteRereadRows(db, tenantId, sessionId);
     for (const day of days.values()) {

@@ -92,8 +92,9 @@ function moveHalfLives(
   const run = () => {
     const from = recordedHalfLifeBase(getMeta(db, META_KEY.halfLifeBase, ''));
     const typedPending = getMeta(db, META_KEY.typedHalfLife, '') === '';
-    if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending))
+    if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) {
       return { from, outcome: null };
+    }
     const { moves, outcome } = planHalfLifeMoves(listHalfLifeRows(db, from, typedPending), to);
     if (opts.dryRun) return { from, outcome };
 
@@ -141,8 +142,9 @@ async function commitSleep(
 function chunkedCommit({ onAsync }: Handles): Consolidation['commit'] {
   return (commit) => {
     const flush = commit.flush && commit.flush.components.length > 0 ? commit.flush : null;
-    if (!flush && commit.expireBefore === null)
+    if (!flush && commit.expireBefore === null) {
       return Promise.resolve({ removedIds: [], expired: 0 });
+    }
     const opener = flush ? sleepStoreOpener : sleepOpener;
     return onAsync((db, files) => commitSleep(db, files, { ...commit, flush }), opener).catch(
       rethrowInPortTerms,

@@ -107,8 +107,7 @@ export async function openIncident(
 function resolving(
   tenantId: string,
   resolutionText: string,
-  actor: string,
-  now: Date,
+  { actor, now }: ActedBy,
 ): IncidentResolve {
   assertTenantId('resolveOpenIncident', tenantId);
   const text = requireText(resolutionText, MAX_SHORT_FIELD_LEN, 'resolutionText');
@@ -120,8 +119,9 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   if (written.refused === 'missing') {
     throw new NotFoundError(`incident ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status')
+  if (written.refused !== 'status') {
     throw new NotFoundError(`incident ${id} not found after UPDATE`);
+  }
   throw new ConflictError(
     `incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
   );
@@ -139,11 +139,6 @@ export async function resolveOpenIncident(
   return resolved(
     tenantId,
     id,
-    await objects.closeObject(
-      tenantId,
-      'incident',
-      id,
-      resolving(tenantId, resolutionText, by.actor, by.now),
-    ),
+    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, by)),
   );
 }

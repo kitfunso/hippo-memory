@@ -37,15 +37,17 @@ import {
   type RenderSlot,
 } from './tool-text.js';
 import type {
+  RecallOptions,
+  RecallResult,
   RecallResultItem,
   RecallSuppressionSummary,
   ShowRanking,
+  StoreRanking,
 } from '../../api/recall/types.js';
 
 /**
  * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands
  * back its hint rows.
- *
  */
 interface RecallPresenterOptions {
   readonly config: HintConfig;
@@ -112,51 +114,84 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
   return dropHeldCopies(unshown, (r) => r);
 }
 
+/** The sections the purse paid for ahead of the memories: '' or null for one that did not fit. */
+interface PaidSections {
+  readonly plan: string;
+  readonly tailRows: RecallResultItem[] | null;
+  readonly continuity: string;
+  /** What the purse has left for the memories. */
+  readonly room: number;
+}
+
+function paySections(
+  budget: number,
+  apiResult: RecallResult,
+  includeContinuity: boolean,
+): PaidSections {
+  // Sections are paid in print order, ahead of the memories and after the heading; one that does
+  // not fit is dropped whole.
+  const purse = tokenPurse(budget - memoriesReserve(budget));
+  const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
+  const planPiece = planningSection(apiResult);
+  const showPlan = planPiece !== '' && pays(planPiece);
+  const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
+  const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
+  const continuityPiece =
+    includeContinuity && apiResult.continuity
+      ? `\n\n${formatContinuityBlock(apiResult.continuity)}`
+      : '';
+  const showContinuity = continuityPiece !== '' && pays(continuityPiece);
+  return {
+    plan: showPlan ? planPiece : '',
+    tailRows: showTail ? tailRows : null,
+    continuity: showContinuity ? continuityPiece : '',
+    room: Math.max(0, purse.left()),
+  };
+}
+
+interface ShownListView {
+  readonly hintPool: ReturnType<typeof availabilityPool>;
+  readonly anchorRing: RingBuffer | null;
+  readonly queryHash: number;
+  readonly ranking: StoreRanking;
+  readonly paid: PaidSections;
+  readonly now: Date;
+}
+
+// The hints and Cutoff block describe the list the tool shows, not the window band in apiResult.
+function renderShownList(cut: SearchResult[], v: ShownListView): RenderedRecall {
+  // After every cut, so a merged row cut here never hides its sources.
+  const list = dropHeldCopies(cut, (r) => r.entry);
+  const { anchoring, availability } = detectRecallHints({
+    list,
+    pool: v.hintPool,
+    anchorRing: v.anchorRing,
+    queryHash: v.queryHash,
+  });
+  const tail = v.paid.tailRows ? unshownTail(list, v.paid.tailRows) : [];
+  const { pool, droppedByScope } = v.ranking;
+  const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
+  const s = suppressionSummary(counts, anchoring);
+  // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list,
+  // where the agent reads it.
+  let text = biasHintSections(anchoring, availability);
+  text += v.paid.plan;
+  text += cutoffSection(s, list.length);
+  // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields
+  // go unanswered.
+  text += formatMemories(list, v.now) + tailSection(tail) + v.paid.continuity;
+  return { anchoring, availability, text, list };
+}
+
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
   const { config, includeContinuity, anchorRing, queryHash, out, hintRows, now } = options;
-  return ({ ranked, pool, droppedByScope }, apiResult) => {
-    // Sections are paid in print order, ahead of the memories and after the heading; one that does
-    // not fit is dropped whole.
-    const purse = tokenPurse(budget - memoriesReserve(budget));
-    const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
-    const hintPool = availabilityPool(config, () => pool);
-    const planPiece = planningSection(apiResult);
-    const showPlan = planPiece !== '' && pays(planPiece);
-    const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
-    const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
-    const continuityPiece =
-      includeContinuity && apiResult.continuity
-        ? `\n\n${formatContinuityBlock(apiResult.continuity)}`
-        : '';
-    const showContinuity = continuityPiece !== '' && pays(continuityPiece);
-
-    // The hints and Cutoff block describe the list the tool shows, not the window band in
-    // apiResult.
-    const render = (cut: SearchResult[]): RenderedRecall => {
-      // After every cut, so a merged row cut here never hides its sources.
-      const list = dropHeldCopies(cut, (r) => r.entry);
-      const { anchoring, availability } = detectRecallHints({
-        list,
-        pool: hintPool,
-        anchorRing,
-        queryHash,
-      });
-      const tail = showTail ? unshownTail(list, tailRows) : [];
-      const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
-      const s = suppressionSummary(counts, anchoring);
-      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list,
-      // where the agent reads it.
-      let text = biasHintSections(anchoring, availability);
-      if (showPlan) text += planPiece;
-      text += cutoffSection(s, list.length);
-      // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields
-      // go unanswered.
-      text +=
-        formatMemories(list, now) + tailSection(tail) + (showContinuity ? continuityPiece : '');
-      return { anchoring, availability, text, list };
-    };
-    const fit = { room: Math.max(0, purse.left()), budget, floor: 1, cost: memoryCostAt(now) };
-    const rendered = fitRecall(ranked, { ...fit, render, textOf: (r) => r.text });
+  return (ranking, apiResult) => {
+    const hintPool = availabilityPool(config, () => ranking.pool);
+    const paid = paySections(budget, apiResult, includeContinuity);
+    const view: ShownListView = { hintPool, anchorRing, queryHash, ranking, paid, now };
+    const render = (cut: SearchResult[]): RenderedRecall => renderShownList(cut, view);
+    const fit = { room: paid.room, budget, floor: 1, cost: memoryCostAt(now) };
+    const rendered = fitRecall(ranking.ranked, { ...fit, render, textOf: (r) => r.text });
     out.rendered = rendered;
     return {
       ids: rendered.list.map((r) => r.entry.id),
@@ -179,12 +214,11 @@ export interface ToolRecallRequest {
 /** hippo_recall's text. The tool keeps its own band size and search mode, and a
  * RecallContractError reaches the caller raw, as mcp-recall-fresh-tail-policy.test.ts pins. */
 export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Promise<string> {
-  const { opts, project } = req;
   const {
     query,
     window: { includeContinuity },
     boost: { sessionId },
-  } = opts;
+  } = req.opts;
   const budget = req.budget ?? ctx.config.defaultBudget;
   const anchorRing = sessionRing(ctx, 'mcp', sessionId);
   const who = callerOf(ctx);
@@ -192,16 +226,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   const out: RenderSlot = {};
   await retrieveRanking(
     ctx,
-    {
-      ...opts,
-      window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
-      mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
-      filter: { ...opts.filter, keepHeldCopies: true, project },
-      // The hint is computed below over the list the tool shows; the window's copy would emit its
-      // audit row twice.
-      hints: { suppressAvailabilityHint: true },
-      trace: { recordAs: RECALL_RECORDING.mcp },
-    },
+    toolRecallOptions(ctx, req),
     recallPresenter(budget, {
       config: ctx.config,
       includeContinuity,
@@ -220,7 +245,21 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
     }),
   );
   const { rendered } = out;
-  if (!rendered)
+  if (!rendered) {
     throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
+  }
   return rendered.text;
+}
+
+function toolRecallOptions(ctx: Context, { opts, project }: ToolRecallRequest): RecallOptions {
+  return {
+    ...opts,
+    window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
+    mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
+    filter: { ...opts.filter, keepHeldCopies: true, project },
+    // The hint is computed below over the list the tool shows; the window's copy would emit its
+    // audit row twice.
+    hints: { suppressAvailabilityHint: true },
+    trace: { recordAs: RECALL_RECORDING.mcp },
+  };
 }

@@ -167,7 +167,11 @@ export async function handleEmbed(
 
   const provider = readyEmbedProvider(root, given);
   if (!provider) return;
+  await embedMissing(ctx, provider);
+}
 
+/** Embeds what has no vector yet; a failure or a leftover sets exit code 1, the saved part kept. */
+async function embedMissing(ctx: CliContext, provider: EmbeddingProvider): Promise<void> {
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
   try {

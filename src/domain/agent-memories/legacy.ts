@@ -49,7 +49,6 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
 /**
  * Matched once across all the store's Claude folders, before any container's transaction; each
  * adoption re-checks its row inside one.
- *
  */
 export async function legacyWork(
   store: Pick<ImportStore, 'reports'>,

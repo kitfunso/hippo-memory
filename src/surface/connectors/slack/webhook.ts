@@ -44,7 +44,7 @@ export async function handleSlackEventsWebhook(
   request: WebhookRequest,
   ports: WebhookPorts,
 ): Promise<void> {
-  const { req, res, opts } = request;
+  const { res, opts } = request;
   // Secret and well-formed headers before the body, so a caller with neither cannot make the server
   // buffer one.
   const secret = envSlackSigningSecret();
@@ -54,6 +54,24 @@ export async function handleSlackEventsWebhook(
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
+  const { rawBytes, sigStr, tsStr } = await readSignedSlackBody(request, secret);
+  await routeUnlessReplayed({
+    hippoRoot: opts.hippoRoot,
+    ...ports,
+    res,
+    rawBody: rawBytes.toString('utf8'),
+    signature: sigStr,
+    slackTimestamp: tsStr,
+  });
+}
+
+/** Reads the raw body and refuses it unless the signature matches the current or the previous
+ * secret. */
+async function readSignedSlackBody(
+  request: WebhookRequest,
+  secret: string,
+): Promise<{ rawBytes: Buffer; sigStr: string; tsStr: string }> {
+  const { req } = request;
   const previousSecret = previousSecretInForce(
     SLACK_PREVIOUS,
     envSlackSigningSecretPrevious(),
@@ -79,14 +97,7 @@ export async function handleSlackEventsWebhook(
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
-  await routeUnlessReplayed({
-    hippoRoot: opts.hippoRoot,
-    ...ports,
-    res,
-    rawBody: rawBytes.toString('utf8'),
-    signature: sigStr,
-    slackTimestamp: tsStr,
-  });
+  return { rawBytes, sigStr, tsStr };
 }
 
 // The timestamp check alone lets a captured request replay for five minutes; a hold in the store
@@ -177,29 +188,8 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces;
-  // park it in slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never
-  // call ingest.
-  let resolvedTenant: string | null = null;
-  if (isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenant(
-      d.store,
-      { connector: 'slack', teamId: body.team_id },
-      hostFallback(),
-    );
-    if (resolvedTenant === null) {
-      await parkAndAck(d, {
-        tenantId: null, // unroutable - stored as '__unroutable__'
-        teamId: body.team_id,
-        error: `unroutable team_id: ${body.team_id}`,
-        bucket: 'unroutable',
-      });
-      return;
-    }
-  } else {
-    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
-    resolvedTenant = envTenant();
-  }
+  const resolvedTenant = await tenantOrPark(d, body);
+  if (resolvedTenant === null) return;
   const ctx: Context = {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
@@ -217,6 +207,31 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   await dispatchSlackEvent(d, ctx, body);
+}
+
+/** The tenant the payload runs as; null once an unroutable envelope is parked. */
+async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<string | null> {
+  // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces;
+  // park it in slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never
+  // call ingest.
+  if (!isSlackEventEnvelope(body)) {
+    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
+    return envTenant();
+  }
+  const resolvedTenant = await resolveTenant(
+    d.store,
+    { connector: 'slack', teamId: body.team_id },
+    hostFallback(),
+  );
+  if (resolvedTenant === null) {
+    await parkAndAck(d, {
+      tenantId: null, // unroutable - stored as '__unroutable__'
+      teamId: body.team_id,
+      error: `unroutable team_id: ${body.team_id}`,
+      bucket: 'unroutable',
+    });
+  }
+  return resolvedTenant;
 }
 
 const hostFallback = (): RouteFallback => ({

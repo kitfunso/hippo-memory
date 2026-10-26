@@ -30,7 +30,6 @@ const CLAUDE_CODE_COMMAND_PREFIXES = [
 /**
  * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'`
  * marks Claude Code's own notices.
- *
  */
 interface TranscriptLineFlags {
   type?: unknown;
@@ -124,7 +123,6 @@ export function collectSessionTurns(
 /**
  * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no
  * human or reply text.
- *
  */
 function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   if (entry.type !== 'user' && entry.type !== 'assistant') return null;
@@ -235,7 +233,6 @@ export function summarizeSessionTurns(turns: readonly SessionTurn[]): string {
  * Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload,
  * then the newest `.jsonl` in the Claude config dir. The scan runs only with `mayScan` (it spans
  * every project on the box); returns null when nothing resolves, never throws.
- *
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,

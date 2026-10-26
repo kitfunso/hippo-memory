@@ -8,13 +8,15 @@ import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js'
 import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import { folderVectorSource } from '../../entry/folder-search.js';
+import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import { defaultStore } from '../open-store.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import {
   bootstrapCorpus,
   compareSummaries,
   runEval,
   type EvalCase,
+  type EvalComparison,
   type EvalSummary,
 } from '../../domain/eval/eval.js';
 import {
@@ -117,7 +119,12 @@ async function runCorpusEval(
           embedderFor: resolveEmbeddingProvider,
         }
       : undefined,
-    source: folderVectorSource({ hippoRoot }),
+    source: vectorSourceOf({
+      store: defaultStore(hippoRoot),
+      config: cliConfig(hippoRoot),
+      onHippoDb: true,
+      embedderFor: resolveEmbeddingProvider,
+    }),
     mmr: !boolFlag(flags, 'no-mmr'),
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
@@ -157,8 +164,13 @@ function isBaselineMetrics(value: JsonValue | undefined): value is BaselineMetri
 
 /** The baseline file's contents as an EvalBaseline, or null when the shape is wrong. */
 export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
-  if (!isJsonObject(value) || !isJsonString(value['version']) || !isJsonString(value['timestamp']))
+  if (
+    !isJsonObject(value) ||
+    !isJsonString(value['version']) ||
+    !isJsonString(value['timestamp'])
+  ) {
     return null;
+  }
   const { features, overall } = value;
   if (
     !isJsonObject(features) ||
@@ -186,24 +198,7 @@ async function runEvalSuite(
 ): Promise<void> {
   const baselinePath =
     stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
-  let baseline: EvalBaseline | undefined;
-  let parsed: JsonValue | undefined;
-  try {
-    parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
-  } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be used
-    // warns.
-    if (errorCode(err) !== 'ENOENT') {
-      printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
-    }
-  }
-  if (parsed !== undefined) {
-    baseline =
-      parseEvalBaseline(parsed) ??
-      fail(
-        `Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`,
-      );
-  }
+  const baseline = loadEvalBaseline(baselinePath);
 
   const infra = cliInfra();
   const result = await runFeatureEval(
@@ -231,6 +226,26 @@ async function runEvalSuite(
       throw new CliExit(1);
     }
   }
+}
+
+function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
+  let parsed: JsonValue | undefined;
+  try {
+    parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
+  } catch (err) {
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used
+    // warns.
+    if (errorCode(err) !== 'ENOENT') {
+      printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
+    }
+  }
+  if (parsed === undefined) return undefined;
+  return (
+    parseEvalBaseline(parsed) ??
+    fail(
+      `Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`,
+    )
+  );
 }
 
 /** Loads the corpus file, exiting with the usage line or the read error when there is none to
@@ -334,17 +349,19 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
   }
 }
 
-function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
+function readCompareBaseline(comparePath: string): EvalSummary {
   if (!fs.existsSync(comparePath)) {
     fail(`Baseline file not found: ${comparePath}`);
   }
-  let baseline: EvalSummary;
   try {
-    baseline = readBaseline(fs.readFileSync(comparePath, 'utf8'));
+    return readBaseline(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
     fail(`Failed to parse baseline ${comparePath}: ${errorMessage(err)}`);
   }
-  const cmp = compareSummaries(baseline, summary);
+}
+
+function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
+  const cmp = compareSummaries(readCompareBaseline(comparePath), summary);
 
   if (asJson) {
     // The main JSON output already emitted; append comparison to stderr so both can be captured
@@ -363,10 +380,14 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   console.log(
     `  improved: ${cmp.improved.length}   regressed: ${cmp.regressed.length}   unchanged: ${cmp.unchanged}`,
   );
-  if (cmp.onlyInBaseline.length > 0)
+  if (cmp.onlyInBaseline.length > 0) {
     console.log(`  only in baseline: ${cmp.onlyInBaseline.length}`);
+  }
   if (cmp.onlyInCurrent.length > 0) console.log(`  only in current:  ${cmp.onlyInCurrent.length}`);
+  printCompareDeltas(cmp);
+}
 
+function printCompareDeltas(cmp: EvalComparison): void {
   const showPerCase = cmp.improved.length + cmp.regressed.length > 0;
   if (showPerCase) {
     for (const d of cmp.improved.slice(0, MAX_DELTAS_SHOWN)) {

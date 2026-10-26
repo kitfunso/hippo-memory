@@ -79,8 +79,9 @@ export function batchWriteAndDeleteInFolder(
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
-  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0)
+  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) {
     return [];
+  }
   return onHandle(
     hippoRoot,
     (db) => batches.batchWriteAndDelete(db, storeFilesOf(hippoRoot), toWrite, toDeleteIds, opts),

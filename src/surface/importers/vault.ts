@@ -85,19 +85,10 @@ async function syncVaultFolder(
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
-  const { batch } = target;
   const ctx = vaultContext(hippoRoot, tenantId, target);
   const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
-  const tally: VaultTally = {
-    total: 0,
-    imported: 0,
-    skipped: 0,
-    rejected: 0,
-    archived: 0,
-    redacted: 0,
-    entries: [],
-  };
+  const tally = emptyVaultTally();
   const baseHalfLifeDays = ctx.config.defaultHalfLifeDays;
   const seen = new Set<string>();
 
@@ -113,18 +104,38 @@ async function syncVaultFolder(
     baseHalfLifeDays,
     tally,
   };
-  const importNotes = async (): Promise<void> => {
-    for (const relpath of relpaths) await importVaultNote(run, relpath);
-  };
-  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
-  // handle.
-  if (dryRun) await batch(importNotes);
-  else await importNotes();
+  await importVaultNotes(run, relpaths, target.batch);
 
   await archiveVanishedNotes(run);
 
   const { total, imported, skipped, rejected, archived, redacted, entries } = tally;
   return { total, imported, skipped, rejected, archived, redacted, entries };
+}
+
+function emptyVaultTally(): VaultTally {
+  return {
+    total: 0,
+    imported: 0,
+    skipped: 0,
+    rejected: 0,
+    archived: 0,
+    redacted: 0,
+    entries: [],
+  };
+}
+
+async function importVaultNotes(
+  run: VaultImportRun,
+  relpaths: string[],
+  batch: VaultTarget['batch'],
+): Promise<void> {
+  const importNotes = async (): Promise<void> => {
+    for (const relpath of relpaths) await importVaultNote(run, relpath);
+  };
+  // A dry run probes the rejection guard once per changed note; one batch lets every probe share a
+  // handle.
+  if (run.dryRun) await batch(importNotes);
+  else await importNotes();
 }
 
 async function archiveVanishedNotes({

@@ -94,7 +94,6 @@ function masked(text: string): string {
 /**
  * A lowercase line continues the line above only when that line has not ended its sentence; "e.g."
  * at a line end has not.
- *
  */
 function continues(line: string, previous: string | undefined): boolean {
   if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;

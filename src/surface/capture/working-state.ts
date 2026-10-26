@@ -15,7 +15,6 @@ type LineMessage = Parameters<typeof humanUserText>[1];
 /**
  * Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript;
  * `textOf` reads a Claude Code line, '' when it has no text.
- *
  */
 function lastTurnText(
   jsonl: string,
@@ -96,7 +95,7 @@ export function transcriptWorkingState(
     return null;
   }
 
-  const state = workingStateOf(rawTask, summariseTranscript(tail), rawNextStep);
+  const state = workingStateOf({ rawTask, rawSummary: summariseTranscript(tail), rawNextStep });
   if (state === null) log('skip: empty summary');
   return state;
 }

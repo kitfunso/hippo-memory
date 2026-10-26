@@ -125,7 +125,6 @@ interface PromptCandidate {
 /**
  * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so
  * task state stays out too.
- *
  */
 export function selectPinned(
   opts: ContextOptions,
@@ -134,29 +133,14 @@ export function selectPinned(
   pools: ContextPools,
   admission: ContextAdmission,
 ): ContextResultEntry[] | null {
-  const { obs, primaryIsGlobal, config: pinnedCfg } = plan;
+  const { obs, config: pinnedCfg } = plan;
   if (!pinnedCfg.pinnedInject.enabled) {
     return null;
   }
   // Effective budget: explicit opts.budget wins over config, less what the sections took.
   const effBudget = left;
   const nowP = plan.now;
-  const localEntries = pools.local.entries;
-  const globalEntries = pools.global.entries;
-  obs?.offer(localEntries, primaryIsGlobal);
-  obs?.offer(globalEntries, true);
-  const [localPool, globalPool] = oneCopyPerMemory(
-    localEntries,
-    globalEntries,
-    nowP,
-    plan.strength,
-  );
-  obs?.dropMissing(
-    [...localEntries, ...globalEntries],
-    [...localPool, ...globalPool],
-    'load',
-    'duplicate',
-  );
+  const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
   // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE
@@ -178,6 +162,28 @@ export function selectPinned(
 
   admitWithinBudget(rankedPinned, picked, effBudget, rejectOverBudget(obs));
   return picked.items;
+}
+
+/** The loaded rows offered to the observer, then one copy of each memory across both stores. */
+function loadedOneCopy(plan: ContextPlan, pools: ContextPools): [MemoryEntry[], MemoryEntry[]] {
+  const { obs } = plan;
+  const localEntries = pools.local.entries;
+  const globalEntries = pools.global.entries;
+  obs?.offer(localEntries, plan.primaryIsGlobal);
+  obs?.offer(globalEntries, true);
+  const [localPool, globalPool] = oneCopyPerMemory(
+    localEntries,
+    globalEntries,
+    plan.now,
+    plan.strength,
+  );
+  obs?.dropMissing(
+    [...localEntries, ...globalEntries],
+    [...localPool, ...globalPool],
+    'load',
+    'duplicate',
+  );
+  return [localPool, globalPool];
 }
 
 function rankPinned(
@@ -406,31 +412,10 @@ async function searchBothStores(
 ): Promise<ContextResultEntry[]> {
   const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so
-  // the global pool is looked up.
-  const poolIds = (pool: AmbientLoadResult): string[] =>
-    [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
-  const localIds = new Set(poolIds(pools.local));
-  const alsoLocal = await heldIds(
-    plan.local.store,
-    poolIds(pools.global).filter((id) => !localIds.has(id)),
-    ctx.tenantId,
-  );
-  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
-  const sources = {
-    local: vectorSourceOf({
-      store: plan.local.store,
-      config: plan.config,
-      onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: ctx.infra.embedderFor,
-    }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm
-    // runs.
-    global: globalVectorSource(ctx),
-  };
+  const isGlobalHit = await globalHitTest(ctx, plan, pools);
   const merged = await rankBothStores(
     plan.query,
-    sources,
+    bothVectorSources(ctx, plan),
     { local: pools.local.entries, global: pools.global.entries },
     contextVectorSpec(ctx, plan, admit),
     {
@@ -450,6 +435,38 @@ async function searchBothStores(
     tokens: price(r.entry, isGlobalHit(r.entry)),
     isGlobal: isGlobalHit(r.entry),
   }));
+}
+
+// A local pool row is local by construction; sync keeps a global row's id on its local copy, so
+// the global pool is looked up.
+async function globalHitTest(
+  ctx: Context,
+  plan: ContextPlan,
+  pools: ContextPools,
+): Promise<(e: MemoryEntry) => boolean> {
+  const poolIds = (pool: AmbientLoadResult): string[] =>
+    [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
+  const localIds = new Set(poolIds(pools.local));
+  const alsoLocal = await heldIds(
+    plan.local.store,
+    poolIds(pools.global).filter((id) => !localIds.has(id)),
+    ctx.tenantId,
+  );
+  return (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
+}
+
+function bothVectorSources(ctx: Context, plan: ContextPlan) {
+  return {
+    local: vectorSourceOf({
+      store: plan.local.store,
+      config: plan.config,
+      onHippoDb: ctx.reach?.isHippoDb,
+      embedderFor: ctx.infra.embedderFor,
+    }),
+    // Its own config.json names the global store's embedding model, read only when the vector arm
+    // runs.
+    global: globalVectorSource(ctx),
+  };
 }
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
@@ -528,8 +545,9 @@ async function auditContextRecall(
     metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
   if (plan.hasLocal) await plan.local.store.appendAuditEvents([row]);
-  if (plan.hasGlobal && !plan.primaryIsGlobal)
+  if (plan.hasGlobal && !plan.primaryIsGlobal) {
     await globalStoreInReach(ctx).appendAuditEvents([row]);
+  }
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */

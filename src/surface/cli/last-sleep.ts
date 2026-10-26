@@ -18,7 +18,6 @@ const FAILURE_CHARS = 120;
 /**
  * The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the
  * spool holds `.bad` files; null when none did.
- *
  */
 export function sleepProblems(logText: string, bad: number): string | null {
   const lines = logText.split(/\r?\n/);
@@ -67,8 +66,9 @@ export function handleLastSleep(
   }
 
   const problems = sleepProblems(content, badSpoolFiles(hippoRoot));
-  if (problems !== null && out === 'hook')
+  if (problems !== null && out === 'hook') {
     process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
+  }
   if (problems !== null && out === 'terminal') printError(problems);
 
   if (!boolFlag(flags, 'keep')) {

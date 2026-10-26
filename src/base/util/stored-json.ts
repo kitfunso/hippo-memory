@@ -14,7 +14,6 @@ export interface StoredJsonSite {
  * Warns the first time a table's column is found damaged in this way, then at debug, so a row read
  * on every recall cannot flood stderr. The row id rides in the fields: a key per row would use up
  * the logger's key cap.
- *
  */
 export function warnDamagedColumn(
   site: StoredJsonSite,

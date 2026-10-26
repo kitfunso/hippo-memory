@@ -47,8 +47,9 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
  * others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
-  for await (const e of run.survivors.rows())
+  for await (const e of run.survivors.rows()) {
     if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
+  }
   const batch: MemoryEntry[] = [];
   let candidates = 0;
   for await (const e of run.survivors.rows()) {
@@ -127,7 +128,6 @@ function keepFacts(
  * Extracts facts from each candidate, up to four model calls at once; every write, count and report
  * then runs in input order. True when it stopped on a failure every later call would repeat (bad
  * key, no credit, unknown model).
- *
  */
 async function extractionPass(
   run: SleepRun,
@@ -135,25 +135,12 @@ async function extractionPass(
   batch: readonly MemoryEntry[],
 ): Promise<boolean> {
   const report = llm.llmError('extraction');
-  let stopAt = Number.POSITIVE_INFINITY;
-  const extract = async (index: number): Promise<Extraction> => {
-    const out: Extraction = { facts: [], errors: [] };
-    const onError = (msg: string, failure?: LlmFailure): void => {
-      out.errors.push([msg, failure]);
-      if (failure && isPermanentFailure(failure)) stopAt = Math.min(stopAt, index);
-    };
-    try {
-      out.facts = await extractFacts(batch[index].content, { ...llm.llmOpts, onError });
-    } catch (err) {
-      out.threw = err;
-    }
-    return out;
-  };
+  const stop: StopIndex = { at: Number.POSITIVE_INFINITY };
   const results = await pooled(
     batch.length,
     EXTRACTION_CONCURRENCY,
-    () => stopAt === Number.POSITIVE_INFINITY,
-    extract,
+    () => stop.at === Number.POSITIVE_INFINITY,
+    (index) => extractOne(llm, batch[index].content, index, stop),
   );
   let extractedCount = 0;
   for (const [index, candidate] of batch.entries()) {
@@ -170,17 +157,45 @@ async function extractionPass(
       report(errorMessage(err));
       log.warn('consolidate extraction threw', errorFields(err));
     }
-    if (index === stopAt) {
-      const skipped = batch.length - index - 1;
-      report(
-        `stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and ` +
-          `the DAG passes with them`,
-      );
+    if (index === stop.at) {
+      reportStop(report, index, batch.length);
       break;
     }
   }
   run.result.extracted = extractedCount;
-  return stopAt !== Number.POSITIVE_INFINITY;
+  return stop.at !== Number.POSITIVE_INFINITY;
+}
+
+/** The lowest input index a permanent failure was seen at; infinity while none was. */
+interface StopIndex {
+  at: number;
+}
+
+async function extractOne(
+  llm: SleepLlm,
+  content: string,
+  index: number,
+  stop: StopIndex,
+): Promise<Extraction> {
+  const out: Extraction = { facts: [], errors: [] };
+  const onError = (msg: string, failure?: LlmFailure): void => {
+    out.errors.push([msg, failure]);
+    if (failure && isPermanentFailure(failure)) stop.at = Math.min(stop.at, index);
+  };
+  try {
+    out.facts = await extractFacts(content, { ...llm.llmOpts, onError });
+  } catch (err) {
+    out.threw = err;
+  }
+  return out;
+}
+
+function reportStop(report: ReturnType<SleepLlm['llmError']>, index: number, total: number): void {
+  const skipped = total - index - 1;
+  report(
+    `stopped after a failure that will not clear on retry; ${skipped} of ${total} candidates skipped, and ` +
+      `the DAG passes with them`,
+  );
 }
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries

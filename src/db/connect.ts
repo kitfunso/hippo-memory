@@ -104,7 +104,6 @@ function settleSchema(
 /**
  * A connection with what its own open's probe read; facts go stale with the next statement, so a
  * handle made by an earlier call carries null.
- *
  */
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
@@ -117,7 +116,6 @@ export interface OpenedDb {
  * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when
  * it is due; the caller owns and closes it. Outside any request scope (CLI start-up, timers) this
  * is the only handle there is; openHippoDb reuses the scope's when one exists.
- *
  */
 export function connectWithFacts(
   hippoRoot: string,

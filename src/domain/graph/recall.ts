@@ -4,7 +4,6 @@
  * with the lexically prefiltered candidates), then the recall hard filters are re-applied. Hits
  * inherit their seed's score minus a per-hop discount; both stores are expanded; no writes, so
  * check-graph-writes permits it outside graph.ts.
- *
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
@@ -14,7 +13,7 @@ import {
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity } from '../../base/ports/store/graph.js';
+import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import {
   passesCliRecallScopeFilter,
@@ -62,7 +61,6 @@ export interface GraphExpandOptions {
    * quarantine excluded, NULL passes), the fail-closed default for SDK callers. { requested,
    * additive: true } is CLI --scope unlock (passesCliRecallScopeFilter); otherwise exact narrowing
    * (passesScopeFilterForRecall).
-   *
    */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
@@ -102,28 +100,12 @@ async function walkRelations(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
-    const { relations: rels } = await store.graphReads.graphRows(tenantId, {
-      by: 'neighbor',
-      ids: frontier,
-      limit,
-    });
+    const { relations: rels } = await neighborRelations(store, tenantId, frontier, maxNeighbors);
     const nextFrontier: number[] = [];
     for (const rel of rels) {
-      const fromIn = frontierSet.has(rel.fromEntityId);
-      const toIn = frontierSet.has(rel.toEntityId);
-      let neighborId: number;
-      let reacherId: number;
-      let direction: 'from' | 'to';
-      if (fromIn && !toIn) {
-        neighborId = rel.toEntityId;
-        reacherId = rel.fromEntityId;
-        direction = 'to';
-      } else if (toIn && !fromIn) {
-        neighborId = rel.fromEntityId;
-        reacherId = rel.toEntityId;
-        direction = 'from';
-      } else continue;
+      const step = stepAcross(rel, frontierSet);
+      if (step === null) continue;
+      const { neighborId, reacherId, direction } = step;
       if (visitedEntityIds.has(neighborId)) continue;
       visitedEntityIds.add(neighborId);
       reached.set(neighborId, { hops: depth, relType: rel.relType, direction });
@@ -135,6 +117,35 @@ async function walkRelations(
     frontier = nextFrontier;
   }
   return { reached, originMemByEntityId };
+}
+
+function neighborRelations(
+  store: GraphStore,
+  tenantId: string,
+  frontier: number[],
+  maxNeighbors: number,
+): Promise<GraphRows> {
+  const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
+  return store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
+}
+
+interface RelationStep {
+  readonly neighborId: number;
+  readonly reacherId: number;
+  readonly direction: 'from' | 'to';
+}
+
+/** The relation's far end when exactly one end sits on the frontier; null otherwise. */
+function stepAcross(rel: Relation, frontierSet: ReadonlySet<number>): RelationStep | null {
+  const fromIn = frontierSet.has(rel.fromEntityId);
+  const toIn = frontierSet.has(rel.toEntityId);
+  if (fromIn && !toIn) {
+    return { neighborId: rel.toEntityId, reacherId: rel.fromEntityId, direction: 'to' };
+  }
+  if (toIn && !fromIn) {
+    return { neighborId: rel.fromEntityId, reacherId: rel.toEntityId, direction: 'from' };
+  }
+  return null;
 }
 
 /** The recall hard filters (as-of, superseded, scope) re-applied to a directly loaded
@@ -181,7 +192,7 @@ async function produceHitsForStore(
   accumulators: HitAccumulators,
   opts: HitOptions,
 ): Promise<void> {
-  const { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
+  const { baseScoreByMemId, seenMemoryIds, seenContent } = accumulators;
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
@@ -191,18 +202,12 @@ async function produceHitsForStore(
   });
   if (seedEntities.length === 0) return;
 
-  const { reached, originMemByEntityId } = await walkRelations(
-    store,
-    tenantId,
-    seedEntities,
-    hops,
-    maxNeighbors,
-  );
-  if (reached.size === 0) return;
+  const walk = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
+  if (walk.reached.size === 0) return;
 
   const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, {
     by: 'entity',
-    ids: [...reached.keys()],
+    ids: [...walk.reached.keys()],
   });
   const loadedById = await loadReachedMemories(store, tenantId, reachedEntities, seenMemoryIds);
   const successorValidFrom = await loadSuccessorValidFrom(store, tenantId, loadedById, asOfDate);
@@ -213,16 +218,20 @@ async function produceHitsForStore(
     if (!mem) continue; // not found / wrong tenant / already in base
     if (seenMemoryIds.has(mem.id)) continue; // another reached entity already added it
     if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
-    const via = reached.get(ent.id)!;
+    const via = walk.reached.get(ent.id)!;
     if (!passesRecallFilters(mem, via, successorValidFrom, opts)) continue;
-    const origin = originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
+    const origin = walk.originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
-    seenMemoryIds.add(mem.id);
-    seenContent.add(mem.content);
-    const hit = buildGraphHit(mem, via, originScore, opts.global);
-    if (!hitsByOrigin.has(origin)) hitsByOrigin.set(origin, []);
-    hitsByOrigin.get(origin)!.push(hit);
+    addHit(accumulators, origin, buildGraphHit(mem, via, originScore, opts.global));
   }
+}
+
+function addHit(accumulators: HitAccumulators, origin: string, hit: GraphHit): void {
+  const { seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
+  seenMemoryIds.add(hit.entry.id);
+  seenContent.add(hit.entry.content);
+  if (!hitsByOrigin.has(origin)) hitsByOrigin.set(origin, []);
+  hitsByOrigin.get(origin)!.push(hit);
 }
 
 function buildGraphHit(
@@ -281,7 +290,6 @@ async function loadSuccessorValidFrom(
  * Augment `baseResults` with memories reached by walking `hops` graph edges from the seeds across
  * local AND global stores, each placed after its seed. Returns `baseResults` unchanged when `hops
  * <= 0`, there are no base results, or nothing new survives the filters and the token budget.
- *
  */
 export async function graphExpandRecall(
   baseResults: SearchResult[],

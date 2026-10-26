@@ -41,7 +41,6 @@ export interface HybridBlend {
   /**
    * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`
    * or `source`. See src/domain/graph/stream.ts.
-   *
    */
   graphStream?: GraphStreamOptions;
   explain?: boolean;
@@ -66,7 +65,6 @@ export interface HybridBoosts {
   /**
    * Multiplier on DAG summary scores. Default 0.85 (`runtime.summaryDeboost` overrides; per-call
    * wins). 1.0 disables.
-   *
    */
   summaryDeboost?: number;
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
@@ -95,13 +93,11 @@ export interface HybridInputs {
   /**
    * Corpus from `buildCorpus` over the same `entries` in the same order (content + tags), reused to
    * skip tokenizing.
-   *
    */
   preparedCorpus?: BM25Corpus;
   /**
    * Add the rows nearest the query vector, not only rescore `entries`; without it a row no query
    * word matches cannot surface.
-   *
    */
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors and the graph are read, in place of `hippoRoot`, `store` and `embeddings`. */
@@ -159,7 +155,6 @@ export type HybridRankOptions = HybridRanking & {
 /**
  * BM25 blended with cosine similarity when `source` holds vectors and a provider is available, BM25
  * * strength * recency otherwise.
- *
  */
 export async function hybridSearch(
   query: string,
@@ -167,7 +162,6 @@ export async function hybridSearch(
   options: HybridRankOptions & RankTime,
 ): Promise<SearchResult[]> {
   const now = rankNow(options);
-  const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];
   const queryTerms = tokenize(query);
@@ -175,19 +169,7 @@ export async function hybridSearch(
 
   const { source } = options;
   const arm = await resolveVectorArm(query, pool, source, options);
-  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a
-  // rebuild.
-  const corpus =
-    (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
-  const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
-  const dense = denseScores(arm);
-  const fusion = {
-    entries: arm.entries,
-    bm25Scores,
-    dense,
-    bm25Weight: 1 - embeddingWeight,
-    embeddingWeight,
-  };
+  const fusion = armFusion(arm, queryTerms, options);
   const rrfScores =
     arm.useEmbeddings && options.scoring === 'rrf'
       ? await fuseRanks({
@@ -200,12 +182,42 @@ export async function hybridSearch(
   const scored = scoreHybridPool({
     ...fusion,
     queryTerms,
-    maxBm25: bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9),
+    maxBm25: fusion.bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9),
     useEmbeddings: arm.useEmbeddings,
     rrfScores,
     explain: options.explain ?? false,
     boosts: hybridBoostContext(query, arm.entries, now, options),
   });
+  return orderAndFit(query, scored, arm, options);
+}
+
+type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'>;
+
+function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOptions): ArmFusion {
+  const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
+  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a
+  // rebuild.
+  const corpus =
+    (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
+  const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
+  const dense = denseScores(arm);
+  return {
+    entries: arm.entries,
+    bm25Scores,
+    dense,
+    bm25Weight: 1 - embeddingWeight,
+    embeddingWeight,
+  };
+}
+
+/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then the
+ * budget. */
+async function orderAndFit(
+  query: string,
+  scored: SearchResult[],
+  arm: VectorArm,
+  options: HybridRankOptions,
+): Promise<SearchResult[]> {
   scored.sort(compareScoredResults);
   const ordered = await orderHybrid(
     query,

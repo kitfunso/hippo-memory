@@ -20,7 +20,6 @@ export interface ApiErrorReply {
 /**
  * Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text
  * stays in the server log.
- *
  */
 export function mapApiError<E>(err: E): ApiErrorReply {
   // A held lock is a retryable 503 in every store, so the surfaces need not know any store's busy
@@ -33,8 +32,9 @@ export function mapApiError<E>(err: E): ApiErrorReply {
   ) {
     return { status: 500, message: INTERNAL_ERROR_MESSAGE };
   }
-  if (err instanceof HttpError || err instanceof ApiError)
+  if (err instanceof HttpError || err instanceof ApiError) {
     return { status: err.status, message: err.message };
+  }
   if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
   if (err instanceof BodyTimeoutError) return { status: 408, message: err.message };
   if (err instanceof StoreBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };

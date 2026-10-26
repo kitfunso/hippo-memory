@@ -285,6 +285,7 @@ export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
   for (const ddl of CONTINUITY_INDEX_DDL) db.exec(ddl);
   // A store that lost one of these tables still opens, so its hooks can log the failed step and run
   // the rest.
-  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL))
+  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL)) {
     if (tableExists(db, table)) db.exec(ddl);
+  }
 }

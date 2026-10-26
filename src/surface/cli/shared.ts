@@ -50,13 +50,22 @@ interface LearnFromRepoResult {
   lowInfo: number;
 }
 
-export async function learnFromRepo(
-  hippoRoot: string,
-  tenantId: string,
-  repoPath: string,
-  days: number,
-  label?: string,
-): Promise<LearnFromRepoResult> {
+export interface LearnFromRepoOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly repoPath: string;
+  readonly days: number;
+  /** Prefixes each printed line, so a multi-repo scan says which repo spoke. */
+  readonly label?: string;
+}
+
+export async function learnFromRepo({
+  hippoRoot,
+  tenantId,
+  repoPath,
+  days,
+  label,
+}: LearnFromRepoOptions): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
   const result = await learn(cliApiContext(hippoRoot, tenantId), {
     repoPath,

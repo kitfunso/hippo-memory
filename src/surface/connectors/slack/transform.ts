@@ -13,7 +13,6 @@ export interface TransformInput {
  * body so the caller marks it seen and skips it. artifact_ref MUST be
  * `slack://${teamId}/${channelId}/${ts}` (deletion looks it up); owner is never null: `user:<id>`,
  * `bot:<bot_id>`, else `bot:unknown`.
- *
  */
 export function messageToRememberOpts(input: TransformInput): RememberOptions | null {
   const text = input.message.text?.trim();

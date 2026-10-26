@@ -24,8 +24,9 @@ export function gatedWrite(
 ): GatedWriteResult {
   // Off for imported agent memories: a person wrote those notes, and a one-line preference fails
   // the check.
-  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content))
+  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) {
     return 'skipped:not-worth-storing';
+  }
   if (detectSecret(entry).flagged) return 'skipped:secret';
   try {
     writeEntryDbOnly(db, stampOriginProject(files, entry), opts);

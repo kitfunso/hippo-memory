@@ -3,7 +3,6 @@
  * age, then apply the `markRetrieved` strengthening. A lightweight deterministic analog of
  * hippocampal replay, so important memories stay strong without being queried; distinct from decay,
  * physics and merge.
- *
  */
 
 import { HOUR_MS } from '../../base/util/time.js';
@@ -32,7 +31,6 @@ const STRENGTH_FLOOR = 0.1;
 /**
  * Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry
  * and current time.
- *
  */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcomePositive ?? 0;

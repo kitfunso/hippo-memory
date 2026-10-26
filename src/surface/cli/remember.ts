@@ -159,8 +159,9 @@ async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise
     return;
   }
   const weak = outcome.startedWeak;
-  if (weak)
+  if (weak) {
     console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
+  }
   if (outcome.status === 'relayed') {
     console.log(`Remembered [${outcome.id}] (via ${outcome.via})`);
     console.log(`   Kind: ${outcome.kind} | Tenant: ${outcome.tenantId}`);
@@ -183,8 +184,9 @@ function printEntry(entry: MemoryEntry, useGlobal: boolean): void {
 }
 
 function printExtraction(extraction: api.FactExtraction): void {
-  if (extraction.status === 'no_key')
+  if (extraction.status === 'no_key') {
     printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+  }
   if (extraction.status !== 'ran') return;
   for (const failure of extraction.failures) printError(`  (extraction failed: ${failure})`);
   if (extraction.facts > 0) printError(`  extracted ${extraction.facts} fact(s)`);
@@ -194,12 +196,16 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
   return stringListFlag(flags, 'tag');
 }
 
+interface SupersedeTarget {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly oldId: string;
+}
+
 /** The api's conflict text differs by which writer lost; the row itself names its successor
  * either way. */
 async function alreadySupersededLine(
-  hippoRoot: string,
-  oldId: string,
-  tenantId: string,
+  { hippoRoot, tenantId, oldId }: SupersedeTarget,
   conflict: ConflictError,
 ): Promise<string> {
   const by = (await memoryGet(cliApiContext(hippoRoot, tenantId), oldId))?.supersededBy;
@@ -218,13 +224,18 @@ function parseLayerFlag(flags: CliFlags): Layer | undefined {
   return layer;
 }
 
-async function supersedeMemory(
-  hippoRoot: string,
-  tenantId: string,
-  oldId: string,
-  newContent: string,
-  flags: CliFlags,
-): Promise<void> {
+interface SupersedeMemoryOptions extends SupersedeTarget {
+  readonly newContent: string;
+  readonly flags: CliFlags;
+}
+
+async function supersedeMemory({
+  hippoRoot,
+  tenantId,
+  oldId,
+  newContent,
+  flags,
+}: SupersedeMemoryOptions): Promise<void> {
   requireInit(hippoRoot);
 
   const overrides = {
@@ -245,9 +256,9 @@ async function supersedeMemory(
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
-    else if (err instanceof ConflictError)
-      printError(await alreadySupersededLine(hippoRoot, oldId, tenantId, err));
-    else throw err;
+    else if (err instanceof ConflictError) {
+      printError(await alreadySupersededLine({ hippoRoot, tenantId, oldId }, err));
+    } else throw err;
     throw new CliExit(1);
   }
   console.log(`Superseded ${oldId} → ${newId}`);
@@ -300,12 +311,14 @@ async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags)
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
-async function printTrace(
-  hippoRoot: string,
-  tenantId: string,
-  id: string,
-  flags: CliFlags,
-): Promise<void> {
+interface PrintTraceOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly id: string;
+  readonly flags: CliFlags;
+}
+
+async function printTrace({ hippoRoot, tenantId, id, flags }: PrintTraceOptions): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
@@ -327,7 +340,7 @@ async function printTrace(
     id,
     sourceLabel,
     ...traceStats(entry, ctx),
-    ...(await traceLineage(hippoRoot, globalRoot, entry, id, tenantId)),
+    ...(await traceLineage({ hippoRoot, globalRoot, entry, id, tenantId })),
   };
   if (asJson) {
     printTraceJson(t);
@@ -343,13 +356,15 @@ type TraceView = ReturnType<typeof traceStats> &
     sourceLabel: 'local' | 'global';
   };
 
-async function traceLineage(
-  hippoRoot: string,
-  globalRoot: string,
-  entry: MemoryEntry,
-  id: string,
-  tenantId: string,
-) {
+interface TraceLineageOptions {
+  readonly hippoRoot: string;
+  readonly globalRoot: string;
+  readonly entry: MemoryEntry;
+  readonly id: string;
+  readonly tenantId: string;
+}
+
+async function traceLineage({ hippoRoot, globalRoot, entry, id, tenantId }: TraceLineageOptions) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const local =
@@ -357,8 +372,9 @@ async function traceLineage(
   const found = new Map(local.map((p) => [p.id, p]));
   const missing = parents.filter((pid) => !found.has(pid));
   if (missing.length > 0 && isInitialized(globalRoot)) {
-    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing))
+    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing)) {
       found.set(p.id, p);
+    }
   }
   const parentPreviews = parents.map((pid) => {
     const p = found.get(pid);
@@ -420,9 +436,8 @@ function printTraceJson(t: TraceView): void {
 }
 
 function printTraceText(t: TraceView): void {
-  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt } = t;
+  const { entry, sourceLabel, conf, ageDays, strength, projectedAt } = t;
   const { halfLife, rewardFactor, effHalfLife, sinceLast } = t;
-  const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
   const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
@@ -450,6 +465,10 @@ function printTraceText(t: TraceView): void {
   console.log(`  last:       ${entry.lastRetrieved}  (${fmt(sinceLast, 1)} days ago)`);
   console.log();
   console.log(`Outcomes:   +${entry.outcomePositive} / -${entry.outcomeNegative}`);
+  printTraceLineage(t);
+}
+
+function printTraceLineage({ id, parentPreviews, myConflicts }: TraceView): void {
   if (parentPreviews.length > 0) {
     console.log();
     console.log(`Parents (consolidation lineage):`);
@@ -497,7 +516,7 @@ export async function handleSupersede({
   if (!oldId || !newContent) {
     fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
-  await supersedeMemory(hippoRoot, tenantId, oldId, newContent, flags);
+  await supersedeMemory({ hippoRoot, tenantId, oldId, newContent, flags });
 }
 
 export async function handleTrace({
@@ -516,5 +535,5 @@ export async function handleTrace({
       'Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>',
     );
   }
-  await printTrace(hippoRoot, tenantId, sub, flags);
+  await printTrace({ hippoRoot, tenantId, id: sub, flags });
 }

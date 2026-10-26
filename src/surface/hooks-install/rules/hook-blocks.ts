@@ -142,7 +142,6 @@ const SHIPPED_HOOK_HASHES = new Map([
 /**
  * The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is
  * undefined for an edited block.
- *
  */
 export function hippoBlock(
   text: string,

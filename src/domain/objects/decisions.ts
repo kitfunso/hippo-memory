@@ -2,7 +2,6 @@
  * Decision object: the `decisions` table is the source of truth, so an in-force decision stays
  * `active` despite memory decay. The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
  * recall only; saveDecision commits both in one `objects` transaction.
- *
  */
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -65,7 +64,6 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
 /**
  * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day
  * at least, marked stale, tagged `superseded`.
- *
  */
 export function weakenSupersededMemory(
   writes: EntryWrites,

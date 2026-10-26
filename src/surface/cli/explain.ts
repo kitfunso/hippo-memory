@@ -2,7 +2,11 @@
 
 import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/strength.js';
-import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_RECALL_BUDGET,
+  type ScoreBreakdown,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
@@ -51,12 +55,19 @@ interface InspectedSlot {
   rank?: RankRecallResult;
 }
 
-async function explainQuery(
-  hippoRoot: string,
-  tenantId: string,
-  query: string,
-  flags: CliFlags,
-): Promise<void> {
+interface ExplainQueryOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly query: string;
+  readonly flags: CliFlags;
+}
+
+async function explainQuery({
+  hippoRoot,
+  tenantId,
+  query,
+  flags,
+}: ExplainQueryOptions): Promise<void> {
   requireInit(hippoRoot);
 
   const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
@@ -66,52 +77,78 @@ async function explainQuery(
   const asOf = parseAsOfFlag(flags);
   const globalRoot = hippoHomeDir();
   const ctx = cliApiContext(hippoRoot, tenantId);
+  const scope = await explainScope(ctx, flags, globalRoot, query);
+
+  const engine = engineFlags(flags, cliConfig(hippoRoot));
+  // Priced as recall prints each result, so explain returns what recall's engines would.
+  const now = ctx.infra.clock();
+  const cost = (r: SearchResult): number =>
+    printedTokens(recallEntryText(r, query, false, scope.origin.isGlobal(r), now));
+  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
+
+  const rank = await inspectRanking(ctx, query, {
+    rank: {
+      budget: entryBudget,
+      cost,
+      window: { limit },
+      includeSuperseded,
+      asOf,
+      explicitScope: scope.explicitScope,
+      activeScope: scope.activeScope,
+      search: { ...engine, multihop: false, explain: true },
+    },
+    sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
+  });
+  printExplainResults(rank, engine.usePhysics, query, asJson, now);
+}
+
+interface ExplainScope {
+  readonly explicitScope: string | null;
+  readonly activeScope: string | null;
+  readonly origin: ReturnType<typeof recallRowOrigin>;
+}
+
+async function explainScope(
+  ctx: ReturnType<typeof cliApiContext>,
+  flags: CliFlags,
+  globalRoot: string,
+  query: string,
+): Promise<ExplainScope> {
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local
   // root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
-  const explainGlobalOn = origin.globalOn;
   await noteScopeHidden(
     ctx,
-    explainGlobalOn ? cliStore(globalRoot) : undefined,
+    origin.globalOn ? cliStore(globalRoot) : undefined,
     query,
     explicitScope || undefined,
   );
+  return { explicitScope, activeScope, origin };
+}
 
-  const config = cliConfig(hippoRoot);
-  const engine = engineFlags(flags, config);
-  // Priced as recall prints each result, so explain returns what recall's engines would.
-  const now = ctx.infra.clock();
-  const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r), now));
-  const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
-
+async function inspectRanking(
+  ctx: ReturnType<typeof cliApiContext>,
+  query: string,
+  ranking: Omit<api.CliCoreInspection, 'inspect'>,
+): Promise<RankRecallResult> {
   const slot: InspectedSlot = {};
   await api.retrieveWithCliCore(
     ctx,
     { query },
     {
-      rank: {
-        budget: entryBudget,
-        cost,
-        window: { limit },
-        includeSuperseded,
-        asOf,
-        explicitScope,
-        activeScope,
-        search: { ...engine, multihop: false, explain: true },
-      },
-      sources: explainGlobalOn ? cliSecondStore(globalRoot) : undefined,
-      inspect: (ranking) => {
-        slot.rank = ranking;
+      rank: ranking.rank,
+      sources: ranking.sources,
+      inspect: (inspected) => {
+        slot.rank = inspected;
       },
     },
   );
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
-  printExplainResults(rank, engine.usePhysics, query, asJson, now);
+  return rank;
 }
 
 function printExplainResults(
@@ -213,52 +250,60 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
     console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
   } else {
-    const matched = b.matchedTerms.length > 0 ? b.matchedTerms.join(', ') : '(none)';
-    console.log(
-      `    mode:      ${b.mode}${b.mode === 'hybrid-no-vec' ? '  (no cached doc vector — run `hippo embed`)' : ''}`,
-    );
-    console.log(
-      `    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`,
-    );
-    console.log(`    embedding: cosine=${fmt(b.cosine, 3)}  weight=${fmt(b.embeddingWeight, 2)}`);
-    console.log(
-      `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
-    );
-    console.log(
-      `    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`,
-    );
-    console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
-    if (b.decisionBoost !== 1)
-      console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
-    if (b.scopeBoost !== 1) {
-      console.log(
-        `    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`,
-      );
-    }
-    if (b.pathBoost !== 1)
-      console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
-    if (b.sourceBump !== 1)
-      console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
-    if (b.outcomeBoost !== 1) {
-      console.log(
-        `    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
-          `(user feedback: pos-neg = ${(r.entry.outcomePositive ?? 0) - (r.entry.outcomeNegative ?? 0)})`,
-      );
-    }
-    if (b.churnStaleMultiplier !== 1) {
-      console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
-    }
-    if (
-      b.preMmrRank !== undefined &&
-      b.postMmrRank !== undefined &&
-      b.preMmrRank !== b.postMmrRank
-    ) {
-      const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
-      console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
-    }
-    console.log(`    final:     ${fmt(b.final, 4)}`);
+    printHybridBreakdown(r, b);
   }
   console.log();
+}
+
+function printHybridBreakdown(r: SearchResult, b: ScoreBreakdown): void {
+  const matched = b.matchedTerms.length > 0 ? b.matchedTerms.join(', ') : '(none)';
+  console.log(
+    `    mode:      ${b.mode}${b.mode === 'hybrid-no-vec' ? '  (no cached doc vector — run `hippo embed`)' : ''}`,
+  );
+  console.log(
+    `    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`,
+  );
+  console.log(`    embedding: cosine=${fmt(b.cosine, 3)}  weight=${fmt(b.embeddingWeight, 2)}`);
+  console.log(
+    `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
+  );
+  console.log(
+    `    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`,
+  );
+  console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
+  printBoostLines(r, b);
+  console.log(`    final:     ${fmt(b.final, 4)}`);
+}
+
+/** The multipliers that differ from 1, then the MMR move when diversity re-ranked the row. */
+function printBoostLines(r: SearchResult, b: ScoreBreakdown): void {
+  if (b.decisionBoost !== 1) {
+    console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
+  }
+  if (b.scopeBoost !== 1) {
+    console.log(
+      `    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`,
+    );
+  }
+  if (b.pathBoost !== 1) {
+    console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
+  }
+  if (b.sourceBump !== 1) {
+    console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
+  }
+  if (b.outcomeBoost !== 1) {
+    console.log(
+      `    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
+        `(user feedback: pos-neg = ${(r.entry.outcomePositive ?? 0) - (r.entry.outcomeNegative ?? 0)})`,
+    );
+  }
+  if (b.churnStaleMultiplier !== 1) {
+    console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
+  }
+  if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
+    const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
+    console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
+  }
 }
 
 export async function handleExplain({
@@ -271,5 +316,5 @@ export async function handleExplain({
   if (!query) {
     fail('Please provide a search query.');
   }
-  await explainQuery(hippoRoot, tenantId, query, flags);
+  await explainQuery({ hippoRoot, tenantId, query, flags });
 }

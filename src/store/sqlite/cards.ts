@@ -75,8 +75,9 @@ function assertCardOutcome(outcome: HandoffOutcome): void {
 /** Whether `runId` is the card's run that has not ended. A second such run means a corrupt
  * store, so this throws rather than guess which run the caller means. */
 function isLiveRun(cardId: string, liveRunIds: readonly number[], runId: number): boolean {
-  if (liveRunIds.length > 1)
+  if (liveRunIds.length > 1) {
     throw new Error(`card ${cardId} has ${liveRunIds.length} runs that have not ended`);
+  }
   return liveRunIds[0] === runId;
 }
 
@@ -170,12 +171,17 @@ function rowToCardComment(row: CardCommentRow): CardComment {
   };
 }
 
+/** A tenant's card and the comment its author leaves on it. */
+interface CardCommentOptions {
+  readonly tenantId: string;
+  readonly cardId: string;
+  readonly author: string;
+  readonly body: string;
+}
+
 function insertCardComment(
   db: DatabaseSyncLike,
-  tenantId: string,
-  cardId: string,
-  author: string,
-  body: string,
+  { tenantId, cardId, author, body }: CardCommentOptions,
 ): CardComment {
   const now = handleStamp(db);
   const result = cachedStatement(
@@ -204,12 +210,17 @@ function liveRunIs(db: DatabaseSyncLike, tenantId: string, cardId: string, runId
   );
 }
 
+/** A tenant's card, how its live run ended and when. */
+interface CloseRunOptions {
+  readonly tenantId: string;
+  readonly cardId: string;
+  readonly outcome: string;
+  readonly now: string;
+}
+
 function closeLiveRun(
   db: DatabaseSyncLike,
-  tenantId: string,
-  cardId: string,
-  outcome: string,
-  now: string,
+  { tenantId, cardId, outcome, now }: CloseRunOptions,
 ): void {
   cachedStatement(
     db,
@@ -524,8 +535,8 @@ function blockCard(
     const now = handleStamp(db);
     // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the
     // live run.
-    closeLiveRun(db, tenantId, id, 'blocked', now);
-    insertCardComment(db, tenantId, id, 'system', reason);
+    closeLiveRun(db, { tenantId, cardId: id, outcome: 'blocked', now });
+    insertCardComment(db, { tenantId, cardId: id, author: 'system', body: reason });
     return true;
   });
   return blocked ? readCardRow(db, tenantId, id) : null;
@@ -585,7 +596,7 @@ function completeCard(
       return rollback(null);
     }
     const now = handleStamp(db);
-    closeLiveRun(db, tenantId, id, outcome, now);
+    closeLiveRun(db, { tenantId, cardId: id, outcome, now });
 
     // Not best-effort: promotion runs in this same transaction, so a card can never be `done` with
     // an un-evaluated child.
@@ -623,8 +634,9 @@ function promoteUnblockedChildren(
   const unblocked = children
     .filter((r) => r.status === 'backlog' && r.open_parents === 0)
     .map((r) => r.child);
-  for (const ids of chunked(unblocked))
+  for (const ids of chunked(unblocked)) {
     transitionCards(db, tenantId, ids, { from: ['backlog'], to: 'ready' });
+  }
   return unblocked;
 }
 
@@ -652,7 +664,7 @@ function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
         to: 'ready',
         extra: { setSql: 'assignee_runtime = NULL' },
       });
-      closeLiveRun(db, tenantId, id, 'reclaimed', now);
+      closeLiveRun(db, { tenantId, cardId: id, outcome: 'reclaimed', now });
     }
     return ids;
   });
@@ -669,7 +681,7 @@ function addCardComment(
 ): CardComment {
   assertTenantId('addCardComment', tenantId);
   assertFilled('body', body);
-  return insertCardComment(db, tenantId, cardId, author, body);
+  return insertCardComment(db, { tenantId, cardId, author, body });
 }
 
 /** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has

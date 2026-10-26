@@ -27,7 +27,6 @@ export function requestDeadlineFor(req: IncomingMessage): RequestDeadline | unde
 /**
  * Calls `reply` when `res` has sent nothing by `deadline`. A store call still in flight answers
  * first, since only the store knows what became of a write.
- *
  */
 export function answerAtDeadline(
   res: ServerResponse,

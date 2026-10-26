@@ -89,8 +89,9 @@ function listHolderIds(
     source: string | null;
     scope: string | null;
   }): void => {
-    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null)
+    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) {
       found.push(row.id);
+    }
   };
   let after: EntryCursor | null = null;
   do {
@@ -211,7 +212,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
   const rawIds = new Set(removal.removedRawIds);
   for (const id of removal.removedIds) {
     const isRaw = rawIds.has(id);
-    const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, isRaw, 'hippo reject');
+    const mirrorOk = purgeMirrorBestEffort(hippoRoot, { id, isRaw, logPrefix: 'hippo reject' });
     if (mirrorOk && isRaw) markMirrorCleaned(db, id, handleStamp(db));
   }
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
@@ -328,7 +329,7 @@ function liftRejection(
 export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
   return checks.map(({ tenantId, entryId, content }) => {
     try {
-      checkRejectionGuard(db, tenantId, entryId, content);
+      checkRejectionGuard(db, { tenantId, entryId, content });
       return false;
     } catch (err) {
       if (err instanceof RejectedValueError) return true;

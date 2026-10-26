@@ -222,17 +222,17 @@ function saveRecordItems(
  * reach back to them. */
 function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
   const now = handleNow(db).getTime();
-  const rows = openTranscriptRows(
-    db,
+  const rows = openTranscriptRows(db, {
     tenantId,
-    iso(now - REPLAY_AFTER_MS),
-    iso(now - TRANSCRIPT_FILL_WINDOW_MS),
-  );
+    startedBefore: iso(now - REPLAY_AFTER_MS),
+    startedAfter: iso(now - TRANSCRIPT_FILL_WINDOW_MS),
+  });
   return rows.flatMap((row) => {
     const record = toRecord(row);
     if (record === null) return [];
     const { id, sessionId, originProject, cwd, transcriptPath, startedAt } = record;
-    const nextStartedAt = nextCompactionStart(db, record.tenantId, sessionId, startedAt);
+    const next = { tenantId: record.tenantId, sessionId, after: startedAt };
+    const nextStartedAt = nextCompactionStart(db, next);
     return [{ id, sessionId, originProject, cwd, transcriptPath, startedAt, nextStartedAt }];
   });
 }

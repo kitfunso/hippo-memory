@@ -47,62 +47,46 @@ export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue
   return issue;
 }
 
+type Defect = Pick<AuditIssue, 'severity' | 'reason'>;
+
 function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   const content = entry.content.trim();
+  const defect = formDefect(content) ?? vaguenessDefect(entry, content);
+  return defect === null ? null : { memoryId: entry.id, content, ...defect };
+}
 
+function formDefect(content: string): Defect | null {
   if (content.length < 3) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 3 chars)' };
+    return { severity: 'error', reason: 'too short (< 3 chars)' };
   }
 
   if (content.length < 10) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'too short (< 10 chars)' };
+    return { severity: 'error', reason: 'too short (< 10 chars)' };
   }
 
   if (isReleaseCommitNoise(content)) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'error',
-      reason: 'release/commit noise, not a useful memory',
-    };
+    return { severity: 'error', reason: 'release/commit noise, not a useful memory' };
   }
 
   if (isFragment(content)) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: 'sentence fragment — lacks context',
-    };
+    return { severity: 'warning', reason: 'sentence fragment — lacks context' };
   }
+  return null;
+}
 
+function vaguenessDefect(entry: MemoryEntry, content: string): Defect | null {
   const substantive = substantiveWordCount(content);
   if (substantive < 2) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: `only ${substantive} substantive word(s) — too vague`,
-    };
+    return { severity: 'warning', reason: `only ${substantive} substantive word(s) — too vague` };
   }
 
   if (content.length < 40 && hasNoSpecificity(content)) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: 'no specific details (names, paths, numbers, code)',
-    };
+    return { severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
   }
 
   const reason = automaticDefect(entry);
   if (reason !== null) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: `automatic memory defect: ${reason}`,
-    };
+    return { severity: 'warning', reason: `automatic memory defect: ${reason}` };
   }
 
   return null;
@@ -206,8 +190,9 @@ export function repairDefect(
       : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
   }
   const texts = heldTexts({ ...entry, source: 'consolidation' });
-  if (texts.length === 0)
+  if (texts.length === 0) {
     return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
+  }
   const reasons = texts
     .map((text) => assessAutomaticMemory(text).reason)
     .filter((reason): reason is AutomaticMemoryDefect => reason !== null);

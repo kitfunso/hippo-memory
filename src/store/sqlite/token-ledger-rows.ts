@@ -46,12 +46,17 @@ interface LedgerAnchor {
   block_hash: string | null;
 }
 
+/** One session's ledger rows on one surface. */
+interface LedgerSurfaceOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly surface: string;
+}
+
 /** The session's newest inject or reset row on a surface. */
 export function latestInjectOrReset(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  surface: string,
+  { tenantId, sessionId, surface }: LedgerSurfaceOptions,
 ): LedgerAnchor | undefined {
   return cachedStatement(
     db,
@@ -63,9 +68,7 @@ export function latestInjectOrReset(
 
 export function countSkipsAfter(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  surface: string,
+  { tenantId, sessionId, surface }: LedgerSurfaceOptions,
   afterId: number,
 ): { n: number } | undefined {
   return cachedStatement(

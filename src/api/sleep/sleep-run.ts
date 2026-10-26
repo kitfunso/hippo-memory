@@ -102,7 +102,32 @@ async function runSleepPhases(
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
   const snapshot = await snapshotDirtyTenants(ctx, phases, dryRun);
+  const { result, pages } = await runCorePhases(ctx, phases, dryRun, counts);
 
+  if (dryRun) return result;
+
+  // Phase 4: Auto-share high-transfer-score memories to global.
+  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
+
+  // Phase 5: Post-sleep ambient state summary.
+  counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
+
+  await drainGraphQueue(ctx, phases, snapshot, result);
+  return result;
+}
+
+interface CorePhasesRun {
+  readonly result: SleepResult;
+  readonly pages: () => AsyncIterable<MemoryEntry[]>;
+}
+
+/** Phases 1 to 3, the ones a dry run also runs. */
+async function runCorePhases(
+  ctx: SleepContext,
+  phases: SleepPhases,
+  dryRun: boolean,
+  counts: SleepCounts,
+): Promise<CorePhasesRun> {
   // Phase 1: Consolidation.
   const { store } = ctx;
   const consolidateResult = await phases.consolidate(store, {
@@ -131,17 +156,7 @@ async function runSleepPhases(
   // remove).
   const auditOptions = { dryRun, consolidateResult, dedupResult, result, pages };
   counts.auditDeleted = await runQualityAudit(ctx, phases, auditOptions);
-
-  if (dryRun) return result;
-
-  // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
-
-  // Phase 5: Post-sleep ambient state summary.
-  counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
-
-  await drainGraphQueue(ctx, phases, snapshot, result);
-  return result;
+  return { result, pages };
 }
 
 // Taken before any memory-deleting phase: queue rows cascade-delete with their mirror, so a later

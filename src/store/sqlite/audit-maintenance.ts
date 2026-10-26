@@ -88,9 +88,11 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
   for (const [table, required] of Object.entries(REQUIRED_COLUMNS)) {
     const columns = tableColumns(db, table);
     if (columns.size === 0) blockers.push(`missing table: ${table}`);
-    else
-      for (const column of required)
+    else {
+      for (const column of required) {
         if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
+      }
+    }
   }
   if (
     blockers.some(
@@ -125,8 +127,9 @@ function parentsOf(
   const ids = [...new Set(entries.flatMap((entry) => entry.parents))];
   const parents = readEntriesByIds(db, ids, tenantId);
   const gone = ids.filter((id) => !parents.has(id));
-  for (const [id, snapshot] of dormantSnapshotsByIds(db, tenantId, gone))
+  for (const [id, snapshot] of dormantSnapshotsByIds(db, tenantId, gone)) {
     parents.set(id, snapshot.entry);
+  }
   return parents;
 }
 
@@ -296,8 +299,9 @@ function applyPlan(
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const blockers = capabilityBlockers(db);
-    if (blockers.length > 0)
+    if (blockers.length > 0) {
       throw new Error(`Quality repair capability changed: ${blockers.join('; ')}`);
+    }
     const move: RepairMove = { now: rules.clock(), backup, rules };
     const { ids, rows, issues: current } = rejudgeSetAsides(db, run, plan);
     const issues = plan.issues.flatMap((issue) =>
@@ -331,7 +335,7 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
   );
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
-    if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
+    if (purgeMirrorBestEffort(root, { id, isRaw: false, logPrefix: 'quality repair' })) continue;
     warnings.push(
       `Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`,
     );

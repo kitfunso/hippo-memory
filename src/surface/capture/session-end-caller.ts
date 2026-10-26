@@ -48,7 +48,6 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
 /**
  * Call on a session's final end only, since it closes the snapshot. A failed close throws so the
  * sender retries, and the retry writes no second handoff.
- *
  */
 export async function sessionEndHandoffForCaller(
   given: EntryContext,

@@ -60,8 +60,9 @@ export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
     git: processGit,
   });
   if (result.status === 'not-a-repo') return 'No git history found.';
-  if (result.status === 'no-commits')
+  if (result.status === 'no-commits') {
     return 'No fix/revert/bug commits found in the specified period.';
+  }
   const { added, skipped, rejected, lowInfo } = result;
   const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';
   const lowInfoSuffix = lowInfo > 0 ? `, ${lowInfo} low-information subjects dropped` : '';

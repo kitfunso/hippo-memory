@@ -77,12 +77,12 @@ export function validatePolicyDates(
 }
 
 /** Recall-surface content for the memory mirror: name + rule + effective range. */
-function buildPolicyContent(
-  policyName: string,
-  policyText: string,
-  validFrom: string,
-  validTo: string | null,
-): string {
+function buildPolicyContent({
+  policyName,
+  policyText,
+  validFrom,
+  validTo,
+}: Pick<Policy, 'policyName' | 'policyText' | 'validFrom' | 'validTo'>): string {
   const range = validTo ? `${validFrom} to ${validTo}` : `${validFrom} onward`;
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
@@ -103,7 +103,7 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
       fields: { policyName, policyText, validFrom, validTo },
-      content: buildPolicyContent(policyName, policyText, validFrom, validTo),
+      content: buildPolicyContent({ policyName, policyText, validFrom, validTo }),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesPolicyId,
       changeSummary: opts.changeSummary,

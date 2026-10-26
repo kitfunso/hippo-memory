@@ -25,8 +25,9 @@ function requireGlobalTarget(
   action: string,
 ): NonNullable<ReturnType<typeof globalTargetOf>> {
   const target = globalTargetOf(ctx);
-  if (target === undefined)
+  if (target === undefined) {
     throw new Error(`${action} needs ctx.reach.globalTarget, the global store`);
+  }
   return target;
 }
 

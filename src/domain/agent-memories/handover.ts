@@ -45,8 +45,9 @@ export async function handOver(
 
 /** One project's mirror purges that failed after a commit, as warnings. */
 export function warnUnpurged(unpurged: readonly MirrorFailure[], report: ImportReport): void {
-  for (const { id, message } of unpurged)
+  for (const { id, message } of unpurged) {
     report.warnings.push(`mirror of ${id} not removed: ${message}`);
+  }
 }
 
 interface HandOverContainerOptions {

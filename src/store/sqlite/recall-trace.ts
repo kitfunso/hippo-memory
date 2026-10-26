@@ -77,33 +77,35 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
         input.explainMode ? 1 : 0,
       );
       const traceId = Number(traceResult.lastInsertRowid);
-
-      for (let from = 0; from < input.results.length; from += RESULT_ROWS_PER_INSERT) {
-        const chunk = input.results.slice(from, from + RESULT_ROWS_PER_INSERT);
-        const binds = chunk.flatMap((r, i) => [
-          traceId,
-          input.tenantId,
-          r.memoryId,
-          from + i + 1,
-          r.score,
-          r.rerankSteps && r.rerankSteps.length > 0
-            ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps))
-            : null,
-        ]);
-        cachedStatement(
-          db,
-          `
-          INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
-          VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
-        `,
-        ).run(...binds);
-      }
-
+      insertTraceResults(db, traceId, input);
       return traceId;
     });
   } catch (error) {
     log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
+  }
+}
+
+function insertTraceResults(db: DatabaseSyncLike, traceId: number, input: RecallTraceInput): void {
+  for (let from = 0; from < input.results.length; from += RESULT_ROWS_PER_INSERT) {
+    const chunk = input.results.slice(from, from + RESULT_ROWS_PER_INSERT);
+    const binds = chunk.flatMap((r, i) => [
+      traceId,
+      input.tenantId,
+      r.memoryId,
+      from + i + 1,
+      r.score,
+      r.rerankSteps && r.rerankSteps.length > 0
+        ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps))
+        : null,
+    ]);
+    cachedStatement(
+      db,
+      `
+          INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
+          VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
+        `,
+    ).run(...binds);
   }
 }
 

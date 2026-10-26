@@ -27,8 +27,9 @@ function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
  * clean. */
 function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   const notes: string[] = [];
-  if (!roleGiven)
+  if (!roleGiven) {
     notes.push('no --role given, so this is a member key (pass --role admin for an admin key)');
+  }
   if (!expiryGiven) notes.push('no --ttl-days or --no-expiry given, so it expires in 90 days');
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
@@ -52,20 +53,33 @@ async function createApiKey(
   // authCreate's opts no longer accepts a tenantId field, so the HTTP layer cannot smuggle a
   // body.tenantId across.
   const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
-  let result: api.AuthCreateResult;
+  const result = await mintApiKey(ctx, {
+    label: labelFlag,
+    role,
+    ttlDays,
+    noExpiry: noExpiry || undefined,
+  });
+  noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
+  printMintedKey(result, labelFlag, asJson);
+}
+
+async function mintApiKey(
+  ctx: api.Context,
+  opts: api.AuthCreateOptions,
+): Promise<api.AuthCreateResult> {
   try {
-    result = await api.authCreate(ctx, {
-      label: labelFlag,
-      role,
-      ttlDays,
-      noExpiry: noExpiry || undefined,
-    });
+    return await api.authCreate(ctx, opts);
   } catch (err) {
     if (!(err instanceof api.BadRequestError)) throw err;
     fail(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
   }
-  noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
+}
 
+function printMintedKey(
+  result: api.AuthCreateResult,
+  labelFlag: string | undefined,
+  asJson: boolean,
+): void {
   if (asJson) {
     console.log(
       JSON.stringify({
@@ -124,8 +138,14 @@ async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags)
   }
 }
 
+interface KeyContextOptions {
+  readonly root: string;
+  readonly tenantId: string;
+  readonly keyId: string;
+}
+
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.Context> {
+async function keyContext({ root, tenantId, keyId }: KeyContextOptions): Promise<api.Context> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
@@ -134,13 +154,20 @@ async function keyContext(root: string, tenantId: string, keyId: string): Promis
   return { ...hostCtx, tenantId: keyTenant };
 }
 
-async function revokeApiKey(
-  hippoRoot: string,
-  tenantId: string,
-  keyId: string,
-  flags: CliFlags,
-): Promise<void> {
-  const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
+interface RevokeApiKeyOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly keyId: string;
+  readonly flags: CliFlags;
+}
+
+async function revokeApiKey({
+  hippoRoot,
+  tenantId,
+  keyId,
+  flags,
+}: RevokeApiKeyOptions): Promise<void> {
+  const ctx = await keyContext({ root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
   let revokedAt: string;
   try {
     revokedAt = (await api.authRevoke(ctx, keyId)).revokedAt;
@@ -167,7 +194,7 @@ interface AuthScopeGrantOptions {
  * restricted-scope and audit checks live in one place. */
 async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
   const { hippoRoot, tenantId, keyId, scope, grant, flags } = options;
-  const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
+  const ctx = await keyContext({ root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
   try {
     if (grant) await api.authGrant(ctx, keyId, scope);
     else await api.authUngrant(ctx, keyId, scope);
@@ -206,7 +233,7 @@ export async function handleAuth({
       if (!keyId) {
         fail('Usage: hippo auth revoke <key_id>');
       }
-      await revokeApiKey(hippoRoot, tenantId, keyId, flags);
+      await revokeApiKey({ hippoRoot, tenantId, keyId, flags });
       return;
     }
     case 'grant':

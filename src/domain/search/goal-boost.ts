@@ -19,7 +19,6 @@ export interface GoalStackBoostOptions {
   /**
    * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because
    * the helper re-spreads rows); only populated when passed.
-   *
    */
   trace?: Map<string, RerankStep>;
 }
@@ -100,7 +99,6 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
  * explicit goal tag. Its log covers the top `limit` rows and keeps those whose memory is global,
  * since only the store can tell them apart; {@link localGoalRecallRows} drops those before the
  * write.
- *
  */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],

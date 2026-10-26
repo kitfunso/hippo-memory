@@ -12,7 +12,6 @@ export interface CompactResumePayload {
 /**
  * Fail-closed read of the SessionStart payload: only a manual run or a main-session `source:
  * 'compact'` payload may print.
- *
  */
 export function readCompactResumePayload(
   stdinText: string | undefined,

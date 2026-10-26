@@ -118,52 +118,21 @@ async function runPreCompact(
   options: PreCompactOptions,
   logFile: string,
 ): Promise<void> {
-  const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
-  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate
-  // before any call that would create a store.
-  if (!isInitialized(hippoRoot)) {
-    appendPreCompactLog(logFile, 'skip: store not initialized');
-    return;
-  }
-
-  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut, runtime);
-  if (receipt.status !== 'received') {
-    appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
-    return;
-  }
-  const { sessionId, transcriptPath: payloadTranscriptPath } = receipt.input;
-  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact
-  // to close a record, nor reads the summarizer text.
-  const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
-  if (vscode && fs.existsSync(vscodeUserHooksFile(processHomes()))) {
-    appendPreCompactLog(
-      logFile,
-      'skip: VS Code payload, hippo.json runs pre-compact for this chat',
-    );
-    return;
-  }
-  if (
-    runtime === 'copilot' &&
-    (await snapshotJustSaved(store.sessions, options.tenantId, sessionId))
-  ) {
-    appendPreCompactLog(
-      logFile,
-      `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
-    );
-    return;
-  }
-
+  const accepted = await acceptPreCompact(hippoRoot, store, options, logFile);
+  if (accepted === null) return;
+  const { input, vscode } = accepted;
+  const { stdinText, runtime = 'claude-code' } = options;
   const closable = runtime === 'claude-code' && !vscode;
   const recordId = await markCompactionBoundary(
     store.compactionHooks,
     options,
     logFile,
-    receipt.input,
+    input,
     closable,
   );
 
   const transcriptPath = resolvePreCompactTranscript(
-    payloadTranscriptPath,
+    input.transcriptPath,
     stdinText,
     logFile,
     runtime,
@@ -177,7 +146,59 @@ async function runPreCompact(
   );
   if (!derived) return;
 
+  const { sessionId } = input;
   await saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
+}
+
+/** The compaction payload this entry runs, or null after logging why it skips it. */
+async function acceptPreCompact(
+  hippoRoot: string,
+  store: CompactionStore,
+  options: PreCompactOptions,
+  logFile: string,
+): Promise<{ input: CaptureInput; vscode: boolean } | null> {
+  const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
+  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate
+  // before any call that would create a store.
+  if (!isInitialized(hippoRoot)) {
+    appendPreCompactLog(logFile, 'skip: store not initialized');
+    return null;
+  }
+
+  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut, runtime);
+  if (receipt.status !== 'received') {
+    appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
+    return null;
+  }
+  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact
+  // to close a record, nor reads the summarizer text.
+  const vscode = runtime === 'claude-code' && isVscodeTranscript(receipt.input.transcriptPath);
+  const skip = await otherEntrySkip(store, options, receipt.input.sessionId, vscode);
+  if (skip !== null) {
+    appendPreCompactLog(logFile, skip);
+    return null;
+  }
+  return { input: receipt.input, vscode };
+}
+
+/** The skip line when the hook's other entry runs this compaction, else null. */
+async function otherEntrySkip(
+  store: CompactionStore,
+  options: PreCompactOptions,
+  sessionId: string | null,
+  vscode: boolean,
+): Promise<string | null> {
+  if (vscode && fs.existsSync(vscodeUserHooksFile(processHomes()))) {
+    return 'skip: VS Code payload, hippo.json runs pre-compact for this chat';
+  }
+  if (
+    options.runtime === 'copilot' &&
+    (await snapshotJustSaved(store.sessions, options.tenantId, sessionId))
+  ) {
+    const window = `${TWIN_FIRE_MS / 1000} s`;
+    return `skip: snapshot for session ${sessionId} saved under ${window} ago, by the other preCompact entry`;
+  }
+  return null;
 }
 
 /** Starts the compaction record when the host will close one (`closable`), then tells
@@ -232,9 +253,7 @@ async function startRecord(
 /** Never throws: the snapshot is saved already, and the record only notes it. */
 async function markSnapshotOnRecord(
   hooks: CompactionHooks,
-  tenantId: string,
-  recordId: string,
-  logFile: string,
+  { tenantId, recordId, logFile }: { tenantId: string; recordId: string; logFile: string },
 ): Promise<void> {
   try {
     await hooks.markSnapshotSaved(tenantId, recordId);
@@ -316,7 +335,7 @@ async function saveDerivedSnapshot(
         null,
       );
       appendPreCompactLog(logFile, 'snapshot saved');
-      if (recordId !== null) await markSnapshotOnRecord(hooks, tenantId, recordId, logFile);
+      if (recordId !== null) await markSnapshotOnRecord(hooks, { tenantId, recordId, logFile });
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
@@ -403,8 +422,9 @@ export async function postCompactHook(
         }
       }
     }
-    if (!storeBusy)
+    if (!storeBusy) {
       await replayCompactions(folder, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    }
     return line;
   } catch (err) {
     log(`failed: ${errorMessage(err)}`);

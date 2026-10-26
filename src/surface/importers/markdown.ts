@@ -18,13 +18,11 @@ function slugify(heading: string): string {
 /**
  * Parse structured markdown into {content, sectionSlug} pairs: each heading starts a section whose
  * bullets or numbered items become memories.
- *
  */
 function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionSlug: string }> {
   const results: Array<{ content: string; sectionSlug: string }> = [];
   const lines = raw.split('\n');
 
-  let currentSection = '';
   let currentSlug = '';
   let pendingText = '';
 
@@ -35,36 +33,40 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
   }
 
   for (const line of lines) {
-    const trimmed = line.trim();
-
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
-    if (headingMatch) {
-      flush();
-      currentSection = headingMatch[2].trim();
-      currentSlug = slugify(currentSection);
+    const md = classifyLine(line);
+    if (md.kind === 'text') {
+      pendingText = pendingText ? pendingText + ' ' + md.text : md.text;
       continue;
     }
-
-    if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
-      flush();
-      const itemText = trimmed
-        .replace(/^[-*+]\s+/, '')
-        .replace(/^\d+\.\s+/, '')
-        .trim();
-      pendingText = itemText;
-      continue;
-    }
-
-    if (!trimmed) {
-      flush();
-      continue;
-    }
-
-    pendingText = pendingText ? pendingText + ' ' + trimmed : trimmed;
+    flush();
+    if (md.kind === 'heading') currentSlug = md.slug;
+    else if (md.kind === 'item') pendingText = md.text;
   }
 
   flush();
   return results.filter((r) => r.content.length > 0);
+}
+
+/** One trimmed markdown line as the parser reads it. */
+type MarkdownLine =
+  | { readonly kind: 'heading'; readonly slug: string }
+  | { readonly kind: 'item'; readonly text: string }
+  | { readonly kind: 'blank' }
+  | { readonly kind: 'text'; readonly text: string };
+
+function classifyLine(line: string): MarkdownLine {
+  const trimmed = line.trim();
+  const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
+  if (headingMatch) return { kind: 'heading', slug: slugify(headingMatch[2].trim()) };
+  if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+    const text = trimmed
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .trim();
+    return { kind: 'item', text };
+  }
+  if (!trimmed) return { kind: 'blank' };
+  return { kind: 'text', text: trimmed };
 }
 
 export function importMarkdownInto(filePath: string, options: TargetedImport): ImportResult {

@@ -36,14 +36,18 @@ export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<s
   if (baserate.meanEstimate !== null) {
     lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
   }
-  if (baserate.meanActual !== null)
+  if (baserate.meanActual !== null) {
     lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null)
+  }
+  if (baserate.meanRatio !== null) {
     lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null)
+  }
+  if (baserate.p50Ratio !== null) {
     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.mae !== null)
+  }
+  if (baserate.mae !== null) {
     lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  }
   return lines.join('\n');
 }
 

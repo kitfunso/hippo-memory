@@ -61,7 +61,6 @@ export interface DoctorOptions {
   /**
    * Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set,
    * ~/.codex unless CODEX_HOME is).
-   *
    */
   home?: string;
   version: string;
@@ -170,12 +169,13 @@ function failuresCheck(failures: StoreHealth['failures'], schemaVersion: number)
 
 /** How long ago the store last slept (consolidated), or why that history could not be read. */
 function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck {
-  if (!lastSleep.ok)
+  if (!lastSleep.ok) {
     return {
       id: 'sleep',
       status: 'info',
       detail: `sleep history unavailable (${lastSleep.message})`,
     };
+  }
   const last = lastSleep.value;
   const when = last !== undefined ? Date.parse(last) : Number.NaN;
   if (Number.isNaN(when)) {
@@ -223,7 +223,6 @@ function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
 /**
  * Compaction records the PostCompact hook left unfinished and spool files a replay has not
  * finished, which `hippo sleep` replays.
- *
  */
 function compactionsCheck(
   compactions: StoreHealth['compactions'],
@@ -231,33 +230,16 @@ function compactionsCheck(
   now: Date,
   spoolFs?: SpoolFs,
 ): DoctorCheck {
-  if (!compactions.ok) {
-    return compactions.message.includes('no such table')
-      ? {
-          id: 'compactions',
-          status: 'info',
-          detail: 'no compaction records yet (hippo creates them on the next write)',
-        }
-      : {
-          id: 'compactions',
-          status: 'warn',
-          detail: `cannot read the compaction records: ${compactions.message}`,
-        };
-  }
+  if (!compactions.ok) return unreadCompactionsCheck(compactions.message);
   const { total, summarised, started } = compactions.value;
   const stuck = summarised + started;
   const { counts: spool, unread } = readSpool(store, now, spoolFs);
   const spooled = spool.waiting + spool.stale + spool.bad > 0;
   const recorded = `${plural(total, 'compaction')} recorded, none stuck`;
-  if (stuck === 0 && !spooled && unread === '')
+  if (stuck === 0 && !spooled && unread === '') {
     return { id: 'compactions', status: 'pass', detail: recorded };
-  const fix = [
-    stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
-    spool.bad > 0
-      ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then ` +
-        `delete them`
-      : '',
-  ].filter((s) => s !== '');
+  }
+  const fix = compactionsFix(stuck, spool, store);
   const unfinished =
     stuck === 0
       ? `${recorded} in the store`
@@ -272,6 +254,30 @@ function compactionsCheck(
     detail: `${unfinished}${note}${unread}`,
     fix: fix.join('; '),
   };
+}
+
+function unreadCompactionsCheck(message: string): DoctorCheck {
+  return message.includes('no such table')
+    ? {
+        id: 'compactions',
+        status: 'info',
+        detail: 'no compaction records yet (hippo creates them on the next write)',
+      }
+    : {
+        id: 'compactions',
+        status: 'warn',
+        detail: `cannot read the compaction records: ${message}`,
+      };
+}
+
+function compactionsFix(stuck: number, spool: SpoolCounts, store: string): string[] {
+  return [
+    stuck + spool.waiting + spool.stale > 0 ? 'hippo sleep   (replays them)' : '',
+    spool.bad > 0
+      ? `open the .bad files in ${path.join(store, SPOOL_DIR)}, save what you still need with hippo remember, then ` +
+        `delete them`
+      : '',
+  ].filter((s) => s !== '');
 }
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global
@@ -410,11 +416,11 @@ function memoriesCheck(memories: number | null, dormant: number | null): DoctorC
 /**
  * Whether the full-text index still matches `memories`; opening a current store no longer checks,
  * so doctor reports and sleep repairs.
- *
  */
 function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
-  if (!fts.ok)
+  if (!fts.ok) {
     return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${fts.message}` };
+  }
   const counts = fts.value;
   if (counts === null) {
     return {
@@ -513,7 +519,11 @@ function claudeCodeCheck(home: string): DoctorCheck {
     };
   }
   const settings = readJson(path.join(claudeDir, 'settings.json'));
-  const text = settings === null ? '' : JSON.stringify(settings);
+  return claudeHooksCheck(settings === null ? '' : JSON.stringify(settings));
+}
+
+/** Grades the hooks from the settings file's text: the plugin, every hook, none, or some. */
+function claudeHooksCheck(text: string): DoctorCheck {
   const viaPlugin = /hippo-memory@/.test(text);
   const missing = CLAUDE_CODE_HOOKS.filter(([marker]) => !text.includes(marker)).map(
     ([, what]) => what,
@@ -578,8 +588,9 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
         `(pilot.holdoutRateBp=${holdoutRateBp})`,
     });
   }
-  if (hasGlobal)
+  if (hasGlobal) {
     checks.push(await projectsCheck(opts.diagnosticsBodies(globalRoot), opts.tenantId));
+  }
 
   checks.push(claudeCodeCheck(home));
 
@@ -605,8 +616,9 @@ export function formatDoctor(report: DoctorReport): string {
   const lines = [`hippo ${report.version} doctor`, ''];
   for (const c of report.checks) {
     lines.push(`  [${mark[c.status]}] ${c.id.padEnd(11)} ${c.detail}`);
-    if (c.fix && (c.status === 'warn' || c.status === 'fail'))
+    if (c.fix && (c.status === 'warn' || c.status === 'fail')) {
       lines.push(`         ${''.padEnd(11)} fix: ${c.fix}`);
+    }
   }
   lines.push('', report.ok ? 'No failures.' : 'Some checks failed; run the fix commands above.');
   return lines.join('\n');

@@ -84,8 +84,9 @@ function moveRowsToArchive(
   cachedStatement(db, `DELETE FROM memories WHERE id IN (${IDS})`).run(ids);
   // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the
   // whole archive.
-  if (isFtsAvailable(db))
+  if (isFtsAvailable(db)) {
     cachedStatement(db, `DELETE FROM memories_fts WHERE id IN (${IDS})`).run(ids);
+  }
   return archivedAt;
 }
 
@@ -123,11 +124,13 @@ function markParentsDirty(
 ): void {
   const parents = new Map<string, string>();
   for (const row of rows) {
-    if (row.dag_parent_id)
+    if (row.dag_parent_id) {
       parents.set(String(row.dag_parent_id), String(row.tenant_id ?? DEFAULT_TENANT_ID));
+    }
   }
-  for (const [parent, tenant] of parents)
-    markSummaryDirtyInTx(db, parent, tenant, who || CLI_ACTOR);
+  for (const [parent, tenant] of parents) {
+    markSummaryDirtyInTx(db, { summaryId: parent, tenantId: tenant, actor: who || CLI_ACTOR });
+  }
 }
 
 /** archiveRawMemory for every row in `ids` in one write scope, in the same few statements for

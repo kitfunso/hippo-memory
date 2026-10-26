@@ -239,8 +239,9 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
   if (!file || !fs.existsSync(file)) return null;
   try {
     const cursor: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (!isObjectLike(cursor) || !('source' in cursor) || cursor.source !== transcriptPath)
+    if (!isObjectLike(cursor) || !('source' in cursor) || cursor.source !== transcriptPath) {
       return null;
+    }
     return 'position' in cursor && isStringValue(cursor.position) ? cursor.position : null;
   } catch (err) {
     // A torn cursor means the next capture reads every turn, which the dedupe keys absorb.

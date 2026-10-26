@@ -73,7 +73,6 @@ export interface MemoryEntry {
   /**
    * True when a child was invalidated, superseded, forgotten or archived since the last rebuild;
    * sleep clears it. Always false below level 2.
-   *
    */
   summaryDirty?: boolean;
   /** ISO 8601 time of the last successful rebuild, or null if never rebuilt. */
@@ -161,7 +160,6 @@ export interface CreateMemoryOptions {
   /**
    * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled
    * default.
-   *
    */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;
@@ -189,7 +187,6 @@ export function createMemory(
   const at = now.toISOString();
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
-  const emotionalValence = options.emotionalValence ?? inferValence(tags);
   const schemaFit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
   const halfLifeDays = deriveHalfLife(options.baseHalfLifeDays, { tags, schemaFit });
@@ -203,7 +200,7 @@ export function createMemory(
     halfLifeDays,
     layer,
     tags,
-    emotionalValence,
+    emotionalValence: options.emotionalValence ?? inferValence(tags),
     schemaFit,
     source: options.source ?? 'cli',
     outcomeScore: null,
@@ -213,6 +210,33 @@ export function createMemory(
     pinned: options.pinned ?? false,
     confidence: options.confidence ?? 'verified',
     content,
+    ...newLineage(options, at),
+  };
+
+  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
+  return entry;
+}
+
+type EntryLineage = Pick<
+  MemoryEntry,
+  | 'parents'
+  | 'starred'
+  | 'traceOutcome'
+  | 'sourceSessionId'
+  | 'validFrom'
+  | 'supersededBy'
+  | 'extractedFrom'
+  | 'dagLevel'
+  | 'dagParentId'
+  | 'kind'
+  | 'scope'
+  | 'owner'
+  | 'artifactRef'
+  | 'tenantId'
+>;
+
+function newLineage(options: CreateMemoryOptions, at: string): EntryLineage {
+  return {
     parents: [],
     starred: false,
     traceOutcome: options.traceOutcome ?? null,
@@ -228,9 +252,6 @@ export function createMemory(
     artifactRef: options.artifactRef ?? null,
     tenantId: options.tenantId ?? DEFAULT_TENANT_ID,
   };
-
-  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
-  return entry;
 }
 
 function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOptions>): void {

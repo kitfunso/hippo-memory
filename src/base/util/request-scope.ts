@@ -24,7 +24,6 @@ export function requestDeadlineMs(configured?: number): number {
 /**
  * When a request must be answered, and the store calls it still waits on: the store ends each of
  * those soon after `at`, with the outcome only it knows.
- *
  */
 export class RequestDeadline {
   /** Epoch milliseconds. */
@@ -51,7 +50,6 @@ export class RequestDeadline {
   /**
    * Runs `fn` now, or once the last store call the request waits on has settled; every function
    * registered meanwhile runs, in order.
-   *
    */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
@@ -89,7 +87,6 @@ export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined {
 /** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and
  * promises it starts. `deadline` reaches every store call made inside, and `signal` every check of
  * `currentSignal`.
- *
  */
 export function runWithRequestId<T>(
   requestId: string,

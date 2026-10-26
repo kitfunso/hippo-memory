@@ -30,8 +30,9 @@ export interface ProjectIdentity {
 /** Wire key, display name and kind for an `origin_project` value. */
 export function projectIdentity(origin: Origin | undefined): ProjectIdentity {
   if (origin === '') return { key: 'global', name: 'Global', kind: 'global' };
-  if (origin === null || origin === undefined)
+  if (origin === null || origin === undefined) {
     return { key: 'unassigned', name: 'Unassigned', kind: 'unassigned' };
+  }
   return { key: `p:${origin}`, name: origin, kind: 'project' };
 }
 

@@ -11,7 +11,6 @@ import { createLlmReranker } from './llm.js';
 /**
  * A new registry with its own cross-encoder: a root builds one and keeps it, so each model loads
  * once and each outage warning lasts the registry's life.
- *
  */
 export function realRerankers(): RerankerLookup {
   // jev falls back to the same cross-encoder, so one model loads.

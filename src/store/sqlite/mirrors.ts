@@ -182,8 +182,9 @@ function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflic
   const keep = new Set(open.map(conflictMirrorName));
   for (const conflict of open) writeConflictMirror(conflictDir, conflict);
   for (const existing of fs.readdirSync(conflictDir)) {
-    if (existing !== '.gitkeep' && !keep.has(existing))
+    if (existing !== '.gitkeep' && !keep.has(existing)) {
       fs.unlinkSync(path.join(conflictDir, existing));
+    }
   }
 }
 
@@ -296,14 +297,19 @@ function listEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   );
 }
 
+/** The memory whose mirror goes, whether it is raw, and the caller's log prefix. */
+interface PurgeMirrorOptions {
+  readonly id: string;
+  readonly isRaw: boolean;
+  readonly logPrefix: string;
+}
+
 /** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the
  * reaper only scans `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to
  * delete by hand. Returns true if the mirror ended up purged. */
 export function purgeMirrorBestEffort(
   hippoRoot: string,
-  id: string,
-  isRaw: boolean,
-  logPrefix: string,
+  { id, isRaw, logPrefix }: PurgeMirrorOptions,
 ): boolean {
   try {
     removeEntryMirrors(hippoRoot, id);

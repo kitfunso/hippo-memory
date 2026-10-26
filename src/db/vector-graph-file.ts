@@ -230,9 +230,12 @@ export function badGraphFile(file: string, what: string, cause?: unknown): Graph
   );
 }
 
-/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it
- * cannot trust. */
-export function readStamp(fd: number, file: string, size: number): GraphStamp {
+/** The header's numbers as the file stores them, before any bounds check. */
+interface StoredHeader extends Omit<GraphStamp, 'model' | 'recordsAt' | 'upperAt'> {
+  readonly jsonBytes: number;
+}
+
+function readHeader(fd: number, file: string, size: number): Buffer {
   const head = Buffer.alloc(HEADER_BYTES);
   if (size < HEADER_BYTES || fs.readSync(fd, head, 0, HEADER_BYTES, 0) < HEADER_BYTES) {
     throw badGraphFile(file, 'short file');
@@ -241,6 +244,11 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
   if (u32(HEADER_AT.magic) !== MAGIC || u32(HEADER_AT.version) !== VERSION) {
     throw badGraphFile(file, 'not a version 1 vector graph file');
   }
+  return head;
+}
+
+function storedHeaderOf(head: Buffer): StoredHeader {
+  const u32 = (at: number): number => head.readUInt32LE(at);
   const [dim, m, nodes, entry, maxLevel, jsonBytes] = [
     HEADER_AT.dim,
     HEADER_AT.m,
@@ -255,29 +263,48 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     HEADER_AT.upperBytes,
   ].map(u32);
   const highRowid = head.readDoubleLE(HEADER_AT.highRowid);
-  const recordsAt = align(HEADER_BYTES + jsonBytes, 8);
-  const upperAt = recordsAt + nodes * recordBytes;
-  const fits =
-    dim >= 1 &&
-    m >= 2 &&
-    m <= 255 &&
-    nodes >= 1 &&
-    entry < nodes &&
-    maxLevel <= 15 &&
-    live <= nodes &&
-    recordBytes === recordBytesOf(dim, m) &&
-    Number.isSafeInteger(highRowid) &&
-    highRowid >= 1;
-  if (!fits) throw badGraphFile(file, 'a header value is out of bounds');
-  if (upperAt + upperBytes > size) throw badGraphFile(file, 'short file');
-  if (upperAt + upperBytes < size)
-    throw badGraphFile(file, 'the file runs on past its last record');
+  return { dim, m, nodes, entry, maxLevel, jsonBytes, live, recordBytes, upperBytes, highRowid };
+}
+
+function headerFits(h: StoredHeader): boolean {
+  return (
+    h.dim >= 1 &&
+    h.m >= 2 &&
+    h.m <= 255 &&
+    h.nodes >= 1 &&
+    h.entry < h.nodes &&
+    h.maxLevel <= 15 &&
+    h.live <= h.nodes &&
+    h.recordBytes === recordBytesOf(h.dim, h.m) &&
+    Number.isSafeInteger(h.highRowid) &&
+    h.highRowid >= 1
+  );
+}
+
+function readModel(fd: number, file: string, jsonBytes: number): string {
   const json = Buffer.alloc(jsonBytes);
-  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes)
+  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes) {
     throw badGraphFile(file, 'short file');
+  }
   const stamp = tryParseJson(json.toString('utf8'));
   const model = isJsonObject(stamp) ? stamp.model : undefined;
   if (!isJsonString(model)) throw badGraphFile(file, 'the stamp names no model');
+  return model;
+}
+
+/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it
+ * cannot trust. */
+export function readStamp(fd: number, file: string, size: number): GraphStamp {
+  const h = storedHeaderOf(readHeader(fd, file, size));
+  const recordsAt = align(HEADER_BYTES + h.jsonBytes, 8);
+  const upperAt = recordsAt + h.nodes * h.recordBytes;
+  if (!headerFits(h)) throw badGraphFile(file, 'a header value is out of bounds');
+  if (upperAt + h.upperBytes > size) throw badGraphFile(file, 'short file');
+  if (upperAt + h.upperBytes < size) {
+    throw badGraphFile(file, 'the file runs on past its last record');
+  }
+  const model = readModel(fd, file, h.jsonBytes);
+  const { dim, m, nodes, entry, maxLevel, highRowid, live, recordBytes, upperBytes } = h;
   return {
     model,
     dim,

@@ -137,8 +137,9 @@ function runsOn(store: HippoStore | undefined, toolName: string): boolean {
 function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
   // drifted apart.
-  if (!TOOL_HANDLERS.has(name))
+  if (!TOOL_HANDLERS.has(name)) {
     throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
+  }
   return toolsOn(ctx.store).get(name)?.(ctx);
 }
 

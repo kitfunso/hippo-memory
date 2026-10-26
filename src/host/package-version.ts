@@ -9,7 +9,8 @@ import { readJsonFile } from './json-file.js';
 export function readPackageVersion(): string {
   const manifest = readJsonFile(path.join(PACKAGE_ROOT, 'package.json'));
   const version = isJsonObject(manifest) ? manifest.version : undefined;
-  if (!isJsonString(version))
+  if (!isJsonString(version)) {
     throw new Error(`${PACKAGE_ROOT}/package.json has no string "version"`);
+  }
   return version;
 }

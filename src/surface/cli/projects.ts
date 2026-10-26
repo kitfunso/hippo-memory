@@ -33,8 +33,9 @@ function worktreeNames(): Map<string, string> {
     const expected =
       errorCode(err) === 'ENOENT' ||
       (err instanceof Error && 'status' in err && err.status === 128);
-    if (!expected)
+    if (!expected) {
       log.once('projects:git-worktree-list', 'warn', 'git worktree list failed', errorFields(err));
+    }
     return new Map();
   }
 }
@@ -115,8 +116,9 @@ async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
       'imported note copies',
     )} under the wrong project set aside (the note stays under its own, or user-global)`,
   );
-  for (const f of r.folds)
+  for (const f of r.folds) {
     console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
+  }
   for (const c of r.collisions) {
     console.log(
       `  ${c.name} left as it is: its folders now resolve to ${c.ids.join(', ')}; fold it by hand with hippo ` +

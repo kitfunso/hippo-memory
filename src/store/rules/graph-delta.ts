@@ -52,7 +52,14 @@ function storedKey(row: StoredEntity): string | null {
   return keyText(row.entity_type, row.source_object_type, row.source_object_id);
 }
 
-export const relationKey = (from: string, to: string, relType: string): string =>
+/** A relation's two endpoint keys and its type. */
+interface RelationKeyOptions {
+  readonly from: string;
+  readonly to: string;
+  readonly relType: string;
+}
+
+export const relationKey = ({ from, to, relType }: RelationKeyOptions): string =>
   `${from}>${to}|${relType}`;
 
 /** Memory id to kind, so a desired row's source_kind is known before the write resolves it the
@@ -88,7 +95,9 @@ export const wantedEntities = (desired: DesiredGraph): Map<string, DesiredEntity
 
 /** The desired relations, the first of each (from, to, type) key, in desired order. */
 export const wantedRelations = (desired: DesiredGraph): Map<string, DesiredRelation> =>
-  firstByKey(desired.relations, (r) => relationKey(entityKey(r.from), entityKey(r.to), r.relType));
+  firstByKey(desired.relations, (r) =>
+    relationKey({ from: entityKey(r.from), to: entityKey(r.to), relType: r.relType }),
+  );
 
 function diffEntities(
   stored: readonly StoredEntity[],
@@ -99,9 +108,9 @@ function diffEntities(
   const deletes: GraphOp[] = [];
   for (const row of stored) {
     const key = storedKey(row);
-    if (key === null || kept.has(key) || !wanted.has(key))
+    if (key === null || kept.has(key) || !wanted.has(key)) {
       deletes.push({ op: 'deleteEntity', id: row.id });
-    else kept.set(key, row);
+    } else kept.set(key, row);
   }
   const updates: GraphOp[] = [];
   const inserts: GraphOp[] = [];
@@ -132,7 +141,7 @@ function diffRelations(
     const to = keptKeyById.get(row.to_entity_id);
     // An edge on a deleted entity goes with it through the v38 cascade.
     if (from === undefined || to === undefined) continue;
-    const key = relationKey(from, to, row.rel_type);
+    const key = relationKey({ from, to, relType: row.rel_type });
     const want = wanted.get(key);
     const same =
       want !== undefined &&
@@ -144,8 +153,9 @@ function diffRelations(
     else deletes.push({ op: 'deleteRelation', id: row.id });
   }
   const inserts: GraphOp[] = [];
-  for (const [key, relation] of wanted)
+  for (const [key, relation] of wanted) {
     if (!kept.has(key)) inserts.push({ op: 'insertRelation', relation });
+  }
   return [...deletes, ...inserts];
 }
 
