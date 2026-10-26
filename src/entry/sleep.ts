@@ -7,19 +7,19 @@ import { anthropicLlmFromEnv } from '../infra/ports.js';
 import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
 import type { ConsolidationResult } from '../domain/consolidate/run.js';
-import { sleepWholeStore, type SleepOpts, type SleepResult } from '../api/sleep/sleep.js';
+import { sleepWholeStore, type SleepOptions, type SleepResult } from '../api/sleep/sleep.js';
 import type { EntrySleepContext as SleepContext } from '../api/types.js';
 import { withEntryInfra } from '../surface/entry-infra.js';
 
 export { ConsolidationResult } from '../domain/consolidate/run.js';
-export type { SleepOpts, SleepResult } from '../api/sleep/sleep.js';
+export type { SleepOptions, SleepResult } from '../api/sleep/sleep.js';
 export type { SleepEvent } from '../api/sleep/events.js';
 export type { RescueRank } from '../domain/consolidate/events.js';
 // Named in the signatures of sleep and consolidate, so a caller needs them to type its own variable.
 export type { SleepContext, SleepStore };
 
 /** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
-export async function sleep(ctx: SleepContext, opts?: SleepOpts): Promise<SleepResult> {
+export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {
   // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close hippo.db's last, which
   // checkpoints and deletes the WAL.
   return withSharedStoreHandles(() => sleepWholeStore(withEntryInfra(ctx), opts));

@@ -25,7 +25,7 @@ const DASHBOARD_ACTOR = 'dashboard';
 // Loopback only: the token guards the memories from other local users, never from the network.
 const DASHBOARD_HOST = '127.0.0.1';
 
-export interface DashboardOpts {
+export interface DashboardOptions {
   readonly hippoRoot: string;
   /** The tenant the CLI root resolved; the dashboard reads and writes as it. */
   readonly tenantId: string;
@@ -60,7 +60,7 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime): DashboardServing {
+function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const now = opts.now ?? ((): number => evalNow().getTime());
   const configAt = configReader(envRuntimeSettings);
@@ -84,7 +84,7 @@ function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime
 
 /** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never claims the API server's
  * pidfile, so both can serve one store. */
-export async function serveDashboard(opts: DashboardOpts): Promise<DashboardHandle> {
+export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
   const runtime = defaultServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();

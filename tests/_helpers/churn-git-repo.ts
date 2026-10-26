@@ -1,5 +1,6 @@
 // A temp git repo with dated commits, and the anchor dates the churn-staleness tests measure against.
-import { execSync, execFileSync } from 'child_process';
+import { execSync, execFileSync } from 'node:child_process';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 export function initGitRepo(dir: string): void {
   execSync('git init', { cwd: dir, stdio: 'ignore' });
@@ -16,7 +17,6 @@ export function commit(dir: string, isoDate: string, message = 'commit'): void {
   });
 }
 
-export const DAY = 24 * 60 * 60 * 1000;
 export const ANCHOR = '2026-01-01T00:00:00.000Z';
-export const BEFORE_ANCHOR = new Date(new Date(ANCHOR).getTime() - 10 * DAY).toISOString();
-export const AFTER_ANCHOR = new Date(new Date(ANCHOR).getTime() + 10 * DAY).toISOString();
+export const BEFORE_ANCHOR = new Date(new Date(ANCHOR).getTime() - 10 * DAY_MS).toISOString();
+export const AFTER_ANCHOR = new Date(new Date(ANCHOR).getTime() + 10 * DAY_MS).toISOString();

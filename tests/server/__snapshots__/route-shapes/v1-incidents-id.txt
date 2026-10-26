@@ -1,0 +1,28 @@
+GET /v1/incidents/1 -> 404 incident 1 not found
+POST /v1/incidents/1 -> 404 not found
+DELETE /v1/incidents/1 -> 404 not found
+PUT /v1/incidents/1 -> 404 not found
+GET /v1/incidents/007 -> 404 incident 7 not found
+POST /v1/incidents/007 -> 404 not found
+DELETE /v1/incidents/007 -> 404 not found
+PUT /v1/incidents/007 -> 404 not found
+GET /v1/incidents/abc -> 404 not found
+POST /v1/incidents/abc -> 404 not found
+DELETE /v1/incidents/abc -> 404 not found
+PUT /v1/incidents/abc -> 404 not found
+GET /v1/incidents/-1 -> 404 not found
+POST /v1/incidents/-1 -> 404 not found
+DELETE /v1/incidents/-1 -> 404 not found
+PUT /v1/incidents/-1 -> 404 not found
+GET /v1/incidents/%31 -> 404 not found
+POST /v1/incidents/%31 -> 404 not found
+DELETE /v1/incidents/%31 -> 404 not found
+PUT /v1/incidents/%31 -> 404 not found
+GET /v1/incidents/ -> 404 not found
+POST /v1/incidents/ -> 404 not found
+DELETE /v1/incidents/ -> 404 not found
+PUT /v1/incidents/ -> 404 not found
+GET /v1/incidents/1/ -> 404 not found
+POST /v1/incidents/1/ -> 404 not found
+DELETE /v1/incidents/1/ -> 404 not found
+PUT /v1/incidents/1/ -> 404 not found

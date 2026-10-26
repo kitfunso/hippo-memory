@@ -1,0 +1,8 @@
+GET /v1/customer-notes -> 200
+POST /v1/customer-notes -> 400 customer is required (non-empty string)
+DELETE /v1/customer-notes -> 404 not found
+PUT /v1/customer-notes -> 404 not found
+GET /v1/customer-notes/ -> 404 not found
+POST /v1/customer-notes/ -> 404 not found
+DELETE /v1/customer-notes/ -> 404 not found
+PUT /v1/customer-notes/ -> 404 not found

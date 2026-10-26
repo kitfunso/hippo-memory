@@ -1,10 +1,10 @@
 import {
   type Actor,
   authCreate,
-  type AuthCreateOpts,
+  type AuthCreateOptions,
   type AuthCreateResult,
   authCreateSelf,
-  type AuthCreateSelfOpts,
+  type AuthCreateSelfOptions,
   type AuthCreateSelfResult,
   authRevoke,
   type AuthRevokeResult,
@@ -24,7 +24,7 @@ export {
   ConflictError,
   ForbiddenError,
   NotFoundError,
-  type AuthCreateSelfOpts,
+  type AuthCreateSelfOptions,
   type AuthCreateSelfResult,
   type AuthRevokeResult,
   type Context,
@@ -39,10 +39,10 @@ export type {
   AuthResolver,
   RateLimitSpec,
   ResolvedBearer,
-  ServeOpts,
+  ServeOptions,
   ServerHandle,
 } from './surface/server/types.js';
-// ServeOpts takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
+// ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './base/ports/store-index.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with promptHookContext, and types its
 // body as JsonValue.
@@ -59,7 +59,7 @@ export {
 } from './surface/capture/session-texts.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot
 // reach.
-export type { AuthCreateOpts, AuthCreateResult };
+export type { AuthCreateOptions, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
 // A route that writes for a session binds it to the caller's owner first.
 export { bindSessionOwner } from './api/auth/session-owners.js';

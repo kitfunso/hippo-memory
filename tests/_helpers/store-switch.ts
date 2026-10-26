@@ -1,6 +1,6 @@
 // The store the HTTP and MCP end-to-end suites serve: hippo.db by default, a port-only store under
 // HIPPO_TEST_STORE=port-only, which the port-only job in ci.yml sets. Only this file reads the variable.
-import { serve as serveOn, type ServeOpts, type ServerHandle } from '../../src/server.js';
+import { serve as serveOn, type ServeOptions, type ServerHandle } from '../../src/server.js';
 import { portOnlyStore } from './port-only-store.js';
 
 export const onPortOnly = process.env.HIPPO_TEST_STORE === 'port-only';
@@ -29,7 +29,7 @@ export function needsHippoDb(why: keyof typeof NEEDS_HIPPO_DB): boolean {
 /** serve() as the suites call it: on the port-only run, a test that names no store of its own gets hippo.db's store
  * through the port alone, without its folder groups and under a kind that is not 'sqlite', so a path that skips the
  * port throws. */
-export function serve(opts: ServeOpts): Promise<ServerHandle> {
+export function serve(opts: ServeOptions): Promise<ServerHandle> {
   if (!onPortOnly || opts.store) return serveOn(opts);
   return serveOn({ ...opts, store: portOnlyStore(opts.hippoRoot) });
 }

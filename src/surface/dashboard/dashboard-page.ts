@@ -1,6 +1,6 @@
 // The dashboard's pages: the React app and its assets, the not-built page, and the step off the ticket URL.
-import { createHash } from 'crypto';
-import type * as http from 'http';
+import { createHash } from 'node:crypto';
+import type * as http from 'node:http';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { assetFor, sendAsset } from './static-file.js';
 

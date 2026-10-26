@@ -1,8 +1,8 @@
 // Summaries post-compact could not record because the store was busy, waiting on disk for the next replay.
 import { MINUTE_MS } from '../base/util/time.js';
-import { randomBytes } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
+import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isObjectLike, isStringValue, type PostCompactPayload } from '../base/session/capture-contract.js';
 import type { CompactionText, StepFailure } from '../base/ports/store/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';

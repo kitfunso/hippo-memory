@@ -7,7 +7,8 @@ import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queri
 import { textFilter, useDashboardFunctions } from '../../src/store/sqlite/dashboard-functions.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
-import { DAY, dashboardOf, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import { dashboardOf, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 const ROWS = 320;
 // Pieces that sit on an edge: the two letters JavaScript lower-cases into ASCII, case past ASCII, JSON's escapes and
@@ -102,7 +103,7 @@ function createdOf(rand: () => number, i: number): string {
   const more = ['not a date', '', '+012026-01-01T00:00:00.000Z', '2026-09-24T12:00:00.000+00:00'];
   if (i % 16 === 0) return [...odd, ...more][(i / 16) % 8];
   const days = i % 3 === 0 ? Math.round(rand() * 400) - 5 : rand() * 400 - 5;
-  return new Date(NOW - Math.round(days * DAY)).toISOString();
+  return new Date(NOW - Math.round(days * DAY_MS)).toISOString();
 }
 
 let store: TmpStore;

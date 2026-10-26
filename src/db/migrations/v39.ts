@@ -1,5 +1,5 @@
-import * as os from 'os';
-import * as path from 'path';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../host/project-identity.js';
 import { raiseMinBinary } from '../meta.js';
 import { tableHasColumn } from '../tables.js';

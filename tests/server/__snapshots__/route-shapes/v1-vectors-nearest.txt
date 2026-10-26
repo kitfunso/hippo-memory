@@ -1,0 +1,8 @@
+GET /v1/vectors/nearest -> 404 not found
+POST /v1/vectors/nearest -> 400 vector must be an array of 1 to 4096 numbers
+DELETE /v1/vectors/nearest -> 404 not found
+PUT /v1/vectors/nearest -> 404 not found
+GET /v1/vectors/nearest/ -> 404 not found
+POST /v1/vectors/nearest/ -> 404 not found
+DELETE /v1/vectors/nearest/ -> 404 not found
+PUT /v1/vectors/nearest/ -> 404 not found

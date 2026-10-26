@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as path from 'path';
-import { createRequire } from 'module';
+import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

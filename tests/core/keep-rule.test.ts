@@ -34,6 +34,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 
@@ -43,7 +44,6 @@ oneRequestPerTest();
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
-const DAY = 86_400_000;
 const TAG = AGENT_MEMORY_TOOLS[0].tag;
 const PREFIX = toolSourcePrefix(AGENT_MEMORY_TOOLS[0].id);
 const KEPT_SOURCE = `${PREFIX}session-one`;
@@ -60,7 +60,7 @@ function newRoot(configJson?: string): string {
 
 const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' });
-const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
+const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY_MS);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () =>
   vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));
@@ -297,7 +297,7 @@ describe('sleep with decay forced', () => {
     writeEntry(root, kept);
 
     await consolidate(root, { now: sixtyDaysOn() });
-    await consolidate(root, { now: new Date(Date.now() + 400 * DAY) });
+    await consolidate(root, { now: new Date(Date.now() + 400 * DAY_MS) });
 
     expect(readEntry(root, kept.id)?.content).toBe(kept.content);
   });

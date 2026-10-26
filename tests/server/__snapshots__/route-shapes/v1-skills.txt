@@ -1,0 +1,8 @@
+GET /v1/skills -> 200
+POST /v1/skills -> 400 skillName is required (non-empty string)
+DELETE /v1/skills -> 404 not found
+PUT /v1/skills -> 404 not found
+GET /v1/skills/ -> 404 not found
+POST /v1/skills/ -> 404 not found
+DELETE /v1/skills/ -> 404 not found
+PUT /v1/skills/ -> 404 not found

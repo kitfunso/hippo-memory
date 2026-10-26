@@ -1,7 +1,7 @@
 // The init and setup steps that touch the machine: Codex hooks, the settings.json warning and the daily schedule.
 
-import * as path from 'path';
-import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_process';
+import * as path from 'node:path';
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import type { InstallResult } from '../hooks-install/rules/json-hooks.js';
 import { CODEX_TRUST_LINE, installJsonHooks } from '../hooks-install/json-hooks.js';
 import { envSkipSchedule } from '../../base/util/env.js';

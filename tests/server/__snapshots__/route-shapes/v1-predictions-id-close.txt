@@ -1,0 +1,28 @@
+GET /v1/predictions/1/close -> 404 not found
+POST /v1/predictions/1/close -> 400 state is required and must be one of: closed | closed-unknown
+DELETE /v1/predictions/1/close -> 404 not found
+PUT /v1/predictions/1/close -> 404 not found
+GET /v1/predictions/007/close -> 404 not found
+POST /v1/predictions/007/close -> 400 state is required and must be one of: closed | closed-unknown
+DELETE /v1/predictions/007/close -> 404 not found
+PUT /v1/predictions/007/close -> 404 not found
+GET /v1/predictions/abc/close -> 404 not found
+POST /v1/predictions/abc/close -> 404 not found
+DELETE /v1/predictions/abc/close -> 404 not found
+PUT /v1/predictions/abc/close -> 404 not found
+GET /v1/predictions/-1/close -> 404 not found
+POST /v1/predictions/-1/close -> 404 not found
+DELETE /v1/predictions/-1/close -> 404 not found
+PUT /v1/predictions/-1/close -> 404 not found
+GET /v1/predictions/%31/close -> 404 not found
+POST /v1/predictions/%31/close -> 404 not found
+DELETE /v1/predictions/%31/close -> 404 not found
+PUT /v1/predictions/%31/close -> 404 not found
+GET /v1/predictions//close -> 404 not found
+POST /v1/predictions//close -> 404 not found
+DELETE /v1/predictions//close -> 404 not found
+PUT /v1/predictions//close -> 404 not found
+GET /v1/predictions/1/close/ -> 404 not found
+POST /v1/predictions/1/close/ -> 404 not found
+DELETE /v1/predictions/1/close/ -> 404 not found
+PUT /v1/predictions/1/close/ -> 404 not found

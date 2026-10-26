@@ -2,7 +2,7 @@
 
 import { envActiveScope } from '../../base/util/env.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { ERROR_TAG, Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
@@ -371,7 +371,7 @@ function printTraceText(t: TraceView): void {
   console.log('='.repeat(50));
   const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
   console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`);
-  const starred = entry.starred ? '  Starred: ' + 'yes' : '';
+  const starred = entry.starred ? '  Starred: yes' : '';
   const pinned = entry.pinned ? 'yes' : 'no';
   console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${pinned}${starred}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);

@@ -3,7 +3,7 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
-import * as path from 'path';
+import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';

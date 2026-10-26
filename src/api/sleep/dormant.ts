@@ -1,7 +1,7 @@
 // Dormant memories: list, restore, forget and check.
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { DormantMemory, ListDormantOpts } from '../../base/ports/store/dormant.js';
+import type { DormantMemory, ListDormantOptions } from '../../base/ports/store/dormant.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';
@@ -9,7 +9,7 @@ import type { Context } from '../types.js';
 /**
  * A tenant's dormant memories (sqlite/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
  * on. Newest first; `opts.query` keeps rows containing every term (case-insensitive). */
-export function dormantList(ctx: Context, opts: ListDormantOpts = {}): Promise<DormantMemory[]> {
+export function dormantList(ctx: Context, opts: ListDormantOptions = {}): Promise<DormantMemory[]> {
   return ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), opts);
 }
 

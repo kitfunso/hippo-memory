@@ -1,6 +1,6 @@
 // What `hippo dashboard` prints at start, and the one line a port that will not open gets.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { printError } from './output.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';

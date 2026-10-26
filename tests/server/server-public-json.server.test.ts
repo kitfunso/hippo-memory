@@ -1,7 +1,6 @@
 // serve({ publicJson }): fixed JSON at plain GET /v1 paths, sent to anyone with no auth, body read or store access.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -129,7 +128,7 @@ describe('a publicJson path behind serve()', () => {
 
 describe('a publicJson path under a store that is not hippo.db', () => {
   it('is served without asking the store, and leaves no hippo.db behind', async () => {
-    const bare = mkdtempSync(join(tmpdir(), 'hippo-public-json-stub-'));
+    const bare = makeRoot('public-json-stub', { init: false });
     let lookups = 0;
     const store: HippoStore = {
       ...withoutFolderGroups(sqliteStore(bare)),
@@ -150,7 +149,6 @@ describe('a publicJson path under a store that is not hippo.db', () => {
     } finally {
       await handle?.stop();
       handle = null;
-      rmSync(bare, { recursive: true, force: true });
     }
   });
 });

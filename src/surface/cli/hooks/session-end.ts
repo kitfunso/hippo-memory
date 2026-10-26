@@ -1,6 +1,6 @@
 // The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker before the host exits.
-import * as fs from 'fs';
-import { spawn } from 'child_process';
+import * as fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../../capture/copilot-transcript.js';
 import {

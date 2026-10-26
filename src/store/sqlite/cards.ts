@@ -189,8 +189,8 @@ function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, ou
   ).run(now, outcome, now, cardId, tenantId);
 }
 
-// The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one runtime authority, so a hand-copied wrong
-// `from` list fails fast here.
+// Every card status change goes through this one function. CARD_TRANSITIONS is the only source of allowed moves, so a
+// hand-copied wrong `from` list fails fast here.
 interface TransitionCardOptions {
   readonly from: CardStatus[];
   readonly to: CardStatus;
@@ -216,7 +216,8 @@ function transitionCards(
   const { from, to, extra } = options;
   assertCardTransition(from, to);
   const now = new Date().toISOString();
-  // Lease columns follow status: set on the move to running, cleared on every other move (rule 15).
+  // Lease columns follow status: set on the move to running, cleared on every other move, so the lease never outlives
+  // the status.
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
   const fromPlaceholders = placeholders(from.length);
   const sql = `
@@ -500,7 +501,7 @@ function completeCard(
     const now = new Date().toISOString();
     closeLiveRun(db, tenantId, id, outcome, now);
 
-    // Not best-effort (rule 12): promotion runs in this same transaction, so a card can never be `done` with an
+    // Not best-effort: promotion runs in this same transaction, so a card can never be `done` with an
     // un-evaluated child.
     return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
   });

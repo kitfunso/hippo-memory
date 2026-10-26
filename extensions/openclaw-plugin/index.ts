@@ -7,11 +7,11 @@
  * Config lives under plugins.entries.hippo-memory.config
  */
 
-import { execFileSync, spawn } from 'child_process';
-import type { ChildProcess, ExecFileSyncOptionsWithStringEncoding, SpawnOptions } from 'child_process';
-import { existsSync, readdirSync, rmSync } from 'fs';
-import { join } from 'path';
-import { basename as posixBasename, dirname as posixDirname } from 'path/posix';
+import { execFileSync, spawn } from 'node:child_process';
+import type { ChildProcess, ExecFileSyncOptionsWithStringEncoding, SpawnOptions } from 'node:child_process';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { basename as posixBasename, dirname as posixDirname } from 'node:path/posix';
 
 interface HippoConfig {
   budget?: number;

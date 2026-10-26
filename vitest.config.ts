@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { ENV_SCRUBBED_IN_TESTS } from './scripts/lib/test-env-scrub.mjs';
-import { EVAL_TESTS, PROCESS_GLOBS, SERVER_GLOBS } from './scripts/lib/test-classes.mjs';
+import { EVAL_TESTS, PROCESS_GLOBS, SERVER_GLOBS, SLOW_GLOBS } from './scripts/lib/test-classes.mjs';
 
 // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
 process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
@@ -60,6 +60,8 @@ export { EVAL_TESTS };
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
+// Seeded stores in the thousands and a TypeScript program over src; none of them starts a process.
+const SLOW_MS = 180_000;
 const SETUP = ['tests/_install-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'];
 // Only tests that run dist (child processes, the server, workers) need a build, so the unit project starts without one.
 const BUILD = ['tests/_build-freshness.ts'];
@@ -69,14 +71,14 @@ export default defineConfig({
   test: {
     // A test that starts a child process, the HTTP server or a worker thread waits on the operating system and keeps 30 s; the rest get UNIT_MS.
     // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
-    // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
+    // A test that starts nothing but needs minutes of CPU or disk is *.slow.test.ts and gets SLOW_MS, so no test sets a long timeout of its own.
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
           include: TEST_GLOBS,
-          exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS],
+          exclude: [...SKIPPED, ...PROCESS_GLOBS, ...SERVER_GLOBS, ...SLOW_GLOBS],
           testTimeout: UNIT_MS,
           hookTimeout: Math.max(UNIT_MS, 10_000),
         },
@@ -90,6 +92,16 @@ export default defineConfig({
           globalSetup: BUILD,
           testTimeout: 30_000,
           hookTimeout: 30_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'slow',
+          include: SLOW_GLOBS,
+          exclude: SKIPPED,
+          testTimeout: SLOW_MS,
+          hookTimeout: SLOW_MS,
         },
       },
       {

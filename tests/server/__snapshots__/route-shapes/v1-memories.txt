@@ -1,0 +1,8 @@
+GET /v1/memories -> 400 q is required
+POST /v1/memories -> 400 content is required
+DELETE /v1/memories -> 404 not found
+PUT /v1/memories -> 404 not found
+GET /v1/memories/ -> 404 not found
+POST /v1/memories/ -> 404 not found
+DELETE /v1/memories/ -> 404 not found
+PUT /v1/memories/ -> 404 not found

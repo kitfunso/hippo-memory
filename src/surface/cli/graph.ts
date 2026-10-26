@@ -1,6 +1,6 @@
 // The entity graph verbs: rebuild it from the consolidated objects, print it, or write it out as a diagram.
 
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { DEFAULT_VIEW_LIMIT, graphExtract, graphViewOnHost } from '../../api/objects/graph.js';
 import { renderGraphHtml, renderGraphCanvas } from './graph-page.js';
 import { printError } from './output.js';

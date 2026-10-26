@@ -7,6 +7,7 @@ import { hybridSearchWire } from '../../src/entry/testing.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { hybridSearch as rankHybrid } from '../../src/domain/search/hybrid.js';
 import { evalSwitches } from '../../src/base/memory/ablation.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 const SWITCHES = [
   'HIPPO_ABLATE_DECAY',
@@ -20,7 +21,6 @@ const SWITCHES = [
 ] as const;
 
 const NOW = new Date('2026-06-11T12:00:00.000Z');
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 beforeEach(() => {
   for (const name of SWITCHES) vi.stubEnv(name, undefined);

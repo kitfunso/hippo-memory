@@ -14,7 +14,7 @@ import type {
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { readApiKeyOwner } from './tenant-lookup.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 
 // A key write's checks: an unknown key and another tenant's key fail alike, so a caller learns
@@ -31,7 +31,7 @@ function assertGrantable({ op, keyId }: Pick<ScopeGrantChange, 'op' | 'keyId'>, 
 }
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
-function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {
+function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOptions {
   return { tenantId: key.tenantId, actor, op: 'auth_create', targetId: key.keyId, metadata };
 }
 

@@ -17,6 +17,8 @@ import {
   STARTS_A_CHILD,
   STARTS_A_SERVER,
   projectOfName,
+  longestOwnTimeoutMs,
+  UNIT_OWN_TIMEOUT_CEILING_MS,
   reachesChildProcess,
 } from './lib/test-classes.mjs';
 
@@ -229,17 +231,22 @@ export function misnamedTests(dir) {
   const hits = [];
   for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
     const file = relative(dirname(dir), path).replaceAll('\\', '/');
-    if (skipped.has(file) || file.startsWith('tests/token-eval-')) continue;
+    if (skipped.has(file) || file.startsWith('tests/eval/token-eval-')) continue;
     const source = readFileSync(path, 'utf8');
     const has = projectOfName(file);
     // A test that spawns inside src never names child_process, so the import graph decides when it lifts its own budget.
     const waitsOnChild = startsChild(source) || (RAISES_OWN_TIMEOUT.test(source) && reachesChildProcess(path));
-    const want =
+    const started =
       waitsOnChild || (has === 'process' && reachesChildProcess(path))
         ? 'process'
         : startsServer(source)
           ? 'server'
           : 'unit';
+    // A slow test starts nothing, so its name is the only mark; a unit test that asks for a long budget of its own earns it.
+    const want =
+      started === 'unit' && (has === 'slow' || longestOwnTimeoutMs(source) > UNIT_OWN_TIMEOUT_CEILING_MS)
+        ? 'slow'
+        : started;
     if (want !== has) hits.push({ file, has, want });
   }
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
@@ -266,6 +273,7 @@ export function unscrubbedEnvReads(envSource, scrubbedNames = ENV_SCRUBBED_IN_TE
 const RENAME = {
   process: 'starts a child process: name it *.process.test.ts',
   server: 'starts the server or a worker thread and no child: name it *.server.test.ts',
+  slow: 'starts nothing but asks for more than 30 s of its own: name it *.slow.test.ts and drop the timeout override',
   unit: 'starts no child, server or worker thread: drop .process or .server from its name',
 };
 

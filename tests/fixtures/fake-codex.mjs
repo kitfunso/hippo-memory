@@ -130,7 +130,7 @@ function limitOnce() {
 /** HANG: the rollout first, no thread.started, a ticking grandchild, then no exit for 120 s. */
 function hang(lines) {
   writeRollout(rolloutPath(threadId), [...lines, tokenCount(700, 200, 40)]);
-  const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  const tick = `const fs=require('node:fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120_000);
@@ -186,7 +186,7 @@ function memWrite() {
   const m = /MEMWRITE:(\d+)(?:x(\d+))?/.exec(prompt);
   if (!m) return;
   const file = path.join(HOME, 'memories', 'memory_summary.md');
-  const code = `const fs=require('fs');let n=${Number(m[2] ?? 1)};const t=setInterval(()=>{fs.mkdirSync(${JSON.stringify(path.dirname(file))},{recursive:true});fs.appendFileSync(${JSON.stringify(file)},'summary\\n');if(--n<=0)clearInterval(t);},${Number(m[1])});`;
+  const code = `const fs=require('node:fs');let n=${Number(m[2] ?? 1)};const t=setInterval(()=>{fs.mkdirSync(${JSON.stringify(path.dirname(file))},{recursive:true});fs.appendFileSync(${JSON.stringify(file)},'summary\\n');if(--n<=0)clearInterval(t);},${Number(m[1])});`;
   spawn(process.execPath, ['-e', code], { detached: true, stdio: 'ignore' }).unref();
 }
 

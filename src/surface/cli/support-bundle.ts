@@ -1,10 +1,10 @@
 /** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (a store may leave empty -wal and
  * -shm files); never touches memory content. */
 import { envByName, processEnv } from '../../base/util/env.js';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { pathToFileURL } from 'url';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { realpathOrResolve } from '../../host/real-path.js';

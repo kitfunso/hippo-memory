@@ -1,8 +1,8 @@
 // K1 vault importer: tenant and vault-name isolation, skipped and emptied notes, dry runs and rejected names (tests h-s).
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';

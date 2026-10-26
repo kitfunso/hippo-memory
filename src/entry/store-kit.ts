@@ -1,10 +1,10 @@
-export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../base/ports/store/keys.js';
+export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../base/ports/store/keys.js';
 export type {
   ApiKeyRecord,
-  AppendAuditOpts,
+  AppendAuditOptions,
   AuditEvent,
   ActiveGoals,
-  GetActiveGoalsOpts,
+  GetActiveGoalsOptions,
   Goal,
   RetrievalPolicy,
   ClassResolution,
@@ -143,7 +143,7 @@ export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js'
 // The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
 export type { CardDetail } from '../base/ports/store/cards.js';
-export type { CompleteGoalOpts, PushGoalOpts } from '../base/ports/store/goals.js';
+export type { CompleteGoalOptions, PushGoalOptions } from '../base/ports/store/goals.js';
 export type {
   ConflictListQuery,
   ConflictMember,
@@ -154,7 +154,7 @@ export type {
   LoserFate,
   MemoryConflict,
 } from '../base/ports/store/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../base/ports/store/dormant.js';
+export type { DormantMemory, DormantRestoreOutcome, ListDormantOptions } from '../base/ports/store/dormant.js';
 export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
 export type {
   CorrectionLink,

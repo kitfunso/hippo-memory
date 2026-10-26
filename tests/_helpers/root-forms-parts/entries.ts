@@ -5,7 +5,7 @@ import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
-import type { DormantMemory, ListDormantOpts } from '../../../src/base/ports/store/dormant.js';
+import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
@@ -102,7 +102,7 @@ export function deleteEntry(
 export function loadDormantMemories(
   hippoRoot: string,
   tenantId: string,
-  opts: ListDormantOpts = {},
+  opts: ListDormantOptions = {},
   admit?: SqlFragment,
 ): DormantMemory[] {
   return onHandle(hippoRoot, (db) => listDormantRows(db, tenantId, opts, admit ?? EVERY_SCOPE));

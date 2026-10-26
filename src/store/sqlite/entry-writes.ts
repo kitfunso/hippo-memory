@@ -42,7 +42,7 @@ import type {
   SupersedeWrite,
 } from '../../base/ports/store.js';
 import type { PinWrite } from '../../base/ports/store/entry-writes.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
@@ -549,11 +549,11 @@ function outcomeAuditRows(
   applied: readonly MemoryEntry[],
   flipped: ReadonlyMap<string, number>,
   outcome: OutcomeWrite,
-): AppendAuditOpts[] {
+): AppendAuditOptions[] {
   const { actor, tenantId, good } = outcome;
   const marked = new Set<string>();
   return applied.flatMap((entry) => {
-    const rows: AppendAuditOpts[] = [
+    const rows: AppendAuditOptions[] = [
       { tenantId: entry.tenantId, actor, op: 'remember', targetId: entry.id, metadata: rememberAuditMetadata(entry) },
     ];
     const parent = entry.dagParentId;

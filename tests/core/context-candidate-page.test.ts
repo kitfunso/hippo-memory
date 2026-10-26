@@ -10,11 +10,11 @@ import { peakRowsRead, recordStatementsAsync } from '../_helpers/count-statement
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
 const ROWS = 2300;
-const DAY_MS = 86_400_000;
 /** The statement that returns the candidate rows: the decay-key subset, or the ranked scan beneath it. */
 const CANDIDATE_READ = /WITH top AS MATERIALIZED|ORDER BY pinned DESC/;
 let seeded: string;

@@ -28,9 +28,9 @@ import type {
 import type { EntryFilter } from '../../base/ports/store/reports.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { listEntriesWhere } from './entry-filter.js';
+import { META_KEY } from '../../db/meta.js';
 
 const TX_LABEL = 'merge_projects';
-const AUTO_REPAIR_META_KEY = 'project_repair_auto';
 
 /** A rewrite's answer plus the ids whose mirrors are rewritten, and those whose mirrors go, once it commits. */
 interface TagRewrite<T> {
@@ -179,7 +179,7 @@ const readsBodies: Bodies<Reads> = {
   originTallies: countByOrigin,
   dormantWhere: dormantSnapshotsWhere,
   compactionOrigins,
-  repairedOnce: (db) => getMeta(db, AUTO_REPAIR_META_KEY) === '1',
+  repairedOnce: (db) => getMeta(db, META_KEY.projectRepairAuto) === '1',
 };
 
 function writesBodies(files: StoreFiles): Bodies<Pick<ProjectTags, 'merge' | 'repair'>> {
@@ -190,7 +190,7 @@ function writesBodies(files: StoreFiles): Bodies<Pick<ProjectTags, 'merge' | 're
 }
 
 const markBodies: Bodies<Pick<ProjectTags, 'markRepairedOnce'>> = {
-  markRepairedOnce: (db) => setMeta(db, AUTO_REPAIR_META_KEY, '1'),
+  markRepairedOnce: (db) => setMeta(db, META_KEY.projectRepairAuto, '1'),
 };
 
 /** `readOpener` opens the reads' handles: hippo.db's own open, which migrates an older schema first, unless a check

@@ -1,8 +1,8 @@
 // The store's handle types and the legacy setup a first open runs; src/store/sqlite/handles.ts opens hippo.db, the
 // source of truth, and Markdown and JSON files are human-readable mirrors of it.
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../base/memory/memory.js';
 import {
   type DatabaseSyncLike,
@@ -23,7 +23,7 @@ import { layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { createHost, type Host } from '../../host/host.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
+import { META_KEY } from '../../db/meta.js';
 
 /** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
  * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
@@ -68,10 +68,10 @@ export function holdsMemory(db: DatabaseSyncLike): boolean {
 /** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that
  * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */
 export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
-  if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
+  if (getMeta(db, META_KEY.halfLifeBase, '') !== '') return;
   if (holdsMemory(db)) return;
-  setMeta(db, HALF_LIFE_BASE_META_KEY, String(DEFAULT_HALF_LIFE_DAYS));
-  setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
+  setMeta(db, META_KEY.halfLifeBase, String(DEFAULT_HALF_LIFE_DAYS));
+  setMeta(db, META_KEY.typedHalfLife, '1');
 }
 
 /** Imports a markdown-era store's mirrors into an empty hippo.db once; true when it imported any row. */
@@ -79,7 +79,7 @@ export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): b
   if (holdsMemory(db)) return false;
   // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the import on every open
   // and duplicate consolidation_runs; this meta flag settles it.
-  if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
+  if (getMeta(db, META_KEY.legacyBootstrapCompleted, '0') === '1') return false;
 
   const legacyEntries = readLegacyMarkdownEntries(hippoRoot);
   if (legacyEntries.length === 0) return false;
@@ -89,7 +89,7 @@ export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): b
     importLegacyIndexAndStats(db, hippoRoot);
 
     // Stamp completion even when every row was rejected; see the gate above.
-    setMeta(db, 'legacy_bootstrap_completed', '1');
+    setMeta(db, META_KEY.legacyBootstrapCompleted, '1');
   });
   return true;
 }
@@ -131,16 +131,16 @@ function importLegacyEntries(
 
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = readLegacyIndexFile(hippoRoot);
-  setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
+  setMeta(db, META_KEY.lastRetrievalIds, JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
   // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string rather than trusting a
   // hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
-  setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
+  setMeta(db, META_KEY.lastTraceId, /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
   const legacyStats = readLegacyStatsFile(hippoRoot);
-  setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
-  setMeta(db, 'total_recalled', String(Number(legacyStats.total_recalled ?? 0)));
-  setMeta(db, 'total_forgotten', String(Number(legacyStats.total_forgotten ?? 0)));
+  setMeta(db, META_KEY.totalRemembered, String(Number(legacyStats.total_remembered ?? 0)));
+  setMeta(db, META_KEY.totalRecalled, String(Number(legacyStats.total_recalled ?? 0)));
+  setMeta(db, META_KEY.totalForgotten, String(Number(legacyStats.total_forgotten ?? 0)));
 
   const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
   const insertRun = db.prepare(

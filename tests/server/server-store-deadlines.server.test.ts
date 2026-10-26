@@ -9,7 +9,7 @@ import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/ports/store.j
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
 import { currentSignal } from '../../src/base/util/request-scope.js';
-import type { AuthResolver, ServeOpts, ServerHandle } from '../../src/server.js';
+import type { AuthResolver, ServeOptions, ServerHandle } from '../../src/server.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -52,7 +52,7 @@ function deadline(ms: string): void {
   vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', ms);
 }
 
-async function start(root: string, opts: Partial<ServeOpts> = {}): Promise<ServerHandle> {
+async function start(root: string, opts: Partial<ServeOptions> = {}): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
   const server = await serveKeyed({ hippoRoot: root, port: 0, ...opts });
   cleanups.push(async () => {
@@ -634,7 +634,7 @@ const STEPS: readonly Step[] = [
 const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
 
 /** Every step's status, headers and body, less what differs between two stores by construction: generated ids and clock readings. */
-async function replies(root: string, opts: Partial<ServeOpts> = {}) {
+async function replies(root: string, opts: Partial<ServeOptions> = {}) {
   const server = await start(root, opts);
   const seen = [];
   for (const [label, send] of STEPS) {

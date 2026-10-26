@@ -16,7 +16,7 @@ import {
   type ServerHandle,
   type AuthResolver,
   type ResolvedBearer,
-  type ServeOpts,
+  type ServeOptions,
   type Context,
 } from '../../src/server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
@@ -45,7 +45,7 @@ let apiKey: CreateApiKeyResult;
 async function start(
   authResolver?: AuthResolver,
   hippoRoot = home,
-  extra: Partial<ServeOpts> = {},
+  extra: Partial<ServeOptions> = {},
 ): Promise<ServerHandle> {
   handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, authResolver, ...extra });
   return handle;
@@ -731,7 +731,7 @@ describe('package surface', () => {
     expect(out.indexServe).toBe(false);
   });
 
-  it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])(
+  it.each(['authCreateSelf', 'AuthCreateSelfOptions', 'AuthCreateSelfResult'])(
     'exports %s on the built server entry',
     (name) => {
       // The built d.ts text is what a consumer's compiler reads, so text is the contract here.

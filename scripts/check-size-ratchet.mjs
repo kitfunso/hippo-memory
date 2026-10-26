@@ -135,7 +135,7 @@ function findOffenders() {
 
 // Test files have no baseline: one past FILE_LIMIT fails. A named exception belongs to another owner, with the reason.
 const TEST_FILE_EXCEPTIONS = {
-  'tests/token-eval-z0-homes.test.ts': 'owned by the Z0 session (602cafe5); split it there',
+  'tests/eval/token-eval-z0-homes.test.ts': 'owned by the Z0 session (602cafe5); split it there',
 };
 
 /** { path: lines } of the .test.ts files under tests/ that pass FILE_LIMIT and that no exception covers. */

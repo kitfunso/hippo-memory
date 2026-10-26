@@ -1859,7 +1859,7 @@ sequence, so token_type_ids were all 0 rather than the 0/1 segment pair the
 model was trained on.
 
 Third defect, the reason this shipped unseen: the test availability probe at
-`tests/rerankers/cross-encoder.test.ts:29-30` compared `rerankScore` against an
+`tests/rerankers/cross-encoder.slow.test.ts:29-30` compared `rerankScore` against an
 input score of `1.0`, so "model unavailable" and "model returned 1.0" were the
 same observation. The detector was blind to exactly this failure.
 

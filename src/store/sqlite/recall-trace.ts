@@ -15,6 +15,7 @@ import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { parseLastTraceId } from './rows.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { META_KEY } from '../../db/meta.js';
 
 // How long the delivery ledger and the recall traces stay.
 
@@ -363,7 +364,7 @@ const TRACE_PRUNE_BATCH = 1000;
 /** Traces before `cutoff` that no outcome names and that are not the last recall's, with their results through the
  * v40 cascade; a trace with an outcome is training data, and the last one may still get its outcome. */
 function pruneRecallTraces(db: DatabaseSyncLike, cutoff: string): void {
-  const last = parseLastTraceId(getMeta(db, 'last_trace_id'));
+  const last = parseLastTraceId(getMeta(db, META_KEY.lastTraceId));
   cachedStatement(
     db,
     `

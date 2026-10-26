@@ -2,7 +2,7 @@
 
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { evalNow, strengthAblation } from './ablation.js';
 import { NO_STRENGTH_ABLATION, type StrengthAblation } from './eval-switches.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';

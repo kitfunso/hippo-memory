@@ -1,7 +1,6 @@
 // Under a store other than hippo.db, MCP lists and runs only the tools that reach their store through the port.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
@@ -12,6 +11,7 @@ import { serve } from '../_helpers/store-switch.js';
 import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -22,11 +22,7 @@ import { testInfra } from '../_helpers/infra.js';
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-mcp-ready-'));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('mcp-ready', { init: false });
 });
 
 // The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.

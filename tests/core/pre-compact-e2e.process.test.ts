@@ -1,6 +1,6 @@
 // The PreCompact hook producer against a real store.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHippoRoot } from '../../src/host/project-identity.js';
 import { WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
@@ -12,12 +12,13 @@ import {
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
 import { withScratchEnv, transcriptJsonl, runHippo, spawnHippo, initHippo } from '../_helpers/pre-compact-e2e.js';
+import { runtimeJoin } from '../_helpers/secret-shapes.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
+const FAKE_JWT = [runtimeJoin('eyJ', 'FAKEHEADER'), runtimeJoin('eyJ', 'FAKEPAYLOAD'), 'FAKESIG'].join('.');
 
 describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   let dir: string;

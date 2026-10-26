@@ -1,0 +1,28 @@
+GET /v1/customer-notes/1 -> 404 customer note 1 not found
+POST /v1/customer-notes/1 -> 404 not found
+DELETE /v1/customer-notes/1 -> 404 not found
+PUT /v1/customer-notes/1 -> 404 not found
+GET /v1/customer-notes/007 -> 404 customer note 7 not found
+POST /v1/customer-notes/007 -> 404 not found
+DELETE /v1/customer-notes/007 -> 404 not found
+PUT /v1/customer-notes/007 -> 404 not found
+GET /v1/customer-notes/abc -> 404 not found
+POST /v1/customer-notes/abc -> 404 not found
+DELETE /v1/customer-notes/abc -> 404 not found
+PUT /v1/customer-notes/abc -> 404 not found
+GET /v1/customer-notes/-1 -> 404 not found
+POST /v1/customer-notes/-1 -> 404 not found
+DELETE /v1/customer-notes/-1 -> 404 not found
+PUT /v1/customer-notes/-1 -> 404 not found
+GET /v1/customer-notes/%31 -> 404 not found
+POST /v1/customer-notes/%31 -> 404 not found
+DELETE /v1/customer-notes/%31 -> 404 not found
+PUT /v1/customer-notes/%31 -> 404 not found
+GET /v1/customer-notes/ -> 404 not found
+POST /v1/customer-notes/ -> 404 not found
+DELETE /v1/customer-notes/ -> 404 not found
+PUT /v1/customer-notes/ -> 404 not found
+GET /v1/customer-notes/1/ -> 404 not found
+POST /v1/customer-notes/1/ -> 404 not found
+DELETE /v1/customer-notes/1/ -> 404 not found
+PUT /v1/customer-notes/1/ -> 404 not found

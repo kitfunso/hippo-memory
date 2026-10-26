@@ -1,0 +1,28 @@
+GET /v1/recall/drill/1 -> 404 No drillable summary at this id
+POST /v1/recall/drill/1 -> 404 not found
+DELETE /v1/recall/drill/1 -> 404 not found
+PUT /v1/recall/drill/1 -> 404 not found
+GET /v1/recall/drill/007 -> 404 No drillable summary at this id
+POST /v1/recall/drill/007 -> 404 not found
+DELETE /v1/recall/drill/007 -> 404 not found
+PUT /v1/recall/drill/007 -> 404 not found
+GET /v1/recall/drill/abc -> 404 No drillable summary at this id
+POST /v1/recall/drill/abc -> 404 not found
+DELETE /v1/recall/drill/abc -> 404 not found
+PUT /v1/recall/drill/abc -> 404 not found
+GET /v1/recall/drill/-1 -> 404 No drillable summary at this id
+POST /v1/recall/drill/-1 -> 404 not found
+DELETE /v1/recall/drill/-1 -> 404 not found
+PUT /v1/recall/drill/-1 -> 404 not found
+GET /v1/recall/drill/%31 -> 404 No drillable summary at this id
+POST /v1/recall/drill/%31 -> 404 not found
+DELETE /v1/recall/drill/%31 -> 404 not found
+PUT /v1/recall/drill/%31 -> 404 not found
+GET /v1/recall/drill/ -> 404 not found
+POST /v1/recall/drill/ -> 404 not found
+DELETE /v1/recall/drill/ -> 404 not found
+PUT /v1/recall/drill/ -> 404 not found
+GET /v1/recall/drill/1/ -> 404 not found
+POST /v1/recall/drill/1/ -> 404 not found
+DELETE /v1/recall/drill/1/ -> 404 not found
+PUT /v1/recall/drill/1/ -> 404 not found

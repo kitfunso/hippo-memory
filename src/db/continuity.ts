@@ -196,7 +196,7 @@ const REQUEST_INDEX_DDL = {
 
 // Lives with the other re-asserted DDL so the required-object list below derives from one place.
 export const MEMORIES_FTS_DDL =
-  `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts ` + `USING fts5(id UNINDEXED, content, tags)`;
+  'CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED, content, tags)';
 
 // The part-word index reads its text from memories itself, so it keeps no second copy; triggers, not hippo's writers,
 // keep it level, so an older binary's writes and a raw SQL edit land in it too.
@@ -206,8 +206,8 @@ const MEMORIES_TRIGRAM_DDL =
 const TRIGRAM_DELETE =
   `INSERT INTO memories_trigram(memories_trigram, rowid, content, tags_json) ` +
   `VALUES ('delete', old.rowid, old.content, old.tags_json);`;
-const TRIGRAM_INSERT =
-  `INSERT INTO memories_trigram(rowid, content, tags_json) ` + `VALUES (new.rowid, new.content, new.tags_json);`;
+const TRIGRAM_INSERT = `INSERT INTO memories_trigram(rowid, content, tags_json) \
+VALUES (new.rowid, new.content, new.tags_json);`;
 const MEMORIES_TRIGRAM_TRIGGER_DDL = [
   `CREATE TRIGGER IF NOT EXISTS memories_trigram_insert AFTER INSERT ON memories BEGIN ${TRIGRAM_INSERT} END`,
   `CREATE TRIGGER IF NOT EXISTS memories_trigram_delete AFTER DELETE ON memories BEGIN ${TRIGRAM_DELETE} END`,
@@ -242,14 +242,14 @@ export const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND 
 
 // A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
 // value String() writes another way.
-export const TAGS_NOT_AS_WRITTEN =
-  `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*' ` + `OR instr(substr(tags_json, 2), '[') > 0`;
+export const TAGS_NOT_AS_WRITTEN = `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*' \
+OR instr(substr(tags_json, 2), '[') > 0`;
 
 /** The rows whose text a trigram lookup may miss where JavaScript's lower-casing finds it: tags not as written, and a
  * dotted capital I, which FTS5 does not fold to `i`. Migration v64 indexes them, so a text filter reads them by
  * index. */
-export const TEXT_OUTSIDE_TRIGRAMS =
-  `${TAGS_NOT_AS_WRITTEN} OR instr(content, char(304)) > 0 ` + `OR instr(tags_json, char(304)) > 0`;
+export const TEXT_OUTSIDE_TRIGRAMS = `${TAGS_NOT_AS_WRITTEN} OR instr(content, char(304)) > 0 \
+OR instr(tags_json, char(304)) > 0`;
 
 const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
 

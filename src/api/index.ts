@@ -128,9 +128,9 @@ export {
   authUngrant,
 } from './auth/auth.js';
 export type {
-  AuthCreateOpts,
+  AuthCreateOptions,
   AuthCreateResult,
-  AuthCreateSelfOpts,
+  AuthCreateSelfOptions,
   AuthCreateSelfResult,
   AuthGrantResult,
   AuthRevokeResult,
@@ -153,7 +153,7 @@ export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/d
 export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';
 export type { QuarantineListItem } from './auth/quarantine.js';
 export { sleepWholeStore } from './sleep/sleep.js';
-export type { SleepOpts, SleepResult } from './sleep/sleep.js';
+export type { SleepOptions, SleepResult } from './sleep/sleep.js';
 export { goalComplete, goalList, goalPush, goalResume, goalSuspend } from './objects/goals.js';
 export type { GoalPushOptions } from './objects/goals.js';
 export { CLI_LEARN, MCP_LEARN, memoryInvalidate, learn } from './sleep/learn.js';

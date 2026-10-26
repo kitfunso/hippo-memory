@@ -4,7 +4,6 @@ import { appendAuditEvents, pruneAuditRows } from './audit.js';
 import { withBackup } from '../../db/backup.js';
 import { withTrialScope, withWriteScope } from '../../db/busy.js';
 import type { DatabaseSyncLike } from '../../db/sqlite.js';
-import { getMeta, pragmaUserVersion, setMeta } from '../../db/meta.js';
 import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
@@ -29,6 +28,7 @@ import type { AuditMaintenance } from '../../base/ports/store.js';
 import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { getMeta, pragmaUserVersion, setMeta, META_KEY } from '../../db/meta.js';
 
 // Quality repair's issue list: which rows are defects and which of those a protection keeps.
 
@@ -76,7 +76,7 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
     return blockers;
   }
   assertBinaryCompatible(db);
-  if (getMeta(db, 'fts5_available', '0') === '1') {
+  if (getMeta(db, META_KEY.fts5Available, '0') === '1') {
     const columns = tableColumns(db, 'memories_fts');
     for (const column of ['id', 'content', 'tags']) {
       if (!columns.has(column)) blockers.push(`missing column: memories_fts.${column}`);
@@ -203,7 +203,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
     reason: 'quality-repair',
     dormantAt: now.toISOString(),
   });
-  if (getMeta(db, 'fts5_available', '0') === '1' && ftsRowExists(db, entry.id)) {
+  if (getMeta(db, META_KEY.fts5Available, '0') === '1' && ftsRowExists(db, entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
   appendAuditEvents(db, [
@@ -284,8 +284,6 @@ function repairAutomaticMemories(
   return repairOn(db, files, opts);
 }
 
-const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
-
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
  * null once done. `db` is opened writable without running migrations. */
 function repairQualityOnce(
@@ -294,11 +292,11 @@ function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): QualityRepairResult | null {
-  if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
+  if (getMeta(db, META_KEY.qualityRepairAuto) === '1') return null;
   // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-  const result = repairOn(db, files, { tenantId, protect, apply: true, doneKey: AUTO_REPAIR_META_KEY });
+  const result = repairOn(db, files, { tenantId, protect, apply: true, doneKey: META_KEY.qualityRepairAuto });
   // An unsupported schema changed nothing, so the next run tries again once a migration has run.
-  if (result.supported && result.backup === null) setMeta(db, AUTO_REPAIR_META_KEY, '1');
+  if (result.supported && result.backup === null) setMeta(db, META_KEY.qualityRepairAuto, '1');
   return result;
 }
 

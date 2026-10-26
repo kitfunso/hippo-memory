@@ -1,5 +1,5 @@
 // Best-effort browser launch for CLI verbs that write a file.
-import { spawn } from 'child_process';
+import { spawn } from 'node:child_process';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
 /** The part of a child process the launch reads. */

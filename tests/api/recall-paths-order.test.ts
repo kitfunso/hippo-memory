@@ -15,7 +15,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import type { AppendAuditOpts, AuditEvent } from '../../src/base/ports/store/types.js';
+import type { AppendAuditOptions, AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -33,7 +33,7 @@ const ROWS = [
 const CLAIM = 'the deploy will take 3 days';
 
 // A hint row of the caller's own, so the test sees where each path puts it among the recall's rows.
-const CALLER_ROW: AppendAuditOpts = { tenantId: TENANT, actor: 'order-test', op: 'recall_availability_detected' };
+const CALLER_ROW: AppendAuditOptions = { tenantId: TENANT, actor: 'order-test', op: 'recall_availability_detected' };
 
 interface Written {
   readonly audit: readonly (readonly [string, number | null])[];

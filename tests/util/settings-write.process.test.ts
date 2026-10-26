@@ -35,7 +35,7 @@ function seed(): string {
 
 /** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
 async function holdOpen(file: string) {
-  const script = `const fs = require('fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
+  const script = `const fs = require('node:fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
   const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
   await once(child.stdout, 'data');
   return child;

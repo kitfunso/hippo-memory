@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import * as path from 'path';
+import * as path from 'node:path';
 import {
   calculateStrength,
   calculateRewardFactor,

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../../src/store/sqlite/mirrors.js';
 import { makeRoot } from '../_helpers/make-root.js';

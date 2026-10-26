@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { type ImportResult, type TargetedImport, importEntriesInto } from './core.js';
 
 const SLUG_MAX_CHARS = 50;

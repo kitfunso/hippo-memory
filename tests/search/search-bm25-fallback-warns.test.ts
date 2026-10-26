@@ -1,7 +1,7 @@
 // When hybrid search drops to BM25 only for a fixable reason, it says so once per process.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';

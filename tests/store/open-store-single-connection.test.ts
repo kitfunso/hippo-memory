@@ -4,7 +4,7 @@ import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import * as path from 'node:path';
-import { createRequire, syncBuiltinESMExports } from 'module';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';

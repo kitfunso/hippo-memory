@@ -1,6 +1,6 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as path from 'path';
+import * as path from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';

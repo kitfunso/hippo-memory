@@ -239,6 +239,21 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   };
 }
 
+/** Books one inject turn: the JSON and markdown renders differ only in the item count and the token figure. */
+async function bookContextInject(view: ContextView, items: number, tokens: number): Promise<void> {
+  const uses = [
+    {
+      tenantId: view.tenantId,
+      sessionId: view.ledgerSessionId,
+      surface: view.pinnedOnly ? ('hook' as const) : ('context' as const),
+      event: 'inject' as const,
+      items,
+      tokens,
+    },
+  ];
+  await bookLedgerTurn({ uses, delivery: takeDelivery(view.rec) }, view.reach);
+}
+
 async function renderContextJson(view: ContextView, query: string): Promise<void> {
   const { result, rec } = view;
   const output = result.entries.map((r) => ({
@@ -262,22 +277,7 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  await bookLedgerTurn(
-    {
-      uses: [
-        {
-          tenantId: view.tenantId,
-          sessionId: view.ledgerSessionId,
-          surface: view.pinnedOnly ? 'hook' : 'context',
-          event: 'inject',
-          items: output.length,
-          tokens: estimateTokens(jsonText),
-        },
-      ],
-      delivery: takeDelivery(rec),
-    },
-    view.reach,
-  );
+  await bookContextInject(view, output.length, estimateTokens(jsonText));
 }
 
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
@@ -297,22 +297,7 @@ async function renderContextMarkdown(view: ContextView): Promise<void> {
   });
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  await bookLedgerTurn(
-    {
-      uses: [
-        {
-          tenantId: view.tenantId,
-          sessionId: view.ledgerSessionId,
-          surface: view.pinnedOnly ? 'hook' : 'context',
-          event: 'inject',
-          items: renderItems.length,
-          tokens: estimateTokens(text),
-        },
-      ],
-      delivery: takeDelivery(rec),
-    },
-    view.reach,
-  );
+  await bookContextInject(view, renderItems.length, estimateTokens(text));
 }
 
 export async function handleContext({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

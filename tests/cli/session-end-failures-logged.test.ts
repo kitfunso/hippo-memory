@@ -1,7 +1,7 @@
 // End to end through bin/hippo.js: a session-end step that fails leaves a line in the session log and one warn line.
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { InProcessResult } from '../_helpers/run-in-process.js';

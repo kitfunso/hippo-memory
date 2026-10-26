@@ -1,8 +1,8 @@
 // Transcript text naming a network host never reaches the filesystem: existsSync on \\host opens an SMB connection.
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import nodeFs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import * as path from 'path';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/host/config-file.js';
 import { recordSessionDigest, type DigestEdit } from '../../src/surface/capture/session-digest.js';

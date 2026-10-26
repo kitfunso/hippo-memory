@@ -1,6 +1,6 @@
 // One memory per ended session, built without a model call from the agent's final message and the files it changed.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './transcript.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';

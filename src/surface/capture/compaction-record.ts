@@ -1,6 +1,6 @@
 // What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
 // for it; the SQL is the adapter's compactions-record.ts.
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { isObjectLike, isStringValue, type PostCompactPayload } from '../../base/session/capture-contract.js';
 import {
   COMPACTION_ITEM_MAX_CHARS,

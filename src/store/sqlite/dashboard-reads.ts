@@ -1,7 +1,7 @@
 // hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the dashboard's SQL
 // functions, so the rows a read hands to JavaScript never grow with the tenant. The commit signal uses one held
 // connection.
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import {
   closeHippoDb,
   type DatabaseSyncLike,

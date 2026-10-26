@@ -1,8 +1,8 @@
 // A session that ends without compacting still gets a handoff, read from its own transcript.
 import { describe, it, expect, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

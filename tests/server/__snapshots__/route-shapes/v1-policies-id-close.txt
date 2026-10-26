@@ -1,0 +1,28 @@
+GET /v1/policies/1/close -> 404 not found
+POST /v1/policies/1/close -> 404 policy 1 not found for tenant default
+DELETE /v1/policies/1/close -> 404 not found
+PUT /v1/policies/1/close -> 404 not found
+GET /v1/policies/007/close -> 404 not found
+POST /v1/policies/007/close -> 404 policy 7 not found for tenant default
+DELETE /v1/policies/007/close -> 404 not found
+PUT /v1/policies/007/close -> 404 not found
+GET /v1/policies/abc/close -> 404 not found
+POST /v1/policies/abc/close -> 404 not found
+DELETE /v1/policies/abc/close -> 404 not found
+PUT /v1/policies/abc/close -> 404 not found
+GET /v1/policies/-1/close -> 404 not found
+POST /v1/policies/-1/close -> 404 not found
+DELETE /v1/policies/-1/close -> 404 not found
+PUT /v1/policies/-1/close -> 404 not found
+GET /v1/policies/%31/close -> 404 not found
+POST /v1/policies/%31/close -> 404 not found
+DELETE /v1/policies/%31/close -> 404 not found
+PUT /v1/policies/%31/close -> 404 not found
+GET /v1/policies//close -> 404 not found
+POST /v1/policies//close -> 404 not found
+DELETE /v1/policies//close -> 404 not found
+PUT /v1/policies//close -> 404 not found
+GET /v1/policies/1/close/ -> 404 not found
+POST /v1/policies/1/close/ -> 404 not found
+DELETE /v1/policies/1/close/ -> 404 not found
+PUT /v1/policies/1/close/ -> 404 not found

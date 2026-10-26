@@ -19,6 +19,7 @@ import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
@@ -28,9 +29,8 @@ afterAll(() => {
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 const TENANT = 'default';
-const DAY = 86_400_000;
 
-const ago = (days: number): string => new Date(NOW.getTime() - days * DAY).toISOString();
+const ago = (days: number): string => new Date(NOW.getTime() - days * DAY_MS).toISOString();
 
 function mk(id: string, content: string, ageDays: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const base = createMemory(content, { baseHalfLifeDays: 30, tenantId: TENANT });

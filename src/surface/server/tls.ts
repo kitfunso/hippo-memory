@@ -3,12 +3,12 @@
 import { createServer as createHttpServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { errorMessage, log } from '../../base/util/log.js';
-import type { ServeOpts } from './types.js';
+import type { ServeOptions } from './types.js';
 
 // A year; no includeSubDomains, since hippo cannot speak for the other hosts under its domain.
 const HSTS = 'max-age=31536000';
 
-export function createListener(tls: ServeOpts['tls'], onRequest: RequestListener): Server {
+export function createListener(tls: ServeOptions['tls'], onRequest: RequestListener): Server {
   if (!tls) return createHttpServer(onRequest);
   // Only a listener that holds the certificate can promise https; behind a proxy, the proxy sends this header.
   const withHsts: RequestListener = (req, res) => {
@@ -29,11 +29,9 @@ export class CleartextBindError extends Error {
   constructor(readonly host: string) {
     super(
       `hippo serve: refusing to listen on ${host} without TLS, since API keys and memory text would travel in ` +
-        `cleartext. ` +
-        'Pass --tls-cert and --tls-key (or set HIPPO_TLS_CERT and HIPPO_TLS_KEY) to serve HTTPS. If a ' +
-        'TLS-terminating ' +
-        'proxy sits in front, ' +
-        'start with --allow-cleartext, set HIPPO_ALLOW_CLEARTEXT=1, or pass allowCleartext: true to serve().',
+        `cleartext. Pass --tls-cert and --tls-key (or set HIPPO_TLS_CERT and HIPPO_TLS_KEY) to serve HTTPS. If a ` +
+        `TLS-terminating proxy sits in front, start with --allow-cleartext, set HIPPO_ALLOW_CLEARTEXT=1, or pass ` +
+        `allowCleartext: true to serve().`,
     );
     this.name = 'CleartextBindError';
   }
@@ -45,7 +43,7 @@ export class CleartextBindError extends Error {
  */
 export function assertTlsOrCleartextAllowed(
   host: string,
-  tls: ServeOpts['tls'],
+  tls: ServeOptions['tls'],
   loopbackHosts: ReadonlySet<string>,
   allowCleartext: boolean,
 ): void {

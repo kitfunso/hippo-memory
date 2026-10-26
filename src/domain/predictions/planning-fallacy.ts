@@ -1,6 +1,6 @@
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
-import type { AppendAuditOpts, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
 import type { PlanningFallacyOutput, PlanningFallacyWatching } from '../../base/records/planning-fallacy.js';
 
 const TARGET_ID_CHARS = 100;
@@ -20,7 +20,7 @@ export function autodebiasMode(runtime: RuntimeSettings | undefined): Autodebias
 /** The output a claim earns from its evidence, and the audit row that records the decision when there is one. */
 export interface PlanningFallacyDecision {
   output: PlanningFallacyOutput;
-  audit?: AppendAuditOpts;
+  audit?: AppendAuditOptions;
 }
 
 /** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */

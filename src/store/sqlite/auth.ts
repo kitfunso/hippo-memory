@@ -16,7 +16,7 @@ import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';
 import type { ApiKeyRecord } from '../../base/ports/store/types.js';
-import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../base/ports/store/keys.js';
+import type { ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../../base/ports/store/keys.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 function verifyKey(plaintext: string, stored: string): boolean {
@@ -148,7 +148,7 @@ interface ApiKeyFilter {
   params: Array<string | number>;
 }
 
-function apiKeyFilter(opts: ListApiKeysOpts): ApiKeyFilter {
+function apiKeyFilter(opts: ListApiKeysOptions): ApiKeyFilter {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
   if (opts.active) {
@@ -172,7 +172,7 @@ function apiKeyFilter(opts: ListApiKeysOpts): ApiKeyFilter {
 }
 
 /** Keys newest first, with their row ids, filtered and limited in SQL. */
-export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListRow[] {
+export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOptions): ApiKeyListRow[] {
   const { where, params } = apiKeyFilter(opts);
   const after = keysetAfter('id', 'id', opts.after);
   params.push(...after.params);

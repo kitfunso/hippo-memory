@@ -1,6 +1,6 @@
 // One way to replace a file a user or another program depends on: write a temp file beside it, then rename over it.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
 
 const RENAME_RETRY_MS = 1000;
@@ -60,7 +60,7 @@ function removeTemp(tmp: string): void {
 /**
  * Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk.
  */
-function writeFlushed(tmp: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOpts): void {
+function writeFlushed(tmp: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOptions): void {
   const fd = fs.openSync(tmp, 'w', (old?.mode ?? opts.mode) & 0o777);
   try {
     fs.writeFileSync(fd, data, 'utf8');
@@ -90,7 +90,12 @@ function flushFolder(dir: string): void {
   }
 }
 
-function replaceViaTemp(target: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOpts): void {
+function replaceViaTemp(
+  target: string,
+  data: string | Uint8Array,
+  old: fs.Stats | undefined,
+  opts: WriteOptions,
+): void {
   const tmp = `${target}.${process.pid}.tmp`;
   try {
     writeFlushed(tmp, data, old, opts);
@@ -126,14 +131,14 @@ export interface AtomicWriteOptions {
   readonly inPlace?: boolean;
 }
 
-type WriteOpts = Required<Pick<AtomicWriteOptions, 'durable' | 'mode'>>;
+type WriteOptions = Required<Pick<AtomicWriteOptions, 'durable' | 'mode'>>;
 
 /** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old
  * content or the new, whole.
  * A file with other hard links, or a rename the platform refuses (logged), is written in place unless `inPlace` is
  * false: a crash mid-write can leave it truncated. */
 export function writeFileAtomic(file: string, data: string | Uint8Array, opts: AtomicWriteOptions = {}): void {
-  const write: WriteOpts = { durable: opts.durable !== false, mode: opts.mode ?? 0o666 };
+  const write: WriteOptions = { durable: opts.durable !== false, mode: opts.mode ?? 0o666 };
   const inPlace = opts.inPlace !== false;
   const target = writeTarget(file);
   const old = fs.statSync(target, { throwIfNoEntry: false });

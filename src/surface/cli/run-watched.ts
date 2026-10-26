@@ -1,5 +1,5 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
-import type { ChildProcess, SpawnOptions } from 'child_process';
+import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */

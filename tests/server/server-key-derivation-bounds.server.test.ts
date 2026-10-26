@@ -5,7 +5,7 @@ import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import type { ServeOpts } from '../../src/server.js';
+import type { ServeOptions } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -54,7 +54,7 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-async function start(extra: Partial<ServeOpts> = {}): Promise<void> {
+async function start(extra: Partial<ServeOptions> = {}): Promise<void> {
   const handle = await serve({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' }, ...extra });
   url = handle.url;
   stop = handle.stop;

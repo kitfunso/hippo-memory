@@ -1,7 +1,7 @@
 // The `hippo sleep` verb; main() loads it lazily, since most invocations never sleep.
 
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import { importForStore } from '../../api/agent-memories.js';

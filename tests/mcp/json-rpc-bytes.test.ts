@@ -1,8 +1,5 @@
 // The bytes of every JSON-RPC reply kind the MCP transports write, pinned as strings so a change to how replies are built cannot move a key.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
@@ -18,11 +15,12 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { testInfra } from '../_helpers/infra.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-rpc-bytes-'));
+  root = makeRoot('rpc-bytes', { init: false });
   vi.spyOn(log, 'warn').mockImplementation(() => undefined);
   vi.spyOn(log, 'info').mockImplementation(() => undefined);
   vi.spyOn(log, 'error').mockImplementation(() => undefined);
@@ -31,7 +29,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  rmSync(root, { recursive: true, force: true });
 });
 
 function ctx(over: Partial<McpContext> = {}): McpContext {

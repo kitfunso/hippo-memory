@@ -1,6 +1,6 @@
 // Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no command.
 
-import * as path from 'path';
+import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';

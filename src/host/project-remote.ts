@@ -1,7 +1,7 @@
 // A checkout's `origin` remote, read from its git config file and normalized into a project id; no git process, so the
 // prompt hook can call it.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isObjectLike, isStringValue } from '../base/session/capture-contract.js';
 import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
 

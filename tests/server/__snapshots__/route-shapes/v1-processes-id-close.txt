@@ -1,0 +1,28 @@
+GET /v1/processes/1/close -> 404 not found
+POST /v1/processes/1/close -> 404 process 1 not found for tenant default
+DELETE /v1/processes/1/close -> 404 not found
+PUT /v1/processes/1/close -> 404 not found
+GET /v1/processes/007/close -> 404 not found
+POST /v1/processes/007/close -> 404 process 7 not found for tenant default
+DELETE /v1/processes/007/close -> 404 not found
+PUT /v1/processes/007/close -> 404 not found
+GET /v1/processes/abc/close -> 404 not found
+POST /v1/processes/abc/close -> 404 not found
+DELETE /v1/processes/abc/close -> 404 not found
+PUT /v1/processes/abc/close -> 404 not found
+GET /v1/processes/-1/close -> 404 not found
+POST /v1/processes/-1/close -> 404 not found
+DELETE /v1/processes/-1/close -> 404 not found
+PUT /v1/processes/-1/close -> 404 not found
+GET /v1/processes/%31/close -> 404 not found
+POST /v1/processes/%31/close -> 404 not found
+DELETE /v1/processes/%31/close -> 404 not found
+PUT /v1/processes/%31/close -> 404 not found
+GET /v1/processes//close -> 404 not found
+POST /v1/processes//close -> 404 not found
+DELETE /v1/processes//close -> 404 not found
+PUT /v1/processes//close -> 404 not found
+GET /v1/processes/1/close/ -> 404 not found
+POST /v1/processes/1/close/ -> 404 not found
+DELETE /v1/processes/1/close/ -> 404 not found
+PUT /v1/processes/1/close/ -> 404 not found

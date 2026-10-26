@@ -3,7 +3,7 @@
 // `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
 import { getHippoRoot } from './host/project-identity.js';

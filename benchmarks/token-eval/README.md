@@ -1,6 +1,6 @@
 # Token-efficiency evals (ROADMAP Part IX, Track TE)
 
-Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm test`, except the eight that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns and the four z0-codex run, guards, faults and install files): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`, each Codex file on its own runner.
+Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/eval/token-eval*`) run with `npm test`, except the eight that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns and the four z0-codex run, guards, faults and install files): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`, each Codex file on its own runner.
 
 | Harness | Roadmap | Needs | What it answers |
 |---|---|---|---|
@@ -47,7 +47,7 @@ It replays each trace through the real hook in two arms:
 - `every-turn`: the behaviour before TE2;
 - `skip-unchanged`: the default.
 
-It prices only hippo's injected text: written to the cache once at 1.25x, then re-read at 0.1x on every later prompt until a compaction drops it. `tests/token-eval-replay.test.ts` runs a short trace in CI.
+It prices only hippo's injected text: written to the cache once at 1.25x, then re-read at 0.1x on every later prompt until a compaction drops it. `tests/eval/token-eval-replay.test.ts` runs a short trace in CI.
 
 **Latest run, `replay-results.json`, on synthetic traces:**
 
@@ -69,7 +69,7 @@ node scripts/token-eval/budget-curve.mjs --data benchmarks/longmemeval/data/long
 
 - **Data:** download `longmemeval_s_cleaned.json` from the LongMemEval release into `benchmarks/longmemeval/data/`.
 - **Default without data:** it runs on the bundled `synthetic_smoke.json`. Each of those haystacks is about 200 tokens, so every arm reaches the evidence at every budget. That run checks the mechanics and says nothing about hippo.
-- **Tests:** `tests/token-eval-budget-curve.test.ts` checks the scoring on a haystack built so that recency and relevance disagree.
+- **Tests:** `tests/eval/token-eval-budget-curve.test.ts` checks the scoring on a haystack built so that recency and relevance disagree.
 - **Deferred:** an LLMLingua-2 compression arm.
 
 ## Z0 built-in memory A/B (Claude Code arms)
@@ -269,7 +269,7 @@ node scripts/token-eval/z0-regrade.mjs grading --out C:/z0-runs/r1
 - **Records.** A Codex apply's record has `tool: 'codex'`. Usage and turns come from the agent's rollouts (`turnsSource: 'rollout'`). `costUsd` is null, since Codex prints no cost, and `usage.extra` is zero, since an apply never resumes. The G1 read check covers the agent's rollouts. Codex's own memory threads count only for reads outside the run. The record also carries `codexHooksFired`, `codexInternalHooksFired`, `codexVersion`, `codexMemories`, `codexHookTrust`, `codexAuth`, `codexCalls`, `codexUnparsedCalls`, `codexUsageOdd`, `codexUsageRaw`, `codexInternalUsage` and `codexStrayRollouts`.
 - **Known limits.** A killed or timed-out X2 session starts no worker, so its cell waits the full bound and records null. Hippo's wrapper deletes `codex-sleep.log` when each session starts, so a worker that fails before its first line also leaves its cell to wait the full bound and record null; the last cell's log stays only when that delete fails. The runner keeps the log's text from the start of each attempt and skips a log that has not changed since, so that cell gets its own worker's verdict, or null after the bound, never the last cell's. A worker whose transcript scan or digest throws writes no end line, so its cell records null after the bound. After a cell that timed out, the old worker's late end line can land after the new worker's start line and give an early false. Until the smoke stage names Codex's own token files, a token found in any file stops the run. A file the sweep cannot read or delete is named in the error, and the run stops.
 
-**Checked so far.** The runner is exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts` and the `tests/token-eval-z0-*.test.ts` files (homes, turns, surfaces, surface reads, snapshot failure, timeout, read check, leaks, chain and grading); every corpus those tests write is checked against a local copy of the analyzer's `z0-record/1` contract. No real Claude Code session has run under the Z0 arms yet: the stage 1 smoke report settles that auto memory saves in a per-run config dir, that A0 gets none, and that the OAuth token signs in with an empty config dir. Set X is exercised the same way with a stand-in for Codex (`tests/fixtures/fake-codex.mjs`) in the `tests/token-eval-z0-codex-*.test.ts` files. No real Codex session has run under the X arms yet: the smoke stage settles the hook trust, the memory wait and which Codex files hold the login.
+**Checked so far.** The runner is exercised end to end with a stand-in for Claude Code in `tests/eval/token-eval-ab-run.test.ts` and the `tests/eval/token-eval-z0-*.test.ts` files (homes, turns, surfaces, surface reads, snapshot failure, timeout, read check, leaks, chain and grading); every corpus those tests write is checked against a local copy of the analyzer's `z0-record/1` contract. No real Claude Code session has run under the Z0 arms yet: the stage 1 smoke report settles that auto memory saves in a per-run config dir, that A0 gets none, and that the OAuth token signs in with an empty config dir. Set X is exercised the same way with a stand-in for Codex (`tests/fixtures/fake-codex.mjs`) in the `tests/eval/token-eval-z0-codex-*.test.ts` files. No real Codex session has run under the X arms yet: the smoke stage settles the hook trust, the memory wait and which Codex files hold the login.
 
 ## A/B analysis (TE5)
 

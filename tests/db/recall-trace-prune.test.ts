@@ -10,8 +10,8 @@ import {
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
-const DAY_MS = 86_400_000;
 // The prune counts back from the real clock, so the seeds are stamped from it too.
 const daysAgo = (days: number): string => new Date(Date.now() - days * DAY_MS).toISOString();
 const TRACE_PRUNE = /^\s*DELETE FROM recall_traces/;

@@ -18,12 +18,12 @@ import { writeEntry } from './root-forms.js';
 import { initTestStore } from './store-template.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
-export const DAY = 86_400_000;
 
 export function isoAgo(days: number): string {
-  return new Date(NOW - days * DAY).toISOString();
+  return new Date(NOW - days * DAY_MS).toISOString();
 }
 
 export interface TmpStore {

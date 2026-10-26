@@ -7,8 +7,8 @@ import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadContextCandidates } from '../_helpers/root-forms.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
-const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 5, 1);
 const CAP = 5;
 const HALF_LIVES = [3, 7, 30];
@@ -29,7 +29,7 @@ function seed(n: number): string {
         ...createMemory(`old row ${i}`, { tenantId: 'default' }),
         id: `m${String(i).padStart(5, '0')}`,
         created: new Date(NOW - (n - i) * 60_000).toISOString(),
-        lastRetrieved: new Date(NOW - ageOf(i) * DAY).toISOString(),
+        lastRetrieved: new Date(NOW - ageOf(i) * DAY_MS).toISOString(),
         halfLifeDays: HALF_LIVES[i % 3]!,
       });
     }

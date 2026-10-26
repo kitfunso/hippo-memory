@@ -4,24 +4,29 @@ import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
-import type { CompleteGoalOpts, PushGoalOpts } from '../../../src/base/ports/store/goals.js';
+import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';
 import * as goalsSql from '../../../src/store/sqlite/goals.js';
 import * as predictionsSql from '../../../src/store/sqlite/predictions.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { ActiveGoals, GetActiveGoalsOpts, Goal, PredictionBaserate } from '../../../src/base/ports/store/types.js';
+import type {
+  ActiveGoals,
+  GetActiveGoalsOptions,
+  Goal,
+  PredictionBaserate,
+} from '../../../src/base/ports/store/types.js';
 import type { Prediction, PredictionClose } from '../../../src/base/ports/store/objects.js';
 import type { ClosureState } from '../../../src/base/records/prediction.js';
 
-export async function pushGoal(hippoRoot: string, opts: PushGoalOpts): Promise<Goal> {
+export async function pushGoal(hippoRoot: string, opts: PushGoalOptions): Promise<Goal> {
   return await sqliteStore(hippoRoot).goals.push(opts.tenantId, opts);
 }
 
-export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
+export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOptions): ActiveGoals {
   return onHandle(hippoRoot, (db) => goalsSql.activeGoalsWithPolicies(db, opts));
 }
 
-export async function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): Promise<void> {
+export async function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOptions): Promise<void> {
   return await sqliteStore(hippoRoot).goals.complete(resolveTenantId({}), goalId, opts);
 }
 

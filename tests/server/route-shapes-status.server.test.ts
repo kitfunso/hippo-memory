@@ -73,6 +73,14 @@ async function replyLine(base: string, method: string, path: string): Promise<st
   return `${method} ${path} -> ${res.status}${body.error === undefined ? '' : ` ${body.error}`}`;
 }
 
+// The path of each row, once: a path shared by a GET row and a POST row is asked under every method either way.
+const TEMPLATES = [...new Set(ROWS.map((row) => row.slice(row.indexOf(' ') + 1)))];
+const fileStem = (template: string): string =>
+  template
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+
 describe('every /v1 route shape under every method', () => {
   let handle: ServerHandle;
 
@@ -92,12 +100,13 @@ describe('every /v1 route shape under every method', () => {
     expect([...rows].sort()).toEqual([...ROWS].sort());
   });
 
-  it.skipIf(needsHippoDb('team'))('answers each path with the same status and error text', async () => {
-    const paths = [...new Set(ROWS.flatMap((row) => pathsOf(row.slice(row.indexOf(' ') + 1))))];
+  // One file per route template, so a changed reply shows as a small diff under the route it belongs to.
+  const eachTemplate = needsHippoDb('team') ? it.skip.each(TEMPLATES) : it.each(TEMPLATES);
+  eachTemplate('answers %s with the same status and error text', async (template) => {
     const lines: string[] = [];
-    for (const path of paths) {
+    for (const path of pathsOf(template)) {
       for (const method of METHODS) lines.push(await replyLine(handle.url, method, path));
     }
-    expect(lines).toMatchSnapshot();
+    await expect(`${lines.join('\n')}\n`).toMatchFileSnapshot(`./__snapshots__/route-shapes/${fileStem(template)}.txt`);
   });
 });

@@ -1,0 +1,28 @@
+GET /v1/decisions/1/supersede -> 404 not found
+POST /v1/decisions/1/supersede -> 400 text is required (non-empty string)
+DELETE /v1/decisions/1/supersede -> 404 not found
+PUT /v1/decisions/1/supersede -> 404 not found
+GET /v1/decisions/007/supersede -> 404 not found
+POST /v1/decisions/007/supersede -> 400 text is required (non-empty string)
+DELETE /v1/decisions/007/supersede -> 404 not found
+PUT /v1/decisions/007/supersede -> 404 not found
+GET /v1/decisions/abc/supersede -> 404 not found
+POST /v1/decisions/abc/supersede -> 404 not found
+DELETE /v1/decisions/abc/supersede -> 404 not found
+PUT /v1/decisions/abc/supersede -> 404 not found
+GET /v1/decisions/-1/supersede -> 404 not found
+POST /v1/decisions/-1/supersede -> 404 not found
+DELETE /v1/decisions/-1/supersede -> 404 not found
+PUT /v1/decisions/-1/supersede -> 404 not found
+GET /v1/decisions/%31/supersede -> 404 not found
+POST /v1/decisions/%31/supersede -> 404 not found
+DELETE /v1/decisions/%31/supersede -> 404 not found
+PUT /v1/decisions/%31/supersede -> 404 not found
+GET /v1/decisions//supersede -> 404 not found
+POST /v1/decisions//supersede -> 404 not found
+DELETE /v1/decisions//supersede -> 404 not found
+PUT /v1/decisions//supersede -> 404 not found
+GET /v1/decisions/1/supersede/ -> 404 not found
+POST /v1/decisions/1/supersede/ -> 404 not found
+DELETE /v1/decisions/1/supersede/ -> 404 not found
+PUT /v1/decisions/1/supersede/ -> 404 not found

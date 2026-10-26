@@ -263,14 +263,14 @@ jobs:
       - run: npm run build
       # The zero-dep `test` job skips these; here the backend is installed.
       - name: Cross-encoder against the real model
-        run: npx vitest run tests/rerankers/cross-encoder.test.ts
+        run: npx vitest run tests/rerankers/cross-encoder.slow.test.ts
         env:
           HIPPO_REQUIRE_CROSS_ENCODER: '1'
       - name: Micro-eval
         run: python3 benchmarks/micro/run.py --verbose
       # The zero-dep `test` job skips these; a missing backend here fails instead.
       - name: Embedding tests against the real backend
-        run: npx vitest run tests/store/lifecycle-stress.test.ts tests/api/global-row-embeddings.process.test.ts
+        run: npx vitest run tests/store/lifecycle-stress.slow.test.ts tests/api/global-row-embeddings.process.test.ts
         env:
           HIPPO_REQUIRE_EMBEDDINGS: '1'
       # After the micro-eval, which has fetched the embedding model into this folder by now on a cold cache too.

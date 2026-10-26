@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity, deriveOriginProject } from '../../src/host/project-identity.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';

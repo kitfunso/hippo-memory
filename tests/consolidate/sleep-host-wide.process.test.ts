@@ -13,7 +13,6 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -23,11 +22,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { DAY_MS } from '../../src/base/util/time.js';
+import { META_KEY } from '../../src/db/meta.js';
 
 oneRequestPerTest();
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
-const DAY = 86_400_000;
 const TENANTS = ['default', 'acme', 'globex'] as const;
 const SEEDED_SIM = '2000-01-01T00:00:00.000Z';
 const CLUSTER_HEADER = '[Consolidated pattern from 3 related memories, newest first]';
@@ -50,8 +50,8 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
       ...opts,
     }),
     id: `mem_${tenant}_${String(n).padStart(2, '0')}`,
-    created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
-    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
+    created: new Date(NOW.getTime() - ageDays * DAY_MS + n++ * 1000).toISOString(),
+    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY_MS).toISOString(),
     originProject: 'hippo',
     ...extra,
   });
@@ -141,8 +141,8 @@ async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<str
       db,
       rows.filter((_, i) => i % 3 === 0).map((r, i) => particle(r.id, i)),
     );
-    setMeta(db, HALF_LIFE_BASE_META_KEY, '7');
-    setMeta(db, TYPED_HALF_LIFE_META_KEY, '');
+    setMeta(db, META_KEY.halfLifeBase, '7');
+    setMeta(db, META_KEY.typedHalfLife, '');
     const globex = rowsOf('globex')
       .slice(0, 3)
       .map((r) => r.content)
@@ -224,8 +224,8 @@ function hostState(root: string) {
       dormant: lines(`SELECT ${columnsBut(db, 'dormant_memories', ['updated_at'])} FROM dormant_memories ORDER BY id`),
       conflicts: lines('SELECT * FROM memory_conflicts ORDER BY id'),
       runs: lines('SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY id'),
-      sleepCount: getMeta(db, 'sleep_count', '0'),
-      halfLifeBase: [getMeta(db, HALF_LIFE_BASE_META_KEY), getMeta(db, TYPED_HALF_LIFE_META_KEY)],
+      sleepCount: getMeta(db, META_KEY.sleepCount, '0'),
+      halfLifeBase: [getMeta(db, META_KEY.halfLifeBase), getMeta(db, META_KEY.typedHalfLife)],
       audit: lines('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id'),
       particles: lines(
         `SELECT memory_id, hex(position_blob) AS position, hex(velocity_blob) AS velocity, mass, charge, temperature, ` +
