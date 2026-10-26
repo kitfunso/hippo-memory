@@ -7,13 +7,13 @@ import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const T = 'default';
+const { sqliteStore, objectsAt } = sessionPerTest();
 
 function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
   const db = openHippoDb(home);

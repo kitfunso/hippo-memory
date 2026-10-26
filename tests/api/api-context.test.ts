@@ -21,16 +21,18 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { remember, contextGet } from '../../src/api/index.js';
-import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
+import { cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { apiCtx } = sessionPerTest();
 
 function tmpHome() {
   const home = makeRoot('api-ctx');
@@ -41,9 +43,8 @@ function tmpHome() {
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
-    restore: () => {
-      removeDir(home);
-    },
+    // Removed once the test is done, after its session has closed its handles.
+    restore: () => onTestFinished(() => removeDir(home)),
   };
 }
 

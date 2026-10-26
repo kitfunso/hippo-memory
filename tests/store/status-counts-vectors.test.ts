@@ -5,9 +5,8 @@ import * as path from 'node:path';
 import { calculateStrength, confidenceFacets, createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
+import { listMemoryConflicts, updateStats } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { handleStatus } from '../../src/surface/cli/status.js';
 import { runCli } from '../../src/cli.js';
@@ -21,6 +20,9 @@ import {
   saveStoredVectors,
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 let home: string;

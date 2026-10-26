@@ -1,7 +1,7 @@
 // Pins which memories MCP hippo_recall returns, and in what order, across its modes and arguments.
 // Ids are random per seed, so rows are named by label.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -10,13 +10,11 @@ import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/s
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   pushGoal,
   saveEmbeddingIndex,
-  writeEntry,
   writeEntriesTogether,
   saveActiveTaskSnapshot,
   appendSessionEvent,
@@ -26,10 +24,12 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -186,9 +186,9 @@ function withEmbeddings(s: Seeded): void {
 const EMBED_CONFIG = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
 
 describe('MCP hippo_recall ranking', () => {
-  const homes: string[] = [];
+  // Removed once the test is done, after its session has closed its handles.
   const track = (s: Seeded): Seeded => {
-    homes.push(s.home);
+    onTestFinished(() => removeDir(s.home));
     return s;
   };
 
@@ -198,7 +198,6 @@ describe('MCP hippo_recall ranking', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    for (const h of homes.splice(0)) removeDir(h);
   });
 
   it('default hybrid mode, default budget', async () => {

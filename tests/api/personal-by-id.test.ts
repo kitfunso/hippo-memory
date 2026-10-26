@@ -11,12 +11,13 @@ import { generateId, type MemoryKind } from '../../src/base/memory/entry.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { listRejectionsForTenant, rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx, testReach } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore, apiCtx } = sessionPerTest();
 
 let root: string;
 let globalRoot: string;
@@ -82,8 +83,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeDir(root);
-  removeDir(globalRoot);
 });
 
 describe("by-id writes on someone else's personal row", () => {

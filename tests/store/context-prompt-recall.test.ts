@@ -12,14 +12,14 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { contextGet } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 const PROJECT = 'proj-a';
 

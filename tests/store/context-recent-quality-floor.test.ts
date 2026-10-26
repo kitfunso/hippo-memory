@@ -15,7 +15,7 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import * as path from 'node:path';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -25,15 +25,16 @@ import { contextGet } from '../../src/api/index.js';
 import { runCli } from '../../src/cli.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
+import { cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 function tmpHome() {
   const home = makeRoot('df3');
@@ -43,10 +44,11 @@ function tmpHome() {
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
-    restore: () => {
-      removeDir(home);
-      rmSync(globalTmp, { recursive: true, force: true });
-    },
+    restore: () =>
+      onTestFinished(() => {
+        removeDir(home);
+        rmSync(globalTmp, { recursive: true, force: true });
+      }),
   };
 }
 
@@ -507,10 +509,6 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     // and pinnedGlobal is populated.
     globalTmp = makeRoot('df3-dedupe-global');
     vi.stubEnv('HIPPO_HOME', globalTmp);
-  });
-
-  afterEach(() => {
-    removeDir(home);
   });
 
   it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {

@@ -8,11 +8,12 @@ import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } fro
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';

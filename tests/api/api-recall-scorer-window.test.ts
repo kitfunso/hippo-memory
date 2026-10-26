@@ -14,15 +14,16 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:f3', role: 'admin' });
@@ -42,7 +43,6 @@ describe('RecallOptions.scorerWindow', () => {
   beforeEach(() => {
     root = makeRoot('f3');
   });
-  afterEach(() => removeDir(root));
 
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
     // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`

@@ -15,10 +15,11 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { supersede } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
+import { deleteEntry, loadAllDirtySummaries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });

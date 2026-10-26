@@ -1,8 +1,7 @@
 // captureSessionTexts: the session-end capture for a caller that read its transcript on another machine.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
@@ -20,9 +19,12 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compaction-hooks.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',
@@ -278,7 +280,7 @@ describe('captureSessionTexts against the CLI', () => {
       expect(contents(root)).toEqual(contents(s.hippoRoot));
       expect(contents(root)).toEqual([...ITEMS].sort());
     } finally {
-      removeScratch(s);
+      onTestFinished(() => removeScratch(s));
     }
   });
 });

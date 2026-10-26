@@ -20,8 +20,11 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { projectNameList, projectNameMerge, projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

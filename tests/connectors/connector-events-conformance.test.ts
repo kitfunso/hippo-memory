@@ -35,6 +35,9 @@ import {
   type ParkedLetter,
 } from '../_helpers/connector-sides.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:github';

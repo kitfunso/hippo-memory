@@ -34,6 +34,9 @@ import {
   useCallerStore,
   withDb,
 } from '../_helpers/compaction-callers.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 useCallerStore();
 

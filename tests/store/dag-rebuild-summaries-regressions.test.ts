@@ -10,11 +10,13 @@ import * as dagModule from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
 import { configReader } from '../../src/host/config-file.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
+import { loadAllDirtySummaries, applyRebuildResult } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

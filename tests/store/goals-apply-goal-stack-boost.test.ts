@@ -5,7 +5,7 @@
  * known-correct primitive.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -18,11 +18,12 @@ import type { GoalStackBoostOptions } from '../../src/domain/search/goal-boost.j
 import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { remember } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 interface ScoredRow {
   entry: MemoryEntry;
@@ -168,9 +169,6 @@ describe('the session goal boost policy branches', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('goal-policy-branches');
-  });
-  afterEach(() => {
-    removeDir(root);
   });
 
   function stored(content: string, tags: string[], schemaFit?: number): MemoryEntry {

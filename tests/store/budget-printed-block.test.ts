@@ -14,11 +14,13 @@ import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
+import { loadLastRecall } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha',

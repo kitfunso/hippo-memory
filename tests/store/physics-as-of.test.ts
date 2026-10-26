@@ -8,15 +8,16 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -77,7 +78,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  removeDir(root);
 });
 
 const ids = (results: SearchResult[]): string[] => results.map((r) => r.entry.id);

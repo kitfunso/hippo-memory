@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { summarizeFailures } from '../../src/store/sqlite/failure-log.js';
 import { failuresPerSession } from '../../src/base/records/failure-repeats.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { failureSignature, lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
@@ -19,6 +18,9 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import type { FailureOutcome } from '../../src/base/ports/store/rejections.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore } = sessionPerTest();
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 

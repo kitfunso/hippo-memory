@@ -12,17 +12,18 @@
  * 7. CRIT regression: a date-only valid_from is returned by a date-only as-of for the same day (normalization)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { POLICY, loadPolicies, policiesAsOf, normalizePolicyDate } from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { savePolicy } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { objectsAt } = sessionPerTest();
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -56,7 +57,6 @@ describe('policies store (bi-temporal first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('policies');
   });
-  afterEach(() => removeDir(home));
 
   it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', async () => {
     const before = new Date().toISOString();

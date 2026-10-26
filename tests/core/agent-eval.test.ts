@@ -21,7 +21,9 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntriesIn, writeEntryIn } from '../../src/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
@@ -201,6 +203,8 @@ interface SimResult {
   memoryRecalled: boolean; // true = relevant memory was in top-5 results
 }
 
+const { session } = sessionPerTest();
+
 /**
  * Simulate an agent running tasks with a given memory condition.
  *
@@ -211,12 +215,13 @@ interface SimResult {
  */
 function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[] {
   const tmpDir = makeRoot(`eval-${mode}`);
+  const files = storeFilesOf(tmpDir, { session: session() });
 
   // For static mode: pre-load all lessons
   if (mode === 'static') {
     for (const cat of TRAP_CATEGORIES) {
       const entry = createMemory(cat.lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: cat.tags });
-      writeEntry(tmpDir, entry);
+      writeEntryIn(files, entry);
     }
   }
 
@@ -236,7 +241,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
     }
 
     // Search memory for relevant guidance
-    const entries = loadAllEntries(tmpDir, 'default');
+    const entries = loadAllEntriesIn(files);
     const searchResults = rankBm25(task.recallQuery, entries, { now: evalNow(), budget: 4000 });
     const topIds = searchResults.slice(0, 5);
 
@@ -257,7 +262,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
       // Strengthen the recalled memories
       if (mode === 'hippo') {
         const toUpdate = markRetrieved(topIds.map((r) => r.entry));
-        for (const u of toUpdate) writeEntry(tmpDir, u);
+        for (const u of toUpdate) writeEntryIn(files, u);
       }
       results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: false, memoryRecalled: true });
     } else {
@@ -271,7 +276,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
           tags: [...cat.tags, 'error'],
           emotionalValence: 'negative',
         });
-        writeEntry(tmpDir, lesson);
+        writeEntryIn(files, lesson);
       }
     }
   }

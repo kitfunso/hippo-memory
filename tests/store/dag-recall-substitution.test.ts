@@ -14,8 +14,10 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:recall-sub', role: 'admin' });

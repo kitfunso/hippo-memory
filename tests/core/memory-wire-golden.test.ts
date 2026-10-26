@@ -15,9 +15,12 @@ import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { everyFieldEntry, GOLDEN_TENANT, recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';
-import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 const savedCwd = process.cwd();
 let base: string;

@@ -1,6 +1,6 @@
 // A store that answers only through the port, under a kind that is not hippo.db, while the port's own methods reach
 // hippo.db's rows.
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, type RequestStores } from '../../src/db/index.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { auditRowsOn } from './audit-rows.js';
 import {
@@ -39,12 +39,14 @@ export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, Fol
 }
 
 /** hippo.db's required groups and of the optional ones only `keep`: with none kept, an add-on store at its smallest.
- * Base methods are listed by hand so one added to the port fails to compile here until it is wired. */
+ * Base methods are listed by hand so one added to the port fails to compile here until it is wired. A `session`
+ * keeps one handle across calls, as an add-on store's own connection pool would. */
 export function portOnlyStore<G extends OptionalGroup = never>(
   hippoRoot: string,
   keep: readonly G[] = [],
+  session?: RequestStores,
 ): StoreWith<G> {
-  const inner = sqliteStore(hippoRoot);
+  const inner = sqliteStore(hippoRoot, { session });
   const leftOut: ReadonlySet<string> = new Set<OptionalGroup>(
     OPTIONAL_GROUPS.filter((group) => !keep.some((k) => k === group)),
   );
@@ -113,10 +115,11 @@ export interface PortOnlySide<G extends OptionalGroup = never> {
 export function portOnlySide<G extends OptionalGroup = never>(
   hippoRoot: string,
   keep: readonly G[] = [],
+  session?: RequestStores,
 ): PortOnlySide<G> {
   const calls: string[] = [];
   return {
-    store: logged(portOnlyStore(hippoRoot, keep), calls),
+    store: logged(portOnlyStore(hippoRoot, keep, session), calls),
     calls,
     auditRows: () => {
       const db = openHippoDb(hippoRoot);

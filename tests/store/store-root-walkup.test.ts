@@ -10,12 +10,9 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { adminActor, retrieve } from '../../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/host/project-identity.js';
 import { findHippoRoot } from '../../src/surface/mcp/server.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliAs, runCliOut } from '../_helpers/run-cli-as.js';
 import {
   loadLastRecall,
-  writeEntry,
-  readEntry,
   appendSessionEvent,
   saveActiveTaskSnapshot,
   saveSessionHandoff,
@@ -23,6 +20,7 @@ import {
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -50,6 +48,7 @@ beforeEach(() => {
 afterEach(() => {
   removeDir(tmpRoot);
 });
+const { writeEntry, readEntry, apiCtx } = sessionPerTest();
 
 describe('getHippoRoot ancestor walk', () => {
   it('resolves a nested subdirectory to the nearest ancestor .hippo directory', () => {

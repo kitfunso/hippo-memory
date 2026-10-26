@@ -1,7 +1,6 @@
 // Root-keyed sessions forms tests call; production code goes through the port or the handle-first forms.
 
 import type { HandoffOutcome, SessionHandoff } from '../../../src/base/session/handoff.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type {
   HandoffFilter,
@@ -15,7 +14,7 @@ import type {
 import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
 import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
-import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
+import { openStore } from '../../../src/store/sqlite/handles.js';
 import type { StoreFiles } from '../../../src/store/sqlite/open.js';
 import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
@@ -25,6 +24,7 @@ import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.
 import type { ContinuityKey } from '../../../src/base/ports/store/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';
 import { sessionDecayContext } from '../../../src/domain/consolidate/decay.js';
+import { onHandle, sqliteStore, storeFilesOf } from '../test-session.js';
 
 export function saveActiveTaskSnapshot(
   hippoRoot: string,

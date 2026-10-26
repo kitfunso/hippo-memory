@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   loadSearchEntries,
-  writeEntry,
-  readEntry,
   loadAllEntries,
   updateStats,
   saveActiveTaskSnapshot,
@@ -16,7 +14,6 @@ import {
   clearActiveTaskSnapshot,
   listSessionEvents,
 } from '../_helpers/root-forms.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -29,6 +26,9 @@ import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, readEntry, sqliteStore } = sessionPerTest();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, '..', 'fixtures', 'legacy-markdown-store');

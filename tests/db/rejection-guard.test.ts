@@ -8,14 +8,11 @@ import { rejectionDigest, normalizeValueForRejection } from '../../src/base/reco
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  deleteEntry,
-  applyRebuildResult,
-  writeEntry,
-  readEntry,
-  batchWriteAndDeleteInFolder,
-} from '../_helpers/root-forms.js';
+import { deleteEntry, applyRebuildResult, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 function reject(home: string, text: string, reason: string): string {
   const digest = rejectionDigest(text);

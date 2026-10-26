@@ -15,7 +15,7 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { retrieve } from '../../src/api/index.js';
@@ -23,12 +23,11 @@ import { estimateTokens } from '../../src/base/util/token-text.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { graphExpandRecall } from '../../src/domain/graph/recall.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/compare.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 // ---------------------------------------------------------------------------
 // api.ts:833 — DAG-substitution ordering (overflow-child count desc)
@@ -63,7 +62,6 @@ describe('api.ts:833 DAG substitution ordering', () => {
   beforeEach(() => {
     root = makeRoot('dag-tiebreak');
   });
-  afterEach(() => removeDir(root));
 
   it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
     // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
@@ -220,7 +218,6 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
   beforeEach(() => {
     home = makeRoot('hop-tiebreak');
   });
-  afterEach(() => removeDir(home));
 
   it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
     // a (origin, base seed) --1hop--> b, c (tied score: same origin+hop under

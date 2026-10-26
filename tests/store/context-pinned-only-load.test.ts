@@ -10,14 +10,15 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { contextGet } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAmbientCandidates, writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
+import { loadAmbientCandidates, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 const PROJECT = 'proj-a';
 

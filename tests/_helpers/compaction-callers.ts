@@ -14,7 +14,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { ContextReach, ContextWith, EntryContext } from '../../src/api/types.js';
 import type { OptionalGroup } from '../../src/base/ports/store.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { onHandle, sqliteStore } from './test-session.js';
 import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
@@ -67,12 +67,7 @@ export function useCallerStore(): void {
 }
 
 export function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(root);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(root, fn);
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.

@@ -14,9 +14,11 @@ import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 // Same secret shape tests/util/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.

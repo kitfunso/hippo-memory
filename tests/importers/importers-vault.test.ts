@@ -26,6 +26,9 @@ import {
   opts,
   archivedRows,
 } from '../_helpers/importers-vault.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 useVaultImport();
 

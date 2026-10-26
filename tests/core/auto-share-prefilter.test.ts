@@ -11,14 +11,16 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry } = sessionPerTest();
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 

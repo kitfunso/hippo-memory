@@ -32,6 +32,9 @@ import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sessionDb } = sessionPerTest();
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -117,7 +120,7 @@ function useHashedServer(root: string): void {
 }
 
 function indexOn(root: string): IndexState {
-  const db = openHippoDb(root);
+  const db = sessionDb(root);
   try {
     return {
       // SAFETY: the SELECT names exactly VectorRow's four fields.

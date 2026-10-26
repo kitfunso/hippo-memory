@@ -10,7 +10,6 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
@@ -21,12 +20,13 @@ import {
   activeGoalsWithPolicies,
   appendConsolidationRun,
   loadAmbientCandidates,
-  writeEntry,
+  writeEntriesTogether,
   updateStats,
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const roots: string[] = [];
 
@@ -34,6 +34,7 @@ afterEach(() => {
   vi.useRealTimers();
   for (const dir of roots.splice(0)) removeDir(dir);
 });
+const { sqliteStore } = sessionPerTest();
 
 function freshRoot(label: string): string {
   const root = makeRoot(label);
@@ -46,7 +47,7 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 function seed(root: string, entries: readonly MemoryEntry[]): void {
-  for (const e of entries) writeEntry(root, e);
+  writeEntriesTogether(root, entries);
 }
 
 /** Runs `write` on a short-lived handle, for fixtures the store API has no writer for. */

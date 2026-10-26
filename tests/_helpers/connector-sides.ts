@@ -1,10 +1,9 @@
 // The connector conformance tests' store with reads of the event logs, quarantine records and dead-letter queues
 // straight from their tables.
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { ConnectorDeadLetter, ConnectorEvent } from '../../src/base/ports/store.js';
 import type { ConnectorStore } from '../../src/surface/connectors/ingest.js';
 import { auditRowsOn } from './audit-rows.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { onHandle, sqliteStore } from './test-session.js';
 import type { FixtureStore, StoreSide } from './store-conformance.js';
 
 /** One connector event log row; the delivery id and event name are GitHub's and null for Slack. */
@@ -70,19 +69,10 @@ const LETTERS_SQL = `SELECT 'slack' AS connector, id, tenant_id AS tenantId, raw
     retry_count, retried_at FROM github_dlq
   ORDER BY connector DESC, id`;
 
-function onDb<T>(hippoRoot: string, read: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return read(db);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /** Every row of a statement that names its row type's columns under their field names. */
 export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
   // SAFETY: the caller's statement aliases each column to a field of T.
-  return onDb(hippoRoot, (db) => db.prepare(sql).all() as T[]).map((row) => ({ ...row }));
+  return onHandle(hippoRoot, (db) => db.prepare(sql).all() as T[]).map((row) => ({ ...row }));
 }
 
 /** `store`, hippo.db's by default, with the same reads straight from hippo.db's tables. */
@@ -91,7 +81,7 @@ export function sqliteConnectorSide<S extends ConnectorStore>(hippoRoot: string,
 export function sqliteConnectorSide(hippoRoot: string, store: ConnectorStore = sqliteStore(hippoRoot)): ConnectorSide {
   return {
     store,
-    auditRows: () => onDb(hippoRoot, (db) => auditRowsOn(db)),
+    auditRows: () => onHandle(hippoRoot, (db) => auditRowsOn(db)),
     events: () => rowsOf<LoggedEvent>(hippoRoot, EVENTS_SQL),
     records: () => rowsOf<HeldRecord>(hippoRoot, RECORDS_SQL),
   };

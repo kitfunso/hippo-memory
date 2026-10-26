@@ -6,9 +6,11 @@ import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 interface KindRow {
   readonly cmd: string;
@@ -84,7 +86,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  removeDir(root);
 });
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));

@@ -9,7 +9,6 @@ import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { pendingVectorIds, pruneOrphanVectors } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { SleepRows } from '../../src/domain/consolidate/survivors.js';
 import { rowsInPages } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -19,6 +18,9 @@ import { seedRows } from '../_helpers/seed-rows.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore } = sessionPerTest();
 
 const ID_PAGE_READ = 'SELECT id, created FROM memories';
 

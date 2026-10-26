@@ -15,6 +15,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
@@ -34,6 +35,7 @@ const tmp = () => {
 afterEach(() => {
   for (const dir of made.splice(0)) removeDir(dir);
 });
+sessionPerTest();
 
 function transcript(entries: unknown[]): string {
   const file = path.join(tmp(), 'session.jsonl');

@@ -7,17 +7,17 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { conflictResolve } from '../../src/api/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/base/errors/api-errors.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
+const { writeEntry, readEntry, sqliteStore, apiCtx } = sessionPerTest();
 const RESOLVED_AT = '2026-02-02T02:02:02.000Z';
 
 beforeEach(() => {

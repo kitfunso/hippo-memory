@@ -11,15 +11,16 @@ import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAllDirtySummaries, applyRebuildResult, writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
+import { loadAllDirtySummaries, applyRebuildResult, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 describe('sleep-cycle rebuildDirtySummaries', () => {
   let hippoRoot: string;

@@ -22,11 +22,13 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries, appendSessionEvent } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 pinClock();
 

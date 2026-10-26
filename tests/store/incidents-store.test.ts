@@ -16,19 +16,20 @@
  * 11. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { openIncident, resolveOpenIncident, INCIDENT } from '../../src/domain/objects/incidents.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { deleteEntry } from '../_helpers/root-forms.js';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, objectsAt } = sessionPerTest();
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -75,7 +76,6 @@ describe('incidents store (first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('incidents');
   });
-  afterEach(() => removeDir(home));
 
   it('saveIncident creates both memory and incidents row + incident_open audit', async () => {
     const inc = await openIncident(

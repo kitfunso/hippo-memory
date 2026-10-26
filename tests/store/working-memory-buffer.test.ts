@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { wmPush, wmRead, wmClear } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 // The store's per-scope cap; a literal here so a change to it fails these tests on purpose.
 const WM_MAX_ENTRIES = 20;

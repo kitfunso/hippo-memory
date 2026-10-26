@@ -15,7 +15,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import { OTHER_STORE_MARKER, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -26,6 +26,9 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore } = sessionPerTest();
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';

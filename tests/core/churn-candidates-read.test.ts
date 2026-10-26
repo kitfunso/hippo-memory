@@ -7,11 +7,11 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
 import { processGit } from '../../src/infra/git-runner.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;
@@ -23,6 +23,7 @@ const roots: string[] = [];
 afterEach(() => {
   for (const r of roots.splice(0)) removeDir(r);
 });
+const { writeEntry, sqliteStore } = sessionPerTest();
 
 function newRoot(): string {
   const root = makeRoot('churn-candidates');

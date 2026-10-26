@@ -7,17 +7,15 @@
  * deterministic ties, empty-graph no-op, not-in-pool ignored, seeds-never-scored incl.
  * the seed-linked-to-another-seed case).
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/domain/graph/stream.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -26,6 +24,9 @@ function safeRmSync(p: string): void {
     /* best-effort */
   }
 }
+// makeRoot removes each folder after the file, once this session has closed its handles.
+const { writeEntry, sqliteStore } = sessionPerTest();
+
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
@@ -85,7 +86,6 @@ describe('graphRankStream (real SQLite)', () => {
   beforeEach(() => {
     home = makeRoot('graphstream');
   });
-  afterEach(() => removeDir(home));
 
   it('scores a 1-hop neighbour; excludes the seed and unrelated in-pool entries', async () => {
     const a = mem(home, T, 'alpha cache invalidation decision');

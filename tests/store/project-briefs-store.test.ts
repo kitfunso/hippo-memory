@@ -14,7 +14,7 @@
  *     refreshed metadata, dry-run assemble does NOT write
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -25,15 +25,16 @@ import {
   PROJECT_BRIEF,
 } from '../../src/domain/objects/project-briefs.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 import { closeObject, objectById } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, objectsAt } = sessionPerTest();
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;
@@ -84,7 +85,6 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   beforeEach(() => {
     home = makeRoot('project-briefs');
   });
-  afterEach(() => removeDir(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

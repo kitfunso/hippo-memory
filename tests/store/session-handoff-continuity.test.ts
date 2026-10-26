@@ -13,6 +13,9 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 let tmpDir: string;
 

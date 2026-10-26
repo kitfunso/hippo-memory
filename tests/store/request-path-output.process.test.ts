@@ -7,17 +7,21 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { withSharedStoreHandlesSync } from '../../src/db/index.js';
+import { writeEntryIn } from '../../src/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { sqliteStore } = sessionPerTest();
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
@@ -144,10 +148,13 @@ describe('request-path output on a fixed store', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
     initTestStore(localRoot);
     initTestStore(globalRoot);
-    for (let i = 0; i < 80; i++) writeEntry(localRoot, localRow(i));
-    writeEntry(localRoot, merged());
-    for (let j = 0; j < 40; j++) writeEntry(globalRoot, globalRow(j));
-
+    withSharedStoreHandlesSync((session) => {
+      const local = storeFilesOf(localRoot, { session });
+      const global = storeFilesOf(globalRoot, { session });
+      for (let i = 0; i < 80; i++) writeEntryIn(local, localRow(i));
+      writeEntryIn(local, merged());
+      for (let j = 0; j < 40; j++) writeEntryIn(global, globalRow(j));
+    });
     cwd = process.cwd();
     process.chdir(tmp); // outside git, so hippo_context's auto query is empty
   });

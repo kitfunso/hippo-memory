@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { join } from 'node:path';
 import { calculateStrength } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { calculateStrength as strengthUnder } from '../../src/base/memory/strength.js';
@@ -7,13 +6,14 @@ import { evalSwitches } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { loadContextCandidates, tallySources, loadTextsHolding } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry } = sessionPerTest();
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 
@@ -52,8 +52,6 @@ describe('loadContextCandidates over the cap', () => {
       writeEntry(root, e);
     }
   });
-
-  afterEach(() => removeDir(join(root, '..')));
 
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
     const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
@@ -115,10 +113,6 @@ describe('loadContextCandidates reward factor', () => {
 
   beforeEach(() => {
     root = makeStore('ctx-reward').root;
-  });
-
-  afterEach(() => {
-    removeDir(join(root, '..'));
   });
 
   // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.

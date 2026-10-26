@@ -10,16 +10,17 @@
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../../src/surface/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../../src/surface/connectors/slack/types.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { rawProvenanceAt } from '../_helpers/report-reads.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { apiCtx } = sessionPerTest();
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
@@ -44,7 +45,6 @@ describe('Slack connector — provenance coverage parity', () => {
   beforeEach(() => {
     root = makeRoot('slack-prov');
   });
-  afterEach(() => removeDir(root));
 
   it('every ingested user message carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);

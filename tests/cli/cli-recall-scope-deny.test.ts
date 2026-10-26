@@ -24,8 +24,11 @@ import { handleExplain } from '../../src/surface/cli/explain.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';

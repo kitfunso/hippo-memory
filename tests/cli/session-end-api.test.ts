@@ -1,14 +1,15 @@
 // sessionEndWork runs from the api with no CLI: real store, host steps passed in, store choice and sleep, capture and
 // cursor policy decided by the api.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
 import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore } = sessionPerTest();
 
 const TENANT = 'default';
 const PROJECT = 'the-session-project';
@@ -26,7 +27,6 @@ beforeEach(() => {
   lines = [];
   steps = [];
 });
-afterEach(() => removeDir(root));
 
 function work(over: Partial<Work> = {}): Work {
   return {
@@ -126,15 +126,11 @@ describe('sessionEndWork', () => {
 
   it('a folder with no store of its own skips sleep, imports its notes and captures into the global store', async () => {
     const globalRoot = makeRoot('session-end-api-global');
-    try {
-      saveActiveTaskSnapshot(globalRoot, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
-      await sessionEndWork(withoutOwnStore(globalRoot), work({ transcriptPath: `${root}/s1.jsonl` }));
-      expect(steps).toEqual(['import', 'scan', `capture:global:t1,t2,t3:${PROJECT}`, 'digest:3:s1']);
-      expect(lines).toContain('skip sleep: this folder has no store of its own');
-      expect(loadActiveTaskSnapshot(globalRoot, TENANT)).toBeNull();
-    } finally {
-      removeDir(globalRoot);
-    }
+    saveActiveTaskSnapshot(globalRoot, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
+    await sessionEndWork(withoutOwnStore(globalRoot), work({ transcriptPath: `${root}/s1.jsonl` }));
+    expect(steps).toEqual(['import', 'scan', `capture:global:t1,t2,t3:${PROJECT}`, 'digest:3:s1']);
+    expect(lines).toContain('skip sleep: this folder has no store of its own');
+    expect(loadActiveTaskSnapshot(globalRoot, TENANT)).toBeNull();
   });
 
   it('skips every step when no store exists', async () => {

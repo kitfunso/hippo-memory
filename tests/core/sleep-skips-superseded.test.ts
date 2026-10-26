@@ -5,11 +5,11 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { supersede } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadChildrenOfSummary, loadAllL2Summaries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { loadChildrenOfSummary, loadAllL2Summaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const roots: string[] = [];
 
@@ -27,6 +27,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   for (const r of roots.splice(0)) removeDir(r);
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 describe('sleep skips superseded rows', () => {
   it('as merge, fact extraction and DAG build input', async () => {

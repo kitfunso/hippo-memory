@@ -15,7 +15,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -29,9 +28,10 @@ import { log } from '../../src/base/util/log.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -59,13 +59,7 @@ function newCtx() {
 
   const ctx = apiCtx(hippoRoot, 'default', adminActor('test:phase-faults'));
 
-  return {
-    ctx,
-    tmpDir,
-    restore: () => {
-      removeDir(tmpDir);
-    },
-  };
+  return { ctx, tmpDir };
 }
 
 function getLastConsolidateAuditRow(hippoRoot: string): {
@@ -86,10 +80,6 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
 
   beforeEach(() => {
     testCtx = newCtx();
-  });
-
-  afterEach(() => {
-    testCtx.restore();
   });
 
   it('phase 1 (consolidate) throw → partial:true + errorMessage', async () => {
@@ -214,7 +204,6 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
   });
 
   afterEach(() => {
-    testCtx.restore();
     vi.restoreAllMocks();
   });
 

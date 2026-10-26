@@ -18,13 +18,13 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { retrieve } from '../../src/api/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { apiCtx } = sessionPerTest();
 
 function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
@@ -78,9 +78,6 @@ describe('api.recall planningFallacyHint', () => {
   beforeEach(() => {
     root = makeRoot('j32');
     vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
-  });
-  afterEach(() => {
-    removeDir(root);
   });
 
   it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', async () => {

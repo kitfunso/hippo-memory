@@ -5,12 +5,12 @@ import { handleAuth } from '../../src/surface/cli/auth.js';
 import { handleGoal } from '../../src/surface/cli/goals.js';
 import * as api from '../../src/api/index.js';
 import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore, apiCtx } = sessionPerTest();
 
 type Flags = Record<string, string | boolean | string[]>;
 
@@ -39,7 +39,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeDir(root);
 });
 
 /** Replaces each distinct id matching `pattern` with its first-seen order, and every ISO timestamp with <ts>. */

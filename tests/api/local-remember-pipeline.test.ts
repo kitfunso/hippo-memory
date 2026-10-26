@@ -13,14 +13,15 @@ import {
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadAllEntries, readEntry, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { loadAllEntries, readEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { testInfra } from '../_helpers/infra.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 const TEXT = 'the billing service retries a failed charge three times';
 const SALIENCE_ON = { salience: { enabled: true } };

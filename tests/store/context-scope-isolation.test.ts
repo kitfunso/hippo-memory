@@ -18,15 +18,15 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet } from '../../src/api/index.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 let tmpRoot: string;
 let projA: string;

@@ -3,7 +3,10 @@ import { beforeAll } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { withSharedStoreHandlesSync, type RequestStores } from '../../src/db/index.js';
+import { writeEntryIn } from '../../src/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import type { StoreFiles } from '../../src/store/sqlite/open.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 export const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
@@ -14,6 +17,8 @@ export const createMemory7 = (content: string, options: Partial<Parameters<typeo
 // ---------------------------------------------------------------------------
 
 export let tmpDir: string;
+// The seeding pass's store, on one session so the 50 writes share a handle.
+let files: StoreFiles;
 export const seedIds: Record<string, string> = {}; // label -> id
 
 export function daysAgo(n: number): string {
@@ -25,7 +30,7 @@ function seed(label: string, content: string, opts: Partial<Parameters<typeof cr
   const entry = createMemory7(content, opts);
   // Use label as a deterministic ID fragment so tests are readable
   const withLabel: MemoryEntry = { ...entry, id: `bm_${label}` };
-  writeEntry(tmpDir, withLabel);
+  writeEntryIn(files, withLabel);
   seedIds[label] = withLabel.id;
   return withLabel;
 }
@@ -35,8 +40,9 @@ function seed(label: string, content: string, opts: Partial<Parameters<typeof cr
 // ---------------------------------------------------------------------------
 
 export function useBenchmarkCorpus() {
-  const seedCorpus = (): void => {
+  const seedCorpus = (session: RequestStores): void => {
     tmpDir = makeRoot('bench');
+    files = storeFilesOf(tmpDir, { session });
 
     // ── Production rules ──────────────────────────────────────────────────────
     seed(
@@ -532,5 +538,5 @@ NOT: https://www.example.com/{name}. Always use this exact format when linking t
       },
     );
   };
-  beforeAll(() => seedCorpus());
+  beforeAll(() => withSharedStoreHandlesSync(seedCorpus));
 }

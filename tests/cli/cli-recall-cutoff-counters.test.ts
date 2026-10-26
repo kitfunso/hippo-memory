@@ -25,7 +25,7 @@
 // the recall itself (real DB, real CLI, project convention).
 
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -34,13 +34,14 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { remember } from '../../src/api/index.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, apiCtx } = sessionPerTest();
 
 /** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
@@ -97,7 +98,9 @@ describe('printRecall candidate accounting closes', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeDir(env.cwd);
+    // Removed once the test is done, after its session has closed its handles.
+    const cwd = env?.cwd;
+    if (cwd) onTestFinished(() => removeDir(cwd));
   });
 
   it.each([
@@ -199,7 +202,9 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   let env: TestEnv;
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeDir(env.cwd);
+    // Removed once the test is done, after its session has closed its handles.
+    const cwd = env?.cwd;
+    if (cwd) onTestFinished(() => removeDir(cwd));
   });
 
   // THE GAP THIS FILE ORIGINALLY MISSED. Every other test here passes
@@ -233,7 +238,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeDir(env.cwd);
+    // Removed once the test is done, after its session has closed its handles.
+    const cwd = env?.cwd;
+    if (cwd) onTestFinished(() => removeDir(cwd));
   });
 
   it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {

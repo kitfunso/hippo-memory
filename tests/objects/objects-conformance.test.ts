@@ -32,6 +32,9 @@ import {
   superseded,
   useObjectsConformance,
 } from '../_helpers/objects-conformance.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 useObjectsConformance();
 

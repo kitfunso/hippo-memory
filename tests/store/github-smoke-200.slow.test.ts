@@ -29,7 +29,8 @@ import type {
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { removeDir } from '../_helpers/remove-dir.js';
@@ -246,10 +247,11 @@ describe('GitHub connector — 200-event smoke test', () => {
   afterEach(() => {
     removeDir(root);
   });
+  const { session } = sessionPerTest();
 
   // Ingests 200 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
-    const ctx = ctxFor(root);
+    const ctx = onSession(ctxFor(root), session());
     const deliveries = buildDeliveryStream();
     expect(deliveries).toHaveLength(200);
 

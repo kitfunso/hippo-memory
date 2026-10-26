@@ -5,11 +5,11 @@ import * as auditSql from '../../../src/store/sqlite/audit.js';
 import type { GitHubEventLogEntry } from '../../../src/store/sqlite/connectors/github.js';
 import * as githubSql from '../../../src/store/sqlite/connectors/github.js';
 import * as slackSql from '../../../src/store/sqlite/connectors/slack.js';
-import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
 import type { ApiKeyListItem, ListApiKeysOptions } from '../../../src/base/ports/store/keys.js';
 import type { AppendAuditOptions } from '../../../src/base/ports/store/types.js';
 import type { ConnectorEventRecord } from '../../../src/base/ports/store/connectors.js';
+import { onHandle } from '../test-session.js';
 
 /** The highest audit id hippo.db ever assigned, pruned rows included. */
 export function auditHighId(hippoRoot: string): number {

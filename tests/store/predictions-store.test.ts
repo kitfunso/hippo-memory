@@ -13,7 +13,7 @@
  * 8. UPDATE trigger, re-close and missing-id guards; the closure_state CHECK constraint
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -26,16 +26,16 @@ import {
   loadPredictionById,
   loadPredictionsByClass,
   loadOpenPredictions,
-  writeEntry,
 } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry } = sessionPerTest();
 
 describe('predictions store (first-class object)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('predictions');
   });
-  afterEach(() => removeDir(home));
 
   it('savePrediction creates both memory and predictions row', async () => {
     const pred = await savePrediction(home, 'default', {

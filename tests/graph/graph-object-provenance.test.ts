@@ -10,7 +10,7 @@
  * not via recall (recall surfacing of mirror-less nodes is an out-of-scope follow-up).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -21,13 +21,13 @@ import { extractGraph } from '../../src/domain/graph/extract.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { objectsAt } from '../_helpers/objects-at.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { deleteEntry, writeEntry, loadEntities } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { deleteEntry, loadEntities } from '../_helpers/root-forms.js';
 import { saveDecision, savePolicy } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, objectsAt } = sessionPerTest();
 
 const T = 'default';
 
@@ -106,13 +106,6 @@ describe('graph provenance is anchored to the first-class object, not its memory
   let home: string;
   beforeEach(() => {
     home = makeRoot('graph-e2-prov');
-  });
-  afterEach(() => {
-    try {
-      removeDir(home);
-    } catch {
-      /* ignore */
-    }
   });
 
   it('extract: a policy + a decision that mentions it produce entities + a references arc', async () => {

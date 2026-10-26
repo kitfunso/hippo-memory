@@ -7,6 +7,9 @@ import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 useVaultImport();
 

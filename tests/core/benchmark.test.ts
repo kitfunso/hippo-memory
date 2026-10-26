@@ -15,6 +15,9 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, seedIds, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 useBenchmarkCorpus();
 

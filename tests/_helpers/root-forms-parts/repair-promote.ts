@@ -4,11 +4,11 @@ import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { promote } from '../../../src/api/memories/promote.js';
-import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { apiCtx } from '../api-ctx.js';
 import { type StoreFiles } from '../../../src/store/sqlite/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';
 import type { QualityRepairResult } from '../../../src/base/ports/store/audit.js';
+import { sqliteStore } from '../test-session.js';
 
 export async function copyToGlobal(
   hippoRoot: string,

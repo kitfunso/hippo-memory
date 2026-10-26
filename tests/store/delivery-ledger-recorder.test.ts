@@ -14,13 +14,13 @@ import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } fro
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { Ledger } from '../../src/base/ports/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

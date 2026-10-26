@@ -16,6 +16,9 @@ import {
   readEntry,
   writeEntriesTogether,
 } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 const TENANTS = ['tenant-a', 'tenant-b'] as const;
 const LIVE_ROWS = /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)$/;

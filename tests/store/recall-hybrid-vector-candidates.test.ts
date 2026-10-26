@@ -1,7 +1,7 @@
 // Pins which rows hybrid recall returns when vectors exist: the CLI shared-store path, api.retrieve and the plain hybrid pool.
 // Ids are random per seed, so rows are named by label.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
@@ -12,19 +12,21 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { retrieve, contextGet } from '../../src/api/index.js';
-import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
+import { cwdProject } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -91,9 +93,9 @@ function withEmbeddings(s: Seeded): void {
 const labels = (s: Seeded, ids: readonly string[]): string[] => ids.map((id) => s.labelById.get(id) ?? id);
 
 describe('hybrid recall candidates with stored vectors', () => {
-  const dirs: string[] = [];
+  // Removed once the test is done, after its session has closed its handles.
   const track = (s: Seeded): Seeded => {
-    dirs.push(s.home, s.global);
+    onTestFinished(() => [s.home, s.global].forEach(removeDir));
     return s;
   };
 
@@ -104,7 +106,6 @@ describe('hybrid recall candidates with stored vectors', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    for (const d of dirs.splice(0)) removeDir(d);
   });
 
   it('searchBothHybrid default recall', async () => {

@@ -15,10 +15,11 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 let tmpDir: string;
 

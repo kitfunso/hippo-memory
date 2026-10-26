@@ -21,13 +21,12 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
-import { writeEntry } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+const { writeEntry, apiCtx } = sessionPerTest();
 
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
@@ -75,9 +74,6 @@ describe('api.recall availabilityHint', () => {
   beforeEach(() => {
     root = makeRoot('j2-api');
     vi.stubEnv('HIPPO_AVAILABILITY', undefined);
-  });
-  afterEach(() => {
-    removeDir(root);
   });
 
   it('fires and emits exactly one audit row on a recency-biased recall', async () => {

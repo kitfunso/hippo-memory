@@ -6,16 +6,17 @@
  * contains another extracted entity's name (conservative: word-boundary, length-bounded,
  * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+const { sqliteStore } = sessionPerTest();
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
@@ -30,13 +31,6 @@ describe('cross-object references (Pass 3 name-match)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('graph-xobj');
-  });
-  afterEach(() => {
-    try {
-      removeDir(home);
-    } catch {
-      /* ignore */
-    }
   });
 
   it('a decision whose text names a policy emits one references edge (decision -> policy), sourced from the decision memory', async () => {

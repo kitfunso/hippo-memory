@@ -13,19 +13,20 @@
  * 8. predict_baserate audit emitted on every call (including n=0)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction, computePredictionBaserate } from '../_helpers/root-forms.js';
-import { removeDir } from '../_helpers/remove-dir.js';
+import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+sessionPerTest();
 
 describe('computePredictionBaserate (baserate detector)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('j3');
   });
-  afterEach(() => removeDir(home));
 
   it('empty class returns nClosed=0 + null stats + empty summary', () => {
     const br = computePredictionBaserate(home, 'default', 'empty-class');
