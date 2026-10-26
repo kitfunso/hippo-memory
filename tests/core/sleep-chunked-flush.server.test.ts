@@ -14,7 +14,7 @@ import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { inSqliteSession, sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
@@ -399,12 +399,18 @@ describe('chunked consolidation flush', () => {
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
     const fx = seed({ clusters: 2, dormant: 0, filler: 0 });
+    const atNow: typeof runConsolidation = (store, opts) =>
+      runConsolidation(store, { ...opts, now: NOW, budget: budget(0) });
     const timeout = await withSharedStoreHandles(
-      async () => {
-        await consolidate(fx.root, { now: NOW, budget: budget(0) });
-        const db = openHippoDb(fx.root);
+      async (session) => {
+        const ctx = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
+        await runSleep(
+          { ...ctx, store: inSqliteSession(ctx.store, session) },
+          { noShare: true },
+          { consolidate: atNow },
+        );
         // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
-        return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+        return (session.get(fx.root).prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
       },
       { busyWaitMs: HOOK_DB_WAIT_MS },
     );

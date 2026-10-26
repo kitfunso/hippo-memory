@@ -49,12 +49,17 @@ export {
 export const publishedDefaultStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups =
   sqliteStoreWith;
 
-/** A store runtime for a root that runs until the process exits, such as the CLI or the stdio MCP loop; its exit hook
- * disposes it. */
-export function openRootStoreRuntime(): StoreRuntime {
+/** Runs `fn` on a store runtime of its own, disposed when `fn` settles, or by its exit hook if the process exits first. */
+export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise<T>): Promise<T> {
   const runtime = new StoreRuntime();
-  process.once('exit', () => runtime.dispose());
-  return runtime;
+  const onExit = (): void => runtime.dispose();
+  process.once('exit', onExit);
+  try {
+    return await fn(runtime);
+  } finally {
+    process.off('exit', onExit);
+    runtime.dispose();
+  }
 }
 
 /** hippo.db as a server serves it, with an exit hook that closes what the server opened if close() never runs. */

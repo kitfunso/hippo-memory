@@ -17,13 +17,14 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     const payload = (text ?? '').trim();
     if (isInitialized(root) && payload) {
       const failure = parseJson(payload);
-      const ctx = cliApiContext(root, tenantId);
-      const rec = await startToolFailureRecorder(ctx, {
-        stdinText: text,
-        runtime: hookRuntime(flags),
-        envSessionId: hostSessionId(),
-      });
+      // Built inside the hook's request, so the recorder and the capture share its one handle.
       await cliHookRequest(async () => {
+        const ctx = cliApiContext(root, tenantId);
+        const rec = await startToolFailureRecorder(ctx, {
+          stdinText: text,
+          runtime: hookRuntime(flags),
+          envSessionId: hostSessionId(),
+        });
         try {
           return await captureToolFailure(ctx, failure, (id) => rec?.logged(id));
         } finally {

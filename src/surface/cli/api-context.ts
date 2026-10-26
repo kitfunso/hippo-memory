@@ -19,7 +19,6 @@ import {
   defaultImportStores,
   defaultReach,
   defaultStore,
-  openRootStoreRuntime,
   runStoreBatch,
   runStoreHookRequest,
   runStoreRequest,
@@ -55,8 +54,9 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 // A CLI process runs one command, so the session that command opened is this root's state, as cliHost is, not a scope.
 let commandSession: StoreSession | undefined;
 
+// A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores share one.
 function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
-  return { ...evalStoreRules(envLossAversionRatio()), runtime: cliRuntime, session };
+  return { ...evalStoreRules(envLossAversionRatio()), runtime: session?.runtime ?? cliRuntime(), session };
 }
 
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
@@ -87,7 +87,7 @@ export function cliImportFiles(hippoRoot: string, session: StoreSession | undefi
 
 /** An import's batch on `hippoRoot`: one handle per store for its synchronous run of writes. */
 export function cliImportBatch(hippoRoot: string): <T>(run: (files: ImportFiles) => T) => T {
-  return (run) => runStoreBatch((session) => run(cliImportFiles(hippoRoot, session)), cliRuntime);
+  return (run) => runStoreBatch((session) => run(cliImportFiles(hippoRoot, session)), cliRuntime());
 }
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
@@ -108,7 +108,7 @@ async function asCommand<T>(session: StoreSession, run: () => T | Promise<T>): P
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
  * undefined. */
 export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
-  return runStoreHookRequest((session) => asCommand(session, run), cliRuntime);
+  return runStoreHookRequest((session) => asCommand(session, run), cliRuntime());
 }
 
 /** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the default
@@ -126,12 +126,12 @@ export function cliSyncOptions(
 export function cliStoreBatch(
   hippoRoot: string,
 ): <T>(run: (store: HippoStore & StoreGroups) => Promise<T>) => Promise<T> {
-  return (run) => runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime);
+  return (run) => runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime());
 }
 
 /** The session a scoped CLI verb runs in, one handle per store; named here so no other surface opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
-  return runStoreRequest((session) => asCommand(session, run), 'cli', cliRuntime);
+  return runStoreRequest((session) => asCommand(session, run), 'cli', cliRuntime());
 }
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
@@ -174,9 +174,8 @@ export function cliLedgerReach(hippoRoot: string): LedgerReach {
 }
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. One
- * host per stdio loop, so its callers and its store runtime live as long as the loop. */
+ * host per stdio loop, so its callers live as long as the loop, which runs as one command on that command's runtime. */
 export function cliStdioHost(): McpHost {
-  const runtime = openRootStoreRuntime();
   const hostTenantId = envTenant();
   const shared = createCallerState();
   // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context names no folder.
@@ -195,7 +194,7 @@ export function cliStdioHost(): McpHost {
               infra: cliInfra(),
             }),
           'cli',
-          runtime,
+          cliRuntime(),
         ).then(() => undefined);
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);
@@ -222,5 +221,7 @@ export function cliStdioHost(): McpHost {
       };
     };
   // Frames interleave, so each takes a session of its own and hands it to every store its context builds.
-  return { runFrame: (signal, run) => runStoreRequest((session) => run(contextIn(session, signal)), 'cli', runtime) };
+  return {
+    runFrame: (signal, run) => runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
+  };
 }

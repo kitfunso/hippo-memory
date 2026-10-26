@@ -10,6 +10,7 @@ import {
   closeHippoDb,
   HOOK_DB_WAIT_MS,
   SERVER_DB_WAIT_MS,
+  withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
@@ -173,18 +174,20 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const reader = openHippoDb(root, { busyWaitMs: SERVER_DB_WAIT_MS });
-      try {
-        let arm: Promise<PilotArm> | undefined;
-        const waited = waitOnSteppedClock(reader, () => {
-          arm = ensurePilotArm(reader, 'default', 'locked', 10000);
-        });
-        expect(await arm).toBe('holdout');
-        expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
-        expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
-      } finally {
-        closeHippoDb(reader);
-      }
+      // The reader is the server request's handle, so its write scope waits the session's bound.
+      await withSharedStoreHandles(
+        async (session) => {
+          const reader = session.get(root);
+          let arm: Promise<PilotArm> | undefined;
+          const waited = waitOnSteppedClock(reader, () => {
+            arm = ensurePilotArm(reader, 'default', 'locked', 10000);
+          });
+          expect(await arm).toBe('holdout');
+          expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
+          expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
+        },
+        { busyWaitMs: SERVER_DB_WAIT_MS },
+      );
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

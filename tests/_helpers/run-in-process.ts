@@ -3,7 +3,6 @@
 import { format } from 'node:util';
 import { vi } from 'vitest';
 import { CliExit } from '../../src/surface/cli/exit.js';
-import { runCliCommand } from '../../src/surface/cli/cli-runtime.js';
 
 /** Thrown in place of process.exit so the verb stops where the real process would. */
 export class ExitCalled extends Error {
@@ -61,8 +60,7 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     }),
   ];
   try {
-    // As one command, so its held writes run and its handles close when it ends, as a spawned hippo's do.
-    await runCliCommand(async () => fn());
+    await fn();
   } catch (error) {
     // A verb called without runCli stops by throwing; the entry would exit with that code.
     if (error instanceof CliExit) exited ??= new ExitCalled(error.code);

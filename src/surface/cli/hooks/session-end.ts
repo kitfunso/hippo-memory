@@ -64,12 +64,17 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
     try {
       await handleSessionEndWorker({ hippoRoot: root, tenantId, args: [], flags: inlineWorkerFlags(flags, worker) });
     } finally {
-      await cliHookRequest(() => flushDeliveryRecorder(rec));
+      await flushOnHook(rec, root, tenantId);
     }
     return;
   }
   // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
-  await cliHookRequest(() => flushDeliveryRecorder(rec));
+  await flushOnHook(rec, root, tenantId);
+}
+
+/** Flushes on the hook's own request, started after the spawn, so its short lock wait bounds the row's write. */
+async function flushOnHook(rec: DeliveryRecorder | null, root: string, tenantId: string): Promise<void> {
+  await cliHookRequest(() => flushDeliveryRecorder(rec, cliApiContext(hookStoreRoot(root), tenantId)));
 }
 
 async function startSessionEndRecorder(
