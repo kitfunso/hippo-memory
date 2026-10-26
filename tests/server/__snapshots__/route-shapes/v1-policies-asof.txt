@@ -1,0 +1,8 @@
+GET /v1/policies/asof -> 400 date is required (ISO-8601 valid-time)
+POST /v1/policies/asof -> 404 not found
+DELETE /v1/policies/asof -> 404 not found
+PUT /v1/policies/asof -> 404 not found
+GET /v1/policies/asof/ -> 404 not found
+POST /v1/policies/asof/ -> 404 not found
+DELETE /v1/policies/asof/ -> 404 not found
+PUT /v1/policies/asof/ -> 404 not found

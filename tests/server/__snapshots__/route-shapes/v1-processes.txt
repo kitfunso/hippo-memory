@@ -1,0 +1,8 @@
+GET /v1/processes -> 200
+POST /v1/processes -> 400 processName is required (non-empty string)
+DELETE /v1/processes -> 404 not found
+PUT /v1/processes -> 404 not found
+GET /v1/processes/ -> 404 not found
+POST /v1/processes/ -> 404 not found
+DELETE /v1/processes/ -> 404 not found
+PUT /v1/processes/ -> 404 not found

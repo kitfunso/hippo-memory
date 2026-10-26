@@ -17,7 +17,7 @@ export interface DormantMemory {
 }
 
 /** Options for `listDormantRows`. */
-export interface ListDormantOpts {
+export interface ListDormantOptions {
   /** Whitespace-separated terms; a row must contain every term (case-insensitive substring). */
   query?: string;
   /** Maximum rows returned, newest first; dormantListCap reads it. */
@@ -27,14 +27,14 @@ export interface ListDormantOpts {
 }
 
 /** The query's terms, each a substring a listed row must hold. */
-export const dormantTerms = (opts: ListDormantOpts): string[] =>
+export const dormantTerms = (opts: ListDormantOptions): string[] =>
   (opts.query ?? '')
     .trim()
     .split(/\s+/)
     .filter((term) => term.length > 0);
 
 /** The rows a dormant list reads: a whole positive `limit`, else 20. */
-export const dormantListCap = ({ limit }: ListDormantOpts): number =>
+export const dormantListCap = ({ limit }: ListDormantOptions): number =>
   limit !== undefined && Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 20;
 
 /** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory already holds the id. */
@@ -54,7 +54,7 @@ export interface DormantRestoreRequest {
 
 /** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
 export interface Dormant {
-  list(tenantId: string, ownScope: string | null, opts: ListDormantOpts): Promise<DormantMemory[]>;
+  list(tenantId: string, ownScope: string | null, opts: ListDormantOptions): Promise<DormantMemory[]>;
   /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is filled as writeEntry
    * fills one. */
   restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;

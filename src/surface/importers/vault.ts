@@ -1,6 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/memory.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';

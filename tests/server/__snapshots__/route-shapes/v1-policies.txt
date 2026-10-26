@@ -1,0 +1,8 @@
+GET /v1/policies -> 200
+POST /v1/policies -> 400 policyName is required (non-empty string)
+DELETE /v1/policies -> 404 not found
+PUT /v1/policies -> 404 not found
+GET /v1/policies/ -> 404 not found
+POST /v1/policies/ -> 404 not found
+DELETE /v1/policies/ -> 404 not found
+PUT /v1/policies/ -> 404 not found

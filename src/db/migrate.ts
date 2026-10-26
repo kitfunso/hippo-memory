@@ -4,7 +4,7 @@ import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
 import { tableExists } from './tables.js';
-import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion } from './meta.js';
+import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion, META_KEY } from './meta.js';
 import {
   MEMORIES_FTS_DDL,
   REQUIRED_SCHEMA_OBJECTS,
@@ -35,20 +35,18 @@ function assertMinBinary(minRequired: string | null | undefined): void {
 /** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a
  * real error. */
 export function assertBinaryCompatible(db: DatabaseSyncLike): void {
-  assertMinBinary(getMeta(db, 'min_compatible_binary'));
+  assertMinBinary(getMeta(db, META_KEY.minCompatibleBinary));
 }
 
-const FTS_IN_SYNC_KEY = 'fts_in_sync';
-
 const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
-  ['schema_version', String(CURRENT_SCHEMA_VERSION)],
-  ['last_retrieval_ids', '[]'],
-  ['last_trace_id', ''],
-  ['total_remembered', '0'],
-  ['total_recalled', '0'],
-  ['total_forgotten', '0'],
-  ['fts5_available', '0'],
-  [FTS_IN_SYNC_KEY, '0'],
+  [META_KEY.schemaVersion, String(CURRENT_SCHEMA_VERSION)],
+  [META_KEY.lastRetrievalIds, '[]'],
+  [META_KEY.lastTraceId, ''],
+  [META_KEY.totalRemembered, '0'],
+  [META_KEY.totalRecalled, '0'],
+  [META_KEY.totalForgotten, '0'],
+  [META_KEY.fts5Available, '0'],
+  [META_KEY.ftsInSync, '0'],
 ];
 
 // Names come from our own constants and match \w+, so inlining them as literals is safe.
@@ -59,9 +57,9 @@ const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
  * required objects. */
 export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
-  (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
-  (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
-  (SELECT value FROM meta WHERE key = 'fts5_available') AS fts5,
+  (SELECT value FROM meta WHERE key = '${META_KEY.schemaVersion}') AS schema_version,
+  (SELECT value FROM meta WHERE key = '${META_KEY.minCompatibleBinary}') AS min_binary,
+  (SELECT value FROM meta WHERE key = '${META_KEY.fts5Available}') AS fts5,
   (SELECT COUNT(*) FROM meta WHERE key IN (${sqlList(META_DEFAULTS.map(([key]) => key))})) AS meta_keys,
   (SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index') AND name IN (${REQUIRED_OBJECTS})) AS objects,
   (SELECT MAX(id) FROM raw_archive) AS archive_top,
@@ -110,8 +108,8 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
 
 const SETTLED_CHECK_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
-  (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
-  (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
+  (SELECT value FROM meta WHERE key = '${META_KEY.schemaVersion}') AS schema_version,
+  (SELECT value FROM meta WHERE key = '${META_KEY.minCompatibleBinary}') AS min_binary,
   (SELECT MAX(id) FROM raw_archive) AS archive_top,
   (SELECT 1 FROM memories LIMIT 1) AS has_memories`;
 
@@ -245,7 +243,7 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
 
 // Read-first: only write when the flag actually changed, so a healthy store's open takes no write lock.
 function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
-  if (getMeta(db, 'fts5_available') !== flag) setMeta(db, 'fts5_available', flag);
+  if (getMeta(db, META_KEY.fts5Available) !== flag) setMeta(db, META_KEY.fts5Available, flag);
 }
 
 /** Row counts of `memories` and its full-text index, which differ once the index drifts; null when either table is
@@ -262,14 +260,14 @@ export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: num
 /** Whether the last real count found `memories_fts` level with `memories` and no write since has failed to index a row;
  * a read trusts this instead of counting both tables. */
 export function isFtsInSync(db: DatabaseSyncLike): boolean {
-  return getMeta(db, FTS_IN_SYNC_KEY, '0') === '1';
+  return getMeta(db, META_KEY.ftsInSync, '0') === '1';
 }
 
 /** Records what a real count found (or what a failed index write now makes false); read-first so a steady store takes
  * no write lock. */
 export function setFtsInSync(db: DatabaseSyncLike, inSync: boolean): void {
   const flag = inSync ? '1' : '0';
-  if (getMeta(db, FTS_IN_SYNC_KEY) !== flag) setMeta(db, FTS_IN_SYNC_KEY, flag);
+  if (getMeta(db, META_KEY.ftsInSync) !== flag) setMeta(db, META_KEY.ftsInSync, flag);
 }
 
 /** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it because a

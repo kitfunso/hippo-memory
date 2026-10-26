@@ -1,9 +1,9 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { dumpFrontmatter } from '../../base/util/yaml.js';
-import { type DatabaseSyncLike, getMeta, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
+import { type DatabaseSyncLike, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
@@ -28,6 +28,7 @@ import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -220,7 +221,7 @@ export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<Memory
       } catch (err) {
         log.warnThenSample(
           'markdown-mirror',
-          `${entry.id}.md not refreshed (${errorMessage(err)}); the database ` + `write succeeded`,
+          `${entry.id}.md not refreshed (${errorMessage(err)}); the database write succeeded`,
           errorFields(err),
         );
       }
@@ -346,16 +347,16 @@ export function readLastRecall(db: DatabaseSyncLike): Pick<HippoIndex, 'last_ret
   // mismatched pair.
   const lockstepRows = cachedStatement(
     db,
-    `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
+    `SELECT key, value FROM meta WHERE key IN ('${META_KEY.lastRetrievalIds}', '${META_KEY.lastTraceId}')`,
   ).all() as Array<{ key: string; value: string }>;
   const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
   return {
-    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]', {
+    last_retrieval_ids: parseJsonArray(lockstep.get(META_KEY.lastRetrievalIds) ?? '[]', {
       table: 'meta',
-      id: 'last_retrieval_ids',
+      id: META_KEY.lastRetrievalIds,
       column: 'value',
     }),
-    last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
+    last_trace_id: parseLastTraceId(lockstep.get(META_KEY.lastTraceId) ?? ''),
   };
 }
 
@@ -370,9 +371,9 @@ export function buildStatsFromDb(db: DatabaseSyncLike): LegacyStats {
   ).all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
 
   return {
-    total_remembered: Number(getMeta(db, 'total_remembered', '0')),
-    total_recalled: Number(getMeta(db, 'total_recalled', '0')),
-    total_forgotten: Number(getMeta(db, 'total_forgotten', '0')),
+    total_remembered: getMetaNumber(db, META_KEY.totalRemembered),
+    total_recalled: getMetaNumber(db, META_KEY.totalRecalled),
+    total_forgotten: getMetaNumber(db, META_KEY.totalForgotten),
     consolidation_runs: runs.map((run) => ({
       timestamp: run.timestamp,
       decayed: run.decayed,

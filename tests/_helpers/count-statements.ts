@@ -1,6 +1,6 @@
 // Records every SQL statement a real SQLite store executes, so a test can pin how query counts grow with rows.
 import { vi } from 'vitest';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 
 type SqlValue = string | number | bigint | null | Uint8Array;
 type SqlParams = Array<SqlValue | Record<string, SqlValue>>;

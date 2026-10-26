@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet } from '../../src/api/index.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';

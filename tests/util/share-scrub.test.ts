@@ -2,8 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import { maskHomePaths, USER_SEGMENT } from '../../src/base/util/home-path.js';
 import { scrubForSharing } from '../../src/surface/capture/share-scrub.js';
-import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
+import {
+  ASSIGNED_SECRET,
+  ASSIGNED_SECRET_LINES,
+  ORDINARY_CONFIG_LINES,
+  runtimeJoin,
+} from '../_helpers/secret-shapes.js';
 
 const GITHUB_TOKEN = `ghp_${'a'.repeat(36)}`;
 
@@ -102,34 +107,38 @@ describe('scrubForSharing', () => {
   });
 
   // Built at runtime, so no secret-shaped literal sits in source.
-  const PASSWORD = 'Hunter2' + 'Hunter2';
-  const AWS_SECRET = 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY';
+  const PASSWORD = runtimeJoin('Hunter2', 'Hunter2');
+  const AWS_SECRET = runtimeJoin('wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY');
   it.each([
     ['a prefixed password', `DB_PASSWORD=${PASSWORD}`, 'DB_[REDACTED]'],
-    ['a prefixed token', `set MY_API_TOKEN=${'abc123' + 'def456ghi789'}`, 'set MY_API_[REDACTED]'],
-    ['a prefixed secret after a colon', `CLIENT_SECRET: ${'4f9a8b7c6d' + '5e4f3a2b1c'}`, 'CLIENT_[REDACTED]'],
+    ['a prefixed token', `set MY_API_TOKEN=${runtimeJoin('abc123', 'def456ghi789')}`, 'set MY_API_[REDACTED]'],
+    [
+      'a prefixed secret after a colon',
+      `CLIENT_SECRET: ${runtimeJoin('4f9a8b7c6d', '5e4f3a2b1c')}`,
+      'CLIENT_[REDACTED]',
+    ],
     ['a name that runs on past the keyword', `AWS_SECRET_ACCESS_KEY=${AWS_SECRET}`, 'AWS_SECRET_[REDACTED]'],
     [
       'a database URL password',
-      `DATABASE_URL=postgres://admin:${'S3cret' + 'Pw9'}@localhost:5432/app`,
+      `DATABASE_URL=postgres://admin:${runtimeJoin('S3cret', 'Pw9')}@localhost:5432/app`,
       'DATABASE_URL=postgres://[REDACTED]@localhost:5432/app',
     ],
     [
       'a git remote password',
-      `https://user:${'ghsecret' + 'pw99'}@internal-host/repo.git`,
+      `https://user:${runtimeJoin('ghsecret', 'pw99')}@internal-host/repo.git`,
       'https://[REDACTED]@internal-host/repo.git',
     ],
     [
       'a mongodb+srv password',
-      `mongodb+srv://svc:${'pa55' + 'word123'}@cluster0.abcde.mongodb.net/db`,
+      `mongodb+srv://svc:${runtimeJoin('pa55', 'word123')}@cluster0.abcde.mongodb.net/db`,
       'mongodb+srv://[REDACTED]@cluster0.abcde.mongodb.net/db',
     ],
     [
       'a URL password with no digit',
-      `https://user:${'correct' + 'horse'}@internal-host/repo.git`,
+      `https://user:${runtimeJoin('correct', 'horse')}@internal-host/repo.git`,
       'https://[REDACTED]@internal-host/repo.git',
     ],
-    ['a URL password before a path', `https://user:${'p4ss' + 'w0rd'}@host/x`, 'https://[REDACTED]@host/x'],
+    ['a URL password before a path', `https://user:${runtimeJoin('p4ss', 'w0rd')}@host/x`, 'https://[REDACTED]@host/x'],
   ])('redacts %s', (_name, text, scrubbed) => {
     expect(scrubForSharing(text)).toBe(scrubbed);
   });

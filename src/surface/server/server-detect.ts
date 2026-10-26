@@ -57,8 +57,7 @@ export class ServerUnresponsiveError extends Error {
   constructor(info: ServerInfo, probeMs: number, options?: ErrorOptions) {
     super(
       `a hippo server (pid ${info.pid}) is recorded at ${info.url} but did not answer /health within ${probeMs} ms; ` +
-        `it may be busy. ` +
-        'Retry shortly, raise HIPPO_HEALTH_PROBE_MS, or stop that server.',
+        `it may be busy. Retry shortly, raise HIPPO_HEALTH_PROBE_MS, or stop that server.`,
       options,
     );
     this.name = 'ServerUnresponsiveError';

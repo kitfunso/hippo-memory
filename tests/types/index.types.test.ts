@@ -13,7 +13,7 @@ import {
   textOverlap,
   tokenize,
   type MemoryEntry,
-  type SleepOpts,
+  type SleepOptions,
   type SleepContext,
   type SleepResult,
   type SleepStore,
@@ -77,7 +77,7 @@ describe('hippo-memory entry types', () => {
     expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | SleepStore>();
     expectTypeOf(consolidate).returns.toEqualTypeOf<Promise<ConsolidationResult>>();
     expectTypeOf(sleep).parameter(0).toEqualTypeOf<SleepContext>();
-    expectTypeOf(sleep).parameter(1).toEqualTypeOf<SleepOpts | undefined>();
+    expectTypeOf(sleep).parameter(1).toEqualTypeOf<SleepOptions | undefined>();
     expectTypeOf(sleep).returns.toEqualTypeOf<Promise<SleepResult>>();
     // @ts-expect-error sleep needs a Context, not a root path
     typeOnly(() => sleep('/tmp/root'));

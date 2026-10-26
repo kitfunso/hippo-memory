@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import * as path from 'path';
-import { createRequire } from 'module';
+import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import { openHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

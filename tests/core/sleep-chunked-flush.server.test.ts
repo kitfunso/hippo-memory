@@ -32,6 +32,7 @@ import { WRITE_BUDGET, type WriteBudget } from '../../src/base/util/write-budget
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -46,7 +47,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: { new (path: string): DatabaseSyncLike; prototype: DatabaseSyncLike };
 };
 
-const DAY = 86_400_000;
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const MERGED_SQL = `SELECT COUNT(*) AS c FROM memories WHERE content LIKE '[Consolidated pattern%'`;
 const roots: string[] = [];
@@ -89,8 +89,8 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
     opts: Parameters<typeof createMemory>[1] = {},
   ): MemoryEntry => ({
     ...createMemory(text, opts),
-    created: new Date(NOW.getTime() - ageDays * DAY + n++ * 1000).toISOString(),
-    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY).toISOString(),
+    created: new Date(NOW.getTime() - ageDays * DAY_MS + n++ * 1000).toISOString(),
+    lastRetrieved: new Date(NOW.getTime() - idleDays * DAY_MS).toISOString(),
   });
   const clusters = Array.from({ length: counts.clusters }, (_, k) =>
     [0, 1, 2].map((j) => row(`c${k}alpha c${k}beta c${k}gamma c${k}delta variant v${j}`, 90, 1)),

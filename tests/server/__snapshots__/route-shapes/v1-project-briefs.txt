@@ -1,0 +1,8 @@
+GET /v1/project-briefs -> 200
+POST /v1/project-briefs -> 400 repo is required (non-empty string)
+DELETE /v1/project-briefs -> 404 not found
+PUT /v1/project-briefs -> 404 not found
+GET /v1/project-briefs/ -> 404 not found
+POST /v1/project-briefs/ -> 404 not found
+DELETE /v1/project-briefs/ -> 404 not found
+PUT /v1/project-briefs/ -> 404 not found

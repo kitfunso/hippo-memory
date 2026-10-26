@@ -1,0 +1,28 @@
+GET /v1/project-briefs/1 -> 404 project brief 1 not found
+POST /v1/project-briefs/1 -> 404 not found
+DELETE /v1/project-briefs/1 -> 404 not found
+PUT /v1/project-briefs/1 -> 404 not found
+GET /v1/project-briefs/007 -> 404 project brief 7 not found
+POST /v1/project-briefs/007 -> 404 not found
+DELETE /v1/project-briefs/007 -> 404 not found
+PUT /v1/project-briefs/007 -> 404 not found
+GET /v1/project-briefs/abc -> 404 not found
+POST /v1/project-briefs/abc -> 404 not found
+DELETE /v1/project-briefs/abc -> 404 not found
+PUT /v1/project-briefs/abc -> 404 not found
+GET /v1/project-briefs/-1 -> 404 not found
+POST /v1/project-briefs/-1 -> 404 not found
+DELETE /v1/project-briefs/-1 -> 404 not found
+PUT /v1/project-briefs/-1 -> 404 not found
+GET /v1/project-briefs/%31 -> 404 not found
+POST /v1/project-briefs/%31 -> 404 not found
+DELETE /v1/project-briefs/%31 -> 404 not found
+PUT /v1/project-briefs/%31 -> 404 not found
+GET /v1/project-briefs/ -> 404 not found
+POST /v1/project-briefs/ -> 404 not found
+DELETE /v1/project-briefs/ -> 404 not found
+PUT /v1/project-briefs/ -> 404 not found
+GET /v1/project-briefs/1/ -> 404 not found
+POST /v1/project-briefs/1/ -> 404 not found
+DELETE /v1/project-briefs/1/ -> 404 not found
+PUT /v1/project-briefs/1/ -> 404 not found

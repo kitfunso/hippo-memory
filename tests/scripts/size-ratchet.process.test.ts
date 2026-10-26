@@ -123,7 +123,7 @@ describe('check-size-ratchet.mjs', () => {
 
   it('exempts the Z0 test file the script names, and no baseline entry excuses another test file', () => {
     const long = 'export const x = 1;\n'.repeat(801);
-    withFixture({ 'tests/token-eval-z0-homes.test.ts': long }, {}, ({ run }) => {
+    withFixture({ 'tests/eval/token-eval-z0-homes.test.ts': long }, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('0 test files over 800 lines');

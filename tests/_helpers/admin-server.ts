@@ -5,7 +5,7 @@ import { serve } from './store-switch.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 
-type ServeOpts = Parameters<typeof serve>[0];
+type ServeOptions = Parameters<typeof serve>[0];
 
 export function mintAdminKey(hippoRoot: string): string {
   const db = openHippoDb(hippoRoot);
@@ -17,7 +17,7 @@ export function mintAdminKey(hippoRoot: string): string {
 }
 
 /** serve() plus an admin key that global fetch sends to this server unless the call names its own Authorization. */
-export async function serveAsAdmin(opts: ServeOpts): Promise<ServerHandle> {
+export async function serveAsAdmin(opts: ServeOptions): Promise<ServerHandle> {
   // Minted before the boot so the served store holds the key.
   const key = mintAdminKey(opts.hippoRoot);
   // A keyed caller is charged by the per-caller limiter where a keyless one was not, so these runs switch it off.

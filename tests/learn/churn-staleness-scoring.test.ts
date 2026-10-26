@@ -1,8 +1,8 @@
 /** FE2 staleness-from-code-churn: outcome-clearing, rank multiplier and config. */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';

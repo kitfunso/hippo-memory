@@ -9,10 +9,10 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadChildrenOfSummary, loadAllL2Summaries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
-const DAY = 86_400_000;
 const roots: string[] = [];
 
 function newRoot(): string {
@@ -63,7 +63,7 @@ describe('sleep skips superseded rows', () => {
     );
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
 
-    await consolidate(root, { now: new Date(Date.now() + DAY), fetcher });
+    await consolidate(root, { now: new Date(Date.now() + DAY_MS), fetcher });
 
     const sent = prompts.join('\n');
     expect(sent).toContain('blamed the dropped billing table');

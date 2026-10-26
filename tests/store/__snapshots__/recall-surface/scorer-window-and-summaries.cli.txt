@@ -1,0 +1,125 @@
+{
+  "global": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":2}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":2}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 2,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 143,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "2",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 1,
+        "score": 0.9104453098338096,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 2,
+        "score": 0.8272957909042091,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 2,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_p_plain","score":0.9104453098338096,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_pinned","score":0.8272957909042091,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"}],"total":2,"suppressionSummary":{"totalCandidates":17,"droppedPreRank":0,"droppedByBudget":15,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+  },
+}

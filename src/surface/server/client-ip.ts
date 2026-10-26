@@ -68,8 +68,7 @@ export class UntrustedClientIpHeaderError extends Error {
   constructor(readonly header: string) {
     super(
       `hippo serve: HIPPO_CLIENT_IP_HEADER is ${header} but HIPPO_TRUSTED_PROXIES is unset, so no peer may set that ` +
-        `header. ` +
-        "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs.",
+        `header. Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs.`,
     );
     this.name = 'UntrustedClientIpHeaderError';
   }

@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';

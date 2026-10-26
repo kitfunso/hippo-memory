@@ -1,0 +1,28 @@
+GET /v1/customer-notes/1/supersede -> 404 not found
+POST /v1/customer-notes/1/supersede -> 400 note is required (non-empty string)
+DELETE /v1/customer-notes/1/supersede -> 404 not found
+PUT /v1/customer-notes/1/supersede -> 404 not found
+GET /v1/customer-notes/007/supersede -> 404 not found
+POST /v1/customer-notes/007/supersede -> 400 note is required (non-empty string)
+DELETE /v1/customer-notes/007/supersede -> 404 not found
+PUT /v1/customer-notes/007/supersede -> 404 not found
+GET /v1/customer-notes/abc/supersede -> 404 not found
+POST /v1/customer-notes/abc/supersede -> 404 not found
+DELETE /v1/customer-notes/abc/supersede -> 404 not found
+PUT /v1/customer-notes/abc/supersede -> 404 not found
+GET /v1/customer-notes/-1/supersede -> 404 not found
+POST /v1/customer-notes/-1/supersede -> 404 not found
+DELETE /v1/customer-notes/-1/supersede -> 404 not found
+PUT /v1/customer-notes/-1/supersede -> 404 not found
+GET /v1/customer-notes/%31/supersede -> 404 not found
+POST /v1/customer-notes/%31/supersede -> 404 not found
+DELETE /v1/customer-notes/%31/supersede -> 404 not found
+PUT /v1/customer-notes/%31/supersede -> 404 not found
+GET /v1/customer-notes//supersede -> 404 not found
+POST /v1/customer-notes//supersede -> 404 not found
+DELETE /v1/customer-notes//supersede -> 404 not found
+PUT /v1/customer-notes//supersede -> 404 not found
+GET /v1/customer-notes/1/supersede/ -> 404 not found
+POST /v1/customer-notes/1/supersede/ -> 404 not found
+DELETE /v1/customer-notes/1/supersede/ -> 404 not found
+PUT /v1/customer-notes/1/supersede/ -> 404 not found

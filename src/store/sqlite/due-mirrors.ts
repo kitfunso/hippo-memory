@@ -1,7 +1,7 @@
 // Mirrors rewritten after the job that changed their rows. Each row's meta mark commits with the row, so a crash before
 // the rewrite leaves the mark, and the store's next open rewrites that mirror.
 import { randomUUID } from 'node:crypto';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import {
   closeHippoDb,
   type DatabaseSyncLike,

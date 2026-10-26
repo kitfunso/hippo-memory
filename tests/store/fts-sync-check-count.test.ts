@@ -1,7 +1,7 @@
 // backfillFtsIndex counted the FTS5 virtual table itself on every open,
 // walking every document. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';

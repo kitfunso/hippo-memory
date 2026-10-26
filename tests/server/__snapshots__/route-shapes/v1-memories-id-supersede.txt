@@ -1,0 +1,28 @@
+GET /v1/memories/1/supersede -> 404 not found
+POST /v1/memories/1/supersede -> 400 content is required
+DELETE /v1/memories/1/supersede -> 404 not found
+PUT /v1/memories/1/supersede -> 404 not found
+GET /v1/memories/007/supersede -> 404 not found
+POST /v1/memories/007/supersede -> 400 content is required
+DELETE /v1/memories/007/supersede -> 404 not found
+PUT /v1/memories/007/supersede -> 404 not found
+GET /v1/memories/abc/supersede -> 404 not found
+POST /v1/memories/abc/supersede -> 400 content is required
+DELETE /v1/memories/abc/supersede -> 404 not found
+PUT /v1/memories/abc/supersede -> 404 not found
+GET /v1/memories/-1/supersede -> 404 not found
+POST /v1/memories/-1/supersede -> 400 content is required
+DELETE /v1/memories/-1/supersede -> 404 not found
+PUT /v1/memories/-1/supersede -> 404 not found
+GET /v1/memories/%31/supersede -> 404 not found
+POST /v1/memories/%31/supersede -> 400 content is required
+DELETE /v1/memories/%31/supersede -> 404 not found
+PUT /v1/memories/%31/supersede -> 404 not found
+GET /v1/memories//supersede -> 404 not found
+POST /v1/memories//supersede -> 404 not found
+DELETE /v1/memories//supersede -> 404 not found
+PUT /v1/memories//supersede -> 404 not found
+GET /v1/memories/1/supersede/ -> 404 not found
+POST /v1/memories/1/supersede/ -> 404 not found
+DELETE /v1/memories/1/supersede/ -> 404 not found
+PUT /v1/memories/1/supersede/ -> 404 not found

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   loadSearchEntries,
   writeEntry,

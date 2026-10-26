@@ -15,7 +15,7 @@ const IMPORTS_EXEC = new RegExp(
   String.raw`import\s*\{[^}]*\b(?:exec|execSync)\b[^}]*\}\s*from\s*'(?:node:)?child_` + "process'",
 );
 const MARKER = 'shell-ran.txt';
-const WRITES_MARKER = `node -e "require('fs').writeFileSync('${MARKER}', 'x')"`;
+const WRITES_MARKER = `node -e "require('node:fs').writeFileSync('${MARKER}', 'x')"`;
 let home = '';
 
 const hippoRun = (...args: string[]): Promise<InProcessResult> =>

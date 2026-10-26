@@ -36,6 +36,15 @@ describe('check-test-stores', () => {
     expect(handBuiltStores(text)).toEqual([]);
   });
 
+  it('flags sqliteStore on a temp dir and passes it on a function parameter', () => {
+    const text = [
+      "const dir = mkdtempSync(join(tmpdir(), 'x-'));",
+      'sqliteStore(dir);',
+      'const open = (root: string) => sqliteStore(root);',
+    ].join('\n');
+    expect(lines(text)).toEqual([2]);
+  });
+
   it('flags a temp dir handed to the CLI as HIPPO_HOME or as the cwd of a hippo spawn', () => {
     const text = [
       "const home = mkdtempSync(join(tmpdir(), 'h-'));",

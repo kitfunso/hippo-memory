@@ -99,6 +99,25 @@ export const HANDOFF_COLUMNS =
 // SAFETY: every read cast to this row selects HANDOFF_COLUMNS; scripts/check-row-casts.mjs proves it.
 export type SessionHandoffDbRow = SessionHandoffRow;
 
+type HandoffColumn = readonly [column: string, value: string | null];
+
+/** The columns an insert and a transcript rewrite both write, so the two statements cannot drift apart. */
+function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
+  return [
+    ['repo_root', handoff.repoRoot ?? null],
+    ['task_id', handoff.taskId ?? null],
+    ['summary', handoff.summary],
+    ['next_action', handoff.nextAction ?? null],
+    ['artifacts_json', JSON.stringify(handoff.artifacts ?? [])],
+    ['scope', handoff.scope ?? null],
+    ['constraints_json', JSON.stringify(handoff.constraints ?? [])],
+    ['evidence_json', handoff.evidence ? JSON.stringify(handoff.evidence) : null],
+    ['outcome', handoff.outcome ?? null],
+    ['target_runtime', handoff.targetRuntime ?? null],
+    ['card_id', handoff.cardId ?? null],
+  ];
+}
+
 function insertHandoffRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -106,29 +125,18 @@ function insertHandoffRow(
   stamp: ContinuityStamp | null,
   now: string,
 ) {
-  return cachedStatement(
-    db,
-    `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, ` +
-      `scope, tenant_id, created_at, ` +
-      `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
-      `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
-  ).run(
-    handoff.sessionId,
-    handoff.repoRoot ?? null,
-    handoff.taskId ?? null,
-    handoff.summary,
-    handoff.nextAction ?? null,
-    JSON.stringify(handoff.artifacts ?? []),
-    handoff.scope ?? null,
-    tenantId,
-    now,
-    JSON.stringify(handoff.constraints ?? []),
-    handoff.evidence ? JSON.stringify(handoff.evidence) : null,
-    handoff.outcome ?? null,
-    handoff.targetRuntime ?? null,
-    handoff.cardId ?? null,
-    stamp?.owner ?? null,
-    stamp?.origin ?? null,
+  const columns: HandoffColumn[] = [
+    ['session_id', handoff.sessionId],
+    ['tenant_id', tenantId],
+    ['created_at', now],
+    ...handoffContentColumns(handoff),
+    ['owner_subject', stamp?.owner ?? null],
+    ['origin_project', stamp?.origin ?? null],
+  ];
+  const names = columns.map(([column]) => column).join(', ');
+  const marks = columns.map(() => '?').join(', ');
+  return cachedStatement(db, `INSERT INTO session_handoffs(${names}) VALUES (${marks})`).run(
+    ...columns.map(([, value]) => value),
   );
 }
 
@@ -274,32 +282,16 @@ function replaceTranscriptHandoff(
   key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
-  const newest =
-    `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id ` + `DESC LIMIT 1`;
+  const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')}
+    ORDER BY created_at DESC, id DESC LIMIT 1`;
+  const columns: HandoffColumn[] = [['created_at', new Date().toISOString()], ...handoffContentColumns(handoff)];
+  const assignments = columns.map(([column]) => `${column} = ?`).join(', ');
   const result = cachedStatement(
     db,
-    `
-    UPDATE session_handoffs SET repo_root = ?, task_id = ?, summary = ?, next_action = ?, artifacts_json = ?, scope =
-    ?, created_at = ?,
-      constraints_json = ?, evidence_json = ?, outcome = ?, target_runtime = ?, card_id = ?
-    WHERE id = (${newest}) AND json_valid(evidence_json) AND json_extract(evidence_json, '$.derivedFrom') =
-    'transcript'
-  `,
-  ).run(
-    handoff.repoRoot ?? null,
-    handoff.taskId ?? null,
-    handoff.summary,
-    handoff.nextAction ?? null,
-    JSON.stringify(handoff.artifacts ?? []),
-    handoff.scope ?? null,
-    new Date().toISOString(),
-    JSON.stringify(handoff.constraints ?? []),
-    handoff.evidence ? JSON.stringify(handoff.evidence) : null,
-    handoff.outcome ?? null,
-    handoff.targetRuntime ?? null,
-    handoff.cardId ?? null,
-    ...params,
-  );
+    `UPDATE session_handoffs SET ${assignments}
+    WHERE id = (${newest}) AND json_valid(evidence_json)
+      AND json_extract(evidence_json, '$.derivedFrom') = 'transcript'`,
+  ).run(...columns.map(([, value]) => value), ...params);
   if (Number(result.changes ?? 0) === 0) return null;
   const row = cachedStatement(db, `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(
     ...params,

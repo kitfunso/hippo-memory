@@ -44,10 +44,10 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 oneRequestPerTest();
-const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
 const DORMANT_OFF = { replay: { count: 0 }, dormant: { enabled: false } };
 

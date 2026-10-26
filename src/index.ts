@@ -45,7 +45,7 @@ export {
 } from './entry/memory.js';
 export {
   ConsolidationResult,
-  type SleepOpts,
+  type SleepOptions,
   type SleepResult,
   type SleepContext,
   type SleepStore,

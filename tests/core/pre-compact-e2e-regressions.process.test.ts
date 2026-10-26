@@ -1,7 +1,7 @@
 // Redaction, per-session fallback, oversized-record and uninitialized-store regressions of pre-compact and compact-resume.
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHippoRoot } from '../../src/host/project-identity.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';

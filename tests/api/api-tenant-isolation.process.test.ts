@@ -197,7 +197,7 @@ describe('api tenant isolation', () => {
 // HTTP POST /v1/auth/keys with a Bearer for tenant alpha and a body
 // containing tenantId='bravo' must mint the key for ALPHA, not bravo.
 // The body field is ignored at the HTTP layer; opts.tenantId no longer
-// exists on AuthCreateOpts.
+// exists on AuthCreateOptions.
 
 describe('authCreate HTTP body.tenantId ignored', () => {
   let home: string;

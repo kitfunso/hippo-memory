@@ -1,7 +1,7 @@
 // `hippo codex-run`: launches the real Codex, then starts the session-end worker once Codex exits.
-import * as path from 'path';
-import * as fs from 'fs';
-import { spawn } from 'child_process';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { installedRealCodexPath, resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { exitAfterFlush } from '../../../base/util/crash-handlers.js';

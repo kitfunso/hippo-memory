@@ -6,15 +6,14 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { detectSecret, redactSecretsStrict } from '../../src/base/util/secret-detect.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { contextGet } from '../../src/api/index.js';
-import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -23,6 +22,7 @@ import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
 
 oneRequestPerTest();
 
@@ -86,18 +86,21 @@ describe('detectSecret patterns', () => {
   });
 
   it.each([
-    ['a prefixed password', 'run DB_PASSWORD=' + 'Hunter2Hunter2' + ' before the migration'],
-    ['a prefixed token', 'set MY_API_TOKEN=' + 'abc123def456ghi789'],
-    ['a prefixed secret after a colon', 'CLIENT_SECRET: ' + '4f9a8b7c6d5e4f3a2b1c'],
+    ['a prefixed password', runtimeJoin('run DB_PASSWORD=', 'Hunter2Hunter2', ' before the migration')],
+    ['a prefixed token', runtimeJoin('set MY_API_TOKEN=', 'abc123def456ghi789')],
+    ['a prefixed secret after a colon', runtimeJoin('CLIENT_SECRET: ', '4f9a8b7c6d5e4f3a2b1c')],
     [
       'a name that runs on past the keyword',
-      'AWS_SECRET_ACCESS_KEY=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY',
+      runtimeJoin('AWS_SECRET_ACCESS_KEY=', 'wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY'),
     ],
-    ['a lower-case prefixed name', 'aws_secret_access_key=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY'],
-    ['a URL password', 'DATABASE_URL=postgres://admin:' + 'S3cretPw9' + '@localhost:5432/app'],
-    ['a passwd name', 'export SMTP_PASSWD=' + 'Tr0ub4dor3x99'],
-    ['a private key name', 'PRIVATE_KEY=' + '9f8e7d6c5b4a3210ffee'],
-    ['an access key name', 'S3_ACCESS_KEY=' + 'AKQ7Z2X9W4V1U8T3'],
+    [
+      'a lower-case prefixed name',
+      runtimeJoin('aws_secret_access_key=', 'wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY'),
+    ],
+    ['a URL password', runtimeJoin('DATABASE_URL=postgres://admin:', 'S3cretPw9', '@localhost:5432/app')],
+    ['a passwd name', runtimeJoin('export SMTP_PASSWD=', 'Tr0ub4dor3x99')],
+    ['a private key name', runtimeJoin('PRIVATE_KEY=', '9f8e7d6c5b4a3210ffee')],
+    ['an access key name', runtimeJoin('S3_ACCESS_KEY=', 'AKQ7Z2X9W4V1U8T3')],
   ])('flags %s', (_name, content) => {
     expect(flagged(content)).toBe(true);
   });
@@ -123,7 +126,7 @@ describe('detectSecret patterns', () => {
     const query = 'http://localhost:8080?next=a@b.co';
     expect(flagged(query)).toBe(false);
     expect(redactSecretsStrict(query)).toBe(query);
-    const withPassword = `https://user:${'p4ss' + 'w0rd'}@host/x`;
+    const withPassword = `https://user:${runtimeJoin('p4ss', 'w0rd')}@host/x`;
     expect(detectSecret({ content: withPassword, tags: [] }).reason).toBe('pattern:url-password');
     expect(redactSecretsStrict(withPassword)).toBe('https://[REDACTED]@host/x');
   });
@@ -131,16 +134,16 @@ describe('detectSecret patterns', () => {
 
 describe('redactSecretsStrict', () => {
   // Built at runtime, so no secret-shaped literal sits in source.
-  const AWS = 'AKIA' + '1234567890ABCDEF';
+  const AWS = runtimeJoin('AKIA', '1234567890ABCDEF');
   const GHP = 'ghp_' + 'A'.repeat(36);
   const GH_PAT = 'github_pat_' + 'A'.repeat(24);
-  const SLACK = 'xoxb-' + '1234567890abcdef';
-  const STRIPE = 'sk_live_' + 'A1b2C3d4E5f6G7h8';
+  const SLACK = runtimeJoin('xoxb-', '1234567890abcdef');
+  const STRIPE = runtimeJoin('sk_live_', 'A1b2C3d4E5f6G7h8');
   const GOOGLE = 'AIza' + 'A'.repeat(35);
   const PEM = '-----BEGIN RSA PRIVATE KEY-----\n' + 'A'.repeat(64) + '\n-----END RSA PRIVATE KEY-----';
   const SK_NO_KEYWORD = 'sk-' + 'A'.repeat(24);
-  const SK_X_NO_KEYWORD = 'sk_' + 'vendor_deadbeef123456';
-  const ASSIGNMENT = 'api_key=' + '9f8e7d6c5b4a3210' + 'ffff';
+  const SK_X_NO_KEYWORD = runtimeJoin('sk_', 'vendor_deadbeef123456');
+  const ASSIGNMENT = runtimeJoin('api_key=', '9f8e7d6c5b4a3210', 'ffff');
   const BEARER = 'Bearer ' + 'A'.repeat(20);
   const BEARER_UPPER = 'BEARER ' + 'D'.repeat(20);
   const JWT = 'eyJ' + 'A'.repeat(10) + '.eyJ' + 'B'.repeat(10) + '.' + 'C'.repeat(10);

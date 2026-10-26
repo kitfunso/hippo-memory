@@ -151,7 +151,7 @@ function hang(tag) {
     said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
   ]);
   // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
-  const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  const tick = `const fs=require('node:fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
   const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
   fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
   log(`hang ${tag}`);

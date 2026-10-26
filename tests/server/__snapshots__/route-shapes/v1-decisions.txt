@@ -1,0 +1,8 @@
+GET /v1/decisions -> 200
+POST /v1/decisions -> 400 text is required (non-empty string)
+DELETE /v1/decisions -> 404 not found
+PUT /v1/decisions -> 404 not found
+GET /v1/decisions/ -> 404 not found
+POST /v1/decisions/ -> 404 not found
+DELETE /v1/decisions/ -> 404 not found
+PUT /v1/decisions/ -> 404 not found

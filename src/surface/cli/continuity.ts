@@ -274,8 +274,7 @@ async function sessionResume(hippoRoot: string, tenantId: string, sessionId: str
 }
 
 const HANDOFF_CREATE_USAGE =
-  'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] ' +
-  '[--task <id>] [--artifact <path>...] ' +
+  'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] ' +
   '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
   '[--tests <pass|fail|unknown>]';
 

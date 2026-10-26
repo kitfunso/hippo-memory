@@ -4,7 +4,7 @@
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
 import {
@@ -47,7 +47,7 @@ interface RecallPresenterOptions {
   readonly anchorRing: RingBuffer | null;
   readonly queryHash: number;
   readonly out: RenderSlot;
-  readonly hintRows: (rendered: RenderedRecall) => AppendAuditOpts[];
+  readonly hintRows: (rendered: RenderedRecall) => AppendAuditOptions[];
 }
 
 // Candidate pool the tool ranks before the token budget trims what is shown.

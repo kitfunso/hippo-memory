@@ -1,0 +1,28 @@
+GET /v1/quarantine/1/reject -> 404 not found
+POST /v1/quarantine/1/reject -> 404 not quarantined: 1
+DELETE /v1/quarantine/1/reject -> 404 not found
+PUT /v1/quarantine/1/reject -> 404 not found
+GET /v1/quarantine/007/reject -> 404 not found
+POST /v1/quarantine/007/reject -> 404 not quarantined: 007
+DELETE /v1/quarantine/007/reject -> 404 not found
+PUT /v1/quarantine/007/reject -> 404 not found
+GET /v1/quarantine/abc/reject -> 404 not found
+POST /v1/quarantine/abc/reject -> 404 not quarantined: abc
+DELETE /v1/quarantine/abc/reject -> 404 not found
+PUT /v1/quarantine/abc/reject -> 404 not found
+GET /v1/quarantine/-1/reject -> 404 not found
+POST /v1/quarantine/-1/reject -> 404 not quarantined: -1
+DELETE /v1/quarantine/-1/reject -> 404 not found
+PUT /v1/quarantine/-1/reject -> 404 not found
+GET /v1/quarantine/%31/reject -> 404 not found
+POST /v1/quarantine/%31/reject -> 404 not quarantined: 1
+DELETE /v1/quarantine/%31/reject -> 404 not found
+PUT /v1/quarantine/%31/reject -> 404 not found
+GET /v1/quarantine//reject -> 404 not found
+POST /v1/quarantine//reject -> 404 not found
+DELETE /v1/quarantine//reject -> 404 not found
+PUT /v1/quarantine//reject -> 404 not found
+GET /v1/quarantine/1/reject/ -> 404 not found
+POST /v1/quarantine/1/reject/ -> 404 not found
+DELETE /v1/quarantine/1/reject/ -> 404 not found
+PUT /v1/quarantine/1/reject/ -> 404 not found

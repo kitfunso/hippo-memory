@@ -1,5 +1,5 @@
 // A handoff's git evidence, read with no store, so a hook with no store can send it with the session's end.
-import { execFileSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 

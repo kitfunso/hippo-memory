@@ -15,7 +15,7 @@ import type { CallerProject } from '../prompt-hook.js';
 import type { GlobalInReach } from '../types.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 
 /** How many rows a recall loads and returns, and the bands it adds beside them. */
 export interface RecallWindowOptions {
@@ -83,7 +83,7 @@ export interface RecallTraceOptions {
    *  Under `retrieveRanking` it also drops the 'mcp' trace of the shown list. HTTP and SDK callers leave it unset. */
   suppressRecallTrace?: boolean;
   // Rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it.
-  leadingAudit?: readonly AppendAuditOpts[];
+  leadingAudit?: readonly AppendAuditOptions[];
   // The ranker then records the recall in full (finish.ts); `retrieve` also fills `recallHistory` and `leadingAudit`.
   recordAs?: RecallRecording;
 }
@@ -137,7 +137,7 @@ export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
  * `tokens`: the text it prints, for the ledger. */
 export interface ShownCliCore {
   results: readonly SearchResult[];
-  audit: readonly AppendAuditOpts[];
+  audit: readonly AppendAuditOptions[];
   tokens: number;
   anchoredOn?: string; // the memory its anchoring hint named; the session ring keeps it for the next recall's cooldown
 }
@@ -146,7 +146,7 @@ export interface ShownCliCore {
  * land or none. */
 export interface ShownRanking {
   ids: readonly string[];
-  audit: readonly AppendAuditOpts[];
+  audit: readonly AppendAuditOptions[];
   /** Read only under `recordAs`: the memory the shown list's anchoring hint named, and the shown text's tokens. */
   anchoredOn?: string;
   tokens?: number;

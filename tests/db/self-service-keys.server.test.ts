@@ -14,7 +14,7 @@ import {
   authCreateSelf,
   authRevoke,
   type Actor,
-  type AuthCreateSelfOpts,
+  type AuthCreateSelfOptions,
   type AuthCreateSelfResult,
   type AuthRevokeResult,
 } from '../../src/api/index.js';
@@ -22,16 +22,16 @@ import { ForbiddenError } from '../../src/base/errors/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 const TENANT = 'ext-tenant';
-const DAY_MS = 86_400_000;
 const PEOPLE = new Map<string, ResolvedBearer>([
   ['tok.alice', { tenantId: TENANT, subject: 'alice@corp.example', role: 'member' }],
   ['tok.bob', { tenantId: TENANT, subject: 'bob@corp.example', role: 'member' }],
   ['tok.boss', { tenantId: TENANT, subject: 'boss@corp.example', role: 'admin' }],
 ]);
 const ALICE = 'tok.alice';
-const OPTS: AuthCreateSelfOpts = { ttlDays: 90, perSubject: 3 };
+const OPTS: AuthCreateSelfOptions = { ttlDays: 90, perSubject: 3 };
 
 let home: string;
 let handle: ServerHandle | undefined;
@@ -60,14 +60,18 @@ function actorOf(token: string): Actor {
   return { subject: person.subject, role: person.role, viaAuthResolver: true };
 }
 
-function mintAs(actor: Actor, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> {
+function mintAs(
+  actor: Actor,
+  label = 'laptop',
+  over: Partial<AuthCreateSelfOptions> = {},
+): Promise<AuthCreateSelfResult> {
   return authCreateSelf(apiCtx(home, TENANT, actor), { label, ...OPTS, ...over });
 }
 
 const selfMint = (
   token = ALICE,
   label = 'laptop',
-  over: Partial<AuthCreateSelfOpts> = {},
+  over: Partial<AuthCreateSelfOptions> = {},
 ): Promise<AuthCreateSelfResult> => mintAs(actorOf(token), label, over);
 
 interface KeyRow {

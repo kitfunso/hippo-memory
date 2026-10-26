@@ -8,6 +8,7 @@ import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
@@ -16,10 +17,9 @@ afterEach(() => {
 });
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
-const DAY = 86400000;
 
 function row(id: string, ageDays: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  const at = new Date(NOW.getTime() - ageDays * DAY).toISOString();
+  const at = new Date(NOW.getTime() - ageDays * DAY_MS).toISOString();
   return {
     ...createMemory(`row ${id} body`, { tenantId: 'default' }),
     id,

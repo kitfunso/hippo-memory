@@ -6,7 +6,7 @@
   "arrowParens": "always",
   "ignorePatterns": [
     "scripts/token-eval/**",
-    "tests/token-eval-*",
+    "tests/eval/token-eval-*",
     "scripts/e1-lifecycle/**",
     "scripts/z1-latency.mjs",
     "scripts/z1-replay.mjs",

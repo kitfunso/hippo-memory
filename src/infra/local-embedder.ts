@@ -1,6 +1,6 @@
 // The local Transformers.js embedder: it imports the package and loads each model's pipeline once per process.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { DEFAULT_EMBEDDING_MODEL, resolveTransformersPackage } from '../base/embeddings/local.js';
 import type { EmbeddingRole } from '../base/ports/embedder.js';
 import { envModelCache } from '../base/util/env.js';

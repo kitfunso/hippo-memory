@@ -7,7 +7,7 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../src/base/ports/store/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { tombstoneChecks as checksOver } from '../../src/domain/consolidate/tombstones.js';
 
@@ -47,7 +47,7 @@ function refusals(root: string, tenantId: string) {
   }
 }
 
-const refusal = (targetId: string): AppendAuditOpts => ({
+const refusal = (targetId: string): AppendAuditOptions => ({
   tenantId: 'ta',
   actor: 'sleep',
   op: 'reject_refusal',

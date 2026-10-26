@@ -2,7 +2,8 @@
 
 import type { ToolInputSchema } from './tool-args.js';
 import { DEFAULT_RECALL_BUDGET } from '../../base/rank/search-types.js';
-import { DEFAULT_ASSEMBLE_BUDGET } from '../../api/assemble.js';
+import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../api/assemble.js';
+import { DEFAULT_DRILL_DOWN_LIMIT, MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
 import { DEFAULT_LEARN_DAYS, MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
@@ -10,6 +11,8 @@ import { DEFAULT_CONFIG } from '../../base/config/config.js';
 // ── Tool definitions ──
 
 // HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
+const FRESH_TAIL_NOTE = `(default ${DEFAULT_FRESH_TAIL_COUNT}). These are never evicted.`;
+const FRESH_TAIL_DESCRIPTION = `Recent raw rows always kept verbatim ${FRESH_TAIL_NOTE}`;
 const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
 
 interface McpToolDefinition {
@@ -22,11 +25,10 @@ export const TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'hippo_recall',
     description:
-      'Retrieve relevant memories from the project memory store. Returns memories ranked by relevance, strength, and ' +
-      'recency within the token budget. Use ' +
-      'at session start or when you need context about a topic. Pass include_continuity=true to also surface the ' +
-      'active task snapshot, latest matching ' +
-      'session handoff, and recent session events as a "## Continuity" appendix.',
+      'Retrieve relevant memories from the project memory store. Returns memories ranked by relevance, strength, ' +
+      'and recency within the token budget. Use at session start or when you need context about a topic. Pass ' +
+      'include_continuity=true to also surface the active task snapshot, latest matching session handoff, and ' +
+      'recent session events as a "## Continuity" appendix.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -49,40 +51,33 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'string',
           description:
             'Restrict results and continuity to memories/rows matching this scope exactly. When omitted, ' +
-            'default-deny ' +
-            'applies to ANY ' +
-            '<source>:private:* (slack, github, ...) and unknown-legacy rows.',
+            'default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
         fresh_tail_count: {
           type: 'number',
           description:
             'When > 0, surface the last N kind=raw rows tagged isFreshTail=true regardless of query match. Useful ' +
-            'for ' +
-            '"what did I just see" ' +
-            'continuity. Capped at 200.',
+            'for "what did I just see" continuity. Capped at 200.',
         },
         fresh_tail_session_id: {
           type: 'string',
           description:
             'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide (legacy ' +
-            'v1.5.2 behaviour, pre-v1.6.3 ' +
-            'default).',
+            'v1.5.2 behaviour, pre-v1.6.3 default).',
         },
         summarize_overflow: {
           type: 'boolean',
           description:
             'When true (default), entries that overflow the limit and share a level-2 parent summary cause that ' +
-            'summary to be appended in their ' +
-            'place. Set false for strict-limit behaviour.',
+            'summary to be appended in their place. Set false for strict-limit behaviour.',
         },
         scorer_window: {
           type: 'number',
           description:
             `How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out ` +
-            `against. ` +
-            `The main list ranks the whole tenant store, so scorer_window does not narrow it. ` +
-            `Default ${DEFAULT_SEARCH_CANDIDATE_LIMIT}. ` +
-            `Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.`,
+            `against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default ` +
+            `${DEFAULT_SEARCH_CANDIDATE_LIMIT}. Rejected as RecallContractError code=invalid_scorer_window if ` +
+            `0/negative/non-finite/non-numeric.`,
         },
         session_id: {
           type: 'string',
@@ -100,10 +95,9 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_assemble',
     description:
       'Build a chronologically-ordered context window for a session. Returns ordered items: fresh-tail raw rows + ' +
-      'level-2 summary substitutions for older ' +
-      'rows + budget-fit. Hippo-additive vs lossless-claw: eviction picks lowest-strength non-fresh-tail items first ' +
-      'instead of oldest-first. ' +
-      'Tenant-scoped; default-deny on private scopes.',
+      'level-2 summary substitutions for older rows + budget-fit. Hippo-additive vs lossless-claw: eviction picks ' +
+      'lowest-strength non-fresh-tail items first instead of oldest-first. Tenant-scoped; default-deny on private ' +
+      'scopes.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -121,7 +115,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         fresh_tail_count: {
           type: 'number',
-          description: 'Recent raw rows always kept verbatim (default 10). These are never evicted.',
+          description: FRESH_TAIL_DESCRIPTION,
         },
         summarize_older: {
           type: 'boolean',
@@ -133,8 +127,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'string',
           description:
             'Restrict to memories whose scope matches exactly. When omitted, default-deny applies to ANY ' +
-            '<source>:private:* scope and ' +
-            'unknown:legacy rows. Pass an explicit scope to assemble a private session with consent.',
+            '<source>:private:* scope and unknown:legacy rows. Pass an explicit scope to assemble a private session ' +
+            'with consent.',
         },
       },
       required: ['session_id'],
@@ -144,9 +138,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_drill',
     description:
       'Walk one step down the DAG from a level-2+ topic summary to its direct children. Companion to hippo_recall: ' +
-      'when recall returns an item with ' +
-      'isSummary=true and substitutedFor=[ids], pass the summary id here to recover the original detail. ' +
-      'Tenant-scoped; default-deny on private scopes.',
+      'when recall returns an item with isSummary=true and substitutedFor=[ids], pass the summary id here to ' +
+      'recover the original detail. Tenant-scoped; default-deny on private scopes.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -160,7 +153,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_LIST_LIMIT,
-          description: `Max children to return (default 50; max ${MAX_LIST_LIMIT}).`,
+          description: `Max children to return (default ${DEFAULT_DRILL_DOWN_LIMIT}; max ${MAX_LIST_LIMIT}).`,
         },
         budget: {
           type: 'number',
@@ -173,11 +166,10 @@ export const TOOLS: readonly McpToolDefinition[] = [
         depth: {
           type: 'integer',
           minimum: 1,
-          maximum: 10,
+          maximum: MAX_DRILL_DOWN_DEPTH,
           description:
-            'v0.30 / E5: walk N levels down (default 1 = direct children only). Higher values include children of ' +
-            'children. Token budget remains ' +
-            'GLOBAL across levels. Hard cap 10.',
+            `v0.30 / E5: walk N levels down (default 1 = direct children only). Higher values include children of ` +
+            `children. Token budget remains GLOBAL across levels. Hard cap ${MAX_DRILL_DOWN_DEPTH}.`,
         },
       },
       required: ['summary_id'],
@@ -187,8 +179,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_remember',
     description:
       'Store a new memory. Use when you learn something non-obvious, hit an error, or discover a useful pattern. ' +
-      'Memories decay over time unless retrieved. ' +
-      'Errors get 2x half-life.',
+      'Memories decay over time unless retrieved. Errors get 2x half-life.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -203,9 +194,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'boolean',
           description:
             'Store it as your own private memory: only you can recall it, in every project. Needs a key you minted ' +
-            'or ' +
-            '' +
-            'a sign-in.',
+            'or a sign-in.',
         },
       },
       required: ['text'],
@@ -215,9 +204,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_outcome',
     description:
       "Report whether recalled memories were useful. Good outcomes slow a memory's decay and bad ones speed it up, " +
-      'in ' +
-      'proportion to its record. Call after ' +
-      'completing work.',
+      'in proportion to its record. Call after completing work.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -233,11 +220,9 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_context',
     description:
       'Smart context injection: auto-detects current task from git state and returns relevant memories plus the ' +
-      'active task snapshot, session handoff and ' +
-      'recent session trail (the same bundle as GET /v1/context). Use at the start of any session. Memories and ' +
-      'those ' +
-      'sections are scope-filtered: a ' +
-      'no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
+      'active task snapshot, session handoff and recent session trail (the same bundle as GET /v1/context). Use at ' +
+      'the start of any session. Memories and those sections are scope-filtered: a no-scope caller does NOT see ANY ' +
+      '<source>:private:* (slack, github, ...) or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -253,9 +238,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'string',
           description:
             'Restrict memories, snapshot, handoff and trail to this scope exactly. When omitted, default-deny ' +
-            'applies ' +
-            'to ANY <source>:private:* ' +
-            '(slack, github, ...) and unknown-legacy rows.',
+            'applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
       },
     },
@@ -332,10 +315,9 @@ export const TOOLS: readonly McpToolDefinition[] = [
     name: 'hippo_predict_baserate',
     description:
       'J3 reference-class / planning-fallacy detector. Get base-rate stats for closed predictions in a class. Call ' +
-      'this when you make a forward-looking ' +
-      'claim (effort estimate, rollout risk, deadline) to anchor on the past track record rather than the inside ' +
-      'view. Returns count + mean estimate + ' +
-      'mean actual + mean ratio + median ratio + MAE + a human-readable summary. Tenant-scoped.',
+      'this when you make a forward-looking claim (effort estimate, rollout risk, deadline) to anchor on the past ' +
+      'track record rather than the inside view. Returns count + mean estimate + mean actual + mean ratio + median ' +
+      'ratio + MAE + a human-readable summary. Tenant-scoped.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -343,8 +325,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'string',
           description:
             'Cohort label, e.g. "migration-effort", "rollout-risk", "deadline-week". Must match the class_tag used ' +
-            'when the predictions were ' +
-            'created via hippo_predict (or `hippo predict ...`).',
+            'when the predictions were created via hippo_predict (or `hippo predict ...`).',
         },
       },
       required: ['class_tag'],

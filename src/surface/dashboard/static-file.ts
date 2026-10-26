@@ -1,10 +1,10 @@
 // The dashboard's static files: the built app, read once at listener start into one map from URL path to the bytes it
 // sends, and the reply that serves one with its validators. A path the map does not hold is never read from disk.
-import { createHash } from 'crypto';
-import * as fs from 'fs';
-import type * as http from 'http';
-import * as path from 'path';
-import { gzipSync } from 'zlib';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import type * as http from 'node:http';
+import * as path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
 import { HttpError } from '../../base/util/http-util.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';

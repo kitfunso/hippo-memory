@@ -1,8 +1,8 @@
 // The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo, repair old tags in
 // one pass.
 
-import * as path from 'path';
-import { execFileSync } from 'child_process';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import * as api from '../../api/index.js';
 import { cliApiContext, type CliContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
@@ -79,13 +79,13 @@ async function projectsMerge(ctx: CliContext, args: string[], flags: CliFlags): 
   console.log(
     `  ${count(
       r.setAside.length,
-      'imported note ' + 'copy',
+      'imported note copy',
       'imported note copies',
     )} set aside (${into} already holds the same note; the rest move under ${into} on the next sync)`,
   );
   console.log(
-    `  ${count(r.restamped.length, 'memory', 'memories')} re-tagged, plus ${r.dormantRestamped.length} dormant ` +
-      `and ${count(r.compactions, 'compaction record')}`,
+    `  ${count(r.restamped.length, 'memory', 'memories')} re-tagged, plus ${r.dormantRestamped.length} dormant and ` +
+      `${count(r.compactions, 'compaction record')}`,
   );
   console.log(
     apply
@@ -106,7 +106,7 @@ async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
   console.log(
     `  ${count(
       r.copies.length,
-      'imported note ' + 'copy',
+      'imported note copy',
       'imported note copies',
     )} under the wrong project set aside (the note stays under its own, or user-global)`,
   );

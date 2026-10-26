@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';

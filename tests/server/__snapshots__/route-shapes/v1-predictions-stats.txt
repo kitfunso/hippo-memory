@@ -1,0 +1,8 @@
+GET /v1/predictions/stats -> 400 class param is required
+POST /v1/predictions/stats -> 404 not found
+DELETE /v1/predictions/stats -> 404 not found
+PUT /v1/predictions/stats -> 404 not found
+GET /v1/predictions/stats/ -> 404 not found
+POST /v1/predictions/stats/ -> 404 not found
+DELETE /v1/predictions/stats/ -> 404 not found
+PUT /v1/predictions/stats/ -> 404 not found

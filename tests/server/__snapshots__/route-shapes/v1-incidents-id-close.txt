@@ -1,0 +1,28 @@
+GET /v1/incidents/1/close -> 404 not found
+POST /v1/incidents/1/close -> 404 incident 1 not found for tenant default
+DELETE /v1/incidents/1/close -> 404 not found
+PUT /v1/incidents/1/close -> 404 not found
+GET /v1/incidents/007/close -> 404 not found
+POST /v1/incidents/007/close -> 404 incident 7 not found for tenant default
+DELETE /v1/incidents/007/close -> 404 not found
+PUT /v1/incidents/007/close -> 404 not found
+GET /v1/incidents/abc/close -> 404 not found
+POST /v1/incidents/abc/close -> 404 not found
+DELETE /v1/incidents/abc/close -> 404 not found
+PUT /v1/incidents/abc/close -> 404 not found
+GET /v1/incidents/-1/close -> 404 not found
+POST /v1/incidents/-1/close -> 404 not found
+DELETE /v1/incidents/-1/close -> 404 not found
+PUT /v1/incidents/-1/close -> 404 not found
+GET /v1/incidents/%31/close -> 404 not found
+POST /v1/incidents/%31/close -> 404 not found
+DELETE /v1/incidents/%31/close -> 404 not found
+PUT /v1/incidents/%31/close -> 404 not found
+GET /v1/incidents//close -> 404 not found
+POST /v1/incidents//close -> 404 not found
+DELETE /v1/incidents//close -> 404 not found
+PUT /v1/incidents//close -> 404 not found
+GET /v1/incidents/1/close/ -> 404 not found
+POST /v1/incidents/1/close/ -> 404 not found
+DELETE /v1/incidents/1/close/ -> 404 not found
+PUT /v1/incidents/1/close/ -> 404 not found

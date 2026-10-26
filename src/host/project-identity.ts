@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { ProjectIdentity, ResolveProjectIdentityOpts } from '../base/scope/project-identity.js';
+import type { ProjectIdentity, ResolveProjectIdentityOptions } from '../base/scope/project-identity.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../base/util/expected-errors.js';
 import { namesProjectsByRemote } from './config-file.js';
@@ -60,7 +60,7 @@ function isDirectoryAt(p: string): boolean {
 }
 
 /** Resolves the project identity for a working directory (default process.cwd()), walking the disk on each call. */
-export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdentityOpts): ProjectIdentity {
+export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdentityOptions): ProjectIdentity {
   return walkIdentity(path.resolve(cwd ?? process.cwd()), opts, globalRemoteRule).identity;
 }
 
@@ -73,7 +73,7 @@ export interface IdentityWalk {
 /** One walk from `start`. */
 export function walkIdentity(
   start: string,
-  opts: ResolveProjectIdentityOpts | undefined,
+  opts: ResolveProjectIdentityOptions | undefined,
   remoteOn: RemoteRule,
 ): IdentityWalk {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
@@ -148,7 +148,7 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
 
 /** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
  *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. */
-export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
+export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOptions): string | null {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
   const stops = [realpathOrResolve(os.tmpdir())];
   if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
@@ -158,7 +158,7 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
 }
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
-export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
+export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOptions): string {
   return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), HIPPO_DIR);
 }
 
@@ -198,6 +198,6 @@ export function originFromSource(source: string | null | undefined, homeName?: s
 
 /** The origin to stamp on a memory written from cwd: its project name, or '' (user-global) outside a project. NULL,
  * which ambient context denies, is a shared store's or a legacy row's, never derived here. */
-export function deriveOriginProject(cwd?: string, opts?: ResolveProjectIdentityOpts): string {
+export function deriveOriginProject(cwd?: string, opts?: ResolveProjectIdentityOptions): string {
   return resolveProjectIdentity(cwd, opts).name;
 }

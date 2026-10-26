@@ -66,9 +66,33 @@ describe('embedding writes', () => {
     const root = makeRoot('embed-queue-shared');
     seed(root, 'one folder holds a note about river bridges');
     seed(root, 'the same folder holds a note about canal locks');
-    const { provider, seen } = countingProvider(() => new Promise((resolve) => setTimeout(resolve, 30)));
+    // The first call stays open on a latch until the other handle has run every step that needs no lock. Without a lock
+    // that handle would be inside embed by then, so the count below would reach 2.
+    let firstIn!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      firstIn = resolve;
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const { provider, seen } = countingProvider(async () => {
+      calls += 1;
+      if (calls === 1) {
+        firstIn();
+        await held;
+      }
+    });
 
-    await Promise.all([embedAll(targetOn(root, provider)), embedAll(targetOn(root, provider))]);
+    const runs = Promise.all([embedAll(targetOn(root, provider)), embedAll(targetOn(root, provider))]);
+    await entered;
+    // One turn of the event loop runs every queued microtask, which is all the second handle's way to embed needs.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(seen.active).toBe(1);
+    expect(calls).toBe(1);
+    release();
+    await runs;
 
     expect(seen.peak).toBe(1);
   }, 20_000);

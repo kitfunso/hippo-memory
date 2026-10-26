@@ -2,7 +2,7 @@
  * settings.json with older forms migrated, Codex an appended one, Copilot a whole file; surface/hooks-install does the
  * reads and writes. */
 
-import * as path from 'path';
+import * as path from 'node:path';
 import {
   type JsonHookTarget,
   HIPPO_SLEEP_MARKER,

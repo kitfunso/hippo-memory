@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as path from 'path';
+import * as path from 'node:path';
 import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';

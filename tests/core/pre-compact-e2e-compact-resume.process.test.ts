@@ -1,6 +1,6 @@
 // The SessionStart(compact) injector against a real store, alone and beside last-sleep.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHippoRoot } from '../../src/host/project-identity.js';
 import { defaultSleepLogPath } from '../../src/surface/hooks-install/json-hooks.js';

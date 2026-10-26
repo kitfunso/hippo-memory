@@ -10,7 +10,7 @@ import { plural } from '../../base/util/format.js';
 export function sleepResultLines(result: api.SleepResult): string[] {
   return [
     ...sleepCountLines(result),
-    ...(result.dryRun ? ['\n(dry run  - nothing ' + 'written)'] : []),
+    ...(result.dryRun ? ['\n(dry run  - nothing written)'] : []),
     ...sleepDedupeAndAuditLines(result),
     ...sleepShareAndGraphLines(result),
   ];
@@ -18,7 +18,7 @@ export function sleepResultLines(result: api.SleepResult): string[] {
 
 function sleepCountLines(result: api.SleepResult): string[] {
   const lines = [
-    `Running consolidation${result.dryRun ? ' (dry ' + 'run)' : ''}...`,
+    `Running consolidation${result.dryRun ? ' (dry run)' : ''}...`,
     `\nResults:`,
     `   Active memories:  ${result.active}`,
     `   Removed (decayed): ${result.removed}`,
@@ -45,7 +45,7 @@ function sleepDedupeAndAuditLines(result: api.SleepResult): string[] {
     if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
     lines.push(
       `\n${
-        result.dryRun ? 'Would ' + 'dedupe' : 'Deduped'
+        result.dryRun ? 'Would dedupe' : 'Deduped'
       } ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`,
     );
   }

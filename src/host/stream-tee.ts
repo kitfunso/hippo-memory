@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 
 // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`); this is the union of both parameter lists.

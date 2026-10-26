@@ -1,5 +1,5 @@
 // Reads the end of a JSONL transcript at an offset: PreCompact and the session digest need its last lines only.
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 
 /** Never read the whole transcript: PreCompact fires exactly when it's largest. */
 export const PRE_COMPACT_TAIL_BYTES = 256 * 1024;

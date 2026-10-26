@@ -1,11 +1,11 @@
 // The per-session goal stack that recall boosts: push, list, complete, suspend and resume.
 
-import type { CompleteGoalOpts, PushGoalOpts } from '../../base/ports/store/goals.js';
+import type { CompleteGoalOptions, PushGoalOptions } from '../../base/ports/store/goals.js';
 import { requireHostAdmin, type Context, type EntryContext } from '../types.js';
 import type { Goal } from '../../base/ports/store/types.js';
 
 /** What a new goal carries; its tenant is always the caller's. */
-export type GoalPushOptions = Omit<PushGoalOpts, 'tenantId'>;
+export type GoalPushOptions = Omit<PushGoalOptions, 'tenantId'>;
 
 /** Push a goal onto `sessionId`'s stack in the caller's tenant. */
 export function goalPush(ctx: EntryContext, opts: GoalPushOptions): Promise<Goal> {
@@ -19,7 +19,7 @@ export async function goalList(ctx: Context, opts: { sessionId: string; all: boo
 }
 
 /** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal. Host admin only. */
-export async function goalComplete(ctx: Context, goalId: string, opts: CompleteGoalOpts): Promise<void> {
+export async function goalComplete(ctx: Context, goalId: string, opts: CompleteGoalOptions): Promise<void> {
   requireHostAdmin(ctx, 'Completing a goal by id');
   await ctx.store.goals.complete(ctx.tenantId, goalId, opts);
 }

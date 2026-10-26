@@ -340,10 +340,9 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
   const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
   const claimed = cachedStatement(
     db,
-    `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? ` +
-      `WHERE id = ? AND status = 'open' ` +
-      `AND ((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) ` +
-      `AND ${SIDE_HOLDS} AND ${SIDE_HOLDS}`,
+    `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ? AND status = 'open' AND ` +
+      `((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) AND ${SIDE_HOLDS} AND ` +
+      `${SIDE_HOLDS}`,
   ).run(resolution.at, conflictId, ...pair, ...sides);
   return Number(claimed.changes ?? 0) > 0;
 }

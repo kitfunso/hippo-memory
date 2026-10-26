@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { execFileSync } from 'child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { importProjectMemories } from '../../src/api/agent-memories.js';
 import { totalTally } from '../../src/base/memory/agent-memory-report.js';
 import { loadConfig } from '../../src/host/config-file.js';

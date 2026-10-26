@@ -1,4 +1,5 @@
 import { DAY_MS, HOUR_MS } from '../base/util/time.js';
+import { median } from '../base/util/stats.js';
 // Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool
 // were passed over.
 // Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the
@@ -56,13 +57,6 @@ export const DEFAULT_RECENT_FRACTION_THRESHOLD = 0.7;
 export const DEFAULT_MIN_RETURNED = 3;
 export const DEFAULT_MIN_POOL = 10;
 export const DEFAULT_MIN_OLDER_PASSED_OVER = 3;
-
-function median(nums: readonly number[]): number {
-  if (nums.length === 0) return 0;
-  const sorted = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
 
 function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] {
   return refs.map((e) => ({ id: e.id, ts: Date.parse(e.created) })).filter((e) => Number.isFinite(e.ts));

@@ -1,7 +1,7 @@
 // How a session digest picks its sentences and the files it lists, read back from the row a fresh store keeps.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js';

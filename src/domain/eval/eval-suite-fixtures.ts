@@ -40,8 +40,8 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-1',
       'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the ' +
-        'staging environment is ' +
-        'using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches',
+        'staging environment is using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of ' +
+        'the security patches',
       {
         created: dateOffset(10),
         tags: ['speaker:Alice', 'topic:infrastructure', 'session:meeting-1'],
@@ -66,8 +66,8 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-2',
       'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month ' +
-        'and the alerting rules ' +
-        'still need to be migrated, Carol was supposed to handle that but she has been busy with the frontend rewrite',
+        'and the alerting rules still need to be migrated, Carol was supposed to handle that but she has been busy ' +
+        'with the frontend rewrite',
       {
         created: dateOffset(11),
         tags: ['speaker:Bob', 'topic:monitoring', 'session:meeting-1'],
@@ -76,8 +76,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-ext-2',
       'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is ' +
-        'responsible but blocked ' +
-        'by the frontend rewrite.',
+        'responsible but blocked by the frontend rewrite.',
       {
         created: dateOffset(11),
         layer: Layer.Semantic,
@@ -93,8 +92,7 @@ export function authMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-src-3',
       'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the ' +
-        'new identity provider and ' +
-        'write the integration tests',
+        'new identity provider and write the integration tests',
       {
         created: dateOffset(12),
         tags: ['speaker:Carol', 'topic:auth', 'session:meeting-2'],
@@ -103,8 +101,7 @@ export function authMeetingEntries(): MemoryEntry[] {
     mem(
       'ep-ext-3',
       'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new ' +
-        'identity provider and write ' +
-        'integration tests.',
+        'identity provider and write integration tests.',
       {
         created: dateOffset(12),
         layer: Layer.Semantic,
@@ -148,8 +145,7 @@ export function multiHopEntries(): MemoryEntry[] {
     mem(
       'mh-4',
       'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the ' +
-        'payments_raw table instead of ' +
-        'payments_reconciled.',
+        'payments_raw table instead of payments_reconciled.',
       {
         created: dateOffset(28),
         tags: ['speaker:Carol', 'topic:billing'],

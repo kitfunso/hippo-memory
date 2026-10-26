@@ -1,0 +1,28 @@
+GET /v1/predictions/1 -> 404 prediction 1 not found
+POST /v1/predictions/1 -> 404 not found
+DELETE /v1/predictions/1 -> 404 not found
+PUT /v1/predictions/1 -> 404 not found
+GET /v1/predictions/007 -> 404 prediction 7 not found
+POST /v1/predictions/007 -> 404 not found
+DELETE /v1/predictions/007 -> 404 not found
+PUT /v1/predictions/007 -> 404 not found
+GET /v1/predictions/abc -> 404 not found
+POST /v1/predictions/abc -> 404 not found
+DELETE /v1/predictions/abc -> 404 not found
+PUT /v1/predictions/abc -> 404 not found
+GET /v1/predictions/-1 -> 404 not found
+POST /v1/predictions/-1 -> 404 not found
+DELETE /v1/predictions/-1 -> 404 not found
+PUT /v1/predictions/-1 -> 404 not found
+GET /v1/predictions/%31 -> 404 not found
+POST /v1/predictions/%31 -> 404 not found
+DELETE /v1/predictions/%31 -> 404 not found
+PUT /v1/predictions/%31 -> 404 not found
+GET /v1/predictions/ -> 404 not found
+POST /v1/predictions/ -> 404 not found
+DELETE /v1/predictions/ -> 404 not found
+PUT /v1/predictions/ -> 404 not found
+GET /v1/predictions/1/ -> 404 not found
+POST /v1/predictions/1/ -> 404 not found
+DELETE /v1/predictions/1/ -> 404 not found
+PUT /v1/predictions/1/ -> 404 not found

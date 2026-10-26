@@ -1,0 +1,28 @@
+GET /v1/policies/1 -> 404 policy 1 not found
+POST /v1/policies/1 -> 404 not found
+DELETE /v1/policies/1 -> 404 not found
+PUT /v1/policies/1 -> 404 not found
+GET /v1/policies/007 -> 404 policy 7 not found
+POST /v1/policies/007 -> 404 not found
+DELETE /v1/policies/007 -> 404 not found
+PUT /v1/policies/007 -> 404 not found
+GET /v1/policies/abc -> 404 not found
+POST /v1/policies/abc -> 404 not found
+DELETE /v1/policies/abc -> 404 not found
+PUT /v1/policies/abc -> 404 not found
+GET /v1/policies/-1 -> 404 not found
+POST /v1/policies/-1 -> 404 not found
+DELETE /v1/policies/-1 -> 404 not found
+PUT /v1/policies/-1 -> 404 not found
+GET /v1/policies/%31 -> 404 not found
+POST /v1/policies/%31 -> 404 not found
+DELETE /v1/policies/%31 -> 404 not found
+PUT /v1/policies/%31 -> 404 not found
+GET /v1/policies/ -> 404 not found
+POST /v1/policies/ -> 404 not found
+DELETE /v1/policies/ -> 404 not found
+PUT /v1/policies/ -> 404 not found
+GET /v1/policies/1/ -> 404 not found
+POST /v1/policies/1/ -> 404 not found
+DELETE /v1/policies/1/ -> 404 not found
+PUT /v1/policies/1/ -> 404 not found

@@ -58,7 +58,7 @@ export interface RateLimitSpec {
   burst: number;
 }
 
-export interface ServeOpts {
+export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
@@ -108,7 +108,7 @@ export interface ServerCounts {
   autoSleeps: number;
 }
 
-export type ResolvedServeOptions = ServeOpts & {
+export type ResolvedServeOptions = ServeOptions & {
   store: HippoStore;
   /** The store is hippo.db rather than a caller's own: its folder's config.json decides shared-ness, and an add-on
    * route naming no group runs on it alone. */

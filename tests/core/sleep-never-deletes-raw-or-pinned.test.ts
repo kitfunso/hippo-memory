@@ -25,6 +25,7 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
@@ -32,7 +33,6 @@ oneRequestPerTest();
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
-const DAY = 86_400_000;
 const roots: string[] = [];
 
 function newRoot(configJson?: string): string {
@@ -46,7 +46,7 @@ const rawRow = (content: string): MemoryEntry =>
   createMemory7(content, { kind: 'raw', artifactRef: 'slack://T1/C1/1.0', owner: 'user:U1' });
 const ctxFor = (hippoRoot: string): FullContext =>
   apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' });
-const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
+const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY_MS);
 const CACHE_FACT = 'the build cache lives in /var/cache/hippo on the CI runners';
 
 function summarizer(text: string) {
@@ -229,8 +229,8 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     for (const f of facts) writeEntry(root, f);
     const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
 
-    await consolidate(root, { now: new Date(Date.now() + DAY), fetcher });
-    await consolidate(root, { now: new Date(Date.now() + 2 * DAY), fetcher });
+    await consolidate(root, { now: new Date(Date.now() + DAY_MS), fetcher });
+    await consolidate(root, { now: new Date(Date.now() + 2 * DAY_MS), fetcher });
 
     const after = facts.map((f) => readEntry(root, f.id)!);
     expect(after[0]!.dagParentId).toMatch(/^[a-z]+_[0-9a-f]+$/);
@@ -258,7 +258,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     );
     const rebuilt = 'Alice owns the billing service and runs the Friday deploy.';
 
-    await consolidate(root, { now: new Date(Date.now() + DAY), fetcher: summarizer(rebuilt) });
+    await consolidate(root, { now: new Date(Date.now() + DAY_MS), fetcher: summarizer(rebuilt) });
 
     expect(readEntry(root, summary.id)?.content).toBe(rebuilt);
   });

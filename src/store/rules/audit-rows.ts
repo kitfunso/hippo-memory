@@ -1,6 +1,6 @@
 // Audit rows several store files write with the same op and keys: a summary flipping dirty, and a value the
 // rejected-value guard refused.
-import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 
 /** The row for a summary whose dirty flag flipped from clean to dirty. */
 export function summaryDirtyAudit(
@@ -8,7 +8,7 @@ export function summaryDirtyAudit(
   tenantId: string,
   actor: string,
   dagLevel: number,
-): AppendAuditOpts {
+): AppendAuditOptions {
   const metadata = { dag_level: dagLevel, source: 'E2' };
   return { tenantId, actor, op: 'summary_marked_dirty', targetId: summaryId, metadata };
 }

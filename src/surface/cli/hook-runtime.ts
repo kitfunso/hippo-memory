@@ -1,8 +1,8 @@
 // What the hook commands share: session id, store choice, delivery recorder, session-end log and store-busy handling.
 
 import { envClaudeCodeSessionId, envHippoSessionId } from '../../base/util/env.js';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';

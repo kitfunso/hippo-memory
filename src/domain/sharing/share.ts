@@ -1,7 +1,7 @@
 // Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
-import * as path from 'path';
+import * as path from 'node:path';
 import {
   MemoryEntry,
   generateId,

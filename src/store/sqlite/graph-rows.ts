@@ -88,10 +88,10 @@ export function rowToRelation(row: RelationRow): Relation {
 }
 
 export const ENTITY_COLS =
-  `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, ` + `source_object_id, created_at`;
+  'id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at';
 export const RELATION_COLS =
-  `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
-  `source_object_type, source_object_id, created_at`;
+  'id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, ' +
+  'source_object_id, created_at';
 
 export interface GraphQueueItem {
   id: number;

@@ -11,6 +11,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -38,7 +39,6 @@ const oid = (hex: string): Buffer => der(0x06, Buffer.from(hex, 'hex'));
 const utcTime = (at: Date): Buffer =>
   der(0x17, Buffer.from(`${at.toISOString().replace(/[-:T]/g, '').slice(2, 14)}Z`, 'ascii'));
 const ECDSA_WITH_SHA256 = sequence(oid('2a8648ce3d040302'));
-const DAY_MS = 86_400_000;
 
 interface TestPair {
   cert: string;

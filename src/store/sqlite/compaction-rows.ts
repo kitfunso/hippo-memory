@@ -56,8 +56,7 @@ type SummarizedInsertMeta = Omit<StartedCompactionInput, 'id'>;
 
 const COLUMNS =
   'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, ' +
-  'summarised_at, summary, ' +
-  'items_json, items_written, status';
+  'summarised_at, summary, items_json, items_written, status';
 
 function listRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
   return cachedStatement(db, `SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
@@ -162,9 +161,8 @@ export function insertSummarizedCompaction(
   cachedStatement(
     db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
-      `started_at, ` +
-      `summarised_at, summary, items_json, status${col})\n` +
-      `     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
+      `started_at, summarised_at, summary, items_json, status${col})\n     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ` +
+      `'summarised'${mark})`,
   ).run(
     tenantId,
     id,

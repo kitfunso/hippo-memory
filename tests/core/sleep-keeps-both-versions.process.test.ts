@@ -40,10 +40,10 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { testInfra } from '../_helpers/infra.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 
-const DAY = 86_400_000;
 const dirs: string[] = [];
 
 function tmp(): string {
@@ -154,7 +154,7 @@ function reject(root: string, contents: string[]): void {
 async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
-    await consolidate(root, { now: new Date(start + day * DAY) });
+    await consolidate(root, { now: new Date(start + day * DAY_MS) });
     await deduplicateStore(sqliteStore(root));
   }
 }
@@ -194,7 +194,7 @@ describe('sleep keeps both versions', () => {
     const b = write(root, 'The analytics service listens on port 7700.');
     const start = Date.now();
 
-    expect((await consolidate(root, { now: new Date(start + DAY) })).semanticCreated).toBe(1);
+    expect((await consolidate(root, { now: new Date(start + DAY_MS) })).semanticCreated).toBe(1);
     const derived = loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic);
     expect(derived).toHaveLength(1);
     expect([...derived[0].parents].sort()).toEqual([a.id, b.id].sort());
@@ -202,7 +202,7 @@ describe('sleep keeps both versions', () => {
     expect(demoted).toBeLessThan(a.halfLifeDays);
 
     for (const day of [2, 3]) {
-      const again = await consolidate(root, { now: new Date(start + day * DAY) });
+      const again = await consolidate(root, { now: new Date(start + day * DAY_MS) });
       expect(again.merged).toBe(0);
       expect(again.semanticCreated).toBe(0);
     }
@@ -283,7 +283,7 @@ describe('merge caps', () => {
     const root = newRoot();
     const checklist =
       'Deploy checklist: build the image, run the migrations, warm the cache, flip the traffic, watch the error rate. ';
-    const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY).toISOString() }); // oldest, so it seeds first
+    const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY_MS).toISOString() }); // oldest, so it seeds first
     const steps = [
       'Deploy step: build the image and run the migrations.',
       'Deploy step: warm the cache, flip the traffic and watch the error rate.',
@@ -303,7 +303,7 @@ describe('merge caps', () => {
 
   // Seven look-alikes, oldest first, so the first five form the capped merge.
   function sevenLookAlikes(root: string): MemoryEntry[] {
-    const start = Date.now() - DAY;
+    const start = Date.now() - DAY_MS;
     return ['alpha', 'bravo', 'delta', 'gamma', 'kappa', 'omega', 'sigma'].map((name, i) =>
       write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`, {
         created: new Date(start + i * 60_000).toISOString(),
@@ -376,7 +376,7 @@ describe('merged row', () => {
     ];
     const writeAll = (root: string): void =>
       texts.forEach((text, i) => {
-        write(root, text, { created: new Date(Date.now() - DAY + i * 60_000).toISOString() });
+        write(root, text, { created: new Date(Date.now() - DAY_MS + i * 60_000).toISOString() });
       });
     const root = newRoot();
     writeAll(root);
@@ -440,7 +440,7 @@ describe('a retired version leaves the merged row', () => {
   async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     const root = newRoot();
-    const old = write(root, OLD, { created: new Date(Date.now() - DAY).toISOString() });
+    const old = write(root, OLD, { created: new Date(Date.now() - DAY_MS).toISOString() });
     const next = write(root, NEW);
     await consolidate(root, { now: FIXED_NOW });
     const [row] = merged(root);
@@ -489,7 +489,7 @@ describe('a retired version leaves the merged row', () => {
     const { root, old, next } = await mergedPair();
     await api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
 
-    await consolidate(root, { now: new Date(Date.now() + DAY) });
+    await consolidate(root, { now: new Date(Date.now() + DAY_MS) });
 
     expect(current(root)).not.toContain(OLD);
     expect(await recalled(root)).not.toContain('port 3000');
@@ -506,7 +506,7 @@ describe('a retired version leaves the merged row', () => {
     });
     reject(root, [OLD]); // a rejection whose sweep missed the merged rows, as resolve --reject-loser leaves it
 
-    await consolidate(root, { now: new Date(Date.now() + DAY) });
+    await consolidate(root, { now: new Date(Date.now() + DAY_MS) });
 
     const ids = loadAllEntries(root, 'default').map((e) => e.id);
     expect(ids).not.toContain(row.id);
@@ -630,7 +630,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     const root = newRoot();
     const text = 'Deploy rule: the staging service listens on port 4400.';
-    const pin = write(root, text, { pinned: true, created: new Date(Date.now() - DAY).toISOString() });
+    const pin = write(root, text, { pinned: true, created: new Date(Date.now() - DAY_MS).toISOString() });
     const old = write(root, `[Consolidated from 2 related memories]\n\n${text}`, {
       layer: Layer.Semantic,
       source: 'consolidation',

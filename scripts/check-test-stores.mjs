@@ -10,7 +10,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-const STORE_OPENERS = new Set(['initStore', 'initTestStore', 'openStore', 'openHippoDb']);
+const STORE_OPENERS = new Set(['initStore', 'initTestStore', 'openStore', 'openHippoDb', 'sqliteStore']);
+// These open a store somebody else made, so a parameter holding its dir is fine; only a mkdtempSync dir is a hand-built store.
+const OPENS_GIVEN_ROOT = new Set(['openHippoDb', 'sqliteStore']);
 const PATH_FUNCTIONS = new Set(['join', 'resolve', 'dirname', 'normalize', 'realpathSync', 'native']);
 const SPAWNERS = new Set(['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync', 'fork']);
 
@@ -120,7 +122,7 @@ export function handBuiltStores(text) {
     if (STORE_OPENERS.has(name)) {
       if (
         n.arguments.some(isTemp) ||
-        (name !== 'openHippoDb' && n.arguments.some((a) => ts.isIdentifier(a) && isParameter(n, a.text)))
+        (!OPENS_GIVEN_ROOT.has(name) && n.arguments.some((a) => ts.isIdentifier(a) && isParameter(n, a.text)))
       ) {
         hit(n);
       }

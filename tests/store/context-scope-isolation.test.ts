@@ -12,8 +12,8 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { contextGet } from '../../src/api/index.js';

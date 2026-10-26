@@ -9,7 +9,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
 import {
   createMemory,
   deriveHalfLife,
@@ -44,6 +43,7 @@ import {
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { META_KEY } from '../../src/db/meta.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteStore(root);
@@ -71,7 +71,7 @@ function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   return withRequestStoresSync(() => {
     const root = store();
     for (const e of entries) writeEntry(root, e);
-    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.halfLifeBase, META_KEY.typedHalfLife);
     return root;
   });
 }
@@ -320,7 +320,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
     writeEntry(root, ordinary);
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({
       from: 365,
@@ -354,7 +354,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const old = readEntry(root, superseded, 'default')!;
     writeEntry(root, { ...old, halfLifeDays: 45, confidence: 'stale', tags: [...old.tags, 'superseded'] });
     writeEntry(root, { ...readEntry(root, handSet, 'default')!, halfLifeDays: 200 });
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ typed: 0, kept: 2 });
     expect(halfLifeOf(root, superseded)).toBe(45);
@@ -383,7 +383,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     );
     await resolveOpenIncident(objectsAt(root), 'default', incident.id, 'made the charge idempotent', 'cli');
     for (const id of [old.memoryId!, closed.memoryId!, incident.memoryId!]) pinTo90(root, id);
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ typed: 1 });
     expect(halfLifeOf(root, old.memoryId!)).toBe(90);
@@ -403,7 +403,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
     writeEntry(root, ordinary);
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));
 
     const details = (await consolidate(root)).details.join('\n');
@@ -423,7 +423,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     writeEntry(root, copy);
     writeEntry(root, pinned);
     pinTo90(root, pinned.id);
-    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.halfLifeBase, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({
       from: 7,
@@ -448,7 +448,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const copy = (await supersede(apiCtx(root, 'default', adminActor('test')), decision, 'we release on Tuesdays now'))
       .newId;
     writeEntry(root, { ...readEntry(root, copy, 'default')!, retrievalCount: 40, halfLifeDays: 30 + 2 * 40 });
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     await migrateDefaultHalfLife(local(root), 30);
     expect(halfLifeOf(root, copy)).toBe(30 + 2 * 40);
@@ -467,7 +467,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
       retrievalCount: 38,
       halfLifeDays: (90 + 2 * 38) / 2,
     });
-    unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.halfLifeBase, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 7, rescaled: 0, typed: 0 });
     expect(halfLifeOf(root, decision)).toBe(83);
@@ -478,7 +478,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     await migrateDefaultHalfLife(local(root), 100);
     const both = createMemory('use gRPC for internal APIs', { source: 'decision', baseHalfLifeDays: 100 });
     writeEntry(root, { ...both, retrievalCount: 5, halfLifeDays: 90 + 2 * 5 });
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ from: 100, rescaled: 0, typed: 1, kept: 0 });
     expect(halfLifeOf(root, both.id)).toBe(365 + 10);
@@ -513,7 +513,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, winner);
     replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
     expect(await resolveConflictKeeping(root, 'default', (await listMemoryConflicts(root))[0]!.id, winner)).toBe(true);
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
     expect(halfLifeOf(root, loser)).toBe(92);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ typed: 1 });
@@ -543,7 +543,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     } finally {
       closeHippoDb(db);
     }
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
 
     expect(await migrateDefaultHalfLife(local(root), 365)).toMatchObject({ typed: 0 });
     expect(halfLifeOf(root, a)).toBe(92);
@@ -554,7 +554,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const root = store();
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
     await migrateDefaultHalfLife(local(root), 30);
-    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    unrecord(root, META_KEY.typedHalfLife);
     const plain = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: 30 });
     writeEntry(root, plain);
     const decision = (

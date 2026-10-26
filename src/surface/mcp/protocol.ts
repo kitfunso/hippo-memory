@@ -1,6 +1,6 @@
 // MCP wire types, the caller context, and the JSON predicates every tool handler narrows its arguments with.
 
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mapApiError } from '../../api/error-reply.js';
 import { INTERNAL_ERROR_MESSAGE } from '../../base/util/http-util.js';
@@ -8,7 +8,7 @@ import { errorClassFields, errorFields, errorMessage, log } from '../../base/uti
 import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
-import { type ResolveProjectIdentityOpts } from '../../base/scope/project-identity.js';
+import { type ResolveProjectIdentityOptions } from '../../base/scope/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
@@ -22,7 +22,7 @@ import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
-export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string | null {
+export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOptions): string | null {
   const local = findHippoStoreDir(cwd, opts);
   if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)

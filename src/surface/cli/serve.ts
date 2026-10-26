@@ -1,6 +1,6 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import { installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js';
 import {
@@ -11,8 +11,8 @@ import {
   envTlsCert,
   envTlsKey,
 } from '../../base/util/env.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -84,10 +84,9 @@ function keyRuleLine(): string {
     );
   }
   return (
-    'every request needs an API key: mint one with `hippo auth create` and send it as ' +
-    '"Authorization: Bearer <key>" ' +
-    '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, ' +
-    'start with HIPPO_ALLOW_KEYLESS_LOCAL=1'
+    'every request needs an API key: mint one with `hippo auth create` and send it as "Authorization: Bearer <key>" ' +
+    '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, start with ' +
+    'HIPPO_ALLOW_KEYLESS_LOCAL=1'
   );
 }
 

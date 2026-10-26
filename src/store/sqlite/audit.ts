@@ -2,7 +2,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../db/sql.js';
 import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
-import type { AppendAuditOpts, AuditEvent } from '../../base/ports/store/types.js';
+import type { AppendAuditOptions, AuditEvent } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import { auditRowsRead, type QueryAuditOptions } from '../../base/ports/store/audit.js';
 import type { AuditPrune } from '../../base/ports/store/audit.js';
@@ -30,7 +30,7 @@ const INSERT_AUDIT_ROWS_SQL =
   `json_extract(value, '$[3]'), json_extract(value, '$[4]') FROM json_each(?) ORDER BY key`;
 
 /** Writes `events` in one statement, ids in their order; a failure writes none of them. */
-export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): void {
+export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendAuditOptions[]): void {
   const [only] = events;
   if (only === undefined) return;
   // The plain INSERT for the common single row skips json_each.
@@ -41,7 +41,7 @@ export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendA
   cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(new Date().toISOString(), JSON.stringify(events.map(auditRowValues)));
 }
 
-function auditRowValues(opts: AppendAuditOpts): [string, string, string, string | null, string] {
+function auditRowValues(opts: AppendAuditOptions): [string, string, string, string | null, string] {
   return [
     opts.tenantId,
     opts.actor,
@@ -135,7 +135,7 @@ function safeJsonParse(raw: string, id: number): JsonObject {
 
 /** An audit row that did not land, with what its write threw. */
 export interface FailedAuditEvent {
-  event: AppendAuditOpts;
+  event: AppendAuditOptions;
   error: unknown;
 }
 
@@ -143,7 +143,7 @@ export interface FailedAuditEvent {
  * failed, for the caller to report. */
 export function recordAuditEventsRowByRow(
   db: DatabaseSyncLike,
-  events: readonly AppendAuditOpts[],
+  events: readonly AppendAuditOptions[],
 ): FailedAuditEvent[] {
   const failed: FailedAuditEvent[] = [];
   for (const event of events) {

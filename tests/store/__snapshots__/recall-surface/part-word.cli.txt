@@ -1,0 +1,307 @@
+{
+  "global": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"0fb91c7693196ba9","query_length":3,"results":19}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [],
+    "retrieved": [],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [],
+    "traces": [],
+  },
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"0fb91c7693196ba9","query_length":3}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"0fb91c7693196ba9","query_length":3,"results":19}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 19,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 841,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_noise",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_cafe",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_child2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_raw",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_x_summary",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "<claim>",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "19",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_x_cafe",
+        "result_rank": 1,
+        "score": 0.625557555370462,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_noise",
+        "result_rank": 2,
+        "score": 0.33616171364561676,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 3,
+        "score": 0.32001417390417036,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 4,
+        "score": 0.3006040818784353,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 5,
+        "score": 0.29593475676437553,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 6,
+        "score": 0.27714863076142376,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 7,
+        "score": 0.2739490321841924,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 8,
+        "score": 0.2674797605469157,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 9,
+        "score": 0.2665623185474653,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 10,
+        "score": 0.2637598859940651,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 11,
+        "score": 0.2367450825678727,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 12,
+        "score": 0.23534751971437173,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 13,
+        "score": 0.2336538614050349,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 14,
+        "score": 0.23152657816277183,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child2",
+        "result_rank": 15,
+        "score": 0.23124003392099607,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 16,
+        "score": 0.21196015182402353,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "<claim>",
+        "result_rank": 17,
+        "score": 0.20641758319635786,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_raw",
+        "result_rank": 18,
+        "score": 0.2039221740268715,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_summary",
+        "result_rank": 19,
+        "score": 0.18974333626686785,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 19,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "reply": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "{"query":"caf","budget":4000,"results":[{"id":"mem_x_cafe","score":0.625557555370462,"strength":1,"tokens":10,"tags":[],"content":"café opening hours for the team lunch","layer":"episodic"},{"id":"mem_p_noise","score":0.33616171364561676,"strength":1,"tokens":13,"tags":[],"content":"unrelated note about lunch options near the office","layer":"episodic"},{"id":"mem_p_fill5","score":0.32001417390417036,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 5 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill4","score":0.3006040818784353,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 4 for the nightly batch","layer":"episodic"},{"id":"mem_p_pinned","score":0.29593475676437553,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_p_fill2","score":0.27714863076142376,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 2 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill1","score":0.2739490321841924,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 1 for the nightly batch","layer":"episodic"},{"id":"mem_p_fill3","score":0.2674797605469157,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 3 for the nightly batch","layer":"episodic"},{"id":"mem_p_trace","score":0.2665623185474653,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_p_fill0","score":0.2637598859940651,"strength":1,"tokens":10,"tags":[],"content":"deploy log line 0 for the nightly batch","layer":"episodic"},{"id":"mem_p_plain","score":0.2367450825678727,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_p_goal","score":0.23534751971437173,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"},{"id":"mem_p_scoped","score":0.2336538614050349,"strength":1,"tokens":14,"tags":[],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_p_new","score":0.23152657816277183,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_x_child2","score":0.23124003392099607,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child two moved the queue","layer":"episodic"},{"id":"mem_x_child1","score":0.21196015182402353,"strength":1,"tokens":10,"tags":[],"content":"deploy batch child one moved the cron","layer":"episodic"},{"id":"<claim>","score":0.20641758319635786,"strength":1,"tokens":11,"tags":["prediction","deploy-duration"],"content":"rollout duration estimate for the eu cluster","layer":"semantic"},{"id":"mem_x_raw","score":0.2039221740268715,"strength":1,"tokens":14,"tags":[],"content":"raw capture of the deploy window from the golden session","layer":"episodic"},{"id":"mem_x_summary","score":0.18974333626686785,"strength":1,"tokens":11,"tags":["dag-summary"],"content":"rollout summary for the nightly batch move","layer":"semantic"}],"total":19,"suppressionSummary":{"totalCandidates":2,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+",
+  },
+}

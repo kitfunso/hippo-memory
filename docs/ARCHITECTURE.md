@@ -111,7 +111,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `auditPrune` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
 
 ### src/api/auth/auth.ts
-- `AuthCreateOpts.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
+- `AuthCreateOptions.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
 - `AuthCreateResult.role`: v1.12.3: the role bound to the new key (admin | member).
 - `authList`: Read-only — no audit emit (matches A5).
 - `authGrant`: Grant `keyId` read access to one restricted `scope` (ROADMAP Part VIII EI2). Admin only.
@@ -193,7 +193,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
 - `sleepWholeStore`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands; at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
 - `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep/sleep-run.ts`, so the package root's declarations never name it.
-- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleepWholeStore` calls it with none.
+- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOptions.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleepWholeStore` calls it with none.
 - `sleepWholeStore`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts
@@ -611,7 +611,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `enforceDepthCapWithinTx`: @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
 - `applyGoalBoost`: A7 recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by entry id. Pure read of r.score here; the mutation below is byte-identical to pre-A7.
 - `applyGoalBoost`: T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity tail
-- `CompleteGoalOpts`: v1.7.4 — when true, skip the strength-multiplier propagation block.
+- `CompleteGoalOptions`: v1.7.4 — when true, skip the strength-multiplier propagation block.
 
 ### src/domain/graph/extract.ts
 - module header: E3.1 deterministic entity extraction (first slice) (docs/plans/2026-06-01-e3-deterministic-extraction.md).

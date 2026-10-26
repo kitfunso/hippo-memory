@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 import { HIPPO_DIR, userHome, type Homes } from '../../../base/util/agent-homes.js';
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';

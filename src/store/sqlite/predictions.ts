@@ -1,5 +1,6 @@
 // hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
+import { median } from '../../base/util/stats.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles } from './open.js';
@@ -76,11 +77,6 @@ function emptyBaserate(classTag: string): PredictionBaserate {
   return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
 }
 
-function median(sorted: readonly number[]): number {
-  const n = sorted.length;
-  return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
-}
-
 /** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
  * disagree on the arithmetic. */
 function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[]): PredictionBaserate {
@@ -99,7 +95,7 @@ function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[])
     meanEstimate: rows.reduce((s, r) => s + r.estimate, 0) / nClosed,
     meanActual: rows.reduce((s, r) => s + r.actual, 0) / nClosed,
     meanRatio,
-    p50Ratio: nRatioEligible > 0 ? median(ratios.slice().sort((a, b) => a - b)) : null,
+    p50Ratio: nRatioEligible > 0 ? median(ratios) : null,
     mae,
     summary: `Last ${plural(nClosed, 'estimate')} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`,
   };

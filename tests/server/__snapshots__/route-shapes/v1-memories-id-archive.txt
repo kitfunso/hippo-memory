@@ -1,0 +1,28 @@
+GET /v1/memories/1/archive -> 404 not found
+POST /v1/memories/1/archive -> 400 reason is required
+DELETE /v1/memories/1/archive -> 404 not found
+PUT /v1/memories/1/archive -> 404 not found
+GET /v1/memories/007/archive -> 404 not found
+POST /v1/memories/007/archive -> 400 reason is required
+DELETE /v1/memories/007/archive -> 404 not found
+PUT /v1/memories/007/archive -> 404 not found
+GET /v1/memories/abc/archive -> 404 not found
+POST /v1/memories/abc/archive -> 400 reason is required
+DELETE /v1/memories/abc/archive -> 404 not found
+PUT /v1/memories/abc/archive -> 404 not found
+GET /v1/memories/-1/archive -> 404 not found
+POST /v1/memories/-1/archive -> 400 reason is required
+DELETE /v1/memories/-1/archive -> 404 not found
+PUT /v1/memories/-1/archive -> 404 not found
+GET /v1/memories/%31/archive -> 404 not found
+POST /v1/memories/%31/archive -> 400 reason is required
+DELETE /v1/memories/%31/archive -> 404 not found
+PUT /v1/memories/%31/archive -> 404 not found
+GET /v1/memories//archive -> 404 not found
+POST /v1/memories//archive -> 404 not found
+DELETE /v1/memories//archive -> 404 not found
+PUT /v1/memories//archive -> 404 not found
+GET /v1/memories/1/archive/ -> 404 not found
+POST /v1/memories/1/archive/ -> 404 not found
+DELETE /v1/memories/1/archive/ -> 404 not found
+PUT /v1/memories/1/archive/ -> 404 not found

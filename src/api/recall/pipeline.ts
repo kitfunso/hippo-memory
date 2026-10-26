@@ -17,7 +17,7 @@ import {
 } from '../../base/scope/recall-scope.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { currentEntries } from '../../domain/search/as-of.js';
-import { rankStrength, STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
+import { outcomeNudge, rankStrength, STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
 import { applyReranker } from '../../domain/search/rerank.js';
 import { searchByEngine } from '../../domain/search/engine.js';
@@ -65,9 +65,10 @@ export interface RankRecallCtx extends RankSource {
   tenantId: string;
   /** Builds the provider that embeds the query for each store's vector arm. */
   embedderFor: EmbedderFor;
-  /** The folder whose path segments boost a memory; absent, no path boost. */
+  /** The folder whose path segments boost a memory. Without it, no path boost applies. */
   cwd?: string;
-  /** The eval switches and fake clock the context's root read; absent, none of them, on the real clock. */
+  /** The eval switches and fake clock that the context's root reads. Without it, no switch applies and the real clock
+   * runs. */
   switches?: EvalSwitches;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
@@ -76,8 +77,8 @@ export interface RankRecallCtx extends RankSource {
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
 export interface RecallSearchOptions {
   usePhysics: boolean;
-  /** The request names an engine (HTTP `mode=hybrid` or `physics`); without it a 'position' profile keeps the load
-   * order. */
+  /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a 'position' profile keeps the
+   * load order. */
   engineNamed?: boolean;
   physicsConfig: PhysicsConfig;
   multihop: boolean;
@@ -113,8 +114,8 @@ export interface RecallReranker {
 export interface RankRecallFilters {
   includeSuperseded: boolean;
   asOf?: string;
-  /** `--scope` unlocks that envelope scope on top of the default-admitted set; under `scopeMode: 'exact'` it is the one
-   * scope read. */
+  /** `--scope` unlocks that envelope scope on top of the default-admitted set. Under `scopeMode: 'exact'` it is the
+   * only scope read. */
   explicitScope: string | null;
   /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API caller. */
   scopeMode?: 'additive' | 'exact';
@@ -122,7 +123,8 @@ export interface RankRecallFilters {
   ownScope?: string;
   /** The caller's project names: other projects' rows stay out, user-global ones stay in. */
   originProjects?: readonly string[];
-  /** Scope used for boosting only, never for filtering; absent, the engine boosts the store's runtime active scope. */
+  /** Scope used for boosting only, never for filtering. Without it, the engine boosts the store's runtime active
+   * scope. */
   activeScope?: string | null;
 }
 
@@ -168,8 +170,8 @@ export interface RankRecallResult {
   graphAdded: number;
   /** goal_recall_log rows the session goal boost earned; the caller writes them. */
   goalRecallLog: GoalRecallLogRow[];
-  /** The goals the ranked goal pass read, so a band pass need not read them again: null when the pass had no session
-   *  to read for, absent when the profile runs no ranked pass. */
+  /** The goals the ranked goal pass read, so a band pass need not read them again. It is null when the pass had no
+   * session to read for, and absent when the profile runs no ranked pass. */
   goals?: ActiveGoals | null;
 }
 
@@ -194,7 +196,7 @@ interface SettledOptions extends RankRecallOptions {
   readonly limit: number;
 }
 
-// A band profile ranks every row; the band composed from the list, and its caller, make the cut.
+// A band profile ranks every row. Its caller composes the band from the list and makes the cut.
 const WHOLE_LIST = { budget: Infinity, cost: undefined, limit: Infinity } as const;
 
 function settle(request: RankRecallOptions, profile: RecallProfile): SettledOptions {
@@ -262,7 +264,8 @@ async function rankStages(
 }
 
 interface PoolScope {
-  /** An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half. */
+  /** An explicit --scope unlocks that envelope scope. The regex-only `<source>:private:*` deny is the JS half of the
+   * rule. */
   requested: string | undefined;
   /** An as-of read needs the rows a later write superseded. */
   loadSuperseded: boolean;
@@ -301,7 +304,7 @@ async function loadRecallPool(
     ctx.global ? ctx.global.store.searchRecallEntries(opts.query, load) : Promise.resolve([]),
   ]);
   let [local, global] = reads;
-  // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
+  // The SQL load already left out some rows, so the total is taken before the JS filters, which normally drop nothing.
   const total = local.length + global.length;
   const passes = poolAdmits(opts);
   local = local.filter(passes);
@@ -417,6 +420,18 @@ async function searchPool(
   }));
 }
 
+/** The tuning each engine takes: physics takes no MMR, and an explain run takes only asOf so its output stays
+ * steady. */
+function engineTuning<T extends { minResults: unknown; includeSuperseded: unknown; asOf: unknown }>(
+  physicsOn: boolean,
+  explain: boolean,
+  all: T,
+): T | Pick<T, 'asOf'> | Pick<T, 'minResults' | 'includeSuperseded' | 'asOf'> {
+  if (!physicsOn) return all;
+  if (explain) return { asOf: all.asOf };
+  return { minResults: all.minResults, includeSuperseded: all.includeSuperseded, asOf: all.asOf };
+}
+
 async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch: PoolSearch): Promise<SearchResult[]> {
   const { pool, scope } = poolSearch;
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
@@ -437,13 +452,8 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
     );
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
-  // Physics takes no MMR; explain drops minResults and includeSuperseded to hold its output steady; asOf must reach
-  // physics or later rows leak.
-  const tuning = !physics
-    ? { mmr, mmrLambda, minResults, includeSuperseded, asOf }
-    : explain
-      ? { asOf }
-      : { minResults, includeSuperseded, asOf };
+  // asOf must reach physics, or later rows leak.
+  const tuning = engineTuning(physics !== null, explain, { mmr, mmrLambda, minResults, includeSuperseded, asOf });
   return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, { ...shared, vectorCandidates, ...tuning });
 }
 
@@ -526,7 +536,7 @@ function applyValueAware(opts: RankRecallOptions, state: RankState): void {
     const pos = r.entry.outcomePositive ?? 0;
     const neg = r.entry.outcomeNegative ?? 0;
     if (pos === 0 && neg === 0) return undefined;
-    return Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
+    return outcomeNudge(pos - neg, VALUE_MULT_SLOPE, VALUE_MULT_MIN, VALUE_MULT_MAX);
   });
 }
 

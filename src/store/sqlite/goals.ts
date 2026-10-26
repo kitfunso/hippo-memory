@@ -5,10 +5,10 @@ import type {
   Goal,
   GoalStatus,
   RetrievalPolicy,
-  GetActiveGoalsOpts,
+  GetActiveGoalsOptions,
 } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
-import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../../base/ports/store/goals.js';
+import type { CompleteGoalOptions, PushGoalOptions, Goals } from '../../base/ports/store/goals.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -32,7 +32,7 @@ const goalOverflow = (activeCount: number): number => Math.max(0, activeCount - 
 
 /** Throws unless the push names no parent or one of its own tenant and session. */
 function assertParentInSession(
-  opts: PushGoalOpts,
+  opts: PushGoalOptions,
   parent: { readonly tenantId: string; readonly sessionId: string } | undefined,
 ): void {
   if (!opts.parentGoalId) return;
@@ -43,7 +43,7 @@ function assertParentInSession(
 }
 
 /** The policy row a push with `policy` stores, each weight 1 unless given. */
-function retrievalPolicyOf(goalId: string, policy: NonNullable<PushGoalOpts['policy']>): RetrievalPolicy {
+function retrievalPolicyOf(goalId: string, policy: NonNullable<PushGoalOptions['policy']>): RetrievalPolicy {
   return {
     id: generateId('rp', GOAL_ID_CHARS),
     goalId,
@@ -56,7 +56,7 @@ function retrievalPolicyOf(goalId: string, policy: NonNullable<PushGoalOpts['pol
 }
 
 /** The goal a push stores. */
-function pushedGoal(id: string, opts: PushGoalOpts, createdAt: string, policyId: string | undefined): Goal {
+function pushedGoal(id: string, opts: PushGoalOptions, createdAt: string, policyId: string | undefined): Goal {
   return {
     id,
     sessionId: opts.sessionId,
@@ -152,8 +152,8 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
   }
 }
 
-function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Goal {
-  const opts: PushGoalOpts = { ...goal, tenantId };
+function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOptions, 'tenantId'>): Goal {
+  const opts: PushGoalOptions = { ...goal, tenantId };
   const id = newGoalId();
   const createdAt = new Date().toISOString();
   const policy = opts.policy ? retrievalPolicyOf(id, opts.policy) : undefined;
@@ -208,7 +208,7 @@ function insertRetrievalPolicy(db: DatabaseSyncLike, policy: RetrievalPolicy): v
 }
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
-export function activeGoalsWithPolicies(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
+export function activeGoalsWithPolicies(db: DatabaseSyncLike, opts: GetActiveGoalsOptions): ActiveGoals {
   const goals = listActiveGoalsOn(db, opts);
   return { goals, policies: readGoalPolicies(db, goals) };
 }
@@ -227,7 +227,7 @@ function listSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: str
   return rows.map(rowToGoal);
 }
 
-function listActiveGoalsOn(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+function listActiveGoalsOn(db: DatabaseSyncLike, opts: GetActiveGoalsOptions): Goal[] {
   const rows = cachedStatement(
     db,
     `
@@ -310,7 +310,7 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
   }
 }
 
-function completeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
+function completeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string, opts: CompleteGoalOptions): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
 

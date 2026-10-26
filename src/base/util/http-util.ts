@@ -156,7 +156,7 @@ export function isCrossSite(req: IncomingMessage): boolean {
   return url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') || url.host !== req.headers.host;
 }
 
-/** Per-request values a connector webhook receiver reads; ServeOpts and the /v1 RouteRequest both satisfy it. */
+/** Per-request values a connector webhook receiver reads; ServeOptions and the /v1 RouteRequest both satisfy it. */
 export interface WebhookRequest {
   req: IncomingMessage;
   res: ServerResponse;

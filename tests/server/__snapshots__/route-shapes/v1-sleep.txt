@@ -1,0 +1,8 @@
+GET /v1/sleep -> 404 not found
+POST /v1/sleep -> 200
+DELETE /v1/sleep -> 404 not found
+PUT /v1/sleep -> 404 not found
+GET /v1/sleep/ -> 404 not found
+POST /v1/sleep/ -> 404 not found
+DELETE /v1/sleep/ -> 404 not found
+PUT /v1/sleep/ -> 404 not found

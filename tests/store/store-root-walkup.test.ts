@@ -1,9 +1,9 @@
 // Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem in a
 // mkdtemp sandbox; the walk stops at the temp root, so stores above it cannot leak into these cases.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';

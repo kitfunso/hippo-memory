@@ -1,8 +1,8 @@
 // A hippo store and a scratch vault folder per test, with the note writer and archive reader the vault import tests share.
 import { beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { type ImportOptions } from '../../src/surface/importers/core.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

@@ -1,0 +1,28 @@
+GET /v1/skills/1/supersede -> 404 not found
+POST /v1/skills/1/supersede -> 400 instructions are required (non-empty string)
+DELETE /v1/skills/1/supersede -> 404 not found
+PUT /v1/skills/1/supersede -> 404 not found
+GET /v1/skills/007/supersede -> 404 not found
+POST /v1/skills/007/supersede -> 400 instructions are required (non-empty string)
+DELETE /v1/skills/007/supersede -> 404 not found
+PUT /v1/skills/007/supersede -> 404 not found
+GET /v1/skills/abc/supersede -> 404 not found
+POST /v1/skills/abc/supersede -> 404 not found
+DELETE /v1/skills/abc/supersede -> 404 not found
+PUT /v1/skills/abc/supersede -> 404 not found
+GET /v1/skills/-1/supersede -> 404 not found
+POST /v1/skills/-1/supersede -> 404 not found
+DELETE /v1/skills/-1/supersede -> 404 not found
+PUT /v1/skills/-1/supersede -> 404 not found
+GET /v1/skills/%31/supersede -> 404 not found
+POST /v1/skills/%31/supersede -> 404 not found
+DELETE /v1/skills/%31/supersede -> 404 not found
+PUT /v1/skills/%31/supersede -> 404 not found
+GET /v1/skills//supersede -> 404 not found
+POST /v1/skills//supersede -> 404 not found
+DELETE /v1/skills//supersede -> 404 not found
+PUT /v1/skills//supersede -> 404 not found
+GET /v1/skills/1/supersede/ -> 404 not found
+POST /v1/skills/1/supersede/ -> 404 not found
+DELETE /v1/skills/1/supersede/ -> 404 not found
+PUT /v1/skills/1/supersede/ -> 404 not found

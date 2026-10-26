@@ -1,10 +1,10 @@
 // HIPPO_MODEL_CACHE makes the local embedding backend load its model from a folder, with no download.
 // The embedding runs in a child process: the backend loads Transformers.js by a dynamic import that vitest's VM cannot serve.
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
-import * as path from 'path';
-import * as url from 'url';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+import * as url from 'node:url';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');

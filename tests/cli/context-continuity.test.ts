@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as path from 'path';
+import * as path from 'node:path';
 import { handleContext } from '../../src/surface/cli/context.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

@@ -1,7 +1,7 @@
 import { claudeConfigDir, claudeHomeIsSet } from '../../base/util/agent-homes.js';
 import { processHomes } from '../../host/agent-homes.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../../base/session/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';

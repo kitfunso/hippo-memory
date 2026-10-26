@@ -34,9 +34,8 @@ export function isCopilotPresent(home: string = os.homedir()): boolean {
 }
 
 const COPILOT_NOTES =
-  'hooks in hooks/hippo.json, the MCP server in ' +
-  'mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and ' +
-  'prompts/hippo.instructions.md';
+  'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md; for VS ' +
+  'Code, the server in each User mcp.json and prompts/hippo.instructions.md';
 
 /** Detect which AI coding tools are installed from config directory presence; `hippo setup` uses it to pick JSON-hook
  * installs. */

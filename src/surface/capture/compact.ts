@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { TaskSnapshot, Sessions } from '../../base/ports/store/sessions.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';

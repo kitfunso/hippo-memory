@@ -89,10 +89,10 @@ entry/memory.d.ts: tokenize re-export
 entry/project-identity.d.ts: MAX_PROJECT_ALIASES re-export
 entry/project-identity.d.ts: MCP_PROJECT_SCOPED_HEADER re-export
 entry/project-identity.d.ts: ProjectIdentity re-export
-entry/project-identity.d.ts: ResolveProjectIdentityOpts re-export
+entry/project-identity.d.ts: ResolveProjectIdentityOptions re-export
 entry/project-identity.d.ts: resolveProjectIdentity re-export
 entry/search.d.ts: DEFAULT_MAX_NEIGHBORS re-export
-entry/search.d.ts: GraphExpandOpts re-export
+entry/search.d.ts: GraphExpandOptions re-export
 entry/search.d.ts: MAX_HOPS re-export
 entry/search.d.ts: MatchExplanation re-export
 entry/search.d.ts: SearchResult re-export
@@ -120,7 +120,7 @@ entry/session-text.d.ts: sessionTail re-export
 entry/session-text.d.ts: transcriptWorkingState re-export
 entry/sleep.d.ts: ConsolidationResult re-export
 entry/sleep.d.ts: SleepContext re-export
-entry/sleep.d.ts: SleepOpts re-export
+entry/sleep.d.ts: SleepOptions re-export
 entry/sleep.d.ts: SleepResult re-export
 entry/sleep.d.ts: SleepStore re-export
 entry/sleep.d.ts: consolidate function
@@ -140,7 +140,7 @@ entry/store-kit.d.ts: AmbientTallies re-export
 entry/store-kit.d.ts: ApiKeyListItem re-export
 entry/store-kit.d.ts: ApiKeyListRow re-export
 entry/store-kit.d.ts: ApiKeyRecord re-export
-entry/store-kit.d.ts: AppendAuditOpts re-export
+entry/store-kit.d.ts: AppendAuditOptions re-export
 entry/store-kit.d.ts: AppliedRejection re-export
 entry/store-kit.d.ts: AuditEvent re-export
 entry/store-kit.d.ts: CallerItems re-export
@@ -155,7 +155,7 @@ entry/store-kit.d.ts: Cards re-export
 entry/store-kit.d.ts: ClassResolution re-export
 entry/store-kit.d.ts: CompactionStart re-export
 entry/store-kit.d.ts: Compactions re-export
-entry/store-kit.d.ts: CompleteGoalOpts re-export
+entry/store-kit.d.ts: CompleteGoalOptions re-export
 entry/store-kit.d.ts: ConflictListQuery re-export
 entry/store-kit.d.ts: ConflictMember re-export
 entry/store-kit.d.ts: ConflictResolution re-export
@@ -187,7 +187,7 @@ entry/store-kit.d.ts: FailureEvent re-export
 entry/store-kit.d.ts: FailureLog re-export
 entry/store-kit.d.ts: FailureOutcome re-export
 entry/store-kit.d.ts: FailureSummary re-export
-entry/store-kit.d.ts: GetActiveGoalsOpts re-export
+entry/store-kit.d.ts: GetActiveGoalsOptions re-export
 entry/store-kit.d.ts: Goal re-export
 entry/store-kit.d.ts: GoalRecallLogRow re-export
 entry/store-kit.d.ts: Goals re-export
@@ -204,8 +204,8 @@ entry/store-kit.d.ts: LastRecall re-export
 entry/store-kit.d.ts: LastRecallWrites re-export
 entry/store-kit.d.ts: LegacyStats re-export
 entry/store-kit.d.ts: LiftedRejection re-export
-entry/store-kit.d.ts: ListApiKeysOpts re-export
-entry/store-kit.d.ts: ListDormantOpts re-export
+entry/store-kit.d.ts: ListApiKeysOptions re-export
+entry/store-kit.d.ts: ListDormantOptions re-export
 entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
@@ -219,7 +219,7 @@ entry/store-kit.d.ts: PageRequest re-export
 entry/store-kit.d.ts: PhysicsParticle re-export
 entry/store-kit.d.ts: PlanningFallacyEvidence re-export
 entry/store-kit.d.ts: PredictionBaserate re-export
-entry/store-kit.d.ts: PushGoalOpts re-export
+entry/store-kit.d.ts: PushGoalOptions re-export
 entry/store-kit.d.ts: RECALL_DEFAULT_DENY_SCOPES re-export
 entry/store-kit.d.ts: RawArchive re-export
 entry/store-kit.d.ts: RawProvenance re-export
@@ -362,7 +362,7 @@ index.d.ts: SalienceOptions re-export
 index.d.ts: SalienceResult re-export
 index.d.ts: SessionHandoff re-export
 index.d.ts: SleepContext re-export
-index.d.ts: SleepOpts re-export
+index.d.ts: SleepOptions re-export
 index.d.ts: SleepResult re-export
 index.d.ts: SleepStore re-export
 index.d.ts: applyOutcome re-export
@@ -395,9 +395,9 @@ index.d.ts: transferScore re-export
 server.d.ts: Actor re-export
 server.d.ts: AddonCall re-export
 server.d.ts: AddonRoute re-export
-server.d.ts: AuthCreateOpts re-export
+server.d.ts: AuthCreateOptions re-export
 server.d.ts: AuthCreateResult re-export
-server.d.ts: AuthCreateSelfOpts re-export
+server.d.ts: AuthCreateSelfOptions re-export
 server.d.ts: AuthCreateSelfResult re-export
 server.d.ts: AuthResolver re-export
 server.d.ts: AuthRevokeResult re-export
@@ -424,7 +424,7 @@ server.d.ts: LOOPBACK_HOST_HEADER re-export
 server.d.ts: NotFoundError re-export
 server.d.ts: RateLimitSpec re-export
 server.d.ts: ResolvedBearer re-export
-server.d.ts: ServeOpts re-export
+server.d.ts: ServeOptions re-export
 server.d.ts: ServerHandle re-export
 server.d.ts: SessionCaptureRequest re-export
 server.d.ts: SessionCaptureResult re-export

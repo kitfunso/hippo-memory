@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import type { ServerHandle, ServeOpts } from '../../src/server.js';
+import type { ServerHandle, ServeOptions } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 
 /** Starts a server over a fresh root with auto-sleep at threshold 2, and mints a host-tenant key. */
-async function startServer(autoSleep: ServeOpts['autoSleep']): Promise<{ root: string; url: string; key: string }> {
+async function startServer(autoSleep: ServeOptions['autoSleep']): Promise<{ root: string; url: string; key: string }> {
   const root = makeRoot('serve-autosleep', { config: { autoSleep: { enabled: true, threshold: 2 } } });
   roots.push(root);
   const db = openHippoDb(root);

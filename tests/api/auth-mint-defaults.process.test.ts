@@ -10,12 +10,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface Minted {
   keyId: string;

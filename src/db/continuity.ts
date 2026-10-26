@@ -196,7 +196,7 @@ const REQUEST_INDEX_DDL = {
 
 // Lives with the other re-asserted DDL so the required-object list below derives from one place.
 export const MEMORIES_FTS_DDL =
-  `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts ` + `USING fts5(id UNINDEXED, content, tags)`;
+  'CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED, content, tags)';
 
 const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
 

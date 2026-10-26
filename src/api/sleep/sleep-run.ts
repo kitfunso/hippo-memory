@@ -12,7 +12,7 @@ import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js
 import type { Context, SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import { globalTargetOf } from '../infra.js';
-import type { SleepOpts, SleepResult } from './sleep.js';
+import type { SleepOptions, SleepResult } from './sleep.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
@@ -61,10 +61,10 @@ interface DirtyTenantSnapshot {
 }
 
 /** `sleepWholeStore` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the
- * public `SleepOpts`. */
+ * public `SleepOptions`. */
 export async function runSleep(
   ctx: SleepContext,
-  opts: SleepOpts,
+  opts: SleepOptions,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
@@ -87,7 +87,7 @@ export async function runSleep(
 
 async function runSleepPhases(
   ctx: SleepContext,
-  opts: SleepOpts,
+  opts: SleepOptions,
   phases: SleepPhases,
   counts: SleepCounts,
 ): Promise<SleepResult> {
@@ -362,7 +362,7 @@ interface SleepAuditMetadata {
 // An audit failure is logged and never replaces the original phase error.
 async function emitSleepAudit(
   ctx: SleepContext,
-  opts: SleepOpts,
+  opts: SleepOptions,
   dryRun: boolean,
   counts: SleepCounts,
   phaseError: { thrown: unknown } | null,

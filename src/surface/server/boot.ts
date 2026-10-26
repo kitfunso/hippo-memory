@@ -70,7 +70,7 @@ import type {
   RateLimitSpec,
   ResolvedServeOptions,
   RouteRequest,
-  ServeOpts,
+  ServeOptions,
   ServerCounts,
   ServerHandle,
 } from './types.js';
@@ -248,7 +248,7 @@ function assertFlagsValid(): void {
 }
 
 /** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
-function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
+function bootLimiters(rateLimits: ServeOptions['rateLimits']): BootedLimiters {
   const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
   if (perCaller !== 'off') assertRateLimitSpec('perCaller', perCaller);
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
@@ -421,7 +421,7 @@ export function resolveTenantId(opts: ResolveOptions): string {
  * HIPPO_REQUIRE_AUTH=1 and either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
  * HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
-export async function serve(opts: ServeOpts): Promise<ServerHandle> {
+export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
   const routes = frozenAddonRoutes(opts.routes);
@@ -456,7 +456,7 @@ interface BootPlan {
 }
 
 /** Everything after the pidfile claim; a throw here releases the claim in serve(). */
-async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandle> {
+async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
   const { host, requestedPort, limiters, startedAt } = plan;
 
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
@@ -497,7 +497,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
   return { port: actualPort, url, stop, server };
 }
 
-function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
+function frozenAddonRoutes(addonRoutes: ServeOptions['routes']): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
     (addonRoutes ?? []).map(({ path, handler, storeReady, loop }) =>
@@ -514,7 +514,7 @@ function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeO
 }
 
 function servedOptsFor(
-  opts: ServeOpts,
+  opts: ServeOptions,
   { routes, publicJsonBodies, limiters }: BootPlan,
   runtime: ServerRuntime,
 ): ResolvedServeOptions {
@@ -569,7 +569,7 @@ async function listenAndDescribe(
   server: Server,
   port: number,
   host: string,
-  tls: ServeOpts['tls'],
+  tls: ServeOptions['tls'],
 ): Promise<{ port: number; url: string }> {
   await listenOn(server, port, host);
 
@@ -584,7 +584,7 @@ async function listenAndDescribe(
 }
 
 async function stopListening(
-  opts: ServeOpts,
+  opts: ServeOptions,
   server: Server,
   inflight: Set<ServerResponse>,
   startedAt: string,

@@ -12,6 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadContextCandidates } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { mulberry32 } from '../_helpers/property.js';
+import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
 
@@ -19,13 +20,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const DAY = 86_400_000;
 const BASE = Date.UTC(2026, 5, 1);
 const HALF_LIVES = [0, 0.5, 1, 3, 7, 14, 30, 90, 365];
 const BAD_DATES = ['', 'not-a-date', '2026-13-45T99:00:00Z'];
 const SUBSET = /WITH top AS MATERIALIZED/;
 const SCAN = /ORDER BY pinned DESC,\s+CASE WHEN/;
-const NOWS = [-30, 0, 3, 30, 200, 2000].map((days) => new Date(BASE + days * DAY));
+const NOWS = [-30, 0, 3, 30, 200, 2000].map((days) => new Date(BASE + days * DAY_MS));
 const CAPS = [1, 7, 40, 120];
 
 let home: string;
@@ -40,7 +40,7 @@ function seedRows(count: number): MemoryEntry[] {
       ...createMemory(`decay row ${i}`, { tenantId: i % 40 === 39 ? 'other' : 'default' }),
       id: `m${String(i).padStart(4, '0')}`,
       created: new Date(BASE - (count - i) * 60_000).toISOString(),
-      lastRetrieved: roll > 0.97 ? pick(BAD_DATES) : new Date(BASE - age * DAY).toISOString(),
+      lastRetrieved: roll > 0.97 ? pick(BAD_DATES) : new Date(BASE - age * DAY_MS).toISOString(),
       halfLifeDays: pick(HALF_LIVES),
       pinned: next() < 0.05,
       outcomePositive: next() < 0.4 ? Math.floor(next() * 9) : 0,
@@ -110,7 +110,7 @@ afterEach(() => {
 
 // Ten-day half-life rows, aged in half-lives: a boosted row the unscaled key would leave out must still outrank a plain one.
 function rfRow(id: string, halfLivesOld: number, outcomePositive = 0): MemoryEntry {
-  const lastRetrieved = new Date(BASE - halfLivesOld * 10 * DAY).toISOString();
+  const lastRetrieved = new Date(BASE - halfLivesOld * 10 * DAY_MS).toISOString();
   return {
     ...createMemory(`rf row ${id}`, { tenantId: 'rf' }),
     id,
@@ -151,7 +151,7 @@ describe('loadContextCandidates past the cap', () => {
   });
 
   it('falls to the scan when the subset is short', () => {
-    const farFuture = new Date(BASE + 2000 * DAY);
+    const farFuture = new Date(BASE + 2000 * DAY_MS);
     const got = readOnce(40, farFuture);
     expect(got.scan).toBe(true);
     expect(got.ids).toEqual(scanIds(40, farFuture));

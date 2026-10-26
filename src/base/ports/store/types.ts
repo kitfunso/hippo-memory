@@ -52,7 +52,7 @@ export interface RetrievalPolicy {
 
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
 
-export interface GetActiveGoalsOpts {
+export interface GetActiveGoalsOptions {
   sessionId: string;
   tenantId: string;
 }
@@ -111,7 +111,7 @@ export interface PredictionBaserate {
   summary: string;
 }
 
-export interface AppendAuditOpts {
+export interface AppendAuditOptions {
   tenantId: string;
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;

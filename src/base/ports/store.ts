@@ -29,10 +29,10 @@ export type { FolderStore, GlobalTargetGroup, StoreReach } from './store/reach.j
 import type {
   ApiKeyRecord,
   ActiveGoals,
-  GetActiveGoalsOpts,
+  GetActiveGoalsOptions,
   ContinuityKey,
   PlanningFallacyEvidence,
-  AppendAuditOpts,
+  AppendAuditOptions,
 } from './store/types.js';
 
 /** Every group a store has: the required ones, then five optional capabilities, each a set of groups a store sets or
@@ -153,7 +153,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
    * ascending; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
-  activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
+  activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
   /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session id and non-null
    * `origins` (those projects and user-global rows) must narrow, by created descending, then content and id ascending.
    */
@@ -170,7 +170,7 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
   planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
-  appendAuditEvents(events: readonly AppendAuditOpts[]): Promise<void>;
+  appendAuditEvents(events: readonly AppendAuditOptions[]): Promise<void>;
   /** Writes the goal log and audit rows in one transaction and rejects with none written if it fails. Then the trace
    * and the strengthen, each on its own: a failure there logs and still resolves, since the reply is already decided.
    */

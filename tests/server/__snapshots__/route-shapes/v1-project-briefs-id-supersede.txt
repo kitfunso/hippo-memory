@@ -1,0 +1,28 @@
+GET /v1/project-briefs/1/supersede -> 404 not found
+POST /v1/project-briefs/1/supersede -> 400 summary is required (non-empty string)
+DELETE /v1/project-briefs/1/supersede -> 404 not found
+PUT /v1/project-briefs/1/supersede -> 404 not found
+GET /v1/project-briefs/007/supersede -> 404 not found
+POST /v1/project-briefs/007/supersede -> 400 summary is required (non-empty string)
+DELETE /v1/project-briefs/007/supersede -> 404 not found
+PUT /v1/project-briefs/007/supersede -> 404 not found
+GET /v1/project-briefs/abc/supersede -> 404 not found
+POST /v1/project-briefs/abc/supersede -> 404 not found
+DELETE /v1/project-briefs/abc/supersede -> 404 not found
+PUT /v1/project-briefs/abc/supersede -> 404 not found
+GET /v1/project-briefs/-1/supersede -> 404 not found
+POST /v1/project-briefs/-1/supersede -> 404 not found
+DELETE /v1/project-briefs/-1/supersede -> 404 not found
+PUT /v1/project-briefs/-1/supersede -> 404 not found
+GET /v1/project-briefs/%31/supersede -> 404 not found
+POST /v1/project-briefs/%31/supersede -> 404 not found
+DELETE /v1/project-briefs/%31/supersede -> 404 not found
+PUT /v1/project-briefs/%31/supersede -> 404 not found
+GET /v1/project-briefs//supersede -> 404 not found
+POST /v1/project-briefs//supersede -> 404 not found
+DELETE /v1/project-briefs//supersede -> 404 not found
+PUT /v1/project-briefs//supersede -> 404 not found
+GET /v1/project-briefs/1/supersede/ -> 404 not found
+POST /v1/project-briefs/1/supersede/ -> 404 not found
+DELETE /v1/project-briefs/1/supersede/ -> 404 not found
+PUT /v1/project-briefs/1/supersede/ -> 404 not found

@@ -1,6 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { summariseTranscript, resolveLastSessionTranscript } from '../../src/surface/capture/transcript.js';

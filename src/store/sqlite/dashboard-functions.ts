@@ -113,8 +113,8 @@ const NOT_ASCII = (column: string): string => `length(CAST(${column} AS BLOB)) <
 
 // A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
 // value String() writes another way.
-const TAGS_NOT_AS_WRITTEN =
-  `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*' ` + `OR instr(substr(tags_json, 2), '[') > 0`;
+const TAGS_NOT_AS_WRITTEN = `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*'
+  OR instr(substr(tags_json, 2), '[') > 0`;
 
 // A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded; for a needle with no
 // ASCII, those with a letter past ASCII; else every row.

@@ -1,0 +1,8 @@
+GET /v1/context -> 200
+POST /v1/context -> 404 not found
+DELETE /v1/context -> 404 not found
+PUT /v1/context -> 404 not found
+GET /v1/context/ -> 404 not found
+POST /v1/context/ -> 404 not found
+DELETE /v1/context/ -> 404 not found
+PUT /v1/context/ -> 404 not found

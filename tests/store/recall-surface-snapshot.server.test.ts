@@ -157,6 +157,11 @@ function viaCli(s: Store, c: SnapshotCase): Promise<InProcessResult> {
   return runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }));
 }
 
+const SURFACES = { http: viaHttp, mcp: viaMcp, cli: viaCli };
+const SURFACE_NAMES = ['http', 'mcp', 'cli'] as const;
+const CASE_SURFACES = CASES.flatMap(([name, c]) => SURFACE_NAMES.map((surface) => [name, surface, c] as const));
+const fileStem = (name: string): string => name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+
 describe('recall surface snapshot', () => {
   beforeAll(async () => {
     embeddings = await startHashedEmbeddings();
@@ -181,13 +186,10 @@ describe('recall surface snapshot', () => {
     vi.unstubAllEnvs();
   });
 
-  it.each(CASES)('%s', async (_name, c) => {
-    // A store per surface: a recall rewrites the rows it returns, and that write would move the next surface's ranks.
-    const got = {
-      http: await onFreshStore((s) => viaHttp(s, c)),
-      mcp: await onFreshStore((s) => viaMcp(s, c)),
-      cli: await onFreshStore((s) => viaCli(s, c)),
-    };
-    expect(got).toMatchSnapshot();
+  // A store per surface: a recall rewrites the rows it returns, and that write would move the next surface's ranks.
+  // One file per case and surface, so a moved ranking shows as a small diff in the one place it moved.
+  it.each(CASE_SURFACES)('%s via %s', async (name, surface, c) => {
+    const got = await onFreshStore((s) => SURFACES[surface](s, c));
+    await expect(got).toMatchFileSnapshot(`./__snapshots__/recall-surface/${fileStem(name)}.${surface}.txt`);
   });
 });

@@ -7,12 +7,14 @@ import {
   MCP_PROJECT_SCOPED_HEADER,
   resolveProjectIdentity,
   type ProjectIdentity,
-  type ResolveProjectIdentityOpts,
+  type ResolveProjectIdentityOptions,
 } from '../../src/entry/project-identity.js';
 
 describe('hippo-memory/project-identity entry types', () => {
   it('resolveProjectIdentity takes an optional cwd and options and returns a ProjectIdentity', () => {
-    expectTypeOf(resolveProjectIdentity).parameters.toEqualTypeOf<[cwd?: string, opts?: ResolveProjectIdentityOpts]>();
+    expectTypeOf(resolveProjectIdentity).parameters.toEqualTypeOf<
+      [cwd?: string, opts?: ResolveProjectIdentityOptions]
+    >();
     expectTypeOf(resolveProjectIdentity).returns.toEqualTypeOf<ProjectIdentity>();
     // @ts-expect-error the working directory is a string
     typeOnly(() => resolveProjectIdentity(42));
@@ -27,8 +29,8 @@ describe('hippo-memory/project-identity entry types', () => {
     expectTypeOf<ProjectIdentity['aliases']>().toEqualTypeOf<readonly string[] | undefined>();
   });
 
-  it('ResolveProjectIdentityOpts holds two optional directories', () => {
-    expectTypeOf<ResolveProjectIdentityOpts>().toEqualTypeOf<{ homeDir?: string; stopDir?: string }>();
+  it('ResolveProjectIdentityOptions holds two optional directories', () => {
+    expectTypeOf<ResolveProjectIdentityOptions>().toEqualTypeOf<{ homeDir?: string; stopDir?: string }>();
   });
 
   it('the constants keep their literal types', () => {

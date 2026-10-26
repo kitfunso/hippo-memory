@@ -4,7 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
-import type { AddonRoute, ServeOpts } from '../../src/server.js';
+import type { AddonRoute, ServeOptions } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
@@ -56,7 +56,7 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-async function start(rateLimits?: ServeOpts['rateLimits'], extra: Partial<ServeOpts> = {}): Promise<void> {
+async function start(rateLimits?: ServeOptions['rateLimits'], extra: Partial<ServeOptions> = {}): Promise<void> {
   const handle = await serve({ hippoRoot: root, port: 0, rateLimits, ...extra });
   url = handle.url;
   stop = handle.stop;
@@ -535,7 +535,7 @@ describe('the per-caller default', () => {
 });
 
 describe('boot and the other Retry-After replies', () => {
-  const BAD: Array<[ServeOpts['rateLimits'], RegExp]> = [
+  const BAD: Array<[ServeOptions['rateLimits'], RegExp]> = [
     [{ perCaller: { ratePerSec: 0, burst: 1 } }, /rateLimits\.perCaller\.ratePerSec/],
     [{ perCaller: { ratePerSec: -1, burst: 2 } }, /rateLimits\.perCaller\.ratePerSec/],
     [{ perCaller: { ratePerSec: 1, burst: Number.POSITIVE_INFINITY } }, /rateLimits\.perCaller\.burst/],

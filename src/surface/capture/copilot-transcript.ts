@@ -1,8 +1,8 @@
 // The Copilot event log: one `{type, data, id, timestamp, parentId}` object per line, written by the Copilot CLI and VS
 // Code Local alike.
 // Matched line by line, since the tail readers start mid-file and never see the session.start line.
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { copilotHomeDir } from '../hooks-install/rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';

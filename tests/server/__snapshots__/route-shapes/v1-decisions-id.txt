@@ -1,0 +1,28 @@
+GET /v1/decisions/1 -> 404 decision 1 not found
+POST /v1/decisions/1 -> 404 not found
+DELETE /v1/decisions/1 -> 404 not found
+PUT /v1/decisions/1 -> 404 not found
+GET /v1/decisions/007 -> 404 decision 7 not found
+POST /v1/decisions/007 -> 404 not found
+DELETE /v1/decisions/007 -> 404 not found
+PUT /v1/decisions/007 -> 404 not found
+GET /v1/decisions/abc -> 404 not found
+POST /v1/decisions/abc -> 404 not found
+DELETE /v1/decisions/abc -> 404 not found
+PUT /v1/decisions/abc -> 404 not found
+GET /v1/decisions/-1 -> 404 not found
+POST /v1/decisions/-1 -> 404 not found
+DELETE /v1/decisions/-1 -> 404 not found
+PUT /v1/decisions/-1 -> 404 not found
+GET /v1/decisions/%31 -> 404 not found
+POST /v1/decisions/%31 -> 404 not found
+DELETE /v1/decisions/%31 -> 404 not found
+PUT /v1/decisions/%31 -> 404 not found
+GET /v1/decisions/ -> 404 not found
+POST /v1/decisions/ -> 404 not found
+DELETE /v1/decisions/ -> 404 not found
+PUT /v1/decisions/ -> 404 not found
+GET /v1/decisions/1/ -> 404 not found
+POST /v1/decisions/1/ -> 404 not found
+DELETE /v1/decisions/1/ -> 404 not found
+PUT /v1/decisions/1/ -> 404 not found

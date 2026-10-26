@@ -1,4 +1,4 @@
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import type { AggregateOptions, FunctionOptions, SQLInputValue, SQLOutputValue } from 'node:sqlite';
 
 const require = createRequire(import.meta.url);
