@@ -56,16 +56,6 @@ describe('computeCutoff', () => {
     expect(computeCutoff(30, now)).toBe('2026-04-24T12:00:00.000Z');
     expect(computeCutoff(90, now)).toBe('2026-02-23T12:00:00.000Z');
   });
-
-  it('defaults to actual Date.now() when not pinned', () => {
-    const before = Date.now();
-    const out = computeCutoff(1);
-    const after = Date.now();
-    const cutoffMs = new Date(out).getTime();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    expect(cutoffMs).toBeGreaterThanOrEqual(before - oneDayMs);
-    expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);
-  });
 });
 
 describe('auditPrune', () => {

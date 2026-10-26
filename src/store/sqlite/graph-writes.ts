@@ -26,6 +26,7 @@ import type {
   Entity,
   Relation,
 } from '../../base/ports/store/graph.js';
+import { handleStamp } from './handle-clock.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
@@ -145,7 +146,7 @@ export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: In
     );
   }
   const name = checkedName('insertEntity', opts.name);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
   const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(
@@ -247,7 +248,7 @@ export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: 
     ...relationSource(db, tenantId, opts),
     source_object_type: opts.sourceObject?.type ?? null,
     source_object_id: opts.sourceObject?.id ?? null,
-    created_at: new Date().toISOString(),
+    created_at: handleStamp(db),
   };
   const insert = cachedStatement(
     db,

@@ -92,7 +92,7 @@ describe('markdown mirror round-trip', () => {
     const base = createMemory('round trip content here');
     for (const origin of ['proj-a', '']) {
       const raw = serializeEntry({ ...base, originProject: origin });
-      const back = deserializeEntry(raw);
+      const back = deserializeEntry(raw, new Date());
       expect(back?.originProject).toBe(origin);
     }
   });
@@ -100,13 +100,13 @@ describe('markdown mirror round-trip', () => {
   it('round-trips an unknown (null) origin, so a rebuild never stamps it user-global', () => {
     const raw = serializeEntry({ ...createMemory('unknown-origin row content here'), originProject: null });
     expect(raw).toContain('origin_project: null');
-    expect(deserializeEntry(raw)?.originProject).toBeNull();
+    expect(deserializeEntry(raw, new Date())?.originProject).toBeNull();
   });
 
   it('omits an unstamped origin and reads a mirror with no origin field as unstamped', () => {
     const raw = serializeEntry(createMemory('unstamped row content here'));
     expect(raw).not.toContain('origin_project');
-    expect(deserializeEntry(raw)?.originProject).toBeUndefined();
+    expect(deserializeEntry(raw, new Date())?.originProject).toBeUndefined();
   });
 
   it('a rebuild keeps an explicit null and stamps only a mirror with no origin field', () => {

@@ -34,6 +34,7 @@ import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { handleStamp } from './handle-clock.js';
 
 type HoldsValue = (text: string) => boolean;
 
@@ -174,7 +175,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
   for (const id of removal.removedIds) {
     const isRaw = rawIds.has(id);
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, isRaw, 'hippo reject');
-    if (mirrorOk && isRaw) markMirrorCleaned(db, id, new Date().toISOString());
+    if (mirrorOk && isRaw) markMirrorCleaned(db, id, handleStamp(db));
   }
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
 }
@@ -213,7 +214,7 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
   const { tenantId, actor, reason, memoryId } = rejection;
   const content = rejectedText(rejection, memoryId === undefined ? undefined : entryRejectRow(db, memoryId));
   const digest = rejectionDigest(content);
-  const rejectedAt = new Date().toISOString();
+  const rejectedAt = files.clock().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
     insertRejectedValue(db, {
       tenantId,

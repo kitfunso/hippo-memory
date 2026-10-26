@@ -161,7 +161,7 @@ function repair(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope,
     const toProject = plan.toProject.filter((r) => merges.has(r.id));
     stampOriginProjects(db, tenantId, toProject);
     const retired = plan.setAside.flatMap((id) => merges.get(id) ?? []);
-    const now = new Date();
+    const now = files.clock();
     for (const row of retired) retire(db, files, row, actor, now);
     const setAside = retired.map((row) => row.id);
     const metadata = { backup, copies, folds, folded, toProject, setAside, untraced };

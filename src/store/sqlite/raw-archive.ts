@@ -8,6 +8,7 @@ import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleStamp } from './handle-clock.js';
 
 export interface ArchiveOptions {
   reason: string;
@@ -52,7 +53,7 @@ function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemo
 function moveRowsToArchive(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow[], opts: ArchiveOptions): string {
   // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row is the compliance
   // trail, so the content is unrecoverable from here on.
-  const archivedAt = new Date().toISOString();
+  const archivedAt = handleStamp(db);
   const payloads = rows.map((row) => [
     row.id,
     JSON.stringify({

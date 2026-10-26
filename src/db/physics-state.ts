@@ -147,7 +147,7 @@ export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
-  // A raw handle has no opener clock, so the wall clock stands in, as for a store opened with none.
+  // Kept for the frozen lifecycle-stress scripts, which pass no clock on a raw handle; the wall clock stands in.
   now: Date = new Date(),
   model: StrengthModel = PRODUCTION_STRENGTH,
 ): number {

@@ -35,6 +35,7 @@ import { updateStats } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
 import type { CompactionStart, CompactionText } from '../../base/ports/store/capture.js';
+import { handleNow, handleStamp } from './handle-clock.js';
 
 export type { CompactionStatus };
 
@@ -129,7 +130,7 @@ export function startCompaction(
   db: DatabaseSyncLike,
   tenantId: string,
   start: CompactionStart,
-  at: Date = new Date(),
+  at: Date = handleNow(db),
 ): string {
   const id = generateId('cmp');
   insertStartedCompaction(db, tenantId, { id, ...start, startedAt: at.toISOString() });
@@ -213,7 +214,7 @@ export function recordSummary(
   options: RecordSummaryOptions,
 ): CompactionRecord {
   const { meta, text, at, caller = {} } = options;
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const itemsJson = JSON.stringify(text.items);
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);

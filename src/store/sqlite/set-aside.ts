@@ -9,6 +9,7 @@ import { calculateStrength } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
 import type { SetAsideResult, SetAsideWhy } from '../../base/ports/store/project-tags.js';
+import { handleNow } from './handle-clock.js';
 
 /** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant,
  * restorable. */
@@ -35,7 +36,7 @@ export function setAsideRow(
     audit({ why, untagged: true });
     return { kind: 'untagged', entry: untagged };
   }
-  const now = new Date();
+  const now = handleNow(db);
   // Sleep's dormant move skips kept rows, so the steps are written out here without its filter.
   insertDormantRow(db, {
     entry: untagged,

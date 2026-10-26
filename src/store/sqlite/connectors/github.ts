@@ -12,6 +12,7 @@ import type {
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { log } from '../../../base/util/log.js';
+import { handleStamp } from '../handle-clock.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -138,5 +139,5 @@ export function saveGitHubCursor(
      VALUES (?, ?, ?, ?)
      ON CONFLICT(tenant_id, repo_full_name)
      DO UPDATE SET ${column} = ${kept}, updated_at = excluded.updated_at`,
-  ).run(tenantId, repo, value, new Date().toISOString());
+  ).run(tenantId, repo, value, handleStamp(db));
 }

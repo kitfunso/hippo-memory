@@ -108,7 +108,7 @@ function restoreInWriteScope(db: DatabaseSyncLike, files: StoreFiles, restore: D
       return rollback({ status: 'missing' });
     }
     if (entryIdTaken(db, restore.id)) return rollback({ status: 'active' });
-    const now = new Date();
+    const now = files.clock();
     const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
     writeEntryDbOnly(db, entry, { actor: restore.actor });
     deleteDormantRow(db, restore.tenantId, restore.id);

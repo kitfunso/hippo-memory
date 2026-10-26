@@ -448,9 +448,9 @@ server.d.ts: ServerHandle re-export
 server.d.ts: SessionCaptureRequest re-export
 server.d.ts: SessionCaptureResult re-export
 server.d.ts: WorkingState re-export
-server.d.ts: authCreate re-export
-server.d.ts: authCreateSelf re-export
-server.d.ts: authRevoke re-export
+server.d.ts: authCreate function
+server.d.ts: authCreateSelf function
+server.d.ts: authRevoke function
 server.d.ts: bindSessionOwner re-export
 server.d.ts: captureFailureForCaller re-export
 server.d.ts: captureSessionTexts re-export

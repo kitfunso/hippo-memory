@@ -39,6 +39,7 @@ import {
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../rules/windows.js';
+import { handleNow, handleStamp } from './handle-clock.js';
 
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
@@ -50,7 +51,7 @@ function clearActiveTaskSnapshot(
   const { hippoRoot } = files;
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const active = cachedStatement(
     db,
     `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC ` +
@@ -84,7 +85,7 @@ function closeTaskSnapshotsForSession(
   if (key) continuityStamp(key);
   // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const result = cachedStatement(
     db,
     `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
@@ -157,7 +158,7 @@ function appendSessionEvent(
   event: SessionEventInput,
 ): SessionEvent {
   assertTenantId('appendSessionEvent', tenantId);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
 
   // Scope is stored as given, since reads deny by default.
   // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
@@ -281,11 +282,11 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     db,
     'bind_session_owner',
     () => {
-      const bound = insertOwnerRow(db, tenantId, sessionId, owner, new Date().toISOString());
+      const bound = insertOwnerRow(db, tenantId, sessionId, owner, handleStamp(db));
       // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
       // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
-      deleteSessionOwnersBefore(db, new Date(Date.now() - retentionMs).toISOString());
+      deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
   );
@@ -343,7 +344,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
  * the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
     const result = cachedStatement(
       db,

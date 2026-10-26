@@ -16,6 +16,7 @@ import {
 import { PRODUCTION_STRENGTH, withLossAversion } from '../../base/memory/strength.js';
 import type { StoreRules } from '../../base/ports/infra.js';
 import { hostClock } from '../../host/clock.js';
+import { bindHandleClock } from './handle-clock.js';
 import { createHost } from '../../host/host.js';
 
 export function initStore(hippoRoot: string): void {
@@ -95,9 +96,9 @@ export function storeFilesOf(hippoRoot: string, rules: StoreRules = {}): StoreFi
 export function handlesOf(hippoRoot: string, rules: StoreRules = {}): Handles {
   const files = storeFilesOf(hippoRoot, rules);
   return {
-    on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
-    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),
-    open: () => openHippoDb(hippoRoot),
+    on: (fn, open) => onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    open: () => bindHandleClock(openHippoDb(hippoRoot), files.clock),
     files,
   };
 }

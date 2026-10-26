@@ -20,6 +20,7 @@ import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleStamp } from './handle-clock.js';
 
 // The card board's argument checks, run lookup and lease, shared by every card write so a bad call fails with one
 // message.
@@ -152,7 +153,7 @@ function insertCardComment(
   author: string,
   body: string,
 ): CardComment {
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const result = cachedStatement(
     db,
     `
@@ -215,7 +216,7 @@ function transitionCards(
 ): number {
   const { from, to, extra } = options;
   assertCardTransition(from, to);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   // Lease columns follow status: set on the move to running, cleared on every other move (rule 15).
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
   const fromPlaceholders = placeholders(from.length);
@@ -244,7 +245,7 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
     const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
     id = generateId('card');
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
 
     cachedStatement(
@@ -385,7 +386,7 @@ function claimCard(
       }
       return rollback(null);
     }
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     const insert = cachedStatement(
       db,
       `
@@ -412,7 +413,7 @@ function heartbeatCard(db: DatabaseSyncLike, tenantId: string, id: string, runId
     if (card.status !== 'running' || !liveRunIs(db, tenantId, id, runId)) {
       return rollback(false);
     }
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     cachedStatement(db, `UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`).run(
       leaseUntilFrom(now),
       now,
@@ -445,7 +446,7 @@ function blockCard(db: DatabaseSyncLike, tenantId: string, id: string, reason: s
       }
       return rollback(false);
     }
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the live run.
     closeLiveRun(db, tenantId, id, 'blocked', now);
     insertCardComment(db, tenantId, id, 'system', reason);
@@ -497,7 +498,7 @@ function completeCard(
       }
       return rollback(null);
     }
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     closeLiveRun(db, tenantId, id, outcome, now);
 
     // Not best-effort (rule 12): promotion runs in this same transaction, so a card can never be `done` with an
@@ -539,7 +540,7 @@ function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
   return withWriteScope(db, 'reclaim_expired_cards', () => {
     // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
-    const now = new Date().toISOString();
+    const now = handleStamp(db);
     const ids = (
       cachedStatement(
         db,

@@ -34,10 +34,6 @@ const ALLOWED = new Map([
     "the bound is the same cell's own span, taken in the same run, which a slow runner only widens",
   ],
   [
-    'db/audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);',
-    'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens',
-  ],
-  [
     'store/company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);',
     'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it',
   ],

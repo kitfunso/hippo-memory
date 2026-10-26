@@ -22,6 +22,7 @@ import {
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffort, removeEntryMirrors } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { Handles, StoreFiles, StoreModel } from './open.js';
+import { bindHandleClock } from './handle-clock.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../../base/ports/store/agent-import.js';
 import type { StrengthenOptions } from '../../base/ports/store/recall-writes.js';
@@ -246,7 +247,7 @@ export function strengthenRetrieved(
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   let db: DatabaseSyncLike;
   try {
-    db = openHippoDb(hippoRoot);
+    db = bindHandleClock(openHippoDb(hippoRoot), rules.clock);
   } catch (error) {
     rethrowIfStoreBlocked(error);
     warnStrengthenFailed(error);
@@ -615,7 +616,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: strin
   }
   try {
     cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-      new Date().toISOString(),
+      files.clock().toISOString(),
       id,
     );
   } catch (err) {

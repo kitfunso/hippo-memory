@@ -4,6 +4,7 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { handleStamp } from '../handle-clock.js';
 
 export type DlqTable = 'slack_dlq' | 'github_dlq';
 
@@ -34,7 +35,7 @@ function insertDlqRow(
   assertTable(table);
   const names = [...columns.map(([name]) => name), 'received_at'];
   assertColumns(names);
-  const values = [...columns.map(([, value]) => value), new Date().toISOString()];
+  const values = [...columns.map(([, value]) => value), handleStamp(db)];
   const result = cachedStatement(
     db,
     `INSERT INTO ${table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,
@@ -84,7 +85,7 @@ function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, tenantId: string,
   cachedStatement(
     db,
     `UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE tenant_id = ? AND id = ?`,
-  ).run(new Date().toISOString(), tenantId, id);
+  ).run(handleStamp(db), tenantId, id);
 }
 
 type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';

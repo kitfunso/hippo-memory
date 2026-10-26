@@ -121,7 +121,8 @@ export interface RankTime {
   readonly now: Date;
 }
 
-/** The instant a ranking scores at: the caller's, else the wall clock for an untyped script that ranks with no root. */
+/** The instant a ranking scores at: the caller's, else the wall clock, kept for frozen dist scripts that
+ *  pass no `now`. */
 export function rankNow(time: Partial<RankTime>): Date {
   return time.now ?? new Date();
 }

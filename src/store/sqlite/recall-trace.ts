@@ -15,6 +15,7 @@ import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { parseLastTraceId } from './rows.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { handleStamp } from './handle-clock.js';
 
 // How long the delivery ledger and the recall traces stay.
 
@@ -54,7 +55,7 @@ const RESULT_ROWS_PER_INSERT = 100;
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
-    const ts = new Date().toISOString();
+    const ts = handleStamp(db);
     return withWriteScope(db, 'write_recall_trace', () => {
       const insertTrace = cachedStatement(db, INSERT_TRACE_SQL);
       const traceResult = insertTrace.run(
@@ -134,7 +135,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       INSERT INTO recall_trace_outcomes (trace_id, ts, tenant_id, outcome, memory_ids_json)
       VALUES (?, ?, ?, ?, ?)
     `,
-    ).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
+    ).run(input.traceId, handleStamp(db), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
     log.error(`recall trace outcome write failed: ${errorMessage(error)}`, errorFields(error));
   }

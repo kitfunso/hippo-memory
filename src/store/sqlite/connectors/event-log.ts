@@ -4,6 +4,7 @@ import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { handleStamp } from '../handle-clock.js';
 
 /** Which log table a connector writes and the column its dedupe key lives in. */
 export interface EventLogSpec {
@@ -32,7 +33,7 @@ export function markEventSeen(
   memoryId: string | null,
 ): boolean {
   const names = [log.keyColumn, ...extra.map(([name]) => name), 'ingested_at', 'memory_id'];
-  const values = [key, ...extra.map(([, value]) => value), new Date().toISOString(), memoryId];
+  const values = [key, ...extra.map(([, value]) => value), handleStamp(db), memoryId];
   const inserted = cachedStatement(
     db,
     `INSERT OR IGNORE INTO ${log.table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`,

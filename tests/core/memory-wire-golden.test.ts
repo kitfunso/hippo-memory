@@ -84,7 +84,7 @@ describe('memory wire goldens', () => {
       rebuildCount: undefined,
       dagLevel3BuiltAt: undefined,
     };
-    expect(deserializeEntry(file)).toEqual(expected);
+    expect(deserializeEntry(file, new Date())).toEqual(expected);
   });
 
   it('dormant snapshot: entry_json bytes, and the entry it restores', () => {
