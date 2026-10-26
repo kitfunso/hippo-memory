@@ -197,6 +197,7 @@ describe('retrieve paths: order and writes', () => {
       audit: [
         ['recall_autodebias_hint_no_class_match', null],
         ['recall', 2],
+        ['recall_anchor_skipped_no_session', null],
         ['recall_availability_detected', null],
       ],
       strengthened: WIDE_RANKED.slice(0, 2).sort(),
@@ -220,6 +221,7 @@ describe('retrieve paths: order and writes', () => {
     expect(written()).toEqual({
       audit: [
         ['recall_autodebias_hint_no_class_match', null],
+        ['recall_anchor_skipped_no_session', null],
         ['recall_availability_detected', null],
         ['recall', 2],
       ],
