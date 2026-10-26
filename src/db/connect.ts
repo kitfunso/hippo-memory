@@ -55,8 +55,8 @@ function warnWideModes(hippoRoot: string): void {
   }
 }
 
-// The probe read whether any archived row's mirror is still uncleaned, so a clean archive costs no scan; a failed unlink
-// leaves its row uncleaned, and the next open retries it.
+// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no scan; a failed
+// unlink leaves its row uncleaned, and the next open retries it.
 function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, pending: boolean | undefined): void {
   if (pending !== false) cleanupArchivedMirrors(hippoRoot, db);
 }

@@ -16,8 +16,8 @@ const INDEXES = [
 const STALE_HASH_TRIGGER =
   `CREATE TRIGGER IF NOT EXISTS memories_duplicate_hash_stale AFTER UPDATE OF content ON memories ` +
   `WHEN new.content IS NOT old.content AND old.duplicate_hash IS NOT NULL ` +
-  `AND new.duplicate_hash IS old.duplicate_hash ` +
-  `BEGIN UPDATE memories SET duplicate_hash = NULL WHERE rowid = new.rowid; END`;
+  `AND new.duplicate_hash IS old.duplicate_hash BEGIN ` +
+  `UPDATE memories SET duplicate_hash = NULL WHERE rowid = new.rowid; END`;
 
 /** Hashes every current distilled row the writer has not; an SQL expression index cost each insert as much again. */
 function backfillDuplicateHashes(db: Parameters<Migration['up']>[0]): void {
