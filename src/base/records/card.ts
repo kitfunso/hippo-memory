@@ -1,17 +1,32 @@
 // Work-queue card types: a claimable unit of work, N candidates claim one row, first wins.
 import { HOUR_MS } from '../util/time.js';
 /** A work-queue card's lifecycle state; CARD_TRANSITIONS lists the legal moves between them. */
-export type CardStatus = 'backlog' | 'ready' | 'running' | 'blocked' | 'review' | 'done' | 'shelved';
+export type CardStatus =
+  | 'backlog'
+  | 'ready'
+  | 'running'
+  | 'blocked'
+  | 'review'
+  | 'done'
+  | 'shelved';
 
-const CARD_STATUSES: readonly CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
+const CARD_STATUSES: readonly CardStatus[] = [
+  'backlog',
+  'ready',
+  'running',
+  'blocked',
+  'review',
+  'done',
+  'shelved',
+];
 
 /** Narrows a raw string, such as a CLI flag value, to a CardStatus. */
 export function isCardStatus(v: string): v is CardStatus {
   return CARD_STATUSES.some((s) => s === v);
 }
 
-/** A card row; leaseUntil and heartbeatAt are null unless the card is running, and a card claimed under 1.40.0 runs
- * with both null until a heartbeat sets them. */
+/** A card row; leaseUntil and heartbeatAt are null unless the card is running, and a card
+ * claimed under 1.40.0 runs with both null until a heartbeat sets them. */
 export interface Card {
   id: string;
   title: string;
@@ -62,8 +77,10 @@ export const CARD_TRANSITIONS: CardTransitions = {
   shelved: [],
 };
 
-// SHORTCUT: one fixed lease for every claim; add a per-claim lease when the W3 dispatcher heartbeats on a timer.
-/** How long a claim or a heartbeat keeps a running card's lease before reclaimExpiredCards may return it to ready. */
+// SHORTCUT: one fixed lease for every claim; add a per-claim lease when the W3 dispatcher
+// heartbeats on a timer.
+/** How long a claim or a heartbeat keeps a running card's lease before reclaimExpiredCards may
+ * return it to ready. */
 export const CARD_LEASE_MS = 4 * HOUR_MS;
 
 /** Throws on any move CARD_TRANSITIONS does not allow, before a status write touches the row. */

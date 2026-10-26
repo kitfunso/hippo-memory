@@ -8,9 +8,17 @@ import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js'
 import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import { folderVectorSource } from '../../entry/folder-search.js';
+import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import { defaultStore } from '../open-store.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
-import { bootstrapCorpus, compareSummaries, runEval, type EvalCase, type EvalSummary } from '../../domain/eval/eval.js';
+import {
+  bootstrapCorpus,
+  compareSummaries,
+  runEval,
+  type EvalCase,
+  type EvalComparison,
+  type EvalSummary,
+} from '../../domain/eval/eval.js';
 import {
   detectRegressions,
   formatResult,
@@ -22,9 +30,21 @@ import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  numberFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { errorCode, errorMessage } from '../../base/util/log.js';
-import { isJsonNumber, isJsonObject, isJsonString, parseJson, type JsonValue } from '../../base/util/json.js';
+import {
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonValue,
+} from '../../base/util/json.js';
 import { CliExit, fail } from './exit.js';
 import { DEFAULT_BOOTSTRAP_CASES } from './flag-defaults.js';
 
@@ -35,8 +55,8 @@ const MAX_MISSED_SHOWN = 4;
 const QUERY_PREVIEW_CHARS = 60;
 const MAX_DELTAS_SHOWN = 5;
 
-/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus
- * file. */
+/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else
+ * it scores a corpus file. */
 async function evaluateCorpus(
   hippoRoot: string,
   tenantId: string,
@@ -94,9 +114,18 @@ async function runCorpusEval(
   const infra = cliInfra();
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot)
-      ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot), embedderFor: resolveEmbeddingProvider }
+      ? {
+          local: cliFolder(hippoRoot),
+          global: cliFolder(globalRoot),
+          embedderFor: resolveEmbeddingProvider,
+        }
       : undefined,
-    source: folderVectorSource({ hippoRoot }),
+    source: vectorSourceOf({
+      store: defaultStore(hippoRoot),
+      config: cliConfig(hippoRoot),
+      onHippoDb: true,
+      embedderFor: resolveEmbeddingProvider,
+    }),
     mmr: !boolFlag(flags, 'no-mmr'),
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
@@ -136,12 +165,23 @@ function isBaselineMetrics(value: JsonValue | undefined): value is BaselineMetri
 
 /** The baseline file's contents as an EvalBaseline, or null when the shape is wrong. */
 export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
-  if (!isJsonObject(value) || !isJsonString(value['version']) || !isJsonString(value['timestamp'])) return null;
-  const { features, overall } = value;
-  if (!isJsonObject(features) || !Object.values(features).every(isBaselineMetrics) || !isBaselineMetrics(overall)) {
+  if (
+    !isJsonObject(value) ||
+    !isJsonString(value['version']) ||
+    !isJsonString(value['timestamp'])
+  ) {
     return null;
   }
-  // SAFETY: every present feature entry is checked above; detectRegressions skips a category the file lacks.
+  const { features, overall } = value;
+  if (
+    !isJsonObject(features) ||
+    !Object.values(features).every(isBaselineMetrics) ||
+    !isBaselineMetrics(overall)
+  ) {
+    return null;
+  }
+  // SAFETY: every present feature entry is checked above; detectRegressions skips a category the
+  // file lacks.
   return {
     version: value['version'],
     timestamp: value['timestamp'],
@@ -151,26 +191,22 @@ export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
 }
 
 /** Suite mode: run the built-in feature eval (no corpus file needed, no init needed). */
-async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
-  const baselinePath = stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
-  let baseline: EvalBaseline | undefined;
-  let parsed: JsonValue | undefined;
-  try {
-    parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
-  } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
-    if (errorCode(err) !== 'ENOENT') {
-      printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
-    }
-  }
-  if (parsed !== undefined) {
-    baseline =
-      parseEvalBaseline(parsed) ??
-      fail(`Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`);
-  }
+async function runEvalSuite(
+  hippoRoot: string,
+  flags: CliFlags,
+  asJson: boolean,
+  minMrr: number | null,
+): Promise<void> {
+  const baselinePath =
+    stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
+  const baseline = loadEvalBaseline(baselinePath);
 
   const infra = cliInfra();
-  const result = await runFeatureEval(PACKAGE_VERSION, infra.evalSwitches ?? PRODUCTION_SWITCHES, infra.clock());
+  const result = await runFeatureEval(
+    PACKAGE_VERSION,
+    infra.evalSwitches ?? PRODUCTION_SWITCHES,
+    infra.clock(),
+  );
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
@@ -193,10 +229,33 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
   }
 }
 
-/** Loads the corpus file, exiting with the usage line or the read error when there is none to score. */
+function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
+  let parsed: JsonValue | undefined;
+  try {
+    parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
+  } catch (err) {
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used
+    // warns.
+    if (errorCode(err) !== 'ENOENT') {
+      printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
+    }
+  }
+  if (parsed === undefined) return undefined;
+  return (
+    parseEvalBaseline(parsed) ??
+    fail(
+      `Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`,
+    )
+  );
+}
+
+/** Loads the corpus file, exiting with the usage line or the read error when there is none to
+ * score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
-    fail('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
+    fail(
+      'Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap',
+    );
   }
 
   if (!fs.existsSync(corpusPath)) {
@@ -263,7 +322,9 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
       const exp = c.case.expectedIds.length;
       const expectedSet = new Set(c.case.expectedIds);
       const hitTop10 = c.returnedIds.slice(0, HIT_TOP_K).filter((id) => expectedSet.has(id));
-      const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id));
+      const missed = c.case.expectedIds.filter(
+        (id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id),
+      );
       console.log();
       console.log(
         `[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`,
@@ -289,20 +350,23 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
   }
 }
 
-function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
+function readCompareBaseline(comparePath: string): EvalSummary {
   if (!fs.existsSync(comparePath)) {
     fail(`Baseline file not found: ${comparePath}`);
   }
-  let baseline: EvalSummary;
   try {
-    baseline = readBaseline(fs.readFileSync(comparePath, 'utf8'));
+    return readBaseline(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
     fail(`Failed to parse baseline ${comparePath}: ${errorMessage(err)}`);
   }
-  const cmp = compareSummaries(baseline, summary);
+}
+
+function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
+  const cmp = compareSummaries(readCompareBaseline(comparePath), summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so both can be captured independently.
+    // The main JSON output already emitted; append comparison to stderr so both can be captured
+    // independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }
@@ -314,24 +378,40 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   console.log(`  Recall@10:  ${sign(cmp.aggregate.recallAt10)}`);
   console.log(`  NDCG@10:    ${sign(cmp.aggregate.ndcgAt10)}`);
   console.log();
-  console.log(`  improved: ${cmp.improved.length}   regressed: ${cmp.regressed.length}   unchanged: ${cmp.unchanged}`);
-  if (cmp.onlyInBaseline.length > 0) console.log(`  only in baseline: ${cmp.onlyInBaseline.length}`);
+  console.log(
+    `  improved: ${cmp.improved.length}   regressed: ${cmp.regressed.length}   unchanged: ${cmp.unchanged}`,
+  );
+  if (cmp.onlyInBaseline.length > 0) {
+    console.log(`  only in baseline: ${cmp.onlyInBaseline.length}`);
+  }
   if (cmp.onlyInCurrent.length > 0) console.log(`  only in current:  ${cmp.onlyInCurrent.length}`);
+  printCompareDeltas(cmp);
+}
 
+function printCompareDeltas(cmp: EvalComparison): void {
   const showPerCase = cmp.improved.length + cmp.regressed.length > 0;
   if (showPerCase) {
     for (const d of cmp.improved.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
-      console.log(`  + [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (+${fmt(delta, 3)})`);
+      console.log(
+        `  + [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (+${fmt(delta, 3)})`,
+      );
     }
     for (const d of cmp.regressed.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
-      console.log(`  - [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (${fmt(delta, 3)})`);
+      console.log(
+        `  - [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (${fmt(delta, 3)})`,
+      );
     }
   }
 }
 
-export async function handleEval({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleEval({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
   await evaluateCorpus(hippoRoot, tenantId, corpusPath, flags);
 }

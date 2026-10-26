@@ -3,8 +3,9 @@ import * as path from 'node:path';
 import { realpathOrResolve } from '../../host/real-path.js';
 
 /**
- * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus
- * the body, or an empty `fm` and the original content when no well-formed block is present. */
+ * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns
+ * the key-value map plus the body, or an empty `fm` and the original content when no well-formed
+ * block is present. */
 interface FrontmatterParseResult {
   fm: Record<string, string>;
   body: string;
@@ -22,8 +23,8 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
     if (!kv) continue;
     let val = kv[2].trim();
     if (val === '') {
-      // YAML block-style list (`key:` then indented `- item` lines, common in Obsidian/Dendron): collect into a
-      // comma-joined value for frontmatterList.
+      // YAML block-style list (`key:` then indented `- item` lines, common in Obsidian/Dendron):
+      // collect into a comma-joined value for frontmatterList.
       const items: string[] = [];
       let j = i + 1;
       let item: RegExpMatchArray | null;
@@ -42,8 +43,8 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
 }
 
 /**
- * Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or one token into a
- * string[]; quotes and brackets are stripped and empty entries dropped. */
+ * Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or
+ * one token into a string[]; quotes and brackets are stripped and empty entries dropped. */
 export function frontmatterList(value: string | undefined): string[] {
   if (!value) return [];
   let v = value.trim();
@@ -60,9 +61,9 @@ export function frontmatterList(value: string | undefined): string[] {
 }
 
 /**
- * Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`; de-duplicated,
- * order-preserving.
- * Embeds (`![[...]]`) match too, because the leading `!` is outside the capture and a candidate target is harmless. */
+ * Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`;
+ * de-duplicated, order-preserving. Embeds (`![[...]]`) match too, because the leading `!` is
+ * outside the capture and a candidate target is harmless. */
 export function parseWikilinks(body: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -80,15 +81,19 @@ export function parseWikilinks(body: string): string[] {
 }
 
 /**
- * Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash relative paths; symlinks
- * are not followed.
- * Skips dot-directories and the Hippo store path so a vault containing the store never imports its own mirror files;
- * importVault handles root-IS-the-store.
+ * Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash
+ * relative paths; symlinks are not followed. Skips dot-directories and the Hippo store path so a
+ * vault containing the store never imports its own mirror files; importVault handles
+ * root-IS-the-store.
  */
-export function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /\.md$/i): string[] {
+export function collectMarkdownFiles(
+  root: string,
+  hippoRoot: string,
+  match: RegExp = /\.md$/i,
+): string[] {
   const out: string[] = [];
-  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a junction or Windows
-  // case alias.
+  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a
+  // junction or Windows case alias.
   const resolvedHippoRoot = realpathOrResolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -96,8 +101,8 @@ export function collectMarkdownFiles(root: string, hippoRoot: string, match: Reg
       if (ent.isSymbolicLink()) continue;
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and the canonicalized store path (covers a
-        // HIPPO_HOME outside `.hippo`).
+        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and the canonicalized
+        // store path (covers a HIPPO_HOME outside `.hippo`).
         if (ent.name.startsWith('.')) continue;
         if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);

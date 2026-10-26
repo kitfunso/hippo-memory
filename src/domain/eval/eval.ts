@@ -58,9 +58,13 @@ export interface RunEvalOptions {
   budget?: number;
   /** Where the vector arm reads when `entries` rank alone; BM25 only when unset. */
   source?: VectorSource;
-  /** When set, eval runs through searchBothHybrid so global memories are in scope, each store's query embedded by
-   * `embedderFor`. Otherwise only the `entries` list is searched. */
-  stores?: { local: ConfiguredFolder<SharingStore>; global: ConfiguredFolder<SharingStore>; embedderFor: EmbedderFor };
+  /** When set, eval runs through searchBothHybrid so global memories are in scope, each store's
+   * query embedded by `embedderFor`. Otherwise only the `entries` list is searched. */
+  stores?: {
+    local: ConfiguredFolder<SharingStore>;
+    global: ConfiguredFolder<SharingStore>;
+    embedderFor: EmbedderFor;
+  };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now: Date;
@@ -151,7 +155,8 @@ export async function runEval(
   };
 }
 
-/** One case's ranking: across the local and global stores when `stores` is set, else over `entries` alone. */
+/** One case's ranking: across the local and global stores when `stores` is set, else over
+ * `entries` alone. */
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
   const ranking = {
     budget: options.budget ?? DEFAULT_EVAL_BUDGET,
@@ -202,8 +207,8 @@ export interface EvalComparison {
 }
 
 /**
- * Compute pairwise deltas between a baseline and a current eval summary, matching cases by EvalCase.id; mismatches land
- * in the onlyIn arrays.
+ * Compute pairwise deltas between a baseline and a current eval summary, matching cases by
+ * EvalCase.id; mismatches land in the onlyIn arrays.
  */
 export function compareSummaries(baseline: EvalSummary, current: EvalSummary): EvalComparison {
   const aggregate: EvalDelta = {
@@ -250,8 +255,8 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
 }
 
 /**
- * For each memory, use its first 8 content words as a trivial query and expect that memory back: a smoke test for
- * recall.
+ * For each memory, use its first 8 content words as a trivial query and expect that memory back: a
+ * smoke test for recall.
  */
 export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase[] {
   const cases: EvalCase[] = [];

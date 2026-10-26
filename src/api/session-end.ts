@@ -1,6 +1,6 @@
-// A session's end: which store it writes to, when it sleeps, which turns it captures, and the store writes after them
-// (handoff, snapshot close, re-read count); plus the compact-resume read. The hook verbs keep stdin, spawning and the
-// log file.
+// A session's end: which store it writes to, when it sleeps, which turns it captures, and the store
+// writes after them (handoff, snapshot close, re-read count); plus the compact-resume read. The
+// hook verbs keep stdin, spawning and the log file.
 
 import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
@@ -9,17 +9,23 @@ import type { SessionEvent } from '../base/ports/store/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
+import {
+  COMPACT_RESUME_EVENT_CONTENT_CAP,
+  COMPACT_RESUME_MAX_AGE_MS,
+  compactResumeText,
+} from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
 import type { Context } from './types.js';
 import type { Ledger } from '../base/ports/store.js';
 
-/** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
+/** What closing one ended session needs from the host; the two readers run only when the handoff
+ * is written. */
 export interface SessionClose {
   sessionId: string | null;
   /**
-   * A reply's end, not the session's: the handoff is updated in place and the snapshot stays for the next compaction.
+   * A reply's end, not the session's: the handoff is updated in place and the snapshot stays for
+   * the next compaction.
    */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
@@ -29,8 +35,9 @@ export interface SessionClose {
   log: (line: string) => void;
 }
 
-/** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own failure and never
- * throws. The handoff goes first, while the snapshot writeSessionEndHandoff reads is still active. */
+/** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
+ * failure and never throws. The handoff goes first, while the snapshot writeSessionEndHandoff
+ * reads is still active. */
 export async function closeEndedSession(ctx: Context, close: SessionClose): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
@@ -40,12 +47,17 @@ export async function closeEndedSession(ctx: Context, close: SessionClose): Prom
   await closeSnapshot(ctx, close.sessionId, close.log);
 }
 
-async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): Promise<void> {
+async function writeEndHandoff(
+  ctx: Context,
+  sessionId: string,
+  close: SessionClose,
+): Promise<void> {
   const { sessions } = ctx.store;
   try {
-    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
-    // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
-    // the slot before the write.
+    const ownSnapshot =
+      (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
+    // A never-compacted session has no snapshot; read even when it has one, as another session's
+    // PreCompact can take the slot before the write.
     const state = close.workingState();
     const derived = state === null ? null : snapshotFields(state);
     if (!ownSnapshot && !derived) {
@@ -55,7 +67,9 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
     const sessionEnd = { sessionId, evidence: close.evidence(), derived, inPlace: close.turn };
     const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, null);
     close.log(
-      handoff ? `wrote handoff for session ${sessionId}` : `skip: kept the existing handoff for session ${sessionId}`,
+      handoff
+        ? `wrote handoff for session ${sessionId}`
+        : `skip: kept the existing handoff for session ${sessionId}`,
     );
   } catch (err) {
     close.log(`handoff write failed: ${errorMessage(err)}`);
@@ -63,8 +77,13 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
   }
 }
 
-// If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is the backstop.
-async function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: string) => void): Promise<void> {
+// If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is
+// the backstop.
+async function closeSnapshot(
+  ctx: Context,
+  sessionId: string | null,
+  line: (message: string) => void,
+): Promise<void> {
   try {
     if (sessionId) {
       const close = { status: 'session-ended', sessionId };
@@ -87,8 +106,8 @@ function rereadLedgers(ctx: Context): Ledger[] {
   return [local, global].filter((ledger) => ledger !== undefined);
 }
 
-/** Books the ending session's re-reads in each hippo.db its ledger rows can land in (the caller's and global); returns
- * the log lines. */
+/** Books the ending session's re-reads in each hippo.db its ledger rows can land in (the
+ * caller's and global); returns the log lines. */
 export async function bookSessionRereads(
   ctx: Context,
   transcriptPath: string | undefined,
@@ -96,7 +115,9 @@ export async function bookSessionRereads(
 ): Promise<string[]> {
   if (!transcriptPath || !sessionId) return [];
   const { transcriptCalls } = ctx.infra;
-  if (transcriptCalls === undefined) return ['skip re-read count: this context reads no transcripts'];
+  if (transcriptCalls === undefined) {
+    return ['skip re-read count: this context reads no transcripts'];
+  }
   let read: TranscriptCalls;
   try {
     read = await transcriptCalls(transcriptPath);
@@ -114,31 +135,43 @@ export async function bookSessionRereads(
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }
   }
-  const skipped = read.malformed > 0 ? `, ${read.malformed} unparsable transcript lines skipped` : '';
-  lines.push(`re-read ${tokens} tokens over ${read.calls.length} model calls for session ${sessionId}${skipped}`);
+  const skipped =
+    read.malformed > 0 ? `, ${read.malformed} unparsable transcript lines skipped` : '';
+  lines.push(
+    `re-read ${tokens} tokens over ${read.calls.length} model calls for session ${sessionId}${skipped}`,
+  );
   return lines;
 }
 
-/** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's
- * snapshot. */
-export async function compactResumeBlock(ctx: Context, payloadSessionId: string | null): Promise<string | null> {
+/** The block a compaction lost: the fresh task snapshot and its session trail, or null with none
+ * or another session's snapshot. */
+export async function compactResumeBlock(
+  ctx: Context,
+  payloadSessionId: string | null,
+): Promise<string | null> {
   const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
-  // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
-  // payload id still prints.
+  // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a
+  // manual run with no payload id still prints.
   if (!snapshot) return null;
-  if (payloadSessionId !== null && snapshot.sessionId !== null && payloadSessionId !== snapshot.sessionId) {
+  if (
+    payloadSessionId !== null &&
+    snapshot.sessionId !== null &&
+    payloadSessionId !== snapshot.sessionId
+  ) {
     return null;
   }
   // A bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
   let events: SessionEvent[] = [];
   try {
     if (snapshot.sessionId) {
-      events = (await sessions.read(ctx.tenantId, 'event', { sessionId: snapshot.sessionId })).map((e) => ({
-        ...e,
-        content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
-      }));
+      events = (await sessions.read(ctx.tenantId, 'event', { sessionId: snapshot.sessionId })).map(
+        (e) => ({
+          ...e,
+          content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
+        }),
+      );
     }
   } catch (err) {
     log.warn(`hippo compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));
@@ -146,8 +179,8 @@ export async function compactResumeBlock(ctx: Context, payloadSessionId: string 
   return compactResumeText(snapshot, events);
 }
 
-/** Log lines held until sleep has restarted the log file. Each line is written once, so the host may also flush on
- * process exit, in case a step ends the process before the run flushes. */
+/** Log lines held until sleep has restarted the log file. Each line is written once, so the host
+ * may also flush on process exit, in case a step ends the process before the run flushes. */
 export interface HeldLog {
   hold(lines: readonly string[]): void;
   flush(): void;
@@ -165,8 +198,9 @@ export function heldLog(write: (line: string) => void): HeldLog {
   };
 }
 
-/** What one session-end run needs from its host: the transcript, the sleep and the capture it runs, and the log it
- * writes. This module decides which store the run writes to, whether sleep runs and which turns are captured. */
+/** What one session-end run needs from its host: the transcript, the sleep and the capture it
+ * runs, and the log it writes. This module decides which store the run writes to, whether sleep
+ * runs and which turns are captured. */
 export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }> {
   mode: 'turn' | 'full';
   sessionId: string | null;
@@ -177,17 +211,20 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   held: HeldLog;
   /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
-  /** Imports the session's agent notes into the global store, for a folder that does not sleep here. */
+  /** Imports the session's agent notes into the global store, for a folder that does not sleep
+   * here. */
   importAgentNotes: () => Promise<void>;
   readScan: (log: (line: string) => void) => Scan | null;
-  /** This session's saved place in its transcript: the turns after it, and moving it past `turns`. */
+  /** This session's saved place in its transcript: the turns after it, and moving it past
+   * `turns`. */
   cursor: {
     after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
     save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;
   };
   /** The project the session ran in. */
   currentProject: () => ProjectRef;
-  /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it failed, having said why. */
+  /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it
+   * failed, having said why. */
   capture: (
     into: Context,
     turns: readonly Turn[] | undefined,
@@ -203,7 +240,8 @@ function hasOwnStore(ctx: Context): boolean {
   return ctx.reach?.hasLocal ?? true;
 }
 
-/** The store a session's end writes to: the folder's own, else the global one; null when neither exists. */
+/** The store a session's end writes to: the folder's own, else the global one; null when neither
+ * exists. */
 function endStore(ctx: Context): Context | null {
   if (hasOwnStore(ctx)) return ctx;
   const global = ctx.reach?.global;
@@ -217,12 +255,14 @@ function endStore(ctx: Context): Context | null {
   };
 }
 
-/** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's end always. */
+/** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's
+ * end always. */
 async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
-  // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
+  // Sleeping the global store from here would learn this folder's git commits into it; it has its
+  // own daily sleep.
   if (!hasOwnStore(ctx)) {
     w.log('skip sleep: this folder has no store of its own', { startFresh: true });
     await w.importAgentNotes();
@@ -250,8 +290,8 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   }
 }
 
-/** Captures the session into `into`; a reply's close takes only the turns after the session's cursor, then moves it, so
- * each reply is extracted once. */
+/** Captures the session into `into`; a reply's close takes only the turns after the session's
+ * cursor, then moves it, so each reply is extracted once. */
 async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   into: Context,
@@ -259,7 +299,8 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const capture = async (turns: readonly Turn[] | undefined): Promise<boolean> => {
-    // With no transcript of its own, capture would read this as a manual run and scan every project.
+    // With no transcript of its own, capture would read this as a manual run and scan every
+    // project.
     if (!w.transcriptPath) {
       w.log('skip capture: no transcript for this session');
       return false;
@@ -283,7 +324,8 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
   if (await capture(fresh)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
 }
 
-/** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx` names, in that order. */
+/** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx`
+ * names, in that order. */
 export async function sessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   w: SessionEndWork<Turn, Scan>,
@@ -307,7 +349,9 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   }
   const scan = w.readScan((line) => w.log(line));
   await captureStep(ctx, into, scan, w);
-  await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) => w.log(line));
+  await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) =>
+    w.log(line),
+  );
   // Only this session's snapshot, and only after sleep and capture.
   const closeLog = (line: string): void => w.log(line);
   await closeEndedSession(into, {

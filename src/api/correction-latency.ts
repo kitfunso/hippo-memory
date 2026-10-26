@@ -32,9 +32,9 @@ function percentile(sorted: number[], q: number): number {
 }
 
 /**
- * Correction latency = `new.created` minus the observation time (the extracted-from row's `created`, else
- * `new.created`).
- * Manual supersedes have latency 0 and are excluded from percentiles so they do not mask real lag. */
+ * Correction latency = `new.created` minus the observation time (the extracted-from row's
+ * `created`, else `new.created`). Manual supersedes have latency 0 and are excluded from
+ * percentiles so they do not mask real lag. */
 export function buildCorrectionLatency(links: readonly CorrectionLink[]): CorrectionLatencyReport {
   const pairs: CorrectionPair[] = [];
   for (const link of links) {

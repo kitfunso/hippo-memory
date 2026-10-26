@@ -14,8 +14,8 @@ interface AuditOptions {
   readonly tenantId: string;
 }
 
-/** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth, and a failed audit
- * write shows up as missing rows. */
+/** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth,
+ * and a failed audit write shows up as missing rows. */
 export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions): void {
   const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {
@@ -34,9 +34,13 @@ export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions):
   }
 }
 
-/** Refusal audit for the rejected-value guard, written by the transaction owner after rollback so the caller's own
- * rollback cannot claw it back. Best-effort like `audit()`: never throws. */
-export function auditRejectionRefusal(db: DatabaseSyncLike, err: RejectedValueError, actor: string): void {
-  const row = refusalAudit(err.tenantId, actor, err.entryId, err);
+/** Refusal audit for the rejected-value guard, written by the transaction owner after rollback
+ * so the caller's own rollback cannot claw it back. Best-effort like `audit()`: never throws. */
+export function auditRejectionRefusal(
+  db: DatabaseSyncLike,
+  err: RejectedValueError,
+  actor: string,
+): void {
+  const row = refusalAudit({ tenantId: err.tenantId, actor, targetId: err.entryId }, err);
   audit(db, row.op, row);
 }

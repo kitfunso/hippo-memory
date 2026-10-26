@@ -1,4 +1,5 @@
-// The project brief verbs: one repo's brief, versioned by supersession and refreshable from the repo's receipts.
+// The project brief verbs: one repo's brief, versioned by supersession and refreshable from the
+// repo's receipts.
 
 import { briefDigest, briefRefresh } from '../../api/objects/object-kinds.js';
 import type { ContextWith } from '../../api/types.js';
@@ -14,7 +15,11 @@ function printBriefRow(b: ProjectBrief): void {
   if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
 }
 
-async function refreshBrief(ctx: ContextWith<'objects'>, args: string[], flags: CliFlags): Promise<void> {
+async function refreshBrief(
+  ctx: ContextWith<'objects'>,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const repoRaw = args[1];
   if (!repoRaw) {
     fail('Usage: hippo brief refresh "<repo>" [--dry-run]');
@@ -28,7 +33,9 @@ async function refreshBrief(ctx: ContextWith<'objects'>, args: string[], flags: 
       return;
     }
     const created = await briefRefresh(ctx, repoRaw);
-    console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
+    console.log(
+      `Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`,
+    );
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
@@ -52,7 +59,12 @@ const briefKind: VersionedKind<'project_brief', string> = {
   bodyRequired: '--summary "<text>"',
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
-  write: (repo, summary, from) => ({ repo, summary, changeSummary: from?.changeSummary, supersedesBriefId: from?.id }),
+  write: (repo, summary, from) => ({
+    repo,
+    summary,
+    changeSummary: from?.changeSummary,
+    supersedesBriefId: from?.id,
+  }),
   recorded: (b) => `Project brief recorded: #${b.id} (v${b.version}) for repo "${b.repo}"`,
   filterFlag: 'repo',
   printRow: printBriefRow,

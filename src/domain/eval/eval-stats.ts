@@ -1,8 +1,8 @@
 /**
- * Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets (uncached input,
- * cache write, cache read, output).
- * Uncertainty uses paired, cluster (same-repository tasks are not independent) and paired-ratio bootstraps; every
- * resampler takes a seed.
+ * Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets
+ * (uncached input, cache write, cache read, output). Uncertainty uses paired, cluster
+ * (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a
+ * seed.
  */
 
 import { mulberry32 } from '../../base/util/prng.js';
@@ -27,8 +27,8 @@ export interface Usage {
 }
 
 /**
- * Prices in dollars per million tokens, taken from the provider's current price page for the exact model; this module
- * has no built-in prices.
+ * Prices in dollars per million tokens, taken from the provider's current price page for the exact
+ * model; this module has no built-in prices.
  */
 export interface Prices {
   inputPerMTok: number;
@@ -61,10 +61,9 @@ export function priceUsage(usage: Usage, prices: Prices): number {
 }
 
 /**
- * Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent tokens" when no dollar
- * prices are given.
- * Defaults follow Anthropic's ratios (5-minute cache write 1.25x, cache read 0.1x); pass another provider's ratios when
- * needed.
+ * Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent
+ * tokens" when no dollar prices are given. Defaults follow Anthropic's ratios (5-minute cache write
+ * 1.25x, cache read 0.1x); pass another provider's ratios when needed.
  */
 export interface CacheRatios {
   write: number;
@@ -75,8 +74,13 @@ export interface CacheRatios {
 export const DEFAULT_CACHE_RATIOS: Readonly<CacheRatios> = { write: 1.25, read: 0.1 };
 
 /** Input cost of `usage` in uncached-equivalent tokens (output excluded). */
-export function uncachedEquivalentInput(usage: Usage, ratios: CacheRatios = DEFAULT_CACHE_RATIOS): number {
-  return usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read;
+export function uncachedEquivalentInput(
+  usage: Usage,
+  ratios: CacheRatios = DEFAULT_CACHE_RATIOS,
+): number {
+  return (
+    usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read
+  );
 }
 
 /** A point estimate with a percentile bootstrap confidence interval. */
@@ -116,8 +120,8 @@ function mean(xs: number[]): number {
 }
 
 /**
- * Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an interval excluding
- * zero is the bar for a real difference.
+ * Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an
+ * interval excluding zero is the bar for a real difference.
  */
 export function pairedBootstrap(diffs: number[], opts: BootstrapOptions = {}): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
@@ -135,8 +139,8 @@ export function pairedBootstrap(diffs: number[], opts: BootstrapOptions = {}): E
 }
 
 /**
- * Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one repository), because tasks
- * in a cluster are not independent.
+ * Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one
+ * repository), because tasks in a cluster are not independent.
  */
 export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
@@ -188,9 +192,9 @@ function costPerResolved(outcomes: ArmOutcome[]): number {
 }
 
 /**
- * Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]` and `treatment[i]` must
- * be the same task).
- * Resamples in which an arm resolves nothing are dropped; `iterations` reports how many were kept. */
+ * Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]`
+ * and `treatment[i]` must be the same task). Resamples in which an arm resolves nothing are
+ * dropped; `iterations` reports how many were kept. */
 export function costPerResolvedDelta(
   control: ArmOutcome[],
   treatment: ArmOutcome[],
@@ -203,7 +207,37 @@ export function costPerResolvedDelta(
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
   const c = costPerResolved(control);
   const t = costPerResolved(treatment);
-  const rand = mulberry32(opts.seed ?? 1);
+  const { deltas, relatives } = bootstrapCostDeltas(control, treatment, iterations, opts.seed ?? 1);
+  const finite = Number.isFinite(c) && Number.isFinite(t);
+  const empty = { low: Number.NaN, high: Number.NaN };
+  return {
+    control: c,
+    treatment: t,
+    delta: {
+      estimate: finite ? t - c : Number.NaN,
+      ...(deltas.length > 0 ? percentileInterval(deltas, alpha) : empty),
+      iterations: deltas.length,
+    },
+    relative: {
+      estimate: finite ? (t - c) / c : Number.NaN,
+      ...(relatives.length > 0 ? percentileInterval(relatives, alpha) : empty),
+      iterations: relatives.length,
+    },
+  };
+}
+
+interface CostDeltaSamples {
+  deltas: number[];
+  relatives: number[];
+}
+
+function bootstrapCostDeltas(
+  control: ArmOutcome[],
+  treatment: ArmOutcome[],
+  iterations: number,
+  seed: number,
+): CostDeltaSamples {
+  const rand = mulberry32(seed);
   const n = control.length;
   const deltas: number[] = [];
   const relatives: number[] = [];
@@ -221,22 +255,7 @@ export function costPerResolvedDelta(
     deltas.push(tt - cc);
     relatives.push((tt - cc) / cc);
   }
-  const finite = Number.isFinite(c) && Number.isFinite(t);
-  const empty = { low: Number.NaN, high: Number.NaN };
-  return {
-    control: c,
-    treatment: t,
-    delta: {
-      estimate: finite ? t - c : Number.NaN,
-      ...(deltas.length > 0 ? percentileInterval(deltas, alpha) : empty),
-      iterations: deltas.length,
-    },
-    relative: {
-      estimate: finite ? (t - c) / c : Number.NaN,
-      ...(relatives.length > 0 ? percentileInterval(relatives, alpha) : empty),
-      iterations: relatives.length,
-    },
-  };
+  return { deltas, relatives };
 }
 
 /** pass@k: share of tasks with at least one success in their first k runs.
@@ -306,8 +325,9 @@ function twoSidedP(samples: readonly number[], nullValue: number): number {
   return Math.min(1, (2 * Math.min(below, above)) / samples.length);
 }
 
-/** Resamples repositories, then families inside each; only the repository draw carries a shared-store fault.
- * The statistic never uses the PRNG, so a second call on one seed draws the same resamples. */
+/** Resamples repositories, then families inside each; only the repository draw carries a
+ * shared-store fault. The statistic never uses the PRNG, so a second call on one seed draws the
+ * same resamples. */
 export function twoLevelBootstrap<T>(
   repos: readonly Repository<T>[],
   statistic: (units: readonly T[]) => number,
@@ -334,8 +354,8 @@ export function twoLevelBootstrap<T>(
   return { estimate, ...interval, p, iterations: samples.length, dropped, nullValue };
 }
 
-/** Holm step-down in input order; the family size is `ps.length`, as preregistered.
- * A NaN stays NaN but ranks as 1, so it never loosens the others; a finite p outside [0, 1] throws. */
+/** Holm step-down in input order; the family size is `ps.length`, as preregistered. A NaN stays
+ * NaN but ranks as 1, so it never loosens the others; a finite p outside [0, 1] throws. */
 export function holmAdjust(ps: readonly number[]): number[] {
   for (const p of ps) {
     if (!Number.isNaN(p) && !(p >= 0 && p <= 1)) throw new RangeError(`p-value out of range: ${p}`);
@@ -373,8 +393,8 @@ export interface VerdictResult {
   readonly reachesMinimum: boolean;
 }
 
-/** Checks in the preregistered order; the null comes from `e.nullValue`, so p and sides cannot disagree.
- * A NaN estimate, p or bound is inconclusive, since a win or loss cannot be ruled out. */
+/** Checks in the preregistered order; the null comes from `e.nullValue`, so p and sides cannot
+ * disagree. A NaN estimate, p or bound is inconclusive, since a win or loss cannot be ruled out. */
 export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec): VerdictResult {
   const inconclusive: VerdictResult = { verdict: 'inconclusive', reachesMinimum: false };
   if ([adjustedP, e.estimate, e.low, e.high].some(Number.isNaN)) return inconclusive;
@@ -385,7 +405,9 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
     const harmfulSide = lowerIsHelpful ? e.estimate > nullValue : e.estimate < nullValue;
     if (harmfulSide) return { verdict: 'loss', reachesMinimum: false };
     if (helpfulSide) {
-      const reaches = lowerIsHelpful ? e.estimate <= spec.minimumEffectAt : e.estimate >= spec.minimumEffectAt;
+      const reaches = lowerIsHelpful
+        ? e.estimate <= spec.minimumEffectAt
+        : e.estimate >= spec.minimumEffectAt;
       return { verdict: 'win', reachesMinimum: reaches };
     }
   }
@@ -395,7 +417,9 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
 
 /** A win must hold under both codings of not-applicable, while a loss under either is reported. */
 export function combineCodings(a: VerdictResult, b: VerdictResult): VerdictResult {
-  if (a.verdict === 'loss' || b.verdict === 'loss') return { verdict: 'loss', reachesMinimum: false };
+  if (a.verdict === 'loss' || b.verdict === 'loss') {
+    return { verdict: 'loss', reachesMinimum: false };
+  }
   if (a.verdict === 'win' && b.verdict === 'win') {
     return { verdict: 'win', reachesMinimum: a.reachesMinimum && b.reachesMinimum };
   }
@@ -413,8 +437,9 @@ export interface HarmGate {
 /** Smallest resolve-rate drop the gate tolerates: 5 points below the baseline. */
 const RESOLVE_DIFF_FLOOR = -0.05;
 
-/** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above -0.05.
- * Both estimates must use alpha 0.05, the conservative reading of "upper 95% bound"; a NaN bound fails. */
+/** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above
+ * -0.05. Both estimates must use alpha 0.05, the conservative reading of "upper 95% bound"; a
+ * NaN bound fails. */
 export function harmGate(costRatio: Estimate, resolveDiff: Estimate): HarmGate {
   const costOk = costRatio.high < 1.1;
   const resolveOk = resolveDiff.low > RESOLVE_DIFF_FLOOR;

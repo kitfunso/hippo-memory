@@ -1,6 +1,11 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
-import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../../api/types.js';
+import {
+  contextReach,
+  type ContextReach,
+  type ContextWith,
+  type GlobalInReach,
+} from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -27,7 +32,12 @@ import {
 } from '../open-store.js';
 import { cliRuntime } from './cli-runtime.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
+import {
+  envClefSettings,
+  envLossAversionRatio,
+  envRuntimeSettings,
+  envTenant,
+} from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -35,32 +45,41 @@ import { createHost } from '../../host/host.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
-/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call parses an unchanged
- * config.json once. */
+/** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
+ * parses an unchanged config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
-/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each shared flag once. */
+/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each
+ * shared flag once. */
 const cliHost = createHost();
 
-/** The CLI process's outside services: one reranker registry for every command and stdio MCP call it runs. */
+/** The CLI process's outside services: one reranker registry for every command and stdio MCP
+ * call it runs. */
 export const cliInfra = rootInfra(cliHost);
 
-/** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
- * recall. */
+/** A registry reranker with the CLEF transport this process's environment names, for a script
+ * that reranks outside a recall. */
 export function cliReranker(name: string | null | undefined): RerankerFn | null {
   return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
-// A CLI process runs one command, so the session that command opened is this root's state, as cliHost is, not a scope.
+// A CLI process runs one command, so the session that command opened is this root's state, as
+// cliHost is, not a scope.
 let commandSession: StoreSession | undefined;
 
-// A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores share one.
+// A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores
+// share one.
 function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
-  return { ...evalStoreRules(envLossAversionRatio()), runtime: session?.runtime ?? cliRuntime(), session };
+  return {
+    ...evalStoreRules(envLossAversionRatio()),
+    runtime: session?.runtime ?? cliRuntime(),
+    session,
+  };
 }
 
-/** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
- * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
+/** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never
+ * names the adapter. A `hippo serve` on the same store answers its nearest-row reads from the
+ * graph it holds. */
 export function cliStore(
   hippoRoot: string,
   session: StoreSession | undefined = commandSession,
@@ -75,13 +94,22 @@ export function cliStore(
   });
 }
 
-/** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
+/** A folder's hippo.db with its config, as sharing and sync take each side; the global one may
+ * not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
-  return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot), embedderFor: resolveEmbeddingProvider };
+  return {
+    store: cliStore(hippoRoot),
+    config: cliConfig(hippoRoot),
+    embedderFor: resolveEmbeddingProvider,
+  };
 }
 
-/** The folder's hippo.db as an import reaches it, answering at once: the published importers return their result. */
-export function cliImportFiles(hippoRoot: string, session: StoreSession | undefined = commandSession): ImportFiles {
+/** The folder's hippo.db as an import reaches it, answering at once: the published importers
+ * return their result. */
+export function cliImportFiles(
+  hippoRoot: string,
+  session: StoreSession | undefined = commandSession,
+): ImportFiles {
   return defaultImportFiles(hippoRoot, cliStoreOptions(session));
 }
 
@@ -90,7 +118,8 @@ export function cliImportBatch(hippoRoot: string): <T>(run: (files: ImportFiles)
   return (run) => runStoreBatch((session) => run(cliImportFiles(hippoRoot, session)), cliRuntime());
 }
 
-/** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
+/** Creates the global store, or finishes one that was partly made: what a first share needs of
+ * it. */
 export function cliInitGlobal(): void {
   defaultImportFiles(hippoHomeDir()).ensure();
 }
@@ -105,14 +134,15 @@ async function asCommand<T>(session: StoreSession, run: () => T | Promise<T>): P
   }
 }
 
-/** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
- * undefined. */
+/** One handle per store at the hook's lock wait; a store still busy after it skips the hook's
+ * work and answers undefined. */
 export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
   return runStoreHookRequest((session) => asCommand(session, run), cliRuntime());
 }
 
-/** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the default
- * store, scored by this process's loss-aversion ratio as cliStore's stores are. */
+/** A CLI verb's agent-memory import options: each target reads its own config.json and opens
+ * through the default store, scored by this process's loss-aversion ratio as cliStore's stores
+ * are. */
 export function cliSyncOptions(
   tenantId: string,
   machine: Machine,
@@ -126,10 +156,12 @@ export function cliSyncOptions(
 export function cliStoreBatch(
   hippoRoot: string,
 ): <T>(run: (store: HippoStore & StoreGroups) => Promise<T>) => Promise<T> {
-  return (run) => runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime());
+  return (run) =>
+    runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime());
 }
 
-/** The session a scoped CLI verb runs in, one handle per store; named here so no other surface opens one. */
+/** The session a scoped CLI verb runs in, one handle per store; named here so no other surface
+ * opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
   return runStoreRequest((session) => asCommand(session, run), 'cli', cliRuntime());
 }
@@ -138,18 +170,24 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
 export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: string };
 
-/** The stores a CLI call on `hippoRoot` reaches, each global one with its config and on the call's session. */
+/** The stores a CLI call on `hippoRoot` reaches, each global one with its config and on the
+ * call's session. */
 function cliReach(hippoRoot: string, store: HippoStore, session = commandSession): ContextReach {
   return contextReach(
-    defaultReach(hippoRoot, store, undefined, (root) => cliStore(root, session), cliHost),
+    defaultReach({
+      hippoRoot,
+      store,
+      openGlobal: (root) => cliStore(root, session),
+      host: cliHost,
+    }),
     cliConfig,
     resolveEmbeddingProvider,
   );
 }
 
-// The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the
-// global store.
-// A command's callers start empty unless its caller holds a set; a CLI write starts no sleep.
+// The one place the CLI names its audit actor and builds its store; root is a parameter because
+// some verbs target the global store. A command's callers start empty unless its caller holds a
+// set; a CLI write starts no sleep.
 export function cliApiContext(
   hippoRoot: string,
   tenantId: string,
@@ -159,7 +197,16 @@ export function cliApiContext(
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
   const reach = cliReach(hippoRoot, store);
-  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers, infra: cliInfra() };
+  return {
+    hippoRoot,
+    tenantId,
+    actor: adminActor(CLI_ACTOR),
+    store,
+    reach,
+    config,
+    callers,
+    infra: cliInfra(),
+  };
 }
 
 /** A second store a CLI read searches beside its own, with that store's config. */
@@ -167,35 +214,43 @@ export function cliSecondStore(root: string): GlobalInReach {
   return { root, store: cliStore(root), config: cliConfig(root) };
 }
 
-/** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */
+/** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one,
+ * probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
   const store = cliStore(hippoRoot);
   return ledgerReachOf({ reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
 }
 
-/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. One
- * host per stdio loop, so its callers live as long as the loop, which runs as one command on that command's runtime. */
+/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
+ * it. */
+function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> {
+  return () =>
+    runStoreRequest(
+      (session) =>
+        autoSleepConsolidate({
+          store: cliStore(root, session),
+          config: cliConfig(root),
+          tenantId: hostTenantId,
+          infra: cliInfra(),
+        }),
+      'cli',
+      cliRuntime(),
+    ).then(() => undefined);
+}
+
+/** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep
+ * that runs in process. One host per stdio loop, so its callers live as long as the loop, which
+ * runs as one command on that command's runtime. */
 export function cliStdioHost(): McpHost {
   const hostTenantId = envTenant();
   const shared = createCallerState();
-  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context names no folder.
+  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context
+  // names no folder.
   const byRoot = new Map<string, CallerState>();
   const callersAt = (root: string): CallerState => {
     let callers = byRoot.get(root);
     if (callers === undefined) {
-      // A session of its own: the sleep outlives the frame whose write started it.
-      const run = (): Promise<void> =>
-        runStoreRequest(
-          (session) =>
-            autoSleepConsolidate({
-              store: cliStore(root, session),
-              config: cliConfig(root),
-              tenantId: hostTenantId,
-              infra: cliInfra(),
-            }),
-          'cli',
-          cliRuntime(),
-        ).then(() => undefined);
+      const run = rootAutoSleep(root, hostTenantId);
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);
     }
@@ -220,8 +275,10 @@ export function cliStdioHost(): McpHost {
         signal,
       };
     };
-  // Frames interleave, so each takes a session of its own and hands it to every store its context builds.
+  // Frames interleave, so each takes a session of its own and hands it to every store its context
+  // builds.
   return {
-    runFrame: (signal, run) => runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
+    runFrame: (signal, run) =>
+      runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
   };
 }

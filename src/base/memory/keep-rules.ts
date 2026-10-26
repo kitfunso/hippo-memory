@@ -3,8 +3,9 @@ import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
 
-/** An imported agent memory is kept for good: the agent's note file is its record. It needs its tool's tag and a source
- * with that tool's prefix, since merge copies source tags onto rows whose source is 'consolidation'. */
+/** An imported agent memory is kept for good: the agent's note file is its record. It needs its
+ * tool's tag and a source with that tool's prefix, since merge copies source tags onto rows
+ * whose source is 'consolidation'. */
 export interface KeepPair {
   readonly tag: string;
   readonly sourcePrefix: string;
@@ -14,9 +15,12 @@ export const KEEP_PAIRS: readonly KeepPair[] = AGENT_MEMORY_TOOLS.map((t) => ({
   sourcePrefix: toolSourcePrefix(t.id),
 }));
 
-export function isKeptForGood(entry: Pick<MemoryEntry, 'tags' | 'source' | 'supersededBy'>): boolean {
+export function isKeptForGood(
+  entry: Pick<MemoryEntry, 'tags' | 'source' | 'supersededBy'>,
+): boolean {
   return (
-    !entry.supersededBy && KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
+    !entry.supersededBy &&
+    KEEP_PAIRS.some((p) => entry.tags.includes(p.tag) && entry.source.startsWith(p.sourcePrefix))
   );
 }
 export function canAutoDelete(
@@ -25,9 +29,14 @@ export function canAutoDelete(
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
-/** Counts the outcome and scores the entry at `now`; calculateStrength turns the counts into a reward factor on the
- * half-life, so there is no fixed delta here. */
-export function applyOutcome(entry: MemoryEntry, good: boolean, now: Date, model: StrengthModel): MemoryEntry {
+/** Counts the outcome and scores the entry at `now`; calculateStrength turns the counts into a
+ * reward factor on the half-life, so there is no fixed delta here. */
+export function applyOutcome(
+  entry: MemoryEntry,
+  good: boolean,
+  now: Date,
+  model: StrengthModel,
+): MemoryEntry {
   const updated: MemoryEntry = {
     ...entry,
     outcomeScore: good ? 1 : -1,
@@ -38,8 +47,14 @@ export function applyOutcome(entry: MemoryEntry, good: boolean, now: Date, model
   return updated;
 }
 
-/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its churn-stale tag goes. */
-export function entryAfterOutcome(entry: MemoryEntry, good: boolean, now: Date, model: StrengthModel): MemoryEntry {
+/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its
+ * churn-stale tag goes. */
+export function entryAfterOutcome(
+  entry: MemoryEntry,
+  good: boolean,
+  now: Date,
+  model: StrengthModel,
+): MemoryEntry {
   const updated = applyOutcome(entry, good, now, model);
   if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
   return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };

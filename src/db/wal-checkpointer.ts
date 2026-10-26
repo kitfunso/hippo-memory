@@ -1,28 +1,32 @@
-// A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would otherwise stall every
-// request on the event loop.
+// A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would
+// otherwise stall every request on the event loop.
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 import type { StoreRuntime } from './store-runtime.js';
 
-// WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long write pays the
-// checkpoint's two flushes once per 1,000 pages, not once per 100.
+// WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long
+// write pays the checkpoint's two flushes once per 1,000 pages, not once per 100.
 const INLINE_CHECKPOINT_PAGES = 1000;
 
-// The same limit while a worker checkpoints the store: SQLite still bounds the WAL when the worker falls behind.
+// The same limit while a worker checkpoints the store: SQLite still bounds the WAL when the worker
+// falls behind.
 const BACKSTOP_CHECKPOINT_PAGES = 4000;
 
 // Sized so one background checkpoint covers about 1000 WAL pages of recalls, SQLite's own default.
 const RESPONSES_PER_CHECKPOINT = 32;
 
-// After a checkpoint that left frames behind, a sooner retry keeps what an inline checkpoint would have to flush small.
+// After a checkpoint that left frames behind, a sooner retry keeps what an inline checkpoint would
+// have to flush small.
 const RESPONSES_PER_RETRY = 8;
 
-// A commit that lands during a pass leaves frames behind, and only a WAL with none left can be reused from its start.
+// A commit that lands during a pass leaves frames behind, and only a WAL with none left can be
+// reused from its start.
 const MAX_PASSES = 4;
 
-// CommonJS in a string, so the worker starts the same way from dist, vitest and strip-types, with no second entry file.
+// CommonJS in a string, so the worker starts the same way from dist, vitest and strip-types, with
+// no second entry file.
 const WORKER_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
@@ -49,15 +53,19 @@ parentPort.on('message', (message) => {
 `;
 
 export interface WalCheckpointer {
-  /** Counts one finished response and starts a checkpoint when enough have finished, unless one is still running. */
+  /** Counts one finished response and starts a checkpoint when enough have finished, unless one
+   * is still running. */
   noteResponse(): void;
-  /** Resolves once the worker's connection is closed, so the caller's own close can be SQLite's last. */
+  /** Resolves once the worker's connection is closed, so the caller's own close can be SQLite's
+   * last. */
   stop(): Promise<void>;
 }
 
 /** The wal_autocheckpoint value for a new connection to `dbPath` under `runtime`. */
 export function autoCheckpointPages(dbPath: string, runtime: StoreRuntime | undefined): number {
-  return runtime?.checkpointsInBackground(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
+  return runtime?.checkpointsInBackground(path.resolve(dbPath))
+    ? BACKSTOP_CHECKPOINT_PAGES
+    : INLINE_CHECKPOINT_PAGES;
 }
 
 interface CheckpointWorker {
@@ -66,8 +74,8 @@ interface CheckpointWorker {
   readonly exited: Promise<void>;
 }
 
-/** An explicit execArgv keeps the parent's loaders out of the worker and silences its repeat of the node:sqlite
- * warning. */
+/** An explicit execArgv keeps the parent's loaders out of the worker and silences its repeat of
+ * the node:sqlite warning. */
 function newCheckpointWorker(
   key: string,
   onSettled: (settled: boolean) => void,
@@ -94,49 +102,65 @@ function newCheckpointWorker(
   return { worker: started, exited };
 }
 
+/** What one checkpointer's response counter and worker stand at. */
+interface CheckpointerState {
+  worker?: Worker;
+  exited?: Promise<void>;
+  running: boolean;
+  stopped: boolean;
+  responses: number;
+  due: number;
+}
+
+function spawnCheckpointWorker(key: string, state: CheckpointerState, end: () => void): Worker {
+  const settle = (settled: boolean): void => {
+    state.running = false;
+    state.due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
+  };
+  const started = newCheckpointWorker(key, settle, end);
+  state.exited = started.exited;
+  return started.worker;
+}
+
 /**
- * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first checkpoint that is due.
- * Connections `runtime` opens meanwhile leave checkpoints to it; outside a runtime they still checkpoint inline.
+ * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first
+ * checkpoint that is due. Connections `runtime` opens meanwhile leave checkpoints to it; outside a
+ * runtime they still checkpoint inline.
  */
-export function startWalCheckpointer(dbPath: string, runtime: StoreRuntime | undefined): WalCheckpointer {
+export function startWalCheckpointer(
+  dbPath: string,
+  runtime: StoreRuntime | undefined,
+): WalCheckpointer {
   const key = path.resolve(dbPath);
-  let worker: Worker | undefined;
-  let exited: Promise<void> | undefined;
-  let running = false;
-  let stopped = false;
-  let responses = 0;
-  let due = RESPONSES_PER_CHECKPOINT;
+  const state: CheckpointerState = {
+    running: false,
+    stopped: false,
+    responses: 0,
+    due: RESPONSES_PER_CHECKPOINT,
+  };
   runtime?.markBackground(key, true);
 
   const end = (): void => {
-    stopped = true;
+    state.stopped = true;
     runtime?.markBackground(key, false);
-  };
-  const spawn = (): Worker => {
-    const settle = (settled: boolean): void => {
-      running = false;
-      due = settled ? RESPONSES_PER_CHECKPOINT : RESPONSES_PER_RETRY;
-    };
-    const started = newCheckpointWorker(key, settle, end);
-    exited = started.exited;
-    return started.worker;
   };
 
   return {
     noteResponse(): void {
-      if (stopped || ++responses < due || running) return;
-      responses = 0;
-      running = true;
-      worker ??= spawn();
-      worker.postMessage('checkpoint');
+      if (state.stopped || ++state.responses < state.due || state.running) return;
+      state.responses = 0;
+      state.running = true;
+      state.worker ??= spawnCheckpointWorker(key, state, end);
+      state.worker.postMessage('checkpoint');
     },
     async stop(): Promise<void> {
-      const live = !stopped;
+      const live = !state.stopped;
       end();
-      // The idle worker is unreferenced, so without this a process with nothing else open ends inside the await.
-      worker?.ref();
-      if (live) worker?.postMessage('stop');
-      await exited;
+      // The idle worker is unreferenced, so without this a process with nothing else open ends
+      // inside the await.
+      state.worker?.ref();
+      if (live) state.worker?.postMessage('stop');
+      await state.exited;
     },
   };
 }

@@ -1,5 +1,6 @@
-// A store's vector graph saved beside hippo.db, so a process with no store worker searches a graph instead of
-// scanning. Node records have one size and sit in rowid order, so a search reads only the records it reaches.
+// A store's vector graph saved beside hippo.db, so a process with no store worker searches a graph
+// instead of scanning. Node records have one size and sit in rowid order, so a search reads only
+// the records it reaches.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../host/atomic-write.js';
@@ -14,7 +15,8 @@ const VERSION = 1;
 const HEADER_BYTES = 64;
 // rowid f64, id hash u32, level u8, flags u8, layer-0 link count u16, upper-links offset u32.
 const RECORD_HEAD = 20;
-/** Where each header field sits, in bytes from the file start; the fields from `magic` to `jsonBytes` are uint32. */
+/** Where each header field sits, in bytes from the file start; the fields from `magic` to
+ * `jsonBytes` are uint32. */
 const HEADER_AT = {
   magic: 0,
   version: 4,
@@ -30,7 +32,14 @@ const HEADER_AT = {
   upperBytes: 48,
 } as const;
 /** Where each field sits, in bytes from the record start. */
-const RECORD_AT = { rowid: 0, idHash: 8, level: 12, flags: 13, linkCount: 14, upperOffset: 16 } as const;
+const RECORD_AT = {
+  rowid: 0,
+  idHash: 8,
+  level: 12,
+  flags: 13,
+  linkCount: 14,
+  upperOffset: 16,
+} as const;
 const FLAG_REPLACED = 1;
 const ENCODE_TURN_NODES = 1024;
 
@@ -38,7 +47,8 @@ export function graphFilePath(hippoRoot: string, dim: number): string {
   return path.join(hippoRoot, `vector-graph-${dim}.bin`);
 }
 
-/** FNV-1a over the id's UTF-16 units: the intact walk compares a row's memory id with its node's by this. */
+/** FNV-1a over the id's UTF-16 units: the intact walk compares a row's memory id with its node's
+ * by this. */
 export function idHash(id: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
@@ -73,9 +83,12 @@ interface FileOrder {
   readonly at: Int32Array;
 }
 
-/** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a reused rowid stays. */
+/** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a
+ * reused rowid stays. */
 function fileOrder(rows: GraphRows): FileOrder {
-  const order = rows.ids.map((_, node) => node).sort((a, b) => rows.rowids[a] - rows.rowids[b] || a - b);
+  const order = rows.ids
+    .map((_, node) => node)
+    .sort((a, b) => rows.rowids[a] - rows.rowids[b] || a - b);
   const at = new Int32Array(order.length);
   order.forEach((node, i) => {
     at[node] = i;
@@ -91,8 +104,16 @@ function putInt8(unit: Float32Array, out: Int8Array): void {
   for (let i = 0; i < unit.length; i++) out[i] = Math.round(unit[i] * scale);
 }
 
+interface WriteUpperLinksOptions {
+  readonly view: DataView;
+  readonly base: number;
+  readonly links: readonly number[][];
+  readonly at: ArrayLike<number>;
+  readonly m: number;
+}
+
 /** The links of levels 1 and up of one node, level by level from `base`. */
-function writeUpperLinks(view: DataView, base: number, links: readonly number[][], at: ArrayLike<number>, m: number) {
+function writeUpperLinks({ view, base, links, at, m }: WriteUpperLinksOptions) {
   for (let level = 1; level < links.length; level++) {
     const from = base + (level - 1) * upperLevelBytes(m);
     view.setUint32(from, links[level].length, true);
@@ -129,7 +150,8 @@ function writeHeader(
   view.setFloat64(HEADER_AT.highRowid, sizes.highRowid, true);
 }
 
-/** The file's bytes for `rows`, yielding every ENCODE_TURN_NODES nodes so the caller can give a turn back. */
+/** The file's bytes for `rows`, yielding every ENCODE_TURN_NODES nodes so the caller can give a
+ * turn back. */
 export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   const { graph, ids, rowids, nodeOf } = rows;
   const { dim, m } = graph;
@@ -168,15 +190,15 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     view.setUint32(off + RECORD_AT.upperOffset, upperOf[node], true);
     data.links[0].forEach((to, j) => view.setUint32(off + RECORD_HEAD + 4 * j, at[to], true));
     putInt8(unit, new Int8Array(bytes.buffer, off + RECORD_HEAD + 8 * m, dim));
-    writeUpperLinks(view, upperAt + upperOf[node], data.links, at, m);
+    writeUpperLinks({ view, base: upperAt + upperOf[node], links: data.links, at, m });
     if (i % ENCODE_TURN_NODES === ENCODE_TURN_NODES - 1) yield;
   }
   view.setUint32(HEADER_AT.live, live, true);
   return bytes;
 }
 
-/** Saves `bytes` as the graph file of length `dim` with hippo.db's mode bits; false, with one info line, when another
- * process holds the old file open, so a later save tries again. */
+/** Saves `bytes` as the graph file of length `dim` with hippo.db's mode bits; false, with one
+ * info line, when another process holds the old file open, so a later save tries again. */
 export function saveGraphFile(hippoRoot: string, dim: number, bytes: Uint8Array): boolean {
   const file = graphFilePath(hippoRoot, dim);
   const mode = fs.statSync(getHippoDbPath(hippoRoot)).mode & 0o777;
@@ -186,25 +208,36 @@ export function saveGraphFile(hippoRoot: string, dim: number, bytes: Uint8Array)
   } catch (err) {
     const code = errorCode(err);
     if (code !== 'EPERM' && code !== 'EBUSY') throw err;
-    log.info(`${path.basename(file)} is open in another process (${code}), so the vector graph was not saved`, {
-      hippoRoot,
-      ...errorFields(err),
-    });
+    log.info(
+      `${path.basename(file)} is open in another process (${code}), so the vector graph was not saved`,
+      {
+        hippoRoot,
+        ...errorFields(err),
+      },
+    );
     return false;
   }
 }
 
-/** A file that cannot be trusted: short, a bad stamp, or a value out of its bounds. The read scans instead. */
+/** A file that cannot be trusted: short, a bad stamp, or a value out of its bounds. The read
+ * scans instead. */
 export class GraphFileError extends Error {
   override readonly name = 'GraphFileError';
 }
 
 export function badGraphFile(file: string, what: string, cause?: unknown): GraphFileError {
-  return new GraphFileError(`${path.basename(file)}: ${what}`, cause === undefined ? undefined : { cause });
+  return new GraphFileError(
+    `${path.basename(file)}: ${what}`,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
-/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it cannot trust. */
-export function readStamp(fd: number, file: string, size: number): GraphStamp {
+/** The header's numbers as the file stores them, before any bounds check. */
+interface StoredHeader extends Omit<GraphStamp, 'model' | 'recordsAt' | 'upperAt'> {
+  readonly jsonBytes: number;
+}
+
+function readHeader(fd: number, file: string, size: number): Buffer {
   const head = Buffer.alloc(HEADER_BYTES);
   if (size < HEADER_BYTES || fs.readSync(fd, head, 0, HEADER_BYTES, 0) < HEADER_BYTES) {
     throw badGraphFile(file, 'short file');
@@ -213,6 +246,11 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
   if (u32(HEADER_AT.magic) !== MAGIC || u32(HEADER_AT.version) !== VERSION) {
     throw badGraphFile(file, 'not a version 1 vector graph file');
   }
+  return head;
+}
+
+function storedHeaderOf(head: Buffer): StoredHeader {
+  const u32 = (at: number): number => head.readUInt32LE(at);
   const [dim, m, nodes, entry, maxLevel, jsonBytes] = [
     HEADER_AT.dim,
     HEADER_AT.m,
@@ -221,30 +259,68 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     HEADER_AT.maxLevel,
     HEADER_AT.jsonBytes,
   ].map(u32);
-  const [live, recordBytes, upperBytes] = [HEADER_AT.live, HEADER_AT.recordBytes, HEADER_AT.upperBytes].map(u32);
+  const [live, recordBytes, upperBytes] = [
+    HEADER_AT.live,
+    HEADER_AT.recordBytes,
+    HEADER_AT.upperBytes,
+  ].map(u32);
   const highRowid = head.readDoubleLE(HEADER_AT.highRowid);
-  const recordsAt = align(HEADER_BYTES + jsonBytes, 8);
-  const upperAt = recordsAt + nodes * recordBytes;
-  const fits =
-    dim >= 1 &&
-    m >= 2 &&
-    m <= 255 &&
-    nodes >= 1 &&
-    entry < nodes &&
-    maxLevel <= 15 &&
-    live <= nodes &&
-    recordBytes === recordBytesOf(dim, m) &&
-    Number.isSafeInteger(highRowid) &&
-    highRowid >= 1;
-  if (!fits) throw badGraphFile(file, 'a header value is out of bounds');
-  if (upperAt + upperBytes > size) throw badGraphFile(file, 'short file');
-  if (upperAt + upperBytes < size) throw badGraphFile(file, 'the file runs on past its last record');
+  return { dim, m, nodes, entry, maxLevel, jsonBytes, live, recordBytes, upperBytes, highRowid };
+}
+
+function headerFits(h: StoredHeader): boolean {
+  return (
+    h.dim >= 1 &&
+    h.m >= 2 &&
+    h.m <= 255 &&
+    h.nodes >= 1 &&
+    h.entry < h.nodes &&
+    h.maxLevel <= 15 &&
+    h.live <= h.nodes &&
+    h.recordBytes === recordBytesOf(h.dim, h.m) &&
+    Number.isSafeInteger(h.highRowid) &&
+    h.highRowid >= 1
+  );
+}
+
+function readModel(fd: number, file: string, jsonBytes: number): string {
   const json = Buffer.alloc(jsonBytes);
-  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes) throw badGraphFile(file, 'short file');
+  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes) {
+    throw badGraphFile(file, 'short file');
+  }
   const stamp = tryParseJson(json.toString('utf8'));
   const model = isJsonObject(stamp) ? stamp.model : undefined;
   if (!isJsonString(model)) throw badGraphFile(file, 'the stamp names no model');
-  return { model, dim, m, nodes, entry, maxLevel, highRowid, live, recordsAt, recordBytes, upperAt, upperBytes };
+  return model;
+}
+
+/** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it
+ * cannot trust. */
+export function readStamp(fd: number, file: string, size: number): GraphStamp {
+  const h = storedHeaderOf(readHeader(fd, file, size));
+  const recordsAt = align(HEADER_BYTES + h.jsonBytes, 8);
+  const upperAt = recordsAt + h.nodes * h.recordBytes;
+  if (!headerFits(h)) throw badGraphFile(file, 'a header value is out of bounds');
+  if (upperAt + h.upperBytes > size) throw badGraphFile(file, 'short file');
+  if (upperAt + h.upperBytes < size) {
+    throw badGraphFile(file, 'the file runs on past its last record');
+  }
+  const model = readModel(fd, file, h.jsonBytes);
+  const { dim, m, nodes, entry, maxLevel, highRowid, live, recordBytes, upperBytes } = h;
+  return {
+    model,
+    dim,
+    m,
+    nodes,
+    entry,
+    maxLevel,
+    highRowid,
+    live,
+    recordsAt,
+    recordBytes,
+    upperAt,
+    upperBytes,
+  };
 }
 
 export const isReplaced = (flags: number): boolean => (flags & FLAG_REPLACED) !== 0;

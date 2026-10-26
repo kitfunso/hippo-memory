@@ -31,11 +31,18 @@ function writeSkippingRejected(
 
 const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHolding' | 'contentsWithTag'>> = {
   textsHolding: (db, tenantId, texts, ownScope) =>
-    listTextsHolding(db, tenantId, texts, undefined, touchableScopeSql('', ownScope)),
+    listTextsHolding(db, {
+      tenantId,
+      texts,
+      project: undefined,
+      admit: touchableScopeSql('', ownScope),
+    }),
   contentsWithTag: contentsWithTag,
 };
 
-function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
+function lessonWritesBodies(
+  files: StoreFiles,
+): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
   return {
     writeSkippingRejected: (db, ...args) => writeSkippingRejected(db, files, ...args),
     writeTogether: (db, entries) => {

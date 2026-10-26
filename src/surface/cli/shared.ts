@@ -20,19 +20,27 @@ export function requireInit(hippoRoot: string): void {
   }
 }
 
-/** Runs churn staleness for the repo this process runs in, against every store its memories can live in. */
+/** Runs churn staleness for the repo this process runs in, against every store its memories can
+ * live in. */
 export async function runChurnStaleForRepo(
   hippoRoot: string,
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), { root: hippoRoot, repoDir: process.cwd(), dryRun });
+  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), {
+    root: hippoRoot,
+    repoDir: process.cwd(),
+    dryRun,
+  });
 }
 
-/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+/** True, after one line, on a shared store: this account's commits and agent notes are not its
+ * members' memories. */
 export function skipLearnOnSharedStore(hippoRoot: string): boolean {
   if (!isSharedStore(hippoRoot)) return false;
-  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  console.log(
+    "Shared store: skipped learning from this account's git commits and coding agents' own memories.",
+  );
   return true;
 }
 
@@ -42,13 +50,22 @@ interface LearnFromRepoResult {
   lowInfo: number;
 }
 
-export async function learnFromRepo(
-  hippoRoot: string,
-  tenantId: string,
-  repoPath: string,
-  days: number,
-  label?: string,
-): Promise<LearnFromRepoResult> {
+export interface LearnFromRepoOptions {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly repoPath: string;
+  readonly days: number;
+  /** Prefixes each printed line, so a multi-repo scan says which repo spoke. */
+  readonly label?: string;
+}
+
+export async function learnFromRepo({
+  hippoRoot,
+  tenantId,
+  repoPath,
+  days,
+  label,
+}: LearnFromRepoOptions): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
   const result = await learn(cliApiContext(hippoRoot, tenantId), {
     repoPath,

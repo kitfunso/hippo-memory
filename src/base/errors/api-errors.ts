@@ -1,5 +1,6 @@
 /**
- * Errors whose HTTP status is part of the API contract; the server maps by class, so message text can change freely.
+ * Errors whose HTTP status is part of the API contract; the server maps by class, so message text
+ * can change freely.
  */
 
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
@@ -38,12 +39,14 @@ export class NotFoundError extends ApiError {
   }
 }
 
-/** What a missing memory answers; one out of the caller's reach answers the same, so the caller learns nothing more. */
+/** What a missing memory answers; one out of the caller's reach answers the same, so the caller
+ * learns nothing more. */
 export function memoryNotFoundText(id: string): string {
   return `memory not found: ${id}`;
 }
 
-/** The row exists but its current state forbids the change (already superseded, closed, or decided). */
+/** The row exists but its current state forbids the change (already superseded, closed, or
+ * decided). */
 export class ConflictError extends ApiError {
   readonly status = 409;
   constructor(message: string) {
@@ -52,7 +55,8 @@ export class ConflictError extends ApiError {
   }
 }
 
-/** A write carried an id another tenant holds; the store refuses it rather than move that tenant's row. */
+/** A write carried an id another tenant holds; the store refuses it rather than move that
+ * tenant's row. */
 export class CrossTenantIdError extends ConflictError {
   constructor(id: string) {
     super(`Memory ${id} belongs to another tenant`);
@@ -60,9 +64,10 @@ export class CrossTenantIdError extends ConflictError {
 }
 
 /**
- * Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would introduce a tombstoned
- * value; carries what the transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback
- * `reject_refusal` audit row via `auditRejectionRefusal`.
+ * Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would
+ * introduce a tombstoned value; carries what the transaction-owner catch blocks (writeEntry,
+ * api.supersede) need to write the post-rollback `reject_refusal` audit row via
+ * `auditRejectionRefusal`.
  */
 export class RejectedValueError extends BadRequestError {
   readonly digest: string;
@@ -71,7 +76,13 @@ export class RejectedValueError extends BadRequestError {
   readonly reason: string | null;
   readonly rejectedAt: string;
 
-  constructor(opts: { digest: string; tenantId: string; entryId: string; reason: string | null; rejectedAt: string }) {
+  constructor(opts: {
+    digest: string;
+    tenantId: string;
+    entryId: string;
+    reason: string | null;
+    rejectedAt: string;
+  }) {
     super(
       `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., ` +
         `reason: ${opts.reason ?? 'none given'}). Run "hippo unreject" to allow it again.`,

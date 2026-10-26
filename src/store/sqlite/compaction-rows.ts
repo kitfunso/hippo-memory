@@ -1,8 +1,10 @@
-// The `compactions` table: one row per Claude Code compaction, and the reads project merge makes over it.
+// The `compactions` table: one row per Claude Code compaction, and the reads project merge makes
+// over it.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
+import type { OriginMoveOptions } from './entry-writes.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -58,21 +60,37 @@ const COLUMNS =
   'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, ' +
   'summarised_at, summary, items_json, items_written, status';
 
-function listRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
-  return cachedStatement(db, `SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
+function listRows(
+  db: DatabaseSyncLike,
+  where: string,
+  ...params: Array<string | number>
+): CompactionRow[] {
+  return cachedStatement(db, `SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(
+    ...params,
+  ) as CompactionRow[];
 }
 
-export function compactionRowsByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRow[] {
+export function compactionRowsByRequest(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  requestId: string,
+): CompactionRow[] {
   return listRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }
 
-/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO strings. */
+/** A session's start window, both bounds ISO strings. */
+interface LatestStartedOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly notAfter: string;
+  readonly notBefore: string;
+}
+
+/** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO
+ * strings. */
 export function latestStartedRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  notAfter: string,
-  notBefore: string,
+  { tenantId, sessionId, notAfter, notBefore }: LatestStartedOptions,
 ): CompactionRow[] {
   return listRows(
     db,
@@ -91,15 +109,26 @@ export function stalledSummarizedRows(
   tenantId: string,
   summarizedBefore: string,
 ): CompactionRow[] {
-  return listRows(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, summarizedBefore);
+  return listRows(
+    db,
+    `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`,
+    tenantId,
+    summarizedBefore,
+  );
 }
 
-/** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`, oldest first. */
+/** A tenant's open start window, both bounds ISO strings. */
+interface OpenTranscriptOptions {
+  readonly tenantId: string;
+  readonly startedBefore: string;
+  readonly startedAfter: string;
+}
+
+/** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`,
+ * oldest first. */
 export function openTranscriptRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  startedBefore: string,
-  startedAfter: string,
+  { tenantId, startedBefore, startedAfter }: OpenTranscriptOptions,
 ): CompactionRow[] {
   return listRows(
     db,
@@ -111,7 +140,11 @@ export function openTranscriptRows(
   );
 }
 
-export function insertStartedCompaction(db: DatabaseSyncLike, tenantId: string, start: StartedCompactionInput): void {
+export function insertStartedCompaction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  start: StartedCompactionInput,
+): void {
   cachedStatement(
     db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
@@ -179,11 +212,15 @@ export function insertSummarizedCompaction(
   );
 }
 
-export function markSnapshotSavedRow(db: DatabaseSyncLike, tenantId: string, recordId: string): void {
-  cachedStatement(db, `UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(
-    tenantId,
-    recordId,
-  );
+export function markSnapshotSavedRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  recordId: string,
+): void {
+  cachedStatement(
+    db,
+    `UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`,
+  ).run(tenantId, recordId);
 }
 
 export function compactionProgress(
@@ -191,22 +228,30 @@ export function compactionProgress(
   tenantId: string,
   id: string,
 ): { status: CompactionStatus; items_written: number } | undefined {
-  return cachedStatement(db, `SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`).get(
-    tenantId,
-    id,
-  ) as { status: CompactionStatus; items_written: number } | undefined;
+  return cachedStatement(
+    db,
+    `SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`,
+  ).get(tenantId, id) as { status: CompactionStatus; items_written: number } | undefined;
 }
 
-export function markCompactionDone(db: DatabaseSyncLike, tenantId: string, id: string, itemsWritten: number): void {
-  cachedStatement(db, `UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(
-    itemsWritten,
-    tenantId,
-    id,
-  );
+export function markCompactionDone(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  itemsWritten: number,
+): void {
+  cachedStatement(
+    db,
+    `UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`,
+  ).run(itemsWritten, tenantId, id);
 }
 
 /** Rows changed: 1 when the `started` row was closed, 0 when it had already moved. */
-export function closeStartedWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string): number {
+export function closeStartedWithoutSummary(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+): number {
   const result = cachedStatement(
     db,
     `UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
@@ -214,11 +259,16 @@ export function closeStartedWithoutSummary(db: DatabaseSyncLike, tenantId: strin
   return Number(result.changes ?? 0);
 }
 
+/** A session and the ISO start its next compaction must follow. */
+interface NextCompactionOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly after: string;
+}
+
 export function nextCompactionStart(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  after: string,
+  { tenantId, sessionId, after }: NextCompactionOptions,
 ): string | null {
   const row = cachedStatement(
     db,
@@ -228,7 +278,11 @@ export function nextCompactionStart(
 }
 
 /** Live rows of one tenant and origin set that default recall shows. */
-export function heldMemoryRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): HeldMemoryRow[] {
+export function heldMemoryRows(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  origins: readonly string[],
+): HeldMemoryRow[] {
   const deny = scopeAdmitSql('');
   return cachedStatement(
     db,
@@ -238,20 +292,23 @@ export function heldMemoryRows(db: DatabaseSyncLike, tenantId: string, origins: 
   ).all(tenantId, ...origins, ...deny.params) as HeldMemoryRow[];
 }
 
-export function restampCompactionOrigin(db: DatabaseSyncLike, tenantId: string, from: string, into: string): number {
+export function restampCompactionOrigin(
+  db: DatabaseSyncLike,
+  { tenantId, from, into }: OriginMoveOptions,
+): number {
   return Number(
-    cachedStatement(db, `UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`).run(
-      into,
-      tenantId,
-      from,
-    ).changes ?? 0,
+    cachedStatement(
+      db,
+      `UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`,
+    ).run(into, tenantId, from).changes ?? 0,
   );
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type CompactionOriginRow = CompactionOrigin;
 
-/** Each distinct project name, transcript and working folder of the tenant's compactions, in one read. */
+/** Each distinct project name, transcript and working folder of the tenant's compactions, in one
+ * read. */
 export function compactionOrigins(db: DatabaseSyncLike, tenantId: string): CompactionOrigin[] {
   return cachedStatement(
     db,

@@ -44,13 +44,12 @@ const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][
   [
     'incident',
     async (root) =>
-      await openIncident(
-        objectsAt(root),
-        loadConfig(root).defaultHalfLifeDays,
-        'default',
-        { incidentText: 'the billing cron charged twice on the 1st' },
-        { actor: 'cli', now: evalNow() },
-      ),
+      await openIncident(objectsAt(root), {
+        baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+        tenantId: 'default',
+        opts: { incidentText: 'the billing cron charged twice on the 1st' },
+        by: { actor: 'cli', now: evalNow() },
+      }),
   ],
   [
     'process',

@@ -1,5 +1,5 @@
-/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main(); the verb table
- * in verbs/health.ts dispatches to handleGitHub. */
+/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering
+ * main(); the verb table in verbs/health.ts dispatches to handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
@@ -24,8 +24,8 @@ import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
-/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type
- * guards. */
+/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or
+ * shapes failing the type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
@@ -36,13 +36,17 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   if (eventName === 'pull_request' && isGitHubPullRequestEvent(parsed, eventName)) {
     return { eventName: 'pull_request', payload: parsed };
   }
-  if (eventName === 'pull_request_review_comment' && isGitHubPullRequestReviewCommentEvent(parsed, eventName)) {
+  if (
+    eventName === 'pull_request_review_comment' &&
+    isGitHubPullRequestReviewCommentEvent(parsed, eventName)
+  ) {
     return { eventName: 'pull_request_review_comment', payload: parsed };
   }
   return null;
 }
 
-// Console lines below are the `hippo github` command's printed result and usage text, so they stay off the logger.
+// Console lines below are the `hippo github` command's printed result and usage text, so they stay
+// off the logger.
 export function printGitHubBackfillUsage(): void {
   console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
@@ -67,7 +71,9 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   }
   const token = envGitHubToken();
   if (!token) {
-    console.error('GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.');
+    console.error(
+      'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
+    );
     throw new CliExit(2);
   }
   const maxPerStream = maxPerStreamFlag(flags);
@@ -90,24 +96,33 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   }
 }
 
-export async function listGitHubDlq(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
+export async function listGitHubDlq(
+  hippoRoot: string,
+  tenantId: string,
+  _flags: CliFlags,
+): Promise<void> {
   const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
   if (items.length === 0) {
     console.log('no entries');
     return;
   }
   for (const it of items) {
-    console.log(`${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`);
+    console.log(
+      `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
+    );
   }
 }
 
 const PAYLOAD_PREVIEW_CHARS = 200;
 
-/** A parked payload that is not JSON, naming the command and the start of the text so the operator can find the row. */
+/** A parked payload that is not JSON, naming the command and the start of the text so the
+ * operator can find the row. */
 export class GitHubPayloadParseError extends Error {
   constructor(command: string, rawPayload: string, cause: unknown) {
     const start = JSON.stringify(rawPayload.slice(0, PAYLOAD_PREVIEW_CHARS));
-    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, { cause });
+    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, {
+      cause,
+    });
     this.name = 'GitHubPayloadParseError';
   }
 }
@@ -126,8 +141,8 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
   if (!event) {
     return { memoryId: null };
   }
-  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which would write the
-  // deleted comment as a NEW raw memory instead of archiving the matching ones.
+  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which
+  // would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
   if (
     (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
     event.payload.action === 'deleted'
@@ -137,15 +152,18 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       event.eventName === 'issue_comment'
         ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
         : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
-    const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
+    const idempotencyKey = computeDeletionKey(
+      artifactRef,
+      event.payload.comment.updated_at ?? null,
+    );
     const r = await handleCommentDeleted(innerCtx, {
       artifactRef,
       idempotencyKey,
       deliveryId: args.deliveryId,
       eventName: event.eventName,
     });
-    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return null; the replay
-    // audit trail is github_dlq.retry_count + retried_at.
+    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return
+    // null; the replay audit trail is github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
   const r = await ingestEvent(innerCtx, {
@@ -163,7 +181,8 @@ export async function replayGitHubDlq(
   flags: CliFlags,
 ): Promise<void> {
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
-  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
+  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook
+  // re-runs ingest.
   await runDlqReplay('github', args[0], flags, (id, force) =>
     replayGithubDlqEntry(ctx, id, {
       force,
@@ -174,7 +193,12 @@ export async function replayGitHubDlq(
   );
 }
 
-export async function handleGitHub({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleGitHub({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     await backfillGitHub(hippoRoot, tenantId, flags);

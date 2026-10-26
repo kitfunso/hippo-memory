@@ -1,5 +1,6 @@
-// A container's live rows as they will stand once its moves run: the legacy adoptions and the moves from the project's
-// earlier names are planned as steps, and applied to the rows read, as the store will apply them.
+// A container's live rows as they will stand once its moves run: the legacy adoptions and the moves
+// from the project's earlier names are planned as steps, and applied to the rows read, as the store
+// will apply them.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
@@ -18,7 +19,8 @@ export interface StoreSession {
   readonly now: Date;
   /** Stamped on written rows; undefined lets the store stamp its own project. */
   readonly originProject: string | undefined;
-  /** Design 6: in the global store only rows visible where the new row goes count as duplicates; null counts all. */
+  /** Design 6: in the global store only rows visible where the new row goes count as duplicates;
+   * null counts all. */
   readonly visible: readonly string[] | null;
   /** Legacy rows about to take a note's key, which stop counting as text another path stored. */
   readonly adopted: ReadonlySet<string>;
@@ -28,14 +30,15 @@ export interface StoreSession {
 export interface ContainerWork {
   readonly tool: AgentMemoryTool;
   readonly container: Container;
-  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting with it. */
+  /** `containerPrefix(tool, containerId)`: every row of the container has a source starting with
+   * it. */
   readonly prefix: string;
   /** Legacy rows that take an item's key as they are, by key. */
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
   /** Legacy rows a new row of the key supersedes, by key (second round). */
   readonly replace: ReadonlyMap<string, readonly MemoryEntry[]>;
-  /** This container's prefixes under the project's earlier names; their rows move here, so a new id imports nothing
-   * twice. */
+  /** This container's prefixes under the project's earlier names; their rows move here, so a new
+   * id imports nothing twice. */
   readonly legacyPrefixes: readonly string[];
 }
 
@@ -44,7 +47,8 @@ export interface ContainerView {
   readonly live: readonly MemoryEntry[];
   /** Dormant snapshots the moves bring under the prefix, as they will stand. */
   readonly movedDormant: readonly DormantSnapshot[];
-  /** Every live row under the prefix and the earlier ones, as read: what the apply checks still stands. */
+  /** Every live row under the prefix and the earlier ones, as read: what the apply checks still
+   * stands. */
   readonly read: readonly PlannedRow[];
   /** The adoptions and moves, in the order the store runs them. */
   readonly steps: readonly ImportStep[];
@@ -63,7 +67,9 @@ export async function liveUnder(
   prefix: string,
 ): Promise<MemoryEntry[]> {
   const under = { tenantId, sourcePrefix: prefix, live: true } as const;
-  return readAll((after?: EntryCursor) => store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }));
+  return readAll((after?: EntryCursor) =>
+    store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+  );
 }
 
 export async function readContainer(s: StoreSession, w: ContainerWork): Promise<ContainerView> {
@@ -79,17 +85,22 @@ export async function readContainer(s: StoreSession, w: ContainerWork): Promise<
   return {
     ...draft,
     live: oldestFirst(draft.live),
-    read: read.map((row) => ({ id: row.id, source: row.source, tagged: row.tags.includes(w.tool.tag) })),
+    read: read.map((row) => ({
+      id: row.id,
+      source: row.source,
+      tagged: row.tags.includes(w.tool.tag),
+    })),
   };
 }
 
-/** Same text as a current note: the legacy row takes the note's key, keeping its id, recall count and outcomes. */
+/** Same text as a current note: the legacy row takes the note's key, keeping its id, recall
+ * count and outcomes. */
 async function adoptLegacy(s: StoreSession, w: ContainerWork, draft: Draft): Promise<void> {
   const standing = await standingLegacy(s, [...w.adopt.values()].flat());
   for (const [key, rows] of w.adopt) {
     const item = w.container.items.find((i) => i.key === key);
     if (item === undefined) continue;
-    const source = itemSource(w.prefix, key, item.text);
+    const source = itemSource(w.prefix, { key, text: item.text });
     for (const { id, source: from } of rows) {
       const row = standing.get(id);
       if (row === undefined) continue;
@@ -99,8 +110,12 @@ async function adoptLegacy(s: StoreSession, w: ContainerWork, draft: Draft): Pro
   }
 }
 
-/** The legacy rows still live at the source the match read, as they stand now: another sync may have adopted one. */
-async function standingLegacy(s: StoreSession, rows: readonly MemoryEntry[]): Promise<Map<string, MemoryEntry>> {
+/** The legacy rows still live at the source the match read, as they stand now: another sync may
+ * have adopted one. */
+async function standingLegacy(
+  s: StoreSession,
+  rows: readonly MemoryEntry[],
+): Promise<Map<string, MemoryEntry>> {
   const from = new Map(rows.map((row) => [row.id, row.source]));
   const out = new Map<string, MemoryEntry>();
   for (const row of await s.store.entriesByIds([...from.keys()], s.tenantId)) {
@@ -109,8 +124,8 @@ async function standingLegacy(s: StoreSession, rows: readonly MemoryEntry[]): Pr
   return out;
 }
 
-/** Rows filed under an earlier project name keep their id and history; dormant ones move too, scanned only until this
- * prefix holds live rows. */
+/** Rows filed under an earlier project name keep their id and history; dormant ones move too,
+ * scanned only until this prefix holds live rows. */
 async function adoptPrefix(
   s: StoreSession,
   w: ContainerWork,
@@ -125,7 +140,10 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.projectTags.dormantWhere({ tenantId: s.tenantId, sourcePrefix: old })) {
+  for (const snap of await s.store.projectTags.dormantWhere({
+    tenantId: s.tenantId,
+    sourcePrefix: old,
+  })) {
     const source = w.prefix + snap.entry.source.slice(old.length);
     draft.movedDormant.push({
       ...snap,
@@ -134,7 +152,8 @@ async function adoptPrefix(
   }
 }
 
-// Byte order on created then id, as the store pages rows; localeCompare may skip the ISO punctuation.
+// Byte order on created then id, as the store pages rows; localeCompare may skip the ISO
+// punctuation.
 const byteOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function oldestFirst(rows: readonly MemoryEntry[]): MemoryEntry[] {

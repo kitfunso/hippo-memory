@@ -1,5 +1,5 @@
-// The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices the rows and asks
-// these functions who gets in.
+// The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices
+// the rows and asks these functions who gets in.
 
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
@@ -28,11 +28,14 @@ const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
 const DEFAULT_PROMPT_RECALL_MIN_SHARED = 2;
 const DEFAULT_PROMPT_RECALL_MAX_ITEMS = 5;
 
-export const finiteOr = (v: number, dflt: number, min: number): number => (Number.isFinite(v) && v >= min ? v : dflt);
+export const finiteOr = (
+  v: number,
+  { fallback, min }: { readonly fallback: number; readonly min: number },
+): number => (Number.isFinite(v) && v >= min ? v : fallback);
 
-// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving, and dedupes by id
-// because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill,
-// safely.
+// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving,
+// and dedupes by id because a synced pin sits in both stores. A pin also in the recent slice is
+// counted twice: recents under-fill, safely.
 export function reservePinned(rankedPinned: readonly PricedRow[], budget: number): number {
   let reserve = 0;
   const reservedIds = new Set<string>();
@@ -46,7 +49,8 @@ export function reservePinned(rankedPinned: readonly PricedRow[], budget: number
   return reserve;
 }
 
-/** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones behind it. */
+/** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones
+ * behind it. */
 export function admitWithinBudget<T extends PricedRow>(
   rows: readonly T[],
   picked: Picked<T>,
@@ -70,14 +74,26 @@ export function promptRecallGateOf(inject: HippoConfig['pinnedInject']): PromptR
   const metric: PromptRecallMetric = inject.promptRecallMetric === 'cosine' ? 'cosine' : 'jaccard';
   return {
     metric,
-    threshold: finiteOr(inject.promptRecallThreshold, DEFAULT_PROMPT_RECALL_THRESHOLD, 0),
-    minShared: finiteOr(inject.promptRecallMinShared, DEFAULT_PROMPT_RECALL_MIN_SHARED, 0),
-    maxItems: finiteOr(inject.promptRecallMaxItems, DEFAULT_PROMPT_RECALL_MAX_ITEMS, 1),
+    threshold: finiteOr(inject.promptRecallThreshold, {
+      fallback: DEFAULT_PROMPT_RECALL_THRESHOLD,
+      min: 0,
+    }),
+    minShared: finiteOr(inject.promptRecallMinShared, {
+      fallback: DEFAULT_PROMPT_RECALL_MIN_SHARED,
+      min: 0,
+    }),
+    maxItems: finiteOr(inject.promptRecallMaxItems, {
+      fallback: DEFAULT_PROMPT_RECALL_MAX_ITEMS,
+      min: 1,
+    }),
   };
 }
 
 /** The newest `limit` rows worth surfacing; a pin always is. */
-export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(rows: readonly T[], limit: number): T[] {
+export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(
+  rows: readonly T[],
+  limit: number,
+): T[] {
   return (
     [...rows]
       // Newest first, then id: stable within one store, but same-millisecond rows fall to random ids across ingests.
@@ -93,10 +109,15 @@ export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(rows: rea
 }
 
 /** No query: the strongest rows first, each kept if it still fits `left` tokens. */
-export function strongestWithin<T extends PricedRow>(local: readonly T[], global: readonly T[], left: number): T[] {
-  const combined = [...[...local].sort(compareScoredResults), ...[...global].sort(compareScoredResults)].sort(
-    compareScoredResults,
-  );
+export function strongestWithin<T extends PricedRow>(
+  local: readonly T[],
+  global: readonly T[],
+  left: number,
+): T[] {
+  const combined = [
+    ...[...local].sort(compareScoredResults),
+    ...[...global].sort(compareScoredResults),
+  ].sort(compareScoredResults);
   const selected: T[] = [];
   let used = 0;
   for (const r of combined) {

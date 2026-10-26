@@ -10,11 +10,11 @@ import { blockHash } from '../../base/util/token-text.js';
 const IPV6_PREFIX_GROUPS = 3;
 
 /**
- * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket unauthenticated
- * traffic can drain.
- * HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs), so a
- * caller that reaches the port past the proxy cannot pick its own bucket. In a comma-joined chain the key is the
- * rightmost hop no trusted proxy added.
+ * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket
+ * unauthenticated traffic can drain. HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) is read only
+ * from a peer in HIPPO_TRUSTED_PROXIES (IPs or CIDRs), so a caller that reaches the port past the
+ * proxy cannot pick its own bucket. In a comma-joined chain the key is the rightmost hop no trusted
+ * proxy added.
  */
 export function clientIpForRateLimit(req: IncomingMessage): string {
   const socketIp = req.socket.remoteAddress ?? 'unknown';
@@ -35,7 +35,8 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
 
 let trustedProxyCache: { raw: string; list: BlockList } | undefined;
 
-/** Parses HIPPO_TRUSTED_PROXIES once per distinct value; undefined when unset, so no peer's header is read. */
+/** Parses HIPPO_TRUSTED_PROXIES once per distinct value; undefined when unset, so no peer's
+ * header is read. */
 function proxyTrust(raw: string | undefined): BlockList | undefined {
   const value = raw?.trim();
   if (!value) return undefined;
@@ -49,7 +50,10 @@ function proxyTrust(raw: string | undefined): BlockList | undefined {
     const family = isIP(addr) === 6 ? 'ipv6' : 'ipv4';
     const bits = prefix === undefined ? undefined : Number(prefix);
     const maxBits = family === 'ipv6' ? 128 : 32;
-    if (isIP(addr) === 0 || (bits !== undefined && (!Number.isInteger(bits) || bits < 0 || bits > maxBits))) {
+    if (
+      isIP(addr) === 0 ||
+      (bits !== undefined && (!Number.isInteger(bits) || bits < 0 || bits > maxBits))
+    ) {
       log.warn(`HIPPO_TRUSTED_PROXIES: ignoring '${entry}', not an IP address or CIDR`);
       continue;
     }
@@ -61,8 +65,8 @@ function proxyTrust(raw: string | undefined): BlockList | undefined {
 }
 
 /**
- * serve() refused HIPPO_CLIENT_IP_HEADER with no HIPPO_TRUSTED_PROXIES: the header would be read from no one, so the
- * setting is a mistake.
+ * serve() refused HIPPO_CLIENT_IP_HEADER with no HIPPO_TRUSTED_PROXIES: the header would be read
+ * from no one, so the setting is a mistake.
  */
 export class UntrustedClientIpHeaderError extends Error {
   constructor(readonly header: string) {
@@ -86,7 +90,8 @@ export class WildcardTrustedProxiesError extends Error {
   }
 }
 
-/** Checked at boot: a wildcard proxy list is refused, and a client-IP header needs a list to be read from. */
+/** Checked at boot: a wildcard proxy list is refused, and a client-IP header needs a list to be
+ * read from. */
 export function assertClientIpHeaderPinned(): void {
   if (
     envTrustedProxies()
@@ -100,7 +105,8 @@ export function assertClientIpHeaderPinned(): void {
   if (proxyTrust(envTrustedProxies()) === undefined) throw new UntrustedClientIpHeaderError(header);
 }
 
-/** The key for one subscriber: an IPv6 address's /48, since one site may hold all 65,536 /64s in it; else as is. */
+/** The key for one subscriber: an IPv6 address's /48, since one site may hold all 65,536 /64s in
+ * it; else as is. */
 function subscriberKey(ip: string): string {
   const bare = ip.split('%')[0]!;
   if (bare.toLowerCase().startsWith('::ffff:') && isIP(bare.slice(7)) === 4) return bare.slice(7);
@@ -111,21 +117,24 @@ function subscriberKey(ip: string): string {
   // A trailing dotted quad holds two groups; isIP has already checked the shape.
   const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
   const groups =
-    tail === undefined ? left : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
+    tail === undefined
+      ? left
+      : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
   return `${groups
     .slice(0, IPV6_PREFIX_GROUPS)
     .map((g) => parseInt(g, 16).toString(16))
     .join(':')}::/48`;
 }
 
-/** The one key every per-address limit and slot count uses, so rotating /64s inside a /48 never buys a fresh bucket
- * or evicts another client's. */
+/** The one key every per-address limit and slot count uses, so rotating /64s inside a /48 never
+ * buys a fresh bucket or evicts another client's. */
 export function clientLimitKey(req: IncomingMessage): string {
   return subscriberKey(clientIpForRateLimit(req));
 }
 
-/** Which client a request comes from, so its last shown ids never mix with another's. The bearer is hashed so the raw
- * token is never logged; MCP over HTTP and the REST routes share the key, so a client's outcome finds its recall. */
+/** Which client a request comes from, so its last shown ids never mix with another's. The bearer
+ * is hashed so the raw token is never logged; MCP over HTTP and the REST routes share the key,
+ * so a client's outcome finds its recall. */
 export function clientKeyOf(req: IncomingMessage, bearer: string | undefined): string {
   return `http:${bearer === undefined ? 'noauth' : blockHash(bearer)}:${clientLimitKey(req)}`;
 }
@@ -137,9 +146,9 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration; /health and other paths are never throttled,
-  // and a 429 lands in the createServer catch. Keyed per clientIpForRateLimit (set HIPPO_CLIENT_IP_HEADER behind a
-  // TLS-terminating proxy, or all clients share one bucket).
+  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration; /health and other paths
+  // are never throttled, and a 429 lands in the createServer catch. Keyed per clientIpForRateLimit
+  // (set HIPPO_CLIENT_IP_HEADER behind a TLS-terminating proxy, or all clients share one bucket).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     if (!limiter.check(clientLimitKey(req))) {
       throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);

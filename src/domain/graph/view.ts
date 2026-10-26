@@ -1,7 +1,7 @@
 /**
  * Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so
- * `scripts/check-graph-writes.mjs` stays green).
- * Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
+ * `scripts/check-graph-writes.mjs` stays green). Shared by `hippo graph show|view` and the HTTP
+ * `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';
 import type { GraphReads, GraphRows } from '../../base/ports/store.js';
@@ -31,9 +31,9 @@ export interface GraphModel {
 export const DEFAULT_VIEW_LIMIT = 500;
 
 /**
- * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop
- * neighbors.
- * Dangling edges (an endpoint outside the node set) are always dropped. */
+ * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named
+ * so plus their 1-hop neighbors. Dangling edges (an endpoint outside the node set) are always
+ * dropped. */
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
@@ -49,7 +49,8 @@ export async function buildGraphModel(
   );
 }
 
-/** The reply model of the rows a store read: an edge with an endpoint outside the node set is dropped. */
+/** The reply model of the rows a store read: an edge with an endpoint outside the node set is
+ * dropped. */
 function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
   const nodeIds = new Set(entities.map((e) => e.id));
   const nodes: GraphNode[] = entities.map((e) => ({
@@ -79,7 +80,8 @@ const MIN_DISTANCE = 0.01;
 /** Keeps nodes this many pixels off the viewport edge. */
 const EDGE_MARGIN_PX = 20;
 
-/** Distance from pj to pi and the unit vector between them, with a zero length floored at MIN_DISTANCE. */
+/** Distance from pj to pi and the unit vector between them, with a zero length floored at
+ * MIN_DISTANCE. */
 function separation(pi: Point, pj: Point) {
   const dx = pi.x - pj.x;
   const dy = pi.y - pj.y;
@@ -101,7 +103,8 @@ function seedCircle(nodes: GraphNode[], width: number, height: number): Map<numb
   return pos;
 }
 
-/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid leaves it out. */
+/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid
+ * leaves it out. */
 const REPULSION_REACH_K = 2;
 const CELL_KEY_STRIDE = 1 << 20;
 
@@ -117,15 +120,17 @@ function gridOf(pts: readonly Point[], reach: number): Map<number, number[]> {
   return cells;
 }
 
-/** Adds every pair's repulsion within the reach, reading only the 3 by 3 cells around each node; `visits` counts the
- * pairs looked at. */
-function addRepulsion(
-  nodes: GraphNode[],
-  pos: Map<number, Point>,
-  disp: Point[],
-  k: number,
-  visits: { pairs: number },
-): void {
+interface AddRepulsionOptions {
+  readonly nodes: GraphNode[];
+  readonly pos: Map<number, Point>;
+  readonly disp: Point[];
+  readonly k: number;
+  readonly visits: { pairs: number };
+}
+
+/** Adds every pair's repulsion within the reach, reading only the 3 by 3 cells around each node;
+ * `visits` counts the pairs looked at. */
+function addRepulsion({ nodes, pos, disp, k, visits }: AddRepulsionOptions): void {
   const reach = REPULSION_REACH_K * k;
   const pts = nodes.map((node) => pos.get(node.id)!);
   const cells = gridOf(pts, reach);
@@ -138,14 +143,22 @@ function addRepulsion(
         for (const j of cells.get(gx * CELL_KEY_STRIDE + gy) ?? []) {
           if (j <= i) continue;
           visits.pairs++;
-          repel(pi, pts[j], disp[i], disp[j], k);
+          repel({ pi, pj: pts[j], di: disp[i], dj: disp[j] }, k);
         }
       }
     }
   }
 }
 
-function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number): void {
+/** Two points and the displacements their repulsion adds to. */
+interface RepelOptions {
+  readonly pi: Point;
+  readonly pj: Point;
+  readonly di: Point;
+  readonly dj: Point;
+}
+
+function repel({ pi, pj, di, dj }: RepelOptions, k: number): void {
   const { dist, ux, uy } = separation(pi, pj);
   if (dist >= REPULSION_REACH_K * k) return;
   const rep = (k * k) / dist;
@@ -155,13 +168,15 @@ function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number): void {
   dj.y -= uy * rep;
 }
 
-function addAttraction(
-  edges: GraphEdge[],
-  idIndex: Map<number, number>,
-  pos: Map<number, Point>,
-  disp: Point[],
-  k: number,
-): void {
+interface AddAttractionOptions {
+  readonly edges: GraphEdge[];
+  readonly idIndex: Map<number, number>;
+  readonly pos: Map<number, Point>;
+  readonly disp: Point[];
+  readonly k: number;
+}
+
+function addAttraction({ edges, idIndex, pos, disp, k }: AddAttractionOptions): void {
   for (const e of edges) {
     const i = idIndex.get(e.from);
     const j = idIndex.get(e.to);
@@ -201,10 +216,11 @@ function applyDisplacement(options: DisplacementOptions): void {
 }
 
 /**
- * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so
- * one model gives the same positions. Repulsion reaches 2k and runs on a grid, so a pass costs the nodes near each
- * node, not every pair; `opts.visits` counts the pairs looked at.
- * Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
+ * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations,
+ * no `Math.random`, so one model gives the same positions. Repulsion reaches 2k and runs on a
+ * grid, so a pass costs the nodes near each node, not every pair; `opts.visits` counts the pairs
+ * looked at. Non-finite coordinates are clamped to the viewport centre and all positions to the
+ * bounds. */
 export function layoutGraph(
   model: GraphModel,
   opts: {
@@ -229,8 +245,8 @@ export function layoutGraph(
 
   for (let iter = 0; iter < iterations; iter++) {
     const disp = nodes.map(() => ({ x: 0, y: 0 }));
-    addRepulsion(nodes, pos, disp, k, visits);
-    addAttraction(model.edges, idIndex, pos, disp, k);
+    addRepulsion({ nodes, pos, disp, k, visits });
+    addAttraction({ edges: model.edges, idIndex, pos, disp, k });
     const temp = Math.max(1, (width / 10) * (1 - iter / iterations));
     applyDisplacement({ nodes, pos, disp, temp, width, height });
   }

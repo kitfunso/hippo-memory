@@ -1,4 +1,5 @@
-// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came from.
+// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came
+// from.
 import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';
@@ -46,8 +47,8 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
 }
 
 /**
- * Matched once across all the store's Claude folders, before any container's transaction; each adoption re-checks its
- * row inside one.
+ * Matched once across all the store's Claude folders, before any container's transaction; each
+ * adoption re-checks its row inside one.
  */
 export async function legacyWork(
   store: Pick<ImportStore, 'reports'>,
@@ -61,14 +62,16 @@ export async function legacyWork(
   const rows =
     containers.length === 0
       ? []
-      : (await liveUnder(store, tenantId, LEGACY_SOURCE_PREFIX)).filter((r) => r.tags.includes(LEGACY_TAG));
+      : (await liveUnder(store, tenantId, LEGACY_SOURCE_PREFIX)).filter((r) =>
+          r.tags.includes(LEGACY_TAG),
+        );
   const byContainer = new Map<string, ContainerLegacy>();
   if (rows.length === 0) return { byContainer, adopted: new Set() };
 
   const { refs, targets } = legacyTargets(containers);
   const match = matchLegacy(
-    // The old import kept emails in clear, and targets are masked; without the mask those rows never matched and
-    // imported twice.
+    // The old import kept emails in clear, and targets are masked; without the mask those rows
+    // never matched and imported twice.
     rows.map((r) => ({
       id: r.id,
       file: r.source.slice(LEGACY_SOURCE_PREFIX.length),

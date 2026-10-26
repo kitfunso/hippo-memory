@@ -3,8 +3,8 @@ import type { AuditOp } from '../../records/audit-ops.js';
 import type { JsonObject } from '../../util/json.js';
 import type { MemoryEntry } from '../../memory/entry.js';
 
-/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role
- * and the expiry. */
+/** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks
+ * the secret, the role and the expiry. */
 export interface ApiKeyRecord {
   keyHash: string;
   tenantId: string;
@@ -69,29 +69,35 @@ export interface ContinuityStamp {
   readonly origin: string;
 }
 
-/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
+/** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no
+ * reader. */
 export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
+  if (key.owner === '' || origin === undefined) {
+    throw new Error('continuity key needs an owner and a project');
+  }
   return { owner: key.owner, origin };
 }
 
-/** The prediction class a forward claim resolves to, and that class's closed-prediction stats when one resolved. */
+/** The prediction class a forward claim resolves to, and that class's closed-prediction stats
+ * when one resolved. */
 export interface PlanningFallacyEvidence extends ClassResolution {
   readonly baserate: PredictionBaserate | null;
 }
 
 export interface ClassResolution {
   classTag: string | null;
-  /** True when >=2 classes tied at the best overlap score AND best >= 1. Caller emits `recall_autodebias_hint_tiebreak`
-   * and returns a null hint (silent: an alphabetical tiebreak would show the wrong class half the time). */
+  /** True when >=2 classes tied at the best overlap score AND best >= 1. Caller emits
+   * `recall_autodebias_hint_tiebreak` and returns a null hint (silent: an alphabetical tiebreak
+   * would show the wrong class half the time). */
   tiebreak: boolean;
 }
 
 export interface PredictionBaserate {
   classTag: string;
   /**
-   * Count of closed predictions with a numeric actual_value (excludes open + closed-unknown). The denominator for MAE.
+   * Count of closed predictions with a numeric actual_value (excludes open + closed-unknown). The
+   * denominator for MAE.
    */
   nClosed: number;
   /** Count of closed rows where estimate_value > 0 (i.e. ratio is defined).
@@ -116,8 +122,8 @@ export interface AppendAuditOptions {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  // Opaque on purpose: appendAuditEvents only JSON.stringify's it wholesale and never reads a field, so no parsed
-  // contract is claimed.
+  // Opaque on purpose: appendAuditEvents only JSON.stringify's it wholesale and never reads a
+  // field, so no parsed contract is claimed.
   metadata?: unknown;
 }
 

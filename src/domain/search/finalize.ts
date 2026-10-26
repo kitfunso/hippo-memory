@@ -2,12 +2,18 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { churnStaleFactor } from './boosts.js';
-import { DEFAULT_MIN_RESULTS, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_MIN_RESULTS,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 
-/** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
+/** When an extracted fact and its source both match, keep only the higher-scoring one (usually
+ * the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   const seenExtractedFrom = new Set<string>();
-  // A dropped source leaves a hole instead of splicing, so each result costs one map step however many came before.
+  // A dropped source leaves a hole instead of splicing, so each result costs one map step however
+  // many came before.
   const slots: Array<SearchResult | null> = [];
   const slotsOfId = new Map<string, number[]>();
   const keep = (result: SearchResult): void => {
@@ -32,9 +38,12 @@ export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
 
 const DAG_CHILD_SCORE_FACTOR = 0.9;
 
-/** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts `results` in place. */
+/** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts
+ * `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
-  const summaryIds = new Set(results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id));
+  const summaryIds = new Set(
+    results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id),
+  );
   if (summaryIds.size === 0) return results;
   const children = pool.filter((e) => e.dagParentId && summaryIds.has(e.dagParentId));
   // The first result of an id wins, and a child added below counts for the rows after it.
@@ -43,8 +52,16 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   for (const child of children) {
     if (resultById.has(child.id)) continue;
     const parentResult = child.dagParentId ? resultById.get(child.dagParentId) : undefined;
-    const childScore = parentResult ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child) : 0;
-    const added = { entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) };
+    const childScore = parentResult
+      ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child)
+      : 0;
+    const added = {
+      entry: child,
+      score: childScore,
+      bm25: 0,
+      cosine: 0,
+      tokens: estimateTokens(child.content),
+    };
     results.push(added);
     resultById.set(child.id, added);
   }
@@ -52,7 +69,8 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   return results;
 }
 
-// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine spends alike.
+// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine
+// spends alike.
 export function fitBudget<T extends SearchResult>(
   ordered: T[],
   budget: number,

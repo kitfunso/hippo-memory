@@ -15,14 +15,16 @@ function optionalOptions(call: GitCall): ExecFileSyncOptions {
   return options;
 }
 
-/** execFileSync puts git's exit code on the error it throws; a kill or a failed start leaves none. */
+/** execFileSync puts git's exit code on the error it throws; a kill or a failed start leaves
+ * none. */
 function exitStatus(error: Error): number | null {
   if (!('status' in error)) return null;
   const { status } = error;
   return Number.isInteger(status) ? Number(status) : null;
 }
 
-/** git as a child process with no shell; a failure returns node's own error, so its message names git's stderr. */
+/** git as a child process with no shell; a failure returns node's own error, so its message
+ * names git's stderr. */
 export const processGit: GitRunner = {
   run(args, call) {
     try {

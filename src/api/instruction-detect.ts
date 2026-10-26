@@ -1,15 +1,19 @@
 /**
- * Prompt-injection detection for untrusted memory content: a heuristic that patterns can miss, never the boundary.
- * The boundary is the frame every untrusted row prints in (api/context-render.ts). Leaf module, no store/api imports.
+ * Prompt-injection detection for untrusted memory content: a heuristic that patterns can miss,
+ * never the boundary. The boundary is the frame every untrusted row prints in
+ * (api/context-render.ts). Leaf module, no store/api imports.
  */
 
-/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as untrusted. */
+/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
+ * untrusted. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
 
-/** What every untrusted write (connector text) carries, so it prints framed whatever the detector said of it. */
+/** What every untrusted write (connector text) carries, so it prints framed whatever the
+ * detector said of it. */
 export const UNTRUSTED_ORIGIN_TAG = 'untrusted-origin';
 
-/** The tags connector rows written before UNTRUSTED_ORIGIN_TAG carry, so an upgraded store frames them too. */
+/** The tags connector rows written before UNTRUSTED_ORIGIN_TAG carry, so an upgraded store
+ * frames them too. */
 export const CONNECTOR_SOURCE_TAGS: readonly string[] = ['source:slack', 'source:github'];
 
 export interface InstructionDetection {
@@ -26,7 +30,10 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
     name: 'role-reassignment',
     re: /\b(?:you are now|act as|pretend to be)\b[^.\n]{0,40}\b(?:an?\s+)?(?:ai|assistant|agent|system)\b/i,
   },
-  { name: 'chat-role-markup', re: /<\|im_start\|>|<\|system\|>|\[INST\]|<\/?system>|###\s*system\s*:/i },
+  {
+    name: 'chat-role-markup',
+    re: /<\|im_start\|>|<\|system\|>|\[INST\]|<\/?system>|###\s*system\s*:/i,
+  },
   {
     name: 'system-prompt-reference',
     re: new RegExp(
@@ -35,7 +42,8 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
       'i',
     ),
   },
-  // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby too.
+  // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby
+  // too.
   {
     name: 'standing-order',
     re: new RegExp(
@@ -67,13 +75,16 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];
 
-// A stray zero-width char has legitimate uses (ZWJ); only a run of 3+ adjacent ones reads as smuggling.
+// A stray zero-width char has legitimate uses (ZWJ); only a run of 3+ adjacent ones reads as
+// smuggling.
 const ZERO_WIDTH_RUN_RE = /[\u200B-\u200F\u2060-\u2064]{3,}/;
 
-// Reorders what is drawn without changing a byte a pattern reads, and ordinary right-to-left prose never needs one.
+// Reorders what is drawn without changing a byte a pattern reads, and ordinary right-to-left prose
+// never needs one.
 const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/;
 
-// A renderer draws a reference as the character it names: decimal, hex, or one of the five names XML defines.
+// A renderer draws a reference as the character it names: decimal, hex, or one of the five names
+// XML defines.
 const CHARACTER_REFERENCE_RE = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos));/g;
 const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['amp', '&'],
@@ -83,12 +94,13 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['apos', "'"],
 ]);
 
-// Drawn with no width, so one inside a word splits it for a pattern and not for a reader: soft hyphen, joiners,
-// zero-width and bidi format characters.
-const INVISIBLE_RE = /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+// Drawn with no width, so one inside a word splits it for a pattern and not for a reader: soft
+// hyphen, joiners, zero-width and bidi format characters.
+const INVISIBLE_RE =
+  /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 
-// Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or Greek prose folds into
-// no phrase a pattern names.
+// Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or
+// Greek prose folds into no phrase a pattern names.
 const LOOKALIKES: ReadonlyMap<string, string> = new Map([
   ['\u0430', 'a'],
   ['\u0441', 'c'],
@@ -129,19 +141,27 @@ const LOOKALIKES: ReadonlyMap<string, string> = new Map([
 ]);
 const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 
-// A line break stays: it is the sentence bound the patterns rely on where a list or a chat message ends a line with no
-// full stop.
+// A line break stays: it is the sentence bound the patterns rely on where a list or a chat message
+// ends a line with no full stop.
 const SPACE_RUN_RE = /[^\S\n]+/g;
 
-function referencedCharacter(reference: string, decimal?: string, hex?: string, name?: string): string {
+function referencedCharacter(
+  reference: string,
+  decimal?: string,
+  hex?: string,
+  name?: string,
+): string {
   if (name !== undefined) return NAMED_REFERENCES.get(name) ?? reference;
-  const code = decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16);
-  // NUL, half a surrogate pair and a number past Unicode name no character, so the reference is read as written.
+  const code =
+    decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16);
+  // NUL, half a surrogate pair and a number past Unicode name no character, so the reference is
+  // read as written.
   const drawn = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
   return drawn ? String.fromCodePoint(code) : reference;
 }
 
-/** `content` as a reader or a model takes it in. For matching only: what is stored is never this. */
+/** `content` as a reader or a model takes it in. For matching only: what is stored is never
+ * this. */
 function screeningForm(content: string): string {
   return (
     content
@@ -162,8 +182,8 @@ function matchedPattern(text: string): string | null {
 }
 
 export function detectInstruction(content: string): InstructionDetection {
-  // The text as written goes first: a phrase in plain sight is named before any smuggling rule, and the screening form
-  // only adds flags.
+  // The text as written goes first: a phrase in plain sight is named before any smuggling rule, and
+  // the screening form only adds flags.
   const plain = matchedPattern(content);
   if (plain !== null) return { flagged: true, reason: plain };
   if (ZERO_WIDTH_RUN_RE.test(content)) {

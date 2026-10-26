@@ -1,4 +1,5 @@
-// Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help` lists them.
+// Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help`
+// lists them.
 
 import {
   CONFLICT_PEER_MULTIPLIER,
@@ -22,7 +23,12 @@ import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context.js';
 import { DEFAULT_MAX_NEIGHBORS } from '../../../domain/graph/recall.js';
 import { JEV_DEFAULT_TOP_K } from '../../../domain/rerankers/hosted.js';
 import { DEFAULT_RERANK_TOP_K } from '../../../domain/search/rerank.js';
-import { DEFAULT_BOOTSTRAP_CASES, MAX_NEIGHBORS_FLAG, SEED_DAYS_SCAN, SEED_DAYS_SINGLE } from '../flag-defaults.js';
+import {
+  DEFAULT_BOOTSTRAP_CASES,
+  MAX_NEIGHBORS_FLAG,
+  SEED_DAYS_SCAN,
+  SEED_DAYS_SINGLE,
+} from '../flag-defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 const SEED_DAYS_HELP = `${SEED_DAYS_SCAN} for --scan, ${SEED_DAYS_SINGLE} for single`;
@@ -32,7 +38,11 @@ export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
     repairsCodexWrapper: true,
     scoped: true,
-    flags: { switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'], values: ['scan'], numbers: ['days'] },
+    flags: {
+      switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'],
+      values: ['scan'],
+      numbers: ['days'],
+    },
     usage: [
       `
   init                     Create .hippo/ structure in current directory
@@ -212,7 +222,11 @@ export const MEMORY_VERBS = {
     ],
   }),
   trace: verb(() => import('../remember.js'), 'handleTrace', {
-    flags: { switches: ['json'], values: ['outcome', 'session', 'source', 'steps', 'task'], lists: ['tag'] },
+    flags: {
+      switches: ['json'],
+      values: ['outcome', 'session', 'source', 'steps', 'task'],
+      lists: ['tag'],
+    },
     usage: [
       `
   trace <id>               Memory dossier: content, decay trajectory, retrievals,
@@ -235,7 +249,15 @@ export const MEMORY_VERBS = {
   }),
   eval: verb(() => import('../eval.js'), 'handleEval', {
     flags: {
-      switches: ['bootstrap', 'equal-sources', 'json', 'no-mmr', 'save-baseline', 'show-cases', 'suite'],
+      switches: [
+        'bootstrap',
+        'equal-sources',
+        'json',
+        'no-mmr',
+        'save-baseline',
+        'show-cases',
+        'suite',
+      ],
       values: ['baseline', 'compare', 'out'],
       numbers: ['embedding-weight', 'local-bump', 'max-cases', 'min-mrr', 'mmr-lambda'],
     },

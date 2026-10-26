@@ -1,4 +1,5 @@
-// MCP wire types, the caller context, and the JSON predicates every tool handler narrows its arguments with.
+// MCP wire types, the caller context, and the JSON predicates every tool handler narrows its
+// arguments with.
 
 import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -22,8 +23,12 @@ import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
-/** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
-export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOptions): string | null {
+/** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are
+ * the test seam. */
+export function findHippoRoot(
+  cwd: string = process.cwd(),
+  opts?: ResolveProjectIdentityOptions,
+): string | null {
   const local = findHippoStoreDir(cwd, opts);
   if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)
@@ -37,8 +42,8 @@ export function callName(req: McpRequest): string {
   return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
-/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered
- * generically. */
+/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is
+ * logged and answered generically. */
 export function mcpErrorResponse<E>(
   id: McpResponse['id'],
   err: E,
@@ -48,27 +53,37 @@ export function mcpErrorResponse<E>(
   const where = call === undefined ? '' : ` (${call})`;
   const { status, message } = mapApiError(err);
   if (status === 503) {
-    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
+    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, {
+      requestId,
+      ...errorFields(err),
+    });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   if (status !== 500) {
-    log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status, ...errorClassFields(err) });
+    log.info(`mcp request${where} failed: ${errorMessage(err)}`, {
+      requestId,
+      status,
+      ...errorClassFields(err),
+    });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   log.error(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
-  return errorReply(id, INTERNAL_ERROR, `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, { requestId });
+  return errorReply(id, INTERNAL_ERROR, `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, {
+    requestId,
+  });
 }
 
 export type { McpRequest, McpResponse };
 
-/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and auth-resolved tenantId/actor), so
- * executeTool skips the findHippoRoot() walk and the env-based tenant fallback, which would pick the wrong store. */
+/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and
+ * auth-resolved tenantId/actor), so executeTool skips the findHippoRoot() walk and the env-based
+ * tenant fallback, which would pick the wrong store. */
 export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context, is
-   * admin without one. */
+  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which
+   * passes no context, is admin without one. */
   role: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
@@ -84,9 +99,11 @@ export interface McpContext {
   /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
   stdio?: true;
   reach?: ContextReach;
-  /** The transport root's per-caller state; without it no session ring, last-shown list or auto-sleep is kept. */
+  /** The transport root's per-caller state; without it no session ring, last-shown list or
+   * auto-sleep is kept. */
   callers?: CallerState;
-  /** The outside services the transport's root built; every tool call's api Context carries them. */
+  /** The outside services the transport's root built; every tool call's api Context carries
+   * them. */
   infra: InfraPorts;
   /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
    * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
@@ -95,8 +112,9 @@ export interface McpContext {
   signal?: AbortSignal;
 }
 
-/** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator, host admin. Any context
- * runs as its own role, and an untyped caller that sends none runs as a member, so a missing role fails closed. */
+/** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator,
+ * host admin. Any context runs as its own role, and an untyped caller that sends none runs as a
+ * member, so a missing role fails closed. */
 export function mcpActor(ctx: McpContext | undefined): ApiActor {
   if (ctx === undefined) return { subject: 'mcp', role: 'admin', hostAdmin: true };
   const actor: ApiActor = {
@@ -110,7 +128,8 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
   return actor;
 }
 
-/** The api Context a tool call runs as: the transport's store, reach and config under the caller's actor. */
+/** The api Context a tool call runs as: the transport's store, reach and config under the
+ * caller's actor. */
 export function mcpApiContext(ctx: McpContext): ApiContext {
   return {
     tenantId: ctx.tenantId,
@@ -125,14 +144,15 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
   };
 }
 
-/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either, so two repos on one
- * shared store keep apart lists. */
+/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
+ * so two repos on one shared store keep apart lists. */
 function mcpClientKey(ctx: McpContext): string {
   const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
   return ctx.project ? `${base}:${ctx.project.name}` : base;
 }
 
-/** Stdio or a host admin: the only callers whose server cwd and git history are their own to read. */
+/** Stdio or a host admin: the only callers whose server cwd and git history are their own to
+ * read. */
 export function ownsServerCwd(ctx: McpContext | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
 }
@@ -142,13 +162,15 @@ export function ownsServerCwd(ctx: McpContext | undefined): boolean {
 /** The context of a tool call on a folder, built by the frame's composition root. */
 export type McpContextFor = (hippoRoot: string, tenantId: string) => McpContext;
 
-/** What the stdio transport takes from its composition root: one frame's run, whose contexts share the frame's store
- * handles and carry `signal`. The root names the store adapter, so src/surface/mcp does not. */
+/** What the stdio transport takes from its composition root: one frame's run, whose contexts
+ * share the frame's store handles and carry `signal`. The root names the store adapter, so
+ * src/surface/mcp does not. */
 export interface McpHost {
   runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor) => Promise<T>): Promise<T>;
 }
 
-/** One tool call after the store, config and tenant are resolved; every handler reads the same five. */
+/** One tool call after the store, config and tenant are resolved; every handler reads the same
+ * five. */
 export interface ToolCall {
   args: Record<string, JsonValue>;
   ctx: McpContext;
@@ -160,15 +182,19 @@ export interface ToolCall {
 
 export type ToolHandler = (call: ToolCall) => string | Promise<string>;
 
-/** A call on a store boot proved holds the optional groups `G`, and the api Context it runs as on that store. */
+/** A call on a store boot proved holds the optional groups `G`, and the api Context it runs as
+ * on that store. */
 export interface GroupToolCall<G extends OptionalGroup> extends ToolCall {
   store: StoreWith<G>;
   api: ContextWith<G>;
 }
 
-export type GroupToolHandler<G extends OptionalGroup> = (call: GroupToolCall<G>) => string | Promise<string>;
+export type GroupToolHandler<G extends OptionalGroup> = (
+  call: GroupToolCall<G>,
+) => string | Promise<string>;
 
-/** A share or peers call: a folder store and the global store its reach names, both checked by the gate. */
+/** A share or peers call: a folder store and the global store its reach names, both checked by
+ * the gate. */
 export interface LocalToolCall extends ToolCall {
   store: StoreWith<'folderFiles'>;
   globalTarget: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;

@@ -2,7 +2,12 @@ import type { ClefSettings } from '../../base/config/config.js';
 import type { Http } from '../../base/ports/http.js';
 import { buildRelevanceRequest, rankByScores } from './jev.js';
 import { JEV_DEFAULT_TOP_K, type ClefModel } from '../../domain/rerankers/hosted.js';
-import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from '../../base/ports/reranker.js';
+import type {
+  RerankerFn,
+  RerankResult,
+  RerankerOptions,
+  RerankProvenance,
+} from '../../base/ports/reranker.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { createOutageWarning } from '../../domain/rerankers/outage-warning.js';
 import { postScoring } from './endpoint.js';
@@ -41,16 +46,23 @@ function isRejection(v: ClefScores | string): v is string {
   return v.constructor === String;
 }
 
-// fetch quotes a rejected header value in its error, so a token it would reject must never reach it.
+// fetch quotes a rejected header value in its error, so a token it would reject must never reach
+// it.
 function checkHeaderSafe(name: string, token: string): void {
-  if (!/^[\x21-\x7e]+$/.test(token)) throw new Error(`${name} has characters a header cannot carry`);
+  if (!/^[\x21-\x7e]+$/.test(token)) {
+    throw new Error(`${name} has characters a header cannot carry`);
+  }
 }
 
-/** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
+/** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted
+ * Workers AI. */
 export function resolveClefRoute(model: ClefModel, settings: ClefSettings | undefined): ClefRoute {
   const endpoint = settings?.endpoint;
   if (endpoint) {
-    const parsed = parseOutboundUrl(endpoint, 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN');
+    const parsed = parseOutboundUrl(endpoint, {
+      setting: 'HIPPO_CLEF_ENDPOINT',
+      keySetting: 'HIPPO_CLEF_ENDPOINT_TOKEN',
+    });
     const endpointToken = settings?.endpointToken;
     if (endpointToken) checkHeaderSafe('HIPPO_CLEF_ENDPOINT_TOKEN', endpointToken);
     return { url: parsed.href, token: endpointToken, backend: 'private-endpoint' };
@@ -58,7 +70,9 @@ export function resolveClefRoute(model: ClefModel, settings: ClefSettings | unde
   const account = settings?.cloudflareAccountId;
   const token = settings?.cloudflareApiToken;
   if (!account || !token) throw new Error('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set');
-  if (!ACCOUNT_ID.test(account)) throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
+  if (!ACCOUNT_ID.test(account)) {
+    throw new Error('CLOUDFLARE_ACCOUNT_ID is not a 32-character hex id');
+  }
   checkHeaderSafe('CLOUDFLARE_API_TOKEN', token);
   return {
     url: `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${model}`,
@@ -68,8 +82,8 @@ export function resolveClefRoute(model: ClefModel, settings: ClefSettings | unde
 }
 
 /**
- * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and `c1..cN`; a string is the
- * rejection reason.
+ * Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and
+ * `c1..cN`; a string is the rejection reason.
  */
 export function parseClefReply(
   body: JsonValue,
@@ -94,7 +108,9 @@ export function parseClefReply(
   const scores: number[] = [];
   for (let i = 1; i <= n; i++) {
     const a = answers[`c${i}`];
-    if (!isJsonObject(a) || (a.type !== undefined && a.type !== 'noul')) return 'incomplete or out-of-range answers';
+    if (!isJsonObject(a) || (a.type !== undefined && a.type !== 'noul')) {
+      return 'incomplete or out-of-range answers';
+    }
     const v = a.noul;
     if (!isNumber(v) || v < 0 || v > 1) return 'incomplete or out-of-range answers';
     scores.push(v);
@@ -109,7 +125,8 @@ export function parseClefReply(
   };
 }
 
-/** Where one scoring request goes and how: the transport, the model asked for, its route and the call's timeout. */
+/** Where one scoring request goes and how: the transport, the model asked for, its route and the
+ * call's timeout. */
 interface ClefCall {
   readonly http: Http;
   readonly model: ClefModel;
@@ -118,13 +135,24 @@ interface ClefCall {
   readonly signal: AbortSignal | undefined;
 }
 
-async function requestScores(call: ClefCall, query: string, head: SearchResult[]): Promise<ClefScores> {
+async function requestScores(
+  call: ClefCall,
+  query: string,
+  head: SearchResult[],
+): Promise<ClefScores> {
   const { http, model, route, requestedTimeoutMs: requested, signal } = call;
   const { state, questions } = buildRelevanceRequest(query, head);
   // Node clamps a delay past 2^31-1 to 1 ms.
-  const timeoutMs = requested !== undefined && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
+  const timeoutMs =
+    requested !== undefined && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const body = { state, model, questions };
-  const resp = await postScoring(http, { url: route.url, token: route.token, body, budgetMs: timeoutMs, signal });
+  const resp = await postScoring(http, {
+    url: route.url,
+    token: route.token,
+    body,
+    budgetMs: timeoutMs,
+    signal,
+  });
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
     const ray = resp.headers
@@ -153,8 +181,8 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
 }
 
 /**
- * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and
- * warns.
+ * A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order
+ * (never paid Jev) and warns.
  */
 export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
   const outage = createOutageWarning(model, 'keeping the native order');
@@ -168,12 +196,20 @@ export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
       route = resolveClefRoute(model, options?.clef);
       const requestedTimeoutMs = options?.clef?.timeoutMs;
-      got = await requestScores({ http, model, route, requestedTimeoutMs, signal: options?.signal }, query, head);
+      got = await requestScores(
+        { http, model, route, requestedTimeoutMs, signal: options?.signal },
+        query,
+        head,
+      );
       outage.answered();
     } catch (err) {
       const reason = errorMessage(err);
       outage.failed(reason, { fields: errorFields(err), signal: options?.signal });
-      return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
+      return nativeOrder(head, {
+        backend: 'native',
+        requestedModel: model,
+        fallbackReason: reason,
+      });
     }
 
     const rerankProvenance: RerankProvenance = {
@@ -183,6 +219,9 @@ export function createClefReranker(model: ClefModel, http: Http): RerankerFn {
       inputTokens: got.inputTokens,
       outputTokens: got.outputTokens,
     };
-    return rankByScores(head, got.scores).map((r) => ({ ...r, rerankProvenance: { ...rerankProvenance } }));
+    return rankByScores(head, got.scores).map((r) => ({
+      ...r,
+      rerankProvenance: { ...rerankProvenance },
+    }));
   };
 }

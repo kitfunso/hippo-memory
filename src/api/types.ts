@@ -1,9 +1,15 @@
-// Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
+// Request context (caller identity and tenant) shared by every API module, plus the recall contract
+// error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '../base/ports/store.js';
+import type {
+  GlobalTargetGroup,
+  OptionalGroup,
+  SleepGroup,
+  StoreWith,
+} from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
@@ -30,21 +36,27 @@ export interface Actor {
   owner?: string; // the person behind the key; task state keys on it
 }
 
-/** The operator's global store in reach, with the config.json that ranks its rows and governs its ledger. */
+/** The operator's global store in reach, with the config.json that ranks its rows and governs
+ * its ledger. */
 export interface GlobalInReach {
   readonly root: string;
   readonly store: StoreWith<'learning'>;
   readonly config: HippoConfig;
 }
 
-/** A store reach as a composition root sets it: each global store carries its own config, so the api reads no file. */
+/** A store reach as a composition root sets it: each global store carries its own config, so the
+ * api reads no file. */
 export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'> {
   readonly global?: GlobalInReach;
   readonly globalTarget?: GlobalTargetInReach;
 }
 
-/** The global write target a host builds: without `embedderFor` the context's own embedder embeds the copy. */
-export type GlobalTargetInReach = Omit<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'> &
+/** The global write target a host builds: without `embedderFor` the context's own embedder
+ * embeds the copy. */
+export type GlobalTargetInReach = Omit<
+  ConfiguredFolder<StoreWith<GlobalTargetGroup>>,
+  'embedderFor'
+> &
   Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
 
 export interface Context {
@@ -52,36 +64,45 @@ export interface Context {
   actor: Actor;
   /** Built by a composition root; every api function reads and writes storage only through it. */
   readonly store: HippoStore;
-  /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
+  /** Set by a composition root. Absent, the api reads one project and no global store, as for an
+   * integrator's store. */
   reach?: ContextReach;
   /** The store's config, loaded by the composition root once per command or request. */
   readonly config: HippoConfig;
-  /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent, a
-   * recall keeps no session history and a write starts no sleep. */
+  /** The root's per-caller state: recall rings, each client's last shown ids, and how a write
+   * starts a sleep. Absent, a recall keeps no session history and a write starts no sleep. */
   readonly callers?: CallerState;
-  /** The key `callers` keeps this client's last shown ids under, set by the surface that knows the client. Absent, a
-   * recall or context call keeps none. */
+  /** The key `callers` keeps this client's last shown ids under, set by the surface that knows
+   * the client. Absent, a recall or context call keeps none. */
   readonly clientKey?: string;
-  /** The machine, model, embedder and rerankers this context reaches past the store, set by its composition root. */
+  /** The machine, model, embedder and rerankers this context reaches past the store, set by its
+   * composition root. */
   readonly infra: InfraPorts;
-  /** Aborts when the request passes its deadline, so a call stops starting work nobody waits for. Set by a server or
-   * stdio root; the deadline itself rides in the store, whose worker calls wait on it. */
+  /** Aborts when the request passes its deadline, so a call stops starting work nobody waits
+   * for. Set by a server or stdio root; the deadline itself rides in the store, whose worker
+   * calls wait on it. */
   readonly signal?: AbortSignal | undefined;
 }
 
-/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion ratio. */
+/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion
+ * ratio. */
 export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
   return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */
-export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & { readonly infra?: EntryInfraPorts };
+export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & {
+  readonly infra?: EntryInfraPorts;
+};
 
-/** The ports a published entry's caller may hand in; without `failureNotices` the entry warns through its own. */
-export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & { readonly failureNotices?: FailureNotices };
+/** The ports a published entry's caller may hand in; without `failureNotices` the entry warns
+ * through its own. */
+export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & {
+  readonly failureNotices?: FailureNotices;
+};
 
-/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader, and a promote
- * embeds its copy with `embedderFor`. */
+/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own
+ * loader, and a promote embeds its copy with `embedderFor`. */
 export function contextReach(
   reach: StoreReach,
   configAt: (root: string) => HippoConfig,
@@ -95,7 +116,9 @@ export function contextReach(
     return last.config;
   };
   let withConfig: ContextReach = rest;
-  if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  if (global !== undefined) {
+    withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  }
   if (globalTarget !== undefined) {
     withConfig = {
       ...withConfig,
@@ -105,12 +128,14 @@ export function contextReach(
   return withConfig;
 }
 
-/** Whether the store serves many people: the root's reach says, else the store's config for an integrator's store. */
+/** Whether the store serves many people: the root's reach says, else the store's config for an
+ * integrator's store. */
 export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
   return ctx.reach ? ctx.reach.shared : ctx.config.sharedStore;
 }
 
-/** A context whose store sets the optional groups `G`: the surface proved them once, so the api checks nothing. */
+/** A context whose store sets the optional groups `G`: the surface proved them once, so the api
+ * checks nothing. */
 export type ContextWith<G extends OptionalGroup> = Context & { readonly store: StoreWith<G> };
 
 /** A context whose store sets the groups a sleep runs on. */
@@ -119,8 +144,8 @@ export type SleepContext = ContextWith<SleepGroup>;
 /** The SleepContext the published sleep entry takes. */
 export type EntrySleepContext = EntryContext<SleepContext>;
 
-/** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
- * callers build Actor from the api_keys row instead. */
+/** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector
+ * Contexts; Bearer-authed callers build Actor from the api_keys row instead. */
 export function adminActor(subject: string): Actor {
   return { subject, role: 'admin', hostAdmin: true };
 }
@@ -135,9 +160,10 @@ export function ownerOrSubject(actor: Actor): string {
   return actor.owner ?? actor.subject;
 }
 
-/** Thrown by `api.recall` on a contract violation; the stable `code` lets callers discriminate without parsing the
- * message. 'fresh_tail_requires_session_id' (needs HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or
- * 'invalid_scorer_window' (0 would hit an uncapped fallback). */
+/** Thrown by `api.recall` on a contract violation; the stable `code` lets callers discriminate
+ * without parsing the message. 'fresh_tail_requires_session_id' (needs
+ * HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1) or 'invalid_scorer_window' (0 would hit an uncapped
+ * fallback). */
 export class RecallContractError extends BadRequestError {
   public readonly code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window';
   constructor(code: 'fresh_tail_requires_session_id' | 'invalid_scorer_window', message: string) {

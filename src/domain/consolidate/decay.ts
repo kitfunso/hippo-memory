@@ -16,12 +16,14 @@ import type { SleepStart } from '../../base/ports/store/consolidation.js';
 
 export const DECAY_THRESHOLD = 0.05;
 
-/** The sleep count (the stored one, else the runs on record) and the average days between the recent runs, 0 with
- * fewer than two, which session-based and adaptive decay read. */
+/** The sleep count (the stored one, else the runs on record) and the average days between the
+ * recent runs, 0 with fewer than two, which session-based and adaptive decay read. */
 export function sessionDecayContext({
   sleepCount,
   recentRuns,
-}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<Pick<DecayBasis, 'sleepCount' | 'avgSessionIntervalDays'>> {
+}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<
+  Pick<DecayBasis, 'sleepCount' | 'avgSessionIntervalDays'>
+> {
   const count = sleepCount || recentRuns.length;
   if (recentRuns.length < 2) return { sleepCount: count, avgSessionIntervalDays: 0 };
   const timestamps = recentRuns.map((at) => new Date(at).getTime()).reverse();
@@ -39,13 +41,13 @@ export interface DecayOutcome {
   rankById: Map<string, MvRankInfo>;
 }
 
-// Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole batch; stored
-// strength refreshed) but sits out this cycle; others go dormant when config.dormant is on, else are deleted. Only
-// called for rows `retirable` allows.
+// Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole
+// batch; stored strength refreshed) but sits out this cycle; others go dormant when config.dormant
+// is on, else are deleted. Only called for rows `retirable` allows.
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
-  // A faded secret is deleted, never kept dormant: keeping it would hold a credential on disk that the user reasonably
-  // expects forgetting removed.
+  // A faded secret is deleted, never kept dormant: keeping it would hold a credential on disk that
+  // the user reasonably expects forgetting removed.
   if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
     result.dormant++;
     result.events.push({ kind: 'dormant', id: entry.id, strength, threshold: DECAY_THRESHOLD });
@@ -62,10 +64,17 @@ function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void 
   run.pendingDeletes.push(entry.id);
 }
 
-/** Keeps an entry with its live strength cached; only strength is a cached computation, confidence stays as stored. */
-function keepSurvivor(run: SleepRun, entry: Pick<MemoryEntry, 'id' | 'strength'>, strength: number): void {
+/** Keeps an entry with its live strength cached; only strength is a cached computation,
+ * confidence stays as stored. */
+function keepSurvivor(
+  run: SleepRun,
+  entry: Pick<MemoryEntry, 'id' | 'strength'>,
+  strength: number,
+): void {
   run.survivors.keep(entry.id, strength);
-  if (!run.dryRun && strength !== entry.strength) run.pendingRefreshes.push({ id: entry.id, strength });
+  if (!run.dryRun && strength !== entry.strength) {
+    run.pendingRefreshes.push({ id: entry.id, strength });
+  }
   run.result.decayed++;
 }
 
@@ -75,9 +84,9 @@ function liveStrength(run: SleepRun, entry: MemoryEntry): number {
   return calculateStrength(entry, run.now, run.strength, run.decayOpts);
 }
 
-// Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet
-// per tenant, then commits.
-// Rescued entries stay full survivors for this cycle's later passes.
+// Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero
+// commits, runs rescueSet per tenant, then commits. Rescued entries stay full survivors for this
+// cycle's later passes.
 export async function decayPass(run: SleepRun): Promise<DecayOutcome> {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
   for await (const page of run.rows.pages()) {
@@ -93,10 +102,15 @@ export async function decayPass(run: SleepRun): Promise<DecayOutcome> {
   return { rescuedIds: new Set(), rescuedEntries: [], rankById: new Map() };
 }
 
-// A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be rescued, so name those entries in
-// one warning rather than leave it a silent NaN detail.
-function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
-  const nonFiniteIds = [...rankById.entries()].filter(([, info]) => !Number.isFinite(info.score)).map(([id]) => id);
+// A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be rescued, so
+// name those entries in one warning rather than leave it a silent NaN detail.
+function reportNonFiniteScores(
+  result: ConsolidationResult,
+  rankById: Map<string, MvRankInfo>,
+): void {
+  const nonFiniteIds = [...rankById.entries()]
+    .filter(([, info]) => !Number.isFinite(info.score))
+    .map(([id]) => id);
   if (nonFiniteIds.length > 0) {
     result.events.push({ kind: 'nonFiniteScores', ids: nonFiniteIds });
   }
@@ -115,35 +129,49 @@ interface Verdict {
 async function classifyByStrength(run: SleepRun) {
   const verdicts: Verdict[] = [];
   const candidates: MvCandidate[] = [];
-  // The weights were trained on clock-basis strength, so only the model carries over, never the decay basis.
+  // The weights were trained on clock-basis strength, so only the model carries over, never the
+  // decay basis.
   const mvRules = run.strength;
   for await (const page of run.rows.pages()) {
     for (const entry of page) {
       const live = liveStrength(run, entry);
       const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
-      verdicts.push({ id: entry.id, tenant_id: entry.tenantId, strength: entry.strength, live, condemned });
+      verdicts.push({
+        id: entry.id,
+        tenant_id: entry.tenantId,
+        strength: entry.strength,
+        live,
+        condemned,
+      });
       if (!entry.pinned) candidates.push(mvCandidate(entry, run.now, mvRules));
     }
   }
   return { verdicts, candidates };
 }
 
-function reportRescue(result: ConsolidationResult, id: string, strength: number, rank: MvRankInfo | undefined): void {
+function reportRescue(
+  result: ConsolidationResult,
+  id: string,
+  strength: number,
+  rank: MvRankInfo | undefined,
+): void {
   result.events.push({ kind: 'rescued', id, strength, threshold: DECAY_THRESHOLD, rank });
 }
 
 async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
   const { verdicts, candidates } = await classifyByStrength(run);
   const condemnedIds = new Set(verdicts.filter((v) => v.condemned).map((v) => v.id));
-  // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun
-  // audit write are !dryRun-gated).
+  // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes
+  // flush and the logRun audit write are !dryRun-gated).
 
-  // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
+  // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when
+  // nothing is condemned.
   validateWeights();
   let rankById: Map<string, MvRankInfo> = new Map();
   let rescuedIds = new Set<string>();
   if (condemnedIds.size > 0) {
-    // Ranks only the rows a rescue or the warning reads, so ranking a tenant holds no row's text but a tie's.
+    // Ranks only the rows a rescue or the warning reads, so ranking a tenant holds no row's text
+    // but a tie's.
     rankById = await rankCandidates(
       candidates,
       (id) => condemnedIds.has(id),
@@ -153,19 +181,24 @@ async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
     rescuedIds = rescueSet([], condemnedIds, run.now, { precomputedRanks: rankById });
     reportNonFiniteScores(run.result, rankById);
   }
-  return { rescuedIds, rescuedEntries: await commitVerdicts(run, verdicts, rescuedIds, rankById), rankById };
+  return {
+    rescuedIds,
+    rescuedEntries: await commitVerdicts(run, verdicts, rescuedIds, rankById),
+    rankById,
+  };
 }
 
-// --- Phase 2b: commit in run order ---
-// Rescued entries appended at the tail would be starved by order-sensitive passes like extraction's slice(0,20).
+// --- Phase 2b: commit in run order --- Rescued entries appended at the tail would be starved by
+// order-sensitive passes like extraction's slice(0,20).
 async function commitVerdicts(
   run: SleepRun,
   verdicts: readonly Verdict[],
   rescuedIds: ReadonlySet<string>,
   rankById: ReadonlyMap<string, MvRankInfo>,
 ): Promise<DecayOutcome['rescuedEntries']> {
-  // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
-  // batchWriteAndDelete, would assert rescues whose effects might never land if a later phase throws.
+  // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here,
+  // before batchWriteAndDelete, would assert rescues whose effects might never land if a later
+  // phase throws.
   const rescuedEntries: DecayOutcome['rescuedEntries'] = [];
   for (const page of chunked(verdicts, run.rows.pageRows)) {
     const faded = page.filter((v) => v.condemned && !rescuedIds.has(v.id)).map((v) => v.id);
@@ -174,7 +207,8 @@ async function commitVerdicts(
       if (!v.condemned) {
         keepSurvivor(run, v, v.live);
       } else if (rescuedIds.has(v.id)) {
-        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached computation.
+        // Confidence is left alone: it is an epistemic tier resolveConfidence derives, not a cached
+        // computation.
         keepSurvivor(run, v, v.live);
         rescuedEntries.push({ id: v.id, tenantId: v.tenant_id });
         reportRescue(run.result, v.id, v.live, rankById.get(v.id));

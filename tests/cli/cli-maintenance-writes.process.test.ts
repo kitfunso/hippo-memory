@@ -71,7 +71,7 @@ describe('hippo watch (built CLI, no server)', () => {
   it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
     scripts(s);
-    const value = captureError(3, STDERR, 'node fail.js', undefined, evalNow()).content;
+    const value = captureError({ command: 'node fail.js', exitCode: 3, stderr: STDERR }, undefined, evalNow()).content;
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value, reason: 'wrong' });
     s.settle();
     expect(await s.run('watch', 'node', 'fail.js')).toEqual({

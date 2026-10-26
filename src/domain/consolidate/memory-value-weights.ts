@@ -1,8 +1,8 @@
 /**
- * Frozen learned memory-value weight vector, GENERATED from benchmarks/memory-value/weights-learned.json; never edit by
- * hand (a sync test fails CI on drift).
- * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read this as production
- * ranking advice.
+ * Frozen learned memory-value weight vector, GENERATED from
+ * benchmarks/memory-value/weights-learned.json; never edit by hand (a sync test fails CI on drift).
+ * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read
+ * this as production ranking advice.
  */
 
 /** The 8 live feature dims the fitter optimized over (FIT_DIMS). */
@@ -19,4 +19,5 @@ export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.fre
 
 /** sha256 of benchmarks/memory-value/weights-learned.json at freeze time (weights-learned.meta.json's
  *  `weightsFileSha256`). */
-export const SOURCE_ARTIFACT_SHA256 = '1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40';
+export const SOURCE_ARTIFACT_SHA256 =
+  '1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40';

@@ -1,4 +1,5 @@
-// CLI flag defaults the help text prints; a leaf module so the verb table reads them without loading a handler.
+// CLI flag defaults the help text prints; a leaf module so the verb table reads them without
+// loading a handler.
 
 /** `hippo init --scan` seeds a year of history across many repos. */
 export const SEED_DAYS_SCAN = 365;

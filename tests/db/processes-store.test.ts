@@ -133,7 +133,7 @@ describe('processes store (first-class object)', () => {
       steps: ['b', 'b2'],
       supersedesProcessId: b.id,
     });
-    await closeObject(objectsAt(home), PROCESS, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), PROCESS, { tenantId: 'default', id: c.id, actor: CLI_ACTOR, now: evalNow() });
 
     const active = await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);

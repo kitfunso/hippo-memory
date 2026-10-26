@@ -53,7 +53,7 @@ function seedVectors(root: string): void {
   onDb(root, (db) => {
     upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
-    resetAllPhysicsState(db, entries, index, new Date(FAKE_NOW));
+    resetAllPhysicsState(db, entries, index, { now: new Date(FAKE_NOW) });
   });
 }
 

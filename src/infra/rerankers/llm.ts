@@ -21,10 +21,10 @@ const DEFAULT_LLM_RERANK_TOP_K = 20;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on
- * HIPPO_LLM_RERANKER_URL against accidental cost.
- * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to
- * identity ordering, so recall never hangs.
+ * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible
+ * endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost. Timeout is 30s for the whole
+ * call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity
+ * ordering, so recall never hangs.
  */
 export function createLlmReranker(http: Http): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
@@ -63,22 +63,34 @@ function replyText(body: JsonValue): string {
   return isJsonString(content) ? content : '';
 }
 
-/** One chat-completions call to `url`, stopped by `signal`; rejects with the reason when the reply holds no usable
- * permutation. */
-async function requestPermutation(
-  { http, url, signal }: { readonly http: Http; readonly url: string; readonly signal: AbortSignal | undefined },
-  query: string,
-  head: readonly SearchResult[],
-): Promise<number[]> {
-  parseOutboundUrl(url, 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY');
-  const key = envLlmRerankerKey();
-  const prompt = [
+/** The ask, with secrets cut from the query and every candidate, since it leaves the machine. */
+function rerankPrompt(query: string, head: readonly SearchResult[]): string {
+  return [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +
       `best-first order.`,
     `Query: ${redactSecretsStrict(query)}`,
     ...head.map((r, i) => `[${i}] ${redactSecretsStrict(r.entry.content)}`),
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
+}
+
+/** One chat-completions call to `url`, stopped by `signal`; rejects with the reason when the
+ * reply holds no usable permutation. */
+async function requestPermutation(
+  {
+    http,
+    url,
+    signal,
+  }: { readonly http: Http; readonly url: string; readonly signal: AbortSignal | undefined },
+  query: string,
+  head: readonly SearchResult[],
+): Promise<number[]> {
+  parseOutboundUrl(url, {
+    setting: 'HIPPO_LLM_RERANKER_URL',
+    keySetting: 'HIPPO_LLM_RERANKER_KEY',
+  });
+  const key = envLlmRerankerKey();
+  const prompt = rerankPrompt(query, head);
 
   const resp = await postScoring(http, {
     url: `${url.replace(/\/$/, '')}/chat/completions`,

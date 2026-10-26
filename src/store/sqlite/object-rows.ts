@@ -1,6 +1,6 @@
-// hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save
-// writes, its insert values and audit keys. A status column carries a CHECK constraint, so a row declares it as the
-// kind's status union.
+// hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind
+// the shared save writes, its insert values and audit keys. A status column carries a CHECK
+// constraint, so a row declares it as the kind's status union.
 import { isJsonString } from '../../base/util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import type { SourceObjectType } from '../../base/ports/store/graph.js';
@@ -102,7 +102,8 @@ export interface RowByKind {
   customer_note: CustomerNoteRow;
 }
 
-// A reply lists an object's keys in the order its mapper sets them: head, the kind's own fields, tail.
+// A reply lists an object's keys in the order its mapper sets them: head, the kind's own fields,
+// tail.
 const head = (row: HeadRow) => ({ id: row.id, memoryId: row.memory_id, tenantId: row.tenant_id });
 
 const versionedTail = <S>(row: VersionedRow<S>) => ({
@@ -206,7 +207,8 @@ interface RowSpec<K extends ObjectKind> {
   /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
   /**
-   * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the object's graph rows.
+   * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the
+   * object's graph rows.
    */
   readonly graphType?: SourceObjectType;
 }

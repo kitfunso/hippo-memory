@@ -29,7 +29,12 @@ import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
 import { createCallerState } from '../../api/callers.js';
-import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
+import {
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  drainAndClose,
+  setKeepAliveTimeouts,
+  shutdownBoundMs,
+} from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
@@ -54,11 +59,19 @@ import {
   dispatchV1Route,
   HOST_ROUTES,
 } from './route-table.js';
-import type { ResolvedServeOptions, RouteRequest, ServeOptions, ServerCounts, ServerHandle } from './types.js';
+import type {
+  ResolvedServeOptions,
+  RouteRequest,
+  ServeOptions,
+  ServerCounts,
+  ServerHandle,
+} from './types.js';
 
-// server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string only for
-// pipe/unix-socket listeners (never used here).
-function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is import('node:net').AddressInfo {
+// server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string
+// only for pipe/unix-socket listeners (never used here).
+function isAddressInfo(
+  a: string | import('node:net').AddressInfo | null,
+): a is import('node:net').AddressInfo {
   return a !== null && typeof a !== 'string';
 }
 
@@ -68,7 +81,8 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
-  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's view. */
+  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's
+   * view. */
   readonly servedStore: HippoStore;
 }
 
@@ -79,27 +93,29 @@ async function handleRequest(
   options: HandleRequestOptions,
 ): Promise<void> {
   const { streamSlots, limiter } = options;
-  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before Node's URL parser collapses them and they slip past
-  // the route table.
+  // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before Node's URL parser collapses them
+  // and they slip past the route table.
   rejectEncodedSlash(req.url ?? '/');
 
   const { method, path, query } = parseRequest(req);
-  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client this one filters by
-  // it.
+  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client
+  // this one filters by it.
   if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
   const routeRequest: RouteRequest = { req, res, opts, query };
   const request = { method, path };
-  const { health, ready, mcpStream } = HOST_ROUTES;
-  if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, options))) return;
-  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, options.servedStore))) return;
+  if (await dispatchProbeRoute(routeRequest, request, options)) return;
 
   enforceRateLimit(req, path, limiter);
 
   if (await dispatchLimitedRoute(routeRequest, method, path)) return;
 
   // Store-ready: the stream only authenticates, through the port.
-  if (await dispatchHostRoute(routeRequest, request, mcpStream, () => handleMcpStream(req, res, opts, streamSlots))) {
+  if (
+    await dispatchHostRoute(routeRequest, request, HOST_ROUTES.mcpStream, () =>
+      handleMcpStream(req, res, opts, streamSlots),
+    )
+  ) {
     return;
   }
 
@@ -107,13 +123,34 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes and POST /mcp. */
-async function dispatchLimitedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+/** GET /health then /ready; false when the request is neither. */
+async function dispatchProbeRoute(
+  r: RouteRequest,
+  request: { method: string; path: string },
+  options: HandleRequestOptions,
+): Promise<boolean> {
+  const { health, ready } = HOST_ROUTES;
+  if (await dispatchHostRoute(r, request, health, async () => sendHealth(r.req, r.res, options))) {
+    return true;
+  }
+  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.servedStore));
+}
+
+/** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes
+ * and POST /mcp. */
+async function dispatchLimitedRoute(
+  r: RouteRequest,
+  method: string,
+  path: string,
+): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
-  return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () => handleMcpPost(r.req, r.res, r.opts));
+  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the
+  // port.
+  return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
+    handleMcpPost(r.req, r.res, r.opts),
+  );
 }
 
 function sendHealth(
@@ -121,9 +158,10 @@ function sendHealth(
   res: ServerResponse,
   { startedAt, counts, workerCounts }: HandleRequestOptions,
 ): void {
-  // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a
-  // proxied caller or a browser page on loopback, gets liveness only: the version would fingerprint the build and the
-  // pid is noise. Platform health checks only need the 200.
+  // A caller on this machine (detectServer's probe reads version and pid) gets the full body;
+  // anyone else, even a proxied caller or a browser page on loopback, gets liveness only: the
+  // version would fingerprint the build and the pid is noise. Platform health checks only need the
+  // 200.
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
@@ -142,8 +180,8 @@ function sendHealth(
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe
- * can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -157,11 +195,14 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
   sendJson(res, 200, { ok: true });
 }
 
-/** A flag typo is refused at boot, since the safe side it would take may not be the side the operator meant. */
+/** A flag typo is refused at boot, since the safe side it would take may not be the side the
+ * operator meant. */
 function assertFlagsValid(): void {
   const bad = validateFlags();
   if (bad.length > 0) {
-    throw new Error(`hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`);
+    throw new Error(
+      `hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`,
+    );
   }
 }
 
@@ -173,8 +214,11 @@ export function listenOn(server: Server, port: number, host: string): Promise<vo
     };
     const onListening = (): void => {
       server.removeListener('error', onError);
-      // With no listener, an 'error' event after boot is an uncaught exception that stops the server for every caller.
-      server.on('error', (err) => log.error(`serve: listener error: ${err.message}`, errorFields(err)));
+      // With no listener, an 'error' event after boot is an uncaught exception that stops the
+      // server for every caller.
+      server.on('error', (err) =>
+        log.error(`serve: listener error: ${err.message}`, errorFields(err)),
+      );
       resolve();
     };
     server.once('error', onError);
@@ -189,17 +233,18 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   installCrashHandlers('serve', shutdown);
 }
 
-/** The ./testing kit's tenant resolver, kept at this root because it reads HIPPO_TENANT: the tenant `opts.apiKey`
- * names, else HIPPO_TENANT's (the default tenant when unset or blank), as the server names it. */
+/** The ./testing kit's tenant resolver, kept at this root because it reads HIPPO_TENANT: the
+ * tenant `opts.apiKey` names, else HIPPO_TENANT's (the default tenant when unset or blank), as
+ * the server names it. */
 export function resolveTenantId(opts: ResolveOptions): string {
   return opts.apiKey ? tenantOfApiKey({ ...opts, apiKey: opts.apiKey }) : envTenant();
 }
 
 /**
- * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot; refuses a non-loopback
- * host unless `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
- * HIPPO_TRUSTED_PROXIES.
- * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
+ * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot;
+ * refuses a non-loopback host unless `tls` or allowCleartext is given, and refuses
+ * HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES. Use port: 0 in tests for an ephemeral
+ * port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
@@ -209,17 +254,30 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   assertClientIpHeaderPinned();
   assertFlagsValid();
   const loopbackHosts = await loopbackBindHosts(host);
-  assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
-  // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
+  assertTlsOrCleartextAllowed(
+    host,
+    opts.tls,
+    loopbackHosts,
+    opts.allowCleartext ?? envAllowCleartext(),
+  );
+  // An open-ended previous secret keeps working, so the operator hears once that nothing will close
+  // it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
 
-  // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
-  // can prove a pid-reusing impostor is not this server.
+  // Single source of truth for the start time: returned by GET /health and written into the
+  // pidfile, so detectServer can prove a pid-reusing impostor is not this server.
   const startedAt = new Date().toISOString();
   await claimPidfile(opts.hippoRoot, startedAt);
   try {
-    return await bindClaimed(opts, { host, requestedPort, routes, publicJsonBodies, limiters, startedAt });
+    return await bindClaimed(opts, {
+      host,
+      requestedPort,
+      routes,
+      publicJsonBodies,
+      limiters,
+      startedAt,
+    });
   } catch (err) {
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     throw err;
@@ -237,10 +295,7 @@ interface BootPlan {
 
 /** Everything after the pidfile claim; a throw here releases the claim in serve(). */
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
-  const { host, requestedPort, limiters, startedAt } = plan;
-
-  // Open /mcp/stream count per client key, so the cap is per server rather than per process.
-  const streamSlots = new Map<string, number>();
+  const { host, requestedPort, startedAt } = plan;
 
   const runtime = defaultServerRuntime(opts.hippoRoot, {
     store: opts.store,
@@ -251,15 +306,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
   const served = servedOptsFor(opts, plan, runtime);
 
   const inflight = new Set<ServerResponse>();
-  const { workerCounts } = runtime;
-  const options = {
-    startedAt,
-    streamSlots,
-    limiter: limiters.perAddress,
-    counts: served.counts,
-    workerCounts,
-    servedStore: served.store,
-  };
+  const options = requestOptionsFor(plan, served, runtime);
   const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);
@@ -275,17 +322,38 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     if (stopping) return;
     stopping = true;
     await stopListening(opts, server, inflight, startedAt);
-    // An auto-sleep answers no request, so draining skips it; its child must leave the store before the store closes.
+    // An auto-sleep answers no request, so draining skips it; its child must leave the store before
+    // the store closes.
     await served.sleeps.settled();
     await runtime.close();
   };
 
-  if (opts.handleSignals) exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
+  if (opts.handleSignals) {
+    exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
+  }
 
   return { port: actualPort, url, stop, server };
 }
 
-function frozenAddonRoutes(addonRoutes: ServeOptions['routes']): NonNullable<ServeOptions['routes']> {
+function requestOptionsFor(
+  { startedAt, limiters }: BootPlan,
+  served: ResolvedServeOptions,
+  { workerCounts }: ServerRuntime,
+): HandleRequestOptions {
+  return {
+    startedAt,
+    // Open /mcp/stream count per client key, so the cap is per server rather than per process.
+    streamSlots: new Map<string, number>(),
+    limiter: limiters.perAddress,
+    counts: served.counts,
+    workerCounts,
+    servedStore: served.store,
+  };
+}
+
+function frozenAddonRoutes(
+  addonRoutes: ServeOptions['routes'],
+): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
     (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
@@ -353,8 +421,9 @@ function acceptingServer(
   });
 }
 
-/** `served` as one request reads it: each store call to a worker waits on the request's deadline, an in-process store
- * opens on the request's session, and its Context carries the abort signal. */
+/** `served` as one request reads it: each store call to a worker waits on the request's
+ * deadline, an in-process store opens on the request's session, and its Context carries the
+ * abort signal. */
 function servedFor(
   served: ResolvedServeOptions,
   runtime: ServerRuntime,
@@ -393,8 +462,8 @@ async function stopListening(
   inflight: Set<ServerResponse>,
   startedAt: string,
 ): Promise<void> {
-  // Remove the pidfile only if it still names this server: a newer server may have rewritten it, and an unconditional
-  // unlink would orphan it.
+  // Remove the pidfile only if it still names this server: a newer server may have rewritten it,
+  // and an unconditional unlink would orphan it.
   removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
   await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }

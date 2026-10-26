@@ -1,12 +1,17 @@
-/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and
- * `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and printRecall: the (query, shown,
- * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
- * and swallowed, never breaking the surrounding call. */
+/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results`
+ * and `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and
+ * printRecall: the (query, shown, outcome) triple the learned components train on. All writes
+ * are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the
+ * surrounding call. */
 
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
-import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from '../../base/session/delivery.js';
+import {
+  DELIVERY_LEDGER_VERSION,
+  isBoundaryEvent,
+  type DeliveryEventInput,
+} from '../../base/session/delivery.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
@@ -20,17 +25,18 @@ import { handleStamp } from './handle-clock.js';
 
 // How long the delivery ledger and the recall traces stay.
 
-/** Delivery events, and recall traces with no outcome that are not the store's last recall, are kept this long. */
+/** Delivery events, and recall traces with no outcome that are not the store's last recall, are
+ * kept this long. */
 const RETENTION_DAYS = 90;
 
-/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real clock, so a far-future
- * fake time spares real rows. */
+/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real
+ * clock, so a far-future fake time spares real rows. */
 const deliveryCutoff = (ts: string, nowMs: number): string =>
   new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
 
-/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
- * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is
- * dropped too. */
+/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the
+ * CLI goal-boost step embeds goal tag text) and would leak user content into `rerank_json`; an
+ * allowlist, so any future free-form field is dropped too. */
 function sanitizeRerankSteps(
   steps: RerankStep[],
 ): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
@@ -51,8 +57,9 @@ const INSERT_TRACE_SQL = `
 // Six binds a row; 100 rows is 600, under the 999 floor of SQLite's bound-parameter limit.
 const RESULT_ROWS_PER_INSERT = 100;
 
-/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
- * stderr and returns null on failure. api.recall/contextGet reach this via `finishRecall` on their own handle. */
+/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection.
+ * Fail-soft: logs to stderr and returns null on failure. api.recall/contextGet reach this via
+ * `finishRecall` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
@@ -70,31 +77,35 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
         input.explainMode ? 1 : 0,
       );
       const traceId = Number(traceResult.lastInsertRowid);
-
-      for (let from = 0; from < input.results.length; from += RESULT_ROWS_PER_INSERT) {
-        const chunk = input.results.slice(from, from + RESULT_ROWS_PER_INSERT);
-        const binds = chunk.flatMap((r, i) => [
-          traceId,
-          input.tenantId,
-          r.memoryId,
-          from + i + 1,
-          r.score,
-          r.rerankSteps && r.rerankSteps.length > 0 ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps)) : null,
-        ]);
-        cachedStatement(
-          db,
-          `
-          INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
-          VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
-        `,
-        ).run(...binds);
-      }
-
+      insertTraceResults(db, traceId, input);
       return traceId;
     });
   } catch (error) {
     log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
+  }
+}
+
+function insertTraceResults(db: DatabaseSyncLike, traceId: number, input: RecallTraceInput): void {
+  for (let from = 0; from < input.results.length; from += RESULT_ROWS_PER_INSERT) {
+    const chunk = input.results.slice(from, from + RESULT_ROWS_PER_INSERT);
+    const binds = chunk.flatMap((r, i) => [
+      traceId,
+      input.tenantId,
+      r.memoryId,
+      from + i + 1,
+      r.score,
+      r.rerankSteps && r.rerankSteps.length > 0
+        ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps))
+        : null,
+    ]);
+    cachedStatement(
+      db,
+      `
+          INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
+          VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
+        `,
+    ).run(...binds);
   }
 }
 
@@ -107,26 +118,30 @@ export interface RecordTraceOutcomeInput {
   memoryIds: string[];
 }
 
-/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from
- * api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it
- * returned. Own table so `auditPrune` cannot erase training data. */
+/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK
+ * `traceId`, never from api.outcome (stale-trace mislink). Skips (log.warn) unless the trace is
+ * in `input.tenantId`; keeps only memoryIds it returned. Own table so `auditPrune` cannot erase
+ * training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
-    const trace = cachedStatement(db, `SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
-      | { tenant_id?: string }
-      | undefined;
+    const trace = cachedStatement(db, `SELECT tenant_id FROM recall_traces WHERE id = ?`).get(
+      input.traceId,
+    ) as { tenant_id?: string } | undefined;
     if (!trace || trace.tenant_id !== input.tenantId) {
       log.warn(`recall trace outcome skipped: trace ${input.traceId} missing or tenant mismatch`);
       return;
     }
 
-    const memberRows = cachedStatement(db, `SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`).all(
-      input.traceId,
-    ) as Array<{ memory_id: string }>;
+    const memberRows = cachedStatement(
+      db,
+      `SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`,
+    ).all(input.traceId) as Array<{ memory_id: string }>;
     const members = new Set(memberRows.map((r) => r.memory_id));
     const credited = input.memoryIds.filter((id) => members.has(id));
     if (credited.length === 0) {
-      log.warn(`recall trace outcome skipped: no credited ids intersect trace ${input.traceId}'s results`);
+      log.warn(
+        `recall trace outcome skipped: no credited ids intersect trace ${input.traceId}'s results`,
+      );
       return;
     }
 
@@ -142,10 +157,11 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
+/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the
+ * hook. */
 const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire
- * twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this
+ * close are one fire twice. */
 const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
@@ -198,7 +214,9 @@ function readDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
   `,
   ).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
-  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+  return (
+    rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null
+  );
 }
 
 function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
@@ -211,13 +229,16 @@ function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInpu
     WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
     ORDER BY id LIMIT 1
   `,
-  ).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
+  ).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as
+    | { id: number }
+    | undefined;
   return row?.id ?? null;
 }
 
 function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   if (input.eventType === 'tool-failure') return readDuplicateToolFailure(db, input);
-  // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
+  // A boundary has no prompt, and two compactions of one session never start within the window, so
+  // time alone decides.
   if (isBoundaryEvent(input.eventType)) return readDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     const row = cachedStatement(
@@ -227,7 +248,9 @@ function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
       WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND host_turn_id = ? AND turn_seq IS NOT NULL
       ORDER BY id LIMIT 1
     `,
-    ).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as { id: number } | undefined;
+    ).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as
+      | { id: number }
+      | undefined;
     return row?.id ?? null;
   }
   if (input.promptHash === null) return null;
@@ -239,10 +262,15 @@ function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
     IS NOT NULL
     ORDER BY id
   `,
-  ).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{ id: number; ts: string }>;
+  ).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{
+    id: number;
+    ts: string;
+  }>;
   const at = Date.parse(input.ts);
   // Absolute difference: two hook processes can commit out of ts order.
-  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+  return (
+    rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null
+  );
 }
 
 function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
@@ -257,7 +285,11 @@ function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
   return (row.m ?? 0) + 1;
 }
 
-function deliveryEventValues(input: DeliveryEventInput, turnSeq: number | null, duplicateOf: number | null) {
+function deliveryEventValues(
+  input: DeliveryEventInput,
+  turnSeq: number | null,
+  duplicateOf: number | null,
+) {
   return [
     input.ts,
     DELIVERY_LEDGER_VERSION,
@@ -313,12 +345,20 @@ const DELIVERY_CANDIDATE_COLUMNS = [
   'tokens',
 ] as const;
 
-/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not give back bit for bit. */
-function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: DeliveryEventInput): void {
+/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not
+ * give back bit for bit. */
+function insertDeliveryCandidates(
+  db: DatabaseSyncLike,
+  eventId: number,
+  input: DeliveryEventInput,
+): void {
   const width = DELIVERY_CANDIDATE_COLUMNS.length;
   const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
   for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
-    cachedStatement(db, `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`).run(
+    cachedStatement(
+      db,
+      `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`,
+    ).run(
       ...chunk.flatMap((c) => [
         eventId,
         input.tenantId,
@@ -336,11 +376,12 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
   }
 }
 
-/** How often a store prunes its delivery ledger and old recall traces: each prune walks the expired rows, so a busy
- * server skips most. */
+/** How often a store prunes its delivery ledger and old recall traces: each prune walks the
+ * expired rows, so a busy server skips most. */
 const DELIVERY_PRUNE_EVERY_MS = 60_000;
 
-/** When a store last pruned its delivery ledger; each store holds its own, so the minute is counted per store. */
+/** When a store last pruned its delivery ledger; each store holds its own, so the minute is
+ * counted per store. */
 export interface DeliveryPruneSchedule {
   due(nowMs: number): boolean;
   pruned(nowMs: number): void;
@@ -358,12 +399,13 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   };
 }
 
-/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after an upgrade holds the
- * hook's write lock briefly; the rest of a backlog goes on the next prunes. */
+/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after
+ * an upgrade holds the hook's write lock briefly; the rest of a backlog goes on the next prunes. */
 const TRACE_PRUNE_BATCH = 1000;
 
-/** Traces before `cutoff` that no outcome names and that are not the last recall's, with their results through the
- * v40 cascade; a trace with an outcome is training data, and the last one may still get its outcome. */
+/** Traces before `cutoff` that no outcome names and that are not the last recall's, with their
+ * results through the v40 cascade; a trace with an outcome is training data, and the last one
+ * may still get its outcome. */
 function pruneRecallTraces(db: DatabaseSyncLike, cutoff: string): void {
   const last = parseLastTraceId(getMeta(db, META_KEY.lastTraceId));
   cachedStatement(
@@ -387,8 +429,8 @@ function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): voi
   pruneRecallTraces(db, cutoff);
 }
 
-/** One event plus its candidates in one write transaction, then a prune when `prune` is due; fail-soft. The caller must
- * not hold a transaction on `db`. */
+/** One event plus its candidates in one write transaction, then a prune when `prune` is due;
+ * fail-soft. The caller must not hold a transaction on `db`. */
 function writeDeliveryEvent(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -398,8 +440,11 @@ function writeDeliveryEvent(
     const now = Date.now();
     const pruning = prune.due(now);
     const eventId = withWriteScope(db, 'write_delivery_event', () => {
-      // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
-      const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
+      // Missing-session and sub-agent events are not turns of a session, so they get no number and
+      // no duplicate check.
+      const isTurn =
+        input.sessionId !== null &&
+        (input.sessionState === 'payload' || input.sessionState === 'env');
       const duplicateOf = isTurn ? readDuplicateTurn(db, input) : null;
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
       const values = deliveryEventValues(input, turnSeq, duplicateOf);
@@ -425,8 +470,8 @@ function writeDeliveryEvent(
   }
 }
 
-/** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock.
- * Fail-soft. */
+/** Write on the request's handle, or a short-lived one, waiting at most {@link
+ * DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
 export function writeDeliveryEventVia(
   on: OnHandle,
   input: DeliveryEventInput,
@@ -445,14 +490,17 @@ export function writeDeliveryEventVia(
   }
 }
 
-/** On a caller's open handle, which saves a second open and close per turn; the handle's own lock wait comes back
- * after. A caller holding only a handle gets a fresh schedule, so each of its writes prunes. */
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own
+ * lock wait comes back after. A caller holding only a handle gets a fresh schedule, so each of
+ * its writes prunes. */
 export function writeDeliveryEventOnHandle(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
   prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
 ): number | null {
-  const prior = Math.trunc(Number((cachedStatement(db, 'PRAGMA busy_timeout').get() as { timeout: number }).timeout));
+  const prior = Math.trunc(
+    Number((cachedStatement(db, 'PRAGMA busy_timeout').get() as { timeout: number }).timeout),
+  );
   db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
   try {
     return writeDeliveryEvent(db, input, prune);

@@ -1,6 +1,12 @@
-// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
-// write of the three.
-import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows:
+// every read and write of the three.
+import {
+  getMeta,
+  setMeta,
+  withReadSnapshot,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../db/index.js';
 import {
   physicsSpeedSum,
   loadAllPhysicsState,
@@ -22,7 +28,12 @@ import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
-import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../../base/ports/store.js';
+import type {
+  VectorBackfillQuery,
+  VectorRowWrite,
+  VectorWrite,
+  VectorWriteResult,
+} from '../../base/ports/store.js';
 import {
   EMBEDDING_MODEL_META_KEY,
   countVectors,
@@ -78,14 +89,18 @@ function readStoredEmbeddingModel(on: OnHandle): string | null {
   }
 }
 
-/** Saves the index identity of provider `model`, versioned by `embeddingIndexIdentity` as the compare side is. */
+/** Saves the index identity of provider `model`, versioned by `embeddingIndexIdentity` as the
+ * compare side is. */
 export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
   on((db) => {
     saveIndexIdentity(db, embeddingIndexIdentity(model));
   });
 }
 
-function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, number[]>): string | null {
+function resolveIndexedEmbeddingModel(
+  on: OnHandle,
+  index?: Record<string, number[]>,
+): string | null {
   const storedModel = readStoredEmbeddingModel(on);
   if (storedModel) return storedModel;
   return indexedModel({
@@ -94,7 +109,11 @@ function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, numbe
   });
 }
 
-export function embeddingModelRequiresReindex(on: OnHandle, model: string, index?: Record<string, number[]>): boolean {
+export function embeddingModelRequiresReindex(
+  on: OnHandle,
+  model: string,
+  index?: Record<string, number[]>,
+): boolean {
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
@@ -110,12 +129,16 @@ export function storedVectorSummary(db: DatabaseSyncLike): StoredVectorSummary {
 }
 
 /** Stored vectors for `ids` only, as Float32 views with no copy. */
-export function readStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+export function readStoredVectorViews(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);
 }
 
-/** Vectors staged by page on a handle of their own, so neither the live index nor the caller holds them all. */
+/** Vectors staged by page on a handle of their own, so neither the live index nor the caller
+ * holds them all. */
 export interface VectorRebuild {
   /** Stages one page, skipping empty or non-finite vectors; answers how many it staged. */
   stage(rows: ReadonlyArray<readonly [string, readonly number[]]>): number;
@@ -124,7 +147,8 @@ export interface VectorRebuild {
   close(): void;
 }
 
-/** A rebuild staged on `db`, a handle of its own that `release` closes, which drops the staging table with it. */
+/** A rebuild staged on `db`, a handle of its own that `release` closes, which drops the staging
+ * table with it. */
 export function beginVectorRebuild(db: DatabaseSyncLike, release: () => void): VectorRebuild {
   openVectorStaging(db);
   return {
@@ -148,7 +172,8 @@ export function pruneOrphanVectors(db: DatabaseSyncLike): void {
   deleteOrphanVectors(db);
 }
 
-/** The ids with no vector, in id order, `page.limit` at a time after `page.afterId`: a backfill needs each once. */
+/** The ids with no vector, in id order, `page.limit` at a time after `page.afterId`: a backfill
+ * needs each once. */
 export function pendingVectorIds(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
   const rows = cachedStatement(
@@ -160,7 +185,10 @@ export function pendingVectorIds(db: DatabaseSyncLike, page: IdPageRequest): IdP
   return idPageOf(rows, page.limit);
 }
 
-export function entriesWithoutVector(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
+export function entriesWithoutVector(
+  db: DatabaseSyncLike,
+  query: VectorBackfillQuery,
+): MemoryEntry[] {
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
   const tenant = tenantAnd(query.tenantId);
@@ -185,8 +213,8 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   return owned;
 }
 
-// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is inserted here
-// instead.
+// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is
+// inserted here instead.
 function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[]): void {
   const stmt = cachedStatement(
     db,
@@ -238,8 +266,8 @@ function listStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadAllPhysicsState(db).values());
 }
 
-/** The particle count and mean speed from the velocity column alone, and every particle while at most `fullUpTo` are
- * stored, on one snapshot. */
+/** The particle count and mean speed from the velocity column alone, and every particle while at
+ * most `fullUpTo` are stored, on one snapshot. */
 export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
   return withReadSnapshot(db, () => {
     const { count, speedSum } = physicsSpeedSum(db);
@@ -248,10 +276,13 @@ export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleS
   });
 }
 
-/** The memory id of every stored particle in listStoredParticles's order, so a caller reads only the particles it
- * keeps. */
+/** The memory id of every stored particle in listStoredParticles's order, so a caller reads only
+ * the particles it keeps. */
 export function storedParticleIds(db: DatabaseSyncLike): string[] {
-  const rows = cachedStatement(db, 'SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{
+  const rows = cachedStatement(
+    db,
+    'SELECT memory_id FROM memory_physics ORDER BY rowid',
+  ).all() as Array<{
     memory_id: string;
   }>;
   return rows.map((row) => row.memory_id);
@@ -265,8 +296,8 @@ export function saveStoredParticles(db: DatabaseSyncLike, particles: PhysicsPart
 const PARTICLE_PAGE = 64;
 const RESET_ID_PAGE = 1000;
 
-/** Every memory with a stored vector, paired with it, in id order, since a reset seeds each once; only one page of
- * each is held. */
+/** Every memory with a stored vector, paired with it, in id order, since a reset seeds each
+ * once; only one page of each is held. */
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   let afterId: string | undefined;
   do {
@@ -284,7 +315,8 @@ function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   } while (afterId !== undefined);
 }
 
-/** Replaces every particle with a fresh one per memory that has a stored vector; returns how many. */
+/** Replaces every particle with a fresh one per memory that has a stored vector; returns how
+ * many. */
 export function resetStoredParticles(db: DatabaseSyncLike, rules: StoreModel): number {
   return resetPhysicsFromSeeds(db, storedSeeds(db), rules.strength, rules.clock());
 }

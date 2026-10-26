@@ -172,10 +172,9 @@ describe('two repos named api in one global store', () => {
 
   it('a compaction item the legacy rows already hold is a repeat, not a new row', () => {
     const written = withDb(w.global, (db) =>
-      saveItems(
-        db,
-        storeFilesOf(w.global),
-        {
+      saveItems(db, {
+        files: storeFilesOf(w.global),
+        ctx: {
           tenantId: T,
           recordId: null,
           sessionId: 's1',
@@ -183,19 +182,18 @@ describe('two repos named api in one global store', () => {
           cwd: a,
           items: [OLD],
         },
-        () => undefined,
-        DEFAULT_HALF_LIFE_DAYS,
-      ),
+        log: () => undefined,
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
     expect(written).toBe(0);
   });
 
   it('a record saved under the old name still sees the rows its project holds under the id', () => {
     const written = withDb(w.global, (db) =>
-      saveItems(
-        db,
-        storeFilesOf(w.global),
-        {
+      saveItems(db, {
+        files: storeFilesOf(w.global),
+        ctx: {
           tenantId: T,
           recordId: null,
           sessionId: 's2',
@@ -203,9 +201,9 @@ describe('two repos named api in one global store', () => {
           cwd: a,
           items: [NEW_A],
         },
-        () => undefined,
-        DEFAULT_HALF_LIFE_DAYS,
-      ),
+        log: () => undefined,
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
     expect(written).toBe(0);
   });

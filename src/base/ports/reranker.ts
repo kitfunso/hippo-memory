@@ -1,14 +1,18 @@
-// The reranker port: a recall names a reranker and the registry its root built hands back the function.
+// The reranker port: a recall names a reranker and the registry its root built hands back the
+// function.
 import type { SearchResult } from '../rank/search-types.js';
 import type { ClefSettings } from '../config/config.js';
 
 /**
- * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so it sees the full
- * diverse pool.
- * MUST be deterministic for a given (query, results) unless documented stochastic (LLM track, hosted jev): paired A/B
- * and the validity gate need it.
+ * Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so
+ * it sees the full diverse pool. MUST be deterministic for a given (query, results) unless
+ * documented stochastic (LLM track, hosted jev): paired A/B and the validity gate need it.
  */
-export type RerankerFn = (query: string, results: SearchResult[], options?: RerankerOptions) => Promise<RerankResult[]>;
+export type RerankerFn = (
+  query: string,
+  results: SearchResult[],
+  options?: RerankerOptions,
+) => Promise<RerankResult[]>;
 
 /** A named reranker, or null for no name; an unknown name throws with the names there are. */
 export type RerankerLookup = (name: string | null | undefined) => RerankerFn | null;
@@ -30,7 +34,8 @@ export interface RerankerOptions {
   config?: Record<string, RerankerConfigValue>;
   /** The CLEF rerankers' transport, from the root's config; the other rerankers ignore it. */
   clef?: ClefSettings;
-  /** The request's abort signal: a hosted scorer stops its call, and no outage is reported, once it fires. */
+  /** The request's abort signal: a hosted scorer stops its call, and no outage is reported, once
+   * it fires. */
   signal?: AbortSignal;
 }
 

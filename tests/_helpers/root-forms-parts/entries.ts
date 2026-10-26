@@ -80,7 +80,11 @@ export function loadTextsHolding(
   project?: readonly string[],
   admit?: SqlFragment,
 ): HeldText[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.listTextsHolding(db, tenantId, texts, project, admit), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => candidatesSql.listTextsHolding(db, { tenantId, texts, project, admit }),
+    openStore,
+  );
 }
 
 export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {

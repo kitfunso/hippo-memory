@@ -1,5 +1,6 @@
-// hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its own.
-// A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be an import cycle.
+// hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its
+// own. A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be
+// an import cycle.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { heldTexts } from '../../base/util/same-text.js';
@@ -18,8 +19,16 @@ import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
-import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
-import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
+import {
+  deleteRejectedValue,
+  insertRejectedValue,
+  listRejectedValues,
+  checkRejectionGuard,
+} from './rejection.js';
+import {
+  normalizeValueForRejection,
+  rejectionDigest,
+} from '../../base/records/rejection-digest.js';
 import type {
   AppliedRejection,
   LiftedRejection,
@@ -52,23 +61,44 @@ interface Holders {
   readonly dormant: { readonly whole: string[]; readonly merged: string[] };
 }
 
-/** How a row holds the rejected text: as its whole text, as one text of a sleep-merged row, or not at all. */
-function holdOf(row: { content: string; source: string | null }, holdsValue: HoldsValue): 'whole' | 'merged' | null {
+/** How a row holds the rejected text: as its whole text, as one text of a sleep-merged row, or
+ * not at all. */
+function holdOf(
+  row: { content: string; source: string | null },
+  holdsValue: HoldsValue,
+): 'whole' | 'merged' | null {
   if (holdsValue(row.content)) return 'whole';
-  return heldTexts({ content: row.content, source: row.source ?? '' }).some(holdsValue) ? 'merged' : null;
+  return heldTexts({ content: row.content, source: row.source ?? '' }).some(holdsValue)
+    ? 'merged'
+    : null;
 }
 
-/** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a time with no lock
- * held: the rejected-value row is already committed, so no write can add a holder behind the walk. */
-function listHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: HoldsValue): string[] {
+/** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a
+ * time with no lock held: the rejected-value row is already committed, so no write can add a
+ * holder behind the walk. */
+function listHolderIds(
+  db: DatabaseSyncLike,
+  rejection: Rejection,
+  holdsValue: HoldsValue,
+): string[] {
   const { tenantId } = rejection;
   const found: string[] = [];
-  const keep = (row: { id: string; content: string; source: string | null; scope: string | null }): void => {
-    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) found.push(row.id);
+  const keep = (row: {
+    id: string;
+    content: string;
+    source: string | null;
+    scope: string | null;
+  }): void => {
+    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) {
+      found.push(row.id);
+    }
   };
   let after: EntryCursor | null = null;
   do {
-    const page = listTenantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, after: after ?? undefined });
+    const page = listTenantTextsPage(db, tenantId, {
+      limit: READ_PAGE_ROWS,
+      after: after ?? undefined,
+    });
     page.texts.forEach(keep);
     after = page.next;
   } while (after !== null);
@@ -80,9 +110,15 @@ function listHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   }
 }
 
-/** The found rows read again under the write lock, each still in reach and still holding the text; a row that sleep
- * moved between the walk and the lock is read from the table it now sits in. */
-function heldUnderLock(db: DatabaseSyncLike, rejection: Rejection, holdsValue: HoldsValue, ids: string[]): Holders {
+/** The found rows read again under the write lock, each still in reach and still holding the
+ * text; a row that sleep moved between the walk and the lock is read from the table it now sits
+ * in. */
+function heldUnderLock(
+  db: DatabaseSyncLike,
+  rejection: Rejection,
+  holdsValue: HoldsValue,
+  ids: string[],
+): Holders {
   const { tenantId, ownScope } = rejection;
   const inReach = (scope: string | null | undefined): boolean => rejectionReaches(ownScope, scope);
   const live = readEntriesByIds(db, ids, tenantId);
@@ -107,7 +143,8 @@ function heldUnderLock(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   };
 }
 
-/** One reject's removal pass: the value test, the rows found holding the value under the lock, and what went. */
+/** One reject's removal pass: the value test, the rows found holding the value under the lock,
+ * and what went. */
 interface Sweep {
   readonly rejection: Rejection;
   readonly holdsValue: HoldsValue;
@@ -122,7 +159,8 @@ function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): 
   const { removedIds, removedRawIds, successors } = removal;
   for (const row of live.whole) {
     if (row.kind === 'raw') {
-      // A raw row is append-only: archiving is its one removal path, and its savepoint nests in this write scope.
+      // A raw row is append-only: archiving is its one removal path, and its savepoint nests in
+      // this write scope.
       archiveRawMemory(db, row.id, { reason, who: actor });
       removedRawIds.push(row.id);
     } else {
@@ -142,8 +180,8 @@ function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): 
   }
 }
 
-// Dormant copies go in the same write scope, so `hippo dormant restore` cannot bring the text back. They have no mirror
-// to purge.
+// Dormant copies go in the same write scope, so `hippo dormant restore` cannot bring the text back.
+// They have no mirror to purge.
 function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
   const { rejection, holdsValue, removal } = sweep;
   const { dormant } = sweep.holders;
@@ -168,32 +206,50 @@ function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
   }
 }
 
-// After the commit, on the same handle: a purged raw mirror is stamped so the reaper skips it, and one that stays is
-// logged.
+// After the commit, on the same handle: a purged raw mirror is stamped so the reaper skips it, and
+// one that stays is logged.
 function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: Removal): void {
   const rawIds = new Set(removal.removedRawIds);
   for (const id of removal.removedIds) {
     const isRaw = rawIds.has(id);
-    const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, isRaw, 'hippo reject');
+    const mirrorOk = purgeMirrorBestEffort(hippoRoot, { id, isRaw, logPrefix: 'hippo reject' });
     if (mirrorOk && isRaw) markMirrorCleaned(db, id, handleStamp(db));
   }
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
 }
 
-/** One short write scope: every found row that still holds the text goes, with one reject_value audit row. */
+/** The rows a rejection found unlocked, and the test each must still pass to go. */
+interface FoundHolders {
+  readonly rejection: Rejection;
+  readonly digest: string;
+  readonly holdsValue: HoldsValue;
+  readonly found: string[];
+}
+
+/** One short write scope: every found row that still holds the text goes, with one reject_value
+ * audit row. */
 function removeHolders(
   db: DatabaseSyncLike,
   files: StoreFiles,
-  rejection: Rejection,
-  { digest, holdsValue }: { digest: string; holdsValue: HoldsValue },
-  found: string[],
+  { rejection, digest, holdsValue, found }: FoundHolders,
 ): Removal {
-  const removal: Removal = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
+  const removal: Removal = {
+    removedIds: [],
+    removedRawIds: [],
+    successors: [],
+    dormantSuccessorIds: [],
+  };
   withWriteScope(db, 'reject_value', () => {
-    const sweep = { rejection, holdsValue, holders: heldUnderLock(db, rejection, holdsValue, found), removal };
+    const sweep = {
+      rejection,
+      holdsValue,
+      holders: heldUnderLock(db, rejection, holdsValue, found),
+      removal,
+    };
     removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
-    // Still inside the write scope: a failed audit row is reported and the removal commits without it.
+    // Still inside the write scope: a failed audit row is reported and the removal commits without
+    // it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
     audit(db, 'reject_value', {
@@ -206,13 +262,21 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so every later write refuses the text; walks the tenant's rows a page at a
- * time with no lock held; then removes each holder in reach (live or dormant, whole or merged) in one short write
- * scope. A failure past the first commit leaves the text refused and its holders kept; rejecting again removes them. */
-function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
+/** Commits the rejected-value row first, so every later write refuses the text; walks the
+ * tenant's rows a page at a time with no lock held; then removes each holder in reach (live or
+ * dormant, whole or merged) in one short write scope. A failure past the first commit leaves the
+ * text refused and its holders kept; rejecting again removes them. */
+function applyRejection(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  rejection: Rejection,
+): AppliedRejection {
   const { hippoRoot } = files;
   const { tenantId, actor, reason, memoryId } = rejection;
-  const content = rejectedText(rejection, memoryId === undefined ? undefined : entryRejectRow(db, memoryId));
+  const content = rejectedText(
+    rejection,
+    memoryId === undefined ? undefined : entryRejectRow(db, memoryId),
+  );
   const digest = rejectionDigest(content);
   const rejectedAt = files.clock().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
@@ -226,11 +290,11 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
       normalizedChars: normalizeValueForRejection(content).length,
     }),
   );
-  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column needs a schema
-  // migration, held until approved.
+  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
+  // needs a schema migration, held until approved.
   const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
   const found = listHolderIds(db, rejection, holdsValue);
-  const removal = removeHolders(db, files, rejection, { digest, holdsValue }, found);
+  const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 
   purgeRemovedMirrors(db, hippoRoot, removal);
 
@@ -245,9 +309,14 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
   };
 }
 
-/** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes its unreject_value audit
- * row. No match, or more than one, writes nothing. */
-function liftRejection(db: DatabaseSyncLike, tenantId: string, digestPrefix: string, actor: string): LiftedRejection {
+/** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes
+ * its unreject_value audit row. No match, or more than one, writes nothing. */
+function liftRejection(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  digestPrefix: string,
+  actor: string,
+): LiftedRejection {
   const matches = listRejectedValues(db, tenantId).filter((r) => r.digest.startsWith(digestPrefix));
   const target = matches[0];
   if (target === undefined) return { status: 'not_found' };
@@ -266,7 +335,7 @@ function liftRejection(db: DatabaseSyncLike, tenantId: string, digestPrefix: str
 export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
   return checks.map(({ tenantId, entryId, content }) => {
     try {
-      checkRejectionGuard(db, tenantId, entryId, content);
+      checkRejectionGuard(db, { tenantId, entryId, content });
       return false;
     } catch (err) {
       if (err instanceof RejectedValueError) return true;
@@ -277,8 +346,16 @@ export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionChe
 
 export function sqliteRejections({ on, files }: Handles): Rejections {
   return {
-    ...bound<Pick<Rejections, 'apply'>>(on, { apply: (db, ...args) => applyRejection(db, files, ...args) }, openStore),
-    ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejection, list: listRejectedValues }, openStore),
+    ...bound<Pick<Rejections, 'apply'>>(
+      on,
+      { apply: (db, ...args) => applyRejection(db, files, ...args) },
+      openStore,
+    ),
+    ...bound<Pick<Rejections, 'lift' | 'list'>>(
+      on,
+      { lift: liftRejection, list: listRejectedValues },
+      openStore,
+    ),
     ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
   };
 }

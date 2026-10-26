@@ -82,7 +82,7 @@ describe('Trace layer inherits core memory mechanics', () => {
       }),
     );
 
-    const picked = await sampleForReplay(traces, 5, new Date(), 42);
+    const picked = await sampleForReplay({ survivors: traces, count: 5, now: new Date(), seed: 42 });
     expect(picked.length).toBeGreaterThanOrEqual(1);
     // Every picked entry should be a trace (the only thing in the pool).
     for (const id of picked) expect(traces.find((t) => t.id === id)?.layer).toBe(Layer.Trace);

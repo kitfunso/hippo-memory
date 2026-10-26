@@ -73,7 +73,9 @@ describe('saveItems for a caller', () => {
         cwd: null,
         items: [ITEMS[1]],
       };
-      expect(saveItems(db, storeFilesOf(root), ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(
+        saveItems(db, { files: storeFilesOf(root), ctx, log: noLog, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(1);
       expect(writtenRows(db, 'compaction:s2')).toEqual([
         { content: ITEMS[1], origin_project: null, actor: 'post-compact' },
       ]);

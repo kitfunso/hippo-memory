@@ -18,13 +18,14 @@ const REQUEST_ID_MAX_CHARS = 64;
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
 
-// Number.isFinite rejects a string or null without coercing it, which the declared type cannot promise about a
-// third-party payload.
+// Number.isFinite rejects a string or null without coercing it, which the declared type cannot
+// promise about a third-party payload.
 function isProbability(v: JsonValue | undefined): v is number {
   return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
-// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole response.
+// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole
+// response.
 function parseScores(body: JsonValue, n: number): number[] | null {
   const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
@@ -43,11 +44,16 @@ export interface RelevanceRequest {
   questions: Record<string, { type: 'noul'; instructions: string }>;
 }
 
-/** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
-export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
+/** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms
+ * see matched input. */
+export function buildRelevanceRequest(
+  query: string,
+  head: readonly SearchResult[],
+): RelevanceRequest {
   // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
   const lines = head.map(
-    (r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
+    (r, i) =>
+      `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
   );
   const state =
     `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +
@@ -62,8 +68,8 @@ export function buildRelevanceRequest(query: string, head: readonly SearchResult
   return { state, questions };
 }
 
-/** One batched request for the whole candidate list, sent over `http` and stopped by `signal`. Rejects with the reason
- * when there are no usable scores. */
+/** One batched request for the whole candidate list, sent over `http` and stopped by `signal`.
+ * Rejects with the reason when there are no usable scores. */
 async function requestScores(
   { http, signal }: { readonly http: Http; readonly signal: AbortSignal | undefined },
   query: string,
@@ -95,7 +101,8 @@ async function requestScores(
   return scores;
 }
 
-/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass a stand-in. */
+/** Builds a Jev reranker around the reranker it degrades to. Exported so a test can pass a
+ * stand-in. */
 export function createJevReranker(localFallback: RerankerFn, http: Http): RerankerFn {
   const outage = createOutageWarning('jev', 'falling back to the local cross-encoder');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
@@ -107,8 +114,8 @@ export function createJevReranker(localFallback: RerankerFn, http: Http): Rerank
       scores = await requestScores({ http, signal: options?.signal }, query, head);
       outage.answered();
     } catch (err) {
-      // A read path never throws, and never hands back the unranked order without saying so: warn, then use the free
-      // local reranker.
+      // A read path never throws, and never hands back the unranked order without saying so: warn,
+      // then use the free local reranker.
       outage.failed(errorMessage(err), { signal: options?.signal });
       return localFallback(query, head, options);
     }
@@ -118,7 +125,10 @@ export function createJevReranker(localFallback: RerankerFn, http: Http): Rerank
 }
 
 /** Orders `head` by `scores[i]`, keeping any upstream pre-rerank rank. Shared with CLEF. */
-export function rankByScores(head: readonly SearchResult[], scores: readonly number[]): RerankResult[] {
+export function rankByScores(
+  head: readonly SearchResult[],
+  scores: readonly number[],
+): RerankResult[] {
   const scored = head.map((r, i) => ({
     ...r,
     rerankScore: scores[i],

@@ -1,4 +1,5 @@
-// Ranking defaults that `hippo recall --help` prints; the help and the rankers read the same value from here.
+// Ranking defaults that `hippo recall --help` prints; the help and the rankers read the same value
+// from here.
 
 /** Share of the blended score that cosine takes. */
 export const DEFAULT_EMBEDDING_WEIGHT = 0.6;

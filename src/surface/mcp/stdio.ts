@@ -3,7 +3,11 @@
 import { exitAfterFlush, installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { envRequestDeadlineMs, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requestDeadlineMs, currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
+import {
+  requestDeadlineMs,
+  currentRequestId,
+  runWithRequestId,
+} from '../../base/util/request-scope.js';
 import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import {
@@ -29,62 +33,80 @@ function send(msg: McpResponse): void {
 
 // ── Stdio transport ──
 
-/** Splits one stream's chunks into frame bodies; the stream owns its half-read frame, so no module holds one. */
+/** One stream's half-read frame; the stream owns it, so no module holds one. */
+interface ReaderState {
+  pending: Uint8Array[];
+  pendingBytes: number;
+  /** Set when the pending bytes hold a Content-Length header whose body has not fully arrived. */
+  needs: number | undefined;
+  /** The part of a refused frame still on its way, dropped as it arrives so it is never buffered
+   * or read as a new frame. */
+  refused: FrameRemainder;
+}
+
+/** Splits one stream's chunks into frame bodies. */
 function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
-  let pending: Uint8Array[] = [];
-  let pendingBytes = 0;
-  // Set when the pending bytes hold a Content-Length header whose body has not fully arrived.
-  let needs: number | undefined;
-  // The part of a refused frame still on its way, dropped as it arrives so it is never buffered or read as a new frame.
-  let refused: FrameRemainder = 0;
-
-  const withoutRefused = (chunk: Buffer): Buffer => {
-    if (refused === 'line') {
-      const newline = chunk.indexOf(0x0a);
-      if (newline === -1) return chunk.subarray(chunk.length);
-      refused = 0;
-      return chunk.subarray(newline + 1);
-    }
-    const dropped = Math.min(refused, chunk.length);
-    refused -= dropped;
-    return chunk.subarray(dropped);
-  };
-
+  const s: ReaderState = { pending: [], pendingBytes: 0, needs: undefined, refused: 0 };
   return (raw) => {
-    const chunk = withoutRefused(raw);
-    pending.push(chunk);
-    pendingBytes += chunk.length;
-    // Joining on every chunk would copy the whole pending frame each time; wait until a frame can have ended.
-    if (needs === undefined ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES : pendingBytes < needs) return;
-    let buffer: Buffer = Buffer.concat(pending, pendingBytes);
-    needs = undefined;
-    while (true) {
-      const result = parseFrame(buffer);
-      if (result.kind === 'incomplete') {
-        needs = result.needs;
-        break;
-      }
-      buffer = result.rest;
-      if (result.kind === 'oversize') {
-        refused = result.remainder;
-        log.warn('mcp: refused a frame over the size cap with a parse error');
-        send(errorReply(null, PARSE_ERROR, 'Parse error: frame exceeds 1MB'));
-        continue;
-      }
-      if (result.kind === 'message') onBody(result.body);
+    const chunk = withoutRefused(s, raw);
+    s.pending.push(chunk);
+    s.pendingBytes += chunk.length;
+    // Joining on every chunk would copy the whole pending frame each time; wait until a frame can
+    // have ended.
+    if (
+      s.needs === undefined
+        ? !chunk.includes(0x0a) && s.pendingBytes <= MAX_BODY_BYTES
+        : s.pendingBytes < s.needs
+    ) {
+      return;
     }
-    pending = buffer.length > 0 ? [buffer] : [];
-    pendingBytes = buffer.length;
+    const buffer = readFrames(s, Buffer.concat(s.pending, s.pendingBytes), onBody);
+    s.pending = buffer.length > 0 ? [buffer] : [];
+    s.pendingBytes = buffer.length;
   };
 }
 
-// Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP transport does.
+function withoutRefused(s: ReaderState, chunk: Buffer): Buffer {
+  if (s.refused === 'line') {
+    const newline = chunk.indexOf(0x0a);
+    if (newline === -1) return chunk.subarray(chunk.length);
+    s.refused = 0;
+    return chunk.subarray(newline + 1);
+  }
+  const dropped = Math.min(s.refused, chunk.length);
+  s.refused -= dropped;
+  return chunk.subarray(dropped);
+}
+
+/** Hands each whole frame to `onBody` and returns the bytes after the last one. */
+function readFrames(s: ReaderState, joined: Buffer, onBody: (body: string) => void): Buffer {
+  let buffer = joined;
+  s.needs = undefined;
+  while (true) {
+    const result = parseFrame(buffer);
+    if (result.kind === 'incomplete') {
+      s.needs = result.needs;
+      return buffer;
+    }
+    buffer = result.rest;
+    if (result.kind === 'oversize') {
+      s.refused = result.remainder;
+      log.warn('mcp: refused a frame over the size cap with a parse error');
+      send(errorReply(null, PARSE_ERROR, 'Parse error: frame exceeds 1MB'));
+      continue;
+    }
+    if (result.kind === 'message') onBody(result.body);
+  }
+}
+
+// Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP
+// transport does.
 function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
   return isJsonObject(v) && isJsonString(v.method);
 }
 
-/** A frame that parsed but names no method: with an id it is a request owed an answer; without one it is a
- * notification, which JSON-RPC forbids answering. */
+/** A frame that parsed but names no method: with an id it is a request owed an answer; without
+ * one it is a notification, which JSON-RPC forbids answering. */
 function answerUnroutable(frame: JsonValue): void {
   const id = isJsonObject(frame) ? frame.id : undefined;
   if (isJsonString(id) || isJsonNumber(id)) {
@@ -94,12 +116,13 @@ function answerUnroutable(frame: JsonValue): void {
   log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
 }
 
-/** How long stdin's end waits for calls still running, so a client that closes right after its last request still gets
- * the reply. */
+/** How long stdin's end waits for calls still running, so a client that closes right after its
+ * last request still gets the reply. */
 const STDIN_END_DRAIN_MS = 5000;
 const CRASH_DRAIN_SLACK_MS = 1000;
 
-// Calls dispatched and not yet answered, each with the method the drain names if it is still running at the bound.
+// Calls dispatched and not yet answered, each with the method the drain names if it is still
+// running at the bound.
 const inFlight = new Map<Promise<void>, string>();
 
 function track(method: string, call: Promise<void>): void {
@@ -131,8 +154,8 @@ async function exitWhenDrained(): Promise<void> {
   exitAfterFlush(0);
 }
 
-/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
- * says whether that answer went out, so a later reply is dropped. */
+/** Answers `req` with one timeout error at the deadline a served request has. The returned
+ * function stops the timer and says whether that answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
   const ms = requestDeadlineMs(envRequestDeadlineMs());
   if (ms === 0) return () => false;
@@ -140,14 +163,24 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   const timer = setTimeout(() => {
     expired = true;
     const name = callName(req);
-    log.warn(`mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`, {
-      method: req.method,
-    });
+    log.warn(
+      `mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`,
+      {
+        method: req.method,
+      },
+    );
     abort.abort(new DOMException(`${name} did not finish within ${ms} ms`, 'TimeoutError'));
     if (!owedReply) return;
     const requestId = currentRequestId();
     const message = `Request timed out: ${name} did not finish within ${ms} ms; a write it started may or may not be saved`;
-    send(errorReply(req.id, REQUEST_TIMEOUT, message, requestId === undefined ? undefined : { requestId }));
+    send(
+      errorReply(
+        req.id,
+        REQUEST_TIMEOUT,
+        message,
+        requestId === undefined ? undefined : { requestId },
+      ),
+    );
   }, ms);
   // Stdin and the call keep the process alive; this timer alone must not.
   timer.unref();
@@ -157,9 +190,13 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   };
 }
 
-/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
- * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
-async function createGlobalStoreOnFirstRun(contextFor: McpContextFor, tenantId: string): Promise<string> {
+/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global
+ * store instead of failing every tool call, and say so on stderr (stdout carries the protocol).
+ * A later `hippo init` project store wins. */
+async function createGlobalStoreOnFirstRun(
+  contextFor: McpContextFor,
+  tenantId: string,
+): Promise<string> {
   const root = hippoHomeDir();
   const target = contextFor(root, tenantId).reach?.globalTarget;
   // A host whose store is not hippo.db keeps no folder, so there is nothing to create.
@@ -171,8 +208,13 @@ async function createGlobalStoreOnFirstRun(contextFor: McpContextFor, tenantId: 
   return root;
 }
 
-/** Runs one frame on the host's stores; only a tool call builds a context, so tools/list never creates a store. */
-function handleFrame(req: McpRequest, host: McpHost, signal: AbortSignal): Promise<McpResponse | null> {
+/** Runs one frame on the host's stores; only a tool call builds a context, so tools/list never
+ * creates a store. */
+function handleFrame(
+  req: McpRequest,
+  host: McpHost,
+  signal: AbortSignal,
+): Promise<McpResponse | null> {
   return host.runFrame(signal, async (contextFor) => {
     if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
     const tenantId = envTenant();
@@ -196,16 +238,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   }
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
-    const stopWatching = watchDeadline(req, false, abort);
-    track(
-      req.method,
-      handleFrame(req, host, abort.signal)
-        .then(() => {})
-        .catch((err) => {
-          log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
-        })
-        .finally(stopWatching),
-    );
+    dispatchNotification(req, abort, host);
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
@@ -220,20 +253,38 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
         if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') {
           log.debug(`mcp: ${callName(req)} stopped at its deadline`, errorFields(err));
         } else if (timedOut()) {
-          log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
+          log.error(
+            `mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`,
+            errorFields(err),
+          );
         } else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
       }),
   );
 }
 
-/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run
- * directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`) does not steal stdin or exit when its
- * parent closes a pipe. The caller picks the host, so src/surface/mcp names no store adapter and no scope plumbing. */
+function dispatchNotification(req: McpRequest, abort: AbortController, host: McpHost): void {
+  const stopWatching = watchDeadline(req, false, abort);
+  track(
+    req.method,
+    handleFrame(req, host, abort.signal)
+      .then(() => {})
+      .catch((err) => {
+        log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
+      })
+      .finally(stopWatching),
+  );
+}
+
+/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or
+ * this file run directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`)
+ * does not steal stdin or exit when its parent closes a pipe. The caller picks the host, so
+ * src/surface/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
   process.stdin.on(
     'data',
     frameReader((body) => {
-      // One id per frame, so the error reply and every line logged for the call name the same request.
+      // One id per frame, so the error reply and every line logged for the call name the same
+      // request.
       const abort = new AbortController();
       runWithRequestId(randomUUID(), () => dispatch(body, abort, host));
     }),
@@ -247,12 +298,17 @@ export function startStdioLoop(host: McpHost): void {
   });
 
   exitOnStreamError();
-  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its reply.
-  installCrashHandlers('mcp', { run: drainInFlight, boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS });
+  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its
+  // reply.
+  installCrashHandlers('mcp', {
+    run: drainInFlight,
+    boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
+  });
 }
 
 function exitOnStreamError(): void {
-  // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would crash the server.
+  // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would
+  // crash the server.
   process.stdout.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
       log.debug('mcp: the client closed stdout; exiting', errorFields(err));
@@ -263,7 +319,8 @@ function exitOnStreamError(): void {
     exitAfterFlush(1);
   });
 
-  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit code.
+  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit
+  // code.
   process.stderr.on('error', (err: NodeJS.ErrnoException) => {
     exitAfterFlush(err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' ? 0 : 1);
   });

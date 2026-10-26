@@ -1,5 +1,5 @@
-// Starting a command from an argv list with no shell, Windows .cmd and .bat shims included, so no argument is ever
-// parsed as shell syntax.
+// Starting a command from an argv list with no shell, Windows .cmd and .bat shims included, so no
+// argument is ever parsed as shell syntax.
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -7,30 +7,37 @@ import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { envPath, envPathExt } from '../base/util/env.js';
 import { isFile } from './real-path.js';
 
-/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
+/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can
+ * expand. */
 export function quoteCmdArg(arg: string): string {
   // cmd.exe ends the command line at CR or LF, so what follows would run as a new command.
-  if (/[\r\n]/.test(arg)) throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
+  if (/[\r\n]/.test(arg)) {
+    throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
+  }
   if (arg.length === 0) return '""';
   if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
-  // MSVCRT reads a backslash run as literal only when no quote follows it, so a run before a quote or the closing
-  // quote is doubled.
+  // MSVCRT reads a backslash run as literal only when no quote follows it, so a run before a quote
+  // or the closing quote is doubled.
   const quoted = arg.replace(/(\\*)"/g, '$1$1""').replace(/(\\+)$/, '$1$1');
   return `"${quoted.replace(/%/g, '"^%"')}"`;
 }
 
-/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered verbatim. */
+/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered
+ * verbatim. */
 export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): string[] {
   const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
-  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
+  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer
+  // pair.
   return ['/d', '/v:off', '/s', '/c', `"${command}"`];
 }
 
-// npm writes `"$basedir/node_modules/<pkg>/<file>.js"` into the .ps1 shim of every package that ships a Node script.
+// npm writes `"$basedir/node_modules/<pkg>/<file>.js"` into the .ps1 shim of every package that
+// ships a Node script.
 const NPM_SHIM_ENTRY = /\$basedir[\\/](node_modules[\\/][^"'\r\n]+?\.[cm]?js)["']/;
 
-/** The JS file an npm .ps1 shim runs, so the caller can start Node on it with no PowerShell. Null when the shim is
- * unreadable, names no script, or names one that is not a file under the shim's own folder. */
+/** The JS file an npm .ps1 shim runs, so the caller can start Node on it with no PowerShell.
+ * Null when the shim is unreadable, names no script, or names one that is not a file under the
+ * shim's own folder. */
 export function npmShimEntry(shimPath: string): string | null {
   let text: string;
   try {
@@ -39,7 +46,8 @@ export function npmShimEntry(shimPath: string): string | null {
     log.warn(`cannot read the shim ${shimPath}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a separator.
+  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a
+  // separator.
   const segments = NPM_SHIM_ENTRY.exec(text)?.[1]?.split(/[\\/]/);
   if (segments === undefined) return null;
   const dir = path.dirname(shimPath);
@@ -50,16 +58,20 @@ export function npmShimEntry(shimPath: string): string | null {
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
 
 /**
- * The file `command` names on win32: as given when it has a folder, else the first hit on PATH (never the working
- * folder, where a project file could stand in for a tool), trying each PATHEXT.
+ * The file `command` names on win32: as given when it has a folder, else the first hit on PATH
+ * (never the working folder, where a project file could stand in for a tool), trying each PATHEXT.
  */
 function resolveWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = /[\\/]/.test(command) ? [''] : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
+  const dirs = /[\\/]/.test(command)
+    ? ['']
+    : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
   for (const dir of dirs) {
     const base = dir === '' ? command : path.join(dir, command);
     const candidates =
-      path.extname(command) === '' ? exts.map((ext) => base + ext) : [base, ...exts.map((ext) => base + ext)];
+      path.extname(command) === ''
+        ? exts.map((ext) => base + ext)
+        : [base, ...exts.map((ext) => base + ext)];
     const hit = candidates.find(isFile);
     if (hit !== undefined) return hit;
   }
@@ -67,11 +79,14 @@ function resolveWindowsCommand(command: string): string | null {
 }
 
 /**
- * Spawns argv[0] with the rest as its arguments and no shell. Node refuses to start a .cmd or .bat without one
- * (CVE-2024-27980), so on win32 such a shim runs through cmd.exe with every argument quoted for it. */
+ * Spawns argv[0] with the rest as its arguments and no shell. Node refuses to start a .cmd or
+ * .bat without one (CVE-2024-27980), so on win32 such a shim runs through cmd.exe with every
+ * argument quoted for it. */
 export function spawnArgv(argv: readonly string[], options: SpawnOptions): ChildProcess {
   const [command, ...args] = argv;
-  if (command === undefined || command.length === 0) throw new RangeError('spawnArgv needs a command: argv is empty');
+  if (command === undefined || command.length === 0) {
+    throw new RangeError('spawnArgv needs a command: argv is empty');
+  }
   if (process.platform === 'win32') {
     const resolved = resolveWindowsCommand(command);
     const ext = resolved === null ? '' : path.extname(resolved).toLowerCase();
@@ -84,5 +99,9 @@ export function spawnArgv(argv: readonly string[], options: SpawnOptions): Child
       });
     }
   }
-  return spawn(command, args, { ...options, windowsHide: options.windowsHide ?? true, shell: false });
+  return spawn(command, args, {
+    ...options,
+    windowsHide: options.windowsHide ?? true,
+    shell: false,
+  });
 }

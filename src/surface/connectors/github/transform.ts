@@ -9,9 +9,9 @@ import type {
 } from './types.js';
 
 /**
- * Convert GitHub webhook events into RememberOptions; each returns null when the event has no usable body so the caller
- * marks it seen and skips the insert.
- * artifact_ref formats (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion
+ * Convert GitHub webhook events into RememberOptions; each returns null when the event has no
+ * usable body so the caller marks it seen and skips the insert. artifact_ref formats
+ * (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion
  * looks rows up by them.
  */
 
@@ -54,7 +54,9 @@ export function issueEventToRememberOpts(evt: GitHubIssueEvent): RememberOptions
   });
 }
 
-export function issueCommentEventToRememberOpts(evt: GitHubIssueCommentEvent): RememberOptions | null {
+export function issueCommentEventToRememberOpts(
+  evt: GitHubIssueCommentEvent,
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -65,7 +67,9 @@ export function issueCommentEventToRememberOpts(evt: GitHubIssueCommentEvent): R
   });
 }
 
-export function pullRequestEventToRememberOpts(evt: GitHubPullRequestEvent): RememberOptions | null {
+export function pullRequestEventToRememberOpts(
+  evt: GitHubPullRequestEvent,
+): RememberOptions | null {
   const content = titleAndBody(evt.pull_request);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -76,7 +80,9 @@ export function pullRequestEventToRememberOpts(evt: GitHubPullRequestEvent): Rem
   });
 }
 
-export function prReviewCommentEventToRememberOpts(evt: GitHubPullRequestReviewCommentEvent): RememberOptions | null {
+export function prReviewCommentEventToRememberOpts(
+  evt: GitHubPullRequestReviewCommentEvent,
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {

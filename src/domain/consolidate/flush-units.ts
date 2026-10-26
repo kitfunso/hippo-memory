@@ -1,7 +1,11 @@
-// Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can
-// commit in short transactions.
+// Splits sleep's queued writes, deletes and dormant moves into components that must each commit
+// whole, so the flush can commit in short transactions.
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { DormantMove, FlushComponent, StrengthRefresh } from '../../base/ports/store/consolidation.js';
+import type {
+  DormantMove,
+  FlushComponent,
+  StrengthRefresh,
+} from '../../base/ports/store/consolidation.js';
 
 /** Sleep's queued ops: decay's strength refreshes, then full writes, deletes and dormant moves. */
 export interface PendingOps {
@@ -11,7 +15,8 @@ export interface PendingOps {
   dormant: readonly DormantMove[];
 }
 
-/** Components that share no id, ordered by each one's first op: refreshes, writes, deletes, then dormant moves. */
+/** Components that share no id, ordered by each one's first op: refreshes, writes, deletes, then
+ * dormant moves. */
 export function groupFlush(
   { refreshes, writes, deletes, dormant }: PendingOps,
   units: readonly (readonly string[])[],
@@ -19,12 +24,19 @@ export function groupFlush(
   const find = unionFind(units);
   const byRoot = new Map<
     string,
-    { refreshes: StrengthRefresh[]; writes: MemoryEntry[]; deletes: string[]; dormant: DormantMove[] }
+    {
+      refreshes: StrengthRefresh[];
+      writes: MemoryEntry[];
+      deletes: string[];
+      dormant: DormantMove[];
+    }
   >();
   const componentOf = (id: string) => {
     const root = find(id);
     let component = byRoot.get(root);
-    if (!component) byRoot.set(root, (component = { refreshes: [], writes: [], deletes: [], dormant: [] }));
+    if (!component) {
+      byRoot.set(root, (component = { refreshes: [], writes: [], deletes: [], dormant: [] }));
+    }
     return component;
   };
   for (const refresh of refreshes) componentOf(refresh.id).refreshes.push(refresh);
@@ -32,7 +44,10 @@ export function groupFlush(
   for (const id of deletes) componentOf(id).deletes.push(id);
   for (const move of dormant) componentOf(move.entry.id).dormant.push(move);
   // A row queued twice keeps its first place and its last version, as one batch always did.
-  return [...byRoot.values()].map((c) => ({ ...c, writes: [...new Map(c.writes.map((e) => [e.id, e])).values()] }));
+  return [...byRoot.values()].map((c) => ({
+    ...c,
+    writes: [...new Map(c.writes.map((e) => [e.id, e])).values()],
+  }));
 }
 
 /** Maps each id to its unit's representative; an id in no unit is its own. */
@@ -40,7 +55,9 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
   const up = new Map<string, string>();
   const find = (id: string): string => {
     let root = id;
-    for (let next = up.get(root); next !== undefined && next !== root; next = up.get(root)) root = next;
+    for (let next = up.get(root); next !== undefined && next !== root; next = up.get(root)) {
+      root = next;
+    }
     if (root !== id) up.set(id, root);
     return root;
   };
@@ -57,11 +74,11 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
 }
 
 /**
- * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark otherwise lands
- * after the parent is gone.
+ * [child, parent] per queued op on a child whose DAG parent the run removes: the parent-dirty mark
+ * otherwise lands after the parent is gone.
  */
-// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can pass holdMs by a
-// family's size; split by child if a family grows large.
+// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can
+// pass holdMs by a family's size; split by child if a family grows large.
 export function familyUnits(
   { refreshes, writes, deletes, dormant }: PendingOps,
   loadedParent: (id: string) => string | undefined,

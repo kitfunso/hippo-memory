@@ -9,7 +9,12 @@ import type { ApiKeyOwner, ApiKeyRecord } from '../../base/ports/store/types.js'
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context, type EntryContext } from '../types.js';
-import type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../../base/ports/store/keys.js';
+import type {
+  ApiKeyListItem,
+  ApiKeyListRow,
+  ListApiKeysOptions,
+  NewApiKey,
+} from '../../base/ports/store/keys.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -20,12 +25,14 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOptions {
   label?: string;
-  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
-   * by name. */
+  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin
+   * key has to be asked for by name. */
   role?: 'admin' | 'member';
-  /** Days until the key expires: above 0 and at most MAX_TTL_DAYS. Defaults to DEFAULT_KEY_TTL_DAYS. */
+  /** Days until the key expires: above 0 and at most MAX_TTL_DAYS. Defaults to
+   * DEFAULT_KEY_TTL_DAYS. */
   ttlDays?: number;
-  /** True mints a key that never expires, which has to be asked for by name; refused together with `ttlDays`. */
+  /** True mints a key that never expires, which has to be asked for by name; refused together
+   * with `ttlDays`. */
   noExpiry?: boolean;
 }
 
@@ -39,11 +46,12 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
- * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
- * mints members. */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A
+ * could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a key never outranks
+ * its minter: a resolver admin is tenant-only, so it mints members. */
 export async function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
-  // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
+  // The key and its auth_create row commit together on every store, so a failed audit write leaves
+  // no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
   await keyWrites.changeApiKey('create', mint);
@@ -68,7 +76,13 @@ function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
   const { keyId, plaintext, keyHash } = mintApiKey();
   return {
     plaintext,
-    key: { ...fields, keyId, keyHash, tenantId: ctx.tenantId, createdAt: ctx.infra.clock().toISOString() },
+    key: {
+      ...fields,
+      keyId,
+      keyHash,
+      tenantId: ctx.tenantId,
+      createdAt: ctx.infra.clock().toISOString(),
+    },
   };
 }
 
@@ -101,12 +115,22 @@ function adminKeyMint(ctx: Context, opts: AuthCreateOptions): KeyMintPlan<KeyMin
   const label = opts.label ?? null;
   const expiresAt = mintExpiry(opts, ctx.infra.clock());
   const { plaintext, key } = newKey(ctx, { label, role, ownerSubject: null, expiresAt });
-  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long, keyId is non-secret.
-  return { plaintext, mint: { key, actor: ctx.actor.subject, metadata: { label, role, expiresAt } } };
+  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long,
+  // keyId is non-secret.
+  return {
+    plaintext,
+    mint: { key, actor: ctx.actor.subject, metadata: { label, role, expiresAt } },
+  };
 }
 
 function createResult({ key }: KeyMint, plaintext: string): AuthCreateResult {
-  return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: key.role, expiresAt: key.expiresAt };
+  return {
+    keyId: key.keyId,
+    plaintext,
+    tenantId: key.tenantId,
+    role: key.role,
+    expiresAt: key.expiresAt,
+  };
 }
 
 export interface AuthCreateSelfOptions {
@@ -122,20 +146,27 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
   expiresAt: string;
 }
 
-/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a
- * departed user's key short-lived. */
+/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps
+ * toISOString in range and a departed user's key short-lived. */
 function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): void {
   if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
-    throw new RangeError(`authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`);
+    throw new RangeError(
+      `authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`,
+    );
   }
   if (!Number.isInteger(perSubject) || perSubject < 1) {
-    throw new RangeError(`authCreateSelf: perSubject must be a whole number of at least 1, got ${String(perSubject)}`);
+    throw new RangeError(
+      `authCreateSelf: perSubject must be a whole number of at least 1, got ${String(perSubject)}`,
+    );
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's
- * revokes, the mint and its audit rows commit or fail together. */
-export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOptions): Promise<AuthCreateSelfResult> {
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary
+ * floor, the cap's revokes, the mint and its audit rows commit or fail together. */
+export async function authCreateSelf(
+  ctx: Context,
+  opts: AuthCreateSelfOptions,
+): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
   await keyWrites.changeApiKey('create_self', mint);
@@ -144,13 +175,16 @@ export async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOptions):
 
 function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<SelfKeyMint> {
   if (!ctx.actor.viaAuthResolver) {
-    throw new ForbiddenError('Only a caller signed in through the auth resolver can mint its own key');
+    throw new ForbiddenError(
+      'Only a caller signed in through the auth resolver can mint its own key',
+    );
   }
   assertSelfMintOpts(opts);
   const { subject } = ctx.actor;
   const label = opts.label ?? null;
   const expiresAt = new Date(ctx.infra.clock().getTime() + opts.ttlDays * DAY_MS).toISOString();
-  // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose ownerSubject's string type.
+  // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose
+  // ownerSubject's string type.
   const made = newKey(ctx, { label, role: 'member', ownerSubject: subject, expiresAt });
   // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
   return {
@@ -165,39 +199,53 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<Sel
 }
 
 function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResult {
-  return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: 'member', expiresAt: key.expiresAt };
+  return {
+    keyId: key.keyId,
+    plaintext,
+    tenantId: key.tenantId,
+    role: 'member',
+    expiresAt: key.expiresAt,
+  };
 }
 
 type KeyListOptions = { active: boolean; limit?: number; after?: KeysetPosition };
 
-/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
+/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is
+ * built from. */
 export async function authListRows(ctx: Context, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
   return listRows(ctx, ctx.store, opts);
 }
 
-/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin
- * only. */
+/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own
+ * view, so the host admin only. */
 export async function authListAllTenants(ctx: Context, active: boolean): Promise<ApiKeyListItem[]> {
   requireHostAdmin(ctx, "Listing every tenant's keys");
   const rows = await ctx.store.keyWrites.listApiKeys({ active, tenantId: ALL_TENANTS });
   return rows.map((row) => row.key);
 }
 
-async function listRows(ctx: Context, store: HippoStore, opts: KeyListOptions): Promise<ApiKeyListRow[]> {
+async function listRows(
+  ctx: Context,
+  store: HippoStore,
+  opts: KeyListOptions,
+): Promise<ApiKeyListRow[]> {
   const keyWrites = store.keyWrites;
   const keyId = memberKeyIdOf(ctx.actor);
   const record = keyId === null ? undefined : await store.findApiKey(keyId);
   const filter = memberListFilter(ctx.actor, record?.ownerSubject);
-  return filter === null ? [] : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
+  return filter === null
+    ? []
+    : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
 }
 
-/** The key id of a member API key caller, whose owner decides what it lists; null for any other caller. */
+/** The key id of a member API key caller, whose owner decides what it lists; null for any other
+ * caller. */
 function memberKeyIdOf(actor: Actor): string | null {
   return actor.role === 'admin' || actor.viaAuthResolver ? null : keyIdOfSubject(actor.subject);
 }
 
-/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole
- * tenant; null means no keys. */
+/** A member sees only the keys its person minted, or just its own key when that has no owner; an
+ * admin sees the whole tenant; null means no keys. */
 function memberListFilter(
   actor: Actor,
   owner: string | null | undefined,
@@ -209,9 +257,13 @@ function memberListFilter(
   return owner ? { ownerSubject: owner } : { keyId };
 }
 
-/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot
- * probe key ids. */
-function assertMayRevoke(ctx: EntryContext, keyId: string, row: ApiKeyOwner | undefined): asserts row is ApiKeyOwner {
+/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or
+ * unowned key, so it cannot probe key ids. */
+function assertMayRevoke(
+  ctx: EntryContext,
+  keyId: string,
+  row: ApiKeyOwner | undefined,
+): asserts row is ApiKeyOwner {
   const { actor } = ctx;
   if (
     actor.role !== 'admin' &&
@@ -225,7 +277,9 @@ function assertMayRevoke(ctx: EntryContext, keyId: string, row: ApiKeyOwner | un
     throw new NotFoundError(`Unknown key_id: ${keyId}`);
   }
   if (actor.viaAuthResolver && row.role === 'admin') {
-    throw new ForbiddenError('An auth resolver admin cannot revoke an admin key, which outranks it');
+    throw new ForbiddenError(
+      'An auth resolver admin cannot revoke an admin key, which outranks it',
+    );
   }
 }
 
@@ -242,12 +296,21 @@ export async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevok
   assertMemberKeyRevokesSelf(ctx, keyId);
   const record = await store.findApiKey(keyId);
   assertMayRevoke(ctx, keyId, keyOwnerOf(record));
-  const revoke = { tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: ctx.infra.clock().toISOString() };
+  const revoke = {
+    tenantId: ctx.tenantId,
+    keyId,
+    actor: ctx.actor.subject,
+    at: ctx.infra.clock().toISOString(),
+  };
   return { ok: true, revokedAt: await store.keyWrites.changeApiKey('revoke', revoke) };
 }
 
 function assertMemberKeyRevokesSelf(ctx: EntryContext, keyId: string): void {
-  if (ctx.actor.role !== 'admin' && !ctx.actor.viaAuthResolver && keyIdOfSubject(ctx.actor.subject) !== keyId) {
+  if (
+    ctx.actor.role !== 'admin' &&
+    !ctx.actor.viaAuthResolver &&
+    keyIdOfSubject(ctx.actor.subject) !== keyId
+  ) {
     throw new ForbiddenError('A member key can revoke only itself');
   }
 }
@@ -263,8 +326,8 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
     : undefined;
 }
 
-/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants, so the
- * local CLI can run revoke and grant in the key's own tenant. */
+/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads
+ * across tenants, so the local CLI can run revoke and grant in the key's own tenant. */
 export async function authKeyTenant(ctx: Context, keyId: string): Promise<string | undefined> {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');
@@ -278,12 +341,20 @@ export interface AuthGrantResult {
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Admin only. */
-export async function authGrant(ctx: Context, keyId: string, scope: string): Promise<AuthGrantResult> {
+export async function authGrant(
+  ctx: Context,
+  keyId: string,
+  scope: string,
+): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_grant');
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
-export async function authUngrant(ctx: Context, keyId: string, scope: string): Promise<AuthGrantResult> {
+export async function authUngrant(
+  ctx: Context,
+  keyId: string,
+  scope: string,
+): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_ungrant');
 }
 
@@ -297,10 +368,14 @@ async function changeGrant(
     throw new ForbiddenError('Only an admin key can change scope grants');
   }
   if (op === 'auth_grant' && /^personal:/i.test(scope)) {
-    throw new BadRequestError(`${scope} is a personal scope: only its owner reads it, and no grant can change that`);
+    throw new BadRequestError(
+      `${scope} is a personal scope: only its owner reads it, and no grant can change that`,
+    );
   }
   if (!isRestrictedScope(scope)) {
-    throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
+    throw new BadRequestError(
+      `${scope} is not a restricted scope; it is already readable by default`,
+    );
   }
   const change = { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject };
   await ctx.store.keyWrites.changeApiKey('scope', change);

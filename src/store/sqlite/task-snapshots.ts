@@ -1,4 +1,5 @@
-// The active task snapshot rows and the continuity key that scopes them, for the Sessions group and the handoffs.
+// The active task snapshot rows and the continuity key that scopes them, for the Sessions group and
+// the handoffs.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { originInSql } from './rule-sql.js';
@@ -9,7 +10,11 @@ import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from '
 import type { TaskSnapshot, SnapshotInput } from '../../base/ports/store/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
+import {
+  continuityStamp,
+  type ContinuityKey,
+  type ContinuityStamp,
+} from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { handleStamp } from './handle-clock.js';
@@ -29,7 +34,8 @@ export function continuityWhere(key: ContinuityKey): SqlFragment {
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
 }
 
-// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
+// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong
+// to other owners.
 export function assertKeyedOnSharedStore(
   fn: string,
   { host, hippoRoot }: StoreFiles,
@@ -42,12 +48,16 @@ export function assertKeyedOnSharedStore(
   }
 }
 
+interface InsertSnapshotOptions {
+  readonly tenantId: string;
+  readonly snapshot: SnapshotInput;
+  readonly now: string;
+  readonly stamp: ContinuityStamp | null;
+}
+
 function insertSnapshot(
   db: DatabaseSyncLike,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  now: string,
-  stamp: ContinuityStamp | null,
+  { tenantId, snapshot, now, stamp }: InsertSnapshotOptions,
 ): number {
   const result = cachedStatement(
     db,
@@ -72,12 +82,16 @@ function insertSnapshot(
   return Number(result.lastInsertRowid ?? 0);
 }
 
+export interface SaveActiveTaskSnapshotOptions {
+  readonly files: StoreFiles;
+  readonly tenantId: string;
+  readonly snapshot: SnapshotInput;
+  readonly key?: ContinuityKey | null;
+}
+
 export function saveActiveTaskSnapshot(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  snapshot: SnapshotInput,
-  key?: ContinuityKey | null,
+  { files, tenantId, snapshot, key }: SaveActiveTaskSnapshotOptions,
 ): TaskSnapshot {
   const { hippoRoot } = files;
   assertTenantId('saveActiveTaskSnapshot', tenantId);
@@ -91,8 +105,9 @@ export function saveActiveTaskSnapshot(
       `UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ` +
         `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
-    const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
-    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
+    const inserted = insertSnapshot(db, { tenantId, snapshot, now, stamp });
+    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner
+    // row shuts it out.
     if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
     return inserted;
   });

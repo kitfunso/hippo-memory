@@ -19,7 +19,8 @@ export interface QuarantineListItem {
 
 const QUARANTINE_PREVIEW_CHARS = 200;
 
-/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
+/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review
+ * queue). */
 export async function quarantineList(
   ctx: ContextWith<'quarantine'>,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
@@ -46,13 +47,18 @@ function refusalError(id: string, refusal: QuarantineRefusal): Error {
   return new ConflictError(`${id} is already ${refusal.status}`);
 }
 
-/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row moved since (mirrors
- * dormantRestore). */
+/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row
+ * moved since (mirrors dormantRestore). */
 export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(ctx.tenantId, id, 'approve', ctx.actor.subject);
+  const result = await ctx.store.quarantine.decideQuarantined(
+    ctx.tenantId,
+    id,
+    'approve',
+    ctx.actor.subject,
+  );
   if (result.outcome === 'approved') return;
   if (result.outcome === 'scope_moved') {
     throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
@@ -60,11 +66,17 @@ export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: stri
   throw refusalError(id, result);
 }
 
-/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched (append-only). */
+/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched
+ * (append-only). */
 export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(ctx.tenantId, id, 'reject', ctx.actor.subject);
+  const result = await ctx.store.quarantine.decideQuarantined(
+    ctx.tenantId,
+    id,
+    'reject',
+    ctx.actor.subject,
+  );
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }

@@ -1,8 +1,8 @@
 /**
- * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so `api.sleep` can dedupe
- * without cli -> api imports.
- * Survivor order is total and tenant-scoped: strength bucket, retrievalCount, then compareEntryIdentity; raw and
- * superseded rows are not candidates.
+ * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so
+ * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
+ * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
+ * candidates.
  */
 
 import { textOverlap } from '../../base/util/tokenize.js';
@@ -33,15 +33,15 @@ export interface DedupResult {
 }
 
 /**
- * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of an abs-diff
- * threshold, so the tiebreak is transitive.
+ * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of
+ * an abs-diff threshold, so the tiebreak is transitive.
  */
 const STRENGTH_TIE_EPSILON = 0.01;
 
 /**
- * Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same multiple of
- * `STRENGTH_TIE_EPSILON`).
- * Non-finite input maps to 0: a NaN bucket would make the comparator return NaN and break the total order. */
+ * Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same
+ * multiple of `STRENGTH_TIE_EPSILON`). Non-finite input maps to 0: a NaN bucket would make the
+ * comparator return NaN and break the total order. */
 export function strengthTieKey(strength: number | null | undefined): number {
   const s = strength ?? 0;
   return Number.isFinite(s) ? Math.round(s / STRENGTH_TIE_EPSILON) : 0;
@@ -62,10 +62,20 @@ interface DedupRow {
 
 function dedupRow(entry: MemoryEntry): DedupRow {
   const { id, content, layer, strength, retrievalCount, tags, source } = entry;
-  return { id, content, layer, strength, retrievalCount, tags, source, deletable: canAutoDelete(entry) };
+  return {
+    id,
+    content,
+    layer,
+    strength,
+    retrievalCount,
+    tags,
+    source,
+    deletable: canAutoDelete(entry),
+  };
 }
 
-/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then compareEntryIdentity. */
+/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then
+ * compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
@@ -88,11 +98,12 @@ function dedupPair(kept: DedupRow, dropped: DedupRow): DedupPair {
   };
 }
 
-/** One partition's same-text groups by duplicateKey: the best row so far and the rows it beat that may go. */
+/** One partition's same-text groups by duplicateKey: the best row so far and the rows it beat
+ * that may go. */
 type PartitionGroups = Map<string, { survivor: DedupRow; losers: DedupRow[] }>;
 
-// The survivor order is total, so the best row so far ends as the row a sorted pass puts first, and every other
-// deletable row ends a loser whichever order the rows came in.
+// The survivor order is total, so the best row so far ends as the row a sorted pass puts first, and
+// every other deletable row ends a loser whichever order the rows came in.
 function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
   const group = groups.get(key);
   if (!group) {
@@ -104,26 +115,29 @@ function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
   if (beaten.deletable) group.losers.push(beaten);
 }
 
-/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's losers by rank; a
- * loser backing an object stays. */
+/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's
+ * losers by rank; a loser backing an object stays. */
 function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): DedupPair[] {
   return [...groups.values()]
     .map((group) => ({ ...group, losers: group.losers.filter((loser) => !backing.has(loser.id)) }))
     .filter((group) => group.losers.length > 0)
     .sort((a, b) => survivorOrder(a.survivor, b.survivor))
-    .flatMap((group) => group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)));
+    .flatMap((group) =>
+      group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)),
+    );
 }
 
 /** The rows duplicateCandidates selects, picked from pages of every row. */
-const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
+const isCurrentDistilled = (e: MemoryEntry): boolean =>
+  (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
 
 type Partitions = Map<string, PartitionGroups>;
 
 /** Pages of rows, held now or read a page at a time from the store. */
 type RowPages = Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
 
-/** Groups rows fed a page at a time; between pages only each group's survivor and losers are held. Map order is first
- * appearance, so partitions keep the order the pages gave them. */
+/** Groups rows fed a page at a time; between pages only each group's survivor and losers are
+ * held. Map order is first appearance, so partitions keep the order the pages gave them. */
 async function partitionRows(pages: RowPages): Promise<Partitions> {
   const partitions: Partitions = new Map();
   for await (const page of pages) {
@@ -155,20 +169,25 @@ async function scanPairs(
   store: StoreWith<'consolidation' | 'auditMaintenance'>,
   partitions: Partitions,
 ): Promise<DedupPair[]> {
-  const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
+  const losers = [...partitions.values()].flatMap((groups) =>
+    [...groups.values()].flatMap((g) => g.losers),
+  );
   const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 
-/** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never across (isolation).
- * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of the candidates read. */
+/** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never
+ * across (isolation). Strength wins, then retrievals; `threshold` is ignored; `pages` feeds
+ * every row in place of the candidates read. */
 export async function deduplicateStore(
   store: StoreWith<'consolidation' | 'auditMaintenance'>,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
-  // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
-  // superseded rows are history.
-  const partitions = options.pages ? await partitionRows(options.pages) : await candidatePartitions(store);
+  // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort
+  // sleep mid-loop) and superseded rows are history.
+  const partitions = options.pages
+    ? await partitionRows(options.pages)
+    : await candidatePartitions(store);
   const pairs = await scanPairs(store, partitions);
   const done = options.dryRun ? pairs : await deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
@@ -181,7 +200,9 @@ async function deletePairs(
   actor: string | undefined,
 ): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = new Set(await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR));
+  const gone = new Set(
+    await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
+  );
   // A loser named twice went once, so only its first pair reports the delete.
   return pairs.filter((p) => gone.delete(p.removed));
 }

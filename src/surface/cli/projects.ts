@@ -1,5 +1,5 @@
-// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo, repair old tags in
-// one pass.
+// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo,
+// repair old tags in one pass.
 
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -12,7 +12,8 @@ import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.j
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
-/** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
+/** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name;
+ * empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
     const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
@@ -27,9 +28,14 @@ function worktreeNames(): Map<string, string> {
       .map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
   } catch (err) {
-    // Outside a git checkout (git exits 128) or no git on PATH (ENOENT): the list just has no worktree hints.
-    const expected = errorCode(err) === 'ENOENT' || (err instanceof Error && 'status' in err && err.status === 128);
-    if (!expected) log.once('projects:git-worktree-list', 'warn', 'git worktree list failed', errorFields(err));
+    // Outside a git checkout (git exits 128) or no git on PATH (ENOENT): the list just has no
+    // worktree hints.
+    const expected =
+      errorCode(err) === 'ENOENT' ||
+      (err instanceof Error && 'status' in err && err.status === 128);
+    if (!expected) {
+      log.once('projects:git-worktree-list', 'warn', 'git worktree list failed', errorFields(err));
+    }
     return new Map();
   }
 }
@@ -110,15 +116,21 @@ async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
       'imported note copies',
     )} under the wrong project set aside (the note stays under its own, or user-global)`,
   );
-  for (const f of r.folds) console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
+  for (const f of r.folds) {
+    console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
+  }
   for (const c of r.collisions) {
     console.log(
       `  ${c.name} left as it is: its folders now resolve to ${c.ids.join(', ')}; fold it by hand with hippo ` +
         `projects merge`,
     );
   }
-  console.log(`  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`);
-  console.log(`  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`);
+  console.log(
+    `  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`,
+  );
+  console.log(
+    `  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`,
+  );
   console.log(
     `  ${r.untraced.length} left as they are (no parent left to show which project; check them with hippo inspect ` +
       `<id>)`,
@@ -130,14 +142,21 @@ async function projectsRepair(ctx: CliContext, flags: CliFlags): Promise<void> {
   );
 }
 
-export async function handleProjects({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleProjects({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const ctx = cliApiContext(resolveAuthRoot(hippoRoot, flags), tenantId);
   const sub = args[0] ?? 'list';
   try {
     if (sub === 'list') return await projectsList(ctx, flags);
     if (sub === 'merge') return await projectsMerge(ctx, args, flags);
     if (sub === 'repair') return await projectsRepair(ctx, flags);
-    printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
+    printError(
+      'Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]',
+    );
     process.exitCode = 1;
   } catch (err) {
     printError(errorMessage(err));

@@ -182,7 +182,7 @@ describe('replay of records a killed hook left', () => {
     run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`);
     const db = openHippoDb(s.hippoRoot);
     try {
-      expect(compactionByRequest(db, 'default', 'req-1', 's1')).toBeNull();
+      expect(compactionByRequest(db, { tenantId: 'default', requestId: 'req-1', sessionId: 's1' })).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -444,9 +444,13 @@ describe('two replayers working the same store', () => {
         cwd: null,
         items: ITEMS,
       };
-      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(
+        saveItems(db, { files: storeFilesOf(s.hippoRoot), ctx, log, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(
+        saveItems(db, { files: storeFilesOf(s.hippoRoot), ctx, log, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ).toBe(2);
     } finally {
       closeHippoDb(db);
     }

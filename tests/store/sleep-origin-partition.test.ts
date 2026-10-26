@@ -115,13 +115,12 @@ describe('sleep partitions by origin project', () => {
     for (const origin of ['proj-b', null]) {
       const source = inProject(createMemory(`alice prefers dark mode in ${origin}`, { layer: Layer.Episodic }), origin);
       writeEntry(home, source);
-      const [fact] = await storeExtractedFacts(
-        sqliteStore(home),
+      const [fact] = await storeExtractedFacts(sqliteStore(home), {
         source,
-        [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }],
-        DEFAULT_HALF_LIFE_DAYS,
-        new Date(),
-      );
+        facts: [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }],
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        now: new Date(),
+      });
       expect(live().find((e) => e.id === fact!.id)!.originProject).toBe(origin);
     }
   });

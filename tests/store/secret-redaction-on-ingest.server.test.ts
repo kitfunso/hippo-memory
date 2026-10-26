@@ -287,9 +287,11 @@ describe('machine-captured lessons', () => {
 
   it('hippo watch drops a token from the failed command and its stderr', () => {
     const entry = captureError(
-      1,
-      `curl: (22) 401 for token ${GHP}`,
-      `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
+      {
+        command: `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
+        exitCode: 1,
+        stderr: `curl: (22) 401 for token ${GHP}`,
+      },
       undefined,
       new Date(),
     );

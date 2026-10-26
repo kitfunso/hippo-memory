@@ -1,10 +1,12 @@
-// The vector math every ranking site shares (embeddings, the vector index, physics): one dot product, one length and
-// one rule for a vector too short to have a direction.
+// The vector math every ranking site shares (embeddings, the vector index, physics): one dot
+// product, one length and one rule for a vector too short to have a direction.
 
-/** A vector shorter than this has no direction: it normalises to nothing and scores 0 against any other. */
+/** A vector shorter than this has no direction: it normalises to nothing and scores 0 against
+ * any other. */
 export const ZERO_NORM = 1e-10;
 
-// Four running sums, which V8 runs faster than one: vector index inserts spend most of their time here.
+// Four running sums, which V8 runs faster than one: vector index inserts spend most of their time
+// here.
 export function dot(a: ArrayLike<number>, b: ArrayLike<number>): number {
   let s0 = 0;
   let s1 = 0;
@@ -26,8 +28,8 @@ export function norm(v: ArrayLike<number>): number {
   return Math.sqrt(dot(v, v));
 }
 
-/** Cosine over any indexable vectors (a Float32 view scores as its number[] copy); 0 for empty, mismatched or
- * directionless input. */
+/** Cosine over any indexable vectors (a Float32 view scores as its number[] copy); 0 for empty,
+ * mismatched or directionless input. */
 export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
 
@@ -47,9 +49,13 @@ export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   return Math.min(1, Math.max(-1, products / (lengthA * lengthB)));
 }
 
-/** Cosine of `v` to a query of length `queryNorm`, summed in float64 so the vector index and a full scan of the rows
- * rank alike; null for a `v` with no direction. */
-export function cosineToQuery(query: ArrayLike<number>, queryNorm: number, v: ArrayLike<number>): number | null {
+/** Cosine of `v` to a query of length `queryNorm`, summed in float64 so the vector index and a
+ * full scan of the rows rank alike; null for a `v` with no direction. */
+export function cosineToQuery(
+  query: ArrayLike<number>,
+  queryNorm: number,
+  v: ArrayLike<number>,
+): number | null {
   let products = 0;
   let squares = 0;
   for (let i = 0; i < v.length; i++) {

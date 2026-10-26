@@ -1,5 +1,5 @@
-// What the dashboard reads off one memory at an instant. The store's dashboard SQL calls these same functions, so a
-// count, a sort and a listed row never judge one memory two ways.
+// What the dashboard reads off one memory at an instant. The store's dashboard SQL calls these same
+// functions, so a count, a sort and a listed row never judge one memory two ways.
 import {
   calculateStrength,
   confidenceFacets,
@@ -63,7 +63,8 @@ export function daysBetween(thenIso: string, nowMs: number): number {
   return Number.isFinite(days) ? Math.max(0, days) : 0;
 }
 
-/** A pin wins, then 30-day strength under the at-risk cut, then strength now at or over the strong cut. */
+/** A pin wins, then 30-day strength under the at-risk cut, then strength now at or over the
+ * strong cut. */
 function bandOf(pinned: boolean, strength: number, strength30d: number): number {
   if (pinned) return BAND_PINNED;
   if (strength30d < AT_RISK_BELOW) return BAND_AT_RISK;
@@ -73,10 +74,15 @@ function bandOf(pinned: boolean, strength: number, strength30d: number): number 
 /** The band of `entry` at `nowMs`, as memoryFacts judges it. */
 export function bandAt(entry: StrengthInputs, nowMs: number, model: StrengthModel): number {
   const strength = calculateStrength(entry, new Date(nowMs), model);
-  return bandOf(entry.pinned, strength, calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model));
+  return bandOf(
+    entry.pinned,
+    strength,
+    calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model),
+  );
 }
 
-/** A list shows this many UTF-16 units of content; the store reads one character more, so the cut shows. */
+/** A list shows this many UTF-16 units of content; the store reads one character more, so the
+ * cut shows. */
 export const LIST_HEAD_CHARS = 240;
 
 /** The start of a memory's content a list shows, and whether any was left off. */
@@ -99,12 +105,14 @@ export function strengthBucket(value: number): 0 | 1 | 2 {
   return value >= STRONG_FROM ? 0 : value >= AT_RISK_BELOW ? 1 : 2;
 }
 
-/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come is today. */
+/** Whole days from `timeMs` back from `nowMs`, held to 0 through SERIES_DAYS; a time to come is
+ * today. */
 export function seriesDay(timeMs: number, nowMs: number): number {
   return Math.min(SERIES_DAYS, Math.max(0, Math.floor((nowMs - timeMs) / DAY_MS)));
 }
 
-/** Strength now and at +7d and +30d, band, age and the confidence split for one entry at `nowMs`. */
+/** Strength now and at +7d and +30d, band, age and the confidence split for one entry at
+ * `nowMs`. */
 export function memoryFacts(
   entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
   nowMs: number,

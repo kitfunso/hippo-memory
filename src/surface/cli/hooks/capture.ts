@@ -2,11 +2,47 @@
 import { hippoHomeDir } from '../../../host/agent-homes.js';
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import { readHookStdin } from '../stdin.js';
-import { type CommandContext, boolFlag, stringFlag, stringFlagOrExit } from '../flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from '../flag-values.js';
 import { captureTarget } from '../hook-runtime.js';
 import { fail } from '../exit.js';
 
 export async function handleCapture({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+  const { captureSource, captureFile, transcriptPath } = captureSourceFlags(flags);
+
+  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own
+  // blocking read in src/surface/capture/ by design.
+  const bounded =
+    captureSource === 'last-session' && !transcriptPath
+      ? await readHookStdin()
+      : { text: undefined, timedOut: false };
+
+  const useGlobal = boolFlag(flags, 'global');
+  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot), {
+    source: captureSource,
+    filePath: captureFile,
+    transcriptPath,
+    stdinText: bounded.text,
+    stdinTimedOut: bounded.timedOut,
+    logFile: stringFlag(flags, 'log-file'),
+    dryRun: boolFlag(flags, 'dry-run'),
+    global: useGlobal,
+    tenantId,
+  });
+}
+
+interface CaptureSourceFlags {
+  readonly captureSource: CaptureOptions['source'];
+  readonly captureFile: string | undefined;
+  readonly transcriptPath: string | undefined;
+}
+
+function captureSourceFlags(flags: CliFlags): CaptureSourceFlags {
   let captureSource: CaptureOptions['source'] | null = null;
   let captureFile: string | undefined;
   let transcriptPath: string | undefined;
@@ -31,22 +67,5 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
         '[--dry-run] [--global]',
     );
   }
-
-  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own blocking read in
-  // src/surface/capture/ by design.
-  const bounded =
-    captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
-
-  const useGlobal = boolFlag(flags, 'global');
-  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot), {
-    source: captureSource,
-    filePath: captureFile,
-    transcriptPath,
-    stdinText: bounded.text,
-    stdinTimedOut: bounded.timedOut,
-    logFile: stringFlag(flags, 'log-file'),
-    dryRun: boolFlag(flags, 'dry-run'),
-    global: useGlobal,
-    tenantId,
-  });
+  return { captureSource, captureFile, transcriptPath };
 }

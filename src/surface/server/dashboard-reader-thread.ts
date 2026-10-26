@@ -1,5 +1,5 @@
-// Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It owns the snapshot
-// clock and answers each read through the api's dashboard functions.
+// Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It
+// owns the snapshot clock and answers each read through the api's dashboard functions.
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { adminActor } from '../../api/index.js';
@@ -19,8 +19,12 @@ import { rootInfra } from '../../infra/ports.js';
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 
-/** The thread is its own root, so it reads the strength model and clock its store and dashboard reads open with. */
-function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
+/** The thread is its own root, so it reads the strength model and clock its store and dashboard
+ * reads open with. */
+function readerStore(
+  hippoRoot: string,
+  clock: { readonly nowMs: number; readonly wallMs: number },
+) {
   const rules = evalStoreRules(envLossAversionRatio());
   const store = defaultStore(hippoRoot, rules);
   const reads = defaultDashboardReads(hippoRoot, rules);
@@ -35,7 +39,8 @@ function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonl
 function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
   const loadConfig = configReader(envRuntimeSettings);
   const infra = rootInfra();
-  // Set from each call, so each read is dated and aged by the clocks the server read when the request came in.
+  // Set from each call, so each read is dated and aged by the clocks the server read when the
+  // request came in.
   const clock = { nowMs: 0, wallMs: 0 };
   const { store, view } = readerStore(hippoRoot, clock);
   const { reads } = view;
@@ -69,7 +74,16 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
         return null;
     }
   };
-  // One call at a time, in the order sent, so a write's invalidation lands before the read that follows it.
+  answerInOrder(port, clock, run);
+}
+
+// One call at a time, in the order sent, so a write's invalidation lands before the read that
+// follows it.
+function answerInOrder(
+  port: MessagePort,
+  clock: { nowMs: number; wallMs: number },
+  run: (call: ReaderCall) => Promise<ReaderValue>,
+): void {
   let turn: Promise<void> = Promise.resolve();
   port.on('message', (call: ReaderCall) => {
     turn = turn.then(async () => {
@@ -82,7 +96,10 @@ function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): voi
 }
 
 // The server logs the failure with its request, so the thread only hands it back.
-async function replyTo(call: ReaderCall, run: (call: ReaderCall) => Promise<ReaderValue>): Promise<ReaderReply> {
+async function replyTo(
+  call: ReaderCall,
+  run: (call: ReaderCall) => Promise<ReaderValue>,
+): Promise<ReaderReply> {
   try {
     return { id: call.id, ok: true, value: await run(call) };
   } catch (err) {
@@ -90,12 +107,16 @@ async function replyTo(call: ReaderCall, run: (call: ReaderCall) => Promise<Read
   }
 }
 
-/** Posts the reply; one that cannot be copied to the server becomes its failure, so no request waits forever. */
+/** Posts the reply; one that cannot be copied to the server becomes its failure, so no request
+ * waits forever. */
 function answer(port: MessagePort, reply: ReaderReply): void {
   try {
     port.postMessage(reply);
   } catch (err) {
-    log.error(`dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`, errorFields(err));
+    log.error(
+      `dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     port.postMessage({ id: reply.id, ...failureReply(err) });
   }
 }

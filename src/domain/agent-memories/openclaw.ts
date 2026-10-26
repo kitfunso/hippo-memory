@@ -1,4 +1,5 @@
-// OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are left out on purpose.
+// OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are
+// left out on purpose.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import { textItemKeys } from './keys.js';
@@ -18,15 +19,19 @@ export const openclawAdapter: Adapter = {
   },
 };
 
-// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and there is no parser
-// for that here); read it if users ask.
+// SHORTCUT: agents.defaults.workspace in openclaw.json is not read (the file allows comments, and
+// there is no parser for that here); read it if users ask.
 function workspaceDir(ctx: AdapterContext): string {
   const { OPENCLAW_WORKSPACE_DIR: workspace } = ctx.env;
   return path.resolve(workspace || path.join(stateDir(ctx), 'workspace'));
 }
 
 function stateDir(ctx: AdapterContext): string {
-  const { OPENCLAW_STATE_DIR: state, OPENCLAW_HOME: openclawHome, OPENCLAW_PROFILE: profile } = ctx.env;
+  const {
+    OPENCLAW_STATE_DIR: state,
+    OPENCLAW_HOME: openclawHome,
+    OPENCLAW_PROFILE: profile,
+  } = ctx.env;
   if (state) return state;
   const suffix = profile && profile !== 'default' ? `-${profile}` : '';
   return path.join(openclawHome || ctx.home, `.openclaw${suffix}`);
@@ -38,7 +43,15 @@ function userContainers(files: AgentFiles, workspace: string): Container[] {
   const read = files.readText(file);
   if (!read.ok) {
     return [
-      { scope: 'user', path: file, readable: false, items: [], skipped: [], warnings: [read.reason], textKeyed: true },
+      {
+        scope: 'user',
+        path: file,
+        readable: false,
+        items: [],
+        skipped: [],
+        warnings: [read.reason],
+        textKeyed: true,
+      },
     ];
   }
   const stored = splitMarkdownItems(read.text).map(({ heading, headingSlug, text }) => ({
@@ -47,5 +60,15 @@ function userContainers(files: AgentFiles, workspace: string): Container[] {
   }));
   const keys = textItemKeys(stored);
   const items = stored.map(({ text }, i) => ({ key: keys[i], text, updatedAt: read.mtimeMs }));
-  return [{ scope: 'user', path: file, readable: true, items, skipped: [], warnings: [], textKeyed: true }];
+  return [
+    {
+      scope: 'user',
+      path: file,
+      readable: true,
+      items,
+      skipped: [],
+      warnings: [],
+      textKeyed: true,
+    },
+  ];
 }

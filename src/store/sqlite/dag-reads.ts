@@ -1,11 +1,16 @@
-// hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a summary's descendants a page
-// at a time.
+// hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a
+// summary's descendants a page at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../../base/ports/store.js';
+import type {
+  DescendantOrigin,
+  SummaryDescendants,
+  DagReads,
+  DescendantWalk,
+} from '../../base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
@@ -23,7 +28,8 @@ interface PagedWalk {
 }
 
 interface LevelRead {
-  /** Ids of every admitted row, in level order; empty for the last level, which has nothing under it to read. */
+  /** Ids of every admitted row, in level order; empty for the last level, which has nothing
+   * under it to read. */
   readonly ids: readonly string[];
   readonly size: number;
   readonly rows: MemoryEntry[];
@@ -41,9 +47,13 @@ interface ChildGroup extends DescendantOrigin {
   readonly n: number;
 }
 
-/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full count
- * in `sizes`. */
-function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
+/** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and
+ * each level's full count in `sizes`. */
+function pagedDescendants(
+  db: DatabaseSyncLike,
+  walk: PagedWalk,
+  summaryAdmitted: boolean,
+): SummaryDescendants {
   const sizes: number[] = [];
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([walk.summary.id]);
@@ -61,7 +71,8 @@ function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted
   return { summary: walk.summary, levels, sizes };
 }
 
-// Reads four short columns of every child, since the level below needs each admitted id as a parent.
+// Reads four short columns of every child, since the level below needs each admitted id as a
+// parent.
 function keyedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -96,9 +107,9 @@ function keyedLevel(
   return { ids, size: ids.length, rows: shown.flatMap((id) => whole.get(id) ?? []) };
 }
 
-/** The last level counted in SQL and read up to `room` rows; null when a row there is refused, which only the keyed
- * read can leave out. A row has one parent and a parent is read at one level, so the summary is the only row an earlier
- * level can already hold. */
+/** The last level counted in SQL and read up to `room` rows; null when a row there is refused,
+ * which only the keyed read can leave out. A row has one parent and a parent is read at one
+ * level, so the summary is the only row an earlier level can already hold. */
 function countedLevel(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -116,7 +127,10 @@ function countedLevel(
     ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.admit(group)) return null;
-      perParent.set(group.dag_parent_id, (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n));
+      perParent.set(
+        group.dag_parent_id,
+        (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n),
+      );
     }
   }
   let size = 0;
@@ -133,7 +147,8 @@ function countedLevel(
   };
 }
 
-// Every parent before the one the page ends in is read whole in one statement; that last one is read under a LIMIT.
+// Every parent before the one the page ends in is read whole in one statement; that last one is
+// read under a LIMIT.
 function firstRows(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -145,14 +160,20 @@ function firstRows(
   for (const parentId of parents) {
     if (left <= 0) break;
     const n = at.perParent.get(parentId) ?? 0;
-    if (n >= left) return [...childrenInOrder(db, walk, whole, -1), ...childrenInOrder(db, walk, [parentId], left)];
+    if (n >= left) {
+      return [
+        ...childrenInOrder(db, walk, whole, -1),
+        ...childrenInOrder(db, walk, [parentId], left),
+      ];
+    }
     whole.push(parentId);
     left -= n;
   }
   return childrenInOrder(db, walk, whole, -1);
 }
 
-/** Children parent by parent, each parent's by created then id; a negative `limit` reads them all. */
+/** Children parent by parent, each parent's by created then id; a negative `limit` reads them
+ * all. */
 function childrenInOrder(
   db: DatabaseSyncLike,
   walk: PagedWalk,
@@ -186,7 +207,8 @@ export function sqliteDagReads(on: OnHandle): DagReads {
   );
 }
 
-// dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.
+// dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or
+// walked in a loop.
 function summaryWithDescendants(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -196,8 +218,16 @@ function summaryWithDescendants(
   const summary = readEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
   const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
-  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
-  if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
+  const walked =
+    readable(summary) &&
+    (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
+  if (page) {
+    return pagedDescendants(
+      db,
+      { tenantId, summary, depth, rows: page.rows, admit: readable },
+      walked,
+    );
+  }
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);
   let parents = walked ? [id] : [];

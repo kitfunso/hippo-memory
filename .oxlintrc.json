@@ -22,7 +22,8 @@
     "tools/oxlint/anti-slop/**"
   ],
   "jsPlugins": [
-    { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }
+    { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
+    { "name": "boundaries", "specifier": "./tools/oxlint/boundaries/index.mjs" }
   ],
   "plugins": ["typescript", "unicorn", "oxc", "import"],
   "rules": {
@@ -50,8 +51,67 @@
       "files": ["src/**/*.ts"],
       "rules": {
         "import/no-cycle": ["error", { "ignoreTypes": true }],
-        "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }]
+        "anti-slop/require-safety-comment-for-type-assertion": ["error", { "allowStatementReads": true }],
+        "max-params": ["error", { "max": 5 }],
+        "boundaries/max-signature-params": "error",
+        "max-lines-per-function": ["error", { "max": 50 }],
+        "max-lines": ["error", { "max": 800 }],
+        "id-denylist": ["error", "sqliteStoreOn"],
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." }
+        ]
       }
+    },
+    {
+      "files": ["src/api/**/*.ts", "src/domain/**/*.ts"],
+      "rules": { "boundaries/no-adapter-name": "error" }
+    },
+    {
+      "files": ["src/api/**/*.ts"],
+      "rules": {
+        "id-denylist": ["error", "sqliteStoreOn", "hippoRoot"],
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "property": "hippoRoot", "message": "The api reads what the folder gave from a port method." }
+        ]
+      }
+    },
+    {
+      "files": ["src/surface/server/routes/**/*.ts"],
+      "rules": {
+        "id-denylist": ["error", "sqliteStoreOn", "requireGroup"],
+        "no-restricted-properties": [
+          "error",
+          { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
+          { "property": "requireGroup", "message": "A route calls a src/api function that takes the Context." }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(ports/store|ports/store-index|entry/store-kit)[.]js$",
+                "importNames": ["requireGroup"],
+                "message": "A route calls a src/api function that takes the Context."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/store/sqlite/**/*.ts", "src/surface/open-store.ts"],
+      "rules": { "id-denylist": "off", "no-restricted-properties": "off" }
+    },
+    {
+      "files": ["scripts/**"],
+      "rules": { "max-lines-per-function": ["error", { "max": 80 }], "max-lines": ["error", { "max": 800 }] }
+    },
+    {
+      "files": ["tests/**/*.test.ts"],
+      "rules": { "max-lines": ["error", { "max": 800 }] }
     },
     {
       "files": ["tests/**/*.ts"],
@@ -67,6 +127,16 @@
         "benchmarks/**"
       ],
       "rules": { "curly": "off" }
+    },
+    {
+      "files": [
+        "scripts/z1-replay.mjs",
+        "scripts/z1c-eval.mjs",
+        "scripts/z0-capture-eval.mjs",
+        "scripts/e1-lifecycle/generate.mjs",
+        "tests/eval/token-eval-z0-homes.test.ts"
+      ],
+      "rules": { "max-lines": "off", "max-lines-per-function": "off" }
     }
   ]
 }

@@ -14,7 +14,12 @@ import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
-import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
+import {
+  requireInit,
+  learnFromRepo,
+  runChurnStaleForRepo,
+  skipLearnOnSharedStore,
+} from './shared.js';
 import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { printError } from './output.js';
@@ -23,21 +28,30 @@ import { plural } from '../../base/util/format.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** Runs `hippo sleep`; `--global` sleeps the global store instead of the folder's. */
-export async function handleSleep({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleSleep({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot;
   await sleepStore({ hippoRoot: root, tenantId, args, flags });
 }
 
 /** Sleeps one store; with `--log-file` it also tees its output to that file. */
 export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can
-  // re-display the output.
+  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
+  // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
     try {
       fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-      fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
+      fs.writeFileSync(
+        logFile,
+        `[hippo] ${new Date().toISOString()} consolidating memory...\n`,
+        'utf8',
+      );
       restoreStdout = teeStdStreams(logFile);
     } catch (err) {
       log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));
@@ -66,20 +80,31 @@ async function repairProjectTagsOnce(hippoRoot: string, tenantId: string): Promi
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
-      r.folds.length > 0 ? `folded ${r.folds.map((f) => `${f.from} into ${f.into}`).join(', ')}` : '',
+      r.folds.length > 0
+        ? `folded ${r.folds.map((f) => `${f.from} into ${f.into}`).join(', ')}`
+        : '',
       r.toProject.length + r.setAside.length > 0
         ? `re-tagged ${r.toProject.length + r.setAside.length} merged memories`
         : '',
     ].filter((p) => p !== '');
-    console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
+    console.log(
+      `Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`,
+    );
   } catch (err) {
-    log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `project tag repair skipped, retried next sleep: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
-async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
-  // The CLI runs it here because api.sleep covers Phase 2-6 only.
+async function learnBeforeSleep(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
+  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses
+  // process.cwd() / os.homedir()). The CLI runs it here because api.sleep covers Phase 2-6 only.
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   if (learn && boolFlag(flags, 'dry-run')) {
     console.log(
@@ -89,33 +114,53 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
   } else if (learn) {
     const config = cliConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(processGit, process.cwd())) {
-      const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
+      const { added } = await learnFromRepo({
+        hippoRoot,
+        tenantId,
+        repoPath: process.cwd(),
+        days: 1,
+      });
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
       for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, false)) {
-        if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
+        if (result.marked > 0) {
+          console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
+        }
         if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       }
     }
 
-    printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())), '');
+    printAgentImport(
+      await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())),
+      '',
+    );
   }
 }
 
-async function runSleepCommand(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function runSleepCommand(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
 
-  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
+  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run
+  // writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
-    const finished = await replayCompactions({ root: hippoRoot, store: cliStore(hippoRoot), tenantId }, warn);
+    const finished = await replayCompactions(
+      { root: hippoRoot, store: cliStore(hippoRoot), tenantId },
+      warn,
+    );
     if (finished > 0) {
-      console.log(`Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`);
+      console.log(
+        `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,
+      );
     }
     await repairProjectTagsOnce(hippoRoot, tenantId);
     await repairQualityOnce(hippoRoot, tenantId);
@@ -130,6 +175,8 @@ async function runSleepCommand(hippoRoot: string, tenantId: string, flags: CliFl
   renderSleepResult(result);
   // A store with no `hippo serve` gets its saved vector graph from its sleeps.
   if (!result.dryRun) {
-    await saveVectorGraphFile(hippoRoot, { maxVectors: cliConfig(hippoRoot).vectorGraph.maxVectors });
+    await saveVectorGraphFile(hippoRoot, {
+      maxVectors: cliConfig(hippoRoot).vectorGraph.maxVectors,
+    });
   }
 }

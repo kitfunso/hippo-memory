@@ -34,59 +34,64 @@ export interface AuditResult {
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only
-  // warn.
+  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never
+  // auto-removed, so it can only warn.
   if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
-    const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : backsObject ? 'backs an object' : 'keep rule';
+    const why = entry.pinned
+      ? 'pinned'
+      : entry.kind === 'raw'
+        ? 'raw'
+        : backsObject
+          ? 'backs an object'
+          : 'keep rule';
     return { ...issue, severity: 'warning', reason: `${issue.reason} (${why}, kept)` };
   }
   return issue;
 }
+
+type Defect = Pick<AuditIssue, 'severity' | 'reason'>;
 
 /** Text this short is an error, not a weak memory. */
 const TRIVIAL_CHARS = 3;
 
 function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   const content = entry.content.trim();
+  const defect = formDefect(content) ?? vaguenessDefect(entry, content);
+  return defect === null ? null : { memoryId: entry.id, content, ...defect };
+}
 
+function formDefect(content: string): Defect | null {
   if (content.length < TRIVIAL_CHARS) {
-    return { memoryId: entry.id, content, severity: 'error', reason: `too short (< ${TRIVIAL_CHARS} chars)` };
+    return { severity: 'error', reason: `too short (< ${TRIVIAL_CHARS} chars)` };
   }
 
   if (content.length < MIN_MEMORY_CHARS) {
-    return { memoryId: entry.id, content, severity: 'error', reason: `too short (< ${MIN_MEMORY_CHARS} chars)` };
+    return { severity: 'error', reason: `too short (< ${MIN_MEMORY_CHARS} chars)` };
   }
 
   if (isReleaseCommitNoise(content)) {
-    return { memoryId: entry.id, content, severity: 'error', reason: 'release/commit noise, not a useful memory' };
+    return { severity: 'error', reason: 'release/commit noise, not a useful memory' };
   }
 
   if (isFragment(content)) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: 'sentence fragment — lacks context' };
+    return { severity: 'warning', reason: 'sentence fragment — lacks context' };
   }
+  return null;
+}
 
+function vaguenessDefect(entry: MemoryEntry, content: string): Defect | null {
   const substantive = substantiveWordCount(content);
   if (substantive < MIN_SUBSTANTIVE_WORDS) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: `only ${substantive} substantive word(s) — too vague`,
-    };
+    return { severity: 'warning', reason: `only ${substantive} substantive word(s) — too vague` };
   }
 
   if (isShortAndUnspecific(content)) {
-    return {
-      memoryId: entry.id,
-      content,
-      severity: 'warning',
-      reason: 'no specific details (names, paths, numbers, code)',
-    };
+    return { severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
   }
 
   const reason = automaticDefect(entry);
   if (reason !== null) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: `automatic memory defect: ${reason}` };
+    return { severity: 'warning', reason: `automatic memory defect: ${reason}` };
   }
 
   return null;
@@ -106,8 +111,8 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
   };
 }
 
-/** Which rows quality repair keeps whatever their defect; data, so a store on a worker thread applies it in its own
- * write. */
+/** Which rows quality repair keeps whatever their defect; data, so a store on a worker thread
+ * applies it in its own write. */
 export interface RepairProtection {
   /** A person's pin, kept as 'pinned'. */
   readonly pinned: boolean;
@@ -119,9 +124,14 @@ export interface RepairProtection {
   readonly objectBacked: boolean;
 }
 
-/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted imported note, and a row an
- * object names, since the object's link could not be restored. */
-export const PROTECTED_ROWS: RepairProtection = { pinned: true, raw: true, trusted: true, objectBacked: true };
+/** What quality repair keeps whatever the defect: a person's pin, a raw receipt, a trusted
+ * imported note, and a row an object names, since the object's link could not be restored. */
+export const PROTECTED_ROWS: RepairProtection = {
+  pinned: true,
+  raw: true,
+  trusted: true,
+  objectBacked: true,
+};
 
 /** Why repair must keep `entry` under `protection`, or undefined to let it go. */
 export function repairKeeps(
@@ -136,7 +146,8 @@ export function repairKeeps(
   return undefined;
 }
 
-/** A defect quality repair acts on: a certain one sets the row aside, any other asks a person to review it. */
+/** A defect quality repair acts on: a certain one sets the row aside, any other asks a person to
+ * review it. */
 export interface RepairDefect {
   readonly reason: string;
   readonly disposition: 'set-aside' | 'review';
@@ -148,11 +159,18 @@ export function isRepairCandidate(entry: MemoryEntry): boolean {
 }
 
 function structured(entry: MemoryEntry): boolean {
-  return entry.traceOutcome !== null || entry.tags.includes('session-digest') || entry.source === 'auto-promote';
+  return (
+    entry.traceOutcome !== null ||
+    entry.tags.includes('session-digest') ||
+    entry.source === 'auto-promote'
+  );
 }
 
 /** A parent that is gone says nothing about who wrote it, so it counts as a person's. */
-function fromAutomaticParents(entry: MemoryEntry, parents: ReadonlyMap<string, MemoryEntry>): boolean {
+function fromAutomaticParents(
+  entry: MemoryEntry,
+  parents: ReadonlyMap<string, MemoryEntry>,
+): boolean {
   return (
     entry.parents.length > 0 &&
     entry.parents.every((id) => {
@@ -162,30 +180,42 @@ function fromAutomaticParents(entry: MemoryEntry, parents: ReadonlyMap<string, M
   );
 }
 
-/** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents the store still has,
- * live or dormant. */
-export function repairDefect(entry: MemoryEntry, parents: ReadonlyMap<string, MemoryEntry>): RepairDefect | null {
+/** The defect quality repair finds in `entry`, or null; `parents` holds whichever of its parents
+ * the store still has, live or dormant. */
+export function repairDefect(
+  entry: MemoryEntry,
+  parents: ReadonlyMap<string, MemoryEntry>,
+): RepairDefect | null {
   if (structured(entry) || !isAutomaticEntry(entry)) return null;
   // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
   if (!BUNDLE_HEADER.test(entry.content)) {
     const { reason } = assessAutomaticMemory(entry.content);
-    return reason === null ? null : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
+    return reason === null
+      ? null
+      : { reason, disposition: isCertainReason(reason) ? 'set-aside' : 'review' };
   }
   const texts = heldTexts({ ...entry, source: 'consolidation' });
-  if (texts.length === 0) return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
+  if (texts.length === 0) {
+    return { reason: 'derived bundle has no safely parsed constituents', disposition: 'review' };
+  }
   const reasons = texts
     .map((text) => assessAutomaticMemory(text).reason)
     .filter((reason): reason is AutomaticMemoryDefect => reason !== null);
   if (reasons.length === 0) return null;
   const certain =
-    reasons.length === texts.length && reasons.every(isCertainReason) && fromAutomaticParents(entry, parents);
+    reasons.length === texts.length &&
+    reasons.every(isCertainReason) &&
+    fromAutomaticParents(entry, parents);
   return {
     reason: `derived constituents: ${[...new Set(reasons)].join('; ')}`,
     disposition: certain ? 'set-aside' : 'review',
   };
 }
 
-/** The defect a store too old to repair can only report: an automatic row's text alone, for a person to review. */
-export function previewDefect(row: Parameters<typeof isAutomaticEntry>[0]): AutomaticMemoryDefect | null {
+/** The defect a store too old to repair can only report: an automatic row's text alone, for a
+ * person to review. */
+export function previewDefect(
+  row: Parameters<typeof isAutomaticEntry>[0],
+): AutomaticMemoryDefect | null {
   return isAutomaticEntry(row) ? assessAutomaticMemory(row.content).reason : null;
 }

@@ -1,24 +1,26 @@
 // The graph groups: the entity graph's reads and the rebuild's writes.
 import type { ScopeActor } from '../../scope/recall-scope.js';
 
-/** How many ids one graph read takes at a time: results come back in this order per batch, and a `limit` holds per
- * batch, so every implementation must use the same size. */
+/** How many ids one graph read takes at a time: results come back in this order per batch, and a
+ * `limit` holds per batch, so every implementation must use the same size. */
 export const GRAPH_ID_BATCH = 400;
 
-/** What one graph view reads. `limit` is a positive integer capping each read on its own; newest means createdAt, then
- * id, both descending. A row shows when it cites no memory, or its memory is in the tenant with a null scope or one
- * `canReadScope(reader, scope)` admits; no `reader` shows every row. */
+/** What one graph view reads. `limit` is a positive integer capping each read on its own; newest
+ * means createdAt, then id, both descending. A row shows when it cites no memory, or its memory
+ * is in the tenant with a null scope or one `canReadScope(reader, scope)` admits; no `reader`
+ * shows every row. */
 export interface GraphViewQuery {
-  /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this name (lowest id first)
-   * that show; none left answers empty. Per GRAPH_ID_BATCH start ids, the newest `limit` relations with an end among
-   * them join in, each adding its other end to the ids held, until `limit` ids are held. */
+  /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this
+   * name (lowest id first) that show; none left answers empty. Per GRAPH_ID_BATCH start ids, the
+   * newest `limit` relations with an end among them join in, each adding its other end to the
+   * ids held, until `limit` ids are held. */
   readonly entity?: string;
   readonly limit: number;
   readonly reader?: ScopeActor;
 }
 
-/** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per batch, and
- * `truncated` is false. */
+/** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per
+ * batch, and `truncated` is false. */
 export type GraphWalkQuery =
   /** The entities whose memory is among `ids`, id ascending per batch. */
   | { readonly by: 'memory'; readonly ids: readonly string[] }
@@ -31,18 +33,21 @@ export interface GraphRows {
   readonly entities: Entity[];
   /** May name an entity `entities` lacks; the caller drops such a relation. */
   readonly relations: Relation[];
-  /** Judged before a row is hidden: true when start entities, joined relations, returned relations or (whole graph)
-   * returned entities came back `limit` long, or the walk held `limit` ids with a relation still to join. */
+  /** Judged before a row is hidden: true when start entities, joined relations, returned
+   * relations or (whole graph) returned entities came back `limit` long, or the walk held
+   * `limit` ids with a relation still to join. */
   readonly truncated: boolean;
 }
 
 /** The rows behind GET /v1/graph and recall's graph walk. */
 export interface GraphReads {
-  /** A view reads one snapshot, then drops rows that do not show: whole graph, the newest `limit` entities and
-   * relations; from a name, its held entities and the newest `limit` relations among them. A walk fills one list. */
+  /** A view reads one snapshot, then drops rows that do not show: whole graph, the newest
+   * `limit` entities and relations; from a name, its held entities and the newest `limit`
+   * relations among them. A walk fills one list. */
   graphRows(tenantId: string, query: GraphViewQuery | GraphWalkQuery): Promise<GraphRows>;
-  /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts diffGraph plans them.
-   * Read outside any write lock, so the apply re-checks each op against what changed since. */
+  /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts
+   * diffGraph plans them. Read outside any write lock, so the apply re-checks each op against
+   * what changed since. */
   graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;
 }
 
@@ -62,8 +67,8 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity came from; null once the mirror is forgotten/pruned, then provenance is
-   * source_object. */
+  /** The consolidated source memory this entity came from; null once the mirror is
+   * forgotten/pruned, then provenance is source_object. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).
@@ -89,20 +94,26 @@ export interface Relation {
 
 // The graph rebuild's writes: ops graphReads.graphDelta planned, applied as plain data.
 export interface GraphRebuild {
-  /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. Each insert and
-   * update is checked against the rows as they stand, so one a writer made stale since the diff's read is skipped. */
-  applyOps(tenantId: string, ops: readonly GraphOp[], opts: ApplyGraphOpsOptions): Promise<ApplyGraphOpsResult>;
+  /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past
+   * `opts.holdMs`. Each insert and update is checked against the rows as they stand, so one a
+   * writer made stale since the diff's read is skipped. */
+  applyOps(
+    tenantId: string,
+    ops: readonly GraphOp[],
+    opts: ApplyGraphOpsOptions,
+  ): Promise<ApplyGraphOpsResult>;
 }
 
-/** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
- * (memory_id may go null) and is re-validated by the rebuild, not enforced by the store. */
+/** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives
+ * a mirror forget/prune (memory_id may go null) and is re-validated by the rebuild, not enforced
+ * by the store. */
 export interface SourceObjectRef {
   type: SourceObjectType;
   id: number;
 }
 
-/** What names an object-derived entity across rebuilds; v38 enforces no unique key on it, so the diff keeps one row per
- * key. */
+/** What names an object-derived entity across rebuilds; v38 enforces no unique key on it, so the
+ * diff keeps one row per key. */
 export interface NaturalKey {
   readonly entityType: EntityType;
   readonly sourceObject: SourceObjectRef;

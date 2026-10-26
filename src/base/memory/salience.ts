@@ -1,5 +1,6 @@
 /**
- * Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped.
+ * Salience gate: decides at memory creation whether content is stored at full strength, starts
+ * weakened, or is skipped.
  */
 
 import type { MemoryEntry } from './entry.js';
@@ -66,19 +67,7 @@ export function computeSalience(
 
   const duplicateMatch = findBestOverlap(trimmed, window);
   if (duplicateMatch.overlap > opts.overlapThreshold) {
-    if (isError) {
-      const recentErrors = countRecentErrors(window);
-      if (recentErrors >= opts.maxRepeatErrors) {
-        return {
-          decision: 'start_weak',
-          reason:
-            `repeat_error (${recentErrors} recent errors, overlap ` +
-            `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
-          score: REPEAT_ERROR_SCORE,
-        };
-      }
-      return { decision: 'store', reason: 'error_despite_overlap', score: ERROR_DESPITE_OVERLAP_SCORE };
-    }
+    if (isError) return judgeOverlappingError(window, duplicateMatch, opts.maxRepeatErrors);
     return judgeOverlappingNonError(trimmed, window, duplicateMatch);
   }
 
@@ -89,12 +78,35 @@ export function computeSalience(
   return scoreNovel(trimmed, tags);
 }
 
+function judgeOverlappingError(
+  window: MemoryEntry[],
+  duplicateMatch: ReturnType<typeof findBestOverlap>,
+  maxRepeatErrors: number,
+): SalienceResult {
+  const recentErrors = countRecentErrors(window);
+  if (recentErrors >= maxRepeatErrors) {
+    return {
+      decision: 'start_weak',
+      reason:
+        `repeat_error (${recentErrors} recent errors, overlap ` +
+        `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
+      score: REPEAT_ERROR_SCORE,
+    };
+  }
+  return {
+    decision: 'store',
+    reason: 'error_despite_overlap',
+    score: ERROR_DESPITE_OVERLAP_SCORE,
+  };
+}
+
 function judgeOverlappingNonError(
   trimmed: string,
   window: MemoryEntry[],
   duplicateMatch: ReturnType<typeof findBestOverlap>,
 ): SalienceResult {
-  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is skipped.
+  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is
+  // skipped.
   const key = duplicateKey(trimmed);
   const same = window.find((m) => heldTextKeys(m).includes(key));
   if (!same) {
@@ -104,7 +116,11 @@ function judgeOverlappingNonError(
       score: NEAR_DUPLICATE_SCORE,
     };
   }
-  return { decision: 'skip', reason: `duplicate (same text as ${same.id})`, score: DUPLICATE_SCORE };
+  return {
+    decision: 'skip',
+    reason: `duplicate (same text as ${same.id})`,
+    score: DUPLICATE_SCORE,
+  };
 }
 
 function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
@@ -134,5 +150,7 @@ function findBestOverlap(content: string, memories: MemoryEntry[]) {
 }
 
 function countRecentErrors(memories: MemoryEntry[]): number {
-  return memories.filter((m) => m.emotionalValence === 'negative' || m.emotionalValence === 'critical').length;
+  return memories.filter(
+    (m) => m.emotionalValence === 'negative' || m.emotionalValence === 'critical',
+  ).length;
 }

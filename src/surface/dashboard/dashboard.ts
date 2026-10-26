@@ -1,11 +1,17 @@
-// The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts maps each path
-// here.
+// The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts
+// maps each path here.
 import type * as http from 'node:http';
 import type { DashboardContext, DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../http/http-util.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { encodeCursor, parseCursor } from '../../api/cursor.js';
-import { forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult } from './dashboard-actions.js';
+import {
+  forgetMemory,
+  markWrong,
+  pinMemory,
+  resolveOpenConflict,
+  type ActionResult,
+} from './dashboard-actions.js';
 import {
   parseActionBody,
   parseConflictId,
@@ -50,21 +56,29 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
   sendOrNotFound(r.res, await r.reader.search(parseSearchText(r.query), freshOf(r)));
 }
 
-// next_cursor rides only a page with more after it, so a board that fits one page gets its old reply byte for byte.
+// next_cursor rides only a page with more after it, so a board that fits one page gets its old
+// reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
   const after = parseCursor(r.query.get('cursor'), 'string', 'string');
-  const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, { limit: MAX_LIST_LIMIT, after });
+  const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, {
+    limit: MAX_LIST_LIMIT,
+    after,
+  });
   sendJson(r.res, 200, next === null ? { cards } : { cards, next_cursor: encodeCursor(next) });
 }
 
 export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promise<void> {
   // The Board has always answered 404, not 400, for an id that does not fit the pattern.
-  sendOrNotFound(r.res, CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null);
+  sendOrNotFound(
+    r.res,
+    CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null,
+  );
 }
 
 type Action = (ctx: DashboardContext, body: ActionBody) => Promise<ActionResult>;
 
-// Nothing runs until the content type and the body pass; a committed write then moves the snapshot id before the reply.
+// Nothing runs until the content type and the body pass; a committed write then moves the snapshot
+// id before the reply.
 async function runAction(r: DashboardRouteRequest, action: Action): Promise<void> {
   const { req, res } = r;
   if (!JSON_CONTENT_TYPE.test(req.headers['content-type'] ?? '')) {

@@ -1,12 +1,13 @@
-// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from its Ledger.
+// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from
+// its Ledger.
 import { ledgerHome, type LedgerReach } from './ledger-db.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 
 export interface SessionArmOptions {
   readonly reach: LedgerReach;
   /**
-   * Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot claim that
-   * session's arm.
+   * Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot
+   * claim that session's arm.
    */
   readonly ownTenantOnly?: boolean;
 }

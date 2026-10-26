@@ -1,5 +1,5 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by its
-// kind's api calls.
+// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill),
+// each driven by its kind's api calls.
 
 import { errorMessage } from '../../base/util/log.js';
 import type { ObjectByKind } from '../../base/records/object-types.js';
@@ -14,7 +14,12 @@ import {
   type WriteOrigin,
 } from '../../api/objects/objects.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import {
+  nonEmptyStringFlag,
+  stringFlag,
+  type CliFlags,
+  type CommandContext,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import {
@@ -36,7 +41,8 @@ export interface Succession {
   readonly changeSummary: string | undefined;
 }
 
-/** How one kind reads its flags and prints; `K` is its kind, `B` the body flags a version is saved from. */
+/** How one kind reads its flags and prints; `K` is its kind, `B` the body flags a version is
+ * saved from. */
 export interface VersionedKind<K extends VersionedKindName, B> {
   readonly kind: K;
   readonly names: ObjectNames;
@@ -81,7 +87,8 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(ctx, args, flags);
     if (sub === 'list') {
-      const filter = kind.filterFlag === undefined ? undefined : stringFlag(flags, kind.filterFlag)?.trim();
+      const filter =
+        kind.filterFlag === undefined ? undefined : stringFlag(flags, kind.filterFlag)?.trim();
       return listObjectsVerb(flags, {
         plural: kind.plural,
         states: objectStates(kind.kind),
@@ -91,7 +98,9 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     }
     if (sub === 'get') return getVersion(ctx, kind, args);
     if (sub === 'supersede') return supersedeVersion(ctx, kind, args, flags);
-    if (sub === 'close') return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
+    if (sub === 'close') {
+      return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
+    }
     // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
     await createVersion(ctx, kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };
@@ -120,7 +129,9 @@ async function createVersion<K extends VersionedKindName, B>(
     for (const line of kind.usage) printError(line);
     throw new CliExit(1);
   }
-  const created = await refusalExits(() => objectCreate(ctx, kind.kind, kind.write(key, body), shellFolder()));
+  const created = await refusalExits(() =>
+    objectCreate(ctx, kind.kind, kind.write(key, body), shellFolder()),
+  );
   printSaved(kind.recorded(created), created);
 }
 
@@ -142,7 +153,10 @@ async function supersedeVersion<K extends VersionedKindName, B>(
   const created = await refusalExits(() =>
     objectCreate(ctx, kind.kind, kind.write(kind.keyOf(existing), body, from), shellFolder()),
   );
-  printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
+  printSaved(
+    `${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`,
+    created,
+  );
 }
 
 /** A CLI write is made in the shell's folder, whose path segments tag its mirror memory. */
@@ -150,7 +164,8 @@ export function shellFolder(): WriteOrigin {
   return { folder: process.cwd() };
 }
 
-/** Every save goes through here, so a refused write always prints the store's message and exits 1. */
+/** Every save goes through here, so a refused write always prints the store's message and exits
+ * 1. */
 async function refusalExits<T>(save: () => Promise<T>): Promise<T> {
   try {
     return await save();

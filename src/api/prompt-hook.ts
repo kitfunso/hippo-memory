@@ -1,7 +1,8 @@
-// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
-// hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags
-// (surface/cli/context.ts); only the CLI parity case in tests/store/prompt-hook-context.process.test.ts ties the two.
-import type { Context, ContextResult, ContextResultEntry } from './index.js';
+// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for
+// promptHookContext (a remote hook route's call). promptHookContext keeps the server-side copy of
+// the CLI's contextGet flags (surface/cli/context.ts); only the CLI parity case in
+// tests/store/prompt-hook-context.process.test.ts ties the two.
+import type { Context, ContextOptions, ContextResult, ContextResultEntry } from './index.js';
 import { assembleContext } from './context.js';
 import { sharedStoreOf, strengthOf } from './types.js';
 import type { StrengthModel } from '../base/memory/strength.js';
@@ -16,7 +17,11 @@ import {
   settleTokens,
   snapshotText,
 } from './context-render.js';
-import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from './delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../base/session/delivery.js';
 import type { HookRuntime } from '../base/session/capture-contract.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
@@ -51,8 +56,12 @@ export interface DeliveryStart {
   fault?: DeliveryFault;
 }
 
-/** A delivery recorder for a hook on `ctx`'s store when the ledger store enables one, else null; never throws. */
-export async function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Promise<DeliveryRecorder | null> {
+/** A delivery recorder for a hook on `ctx`'s store when the ledger store enables one, else null;
+ * never throws. */
+export async function startDeliveryRecorder(
+  ctx: Context,
+  start: DeliveryStart,
+): Promise<DeliveryRecorder | null> {
   try {
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
@@ -77,8 +86,8 @@ export async function startDeliveryRecorder(ctx: Context, start: DeliveryStart):
   }
 }
 
-/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never
- * points into another. */
+/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store,
+ * so `failure_id` never points into another. */
 export async function startToolFailureRecorder(
   ctx: Context,
   start: Omit<DeliveryStart, 'eventType'>,
@@ -89,7 +98,8 @@ export async function startToolFailureRecorder(
   return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
 }
 
-/** The recorder's event for a turn to write after its rows; undefined with no recorder, a second take or a failure. */
+/** The recorder's event for a turn to write after its rows; undefined with no recorder, a second
+ * take or a failure. */
 export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput | undefined {
   if (rec === null) return undefined;
   try {
@@ -100,15 +110,17 @@ export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput |
   }
 }
 
-/** Writes the recorder's event; a second flush is a no-op. A recorder started before the request that flushes it
- * passes that request's `ctx`, so the write takes the request's handle and lock wait. */
+/** Writes the recorder's event; a second flush is a no-op. A recorder started before the request
+ * that flushes it passes that request's `ctx`, so the write takes the request's handle and lock
+ * wait. */
 export async function flushDeliveryRecorder(
   rec: DeliveryRecorder | null,
   ctx?: Pick<Context, 'reach' | 'store' | 'config'>,
 ): Promise<void> {
   const event = takeDelivery(rec);
   if (rec === null || event === undefined) return;
-  const ledger = (ctx === undefined ? undefined : ledgerHome(ledgerReachOf(ctx))?.ledger) ?? rec.ledger;
+  const ledger =
+    (ctx === undefined ? undefined : ledgerHome(ledgerReachOf(ctx))?.ledger) ?? rec.ledger;
   await ledger.recordTurn({ uses: [], delivery: event });
 }
 
@@ -122,7 +134,8 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Where the ledger rows go; a shared store's reach has no global store, see promptHookContext. */
+  /** Where the ledger rows go; a shared store's reach has no global store, see
+   * promptHookContext. */
   readonly reach: LedgerReach;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule; a string or
    *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have
@@ -135,14 +148,16 @@ export interface ContextView {
   readonly strength: StrengthModel;
 }
 
-/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code
- * Local reads. */
+/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the
+ * nested one VS Code Local reads. */
 export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vscode-session-start';
 
-/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which
- * only the Copilot harness sends. */
+/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a
+ * camelCase `sessionId`, which only the Copilot harness sends. */
 export function sessionStartEnvelope(stdinText: string | undefined): HookEnvelope {
-  return hookPayloadString(stdinText, 'sessionId') !== null ? 'copilot-session-start' : 'vscode-session-start';
+  return hookPayloadString(stdinText, 'sessionId') !== null
+    ? 'copilot-session-start'
+    : 'vscode-session-start';
 }
 
 function hookReply(envelope: HookEnvelope, additionalContext: string): string {
@@ -151,7 +166,8 @@ function hookReply(envelope: HookEnvelope, additionalContext: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
-/** A hook render's stdout and the hash of the static block it carries, null when it carries none. */
+/** A hook render's stdout and the hash of the static block it carries, null when it carries
+ * none. */
 interface RenderedContext {
   readonly stdout: string;
   readonly staticHash: string | null;
@@ -171,11 +187,16 @@ export function hasContextData(result: ContextResult): boolean {
 export type RenderItem = { entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean };
 
 export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
-  return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
+  return entries.map((r) => ({
+    entry: r.entry,
+    score: r.score,
+    tokens: r.tokens,
+    isGlobal: r.isGlobal ?? false,
+  }));
 }
 
-/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
- * recent-N) and a never-skipped recall block. */
+/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot,
+ * handoff, events, pins, recent-N) and a never-skipped recall block. */
 export async function additionalContextOutput(view: ContextView): Promise<string> {
   return (await renderAdditionalContext(view)).stdout;
 }
@@ -190,8 +211,11 @@ function renderStaticBlock(
     [
       ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
       ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
-      ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
-      // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
+      ...(result.recentEvents && result.recentEvents.length > 0
+        ? [sessionTrailText(result.recentEvents)]
+        : []),
+      // No live strength percentage, so an unchanged set of memories renders byte-identically turn
+      // after turn.
       ...(staticItems.length > 0
         ? contextBlockLines(staticItems, t, framing, { now: view.now, showStrength: false })
         : []),
@@ -200,33 +224,59 @@ function renderStaticBlock(
   );
 }
 
-function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing'], now: Date): string {
+function renderRecallBlock(
+  recallItems: RenderItem[],
+  framing: ContextView['framing'],
+  now: Date,
+): string {
   if (recallItems.length === 0) return '';
   return settleTokens((t) =>
-    contextBlockLines(recallItems, t, framing, { now, showStrength: false, heading: 'Prompt-Relevant Memory' }).join(
-      '\n',
-    ),
+    contextBlockLines(recallItems, t, framing, {
+      now,
+      showStrength: false,
+      heading: 'Prompt-Relevant Memory',
+    }).join('\n'),
   );
 }
 
-async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
-  const { result, rec, framing } = view;
-  const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
-  const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
+interface RenderedBlocks {
+  readonly staticItems: RenderItem[];
+  readonly recallItems: RenderItem[];
+  readonly staticBlock: string;
+  readonly recallBlock: string;
+}
+
+function renderBlocks(view: ContextView): RenderedBlocks {
+  const { result, framing } = view;
+  const staticEntries = result.entries.filter(
+    (r) => r.category !== 'cross-project' && !r.promptRecall,
+  );
+  const staticCrossEntries = result.entries.filter(
+    (r) => r.category === 'cross-project' && !r.promptRecall,
+  );
   const staticItems = toRenderItems(staticEntries);
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
+  return {
+    staticItems,
+    recallItems,
+    staticBlock: renderStaticBlock(view, staticItems, staticCrossEntries),
+    recallBlock: renderRecallBlock(recallItems, framing, view.now),
+  };
+}
 
-  const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
-  const recallBlock = renderRecallBlock(recallItems, framing, view.now);
+async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
+  const { rec } = view;
+  const { staticItems, recallItems, staticBlock, recallBlock } = renderBlocks(view);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
+  const staticCount = staticItems.length;
   const sendStatic =
     staticBlock.trim().length > 0 &&
-    !(await skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length));
+    !(await skipUnchangedStatic({ view, surface, staticBlock, recallBlock, staticCount }));
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext =
@@ -249,25 +299,37 @@ async function renderAdditionalContext(view: ContextView): Promise<RenderedConte
     await recordAdditionalContextRows(
       view,
       surface,
-      { text: finalStatic, items: staticItems.length },
+      { text: finalStatic, items: staticCount },
       { text: recallBlock, items: recallItems.length },
     );
   }
   return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-async function skipUnchangedStatic(
-  view: ContextView,
-  surface: TokenSurface,
-  staticBlock: string,
-  recallBlock: string,
-  staticCount: number,
-): Promise<boolean> {
+interface SkipUnchangedStaticOptions {
+  readonly view: ContextView;
+  readonly surface: TokenSurface;
+  readonly staticBlock: string;
+  readonly recallBlock: string;
+  readonly staticCount: number;
+}
+
+/** True, after booking the skip row, when the hook may omit a static block this session already
+ * holds. */
+async function skipUnchangedStatic({
+  view,
+  surface,
+  staticBlock,
+  recallBlock,
+  staticCount,
+}: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
-  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
+  // Session start is the only injection Copilot gets, so a resumed session needs the whole block
+  // again.
+  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
+    return false;
+  }
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
@@ -276,7 +338,8 @@ async function skipUnchangedStatic(
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = await ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last, staticHash, injectCfg.refreshTurns)) return false;
-  // With no recall block this turn sends nothing more, so its delivery row says the static block was reused.
+  // With no recall block this turn sends nothing more, so its delivery row says the static block
+  // was reused.
   if (!recallBlock.trim()) rec?.delivered({ state: 'reused', staticHash, staticReused: true });
   await bookLedgerTurn(
     {
@@ -303,8 +366,8 @@ interface InjectedBlock {
   readonly items: number;
 }
 
-/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
- * break the hook. */
+/** One connection for both rows; a failed row is logged and the other still lands, because a
+ * ledger failure must not break the hook. */
 async function recordAdditionalContextRows(
   view: ContextView,
   surface: TokenSurface,
@@ -332,7 +395,8 @@ async function recordAdditionalContextRows(
   );
 }
 
-// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
+// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two
+// drift.
 const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
@@ -341,7 +405,8 @@ const HOOK_FRAMING = 'observe';
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
 /**
- * The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves to.
+ * The project a hook caller runs in: its id, the folder name its older rows carry, and any other
+ * names it resolves to.
  */
 export interface CallerProject {
   readonly name: string;
@@ -353,8 +418,8 @@ export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
-  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always
-   * sent. */
+  /** The staticHash of the last reply whose stdout the caller printed in this session; absent,
+   * the block is always sent. */
   readonly printedHash?: string;
 }
 
@@ -364,14 +429,17 @@ export interface PromptHookOptions {
   readonly sharedStore?: true;
 }
 
-/** The caps on a hook caller's session id and project names, so a caller other than an HTTP route is bounded too. */
+/** The caps on a hook caller's session id and project names, so a caller other than an HTTP
+ * route is bounded too. */
 export function assertCallerIds(sessionId: string, project: CallerProject): void {
   const { name, legacyName, aliases = [] } = project;
   if (aliases.length > MAX_PROJECT_ALIASES) {
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   }
   if ([sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
-    throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
+    throw new BadRequestError(
+      `session id and project names: at most ${MAX_ID_LEN} characters each`,
+    );
   }
 }
 
@@ -382,12 +450,13 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
- * on `ctx`'s store for its project. Omits an unchanged static block only when `printedHash` matches; `arm` is the
- * ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout. `staticHash` is the hash to echo back
- * (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
- * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
- * any arm is booked. */
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints
+ * for this session, read on `ctx`'s store for its project. Omits an unchanged static block only
+ * when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null at rate 0); a
+ * holdout gets empty stdout. `staticHash` is the hash to echo back (null with no static block, a
+ * sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only. Throws
+ * BadRequestError past the input caps, and on a shared store for a project assertCallerProject
+ * refuses, before any arm is booked. */
 export async function buildPromptHookContext(
   ctx: Context,
   req: PromptHookRequest,
@@ -397,26 +466,16 @@ export async function buildPromptHookContext(
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
   if (sharedStore || sharedStoreOf(ctx)) assertCallerProject(req.project);
-  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
+  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here
+  // either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
   const armOpts = { reach, ownTenantOnly: true };
   const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
-  const prompt = payload?.prompt;
   const now = ctx.infra.clock();
-  const result = await assembleContext(ctx, {
-    budget: HOOK_BUDGET,
-    pinnedOnly: true,
-    includeRecent: HOOK_INCLUDE_RECENT,
-    // The project comes from the caller, never from where the store sits or the daemon's cwd.
-    currentProject: req.project,
-    currentSessionId: sessionId,
-    prompt: isJsonString(prompt) ? prompt : undefined,
-    cost: contextCost('additional-context', HOOK_FRAMING, now),
-    sharedStore,
-  });
+  const result = await assembleContext(ctx, hookContextOptions(req, now, sharedStore));
   const rendered = hasContextData(result)
     ? await renderAdditionalContext({
         config: ctx.config,
@@ -435,4 +494,23 @@ export async function buildPromptHookContext(
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.
   return { arm, stdout: rendered.stdout, staticHash: subagent ? null : rendered.staticHash };
+}
+
+function hookContextOptions(
+  req: PromptHookRequest,
+  now: Date,
+  sharedStore: PromptHookOptions['sharedStore'],
+): ContextOptions {
+  const prompt = req.payload?.prompt;
+  return {
+    budget: HOOK_BUDGET,
+    pinnedOnly: true,
+    includeRecent: HOOK_INCLUDE_RECENT,
+    // The project comes from the caller, never from where the store sits or the daemon's cwd.
+    currentProject: req.project,
+    currentSessionId: req.sessionId,
+    prompt: isJsonString(prompt) ? prompt : undefined,
+    cost: contextCost('additional-context', HOOK_FRAMING, now),
+    sharedStore,
+  };
 }

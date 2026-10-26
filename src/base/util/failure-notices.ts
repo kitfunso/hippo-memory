@@ -1,5 +1,5 @@
-// The failures a root has warned about. A bad key fails every write, so each distinct failure warns once in full and
-// its repeats are counted, then summed at most once per interval.
+// The failures a root has warned about. A bad key fails every write, so each distinct failure warns
+// once in full and its repeats are counted, then summed at most once per interval.
 import { MINUTE_MS } from './time.js';
 
 const NOTICE_KEY_CAP = 64;
@@ -10,8 +10,12 @@ interface Seen {
   suppressed: number;
 }
 
-/** What one failure should print: its full warning, a count of the repeats since the last notice, or nothing. */
-export type FailureNotice = { readonly kind: 'first' } | { readonly kind: 'repeats'; readonly count: number } | null;
+/** What one failure should print: its full warning, a count of the repeats since the last
+ * notice, or nothing. */
+export type FailureNotice =
+  | { readonly kind: 'first' }
+  | { readonly kind: 'repeats'; readonly count: number }
+  | null;
 
 /** One root's warned failures, kept for the root's life and never shared with another root. */
 export class FailureNotices {

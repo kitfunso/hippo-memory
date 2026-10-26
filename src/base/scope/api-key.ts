@@ -1,5 +1,5 @@
-// An API key: its shape, its scrypt cost, the mint and the checks a stored row passes, so only a hash of the plaintext
-// ever reaches a store.
+// An API key: its shape, its scrypt cost, the mint and the checks a stored row passes, so only a
+// hash of the plaintext ever reaches a store.
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
@@ -24,10 +24,17 @@ export interface ScryptParams {
   readonly maxmem: number;
 }
 
-export const DEFAULT_SCRYPT: ScryptParams = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
+export const DEFAULT_SCRYPT: ScryptParams = {
+  N: SCRYPT_N,
+  r: SCRYPT_R,
+  p: SCRYPT_P,
+  maxmem: SCRYPT_MAXMEM,
+};
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
-const MINTED_KEY_PATTERN = new RegExp(`^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`);
+const MINTED_KEY_PATTERN = new RegExp(
+  `^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`,
+);
 
 function randBase32(n: number): string {
   const bytes = randomBytes(n);
@@ -43,10 +50,12 @@ function hashKey(plaintext: string): string {
   return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
-/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
+/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by
+ * itself. */
 export const DEFAULT_KEY_TTL_DAYS = 90;
 
-/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its place. */
+/** A fresh key: the plaintext its caller sees once, and the scrypt hash a store keeps in its
+ * place. */
 export interface MintedApiKey {
   keyId: string;
   plaintext: string;
@@ -61,11 +70,13 @@ export function mintApiKey(): MintedApiKey {
 
 /** The key id of a minted-key-shaped token, else null. */
 export function mintedKeyId(plaintext: string): string | null {
-  return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
+  return MINTED_KEY_PATTERN.test(plaintext)
+    ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN)
+    : null;
 }
 
-/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
- * with the one compare the sync and the pooled check share. */
+/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value
+ * asks of a derivation, with the one compare the sync and the pooled check share. */
 export interface StoredScrypt {
   readonly salt: Buffer;
   readonly keylen: number;
@@ -73,7 +84,7 @@ export interface StoredScrypt {
   matches(derived: Buffer): boolean;
 }
 
-function validCost(n: number, r: number, p: number): boolean {
+function validCost({ N: n, r, p }: Omit<ScryptParams, 'maxmem'>): boolean {
   const powerOfTwo = Number.isInteger(n) && n >= 2 && (n & (n - 1)) === 0;
   return (
     powerOfTwo &&
@@ -97,9 +108,9 @@ export function storedScrypt(stored: string): StoredScrypt | null {
   const saltHex = parts[parts.length - 2]!;
   if (parts.length === 3 && parts[0] !== 'scrypt') return null;
   if (parts.length === 6) {
-    const [n, r, p] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
-    if (parts[0] !== 'scrypt2' || !validCost(n, r, p)) return null;
-    params = { N: n, r, p, maxmem: SCRYPT_MAXMEM };
+    const cost = { N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]) };
+    if (parts[0] !== 'scrypt2' || !validCost(cost)) return null;
+    params = { ...cost, maxmem: SCRYPT_MAXMEM };
   }
   const expected = Buffer.from(hashHex, 'hex');
   return {
@@ -129,8 +140,8 @@ interface KeyRowFacts {
   readonly ownerSubject?: string | null;
 }
 
-/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that
- * predates expiry) or a stamp that does not parse, so both fail closed. */
+/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing
+ * field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
 export function keyExpiryMs(expiresAt: string | null | undefined): number {
   if (expiresAt === null) return Infinity;
   if (expiresAt === undefined) return -Infinity;
@@ -140,8 +151,8 @@ export function keyExpiryMs(expiresAt: string | null | undefined): number {
 
 /** True for a record that is present, unrevoked and unexpired, before any secret check. */
 export function isUsableKey<R extends KeyRowFacts>(record: R | null, now: number): record is R {
-  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn
-  // CPU.
+  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and
+  // let junk tokens burn CPU.
   if (!record) return false;
   return !record.revokedAt && now < keyExpiryMs(record.expiresAt);
 }
@@ -150,7 +161,12 @@ export function isUsableKey<R extends KeyRowFacts>(record: R | null, now: number
 export function verifiedKeyOf(keyId: string, record: KeyRowFacts): VerifiedApiKey {
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
-  const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
+  const key: VerifiedApiKey = {
+    tenantId: record.tenantId,
+    keyId,
+    role,
+    scopes: [...record.scopes],
+  };
   // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
   if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
   return key;

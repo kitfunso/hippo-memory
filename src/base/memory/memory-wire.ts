@@ -1,8 +1,17 @@
-// The snake_case keys a memory carries in every file and wire format: export JSON, markdown mirrors, dormant snapshots
-// and the eval kit. MemoryEntry renames its fields freely; these names are published and stay.
-import type { ConfidenceLevel, EmotionalValence, Layer, MemoryEntry, MemoryKind, TraceOutcome } from './entry.js';
+// The snake_case keys a memory carries in every file and wire format: export JSON, markdown
+// mirrors, dormant snapshots and the eval kit. MemoryEntry renames its fields freely; these names
+// are published and stay.
+import type {
+  ConfidenceLevel,
+  EmotionalValence,
+  Layer,
+  MemoryEntry,
+  MemoryKind,
+  TraceOutcome,
+} from './entry.js';
 
-/** A memory as files and wire formats name it. Optional keys are the ones a stored entry may lack. */
+/** A memory as files and wire formats name it. Optional keys are the ones a stored entry may
+ * lack. */
 export interface MemoryWire {
   id: string;
   created: string;
@@ -44,12 +53,13 @@ export interface MemoryWire {
   last_rebuilt_at?: string | null;
   rebuild_count?: number;
   dag_level_3_built_at?: string | null;
-  /** 2.x wrote a search row's FTS5 rank here; kept so such a wire object still types, though 3.0 never writes or reads
-   * it. A hit's score is on `SearchResult`. */
+  /** 2.x wrote a search row's FTS5 rank here; kept so such a wire object still types, though 3.0
+   * never writes or reads it. A hit's score is on `SearchResult`. */
   bm25_score?: number;
 }
 
-/** Keys in the order a store read builds an entry, so a dump of a loaded entry keeps the bytes 2.x wrote. */
+/** Keys in the order a store read builds an entry, so a dump of a loaded entry keeps the bytes
+ * 2.x wrote. */
 export function toWire(entry: MemoryEntry): MemoryWire {
   return {
     id: entry.id,
@@ -95,7 +105,8 @@ export function toWire(entry: MemoryEntry): MemoryWire {
   };
 }
 
-/** The entry a wire object names; a key the wire lacks stays undefined, as JSON.parse left it before. */
+/** The entry a wire object names; a key the wire lacks stays undefined, as JSON.parse left it
+ * before. */
 export function fromWire(wire: MemoryWire): MemoryEntry {
   return {
     id: wire.id,

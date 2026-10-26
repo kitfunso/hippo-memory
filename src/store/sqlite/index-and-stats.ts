@@ -16,9 +16,13 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
 import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
-/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
- * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
-export function saveIndex(db: DatabaseSyncLike, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
+/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and
+ * `last_trace_id` commit in one transaction, as callers rely on both moving together. No hippo
+ * path writes index.json. */
+export function saveIndex(
+  db: DatabaseSyncLike,
+  index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>,
+): void {
   withWriteScope(db, 'save_index', () => {
     setMeta(db, META_KEY.lastRetrievalIds, JSON.stringify(index.last_retrieval_ids ?? []));
     setMeta(db, META_KEY.lastTraceId, index.last_trace_id ?? '');
@@ -37,7 +41,8 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  // Increments a busy store refused, held by the runtime and folded into the next update that lands.
+  // Increments a busy store refused, held by the runtime and folded into the next update that
+  // lands.
   const { runtime } = files;
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {
@@ -49,8 +54,8 @@ export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: Stat
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, at: StoreAt, delta: StatsDelta): void {
-  // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
-  // over the untouched two.
+  // One atomic statement per named counter: a read-modify-write loses concurrent increments and
+  // stamps stale values over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
     [META_KEY.totalRemembered, delta.remembered ?? 0],
     [META_KEY.totalRecalled, delta.recalled ?? 0],
@@ -58,8 +63,8 @@ export function updateStatsOn(db: DatabaseSyncLike, at: StoreAt, delta: StatsDel
   ];
   for (const [key, amount] of increments) {
     if (amount === 0) continue;
-    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store "1.0" into this TEXT
-    // column instead of "1".
+    // Both binds are the same string: node:sqlite binds a JS number as REAL, which would store
+    // "1.0" into this TEXT column instead of "1".
     cachedStatement(
       db,
       `
@@ -95,17 +100,16 @@ export function appendConsolidationRun(
   files: StoreFiles,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  cachedStatement(db, `INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
-    run.timestamp,
-    run.decayed,
-    run.merged,
-    run.removed,
-  );
+  cachedStatement(
+    db,
+    `INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`,
+  ).run(run.timestamp, run.decayed, run.merged, run.removed);
   pruneConsolidationRuns(db);
   writeStatsMirror(files, buildStatsFromDb(db));
 }
 
-/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
+/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24
+ * hours. */
 export function createdSinceLastSleep(db: DatabaseSyncLike, tenantId: string, now: Date): number {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const row = cachedStatement(
@@ -126,12 +130,17 @@ export function lastConsolidation(db: DatabaseSyncLike): string | undefined {
 }
 
 /** The stored sleep count (0 when none) and the newest 20 run times, newest first. */
-export function readSleepHistory(db: DatabaseSyncLike): Pick<SleepStart, 'sleepCount' | 'recentRuns'> {
+export function readSleepHistory(
+  db: DatabaseSyncLike,
+): Pick<SleepStart, 'sleepCount' | 'recentRuns'> {
   const rows = cachedStatement(
     db,
     `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`,
   ).all() as Array<{ timestamp: string }>;
-  return { sleepCount: getMetaNumber(db, META_KEY.sleepCount), recentRuns: rows.map((r) => r.timestamp) };
+  return {
+    sleepCount: getMetaNumber(db, META_KEY.sleepCount),
+    recentRuns: rows.map((r) => r.timestamp),
+  };
 }
 
 /** Increment the sleep counter after each consolidation run. */

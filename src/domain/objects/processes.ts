@@ -1,9 +1,8 @@
 /**
- * Process object: a named, ordered list of `steps` that evolves by supersession, each version recording
- * `change_summary` and a server-derived `version`.
- * The `processes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
- * recall.
- * Structural step-diffing is a deferred read-side feature; the version chain is the changelog. */
+ * Process object: a named, ordered list of `steps` that evolves by supersession, each version
+ * recording `change_summary` and a server-derived `version`. The `processes` table is the source
+ * of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. Structural
+ * step-diffing is a deferred read-side feature; the version chain is the changelog. */
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
@@ -36,13 +35,16 @@ export interface SaveProcessOptions {
   extraTags?: string[];
 }
 
-/** Validate and trim the steps body; throws on a non-array, a non-string or empty element, or a cap breach. */
+/** Validate and trim the steps body; throws on a non-array, a non-string or empty element, or a
+ * cap breach. */
 export function validateProcessSteps(steps: JsonValue): string[] {
   if (!Array.isArray(steps)) {
     throw new BadRequestError('steps must be an array of strings');
   }
   if (steps.length > MAX_PROCESS_STEPS) {
-    throw new BadRequestError(`steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`);
+    throw new BadRequestError(
+      `steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`,
+    );
   }
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {

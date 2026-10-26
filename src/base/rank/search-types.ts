@@ -1,20 +1,23 @@
 import type { MemoryEntry } from '../memory/entry.js';
 
-/** Default candidate-pool size for `listSearchEntries` when `limit` is undefined; `api.recall` imports it for
- * `RecallResult.windowSize` so the two cannot drift. */
+/** Default candidate-pool size for `listSearchEntries` when `limit` is undefined; `api.recall`
+ * imports it for `RecallResult.windowSize` so the two cannot drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 export const DEFAULT_RECALL_BUDGET = 4000;
 
 /** Results a search keeps whatever they cost when the caller names no minimum. */
 export const DEFAULT_MIN_RESULTS = 1;
-// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global discount.
+// Local memories outrank global ones by this factor; contextGet applies it as a 1/x global
+// discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
-// The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both default to it.
+// The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both
+// default to it.
 export const DEFAULT_MMR_LAMBDA = 0.7;
 // A recorded conflict peer in the same result list is cut to this share of its score.
 export const CONFLICT_PEER_MULTIPLIER = 0.3;
-// The value-aware clamp is wider than the always-on outcome nudge, so outcome history can decide the order.
+// The value-aware clamp is wider than the always-on outcome nudge, so outcome history can decide
+// the order.
 export const VALUE_MULT_SLOPE = 0.3;
 export const VALUE_MULT_MIN = 0.7;
 export const VALUE_MULT_MAX = 1.3;
@@ -47,15 +50,18 @@ export interface SearchResult {
   tokens: number;
   /** Populated when search is called with options.explain === true. */
   breakdown?: ScoreBreakdown;
-  /** Ordered lifecycle re-ranking steps that mutated `score`; set only when `recall --why` asks for it. */
+  /** Ordered lifecycle re-ranking steps that mutated `score`; set only when `recall --why` asks
+   * for it. */
   rerankTrace?: RerankStep[];
   /** Set when a reranker ran; orders the results while `score` keeps the pre-rerank value. */
   rerankScore?: number;
   preRerankRank?: number;
   postRerankRank?: number;
-  /** Set for results reached by graph traversal (`recall --hops N`): how the memory was reached from a lexical seed. */
+  /** Set for results reached by graph traversal (`recall --hops N`): how the memory was reached
+   * from a lexical seed. */
   graphVia?: { hops: number; relType: string; direction: 'from' | 'to' };
-  /** Set where a recall merges the local and global stores: true when the row came from the global one. */
+  /** Set where a recall merges the local and global stores: true when the row came from the
+   * global one. */
   isGlobal?: boolean;
 }
 
@@ -86,11 +92,12 @@ export interface ScoreBreakdown {
   pathBoost: number;
   /** 1.5 if scope matches, 0.5 if scope mismatches, 1.0 if neutral. */
   scopeBoost: number;
-  /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a local+global merge); 1.0 otherwise. */
+  /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a local+global merge);
+   * 1.0 otherwise. */
   sourceBump: number;
   /**
-   * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from the slow strength
-   * path.
+   * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from
+   * the slow strength path.
    */
   outcomeBoost: number;
   /** CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */

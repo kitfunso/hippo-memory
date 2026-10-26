@@ -1,9 +1,17 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
-import { tallyAmbientEntries as tallyAmbientAt, type AmbientTallies } from '../base/memory/ambient.js';
+import {
+  tallyAmbientEntries as tallyAmbientAt,
+  type AmbientTallies,
+} from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
-export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../base/ports/store/keys.js';
+export type {
+  ApiKeyListItem,
+  ApiKeyListRow,
+  ListApiKeysOptions,
+  NewApiKey,
+} from '../base/ports/store/keys.js';
 export type {
   ApiKeyRecord,
   AppendAuditOptions,
@@ -21,7 +29,11 @@ export type {
   EntryCursor,
   EntryPage,
 } from '../base/ports/store/types.js';
-export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../base/ports/store/recall-writes.js';
+export type {
+  GoalRecallLogRow,
+  RecallTraceInput,
+  StrengthenOptions,
+} from '../base/ports/store/recall-writes.js';
 export type {
   RecallScopeFilter,
   VectorCandidateSpec,
@@ -49,11 +61,11 @@ export type {
   RejectionSource,
 } from '../base/ports/store/rejections.js';
 
-// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule
-// helpers), so a store built on it applies hippo.db's rules with the same code.
+// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
+// hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
-// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names hippo.db's, which
-// the composition roots open as their default store.
+// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
+// hippo.db's, which the composition roots open as their default store.
 export {
   publishedDefaultStore as sqliteStore,
   decodeVector,
@@ -114,13 +126,19 @@ export {
   type WorkingMemoryFilter,
   type WorkingMemoryPush,
 } from '../base/ports/store-index.js';
-// An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
+// An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as
+// hippo.db does.
 export function entryAfterOutcome(
   entry: MemoryEntry,
   good: boolean,
   rules: { lossAversionRatio?: number } = {},
 ): MemoryEntry {
-  return outcomeAt(entry, good, evalNow(), withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio));
+  return outcomeAt(
+    entry,
+    good,
+    evalNow(),
+    withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio),
+  );
 }
 export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
@@ -140,7 +158,8 @@ export {
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';
 export type { KeysetPosition } from '../base/util/keyset.js';
-// The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
+// The types HippoStore's methods take and return, so an add-on store can implement them from this
+// subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
 export type { MemoryEntry } from '../base/memory/entry.js';
 export type {
@@ -167,7 +186,11 @@ export type {
   LoserFate,
   MemoryConflict,
 } from '../base/ports/store/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, ListDormantOptions } from '../base/ports/store/dormant.js';
+export type {
+  DormantMemory,
+  DormantRestoreOutcome,
+  ListDormantOptions,
+} from '../base/ports/store/dormant.js';
 export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
 export type {
   CorrectionLink,
@@ -181,17 +204,21 @@ export type {
 export type { TokenSummary, TokenUse } from '../base/ports/store/ledger.js';
 export type { AmbientTallies } from '../base/memory/ambient.js';
 export type { PhysicsParticle } from '../base/rank/physics.js';
-// An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
+// An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root
+// in the options.
 export { physicsSearch } from './folder-search.js';
 export { StoreBusyError } from '../base/ports/store.js';
-// A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it from a missed tenant.
+// A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it
+// from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
-// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
-// rule, so an add-on store and hippo.db keep the same bytes and return the same ids in the same order.
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and
+// drops the index by its rule, so an add-on store and hippo.db keep the same bytes and return the
+// same ids in the same order.
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
-// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
-// An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's rule.
+// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the
+// same code. An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's
+// rule.
 export {
   ambientRefusal,
   descendantAdmits,
@@ -204,7 +231,8 @@ export { SECRET_TAGS } from '../base/util/secret-detect.js';
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
-// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's rule.
+// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's
+// rule.
 export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.

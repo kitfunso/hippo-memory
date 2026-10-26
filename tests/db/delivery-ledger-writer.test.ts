@@ -503,7 +503,7 @@ describe('createDeliveryRecorder row building', () => {
     ];
     entries.slice(2, 32).forEach((e, i) => {
       const [stage, reason] = stages[i % 3];
-      rec.reject(e, stage, reason, i);
+      rec.reject(e, { stage, reason, score: i });
     });
     rec.selected([
       { entry: entries[0], score: 2, tokens: 5 },
@@ -531,9 +531,9 @@ describe('createDeliveryRecorder row building', () => {
     const rec = recorder();
     const [a, b, c] = [mem(1, { pinned: true }), mem(2), mem(3)];
     rec.offer([a, b, c], false);
-    rec.reject(b, 'eligible', 'quality');
-    rec.reject(b, 'budget', 'budget');
-    rec.reject(a, 'budget', 'budget');
+    rec.reject(b, { stage: 'eligible', reason: 'quality' });
+    rec.reject(b, { stage: 'budget', reason: 'budget' });
+    rec.reject(a, { stage: 'budget', reason: 'budget' });
     rec.selected([
       { entry: a, score: 1, tokens: 3 },
       { entry: c, score: 1, tokens: 3, promptRecall: true },

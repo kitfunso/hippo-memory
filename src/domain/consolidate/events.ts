@@ -11,7 +11,13 @@ export interface RescueRank {
 export type ConsolidateEvent =
   | { kind: 'dormant'; id: string; strength: number; threshold: number }
   | { kind: 'removed'; id: string; strength: number; threshold: number }
-  | { kind: 'rescued'; id: string; strength: number; threshold: number; rank: RescueRank | undefined }
+  | {
+      kind: 'rescued';
+      id: string;
+      strength: number;
+      threshold: number;
+      rank: RescueRank | undefined;
+    }
   | { kind: 'nonFiniteScores'; ids: readonly string[] }
   /** A model-backed pass failed or was refused; `message` is the failure's text, shown once per phase and message. */
   | { kind: 'passFailed'; phase: string; message: string }

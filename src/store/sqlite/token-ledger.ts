@@ -1,7 +1,8 @@
-/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for
- * the token-savings evals. Backs inject-only-on-change: the hook records a `skip` when the block hash matches the
- * session's last; `reread` rows cover {@link REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4);
- * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
+/** Token ledger: one row per block of memory text sent to an agent on any surface, with its
+ * token cost; the input for the token-savings evals. Backs inject-only-on-change: the hook
+ * records a `skip` when the block hash matches the session's last; `reread` rows cover {@link
+ * REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4); rows never hold
+ * content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import {
   countSkipsAfter,
@@ -15,7 +16,12 @@ import {
   surfaceTotals,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../../base/ports/store/ledger.js';
+import type {
+  TokenSummary,
+  TokenSurface,
+  TokenSurfaceSummary,
+  TokenUse,
+} from '../../base/ports/store/ledger.js';
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../base/util/time.js';
@@ -37,8 +43,8 @@ const TOKEN_SURFACES: readonly TokenSurface[] = [
   'http_assemble',
 ];
 
-/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry
- * one session id. */
+/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its
+ * parent's, as both carry one session id. */
 const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
 /** Rows older than this are pruned on write. */
@@ -64,8 +70,8 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   pruneTokenRowsBefore(db, ledgerCutoff(now));
 }
 
-/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session
- * id (the caller then always injects). */
+/** The last block this session injected on `surface`, or null if none, a `reset` came after it,
+ * or there is no session id (the caller then always injects). */
 export function lastSentState(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -73,14 +79,19 @@ export function lastSentState(
   surface: TokenSurface,
 ): LastSent | null {
   if (!sessionId) return null;
-  const anchor = latestInjectOrReset(db, tenantId, sessionId, surface);
+  const key = { tenantId, sessionId, surface };
+  const anchor = latestInjectOrReset(db, key);
   if (!anchor || anchor.event === 'reset' || !anchor.block_hash) return null;
-  const skips = countSkipsAfter(db, tenantId, sessionId, surface, anchor.id);
+  const skips = countSkipsAfter(db, key, anchor.id);
   return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
 }
 
 /** Sum the ledger for one tenant since `sinceIso`; surfaces with no rows are omitted. */
-export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {
+export function summarizeTokenUse(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): TokenSummary {
   const rows = surfaceTotals(db, tenantId, sinceIso);
   const bySurface = new Map(rows.map((r) => [r.surface, r]));
   const surfaces: TokenSurfaceSummary[] = [];
@@ -124,9 +135,13 @@ interface SessionTokens {
   injections: number;
 }
 
-/** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's session id (the
- * transcript file name), so they join to its usage records. */
-export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokens[] {
+/** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's
+ * session id (the transcript file name), so they join to its usage records. */
+export function tokensBySession(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SessionTokens[] {
   return sessionTokenRows(db, tenantId, sinceIso).map((r) => ({
     sessionId: r.session_id,
     sent: Number(r.sent),
@@ -135,16 +150,18 @@ export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso
   }));
 }
 
-/** Calls that carried a block sent at `at` (epoch ms): every later call in the first later call's context window. */
+/** Calls that carried a block sent at `at` (epoch ms): every later call in the first later
+ * call's context window. */
 export function carryingCalls(calls: readonly ApiCall[], at: number): ApiCall[] {
-  // Windows come from file order, not boundary timestamps: the compact-resume block is booked before its boundary's
-  // timestamp.
+  // Windows come from file order, not boundary timestamps: the compact-resume block is booked
+  // before its boundary's timestamp.
   const first = calls.find((call) => call.at > at);
   if (!first) return [];
   return calls.filter((call) => call.at > at && call.compactions === first.compactions);
 }
 
-/** A surface's re-reads on one UTC day; `at` is the day's last carrying call or send and dates the row. */
+/** A surface's re-reads on one UTC day; `at` is the day's last carrying call or send and dates
+ * the row. */
 interface RereadDay {
   surface: TokenSurface;
   at: number;
@@ -152,8 +169,9 @@ interface RereadDay {
   tokens: number;
 }
 
-/** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day;
- * returns the tokens booked. One transaction, so a refused row leaves the session's earlier re-read rows in place. */
+/** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES}
+ * surface and UTC day; returns the tokens booked. One transaction, so a refused row leaves the
+ * session's earlier re-read rows in place. */
 export function recordRereads(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -163,18 +181,25 @@ export function recordRereads(
   return withWriteScope(db, 'record_rereads', () => {
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
-    const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
+    const add = ({ surface, at, rereads, tokens }: RereadDay): void => {
       const key = `${surface} ${new Date(at).toISOString().slice(0, DATE_PREFIX_CHARS)}`;
       const day = days.get(key) ?? { surface, at, rereads: 0, tokens: 0 };
-      days.set(key, { surface, at: Math.max(day.at, at), rereads: day.rereads + rereads, tokens: day.tokens + tokens });
+      days.set(key, {
+        surface,
+        at: Math.max(day.at, at),
+        rereads: day.rereads + rereads,
+        tokens: day.tokens + tokens,
+      });
     };
     for (const row of rows) {
       const sentAt = Date.parse(row.ts);
-      // Dated by when the calls happened, so a --days window counts re-reads in it; the empty send-day row keeps the
-      // session in coverage.
-      add(row.surface, sentAt, 0, 0);
+      // Dated by when the calls happened, so a --days window counts re-reads in it; the empty
+      // send-day row keeps the session in coverage.
+      add({ surface: row.surface, at: sentAt, rereads: 0, tokens: 0 });
       // The first carrying call is the send itself; every later one is a re-read.
-      for (const call of carryingCalls(calls, sentAt).slice(1)) add(row.surface, call.at, 1, Number(row.tokens));
+      for (const call of carryingCalls(calls, sentAt).slice(1)) {
+        add({ surface: row.surface, at: call.at, rereads: 1, tokens: Number(row.tokens) });
+      }
     }
     deleteRereadRows(db, tenantId, sessionId);
     for (const day of days.values()) {

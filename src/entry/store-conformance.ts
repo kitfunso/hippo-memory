@@ -1,5 +1,5 @@
-// The store-kit suite an add-on runs against its own HippoStore. It takes the test runner's describe, it and expect, so
-// the package imports no test framework.
+// The store-kit suite an add-on runs against its own HippoStore. It takes the test runner's
+// describe, it and expect, so the package imports no test framework.
 import { NotFoundError } from '../base/errors/api-errors.js';
 import type { HippoStore } from '../base/ports/store-index.js';
 
@@ -33,7 +33,10 @@ function newKey(tenantId: string) {
   };
 }
 
-async function withStore(open: () => Promise<HippoStore> | HippoStore, run: (store: HippoStore) => Promise<void>) {
+async function withStore(
+  open: () => Promise<HippoStore> | HippoStore,
+  run: (store: HippoStore) => Promise<void>,
+) {
   const store = await open();
   try {
     await run(store);
@@ -51,11 +54,20 @@ async function failureOf<R>(run: () => Promise<R>): Promise<string | undefined> 
   return undefined;
 }
 
-/** Registers the checks every store must pass on its required groups; `open` gives a fresh, empty store for each. */
-export function runStoreConformance(runner: ConformanceRunner, open: () => Promise<HippoStore> | HippoStore): void {
+function revoke(
+  store: HippoStore,
+  { tenantId, keyId, at }: { tenantId: string; keyId: string; at: string },
+) {
+  return store.keyWrites.changeApiKey('revoke', { tenantId, keyId, actor: 'conformance', at });
+}
+
+/** Registers the checks every store must pass on its required groups; `open` gives a fresh,
+ * empty store for each. */
+export function runStoreConformance(
+  runner: ConformanceRunner,
+  open: () => Promise<HippoStore> | HippoStore,
+): void {
   const { describe, it, expect } = runner;
-  const revoke = (store: HippoStore, tenantId: string, keyId: string, at: string) =>
-    store.keyWrites.changeApiKey('revoke', { tenantId, keyId, actor: 'conformance', at });
 
   describe('store conformance: key writes', () => {
     it('reads a minted key back under its tenant, live', () =>
@@ -71,8 +83,8 @@ export function runStoreConformance(runner: ConformanceRunner, open: () => Promi
       withStore(open, async (store) => {
         const key = newKey('acme');
         await store.keyWrites.changeApiKey('create', { key, actor: 'conformance', metadata: {} });
-        expect(await revoke(store, 'acme', key.keyId, AT)).toBe(AT);
-        expect(await revoke(store, 'acme', key.keyId, LATER)).toBe(AT);
+        expect(await revoke(store, { tenantId: 'acme', keyId: key.keyId, at: AT })).toBe(AT);
+        expect(await revoke(store, { tenantId: 'acme', keyId: key.keyId, at: LATER })).toBe(AT);
         expect((await store.findApiKey(key.keyId))?.revokedAt).toBe(AT);
       }));
 
@@ -80,7 +92,9 @@ export function runStoreConformance(runner: ConformanceRunner, open: () => Promi
       withStore(open, async (store) => {
         const key = newKey('globex');
         await store.keyWrites.changeApiKey('create', { key, actor: 'conformance', metadata: {} });
-        const failure = await failureOf(() => revoke(store, 'acme', key.keyId, AT));
+        const failure = await failureOf(() =>
+          revoke(store, { tenantId: 'acme', keyId: key.keyId, at: AT }),
+        );
         expect(failure).toBe(`${NotFoundError.name}: Unknown key_id: ${key.keyId}`);
         expect((await store.findApiKey(key.keyId))?.revokedAt).toBe(null);
       }));

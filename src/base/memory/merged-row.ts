@@ -1,13 +1,13 @@
-// A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its source) must reach the
-// row too.
-// SHORTCUT: reject rewrites merged rows at once, live and dormant; supersede and `resolve
-// --reject-loser` wait for the next sleep's check, which sees a dormant row only once restored.
+// A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its
+// source) must reach the row too. SHORTCUT: reject rewrites merged rows at once, live and dormant;
+// supersede and `resolve --reject-loser` wait for the next sleep's check, which sees a dormant row
+// only once restored.
 import { generateId, type MemoryEntry } from './entry.js';
 import { duplicateKey, heldTexts, mergedText } from '../util/same-text.js';
 
 /**
- * The row that replaces a merged row once its retired texts leave: undefined when it holds none, null when nothing else
- * is left.
+ * The row that replaces a merged row once its retired texts leave: undefined when it holds none,
+ * null when nothing else is left.
  */
 export function mergedSuccessor(
   row: MemoryEntry,
@@ -19,8 +19,11 @@ export function mergedSuccessor(
   if (kept.length === texts.length) return undefined;
   if (kept.length === 0) return null;
   const count = `${kept.length} related ${kept.length === 1 ? 'memory' : 'memories'}`;
-  const header = row.content.slice(0, row.content.indexOf('\n\n')).replace(/\d+ related memor(?:y|ies)/, count);
-  // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row no extra life.
+  const header = row.content
+    .slice(0, row.content.indexOf('\n\n'))
+    .replace(/\d+ related memor(?:y|ies)/, count);
+  // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row
+  // no extra life.
   return {
     ...row,
     id: generateId('sem'),
@@ -31,8 +34,8 @@ export function mergedSuccessor(
 }
 
 /**
- * Sleep's check on a merged row: drops texts whose source was superseded since the merge, or that a rejection now
- * covers.
+ * Sleep's check on a merged row: drops texts whose source was superseded since the merge, or that a
+ * rejection now covers.
  */
 export function successorAfterRetirement(
   row: MemoryEntry,
@@ -41,9 +44,15 @@ export function successorAfterRetirement(
 ): MemoryEntry | null | undefined {
   if (row.source !== 'consolidation' || row.supersededBy) return undefined;
   const sources = row.parents.flatMap((id) => byId.get(id) ?? []);
-  const retiredIds = new Set(sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id));
-  const live = new Set(sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
-  const gone = new Set(sources.filter((s) => retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
+  const retiredIds = new Set(
+    sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id),
+  );
+  const live = new Set(
+    sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)),
+  );
+  const gone = new Set(
+    sources.filter((s) => retiredIds.has(s.id)).map((s) => duplicateKey(s.content)),
+  );
   const retired = (text: string): boolean =>
     (gone.has(duplicateKey(text)) && !live.has(duplicateKey(text))) || rejected(text);
   return mergedSuccessor(row, retired, retiredIds);

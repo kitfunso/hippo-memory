@@ -16,15 +16,16 @@ export const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
 export const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 export const HIPPO_SESSION_END_MARKER = 'hippo session-end';
 export const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
-export const HIPPO_PINNED_INJECT_COMMAND = 'hippo context --pinned-only --include-recent 5 --format additional-context';
+export const HIPPO_PINNED_INJECT_COMMAND =
+  'hippo context --pinned-only --include-recent 5 --format additional-context';
 export const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
 export const HIPPO_PRE_COMPACT_MARKER = 'hippo pre-compact';
 export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 
-/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under the profile folder, as the Copilot apps resolve it (a
- * HOME that differs from the profile must not move it). */
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under the profile folder, as the
+ * Copilot apps resolve it (a HOME that differs from the profile must not move it). */
 export function copilotHomeDir({ home, env }: Homes): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
@@ -35,16 +36,16 @@ export function copilotHooksFile(homes: Homes): string {
 }
 
 /**
- * Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder, whatever
- * COPILOT_HOME says.
+ * Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder,
+ * whatever COPILOT_HOME says.
  */
 export function vscodeUserHooksFile({ home }: Homes): string {
   return path.join(home, '.copilot', 'hooks', 'hippo.json');
 }
 
 /**
- * Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says
- * what they would trust.
+ * Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so
+ * the reminder says what they would trust.
  */
 export const CODEX_TRUST_LINE =
   "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only " +
@@ -56,9 +57,9 @@ export function sleepLogPathOn(homes: Homes): string {
 }
 
 /**
- * Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log because `hippo last-sleep`
- * truncates that one every SessionStart.
- * Nothing reads it programmatically; overridden by `--log-file`. */
+ * Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log
+ * because `hippo last-sleep` truncates that one every SessionStart. Nothing reads it
+ * programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(homes: Homes): string {
   return path.join(userHome(homes), HIPPO_DIR, 'logs', 'pre-compact.log');
 }

@@ -1,5 +1,5 @@
-// Code-churn staleness for `hippo invalidate --churn` and sleep's opt-in pass: the repo and project it reads, and one
-// run per store, each on its own.
+// Code-churn staleness for `hippo invalidate --churn` and sleep's opt-in pass: the repo and project
+// it reads, and one run per store, each on its own.
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
@@ -15,15 +15,19 @@ export interface ChurnStore {
   readonly store: StoreWith<'learning'>;
 }
 
-/** Tags, in each store, the memories of `repoDir`'s project whose files git says have churned. A store that fails gives
- * a result with `error` set, so it never skips the next store or a sleep's later phases. */
+/** Tags, in each store, the memories of `repoDir`'s project whose files git says have churned. A
+ * store that fails gives a result with `error` set, so it never skips the next store or a
+ * sleep's later phases. */
 async function markChurnStale(
   ctx: Pick<Context, 'tenantId' | 'infra'>,
   stores: readonly ChurnStore[],
   opts: { readonly repoDir: string; readonly dryRun: boolean },
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
   const { git, projectIdentity } = ctx.infra.machine;
-  const top = git.run(['rev-parse', '--show-toplevel'], { cwd: opts.repoDir, timeoutMs: GIT_CALL_TIMEOUT_MS });
+  const top = git.run(['rev-parse', '--show-toplevel'], {
+    cwd: opts.repoDir,
+    timeoutMs: GIT_CALL_TIMEOUT_MS,
+  });
   if (!top.ok) throw top.error;
   const repo = { root: top.stdout.trim(), git };
   const { name: projectName, legacyName } = projectIdentity(opts.repoDir);
@@ -42,8 +46,8 @@ async function markChurnStale(
   return results;
 }
 
-/** `markChurnStale` over the stores the context reaches: its own, named `root` in the report, and the operator's global
- * store when it is readable and another folder. */
+/** `markChurnStale` over the stores the context reaches: its own, named `root` in the report,
+ * and the operator's global store when it is readable and another folder. */
 export function markChurnStaleInReach(
   ctx: Pick<ContextWith<'learning'>, 'tenantId' | 'infra' | 'store' | 'reach'>,
   opts: { readonly root: string; readonly repoDir: string; readonly dryRun: boolean },

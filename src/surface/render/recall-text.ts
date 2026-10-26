@@ -1,5 +1,6 @@
-// Recall text pieces the CLI and MCP presenters share, so the cutoff wording and the hints cannot drift apart.
-// They sit in render, below both: cli imports server and server imports mcp, so neither may import the other.
+// Recall text pieces the CLI and MCP presenters share, so the cutoff wording and the hints cannot
+// drift apart. They sit in render, below both: cli imports server and server imports mcp, so
+// neither may import the other.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
@@ -19,9 +20,13 @@ export function cutoffClauses(s: RecallSuppressionSummary): string[] {
   // The residual covers rank, budget and limit drops alike, and fires with no --limit at all.
   if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
   if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
-  if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+  if (s.summarySubstitutionsAdded > 0) {
+    clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+  }
   if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-  if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  if (s.suppressedByInterference > 0) {
+    clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  }
   return clauses;
 }
 
@@ -53,13 +58,20 @@ export function availabilityPool<E extends { id: string; created: string }>(
   config: HintConfig,
   entries: () => ReadonlyArray<E>,
 ): Array<{ id: string; created: string }> | null {
-  return biasHintEnabled(config, 'availability') ? entries().map((e) => ({ id: e.id, created: e.created })) : null;
+  return biasHintEnabled(config, 'availability')
+    ? entries().map((e) => ({ id: e.id, created: e.created }))
+    : null;
 }
 
 export function detectRecallHints({ list, pool, anchorRing, queryHash }: HintInputs): RecallHints {
-  const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+  const anchoring = anchorRing
+    ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null)
+    : null;
   const availability = pool
-    ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool })
+    ? detectAvailabilityBias({
+        topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+        pool,
+      })
     : null;
   return { anchoring, availability };
 }

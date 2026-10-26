@@ -1,5 +1,5 @@
-// SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for this session, as the
-// local hook prints it.
+// SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for
+// this session, as the local hook prints it.
 import type { Context, EntryContext } from '../../api/types.js';
 import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
@@ -29,12 +29,14 @@ export async function compactResumeForCaller(
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) return { stdout: '' };
+  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) {
+    return { stdout: '' };
+  }
   const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
-  // One owner's concurrent sessions must not cross-restore; a snapshot with no session still restores, as on the local
-  // path.
+  // One owner's concurrent sessions must not cross-restore; a snapshot with no session still
+  // restores, as on the local path.
   if (snapshot === null || (snapshot.sessionId !== null && snapshot.sessionId !== req.sessionId)) {
     return { stdout: '' };
   }
@@ -54,7 +56,11 @@ export async function compactResumeForCaller(
 }
 
 /** A bad trail row costs the trail, not the snapshot. */
-async function sessionTrail(ctx: Context, sessions: Sessions, sessionId: string | null): Promise<SessionEvent[]> {
+async function sessionTrail(
+  ctx: Context,
+  sessions: Sessions,
+  sessionId: string | null,
+): Promise<SessionEvent[]> {
   if (!sessionId) return [];
   try {
     return (await sessions.read(ctx.tenantId, 'event', { sessionId })).map((e) => ({

@@ -222,13 +222,12 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     (root) => {
       const source = seed(root, 'Alice prefers dark mode and vim keybindings');
       return added(root, () =>
-        storeExtractedFacts(
-          sqliteStore(root),
+        storeExtractedFacts(sqliteStore(root), {
           source,
-          [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }],
-          loadConfig(root).defaultHalfLifeDays,
-          new Date(),
-        ),
+          facts: [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }],
+          baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+          now: new Date(),
+        }),
       );
     },
   ],

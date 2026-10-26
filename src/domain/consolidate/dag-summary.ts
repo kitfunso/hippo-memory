@@ -1,5 +1,5 @@
-// The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes are tested on their
-// own.
+// The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes
+// are tested on their own.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { describeLlmFailure, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
@@ -32,7 +32,10 @@ export async function generateDagSummary(
   opts: DagSummaryOptions,
 ): Promise<string | null> {
   const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
-  const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace('{facts}', factsBlock);
+  const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace(
+    '{facts}',
+    factsBlock,
+  );
 
   const reply = await opts.llm.send({
     model: opts.model,

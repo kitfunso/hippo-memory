@@ -5,7 +5,12 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvents, listAuditEvents } from './audit.js';
-import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
+import {
+  getHippoDbPath,
+  openHippoDbReadOnly,
+  type DatabaseSyncLike,
+  type RequestStores,
+} from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { recordTokenUse } from './token-ledger.js';
@@ -77,7 +82,8 @@ import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import { asViewOf } from '../../base/util/store-view.js';
 
-/** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's and capture's. */
+/** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
+ * and capture's. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
   const { on } = handles;
   return {
@@ -97,9 +103,10 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
   };
 }
 
-/** The built-in store on `handles`: hippo.db under the port's own method names, each call run to its end on its own
- * short-lived handle before its Promise settles, so no write scope spans an await. The caller passes the handles, so a
- * store built over this one opens a single set, and a store worker's opens all reach its thread's one connection. */
+/** The built-in store on `handles`: hippo.db under the port's own method names, each call run to
+ * its end on its own short-lived handle before its Promise settles, so no write scope spans an
+ * await. The caller passes the handles, so a store built over this one opens a single set, and a
+ * store worker's opens all reach its thread's one connection. */
 export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
   const { on, files } = handles;
   return {
@@ -131,7 +138,8 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
   };
 }
 
-/** The groups only a store kept as files in a folder serves: its ledger, own index, promote copies and sharing. */
+/** The groups only a store kept as files in a folder serves: its ledger, own index, promote
+ * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
     ledger: sqliteLedger(handles.on, handles.files.opens.grant?.session),
@@ -142,13 +150,17 @@ function sqliteFolderGroups(handles: Handles): FolderGroups {
   };
 }
 
-const baseReadsBodies: Bodies<Pick<BaseMethods, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>> = {
+const baseReadsBodies: Bodies<
+  Pick<BaseMethods, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>
+> = {
   findApiKey: readApiKeyRecord,
   activeGoals: activeGoalsWithPolicies,
   planningFallacyEvidence: planningFallacyEvidence,
 };
 
-const entryReadsBodies: Bodies<Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>> = {
+const entryReadsBodies: Bodies<
+  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>
+> = {
   searchRecallEntries: listRecallEntries,
   entriesByIds: readEntriesInIdOrder,
   freshRawEntries: listFreshRawMemories,
@@ -187,7 +199,10 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
 }
 
 function sqliteVectorWrites(on: OnHandle): VectorWrites {
-  return bound<VectorWrites>(on, { entriesWithoutVector: entriesWithoutVector, writeVectors: writeVectors });
+  return bound<VectorWrites>(on, {
+    entriesWithoutVector: entriesWithoutVector,
+    writeVectors: writeVectors,
+  });
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
@@ -198,7 +213,8 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   return {
     ping: () =>
       answered(() => {
-        // A probe must not create the store; the first write does, so a root with none yet is ready.
+        // A probe must not create the store; the first write does, so a root with none yet is
+        // ready.
         if (!existsSync(getHippoDbPath(hippoRoot))) return;
         on((db) => {
           db.prepare('SELECT 1').get();
@@ -207,21 +223,31 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   };
 }
 
-/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
- * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. A root that
- * probes per request passes its own `host`, so a store once shared stays shared for it. */
-export function sqliteReach(
-  hippoRoot: string,
-  store: HippoStore,
-  shared?: boolean,
-  openGlobal: (root: string) => HippoStore & StoreGroups = sqliteStore,
-  host: Host = createHost(),
-): StoreReach {
+export interface SqliteReachOptions {
+  readonly hippoRoot: string;
+  readonly store: HippoStore;
+  readonly shared?: boolean;
+  readonly openGlobal?: (root: string) => HippoStore & StoreGroups;
+  readonly host?: Host;
+}
+
+/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the
+ * transport's flag); `openGlobal` builds the global store, read and written, which a server
+ * keeps on threads of its own. A root that probes per request passes its own `host`, so a store
+ * once shared stays shared for it. */
+export function sqliteReach({
+  hippoRoot,
+  store,
+  shared,
+  openGlobal = sqliteStore,
+  host = createHost(),
+}: SqliteReachOptions): StoreReach {
   const other = isHippoDbStore(store) ? undefined : store;
   const sharedStore = shared === true || host.isSharedStore(hippoRoot);
   const globalRoot = hippoHomeDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
-  const globalTarget = other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
+  const globalTarget =
+    other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
   const reach: StoreReach = {
     hasLocal: other !== undefined || isInitialized(hippoRoot),
     isGlobal: isGlobalStoreRoot(hippoRoot),
@@ -233,15 +259,22 @@ export function sqliteReach(
   return { ...reach, global: { root: globalRoot, store: openGlobal(globalRoot) } };
 }
 
-/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
- * handles, so a check never creates or migrates the store it inspects. */
-export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
+/** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the
+ * project-tag reads on read-only handles, so a check never creates or migrates the store it
+ * inspects. */
+export function sqliteDiagnosticsStore(
+  hippoRoot: string,
+): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   const handles = handlesOf(hippoRoot);
   const { on } = handles;
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
-    reports: bound<ProjectTagReads['reports']>(on, { entriesWhere: listEntriesWhere }, openHippoDbReadOnly),
+    reports: bound<ProjectTagReads['reports']>(
+      on,
+      { entriesWhere: listEntriesWhere },
+      openHippoDbReadOnly,
+    ),
     auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, openHippoDbReadOnly),
   };
 }
@@ -249,19 +282,23 @@ export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'di
 // Each store sqliteStore built, with how to build it again on one session's handles.
 const reopeners = new WeakMap<HippoStore, (session: RequestStores) => HippoStore & StoreGroups>();
 
-/** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its runtime and
- * session. */
-export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): HippoStore & StoreGroups {
+/** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its
+ * runtime and session. */
+export function sqliteStore(
+  hippoRoot: string,
+  opts: SqliteStoreOptions = {},
+): HippoStore & StoreGroups {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
   reopeners.set(store, (session) => sqliteStore(hippoRoot, { ...opts, session }));
   return store;
 }
 
-/** `store` on `session`'s handles when sqliteStore built it, so a pass of many calls opens hippo.db once; any other
- * store, a caller's copy of one included, as it is. */
+/** `store` on `session`'s handles when sqliteStore built it, so a pass of many calls opens
+ * hippo.db once; any other store, a caller's copy of one included, as it is. */
 export function inSqliteSession<S extends HippoStore>(store: S, session: RequestStores): S {
   const reopen = reopeners.get(store);
-  // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on another session.
+  // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on
+  // another session.
   return reopen === undefined ? store : asViewOf(reopen(session) as S, store);
 }
 
@@ -297,7 +334,11 @@ function continuity(
   const sessionId = activeSnapshot?.sessionId ?? undefined;
   return {
     activeSnapshot,
-    sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key) : null,
-    recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
+    sessionHandoff: sessionId
+      ? readLatestHandoff(db, { tenantId, sessionId, opts: {}, key })
+      : null,
+    recentSessionEvents: sessionId
+      ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: eventLimit })
+      : [],
   };
 }

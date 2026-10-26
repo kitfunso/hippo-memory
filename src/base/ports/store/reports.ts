@@ -42,8 +42,8 @@ export interface StatusCounts {
   embedded: number;
 }
 
-/** One superseded row and its successor; `sourceCreated` is the `created` of the successor's extraction source, null
- * when it names none that exists. */
+/** One superseded row and its successor; `sourceCreated` is the `created` of the successor's
+ * extraction source, null when it names none that exists. */
 export interface CorrectionLink {
   oldId: string;
   newId: string;
@@ -51,8 +51,8 @@ export interface CorrectionLink {
   sourceCreated: string | null;
 }
 
-/** Which memories a filtered read keeps, as data: hippo.db compiles it to a WHERE (sqlite/entry-filter.ts).
- * Each field that is set narrows the rows. */
+/** Which memories a filtered read keeps, as data: hippo.db compiles it to a WHERE
+ * (sqlite/entry-filter.ts). Each field that is set narrows the rows. */
 export interface EntryFilter {
   /** One tenant's rows, or every tenant's under ALL_TENANTS. */
   readonly tenantId: TenantId;
@@ -77,14 +77,16 @@ export interface EntryFilter {
 /** The fields past the tenant, each compiled or tested on its own. */
 export type EntryNarrowing = Omit<EntryFilter, 'tenantId'>;
 
-/** Where a page starts and how many rows it holds at most; `newest` walks the order backwards, newest row first. */
+/** Where a page starts and how many rows it holds at most; `newest` walks the order backwards,
+ * newest row first. */
 export interface PageRequest {
   readonly limit: number;
   readonly after?: EntryCursor;
   readonly newest?: boolean;
 }
 
-/** What a paged report read asks for: up to `limit` rows after `after`, in the report's created-then-id order. */
+/** What a paged report read asks for: up to `limit` rows after `after`, in the report's
+ * created-then-id order. */
 export interface ReportPage {
   readonly limit: number;
   readonly after?: EntryCursor;
@@ -112,9 +114,14 @@ export interface Reports {
   tokenUse(tenantId: string, sinceIso: string): Promise<TokenSummary>;
   failures(tenantId: string, sinceIso: string): Promise<FailureSummary>;
   /** Strength tallies and the open-conflict count, read on one snapshot. */
-  memoryStatus(tenantId: string, now: Date, atRiskBelow: number): Promise<StrengthTallies & { openConflicts: number }>;
-  /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host admin, the api
-   * checks). One read for each walk of a filtered set of rows, so no group keeps a read per caller. */
+  memoryStatus(
+    tenantId: string,
+    now: Date,
+    atRiskBelow: number,
+  ): Promise<StrengthTallies & { openConflicts: number }>;
+  /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host
+   * admin, the api checks). One read for each walk of a filtered set of rows, so no group keeps
+   * a read per caller. */
   entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
   /** Every row in the store, no tenant: host admin. */
   countEntries(): Promise<number>;
@@ -122,10 +129,13 @@ export interface Reports {
   stats(): Promise<LegacyStats>;
   /** What `hippo status` counts over every row of every tenant, superseded ones too: host admin. */
   statusCounts(now: Date, atRiskBelow: number): Promise<StatusCounts>;
-  /** A page of superseded rows with their successors, by the superseded row's created then id: host admin. */
+  /** A page of superseded rows with their successors, by the superseded row's created then id:
+   * host admin. */
   correctionLinks(page: ReportPage): Promise<CorrectionLinkPage>;
-  /** The kind='raw' count and a page of the raw rows missing provenance, by created then id: host admin. */
+  /** The kind='raw' count and a page of the raw rows missing provenance, by created then id:
+   * host admin. */
   rawProvenance(page: ReportPage): Promise<RawProvenancePage>;
-  /** Rows the tenant created since the last sleep of the store, looking back at most a day from `now`. */
+  /** Rows the tenant created since the last sleep of the store, looking back at most a day from
+   * `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }

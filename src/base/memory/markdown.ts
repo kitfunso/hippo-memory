@@ -1,5 +1,11 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
-import { type MemoryEntry, Layer, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from './entry.js';
+import {
+  type MemoryEntry,
+  Layer,
+  DEFAULT_SCHEMA_FIT,
+  type ConfidenceLevel,
+  type MemoryKind,
+} from './entry.js';
 import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
@@ -7,8 +13,8 @@ import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
 /**
- * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional so they stay absent
- * from the YAML when unset.
+ * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional
+ * so they stay absent from the YAML when unset.
  */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
@@ -81,7 +87,8 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
     scope: wire.scope ?? null,
     owner: wire.owner ?? null,
     artifact_ref: wire.artifact_ref ?? null,
-    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all five.
+    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all
+    // five.
     valid_from: wire.valid_from,
     superseded_by: wire.superseded_by,
     extracted_from: wire.extracted_from,
@@ -94,32 +101,66 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
 export function serializeEntry(entry: MemoryEntry): string {
   const wire = toWire(entry);
   const frontmatter = entryFrontmatter(wire);
-  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case (mirrors the plan's
-  // task 7 guidance).
+  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case
+  // (mirrors the plan's task 7 guidance).
   const tenantId = wire.tenant_id ?? DEFAULT_TENANT_ID;
   if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
-  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only undefined (unstamped) is
-  // omitted, so a rebuild stamps nothing it can read.
+  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only
+  // undefined (unstamped) is omitted, so a rebuild stamps nothing it can read.
   if (wire.origin_project !== undefined) {
     frontmatter['origin_project'] = wire.origin_project;
   }
-  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index signature, which the named
-  // interface does not structurally provide.
+  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index
+  // signature, which the named interface does not structurally provide.
   const fm = dumpFrontmatter({ ...frontmatter });
   return `${fm}\n\n${wire.content}\n`;
 }
 
-/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation time. */
+/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation
+ * time. */
 export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 
   if (!data['id'] || !data['layer']) return null;
 
-  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only written by
-  // serializeEntry, so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
   return fromWire({
+    ...scoringWireOf(data, now),
+    content: content.trim(),
+    ...lineageWireOf(data, now),
+  });
+}
+
+type FrontmatterData = Record<string, FrontmatterValue>;
+
+type LineageWire = Pick<
+  MemoryWire,
+  | 'parents'
+  | 'starred'
+  | 'trace_outcome'
+  | 'source_session_id'
+  | 'valid_from'
+  | 'superseded_by'
+  | 'extracted_from'
+  | 'dag_level'
+  | 'dag_parent_id'
+  | 'kind'
+  | 'scope'
+  | 'owner'
+  | 'artifact_ref'
+  | 'tenant_id'
+  | 'origin_project'
+>;
+
+function scoringWireOf(
+  data: FrontmatterData,
+  now: Date,
+): Omit<MemoryWire, 'content' | keyof LineageWire> {
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
+  // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
+  // accept (permissive parse).
+  return {
     id: String(data['id']),
     created: String(data['created'] ?? now.toISOString()),
     last_retrieved: String(data['last_retrieved'] ?? now.toISOString()),
@@ -132,18 +173,29 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     schema_fit: Number(data['schema_fit'] ?? DEFAULT_SCHEMA_FIT),
     source: String(data['source'] ?? 'cli'),
     outcome_score:
-      data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
+      data['outcome_score'] === null || data['outcome_score'] === undefined
+        ? null
+        : Number(data['outcome_score']),
     outcome_positive: Number(data['outcome_positive'] ?? 0),
     outcome_negative: Number(data['outcome_negative'] ?? 0),
     conflicts_with: normalizeStringArray(data['conflicts_with']),
     pinned: Boolean(data['pinned'] ?? false),
     confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
-    content: content.trim(),
+  };
+}
+
+function lineageWireOf(data: FrontmatterData, now: Date): LineageWire {
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryWire union member; frontmatter is only
+  // written by serializeEntry, so out-of-range values mean hand-edited files, which this parser may
+  // accept (permissive parse).
+  return {
     parents: normalizeStringArray(data['parents']),
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryWire['trace_outcome']) ?? null,
     source_session_id: nullableString(data['source_session_id']),
-    valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? now.toISOString()),
+    valid_from: data['valid_from']
+      ? String(data['valid_from'])
+      : String(data['created'] ?? now.toISOString()),
     superseded_by: nullableString(data['superseded_by']),
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),
@@ -154,7 +206,7 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     artifact_ref: nullableString(data['artifact_ref']),
     tenant_id: nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
     origin_project: originProjectOf(data),
-  });
+  };
 }
 
 function originProjectOf(data: Record<string, FrontmatterValue>): string | null | undefined {

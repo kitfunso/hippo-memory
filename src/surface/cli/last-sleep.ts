@@ -1,4 +1,5 @@
-// `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for the user.
+// `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for
+// the user.
 import * as fs from 'node:fs';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../../infra/compaction-spool.js';
@@ -15,8 +16,8 @@ const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
 
 /**
- * The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the spool holds `.bad`
- * files; null when none did.
+ * The line the user sees when the last sleep failed, a spool step hit an unexpected error, or the
+ * spool holds `.bad` files; null when none did.
  */
 export function sleepProblems(logText: string, bad: number): string | null {
   const lines = logText.split(/\r?\n/);
@@ -52,7 +53,9 @@ export function handleLastSleep(
   if (!fs.existsSync(logPath)) return;
 
   // Removed or locked since the exists check: there is nothing to show this session.
-  const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () => fs.readFileSync(logPath, 'utf8'));
+  const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () =>
+    fs.readFileSync(logPath, 'utf8'),
+  );
   if (content === undefined) return;
 
   if (content.trim().length > 0) {
@@ -63,14 +66,19 @@ export function handleLastSleep(
   }
 
   const problems = sleepProblems(content, badSpoolFiles(hippoRoot));
-  if (problems !== null && out === 'hook') process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
+  if (problems !== null && out === 'hook') {
+    process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
+  }
   if (problems !== null && out === 'terminal') printError(problems);
 
   if (!boolFlag(flags, 'keep')) {
     try {
       fs.unlinkSync(logPath);
     } catch (err) {
-      log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`, errorFields(err));
+      log.debug(
+        `last-sleep log not removed, it shows again next session: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
   }
 }

@@ -201,7 +201,14 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      note(await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      note(
+        await closeObject(objectsAt(home), CUSTOMER_NOTE, {
+          tenantId: 'default',
+          id,
+          actor: CLI_ACTOR,
+          now: evalNow(),
+        }),
+      ),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), CUSTOMER_NOTE, 'default', id);
       return r && note(r);
@@ -223,7 +230,7 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      skill(await closeObject(objectsAt(home), SKILL, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      skill(await closeObject(objectsAt(home), SKILL, { tenantId: 'default', id, actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), SKILL, 'default', id);
       return r && skill(r);
@@ -244,7 +251,7 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      policy(await closeObject(objectsAt(home), POLICY, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      policy(await closeObject(objectsAt(home), POLICY, { tenantId: 'default', id, actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), POLICY, 'default', id);
       return r && policy(r);
@@ -265,7 +272,14 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      brief(await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      brief(
+        await closeObject(objectsAt(home), PROJECT_BRIEF, {
+          tenantId: 'default',
+          id,
+          actor: CLI_ACTOR,
+          now: evalNow(),
+        }),
+      ),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROJECT_BRIEF, 'default', id);
       return r && brief(r);
@@ -286,7 +300,7 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      proc(await closeObject(objectsAt(home), PROCESS, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      proc(await closeObject(objectsAt(home), PROCESS, { tenantId: 'default', id, actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROCESS, 'default', id);
       return r && proc(r);
@@ -305,7 +319,9 @@ const LINEAGES: readonly Lineage[] = [
         }),
       ),
     close: async (id) =>
-      decision(await closeObject(objectsAt(home), DECISION, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
+      decision(
+        await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id, actor: CLI_ACTOR, now: evalNow() }),
+      ),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), DECISION, 'default', id);
       return r && decision(r);
@@ -497,13 +513,12 @@ const LISTINGS: readonly Listing[] = [
     expected: ['open', 'resolved', 'closed'],
     save: async (t, body) =>
       (
-        await openIncident(
-          objectsAt(home),
-          loadConfig(home).defaultHalfLifeDays,
-          t,
-          { incidentText: body },
-          { actor: 'cli', now: evalNow() },
-        )
+        await openIncident(objectsAt(home), {
+          baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
+          tenantId: t,
+          opts: { incidentText: body },
+          by: { actor: 'cli', now: evalNow() },
+        })
       ).id,
     list: async (t, s) =>
       ids(await listObjects(objectsAt(home), INCIDENT, t, s === undefined ? {} : { status: unchecked(s) })),

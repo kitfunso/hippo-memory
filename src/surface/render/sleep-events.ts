@@ -1,4 +1,5 @@
-// The lines `hippo sleep` and POST /v1/sleep show for what a sleep did; one place, so both read alike.
+// The lines `hippo sleep` and POST /v1/sleep show for what a sleep did; one place, so both read
+// alike.
 import type { SleepEvent } from '../../api/sleep/events.js';
 import { plural } from '../../base/util/format.js';
 
@@ -31,7 +32,8 @@ function dagRebuildLine(e: EventOf<'dagRebuild'>): string {
 }
 
 function physicsLine(e: EventOf<'physics'>): string {
-  const capped = e.shown < e.stored ? ` (the ${e.shown} most recently recalled of ${e.stored})` : '';
+  const capped =
+    e.shown < e.stored ? ` (the ${e.shown} most recently recalled of ${e.stored})` : '';
   return `  ⚛️  physics: ${e.particles} particles${capped}, avg vel ${e.avgVelocity.toFixed(STATS_DECIMALS)}`;
 }
 

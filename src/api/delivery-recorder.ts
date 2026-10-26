@@ -1,9 +1,14 @@
-// In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
-// each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
-// src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never text.
+// In-memory observer for one call (a context call, a compaction boundary or a session end): what
+// was considered, why each was rejected, what reached stdout. No DB access (the caller hands
+// build()'s output to src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never
+// text.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
+import {
+  hookPayloadSessionId,
+  hookPayloadString,
+  isSubagentPayload,
+} from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
@@ -20,8 +25,10 @@ import type {
   DeliveryStage,
   DeliveryWriteStore,
 } from '../base/session/delivery.js';
-/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
-const carriesPrompt = (type: DeliveryEventType): boolean => type === 'prompt-submit' || type === 'pinned-manual';
+/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a
+ * prompt. */
+const carriesPrompt = (type: DeliveryEventType): boolean =>
+  type === 'prompt-submit' || type === 'pinned-manual';
 
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 const DELIVERY_REJECTED_ROW_CAP = 16;
@@ -51,7 +58,16 @@ export interface DeliverySelected {
   promptRecall?: boolean;
 }
 
-/** What contextGet reports while it selects. Every method only reads; none changes what is selected. */
+/** Where and why a candidate fell out, with its score and tokens when the stage knew them. */
+export interface CandidateRejection {
+  readonly stage: DeliveryStage;
+  readonly reason: DeliveryRejectReason;
+  readonly score?: number;
+  readonly tokens?: number;
+}
+
+/** What contextGet reports while it selects. Every method only reads; none changes what is
+ * selected. */
 export interface DeliveryObserver {
   facts(facts: DeliveryFacts): void;
   sections(shown: number, dropped: number): void;
@@ -60,13 +76,14 @@ export interface DeliveryObserver {
   /** A store's ambient load refused the row with this id under the admission it was sent. */
   filtered(id: string): void;
   /**
-   * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it instead.
+   * The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility
+   * reports it instead.
    */
   qualityDropped(id: string, isGlobal: boolean): void;
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
-  reject(entry: MemoryEntry, stage: DeliveryStage, reason: DeliveryRejectReason, score?: number, tokens?: number): void;
+  reject(entry: MemoryEntry, rejection: CandidateRejection): void;
   dropMissing(
     before: readonly MemoryEntry[],
     after: readonly MemoryEntry[],
@@ -82,7 +99,8 @@ export interface DeliveryObserver {
   selected(items: readonly DeliverySelected[]): void;
   /** A searching call's query, `*` for none; kept as its hash, the one the recall trace stores. */
   queried(query: string): void;
-  /** The recall trace a call that returned rows wrote; null when the write failed or the store answers no id. */
+  /** The recall trace a call that returned rows wrote; null when the write failed or the store
+   * answers no id. */
   traced(traceId: number | null): void;
 }
 
@@ -91,7 +109,8 @@ export interface DeliveryOutcomeInput {
   state: DeliveryBlockState;
   staticHash?: string | null;
   recallHash?: string | null;
-  /** The exact text the agent receives: the hook's additionalContext, or every stdout byte, newline included. */
+  /** The exact text the agent receives: the hook's additionalContext, or every stdout byte,
+   * newline included. */
   emittedText?: string | null;
   /** The static block was skipped as unchanged, so its entries are reused, not sent. */
   staticReused?: boolean;
@@ -102,7 +121,8 @@ export interface DeliveryRecorder extends DeliveryObserver {
   delivered(outcome: DeliveryOutcomeInput): void;
   /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
   logged(failureId: number | null): void;
-  /** The event, built on the first call only; null after that or once broken. Throws on an injected fault. */
+  /** The event, built on the first call only; null after that or once broken. Throws on an
+   * injected fault. */
   takeEvent(): DeliveryEventInput | null;
 }
 
@@ -115,12 +135,15 @@ export interface DeliveryRecorderInit {
   stdinText?: string;
   envSessionId?: string;
   /**
-   * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code.
+   * Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference
+   * would say claude-code.
    */
   runtime?: DeliveryRuntime;
-  /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
+  /** Set by hooks that are not prompt or context calls; without it the payload's hook event
+   * decides. */
   eventType?: DeliveryEventType;
-  /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment variable reaches it. */
+  /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment
+   * variable reaches it. */
   fault?: DeliveryFault;
   /** The instant the event is stamped with. */
   now: Date;
@@ -150,7 +173,8 @@ function storeOf(isGlobal: boolean | undefined): DeliveryWriteStore {
 }
 
 function byDepthThenScore(a: Candidate, b: Candidate): number {
-  const depth = (STAGE_DEPTH.get(b.stage ?? 'load') ?? 0) - (STAGE_DEPTH.get(a.stage ?? 'load') ?? 0);
+  const depth =
+    (STAGE_DEPTH.get(b.stage ?? 'load') ?? 0) - (STAGE_DEPTH.get(a.stage ?? 'load') ?? 0);
   if (depth !== 0) return depth;
   const score = (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
   if (score !== 0 && !Number.isNaN(score)) return score;
@@ -190,7 +214,8 @@ type Guard = (fn: () => void) => void;
 function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const payloadSession = hookPayloadSessionId(init.stdinText);
   const subagent = isSubagentPayload(init.stdinText);
-  const envSession = init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
+  const envSession =
+    init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
   const prompt = hookPayloadString(init.stdinText, 'prompt');
   const rawTurnId = hookPayloadString(init.stdinText, 'turn_id');
   const hostTurnId = rawTurnId !== null && rawTurnId.trim() !== '' ? rawTurnId : null;
@@ -284,7 +309,12 @@ function rejectedRows(state: RecorderState): RejectedRows {
 
 type DeliveryCounts = Pick<
   DeliveryEventInput,
-  'consideredCount' | 'filteredCount' | 'selectedCount' | 'emittedCount' | 'rejectedCount' | 'rejectedUnlisted'
+  | 'consideredCount'
+  | 'filteredCount'
+  | 'selectedCount'
+  | 'emittedCount'
+  | 'rejectedCount'
+  | 'rejectedUnlisted'
 >;
 
 function deliveryCounts(
@@ -302,41 +332,44 @@ function deliveryCounts(
   };
 }
 
-function buildEvent(
-  init: DeliveryRecorderInit,
+function inferRuntime(payload: PayloadFacts): DeliveryRuntime {
+  return payload.hostTurnId !== null
+    ? 'codex'
+    : payload.hookEvent !== null
+      ? 'claude-code'
+      : 'unknown';
+}
+
+function promptFields(
   payload: PayloadFacts,
-  state: RecorderState,
-  ts: string,
-  startedMs: number,
-): DeliveryEventInput {
-  const { facts, outcome } = state;
-  const picked = pickedRows(state);
-  const rejected = rejectedRows(state);
-  const rows = [...picked, ...rejected.rows];
-  const emitted = outcome.emittedText ?? null;
-  const eventType = init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
-  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by its prompt.
+  eventType: DeliveryEventType,
+): Pick<DeliveryEventInput, 'promptHash' | 'promptLength'> {
+  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by
+  // its prompt.
   const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
-    ts,
-    tenantId: init.tenantId,
-    runtime:
-      init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
-    eventType,
-    surface: eventType === 'context' ? 'context' : 'hook',
-    storeHash: init.storeHash,
-    writeStore: init.writeStore,
-    projectHash: facts !== null && facts.projectName !== '' ? blockHash(facts.projectName) : null,
-    sessionId: payload.payloadSession ?? payload.envSession,
-    sessionState: payload.sessionState,
-    hostTurnId: payload.hostTurnId,
     promptHash: prompt !== null ? blockHash(prompt) : null,
     promptLength: prompt?.length ?? 0,
-    queryHash: state.queryHash,
-    recallTraceId: state.recallTraceId,
-    blockState: state.disabledSeen ? 'disabled' : outcome.state,
-    promptRecall: facts?.promptRecall === true,
-    ...deliveryCounts(state, rows, rejected),
+  };
+}
+
+type SentFields = Pick<
+  DeliveryEventInput,
+  | 'sectionsShown'
+  | 'sectionsDropped'
+  | 'budgetTokens'
+  | 'selectedTokens'
+  | 'injectedTokens'
+  | 'staticHash'
+  | 'recallHash'
+  | 'emittedHash'
+  | 'elapsedMs'
+>;
+
+function sentFields(state: RecorderState, startedMs: number): SentFields {
+  const { facts, outcome } = state;
+  const emitted = outcome.emittedText ?? null;
+  return {
     sectionsShown: state.shown,
     sectionsDropped: state.dropped,
     budgetTokens: facts?.budgetTokens ?? 0,
@@ -346,6 +379,50 @@ function buildEvent(
     recallHash: outcome.recallHash ?? null,
     emittedHash: emitted !== null ? blockHash(emitted) : null,
     elapsedMs: Math.max(0, Date.now() - startedMs),
+  };
+}
+
+interface BuildEventOptions {
+  readonly init: DeliveryRecorderInit;
+  readonly payload: PayloadFacts;
+  readonly state: RecorderState;
+  readonly ts: string;
+  readonly startedMs: number;
+}
+
+function buildEvent({
+  init,
+  payload,
+  state,
+  ts,
+  startedMs,
+}: BuildEventOptions): DeliveryEventInput {
+  const { facts, outcome } = state;
+  const picked = pickedRows(state);
+  const rejected = rejectedRows(state);
+  const rows = [...picked, ...rejected.rows];
+  const eventType =
+    init.eventType ??
+    (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
+  return {
+    ts,
+    tenantId: init.tenantId,
+    runtime: init.runtime ?? inferRuntime(payload),
+    eventType,
+    surface: eventType === 'context' ? 'context' : 'hook',
+    storeHash: init.storeHash,
+    writeStore: init.writeStore,
+    projectHash: facts !== null && facts.projectName !== '' ? blockHash(facts.projectName) : null,
+    sessionId: payload.payloadSession ?? payload.envSession,
+    sessionState: payload.sessionState,
+    hostTurnId: payload.hostTurnId,
+    ...promptFields(payload, eventType),
+    queryHash: state.queryHash,
+    recallTraceId: state.recallTraceId,
+    blockState: state.disabledSeen ? 'disabled' : outcome.state,
+    promptRecall: facts?.promptRecall === true,
+    ...deliveryCounts(state, rows, rejected),
+    ...sentFields(state, startedMs),
     toolUseId: eventType === 'tool-failure' ? payload.toolUseId : null,
     failureId: eventType === 'tool-failure' ? state.failureId : null,
     candidates: rows,
@@ -376,12 +453,19 @@ function markQualityDropped(
   rejectId(state, id, { stage: 'load', reason: 'quality', score: null, tokens: null });
 }
 
-function offerEntries(state: RecorderState, ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>): void {
+function offerEntries(
+  state: RecorderState,
+  ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>
+): void {
   for (const e of entries) {
     const held = state.candidates.get(e.id);
     const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
     // A loaded recent row the prompt-recall gate then judges belongs to that pool.
-    const relabel = held !== undefined && held.reason === null && held.pool === 'recent' && wanted === 'prompt-recall';
+    const relabel =
+      held !== undefined &&
+      held.reason === null &&
+      held.pool === 'recent' &&
+      wanted === 'prompt-recall';
     if (held !== undefined && !relabel) continue;
     state.candidates.set(e.id, {
       id: e.id,
@@ -395,13 +479,33 @@ function offerEntries(state: RecorderState, ...[entries, isGlobal, pool]: Parame
   }
 }
 
+function rejectGated(
+  state: RecorderState,
+  ...[prompt, items, gate, kept]: Parameters<DeliveryObserver['gated']>
+): void {
+  const keptIds = new Set(kept.map((g) => g.item.id));
+  for (const c of items) {
+    if (keptIds.has(c.id)) continue;
+    const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
+    const cleared = score >= gate.threshold && shared >= gate.minShared;
+    rejectId(state, c.id, {
+      stage: 'gate',
+      reason: cleared ? 'gate-max-items' : 'gate-below-threshold',
+      score,
+      tokens: null,
+    });
+  }
+}
+
 /** The candidate-tracking half of the observer, each method run through `guard`. */
 function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods {
   return {
     qualityDropped: (...args) => guard(() => markQualityDropped(state, ...args)),
     offer: (...args) => guard(() => offerEntries(state, ...args)),
-    reject: (e, stage, reason, score, tokens) =>
-      guard(() => rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null })),
+    reject: (e, { stage, reason, score, tokens }) =>
+      guard(() =>
+        rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null }),
+      ),
     dropMissing: (before, after, stage, reason) =>
       guard(() => {
         const kept = new Set(after.map((e) => e.id));
@@ -409,21 +513,7 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
           if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
         }
       }),
-    gated: (prompt, items, gate, kept) =>
-      guard(() => {
-        const keptIds = new Set(kept.map((g) => g.item.id));
-        for (const c of items) {
-          if (keptIds.has(c.id)) continue;
-          const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
-          const cleared = score >= gate.threshold && shared >= gate.minShared;
-          rejectId(state, c.id, {
-            stage: 'gate',
-            reason: cleared ? 'gate-max-items' : 'gate-below-threshold',
-            score,
-            tokens: null,
-          });
-        }
-      }),
+    gated: (...args) => guard(() => rejectGated(state, ...args)),
     selected: (items) =>
       guard(() => {
         state.picked.clear();
@@ -463,8 +553,32 @@ function newRecorderState(): RecorderState {
 
 type StateMethods = Pick<
   DeliveryRecorder,
-  'facts' | 'sections' | 'watchAdmit' | 'filtered' | 'disabled' | 'queried' | 'traced' | 'delivered' | 'logged'
+  | 'facts'
+  | 'sections'
+  | 'watchAdmit'
+  | 'filtered'
+  | 'disabled'
+  | 'queried'
+  | 'traced'
+  | 'delivered'
+  | 'logged'
 >;
+
+function watchedAdmit(
+  state: RecorderState,
+  guard: Guard,
+  admit: (e: MemoryEntry) => boolean,
+): (e: MemoryEntry) => boolean {
+  return (e) => {
+    const ok = admit(e);
+    if (!ok) {
+      guard(() => {
+        state.filtered.add(e.id);
+      });
+    }
+    return ok;
+  };
+}
 
 function stateMethods(state: RecorderState, guard: Guard): StateMethods {
   return {
@@ -477,15 +591,7 @@ function stateMethods(state: RecorderState, guard: Guard): StateMethods {
         state.shown = s;
         state.dropped = d;
       }),
-    watchAdmit: (admit) => (e) => {
-      const ok = admit(e);
-      if (!ok) {
-        guard(() => {
-          state.filtered.add(e.id);
-        });
-      }
-      return ok;
-    },
+    watchAdmit: (admit) => watchedAdmit(state, guard, admit),
     filtered: (id) =>
       guard(() => {
         state.filtered.add(id);
@@ -513,7 +619,8 @@ function stateMethods(state: RecorderState, guard: Guard): StateMethods {
   };
 }
 
-/** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
+/** A recorder for one call; every observer method is guarded, and a throw marks it broken
+ * instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
   const ts = init.now.toISOString();
@@ -522,7 +629,10 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const state = newRecorderState();
 
   const guard = guardFor(state, fault);
-  const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);
+  const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(
+    state,
+    guard,
+  );
 
   return {
     ledger: init.ledger,
@@ -533,27 +643,38 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     dropMissing,
     gated,
     selected,
-    takeEvent: recorderTake(init, payload, state, ts, startedMs),
+    takeEvent: recorderTake({ init, payload, state, ts, startedMs }),
   };
 }
 
-function recorderTake(
-  init: DeliveryRecorderInit,
-  payload: PayloadFacts,
-  state: RecorderState,
-  ts: string,
-  startedMs: number,
-): DeliveryRecorder['takeEvent'] {
+interface RecorderTakeOptions {
+  readonly init: DeliveryRecorderInit;
+  readonly payload: PayloadFacts;
+  readonly state: RecorderState;
+  readonly ts: string;
+  readonly startedMs: number;
+}
+
+function recorderTake({
+  init,
+  payload,
+  state,
+  ts,
+  startedMs,
+}: RecorderTakeOptions): DeliveryRecorder['takeEvent'] {
   const fault = init.fault ?? null;
   return () => {
     if (state.flushed) return null;
     state.flushed = true;
     if (state.broken !== null) {
-      log.warn(`delivery ledger skipped: recorder failed: ${state.broken.message}`, errorFields(state.broken.error));
+      log.warn(
+        `delivery ledger skipped: recorder failed: ${state.broken.message}`,
+        errorFields(state.broken.error),
+      );
       return null;
     }
     if (fault === 'build') throw new Error('injected build fault');
-    const input = buildEvent(init, payload, state, ts, startedMs);
+    const input = buildEvent({ init, payload, state, ts, startedMs });
     if (fault === 'flush') throw new Error('injected flush fault');
     return input;
   };

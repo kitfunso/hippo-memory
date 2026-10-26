@@ -27,7 +27,7 @@ async function dirtyFor(root: string, tenantId: string): Promise<MemoryEntry[]> 
 function markDirty(root: string, summaryId: string, tenantId: string, actor: string): void {
   const db = openHippoDb(root);
   try {
-    markSummaryDirtyInTx(db, summaryId, tenantId, actor);
+    markSummaryDirtyInTx(db, { summaryId, tenantId, actor });
   } finally {
     closeHippoDb(db);
   }

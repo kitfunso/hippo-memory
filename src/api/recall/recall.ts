@@ -1,5 +1,6 @@
-// Read path: the recall entries that cut a band. Each ranks with rankRecall under its profile, then composes the band
-// and writes the recall; the budget-cut entry, retrieveWithCliCore, is in request.ts.
+// Read path: the recall entries that cut a band. Each ranks with rankRecall under its profile, then
+// composes the band and writes the recall; the budget-cut entry, retrieveWithCliCore, is in
+// request.ts.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
@@ -31,15 +32,21 @@ import {
   type RecallPlan,
   type RecallReads,
 } from './compose.js';
-import { rankCtxOf, rankRecall, withMissing, type RankRecallOptions, type RankRecallResult } from './pipeline.js';
+import {
+  rankCtxOf,
+  rankRecall,
+  withMissing,
+  type RankRecallOptions,
+  type RankRecallResult,
+} from './pipeline.js';
 import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { RecallWrites } from '../../base/ports/store.js';
 import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
 
-/** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets `recordAs` also has the
- * recall recorded in full. */
+/** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets
+ * `recordAs` also has the recall recorded in full. */
 export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
@@ -47,25 +54,47 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
   const recordAs = opts.trace?.recordAs;
   if (!recordAs) return recallFromWindow(ctx, opts, windowSize, personalScope);
-  const { recallHistory, leadingAudit } = recallLead(ctx, recordAs, opts.query, opts.boost?.sessionId);
-  const withLead = { ...opts, hints: { ...opts.hints, recallHistory }, trace: { ...opts.trace, leadingAudit } };
+  const { recallHistory, leadingAudit } = recallLead(
+    ctx,
+    recordAs,
+    opts.query,
+    opts.boost?.sessionId,
+  );
+  const withLead = {
+    ...opts,
+    hints: { ...opts.hints, recallHistory },
+    trace: { ...opts.trace, leadingAudit },
+  };
   const result = await recallFromWindow(ctx, withLead, windowSize, personalScope);
   await recordShownRecall(ctx, ctx.store, recordAs, returnedList(opts, result));
   return result;
 }
 
-/** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the ids `show` returns;
- * `results` stays the top window of that ranking. Under `recordAs`, `show` judges the hints, so only the shown list is
- * recorded. */
-export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: ShowRanking): Promise<RecallResult> {
+/** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the
+ * ids `show` returns; `results` stays the top window of that ranking. Under `recordAs`, `show`
+ * judges the hints, so only the shown list is recorded. */
+export async function retrieveRanking(
+  ctx: Context,
+  opts: RecallOptions,
+  show: ShowRanking,
+): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), BAND_RANKED);
+  const ranking = await rankRecall(
+    rankCtxOf(ctx),
+    rankRequestOf(ctx, opts, windowSize, personalScope),
+    BAND_RANKED,
+  );
   const window = ranking.results.slice(0, windowSize).map((r) => r.entry);
   // The caller traces and audits the rows it shows, so the window writes neither.
   const windowOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
-  const plan = planRecall(ctx, windowOpts, window, personalScope, BAND_RANKED);
+  const plan = planRecall(ctx, {
+    opts: windowOpts,
+    all: window,
+    personalScope,
+    profile: BAND_RANKED,
+  });
   const reads = await readRecall(ctx, windowOpts, plan, ranking.goals);
   const composed = composeRecall(ctx, windowOpts, {
     windowSize,
@@ -90,12 +119,14 @@ function presentedList(opts: RecallOptions, shown: ShownRanking): ShownList {
     anchoredOn: shown.hints.anchoring?.memoryId,
     tokens: shown.tokens ?? 0,
     ledgerSessionId: null,
-    // finishShownRecall throws when its audit write fails, so this point is never reached without the rows.
+    // finishShownRecall throws when its audit write fails, so this point is never reached without
+    // the rows.
     written: true,
   };
 }
 
-/** What `retrieve` records: the rows it returns, and the continuity block the reply carries beside them. */
+/** What `retrieve` records: the rows it returns, and the continuity block the reply carries
+ * beside them. */
 function returnedList(opts: RecallOptions, result: RecallResult): ShownList {
   return {
     query: opts.query,
@@ -104,7 +135,8 @@ function returnedList(opts: RecallOptions, result: RecallResult): ShownList {
     anchoredOn: result.anchoringHint?.memoryId,
     tokens: result.tokens + (result.continuityTokens ?? 0),
     ledgerSessionId: opts.boost?.sessionId ?? null,
-    // A failed audit write throws out of recallFromWindow, so this point is never reached without the rows.
+    // A failed audit write throws out of recallFromWindow, so this point is never reached without
+    // the rows.
     written: true,
   };
 }
@@ -115,9 +147,13 @@ async function recallFromWindow(
   windowSize: number,
   personalScope: string | undefined,
 ): Promise<RecallResult> {
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), POSITION_BAND);
+  const ranking = await rankRecall(
+    rankCtxOf(ctx),
+    rankRequestOf(ctx, opts, windowSize, personalScope),
+    POSITION_BAND,
+  );
   const candidates = ranking.results.map((r) => r.entry);
-  const plan = planRecall(ctx, opts, candidates, personalScope, POSITION_BAND);
+  const plan = planRecall(ctx, { opts, all: candidates, personalScope, profile: POSITION_BAND });
   const reads = await readRecall(ctx, opts, plan, ranking.goals);
   const composed = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
   await finishRecall(
@@ -129,7 +165,8 @@ async function recallFromWindow(
   return composed.result;
 }
 
-/** What an API recall asks the ranker for: its exact scope and own scope, its project, and the engine `mode` names. */
+/** What an API recall asks the ranker for: its exact scope and own scope, its project, and the
+ * engine `mode` names. */
 function rankRequestOf(
   ctx: Context,
   opts: RecallOptions,
@@ -145,7 +182,8 @@ function rankRequestOf(
     scopeMode: 'exact',
     ownScope: personalScope,
     originProjects: recallOrigin(opts),
-    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag instead.
+    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag
+    // instead.
     boost: goalTag ? {} : { sessionId },
     search: {
       usePhysics: opts.mode === 'physics',
@@ -157,7 +195,8 @@ function rankRequestOf(
   };
 }
 
-/** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
+/** The one recall write: the caller's leading audit rows go first, and the ids shown are the
+ * ones strengthened. */
 async function finishRecall(
   ctx: Context,
   opts: RecallOptions,
@@ -171,7 +210,8 @@ async function finishRecall(
   });
 }
 
-/** The ranking the MCP presenter cuts its list from: every ranked row, and the scope-filtered pool for its hints. */
+/** The ranking the MCP presenter cuts its list from: every ranked row, and the scope-filtered
+ * pool for its hints. */
 function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   const rankedEntries = ranking.results.map((r) => r.entry);
   return {
@@ -181,14 +221,16 @@ function storeRankingOf(ranking: RankRecallResult): StoreRanking {
   };
 }
 
-/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it earned. */
+/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it
+ * earned. */
 interface CallerCut {
   readonly show: ShowRanking;
   readonly ranking: StoreRanking;
   readonly goalLog: GoalRecallLogRow[];
 }
 
-/** The caller shows its cut of the ranking; its rows go after the window's, in the same one write. */
+/** The caller shows its cut of the ranking; its rows go after the window's, in the same one
+ * write. */
 async function finishShownRecall(
   ctx: Context,
   opts: RecallOptions,
@@ -197,7 +239,11 @@ async function finishShownRecall(
 ): Promise<ShownRanking> {
   const shown = cut.show(cut.ranking, composed.result);
   const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, cut.ranking.ranked);
-  const hintRows = shownRecallRows(ctx, { query: opts.query, sessionId: opts.boost?.sessionId }, shown.hints);
+  const hintRows = shownRecallRows(
+    ctx,
+    { query: opts.query, sessionId: opts.boost?.sessionId },
+    shown.hints,
+  );
   const { writes } = composed;
   await finishRecall(
     ctx,
@@ -212,9 +258,19 @@ async function finishShownRecall(
   return shown;
 }
 
-function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: SearchResult[]) {
+function shownAuditAndTrace(
+  ctx: Context,
+  opts: RecallOptions,
+  shownIds: readonly string[],
+  ranked: SearchResult[],
+) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
-  const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
+  const shownRow = recallAuditRow(
+    callerOf(ctx),
+    'recall',
+    undefined,
+    recallAuditMetadata(opts.query, shownIds.length),
+  );
   const trace = opts.trace?.suppressRecallTrace
     ? undefined
     : {
@@ -241,8 +297,9 @@ function recallWindowSize(ctx: Context, window: RecallWindowOptions = {}): numbe
         'pass opts.window.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
     );
   }
-  // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill overflow summaries.
-  // 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so non-positive values throw.
+  // Undefined keeps the store default: defaulting to `limit` would shrink the pool and kill
+  // overflow summaries. 0 would reach FTS/LIKE LIMIT 0 and then an uncapped full-store fallback, so
+  // non-positive values throw.
   if (scorerWindow !== undefined) {
     if (!Number.isFinite(scorerWindow) || !Number.isInteger(scorerWindow) || scorerWindow < 1) {
       throw new RecallContractError(
@@ -270,10 +327,19 @@ async function readRecall(
     parents: parentIds ? await store.entriesByIds(parentIds, tenantId) : [],
     freshRaws:
       freshCount > 0
-        ? await store.freshRawEntries(freshCount, tenantId, freshTailSessionId, recallOrigin(opts) ?? null)
+        ? await store.freshRawEntries(
+            freshCount,
+            tenantId,
+            freshTailSessionId,
+            recallOrigin(opts) ?? null,
+          )
         : [],
-    continuity: continuity ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuity.key) : undefined,
-    planning: plan.claim ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
+    continuity: continuity
+      ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuity.key)
+      : undefined,
+    planning: plan.claim
+      ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens)
+      : null,
   };
 }
 
@@ -284,7 +350,8 @@ async function goalsOf(ctx: Context, plan: RecallPlan, known: ActiveGoals | null
   return ctx.store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId: ctx.tenantId });
 }
 
-// On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
+// On a shared store the tenant's newest row is another developer's; no project keys to nothing, so
+// the block is empty.
 function continuityKey(ctx: Context, opts: RecallOptions): ContinuityKey | null {
   if (!sharedStoreOf(ctx)) return null;
   return { owner: ownerOrSubject(ctx.actor), project: recallOrigin(opts) ?? [] };

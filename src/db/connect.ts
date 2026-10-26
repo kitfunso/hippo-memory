@@ -4,7 +4,12 @@ import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
-import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
+import {
+  type OpenFacts,
+  importLegacyVectors,
+  runMigrations,
+  settledStoreFacts,
+} from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 import { storeKey, type StoreRuntime } from './store-runtime.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
@@ -13,22 +18,28 @@ export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
 
-/** A store's folder and the runtime its opens run under; undefined runs every open step on every open. */
+/** A store's folder and the runtime its opens run under; undefined runs every open step on every
+ * open. */
 export interface StoreAt {
   readonly hippoRoot: string;
   readonly runtime: StoreRuntime | undefined;
 }
 
-/** Runs `step` on the store unless it already ran to the end under the store's runtime; a throw leaves it due, and
- * with no runtime it always runs. */
-export function oncePerStore({ hippoRoot, runtime }: StoreAt, name: string, step: () => void): void {
+/** Runs `step` on the store unless it already ran to the end under the store's runtime; a throw
+ * leaves it due, and with no runtime it always runs. */
+export function oncePerStore(
+  { hippoRoot, runtime }: StoreAt,
+  name: string,
+  step: () => void,
+): void {
   const key = storeKey(hippoRoot);
   if (runtime?.hasRun(key, name)) return;
   step();
   runtime?.markRun(key, name);
 }
 
-// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs, with one warning.
+// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep
+// theirs, with one warning.
 function createStoreFilesOwnerOnly(at: StoreAt): void {
   const { hippoRoot } = at;
   // A stat, not a failed exclusive open, is what an existing store costs on every connection.
@@ -62,22 +73,27 @@ function warnWideModes(hippoRoot: string): void {
   }
 }
 
-// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no scan; a failed
-// unlink leaves its row uncleaned, and the next open retries it.
-function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, pending: boolean | undefined): void {
+// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no
+// scan; a failed unlink leaves its row uncleaned, and the next open retries it.
+function sweepArchivedMirrorsIfDue(
+  hippoRoot: string,
+  db: DatabaseSyncLike,
+  pending: boolean | undefined,
+): void {
   if (pending !== false) cleanupArchivedMirrors(hippoRoot, db);
 }
 
 const SCHEMA_STEP = 'schema';
 
-/** Makes the next connection under `runtime` prove this store's schema again; `hippo init` calls it because it is the
- * explicit ask to set a store up. */
+/** Makes the next connection under `runtime` prove this store's schema again; `hippo init` calls
+ * it because it is the explicit ask to set a store up. */
 export function reproveStoreSchema({ hippoRoot, runtime }: StoreAt): void {
   runtime?.forget(storeKey(hippoRoot), SCHEMA_STEP);
 }
 
-// Once the runtime has proven a store's schema, a new connection re-reads only the two version stamps and the binary
-// floor: a migration by another process moves a stamp and sends the open down the full path.
+// Once the runtime has proven a store's schema, a new connection re-reads only the two version
+// stamps and the binary floor: a migration by another process moves a stamp and sends the open down
+// the full path.
 function settleSchema(db: DatabaseSyncLike, at: StoreAt, busyWaitMs: number): OpenFacts | null {
   const { hippoRoot, runtime } = at;
   if (runtime?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
@@ -94,8 +110,8 @@ function settleSchema(db: DatabaseSyncLike, at: StoreAt, busyWaitMs: number): Op
 }
 
 /**
- * A connection with what its own open's probe read; facts go stale with the next statement, so a handle made by an
- * earlier call carries null.
+ * A connection with what its own open's probe read; facts go stale with the next statement, so a
+ * handle made by an earlier call carries null.
  */
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
@@ -105,9 +121,9 @@ export interface OpenedDb {
 }
 
 /**
- * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the
- * caller owns and closes it. `busyWaitMs` is the default lock wait when unset.
- * An open with no session takes this path; a session's first open on a store does too.
+ * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when
+ * it is due; the caller owns and closes it. `busyWaitMs` is the default lock wait when unset. An
+ * open with no session takes this path; a session's first open on a store does too.
  */
 export function connectWithFacts(at: StoreAt, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
   const { hippoRoot } = at;
@@ -117,7 +133,9 @@ export function connectWithFacts(at: StoreAt, busyWaitMs: number = DEFAULT_BUSY_
     db.exec(`PRAGMA busy_timeout = ${busyWaitMs}`);
     execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
-    db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot), at.runtime)}`);
+    db.exec(
+      `PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot), at.runtime)}`,
+    );
     db.exec('PRAGMA foreign_keys = ON');
     const facts = settleSchema(db, at, busyWaitMs);
     // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.

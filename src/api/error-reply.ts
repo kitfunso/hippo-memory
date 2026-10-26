@@ -1,5 +1,5 @@
-// The one error-to-reply map the HTTP server and the MCP transports share, so a status never depends on which front end
-// caught the error.
+// The one error-to-reply map the HTTP server and the MCP transports share, so a status never
+// depends on which front end caught the error.
 import { ApiError } from '../base/errors/api-errors.js';
 import {
   BodyTimeoutError,
@@ -18,17 +18,23 @@ export interface ApiErrorReply {
 }
 
 /**
- * Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server
- * log.
+ * Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text
+ * stays in the server log.
  */
 export function mapApiError<E>(err: E): ApiErrorReply {
-  // A held lock is a retryable 503 in every store, so the surfaces need not know any store's busy codes.
+  // A held lock is a retryable 503 in every store, so the surfaces need not know any store's busy
+  // codes.
   if (isStoreBusy(err)) return { status: 503, message: STORE_BUSY_MESSAGE };
   // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
-  if (err instanceof HttpError && !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)) {
+  if (
+    err instanceof HttpError &&
+    !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)
+  ) {
     return { status: 500, message: INTERNAL_ERROR_MESSAGE };
   }
-  if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
+  if (err instanceof HttpError || err instanceof ApiError) {
+    return { status: err.status, message: err.message };
+  }
   if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
   if (err instanceof BodyTimeoutError) return { status: 408, message: err.message };
   if (err instanceof StoreBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };

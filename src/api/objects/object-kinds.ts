@@ -1,11 +1,19 @@
-// What only one typed-object kind does: an incident's open and resolve, the policies in force at a date, the skills
-// export, a brief built from its repo's receipts, and the memory a new decision replaces.
+// What only one typed-object kind does: an incident's open and resolve, the policies in force at a
+// date, the skills export, a brief built from its repo's receipts, and the memory a new decision
+// replaces.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
 import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import { resolveActiveDecisionIdByMemory, weakenSupersededMemory } from '../../domain/objects/decisions.js';
-import { openIncident, resolveOpenIncident, type SaveIncidentOptions } from '../../domain/objects/incidents.js';
+import {
+  resolveActiveDecisionIdByMemory,
+  weakenSupersededMemory,
+} from '../../domain/objects/decisions.js';
+import {
+  openIncident,
+  resolveOpenIncident,
+  type SaveIncidentOptions,
+} from '../../domain/objects/incidents.js';
 import { policiesAsOf } from '../../domain/objects/policies.js';
 import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS } from '../../domain/objects/processes.js';
 import {
@@ -27,7 +35,8 @@ import { saveSiteOf, taggedFrom, type WriteOrigin } from './objects.js';
 export type { BriefDigest } from '../../domain/objects/project-briefs.js';
 export type { SaveIncidentOptions } from '../../domain/objects/incidents.js';
 
-/** The field caps a route checks before it saves, so an over-long field answers 400 before the store is asked. */
+/** The field caps a route checks before it saves, so an over-long field answers 400 before the
+ * store is asked. */
 export const OBJECT_CAPS = {
   customer: MAX_CUSTOMER_LEN,
   note: MAX_NOTE_LEN,
@@ -42,7 +51,8 @@ export const OBJECT_CAPS = {
   skillTrigger: MAX_SKILL_TRIGGER_LEN,
 } as const;
 
-/** Opens an incident as the caller; a linked memory outside the caller's tenant refuses the whole write. */
+/** Opens an incident as the caller; a linked memory outside the caller's tenant refuses the
+ * whole write. */
 export function incidentOpen(
   ctx: ContextWith<'objects'>,
   write: SaveIncidentOptions,
@@ -50,17 +60,31 @@ export function incidentOpen(
 ): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
-  return openIncident(ctx.store.objects, defaultHalfLifeDays, ctx.tenantId, tagged, {
-    actor: ctx.actor.subject,
-    now: ctx.infra.clock(),
+  return openIncident(ctx.store.objects, {
+    baseHalfLifeDays: defaultHalfLifeDays,
+    tenantId: ctx.tenantId,
+    opts: tagged,
+    by: {
+      actor: ctx.actor.subject,
+      now: ctx.infra.clock(),
+    },
   });
 }
 
 /** Moves an open incident to resolved as the caller. */
-export function incidentResolve(ctx: ContextWith<'objects'>, id: number, resolutionText: string): Promise<Incident> {
-  return resolveOpenIncident(ctx.store.objects, ctx.tenantId, id, resolutionText, {
-    actor: ctx.actor.subject,
-    now: ctx.infra.clock(),
+export function incidentResolve(
+  ctx: ContextWith<'objects'>,
+  id: number,
+  resolutionText: string,
+): Promise<Incident> {
+  return resolveOpenIncident(ctx.store.objects, {
+    tenantId: ctx.tenantId,
+    id,
+    resolutionText,
+    by: {
+      actor: ctx.actor.subject,
+      now: ctx.infra.clock(),
+    },
   });
 }
 
@@ -88,8 +112,12 @@ export function briefRefresh(ctx: ContextWith<'objects'>, repo: string): Promise
   return refreshedBrief(ctx.store.objects, saveSiteOf(ctx), repo);
 }
 
-/** The active decision whose mirror is `memoryId`, or null: what the CLI's `--supersedes <memory-id>` names. */
-export function decisionIdByMemory(ctx: ContextWith<'objects'>, memoryId: string): Promise<number | null> {
+/** The active decision whose mirror is `memoryId`, or null: what the CLI's `--supersedes
+ * <memory-id>` names. */
+export function decisionIdByMemory(
+  ctx: ContextWith<'objects'>,
+  memoryId: string,
+): Promise<number | null> {
   return resolveActiveDecisionIdByMemory(ctx.store.objects, ctx.tenantId, memoryId);
 }
 

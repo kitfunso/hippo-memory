@@ -1,11 +1,17 @@
-// The memory entry: its shape, kinds and tags, how one is created, succeeded and retrieved, and its schema fit.
+// The memory entry: its shape, kinds and tags, how one is created, succeeded and retrieved, and its
+// schema fit.
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
 import { randomUUID } from 'node:crypto';
 import { isJsonString } from '../util/json.js';
 import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
-import { calculateStrength, netWrong, PRODUCTION_STRENGTH, type StrengthModel } from './strength.js';
+import {
+  calculateStrength,
+  netWrong,
+  PRODUCTION_STRENGTH,
+  type StrengthModel,
+} from './strength.js';
 
 export const DEFAULT_SCHEMA_FIT = 0.5;
 
@@ -25,12 +31,12 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
-// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison sorts them
-// chronologically.
-// The row writer stores `created` in that form (isoInstant); only rows written before it may hold another.
+// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison
+// sorts them chronologically. The row writer stores `created` in that form (isoInstant); only rows
+// written before it may hold another.
 
-// Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every stored and wire
-// format.
+// Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every
+// stored and wire format.
 export interface MemoryEntry {
   id: string;
   created: string; // ISO 8601
@@ -59,14 +65,14 @@ export interface MemoryEntry {
   extractedFrom: string | null;
   dagLevel: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dagParentId: string | null; // ID of parent summary node in the DAG; null = root level
-  // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always 0 / null on leaves
-  // and facts.
+  // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always
+  // 0 / null on leaves and facts.
   descendantCount?: number;
   earliestAt?: string | null;
   latestAt?: string | null;
   /**
-   * True when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it.
-   * Always false below level 2.
+   * True when a child was invalidated, superseded, forgotten or archived since the last rebuild;
+   * sleep clears it. Always false below level 2.
    */
   summaryDirty?: boolean;
   /** ISO 8601 time of the last successful rebuild, or null if never rebuilt. */
@@ -82,9 +88,9 @@ export interface MemoryEntry {
   artifactRef: string | null; // URI to source artifact (slack://, gh://, file://)
   tenantId: string; // 'default' for single-tenant deployments
   /**
-   * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
-   * denied by ambient context.
-   * Stamped at write time by stampOriginProject (sqlite/entry-row.ts); undefined only before the first write. */
+   * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known
+   * (legacy or unnamed write), denied by ambient context. Stamped at write time by
+   * stampOriginProject (sqlite/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
 }
 
@@ -108,7 +114,8 @@ export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
-// Schema fit blends tag coverage and content similarity; a content match needs this share of shared tokens.
+// Schema fit blends tag coverage and content similarity; a content match needs this share of shared
+// tokens.
 const TAG_FIT_WEIGHT = 0.6;
 const CONTENT_FIT_WEIGHT = 0.4;
 const CONTENT_TOKEN_SHARE_MIN = 0.2;
@@ -151,7 +158,8 @@ export interface CreateMemoryOptions {
   source?: string;
   confidence?: ConfidenceLevel;
   /**
-   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled default.
+   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled
+   * default.
    */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;
@@ -167,14 +175,18 @@ export interface CreateMemoryOptions {
   tenantId?: string;
 }
 
-/** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type asks for it. */
-export function createMemory(content: string, options: CreateMemoryOptions, now: Date): MemoryEntry {
+/** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type
+ * asks for it. */
+export function createMemory(
+  content: string,
+  options: CreateMemoryOptions,
+  now: Date,
+): MemoryEntry {
   assertValidMemoryInput(content, options);
 
   const at = now.toISOString();
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
-  const emotionalValence = options.emotionalValence ?? inferValence(tags);
   const schemaFit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
   const halfLifeDays = deriveHalfLife(options.baseHalfLifeDays, { tags, schemaFit });
@@ -188,7 +200,7 @@ export function createMemory(content: string, options: CreateMemoryOptions, now:
     halfLifeDays,
     layer,
     tags,
-    emotionalValence,
+    emotionalValence: options.emotionalValence ?? inferValence(tags),
     schemaFit,
     source: options.source ?? 'cli',
     outcomeScore: null,
@@ -198,6 +210,33 @@ export function createMemory(content: string, options: CreateMemoryOptions, now:
     pinned: options.pinned ?? false,
     confidence: options.confidence ?? 'verified',
     content,
+    ...newLineage(options, at),
+  };
+
+  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
+  return entry;
+}
+
+type EntryLineage = Pick<
+  MemoryEntry,
+  | 'parents'
+  | 'starred'
+  | 'traceOutcome'
+  | 'sourceSessionId'
+  | 'validFrom'
+  | 'supersededBy'
+  | 'extractedFrom'
+  | 'dagLevel'
+  | 'dagParentId'
+  | 'kind'
+  | 'scope'
+  | 'owner'
+  | 'artifactRef'
+  | 'tenantId'
+>;
+
+function newLineage(options: CreateMemoryOptions, at: string): EntryLineage {
+  return {
     parents: [],
     starred: false,
     traceOutcome: options.traceOutcome ?? null,
@@ -213,15 +252,14 @@ export function createMemory(content: string, options: CreateMemoryOptions, now:
     artifactRef: options.artifactRef ?? null,
     tenantId: options.tenantId ?? DEFAULT_TENANT_ID,
   };
-
-  entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
-  return entry;
 }
 
 function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOptions>): void {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
-    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+    throw new BadRequestError(
+      `Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`,
+    );
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
@@ -241,9 +279,14 @@ export interface SuccessorOptions {
   readonly pinned?: boolean;
 }
 
-/** The row that replaces `old`, created at `now`: a supersede never changes where a memory belongs or whose it is,
- * so source, scope, owner, session and a stamped origin carry over. */
-export function createSuccessor(old: MemoryEntry, content: string, opts: SuccessorOptions, now: Date): MemoryEntry {
+/** The row that replaces `old`, created at `now`: a supersede never changes where a memory
+ * belongs or whose it is, so source, scope, owner, session and a stamped origin carry over. */
+export function createSuccessor(
+  old: MemoryEntry,
+  content: string,
+  opts: SuccessorOptions,
+  now: Date,
+): MemoryEntry {
   const fields: CreateMemoryOptions = {
     layer: opts.layer ?? old.layer,
     tags: opts.tags ?? [...old.tags],
@@ -265,14 +308,19 @@ export function createSuccessor(old: MemoryEntry, content: string, opts: Success
 }
 
 /**
- * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays
- * faster if unused.
- * Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
-export function computeSchemaFit(content: string, tags: string[], existingEntries: MemoryEntry[]): number {
+ * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3
+ * is novel and decays faster if unused. Tags shared with existing memories count by rarity (a
+ * rare shared tag fits more), plus content-token overlap. */
+export function computeSchemaFit(
+  content: string,
+  tags: string[],
+  existingEntries: MemoryEntry[],
+): number {
   return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
 }
 
-/** What schema fit reads from `entries`, built once for a caller that scores many contents against the same rows. */
+/** What schema fit reads from `entries`, built once for a caller that scores many contents
+ * against the same rows. */
 export function schemaFitSourceOf(entries: readonly MemoryEntry[]): SchemaFitSource {
   const tagCounts = new Map<string, number>();
   for (const entry of entries) {
@@ -296,7 +344,8 @@ export interface SchemaFitSource {
 const FILLER_TOKEN_MAX_LENGTH = 3;
 // Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
 const TAG_OVERLAP_SCALE = 2;
-// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one hit.
+// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one
+// hit.
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {
@@ -304,7 +353,11 @@ function significantTokens(text: string): Set<string> {
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
-export function schemaFitFrom(content: string, tags: readonly string[], source: SchemaFitSource): number {
+export function schemaFitFrom(
+  content: string,
+  tags: readonly string[],
+  source: SchemaFitSource,
+): number {
   const N = source.rows;
   if (N === 0) return DEFAULT_SCHEMA_FIT;
   const tagFreq = source.tagCounts;
@@ -319,7 +372,8 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
     if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
+  const tagScore =
+    totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
 
   const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
@@ -348,9 +402,14 @@ function inferValence(tags: string[]): EmotionalValence {
   return 'neutral';
 }
 
-/** Copies with the retrieval count, clock and half-life updated at `now`; the caller persists them. A model whose
- * recall does not strengthen returns the entries unchanged, not empty, since callers derive last_retrieval_ids. */
-export function markRetrieved(entries: MemoryEntry[], now: Date, model: StrengthModel): MemoryEntry[] {
+/** Copies with the retrieval count, clock and half-life updated at `now`; the caller persists
+ * them. A model whose recall does not strengthen returns the entries unchanged, not empty, since
+ * callers derive last_retrieval_ids. */
+export function markRetrieved(
+  entries: MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): MemoryEntry[] {
   if (!model.recallStrengthens) return entries;
   return entries.map((e) => {
     if (e.supersededBy) return e;

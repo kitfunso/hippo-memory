@@ -1,7 +1,7 @@
-// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the
-// `objects` store group. Each flow runs once, over the `objects` group of whatever store the caller holds: the CLI's, a
-// served one, or a test's. The tenant, the fields and the list status are checked first, so a bad request fails before
-// a store is asked.
+// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the
+// error text, over the `objects` store group. Each flow runs once, over the `objects` group of
+// whatever store the caller holds: the CLI's, a served one, or a test's. The tenant, the fields and
+// the list status are checked first, so a bad request fails before a store is asked.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
@@ -15,7 +15,12 @@ import {
 } from '../../base/records/object-types.js';
 import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { ObjectDescriptor, ObjectDraft, ObjectListOptions, SavableDescriptor } from './descriptor.js';
+import type {
+  ObjectDescriptor,
+  ObjectDraft,
+  ObjectListOptions,
+  SavableDescriptor,
+} from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */
 function listQuery<K extends ObjectKind>(
@@ -25,7 +30,9 @@ function listQuery<K extends ObjectKind>(
 ): ObjectListQuery<K> {
   assertTenantId('listObjects', tenantId);
   if (opts.status && !d.states.has(opts.status)) {
-    throw new BadRequestError(`status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
+    throw new BadRequestError(
+      `status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`,
+    );
   }
   return {
     status: opts.status || undefined,
@@ -75,33 +82,47 @@ function closed<K extends ObjectKind>(
   if (written.refused === 'missing') {
     throw new NotFoundError(`${d.label} ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
+  if (written.refused !== 'status') {
+    throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
+  }
   const closable = d.closableFrom.join(' or ');
   throw new ConflictError(
     `${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,
   );
 }
 
+/** Which object to retire, and who retires it when. */
+export interface CloseObjectOptions extends ActedBy {
+  readonly tenantId: string;
+  readonly id: number;
+}
+
 /** Retires one object; its mirror memory stays as saved. */
 export async function closeObject<K extends ObjectKind>(
   objects: Objects,
   d: ObjectDescriptor<K>,
-  tenantId: string,
-  id: number,
-  by: ActedBy,
+  { tenantId, id, actor, now }: CloseObjectOptions,
 ): Promise<ObjectByKind[K]> {
-  const close = closing(d, tenantId, by.actor, by.now);
+  const close = closing(d, tenantId, actor, now);
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
+export interface ObjectMirrorOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly source: ObjectKind;
+  readonly text: { readonly content: string; readonly tags: readonly string[] };
+  readonly now: Date;
+}
+
 /** The memory a typed object writes beside its row, so recall finds the object. */
-export function objectMirror(
-  baseHalfLifeDays: number,
-  tenantId: string,
-  source: ObjectKind,
-  text: { readonly content: string; readonly tags: readonly string[] },
-  now: Date,
-): MemoryEntry {
+export function objectMirror({
+  baseHalfLifeDays,
+  tenantId,
+  source,
+  text,
+  now,
+}: ObjectMirrorOptions): MemoryEntry {
   return createMemory(
     text.content,
     {
@@ -116,7 +137,8 @@ export function objectMirror(
   );
 }
 
-/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror starts on. */
+/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror
+ * starts on. */
 /** Who closes or opens an object, and the instant the row is stamped with. */
 export interface ActedBy {
   readonly actor: string;
@@ -131,8 +153,18 @@ export interface ObjectSaveSite {
   readonly now: Date;
 }
 
-function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
-  const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft, site.now);
+function objectSave<K extends SavableKind>(
+  site: ObjectSaveSite,
+  kind: K,
+  draft: ObjectDraft<K>,
+): ObjectSave<K> {
+  const mirror = objectMirror({
+    baseHalfLifeDays: site.baseHalfLifeDays,
+    tenantId: site.tenantId,
+    source: kind,
+    text: draft,
+    now: site.now,
+  });
   return {
     mirror,
     fields: draft.fields,
@@ -152,19 +184,24 @@ function saved<K extends SavableKind, W>(
   if (!isObjectRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
-      throw new NotFoundError(`${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
+      throw new NotFoundError(
+        `${d.label} ${replaced} to supersede not found for tenant ${tenantId}`,
+      );
     case 'status':
       throw new ConflictError(
         `${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`,
       );
     case 'raced':
-      throw new ConflictError(`${d.label} ${replaced} could not be superseded (no longer active or self-reference).`);
+      throw new ConflictError(
+        `${d.label} ${replaced} could not be superseded (no longer active or self-reference).`,
+      );
     case 'vanished':
       throw new Error(`failed to reload saved ${d.label} row`);
   }
 }
 
-/** Creates an object, or the version that replaces the one its options name, with its mirror memory in one write. */
+/** Creates an object, or the version that replaces the one its options name, with its mirror
+ * memory in one write. */
 export async function saveObject<K extends SavableKind, W>(
   objects: Objects,
   d: SavableDescriptor<K, W>,

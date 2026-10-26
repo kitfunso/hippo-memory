@@ -1,6 +1,12 @@
 // Leaf module: the one value space JSON.parse can produce, so boundary guards narrow a shared type.
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -8,8 +14,12 @@ export function isJsonString(value: JsonValue | undefined): value is string {
   return typeof value === 'string';
 }
 
-/** The option in `allowed` that `value` names, or undefined: a parsed value narrows to a literal union with no cast. */
-export function knownOption<T extends string>(allowed: readonly T[], value: JsonValue | undefined): T | undefined {
+/** The option in `allowed` that `value` names, or undefined: a parsed value narrows to a literal
+ * union with no cast. */
+export function knownOption<T extends string>(
+  allowed: readonly T[],
+  value: JsonValue | undefined,
+): T | undefined {
   return allowed.find((option) => option === value);
 }
 
@@ -23,20 +33,29 @@ export function isJsonBoolean(value: JsonValue | undefined): value is boolean {
 
 /** A non-null, non-array object. */
 export function isJsonObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
+  return (
+    value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value)
+  );
 }
 
-/** Like `isJsonObject`, but also false for an object whose own `constructor` key shadows `Object`. */
-export function isJsonObjectLiteral(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
+/** Like `isJsonObject`, but also false for an object whose own `constructor` key shadows
+ * `Object`. */
+export function isJsonObjectLiteral(
+  value: JsonValue | undefined,
+): value is { [key: string]: JsonValue } {
+  return (
+    value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object
+  );
 }
 
-/** `JSON.parse` typed as the values it can produce, so a reader narrows with the guards above instead of a cast. */
+/** `JSON.parse` typed as the values it can produce, so a reader narrows with the guards above
+ * instead of a cast. */
 export function parseJson(text: string): JsonValue {
   return JSON.parse(text);
 }
 
-/** The parsed value, or undefined when the text is not JSON; only the parser's SyntaxError is absorbed. */
+/** The parsed value, or undefined when the text is not JSON; only the parser's SyntaxError is
+ * absorbed. */
 export function tryParseJson(text: string): JsonValue | undefined {
   try {
     return JSON.parse(text);

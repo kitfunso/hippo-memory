@@ -1,5 +1,6 @@
-// A store's saved vector graph as a VectorIndex. Each read takes the whole file in one call and closes it at once, so a
-// writer on Windows can replace the file between reads; a record a time cost a syscall for each node the walk reached.
+// A store's saved vector graph as a VectorIndex. Each read takes the whole file in one call and
+// closes it at once, so a writer on Windows can replace the file between reads; a record a time
+// cost a syscall for each node the walk reached.
 import * as fs from 'node:fs';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -18,9 +19,15 @@ import {
   upperLevelBytes,
 } from './vector-graph-file.js';
 import { admittedRows, proposedMatches, STALE_SHARE, storedModel } from './vector-graph-rows.js';
-import type { ProposedMatches, VectorIndex, VectorMatch, VectorMatchQuery } from './vector-store.js';
+import type {
+  ProposedMatches,
+  VectorIndex,
+  VectorMatch,
+  VectorMatchQuery,
+} from './vector-store.js';
 
-// Rows below the file's newest that may be checked for the newest row still holding what the file read.
+// Rows below the file's newest that may be checked for the newest row still holding what the file
+// read.
 const INTACT_WALK = 32;
 
 interface NodeRecord {
@@ -33,15 +40,24 @@ interface NodeRecord {
   readonly upperOffset: number;
 }
 
-/** What tells one saved file from the next: the writer replaces it by rename, so a new file has a new identity. */
+/** What tells one saved file from the next: the writer replaces it by rename, so a new file has
+ * a new identity. */
 interface FileIdentity {
   readonly size: number;
   readonly mtimeMs: number;
   readonly ino: number;
 }
 
-/** One graph file's bytes, decoded a record at a time as a search reaches each node; each value is checked as it is
- * read, so a bad one throws GraphFileError and never steers a read out of the file. */
+/** Where one node's link list starts in a buffer, how many links it holds and whose it is. */
+interface LinkListOptions {
+  readonly at: number;
+  readonly count: number;
+  readonly node: number;
+}
+
+/** One graph file's bytes, decoded a record at a time as a search reaches each node; each value
+ * is checked as it is read, so a bad one throws GraphFileError and never steers a read out of
+ * the file. */
 class GraphFileView implements GraphView {
   readonly #bytes: Buffer;
   readonly #file: string;
@@ -99,7 +115,9 @@ class GraphFileView implements GraphView {
     const known = this.#records.get(node);
     if (known) return known;
     const { nodes, recordsAt, recordBytes, highRowid, maxLevel, m, dim, upperBytes } = this.stamp;
-    if (!Number.isInteger(node) || node < 0 || node >= nodes) throw this.#bad(`node ${node} is out of range`);
+    if (!Number.isInteger(node) || node < 0 || node >= nodes) {
+      throw this.#bad(`node ${node} is out of range`);
+    }
     const buf = this.#read(recordsAt + node * recordBytes, recordBytes);
     const rowid = buf.readDoubleLE(RECORD_AT.rowid);
     const [level, flags, count, upperOffset] = [
@@ -108,16 +126,27 @@ class GraphFileView implements GraphView {
       buf.readUInt16LE(RECORD_AT.linkCount),
       buf.readUInt32LE(RECORD_AT.upperOffset),
     ];
-    const upperFits = level === 0 || (upperOffset % 4 === 0 && upperOffset + level * upperLevelBytes(m) <= upperBytes);
-    const fits = Number.isSafeInteger(rowid) && rowid >= 1 && rowid <= highRowid && level <= maxLevel && flags <= 1;
-    if (!fits || count > 2 * m || !upperFits) throw this.#bad(`node ${node} has a value out of bounds`);
+    const upperFits =
+      level === 0 ||
+      (upperOffset % 4 === 0 && upperOffset + level * upperLevelBytes(m) <= upperBytes);
+    const fits =
+      Number.isSafeInteger(rowid) &&
+      rowid >= 1 &&
+      rowid <= highRowid &&
+      level <= maxLevel &&
+      flags <= 1;
+    if (!fits || count > 2 * m || !upperFits) {
+      throw this.#bad(`node ${node} has a value out of bounds`);
+    }
     const record: NodeRecord = {
       rowid,
       idHash: buf.readUInt32LE(RECORD_AT.idHash),
       level,
       replaced: isReplaced(flags),
-      links: this.#links(buf, RECORD_HEAD, count, node),
-      vector: new Float32Array(new Int8Array(buf.buffer, buf.byteOffset + RECORD_HEAD + 8 * m, dim)),
+      links: this.#links(buf, { at: RECORD_HEAD, count, node }),
+      vector: new Float32Array(
+        new Int8Array(buf.buffer, buf.byteOffset + RECORD_HEAD + 8 * m, dim),
+      ),
       upperOffset,
     };
     this.#records.set(node, record);
@@ -127,20 +156,26 @@ class GraphFileView implements GraphView {
   linksOf(node: number, level: number): ArrayLike<number> {
     const record = this.record(node);
     if (level === 0) return record.links;
-    if (level > record.level) throw this.#bad(`node ${node} is linked at level ${level}, above its own`);
+    if (level > record.level) {
+      throw this.#bad(`node ${node} is linked at level ${level}, above its own`);
+    }
     const key = node * 16 + level;
     const known = this.#upper.get(key);
     if (known) return known;
     const { upperAt, m } = this.stamp;
-    const buf = this.#read(upperAt + record.upperOffset + (level - 1) * upperLevelBytes(m), upperLevelBytes(m));
+    const buf = this.#read(
+      upperAt + record.upperOffset + (level - 1) * upperLevelBytes(m),
+      upperLevelBytes(m),
+    );
     const count = buf.readUInt32LE(0);
     if (count > m) throw this.#bad(`node ${node} has ${count} links at level ${level}`);
-    const links = this.#links(buf, 4, count, node);
+    const links = this.#links(buf, { at: 4, count, node });
     this.#upper.set(key, links);
     return links;
   }
 
-  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last is current. */
+  /** The node at `rowid`: records sit in rowid order, and of a reused rowid only the last is
+   * current. */
   nodeAt(rowid: number): number | undefined {
     let lo = 0;
     let hi = this.stamp.nodes;
@@ -152,11 +187,13 @@ class GraphFileView implements GraphView {
     return lo > 0 && this.record(lo - 1).rowid === rowid ? lo - 1 : undefined;
   }
 
-  #links(buf: Buffer, at: number, count: number, node: number): Uint32Array {
+  #links(buf: Buffer, { at, count, node }: LinkListOptions): Uint32Array {
     const links = new Uint32Array(count);
     for (let j = 0; j < count; j++) {
       links[j] = buf.readUInt32LE(at + 4 * j);
-      if (links[j] >= this.stamp.nodes) throw this.#bad(`node ${node} links to node ${links[j]}, out of range`);
+      if (links[j] >= this.stamp.nodes) {
+        throw this.#bad(`node ${node} links to node ${links[j]}, out of range`);
+      }
     }
     return links;
   }
@@ -171,7 +208,8 @@ class GraphFileView implements GraphView {
   }
 }
 
-/** How the file stands against the store: the rowid it still answers for, the rows above it and its stale nodes. */
+/** How the file stands against the store: the rowid it still answers for, the rows above it and
+ * its stale nodes. */
 interface Coverage {
   readonly rowid: number;
   readonly above: number;
@@ -183,8 +221,9 @@ function countOf(db: DatabaseSyncLike, sql: string, ...params: number[]): number
   return (cachedStatement(db, sql).get(...params) as { n: number }).n;
 }
 
-/** The highest rowid at or below the file's newest whose row still holds the memory its node read, or undefined when
- * none of the newest rows does. SQLite hands a deleted top rowid out again, so rows above it may be new. */
+/** The highest rowid at or below the file's newest whose row still holds the memory its node
+ * read, or undefined when none of the newest rows does. SQLite hands a deleted top rowid out
+ * again, so rows above it may be new. */
 function intactRowid(db: DatabaseSyncLike, file: GraphFileView): number | undefined {
   const rows = cachedStatement(
     db,
@@ -203,7 +242,8 @@ function coverage(db: DatabaseSyncLike, file: GraphFileView): Coverage | undefin
   if (file.stamp.model !== storedModel(db)) return undefined;
   const rowid = intactRowid(db, file);
   if (rowid === undefined) return undefined;
-  // count(*) walks the memory_id key, the smallest b-tree; rows above the intact one are few, and read anyway.
+  // count(*) walks the memory_id key, the smallest b-tree; rows above the intact one are few, and
+  // read anyway.
   const all = countOf(db, 'SELECT count(*) AS n FROM memory_vectors');
   const above = countOf(db, 'SELECT count(*) AS n FROM memory_vectors WHERE rowid > ?', rowid);
   return { rowid, above, stale: Math.max(0, file.stamp.nodes - (all - above)) };
@@ -223,7 +263,8 @@ function fileMatches(
   const filter = { dim: q.length, where, params };
   return proposedMatches(query, k, {
     nodes: file.stamp.nodes,
-    walk: (ef) => searchView(file, q, { k: ef, ef, admit, vectorOf: (node) => file.record(node).vector }),
+    walk: (ef) =>
+      searchView(file, q, { k: ef, ef, admit, vectorOf: (node) => file.record(node).vector }),
     admit: (nodes) =>
       admittedRows(
         db,
@@ -234,34 +275,31 @@ function fileMatches(
   });
 }
 
-/** The graph file under one store root, read off the store worker and by a worker whose own graph is not ready. */
+/** The graph file under one store root, read off the store worker and by a worker whose own
+ * graph is not ready. */
 export class GraphFileIndex implements VectorIndex {
   readonly #hippoRoot: string;
   // A file that cannot be trusted warns once, until it is replaced.
   readonly #warned = new Set<string>();
-  // The last view of each path, kept so a long-lived process reads the file once, not on every query.
+  // The last view of each path, kept so a long-lived process reads the file once, not on every
+  // query.
   readonly #views = new Map<string, GraphFileView>();
 
   constructor(hippoRoot: string) {
     this.#hippoRoot = hippoRoot;
   }
 
-  matches(
-    db: DatabaseSyncLike,
-    query: readonly number[],
-    k: number,
-    where: string,
-    params: readonly (string | number)[],
-  ): ProposedMatches | undefined {
-    return this.#onFile(query.length, (file) => {
+  matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined {
+    return this.#onFile(ask.query.length, (file) => {
       const covered = coverage(db, file);
       if (covered === undefined || covered.stale > STALE_SHARE * file.stamp.nodes) return undefined;
-      const matches = fileMatches(db, file, covered.rowid, { query, k, where, params });
+      const matches = fileMatches(db, file, covered.rowid, ask);
       return matches && { matches, coveredRowid: covered.rowid };
     });
   }
 
-  /** The share of the file's nodes that are stale plus the rows above what it covers; Infinity when it has no use. */
+  /** The share of the file's nodes that are stale plus the rows above what it covers; Infinity
+   * when it has no use. */
   drift(db: DatabaseSyncLike, dim: number): number {
     const share = this.#onFile(dim, (file) => {
       const covered = coverage(db, file);

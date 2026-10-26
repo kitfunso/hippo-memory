@@ -29,15 +29,23 @@ import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/j
 import type { ConnectorContext, WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
-  warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
+  warnIfOpenEnded(
+    SLACK_PREVIOUS,
+    envSlackSigningSecretPrevious(),
+    envSlackSigningSecretPreviousUntil(),
+  );
 }
 
-/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
- * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
- * cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
-  const { req, res, opts } = request;
-  // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
+/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its
+ * route row declares webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not
+ * 503) when the secret is unset, so a probe cannot tell a gated-off route from a missing one. */
+export async function handleSlackEventsWebhook(
+  request: WebhookRequest,
+  ports: WebhookPorts,
+): Promise<void> {
+  const { res, opts } = request;
+  // Secret and well-formed headers before the body, so a caller with neither cannot make the server
+  // buffer one.
   const secret = envSlackSigningSecret();
   if (!secret) {
     closeIfBodyUnread(request);
@@ -45,6 +53,24 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, ports: W
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
+  const { rawBytes, sigStr, tsStr } = await readSignedSlackBody(request, secret);
+  await routeUnlessReplayed({
+    hippoRoot: opts.hippoRoot,
+    ...ports,
+    res,
+    rawBody: rawBytes.toString('utf8'),
+    signature: sigStr,
+    slackTimestamp: tsStr,
+  });
+}
+
+/** Reads the raw body and refuses it unless the signature matches the current or the previous
+ * secret. */
+async function readSignedSlackBody(
+  request: WebhookRequest,
+  secret: string,
+): Promise<{ rawBytes: Buffer; sigStr: string; tsStr: string }> {
+  const { req } = request;
   const previousSecret = previousSecretInForce(
     SLACK_PREVIOUS,
     envSlackSigningSecretPrevious(),
@@ -70,21 +96,15 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, ports: W
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
-  await routeUnlessReplayed({
-    hippoRoot: opts.hippoRoot,
-    ...ports,
-    res,
-    rawBody: rawBytes.toString('utf8'),
-    signature: sigStr,
-    slackTimestamp: tsStr,
-  });
+  return { rawBytes, sigStr, tsStr };
 }
 
-// The timestamp check alone lets a captured request replay for five minutes; a hold in the store refuses the second
-// copy, and survives a restart.
+// The timestamp check alone lets a captured request replay for five minutes; a hold in the store
+// refuses the second copy, and survives a restart.
 const REPLAY_HOLD_MS = DAY_MS;
 
-/** Routes a verified request once: the signature covers the timestamp and the body, so a repeat is the same request. */
+/** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
+ * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
   const events = d.store.connectorEvents;
   const held = await events.claimDelivery({
@@ -102,7 +122,10 @@ async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
   } catch (err) {
     // A request that failed left nothing stored, so Slack's retry must get through.
     await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
-      log.warn('slack webhook: could not free the replay hold of a failed delivery', errorFields(releaseErr));
+      log.warn(
+        'slack webhook: could not free the replay hold of a failed delivery',
+        errorFields(releaseErr),
+      );
     });
     throw err;
   }
@@ -135,8 +158,8 @@ async function parkAndAck(
 }
 
 function teamIdInRawBody(rawBody: string): string | null {
-  // Cheap regex extracts team_id from a (possibly malformed) raw body so the DLQ row carries it for triage even when
-  // JSON.parse fails.
+  // Cheap regex extracts team_id from a (possibly malformed) raw body so the DLQ row carries it for
+  // triage even when JSON.parse fails.
   const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
   return m ? m[1] : null;
 }
@@ -164,24 +187,8 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces; park it in
-  // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
-  let resolvedTenant: string | null = null;
-  if (isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenant(d.store, { connector: 'slack', teamId: body.team_id }, hostFallback());
-    if (resolvedTenant === null) {
-      await parkAndAck(d, {
-        tenantId: null, // unroutable - stored as '__unroutable__'
-        teamId: body.team_id,
-        error: `unroutable team_id: ${body.team_id}`,
-        bucket: 'unroutable',
-      });
-      return;
-    }
-  } else {
-    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
-    resolvedTenant = envTenant();
-  }
+  const resolvedTenant = await tenantOrPark(d, body);
+  if (resolvedTenant === null) return;
   const ctx: ConnectorContext = {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
@@ -201,14 +208,39 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   await dispatchSlackEvent(d, ctx, body);
 }
 
+/** The tenant the payload runs as; null once an unroutable envelope is parked. */
+async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<string | null> {
+  // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces;
+  // park it in slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never
+  // call ingest.
+  if (!isSlackEventEnvelope(body)) {
+    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
+    return envTenant();
+  }
+  const resolvedTenant = await resolveTenant(
+    d.store,
+    { connector: 'slack', teamId: body.team_id },
+    hostFallback(),
+  );
+  if (resolvedTenant === null) {
+    await parkAndAck(d, {
+      tenantId: null, // unroutable - stored as '__unroutable__'
+      teamId: body.team_id,
+      error: `unroutable team_id: ${body.team_id}`,
+      bucket: 'unroutable',
+    });
+  }
+  return resolvedTenant;
+}
+
 const hostFallback = (): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown: envSlackAllowUnknownTeamFallback(),
 });
 
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
-  // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a null or unknown team
-  // writes tenantId=null, which lands as '__unroutable__'.
+  // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a
+  // null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null
       ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
@@ -241,8 +273,8 @@ async function dispatchSlackEvent(
     }
     const r = await ingestMessage(ctx, {
       teamId: body.team_id,
-      // Channel privacy is not on the inner event, so channel_type is the proxy: 'group'|'im'|'mpim' private, 'channel'
-      // public, unknown private.
+      // Channel privacy is not on the inner event, so channel_type is the proxy:
+      // 'group'|'im'|'mpim' private, 'channel' public, unknown private.
       channel: {
         id: inner.channel,
         is_private: inner.channel_type !== 'channel',

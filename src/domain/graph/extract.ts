@@ -43,9 +43,11 @@ export interface ExtractResult {
   references: number;
   /** Entity count per extracted type. */
   byType: Record<string, number>;
-  /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph is under-extracted for those). */
+  /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph is
+   * under-extracted for those). */
   truncated: string[];
-  /** Writes left out because a writer changed their row or object after the diff; set only when above 0. */
+  /** Writes left out because a writer changed their row or object after the diff; set only when
+   * above 0. */
   skipped?: number;
 }
 
@@ -82,7 +84,9 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
  *  unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
-  if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
+  if (!type) {
+    throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
+  }
   return { type, id: e2Id };
 }
 
@@ -182,7 +186,8 @@ export interface DerivedGraph extends DesiredGraph {
   references: number;
 }
 
-/** A derived entity with what Pass 3 needs; `key` stands in for the entity id the rebuild no longer has. */
+/** A derived entity with what Pass 3 needs; `key` stands in for the entity id the rebuild no
+ * longer has. */
 interface DerivedEntity extends DesiredEntity {
   key: string;
   searchText: string;
@@ -199,7 +204,8 @@ interface DerivedEntities {
   created: DerivedEntity[];
 }
 
-/** The tenant's graph as a pure function of its loaded objects; the write side diffs it against what is stored. */
+/** The tenant's graph as a pure function of its loaded objects; the write side diffs it against
+ * what is stored. */
 export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
   const pass = deriveEntities(loaded);
   const supersedes = deriveSupersedes(pass);
@@ -218,18 +224,28 @@ export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
   };
 }
 
-const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({ entityType: e.entityType, sourceObject: e.sourceObject });
+const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({
+  entityType: e.entityType,
+  sourceObject: e.sourceObject,
+});
 
-// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it survives a forgotten
-// mirror; the mirror memory rides along only while it exists.
+// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it
+// survives a forgotten mirror; the mirror memory rides along only while it exists.
 function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
-  const pass: DerivedEntities = { byType: {}, truncated: [], allRows: [], byKey: new Map(), created: [] };
+  const pass: DerivedEntities = {
+    byType: {},
+    truncated: [],
+    allRows: [],
+    byKey: new Map(),
+    created: [],
+  };
   for (const { entityType, rows, hitCap } of loaded) {
     if (hitCap) pass.truncated.push(entityType);
     pass.byType[entityType] = 0;
     for (const row of rows) {
       pass.allRows.push(row);
-      // Names are uncapped at source; trimming on both sides of the cap gives the exact name insertEntityRow stores.
+      // Names are uncapped at source; trimming on both sides of the cap gives the exact name
+      // insertEntityRow stores.
       const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN).trim();
       const key = keyOf(row.entityType, row.e2Id);
       // A row seen twice was superseded between the two status loads; its first sighting stands.
@@ -256,11 +272,12 @@ interface SupersedesPass {
   readonly supersededPairs: Set<string>;
 }
 
-// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is anchored to the successor's
-// object and carries its mirror memory only while that lives.
+// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is
+// anchored to the successor's object and carries its mirror memory only while that lives.
 function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   const relations: DesiredRelation[] = [];
-  // Pass 3 skips these pairs: "Adopt X (managed)" containing "Adopt X" is a version, not a cross-reference.
+  // Pass 3 skips these pairs: "Adopt X (managed)" containing "Adopt X" is a version, not a
+  // cross-reference.
   const supersededPairs = new Set<string>();
   for (const row of pass.allRows) {
     if (row.supersededBy === null) continue;
@@ -285,7 +302,8 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   const ambiguous = new Set<string>();
   for (const e of created) {
     if (e.superseded) continue;
-    // Decisions are sources only: their name is their prose, which would self-match and shadow embedded targets.
+    // Decisions are sources only: their name is their prose, which would self-match and shadow
+    // embedded targets.
     if (e.entityType === 'decision') continue;
     const norm = e.name.trim().toLowerCase();
     if (norm.length < MIN_REF_NAME_LEN || norm.length > MAX_REF_NAME_LEN) continue;
@@ -300,8 +318,9 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   return byName;
 }
 
-// Pass 3: a `references` edge when one object's text names another entity, matched on word boundaries, self-skipped,
-// deduped and capped per source; the edge is anchored to the source object.
+// Pass 3: a `references` edge when one object's text names another entity, matched on word
+// boundaries, self-skipped, deduped and capped per source; the edge is anchored to the source
+// object.
 function deriveReferences(
   created: readonly DerivedEntity[],
   supersededPairs: ReadonlySet<string>,
@@ -310,7 +329,8 @@ function deriveReferences(
   const byName = referenceTargets(created);
   if (byName.size === 0) return [];
   if (byName.size > MAX_TARGET_NAMES) truncated.push('references-targets');
-  // Longest first, then alphabetical: regex alternation is leftmost-first, so `postgres pro` beats `postgres`.
+  // Longest first, then alphabetical: regex alternation is leftmost-first, so `postgres pro` beats
+  // `postgres`.
   const targetNames = [...byName.keys()]
     .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0))
     .slice(0, MAX_TARGET_NAMES);
@@ -359,8 +379,8 @@ export async function extractGraph(
   tenantId: string,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
-  // No hold limit, so every op lands in one apply; it re-checks each insert, so a rebuild that committed since this
-  // one's read adds no second row.
+  // No hold limit, so every op lands in one apply; it re-checks each insert, so a rebuild that
+  // committed since this one's read adds no second row.
   return rebuildGraph(store, tenantId, { ...WRITE_BUDGET, holdMs: Infinity });
 }
 
@@ -387,7 +407,10 @@ async function rebuildGraph(
   let committedAt = 0;
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
-    const chunk = await store.graphRebuild.applyOps(tenantId, ops, { from: next, holdMs: budget.holdMs });
+    const chunk = await store.graphRebuild.applyOps(tenantId, ops, {
+      from: next,
+      holdMs: budget.holdMs,
+    });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

@@ -6,6 +6,9 @@ export function median(nums: readonly number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-export function clamp(value: number, min: number, max: number): number {
+export function clamp(
+  value: number,
+  { min, max }: { readonly min: number; readonly max: number },
+): number {
   return Math.max(min, Math.min(max, value));
 }

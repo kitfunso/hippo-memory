@@ -1,5 +1,5 @@
-// AgentImport on hippo.db: a container's steps in one scope on a handle opened with openStore, whose mirror folders the
-// commit's mirror files need.
+// AgentImport on hippo.db: a container's steps in one scope on a handle opened with openStore,
+// whose mirror folders the commit's mirror files need.
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { writeEntryMirrors } from './entry-writes.js';
@@ -15,13 +15,23 @@ import type {
   MirrorFailure,
 } from '../../base/ports/store/agent-import.js';
 
-function applyContainer(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {
+function applyContainer(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  plan: ContainerApply,
+): ContainerApplied {
   const run = () => runSteps(db, files, plan);
-  const done = plan.dryRun ? withTrialScope(db, 'sync_container', run) : withWriteScope(db, 'sync_container', run);
+  const done = plan.dryRun
+    ? withTrialScope(db, 'sync_container', run)
+    : withWriteScope(db, 'sync_container', run);
   if (done === null) return { kind: 'changed' };
   if (plan.dryRun) return { kind: 'applied', outcomes: done.outcomes, unpurged: [] };
   for (const entry of done.mirror) writeEntryMirrors(files.hippoRoot, entry);
-  return { kind: 'applied', outcomes: done.outcomes, unpurged: purgeMirrors(files.hippoRoot, done.purge) };
+  return {
+    kind: 'applied',
+    outcomes: done.outcomes,
+    unpurged: purgeMirrors(files.hippoRoot, done.purge),
+  };
 }
 
 function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[] {
@@ -30,7 +40,8 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
     try {
       removeEntryMirrors(hippoRoot, id);
     } catch (err) {
-      // A legacy-mirror import on an empty store would bring the row back live, and the next sync sets it aside again.
+      // A legacy-mirror import on an empty store would bring the row back live, and the next sync
+      // sets it aside again.
       log.debug(`agent import: ${id} failed`, errorFields(err));
       failed.push({ id, message: errorMessage(err) });
     }
@@ -38,7 +49,8 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
   return failed;
 }
 
-/** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's import asks. */
+/** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's
+ * import asks. */
 export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
   return bound<AgentImport>(
     on,

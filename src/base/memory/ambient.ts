@@ -1,6 +1,6 @@
 /**
- * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without
- * retrieving specific memories.
+ * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in
+ * knowledge-space without retrieving specific memories.
  */
 
 import type { MemoryEntry } from './entry.js';
@@ -45,7 +45,8 @@ export interface AmbientState {
 /** A memory is fresh when created within this window. */
 export const AMBIENT_FRESH_WINDOW_MS = 7 * DAY_MS;
 
-/** Row counts and sums an AmbientState is derived from; two stores' tallies add with addAmbientTallies. */
+/** Row counts and sums an AmbientState is derived from; two stores' tallies add with
+ * addAmbientTallies. */
 export interface AmbientTallies {
   total: number;
   strengthSum: number;
@@ -90,8 +91,13 @@ export function isErrorTagged(tags: readonly string[]): boolean {
   return tags.some((tag) => ERROR_TAGS.includes(tag) || tag.startsWith(ERROR_TAG_PREFIX));
 }
 
-/** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
-export function tallyAmbientEntries(entries: readonly MemoryEntry[], now: Date, model: StrengthModel): AmbientTallies {
+/** Tallies over loaded entries; superseded rows count toward the total only, as they always have
+ * here. */
+export function tallyAmbientEntries(
+  entries: readonly MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): AmbientTallies {
   const t: AmbientTallies = {
     total: 0,
     strengthSum: 0,
@@ -110,7 +116,8 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now: Date, 
   return t;
 }
 
-/** Adds rows to `t` in order, so a store read a page at a time sums its floats exactly as one whole read does. */
+/** Adds rows to `t` in order, so a store read a page at a time sums its floats exactly as one
+ * whole read does. */
 export function foldAmbientRows(
   t: AmbientTallies,
   entries: readonly MemoryEntry[],
@@ -124,7 +131,9 @@ export function foldAmbientRows(
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
-    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') t.negative++;
+    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') {
+      t.negative++;
+    }
     if (isErrorTagged(entry.tags)) t.errors++;
     if (entry.schemaFit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
@@ -135,7 +144,11 @@ export function foldAmbientRows(
   }
 }
 
-export function computeAmbientState(entries: MemoryEntry[], now: Date, model: StrengthModel): AmbientState {
+export function computeAmbientState(
+  entries: MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): AmbientState {
   return ambientStateFromTallies(tallyAmbientEntries(entries, now, model));
 }
 

@@ -1,5 +1,5 @@
-// This process's home folder and environment, which src/base/util/agent-homes.ts's path rules read: the one place the
-// profile folder is asked for.
+// This process's home folder and environment, which src/base/util/agent-homes.ts's path rules read:
+// the one place the profile folder is asked for.
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { HIPPO_DIR, userHome, type Homes } from '../base/util/agent-homes.js';

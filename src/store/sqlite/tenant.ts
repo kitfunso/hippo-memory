@@ -4,13 +4,15 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { validateApiKey } from './auth.js';
 import type { SqlFragment } from '../../db/sql.js';
 
-// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
-// instead.
+// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row
+// of the tenant instead.
 export const TENANT_IS = '+tenant_id = ?';
 
 /** ` AND <condition>` and its argument for one tenant; both empty for ALL_TENANTS. */
 export function tenantAnd(tenantId: TenantId, condition: string = 'tenant_id = ?'): SqlFragment {
-  return tenantId === ALL_TENANTS ? { sql: '', params: [] } : { sql: ` AND ${condition}`, params: [tenantId] };
+  return tenantId === ALL_TENANTS
+    ? { sql: '', params: [] }
+    : { sql: ` AND ${condition}`, params: [tenantId] };
 }
 
 export interface ResolveOptions {
@@ -18,7 +20,8 @@ export interface ResolveOptions {
   apiKey?: string;
 }
 
-/** The tenant `opts.apiKey` names; throws when the key is invalid or no handle is given to check it on. */
+/** The tenant `opts.apiKey` names; throws when the key is invalid or no handle is given to check
+ * it on. */
 export function tenantOfApiKey(opts: ResolveOptions & { apiKey: string }): string {
   if (!opts.db) throw new Error('resolveTenantId: db required when apiKey is set');
   const ctx = validateApiKey(opts.db, opts.apiKey);

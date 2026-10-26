@@ -1,6 +1,7 @@
-// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not stored,
-// because error memories decay slowly and would crowd out real lessons; what is stored stays `observed` until outcome
-// feedback confirms it. Every failure, stored or not, goes to the failure log.
+// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and
+// repeats are not stored, because error memories decay slowly and would crowd out real lessons;
+// what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
+// goes to the failure log.
 import type { ContextWith } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -16,12 +17,16 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { CaptureErrorOutcome, FailureOutcome } from '../../base/ports/store/rejections.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
-export type FailureTarget = Pick<ContextWith<'failureLog' | 'lessonWrites'>, 'tenantId' | 'store' | 'config'> & {
+export type FailureTarget = Pick<
+  ContextWith<'failureLog' | 'lessonWrites'>,
+  'tenantId' | 'store' | 'config'
+> & {
   readonly infra: Pick<InfraPorts, 'clock'>;
 };
 
 /**
- * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws.
+ * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even
+ * when storing throws.
  */
 export async function captureToolFailure(
   target: FailureTarget,
@@ -34,18 +39,27 @@ export async function captureToolFailure(
     outcome = 'skip' in lesson ? lesson.skip : await storeLesson(target, lesson.text);
     return outcome;
   } finally {
-    await logAndReport(target, payload, lesson, outcome, onLogged);
+    await logAndReport({ target, payload, lesson, outcome, onLogged });
   }
 }
 
-/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw goes on. */
-async function logAndReport(
-  target: FailureTarget,
-  payload: JsonValue,
-  lesson: FailureReading,
-  outcome: FailureOutcome,
-  onLogged: ((failureId: number | null) => void) | undefined,
-): Promise<void> {
+interface LogAndReportOptions {
+  readonly target: FailureTarget;
+  readonly payload: JsonValue;
+  readonly lesson: FailureReading;
+  readonly outcome: FailureOutcome;
+  readonly onLogged: ((failureId: number | null) => void) | undefined;
+}
+
+/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw
+ * goes on. */
+async function logAndReport({
+  target,
+  payload,
+  lesson,
+  outcome,
+  onLogged,
+}: LogAndReportOptions): Promise<void> {
   let id: number;
   try {
     id = await logFailure(target, payload, lesson, outcome);
@@ -74,7 +88,8 @@ function logFailure(
   });
 }
 
-/** Who sent a failure from another machine: the audit actor and the project its lesson and repeat check belong to. */
+/** Who sent a failure from another machine: the audit actor and the project its lesson and
+ * repeat check belong to. */
 export interface LessonCaller {
   actor: string;
   originProject: string;

@@ -9,8 +9,13 @@ import { cliApiContext, cliHookRequest } from '../api-context.js';
 import type { CommandContext } from '../flag-values.js';
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 
-/** Every path exits 0, and nothing is created when no store exists, since the hook fires in every directory. */
-export async function handleCaptureError({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+/** Every path exits 0, and nothing is created when no store exists, since the hook fires in
+ * every directory. */
+export async function handleCaptureError({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const { text } = await readHookStdin();
   try {
     const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));
@@ -33,7 +38,8 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
       });
     }
   } catch (err) {
-    // A malformed payload or store error must never fail the agent's tool call, so it is reported and dropped.
+    // A malformed payload or store error must never fail the agent's tool call, so it is reported
+    // and dropped.
     log.warn(`failure capture skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }

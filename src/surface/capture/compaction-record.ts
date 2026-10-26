@@ -1,13 +1,22 @@
-// What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
-// for it; the SQL is the adapter's compactions-record.ts.
+// What turns a compaction's summary into text the store keeps, and the replay that reads the spool
+// and transcripts for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'node:fs';
-import { isObjectLike, isStringValue, type PostCompactPayload } from '../../base/session/capture-contract.js';
+import {
+  isObjectLike,
+  isStringValue,
+  type PostCompactPayload,
+} from '../../base/session/capture-contract.js';
 import {
   COMPACTION_ITEM_MAX_CHARS,
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import { importSpool, spool, type Log, type SpooledCompaction } from '../../infra/compaction-spool.js';
+import {
+  importSpool,
+  spool,
+  type Log,
+  type SpooledCompaction,
+} from '../../infra/compaction-spool.js';
 import type {
   CompactionHooks,
   CompactionSaveResult,
@@ -32,7 +41,8 @@ export const PRE_COMPACT_INSTRUCTION =
   "earlier summary already listed under 'Memories for hippo', and anything this session already saved with " +
   "`hippo remember`. Write '- none' if nothing new remains.";
 
-/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root resolved. */
+/** A store folder, its store and the tenant a compaction hook writes as, which the CLI root
+ * resolved. */
 export interface CompactionFolder {
   readonly root: string;
   readonly store: Pick<StoreGroups, 'compactionHooks'>;
@@ -53,7 +63,8 @@ interface ScrubbedSummary {
   found: boolean;
 }
 
-/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item scrubbed. */
+/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item
+ * scrubbed. */
 export function readCompactionText(compactSummary: string): ScrubbedSummary {
   const body = compactSummaryBody(compactSummary);
   const parsed = parseCompactionItems(body);
@@ -64,8 +75,8 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   };
 }
 
-/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted;
- * cut after it, as a mask can run longer than what it hides. */
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's
+ * scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
 export function scrubCompactionItems(items: readonly string[]): string[] {
   return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
 }
@@ -95,8 +106,8 @@ function writeNotes(log: Log, notes: readonly string[]): void {
   for (const note of notes) log(note);
 }
 
-/** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
- * defers. Never throws. */
+/** The PostCompact work: record the summary, then write its items. Each step is independent; a
+ * busy store spools or defers. Never throws. */
 export async function saveCompaction(
   folder: CompactionFolder,
   payload: PostCompactPayload,
@@ -121,7 +132,9 @@ export async function saveCompaction(
     baseHalfLifeDays: defaultHalfLifeDays,
   });
   writeNotes(log, notes);
-  if (spoolReason !== null) spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
+  if (spoolReason !== null) {
+    spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
+  }
   return result;
 }
 
@@ -129,7 +142,9 @@ export async function saveCompaction(
 export function postCompactLine(result: CompactionSaveResult): string | null {
   if (result.deferred) return 'Hippo will finish saving this compaction at the next sleep.';
   if (result.written === null) return null;
-  if (result.written === 0) return "Hippo kept this compaction's summary; it listed no new memories.";
+  if (result.written === 0) {
+    return "Hippo kept this compaction's summary; it listed no new memories.";
+  }
   const noun = result.written === 1 ? 'memory' : 'memories';
   const restored = result.snapshotSaved ? ' and restored your task snapshot' : '';
   return `Hippo saved ${result.written} ${noun} from this compaction${restored}.`;
@@ -142,7 +157,8 @@ interface TranscriptLine {
 }
 
 // Every field is optional and read through a guard, so an object is all a line needs to be.
-const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine => isObjectLike(value);
+const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine =>
+  isObjectLike(value);
 
 function lineText(line: TranscriptLine): string {
   const content = line.message?.content;
@@ -151,9 +167,13 @@ function lineText(line: TranscriptLine): string {
   return content.map((block) => (isStringValue(block.text) ? block.text : '')).join('\n');
 }
 
-/** The summary Claude Code wrote into a transcript between two moments; null when it is not (yet) there or the window
- * cannot reach back that far. */
-function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: number): string | null {
+/** The summary Claude Code wrote into a transcript between two moments; null when it is not
+ * (yet) there or the window cannot reach back that far. */
+function transcriptSummary(
+  transcriptPath: string,
+  afterMs: number,
+  beforeMs: number,
+): string | null {
   const size = fs.statSync(transcriptPath).size;
   for (const cap of TRANSCRIPT_TAIL_CAPS) {
     const lines: TranscriptLine[] = [];
@@ -165,20 +185,24 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
     const stamp = (line: TranscriptLine): number =>
       isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN;
     const first = lines.map(stamp).find((ms) => !Number.isNaN(ms));
-    const hit = lines.find((line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs);
+    const hit = lines.find(
+      (line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs,
+    );
     if (hit) return lineText(hit);
     if (size <= cap || (first !== undefined && first <= afterMs)) return null;
   }
   return null;
 }
 
-/** How long a replay waits on a locked store, and the Date.now() after which it starts no new record. */
+/** How long a replay waits on a locked store, and the Date.now() after which it starts no new
+ * record. */
 export interface ReplayOptions {
   busyWaitMs?: number;
   deadline?: number;
 }
 
-/** What every replay step reads: the store's hooks, the folder its spool sits in, and the deadline the run works to. */
+/** What every replay step reads: the store's hooks, the folder its spool sits in, and the
+ * deadline the run works to. */
 interface Replay {
   readonly hooks: CompactionHooks;
   readonly root: string;
@@ -189,7 +213,10 @@ interface Replay {
 }
 
 async function replayStalled(run: Replay): Promise<number> {
-  const { saved, notes } = await run.hooks.saveStalled(run.tenantId, { ...run.items, deadline: run.deadline });
+  const { saved, notes } = await run.hooks.saveStalled(run.tenantId, {
+    ...run.items,
+    deadline: run.deadline,
+  });
   writeNotes(run.log, notes);
   return saved;
 }
@@ -226,7 +253,8 @@ async function replaySpool(run: Replay): Promise<number> {
 /** Fills one open record from its transcript; true when it saved items. */
 async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<boolean> {
   if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
-  const before = record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
+  const before =
+    record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
   const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), before);
   let text: CompactionText | null = null;
   if (found !== null) {
@@ -253,8 +281,9 @@ async function replayOpen(run: Replay): Promise<number> {
   return saved;
 }
 
-/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left (`summarised` records, spool
- * files, and `started` records the transcript can fill), never throws. Returns how many compactions it saved. */
+/** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left
+ * (`summarised` records, spool files, and `started` records the transcript can fill), never
+ * throws. Returns how many compactions it saved. */
 export async function replayCompactions(
   { root, store, tenantId }: CompactionFolder,
   log: Log,

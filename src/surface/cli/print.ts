@@ -3,8 +3,8 @@
 import { confidenceLabel } from '../../base/memory/strength.js';
 import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
-import type { SearchResult } from '../../base/rank/search-types.js';
-import { recallJsonRow } from '../../api/recall/rows.js';
+import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
+import { type RecallJsonRow, recallJsonRow } from '../../api/recall/rows.js';
 import { type ImportReport, summaryLine } from '../../base/memory/agent-memory-report.js';
 import { snapshotText, sessionTrailText, handoffText } from '../../api/context-render.js';
 import { printError } from './output.js';
@@ -13,14 +13,22 @@ export function fmt(n: number, digits = 2): string {
   return n.toFixed(digits);
 }
 
+export interface RecallEntryTextOptions {
+  readonly r: SearchResult;
+  readonly query: string;
+  readonly showWhy: boolean;
+  readonly isGlobal: boolean;
+  readonly now: Date;
+}
+
 // What `hippo recall` prints for one result; the budget prices this same text.
-export function recallEntryText(
-  r: SearchResult,
-  query: string,
-  showWhy: boolean,
-  isGlobal: boolean,
-  now: Date,
-): string {
+export function recallEntryText({
+  r,
+  query,
+  showWhy,
+  isGlobal,
+  now,
+}: RecallEntryTextOptions): string {
   const e = r.entry;
   const label = confidenceLabel(e, now);
   const confLabel = label.warn ? `[${label.text}] ⚠️` : `[${label.text}]`;
@@ -34,34 +42,41 @@ export function recallEntryText(
       `${e.retrievalCount}x`,
   ];
   if (showWhy) {
-    // The row --json prints carries the same reason and envelope, so the two outputs never explain a match apart.
-    const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal, now);
+    // The row --json prints carries the same reason and envelope, so the two outputs never explain
+    // a match apart.
+    const { reason, envelope: env } = recallJsonRow({ r, query, showWhy: true, isGlobal, now });
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
       `    reason: ${reason}`,
     );
-    if (env) {
-      lines.push(`    kind: ${env.kind}`);
-      if (env.scope) lines.push(`    scope: ${env.scope}`);
-      if (env.owner) lines.push(`    owner: ${env.owner}`);
-      if (env.artifact_ref) lines.push(`    artifact_ref: ${env.artifact_ref}`);
-      if (env.session_id) lines.push(`    session_id: ${env.session_id}`);
-      lines.push(`    confidence: ${env.confidence}`);
-    }
-    // The recall trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost x1.50 -> 0.189".
-    if (r.rerankTrace && r.rerankTrace.length > 0) {
-      const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
-      for (const step of r.rerankTrace) {
-        parts.push(
-          `${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`,
-          fmt(step.scoreAfter, 3),
-        );
-      }
-      lines.push(`    ranking: ${parts.join(' -> ')}`);
-    }
+    if (env) lines.push(...envelopeLines(env));
+    // The recall trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost
+    // x1.50 -> 0.189".
+    if (r.rerankTrace && r.rerankTrace.length > 0) lines.push(rankingLine(r.rerankTrace));
   }
   lines.push('', e.content, '');
   return lines.join('\n');
+}
+
+function envelopeLines(env: NonNullable<RecallJsonRow['envelope']>): string[] {
+  const lines = [`    kind: ${env.kind}`];
+  if (env.scope) lines.push(`    scope: ${env.scope}`);
+  if (env.owner) lines.push(`    owner: ${env.owner}`);
+  if (env.artifact_ref) lines.push(`    artifact_ref: ${env.artifact_ref}`);
+  if (env.session_id) lines.push(`    session_id: ${env.session_id}`);
+  lines.push(`    confidence: ${env.confidence}`);
+  return lines;
+}
+
+function rankingLine(trace: readonly RerankStep[]): string {
+  const parts = [`base ${fmt(trace[0].scoreBefore, 3)}`];
+  for (const step of trace) {
+    parts.push(
+      `${step.stage}${step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : ''}`,
+      fmt(step.scoreAfter, 3),
+    );
+  }
+  return `    ranking: ${parts.join(' -> ')}`;
 }
 
 export function recallHeading(entries: number, tokens: number, query: string): string {
@@ -87,7 +102,8 @@ export function printHandoff(handoff: SessionHandoff): void {
   console.log(handoffText(handoff));
 }
 
-/** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty one is left out. */
+/** The continuity sections in print order (snapshot, handoff, session trail); a missing or empty
+ * one is left out. */
 export function continuityTexts(
   snapshot: TaskSnapshot | null | undefined,
   handoff: SessionHandoff | null | undefined,

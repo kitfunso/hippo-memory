@@ -1,5 +1,6 @@
-// The rows that may hold one of a batch of texts word for word, spacing aside, one query per chunk: the index's phrase
-// hits for the texts it can name, else the tenant's rows, each kept only by mayHoldCopy's SQL twin.
+// The rows that may hold one of a batch of texts word for word, spacing aside, one query per chunk:
+// the index's phrase hits for the texts it can name, else the tenant's rows, each kept only by
+// mayHoldCopy's SQL twin.
 import { chunked } from '../../base/util/chunked.js';
 import { DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/index.js';
@@ -13,13 +14,15 @@ import { bareTextSql } from './rule-sql.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 
-// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
-// Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
-const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]');
+// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew,
+// Arabic, Devanagari, Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
+const SURE_TOKEN_CHAR = new RegExp(
+  '[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]',
+);
 const PHRASE_WORDS = 32;
 
-/** The first words of `text`, which a row holding the text word for word holds in a row; null when they might name no
- * token, since an empty phrase matches no row. */
+/** The first words of `text`, which a row holding the text word for word holds in a row; null
+ * when they might name no token, since an empty phrase matches no row. */
 function openingPhrase(text: string): string | null {
   const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
   return SURE_TOKEN_CHAR.test(opening) ? opening : null;
@@ -47,7 +50,8 @@ export type CopyDbRow = {
   origin_project: string | null;
 };
 
-/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written ` AND ...`. */
+/** Which rows of the tenant a copy read looks at: `filter` adds predicates, each written ` AND
+ * ...`. */
 export interface CopyRead {
   readonly tenantId: TenantId;
   readonly filter: SqlFragment;
@@ -74,11 +78,17 @@ function copyChunk(
   ) as CopyDbRow[];
 }
 
-/** The rows `read` admits that may hold one of `texts`, a superset of the copies heldTextKeys finds: the texts the
- * index can name first, a row once per chunk it matches. */
-export function rowsHoldingTexts(db: DatabaseSyncLike, read: CopyRead, texts: readonly string[]): CopyDbRow[] {
+/** The rows `read` admits that may hold one of `texts`, a superset of the copies heldTextKeys
+ * finds: the texts the index can name first, a row once per chunk it matches. */
+export function rowsHoldingTexts(
+  db: DatabaseSyncLike,
+  read: CopyRead,
+  texts: readonly string[],
+): CopyDbRow[] {
   const indexed = isFtsAvailable(db) && isFtsInSync(db);
-  const phraseOf = new Map([...new Set(texts)].map((text) => [text, indexed ? holdingPhrase(text) : null]));
+  const phraseOf = new Map(
+    [...new Set(texts)].map((text) => [text, indexed ? holdingPhrase(text) : null]),
+  );
   const named = [...phraseOf].filter((pair): pair is [string, string] => pair[1] !== null);
   const unnamed = [...phraseOf].filter(([, phrase]) => phrase === null).map(([text]) => text);
   const rows: CopyDbRow[] = [];
@@ -97,21 +107,28 @@ export function rowsHoldingTexts(db: DatabaseSyncLike, read: CopyRead, texts: re
 }
 
 /** Each row `read` admits that may hold one of `texts`, once. */
-function distinctRowsHolding(db: DatabaseSyncLike, read: CopyRead, texts: readonly string[]): CopyDbRow[] {
+function distinctRowsHolding(
+  db: DatabaseSyncLike,
+  read: CopyRead,
+  texts: readonly string[],
+): CopyDbRow[] {
   return [...new Map(rowsHoldingTexts(db, read, texts).map((row) => [row.id, row])).values()];
 }
 
-/** The rows `filter` keeps that may hold one of `texts` word for word, spacing aside. Callers check each again. */
+/** The rows `filter` keeps that may hold one of `texts` word for word, spacing aside. Callers
+ * check each again. */
 export function listTextKeysHolding(
   db: DatabaseSyncLike,
   filter: EntryFilter,
   texts: readonly string[],
 ): EntryTextKey[] {
   const { tenantId, ...narrowing } = filter;
-  return distinctRowsHolding(db, { tenantId, filter: narrowingAnd(narrowing) }, texts).map((row) => ({
-    id: row.id,
-    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
-    content: row.content,
-    source: row.source,
-  }));
+  return distinctRowsHolding(db, { tenantId, filter: narrowingAnd(narrowing) }, texts).map(
+    (row) => ({
+      id: row.id,
+      tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
+      content: row.content,
+      source: row.source,
+    }),
+  );
 }

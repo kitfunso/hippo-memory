@@ -112,7 +112,7 @@ describe('sleep enqueue-hook', () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'to be closed',
     });
-    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(tc.hippoRoot), DECISION, { tenantId: T, id: d.id, actor: CLI_ACTOR, now: evalNow() });
     await saveProjectBrief(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       repo: 'myrepo',
       summary: 'first',

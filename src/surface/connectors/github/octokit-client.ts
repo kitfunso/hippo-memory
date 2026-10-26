@@ -1,6 +1,6 @@
-/** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`.
- * Any non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty page would be a
- * silent empty backfill.
+/** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`. Any
+ * non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty
+ * page would be a silent empty backfill.
  */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
@@ -48,12 +48,13 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
 const GITHUB_TIMEOUT_MS = 30_000;
 const ERROR_BODY_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;
-// A page is at most 100 items (per_page=100), each with a body of up to 65,536 characters at 4 bytes, plus its fields.
+// A page is at most 100 items (per_page=100), each with a body of up to 65,536 characters at 4
+// bytes, plus its fields.
 const GITHUB_MAX_REPLY_BYTES = 32 * 1024 * 1024;
 
 /**
- * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array throws, so it never
- * reaches ingest as items.
+ * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array
+ * throws, so it never reaches ingest as items.
  */
 async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   // The path only: a `next` link comes from the server, so its query string is not ours to print.
@@ -64,7 +65,9 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   } catch (err) {
     throw new GitHubFetchError(res.status, errorMessage(err), path, { cause: err });
   }
-  if (!Array.isArray(body)) throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
+  if (!Array.isArray(body)) {
+    throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
+  }
   return body;
 }
 
@@ -86,13 +89,23 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   // Don't silently turn 401/403/404/500 into empty pages.
   if (res.status !== 200 && rateLimit.reason === 'none') {
     // The status is the error reported; a body that cannot be read only costs its snippet.
-    const body = await readCappedText(res, ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch((err) => {
-      log.debug(`github: could not read the ${res.status} error body: ${errorMessage(err)}`, errorFields(err));
+    const body = await readCappedText(
+      res,
+      ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR,
+    ).catch((err) => {
+      log.debug(
+        `github: could not read the ${res.status} error body: ${errorMessage(err)}`,
+        errorFields(err),
+      );
       return '';
     });
     // Host and path only: the query string can carry a cursor or filter that is not ours to print.
     const { origin, pathname } = new URL(url);
-    throw new GitHubFetchError(res.status, body.slice(0, ERROR_BODY_SNIPPET_CHARS), origin + pathname);
+    throw new GitHubFetchError(
+      res.status,
+      body.slice(0, ERROR_BODY_SNIPPET_CHARS),
+      origin + pathname,
+    );
   }
 
   const items = res.status === 200 ? await readItems(res, url) : [];

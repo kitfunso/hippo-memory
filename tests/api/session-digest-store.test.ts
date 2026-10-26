@@ -191,19 +191,18 @@ describe('sharing', () => {
     await write('s1', scan(REPLY));
     const [digest] = digests();
     expect(neverAutoShareTags([digest])).toEqual([SESSION_DIGEST_TAG]);
-    const [fact] = await storeExtractedFacts(
-      sqliteStore(hippoRoot),
-      digest,
-      [
+    const [fact] = await storeExtractedFacts(sqliteStore(hippoRoot), {
+      source: digest,
+      facts: [
         {
           content: 'The uploader retries with backoff when the storage token expires.',
           tags: ['topic:upload'],
           valence: 'neutral',
         },
       ],
-      DEFAULT_HALF_LIFE_DAYS,
-      new Date(),
-    );
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: new Date(),
+    });
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
     await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0 });

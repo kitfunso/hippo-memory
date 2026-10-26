@@ -19,10 +19,13 @@ export interface DeletionResult {
   archivedCount: number;
 }
 
-/** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`: archive ALL active raw rows for the
- * artifact_ref in one write. Tenant and kind='raw' filtering are load-bearing: without them a deletion could archive
- * another tenant's row or a distilled row. */
-export async function handleCommentDeleted(ctx: ConnectorContext, input: DeletionInput): Promise<DeletionResult> {
+/** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`: archive ALL active
+ * raw rows for the artifact_ref in one write. Tenant and kind='raw' filtering are load-bearing:
+ * without them a deletion could archive another tenant's row or a distilled row. */
+export async function handleCommentDeleted(
+  ctx: ConnectorContext,
+  input: DeletionInput,
+): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
   const event = { connector: 'github', idempotencyKey, deliveryId, eventName } as const;
   const done = await ctx.store.connectorEvents.markEventSeen(event, {

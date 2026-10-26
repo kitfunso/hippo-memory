@@ -81,7 +81,15 @@ export function planContainer(input: PlanInput): ContainerPlan {
     duplicates: 0,
     refused: 0,
   };
-  for (const item of input.items) planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
+  for (const item of input.items) {
+    planItem({
+      input,
+      item,
+      rows: live.get(item.key) ?? [],
+      snaps: dormant.get(item.key) ?? [],
+      draft,
+    });
+  }
 
   const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
   const gone = new Map<string, string[]>();
@@ -96,13 +104,15 @@ export function planContainer(input: PlanInput): ContainerPlan {
   return { ...plan, writes: [...plan.writes, ...fresh] };
 }
 
-function planItem(
-  input: PlanInput,
-  item: PlanItem,
-  rows: readonly LiveRow[],
-  snaps: readonly DormantRow[],
-  draft: Draft,
-): void {
+interface PlanItemOptions {
+  readonly input: PlanInput;
+  readonly item: PlanItem;
+  readonly rows: readonly LiveRow[];
+  readonly snaps: readonly DormantRow[];
+  readonly draft: Draft;
+}
+
+function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
   const tagged = rows.filter((r) => r.tagged);
   if (item.refused) {
     draft.refused++;
@@ -125,7 +135,11 @@ function planItem(
       draft.duplicates++;
       draft.setAside.push(...tagged.map((r) => r.id));
     } else {
-      draft.writes.push({ key: item.key, hash: item.hash, supersedes: [...rows.map((r) => r.id), ...legacy] });
+      draft.writes.push({
+        key: item.key,
+        hash: item.hash,
+        supersedes: [...rows.map((r) => r.id), ...legacy],
+      });
     }
     return;
   }
@@ -135,7 +149,8 @@ function planItem(
   else draft.fresh.push({ key: item.key, hash: item.hash, supersedes: legacy });
 }
 
-/** A single-file store keys items by text, so an edit reads as one key gone and one new under the same heading. */
+/** A single-file store keys items by text, so an edit reads as one key gone and one new under
+ * the same heading. */
 function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   const goneBy = groupBy([...gone.keys()], headingOf);
   const freshBy = groupBy(
@@ -197,14 +212,19 @@ export interface LegacyTarget {
 }
 
 export interface LegacyMatch {
-  /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a renamed note too). */
+  /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a
+   * renamed note too). */
   readonly adopt: ReadonlyMap<string, string>;
-  /** Target ref to the legacy row a new row of that target replaces (different text, one legacy row of that file). */
+  /** Target ref to the legacy row a new row of that target replaces (different text, one legacy
+   * row of that file). */
   readonly replace: ReadonlyMap<string, string>;
 }
 
 /** Same text first, then one legacy row per file name; anything else is left to decay. */
-export function matchLegacy(rows: readonly LegacyRow[], targets: readonly LegacyTarget[]): LegacyMatch {
+export function matchLegacy(
+  rows: readonly LegacyRow[],
+  targets: readonly LegacyTarget[],
+): LegacyMatch {
   const byText = new Map<string, string>();
   for (const t of targets) if (!byText.has(t.textKey)) byText.set(t.textKey, t.ref);
   const adopt = new Map<string, string>();

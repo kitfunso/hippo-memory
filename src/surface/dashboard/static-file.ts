@@ -1,5 +1,6 @@
-// The dashboard's static files: the built app, read once at listener start into one map from URL path to the bytes it
-// sends, and the reply that serves one with its validators. A path the map does not hold is never read from disk.
+// The dashboard's static files: the built app, read once at listener start into one map from URL
+// path to the bytes it sends, and the reply that serves one with its validators. A path the map
+// does not hold is never read from disk.
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import type * as http from 'node:http';
@@ -89,7 +90,8 @@ function readAsset(file: string): Buffer | null {
   }
 }
 
-/** Every file under `root` with a type the dashboard serves, read once; null when the app is not built. */
+/** Every file under `root` with a type the dashboard serves, read once; null when the app is not
+ * built. */
 export function loadStaticFiles(root: string = DASHBOARD_STATIC_ROOT): StaticFiles | null {
   if (builtStaticRoot(root) === null) return null;
   const files = new Map<string, StaticAsset>();
@@ -103,7 +105,8 @@ export function loadStaticFiles(root: string = DASHBOARD_STATIC_ROOT): StaticFil
   return files;
 }
 
-/** The file a URL path names, else index.html, since the app routes in the browser; undefined when neither is held. */
+/** The file a URL path names, else index.html, since the app routes in the browser; undefined
+ * when neither is held. */
 export function assetFor(files: StaticFiles, urlPath: string): StaticAsset | undefined {
   let name: string;
   try {
@@ -133,16 +136,31 @@ function holdsVersion(header: string | undefined, etag: string): boolean {
   });
 }
 
-/** Sends `asset` gzipped when the client takes gzip, or a 304 when the client already holds those bytes. */
-export function sendAsset(req: http.IncomingMessage, res: http.ServerResponse, asset: StaticAsset): void {
-  const sent = asset.gzip !== null && takesGzip(req.headers['accept-encoding']) ? asset.gzip : asset.plain;
-  const validators = { ETag: sent.etag, 'Cache-Control': asset.cacheControl, Vary: 'Accept-Encoding' };
+/** Sends `asset` gzipped when the client takes gzip, or a 304 when the client already holds
+ * those bytes. */
+export function sendAsset(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  asset: StaticAsset,
+): void {
+  const sent =
+    asset.gzip !== null && takesGzip(req.headers['accept-encoding']) ? asset.gzip : asset.plain;
+  const validators = {
+    ETag: sent.etag,
+    'Cache-Control': asset.cacheControl,
+    Vary: 'Accept-Encoding',
+  };
   if (holdsVersion(req.headers['if-none-match'], sent.etag)) {
     res.writeHead(304, validators);
     res.end();
     return;
   }
   const encoding = sent === asset.gzip ? { 'Content-Encoding': 'gzip' } : {};
-  res.writeHead(200, { ...validators, ...encoding, 'Content-Type': asset.type, 'Content-Length': sent.body.length });
+  res.writeHead(200, {
+    ...validators,
+    ...encoding,
+    'Content-Type': asset.type,
+    'Content-Length': sent.body.length,
+  });
   res.end(sent.body);
 }

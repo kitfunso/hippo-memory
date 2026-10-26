@@ -1,7 +1,8 @@
 /**
- * Deterministic tie-break comparators for recall ranking. A true LEAF module: it imports from no sort-site module
- * (search, physics, api, cli, goals, graph-recall, multihop, rerankers), taking structural param types instead, because
- * even a type-only import back would recreate the search <-> physics ESM cycle this module exists to avoid. */
+ * Deterministic tie-break comparators for recall ranking. A true LEAF module: it imports from no
+ * sort-site module (search, physics, api, cli, goals, graph-recall, multihop, rerankers), taking
+ * structural param types instead, because even a type-only import back would recreate the search
+ * <-> physics ESM cycle this module exists to avoid. */
 
 /** Minimal shape for a deterministic tie-break across fresh ingests into different stores; the metadata keys are
  *  optional so `{ content, id }` callers still fit. */
@@ -14,10 +15,10 @@ export interface EntryIdentity {
 }
 
 /**
- * Order: content, layer rank (semantic first, keeping the promotion), tag count desc, sorted tags, source, id; plain
- * `<`/`>`, never `localeCompare`.
- * `content` is the cross-ingest-stable key; `id` is random per instance, so it is only the terminal key. Metadata keys
- * are computed only on a content tie.
+ * Order: content, layer rank (semantic first, keeping the promotion), tag count desc, sorted tags,
+ * source, id; plain `<`/`>`, never `localeCompare`. `content` is the cross-ingest-stable key; `id`
+ * is random per instance, so it is only the terminal key. Metadata keys are computed only on a
+ * content tie.
  */
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
   return (
@@ -65,16 +66,16 @@ export interface ScoredEntryLike {
 }
 
 /**
- * score descending, then `compareEntryIdentity`: the shared ordering for every score-primary recall sort site, which
- * delegate here (via an arrow when the score field is not named `score`) so the tiebreak cannot drift between call
- * sites. */
+ * score descending, then `compareEntryIdentity`: the shared ordering for every score-primary
+ * recall sort site, which delegate here (via an arrow when the score field is not named `score`)
+ * so the tiebreak cannot drift between call sites. */
 export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): number {
   return compareScoresDesc(a.score, b.score) || compareEntryIdentity(a.entry, b.entry);
 }
 
 /**
- * Larger first, NaN after every number, 0 for equal scores. Not a subtraction: two infinities, or any NaN, subtract to
- * NaN, which a sort reads as a tie.
+ * Larger first, NaN after every number, 0 for equal scores. Not a subtraction: two infinities, or
+ * any NaN, subtract to NaN, which a sort reads as a tie.
  */
 export function compareScoresDesc(a: number, b: number): number {
   if (a > b) return -1;
@@ -83,10 +84,10 @@ export function compareScoresDesc(a: number, b: number): number {
 }
 
 /**
- * Score-desc then tie-key comparator for the physics layer (no `entry`/`content` in scope): the default memoryId key is
- * per-instance determinism only.
- * Cross-ingest stability needs `tieKeyOf` (content), since the baseScore tie order picks the clusterTopK set. A
- * factory, as two fields sort in turn.
+ * Score-desc then tie-key comparator for the physics layer (no `entry`/`content` in scope): the
+ * default memoryId key is per-instance determinism only. Cross-ingest stability needs `tieKeyOf`
+ * (content), since the baseScore tie order picks the clusterTopK set. A factory, as two fields sort
+ * in turn.
  */
 export function comparePhysicsResultsBy<T extends { memoryId: string }>(
   scoreOf: (r: T) => number,
@@ -99,8 +100,8 @@ export function comparePhysicsResultsBy<T extends { memoryId: string }>(
     const bi = tieKeyOf ? tieKeyOf(b) : b.memoryId;
     if (ai < bi) return -1;
     if (ai > bi) return 1;
-    // Tie-key collision (e.g. duplicate content): fall through to memoryId so the comparator still yields a total order
-    // within one store.
+    // Tie-key collision (e.g. duplicate content): fall through to memoryId so the comparator still
+    // yields a total order within one store.
     return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
   };
 }

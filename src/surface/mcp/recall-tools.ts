@@ -1,7 +1,11 @@
 // Read-side tool handlers: hippo_recall, hippo_assemble, hippo_drill and hippo_context.
 
 import * as path from 'node:path';
-import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../../api/index.js';
+import {
+  drillDown as apiDrillDown,
+  assemble as apiAssemble,
+  contextGet as apiGetContext,
+} from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
@@ -22,8 +26,9 @@ import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../../api/recall/request.js';
 
-// Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread
-// once, which keeps per-field omission without the `...(cond ? { field } : {})` pattern.
+// Named shapes for optional fields each api.* call only wants when the caller supplied them: build
+// `extra`, then spread once, which keeps per-field omission without the `...(cond ? { field } :
+// {})` pattern.
 interface AssembleExtraOptions {
   budget?: number;
   freshTailCount?: number;
@@ -37,7 +42,8 @@ interface DrillDownExtraOptions {
 }
 
 export async function runRecallTool({ ctx, args }: ToolCall): Promise<string> {
-  // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
+  // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not
+  // passed on.
   const { opts } = parseRecallRequest(toolParams(args));
   return toolRecallText(mcpApiContext(ctx), {
     opts,
@@ -55,7 +61,9 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
   const explicitScope = stringArg(args, 'scope', MAX_ID_LEN) || undefined;
   const assembleExtra: AssembleExtraOptions = {};
   if (budget !== undefined && budget > 0) assembleExtra.budget = budget;
-  if (freshTailCount !== undefined && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
+  if (freshTailCount !== undefined && freshTailCount >= 0) {
+    assembleExtra.freshTailCount = freshTailCount;
+  }
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
     summarizeOlder,
@@ -71,7 +79,8 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   if (!summaryId) return 'No summary_id provided.';
   const limit = numberArg(args, 'limit');
   const budget = numberArg(args, 'budget');
-  // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
+  // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the
+  // cap.
   const depth = numberArg(args, 'depth');
   const drillExtra: DrillDownExtraOptions = {};
   if (limit !== undefined && limit > 0) drillExtra.limit = limit;
@@ -80,8 +89,8 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   const opts = { ...drillExtra, project: ctx?.project, cost: drillCost };
   const r = await apiDrillDown(mcpApiContext(ctx), summaryId, opts);
   if ('failure' in r) {
-    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and missing, because
-    // telling scope_blocked apart would leak private-row existence.
+    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
+    // missing, because telling scope_blocked apart would leak private-row existence.
     if (r.failure === 'not_drillable') {
       return `Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`;
     }
@@ -90,8 +99,8 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   return drillText(r);
 }
 
-// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so only an owner
-// of the server cwd falls back to it.
+// The served store names the project (an HTTP daemon runs from anywhere); the global root names
+// none, so only an owner of the server cwd falls back to it.
 function localProject(
   hippoRoot: string,
   ownsCwd: boolean,
@@ -102,7 +111,8 @@ function localProject(
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall): Promise<string> {
-  // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
+  // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends
+  // X-Hippo-Project.
   if (sharedStoreOf(ctx) && ctx.project === undefined) {
     return 'hippo_context needs a project on a shared store; use hippo_recall';
   }
@@ -113,8 +123,8 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   const ownsCwd = ownsServerCwd(ctx);
   const now = ctx.infra.clock();
   const result = await apiGetContext(mcpApiContext(ctx), {
-    // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
-    // query.
+    // The server's git state is no remote caller's, so a project or remote caller gets rows by
+    // strength without a query.
     q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(processGit),
     budget,
     exactScope,

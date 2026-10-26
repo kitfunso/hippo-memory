@@ -105,8 +105,9 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the
- * HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
+/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so
+ * the caller leaves the HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a
+ * capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -131,21 +132,16 @@ async function drainStream(
     pages++;
 
     for (const item of page.items) {
-      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
-      // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
-      const updatedAt = isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
+      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't
+      // loop forever.
+      const updatedAt = itemUpdatedAt(item);
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
         maxUpdatedAt = updatedAt;
       }
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      const r = await ingestEvent(ctx, {
-        event: evt,
-        rawBody: JSON.stringify(item),
-        deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
-      });
-      if (r.status === 'ingested' || r.status === 'skipped') ingested++;
+      if (await ingestBackfillItem(ctx, item, evt, updatedAt)) ingested++;
 
       if (maxItems && ingested >= maxItems) {
         // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
@@ -159,12 +155,35 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole
-// window.
+function itemUpdatedAt(item: JsonValue): string | null {
+  // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
+  return isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
+}
+
+/** True when the item counts toward the stream's ingested total. */
+async function ingestBackfillItem(
+  ctx: ConnectorContext,
+  item: JsonValue,
+  evt: IngestEvent,
+  updatedAt: string | null,
+): Promise<boolean> {
+  const r = await ingestEvent(ctx, {
+    event: evt,
+    rawBody: JSON.stringify(item),
+    deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
+  });
+  return r.status === 'ingested' || r.status === 'skipped';
+}
+
+// A reset hours away must fail the run for a later rerun; sleeping through it would hold the
+// process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
-async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
+async function fetchPagePastRateLimit(
+  options: DrainStreamOptions,
+  url: string,
+): Promise<GitHubBackfillPage> {
   const { fetcher, token, sleep } = options;
   let waitedMs = 0;
   for (let attempt = 1; ; attempt++) {
@@ -200,10 +219,13 @@ function issueItemToEvent(item: JsonValue, repository: GitHubRepository): Ingest
   return { eventName: 'issues', payload };
 }
 
-function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+function issueCommentItemToEvent(
+  item: JsonValue,
+  repository: GitHubRepository,
+): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem validates is an
-  // IssueCommentItem; a missing issue_url is handled below.
+  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem
+  // validates is an IssueCommentItem; a missing issue_url is handled below.
   const c = item as IssueCommentItem;
   const issueNumber = parseTrailingNumber(c.issue_url);
   if (issueNumber === null) return null;
@@ -221,10 +243,13 @@ function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository):
   return { eventName: 'issue_comment', payload };
 }
 
-function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+function prReviewCommentItemToEvent(
+  item: JsonValue,
+  repository: GitHubRepository,
+): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem validates is a
-  // PrReviewCommentItem; a missing pull_request_url is handled below.
+  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem
+  // validates is a PrReviewCommentItem; a missing pull_request_url is handled below.
   const c = item as PrReviewCommentItem;
   const prNumber = parseTrailingNumber(c.pull_request_url);
   if (prNumber === null) return null;
@@ -252,7 +277,10 @@ const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStrea
 });
 
 /** Each stream's HWM, after a first run's `--since` seeds the ones no run saved. */
-async function resumeFrom(ctx: ConnectorContext, opts: BackfillOptions): Promise<Record<GitHubStream, string | null>> {
+async function resumeFrom(
+  ctx: ConnectorContext,
+  opts: BackfillOptions,
+): Promise<Record<GitHubStream, string | null>> {
   const events = ctx.store.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
@@ -273,7 +301,11 @@ async function backfillStream(
   ctx: ConnectorContext,
   opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
-  stream: { url: string; name: GitHubStream; toIngestEvent: (item: JsonValue) => IngestEvent | null },
+  stream: {
+    url: string;
+    name: GitHubStream;
+    toIngestEvent: (item: JsonValue) => IngestEvent | null;
+  },
 ): Promise<{ ingested: number; pages: number }> {
   const res = await drainStream(ctx, stream.url, {
     toIngestEvent: stream.toIngestEvent,
@@ -282,14 +314,18 @@ async function backfillStream(
     sleep,
     maxItems: opts.maxPerStream,
   });
-  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
+  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
+  // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
     await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }
 
-export async function backfillRepo(ctx: ConnectorContext, opts: BackfillOptions): Promise<BackfillResult> {
+export async function backfillRepo(
+  ctx: ConnectorContext,
+  opts: BackfillOptions,
+): Promise<BackfillResult> {
   const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const cursors = await resumeFrom(ctx, opts);
   const repository = syntheticRepository(opts.repoFullName);

@@ -1,6 +1,6 @@
 /**
- * Minimal YAML frontmatter serializer/deserializer with no external deps: simple key-value pairs and inline arrays,
- * enough for the MemoryEntry schema.
+ * Minimal YAML frontmatter serializer/deserializer with no external deps: simple key-value pairs
+ * and inline arrays, enough for the MemoryEntry schema.
  */
 
 type YamlValue = string | number | boolean | null | string[] | number[];
@@ -16,7 +16,11 @@ const UNESCAPES: ReadonlyMap<string, string> = new Map([
 function escapeString(s: string): string {
   // A string that reads as null, a boolean or a number is quoted so it comes back a string.
   if (/[:#[\]{},\n\r"']/.test(s) || s.trim() !== s || s === '' || SCALAR_LOOKALIKE.test(s)) {
-    const escaped = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    const escaped = s
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r');
     return `"${escaped}"`;
   }
   return s;

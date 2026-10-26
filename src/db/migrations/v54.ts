@@ -23,7 +23,8 @@ const SESSION_OWNERS_DDL = `
     )
   `;
 
-// Same text the open re-asserted before 3.0, so a store that has them keeps an identical sqlite_master row.
+// Same text the open re-asserted before 3.0, so a store that has them keeps an identical
+// sqlite_master row.
 const OWNER_INDEX_DDL: ReadonlyArray<readonly [string, string]> = [
   [
     'task_snapshots',
@@ -35,7 +36,8 @@ const OWNER_INDEX_DDL: ReadonlyArray<readonly [string, string]> = [
     `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, ` +
       `origin_project, created_at DESC)`,
   ],
-  // A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
+  // A client retry carries the same request id, so a repeat finds the earlier row instead of
+  // writing again.
   [
     'compactions',
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) ` +
@@ -51,11 +53,13 @@ const OWNER_INDEX_DDL: ReadonlyArray<readonly [string, string]> = [
 export const v54: Migration = {
   version: 54,
   up: (db) => {
-    // Rows from before this stay NULL: no backfill, so they never match an owner's key.
-    // No floor raise here: the first session bind or owner snapshot raises it, so an unused store stays open to older
-    // binaries.
+    // Rows from before this stay NULL: no backfill, so they never match an owner's key. No floor
+    // raise here: the first session bind or owner snapshot raises it, so an unused store stays open
+    // to older binaries.
     for (const [t, c] of OWNER_COLUMNS) {
-      if (tableExists(db, t) && !tableHasColumn(db, t, c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
+      if (tableExists(db, t) && !tableHasColumn(db, t, c)) {
+        db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
+      }
     }
     db.exec(SESSION_OWNERS_DDL);
     for (const [t, ddl] of OWNER_INDEX_DDL) if (tableExists(db, t)) db.exec(ddl);

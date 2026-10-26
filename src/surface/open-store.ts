@@ -1,6 +1,7 @@
-// The one module outside the SQLite adapter that names it: each composition root opens the default store, its request
-// sessions, its store runtime and its server runtime here, so a second adapter changes this file and no root
-// (scripts/check-layers.mjs). The exit hooks live here too, since the store layers install none.
+// The one module outside the SQLite adapter that names it: each composition root opens the default
+// store, its request sessions, its store runtime and its server runtime here, so a second adapter
+// changes this file and no root (.dependency-cruiser.cjs). The exit hooks live here too, since the
+// store layers install none.
 import type { StoreRules } from '../base/ports/infra.js';
 import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
 import {
@@ -44,13 +45,15 @@ export {
   type VectorRow,
 } from '../store/sqlite/index.js';
 
-/** The default store as ./store-kit publishes it, with only the rules an add-on picks: a runtime or a session belongs
- * to a composition root, and the published entries export neither. */
-export const publishedDefaultStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups =
-  sqliteStoreWith;
+/** The default store as ./store-kit publishes it, with only the rules an add-on picks: a runtime
+ * or a session belongs to a composition root, and the published entries export neither. */
+export const publishedDefaultStore: (
+  hippoRoot: string,
+  rules?: StoreRules,
+) => HippoStore & StoreGroups = sqliteStoreWith;
 
-/** Runs `fn` on a store runtime of its own, disposed when `fn` settles, or by its exit hook if the process exits
- * first. */
+/** Runs `fn` on a store runtime of its own, disposed when `fn` settles, or by its exit hook if
+ * the process exits first. */
 export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise<T>): Promise<T> {
   const runtime = new StoreRuntime();
   const onExit = (): void => runtime.dispose();
@@ -63,8 +66,12 @@ export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise
   }
 }
 
-/** hippo.db as a server serves it, with an exit hook that closes what the server opened if close() never runs. */
-export function defaultServerRuntime(hippoRoot: string, opts: ServerRuntimeOptions = {}): SqliteServerRuntime {
+/** hippo.db as a server serves it, with an exit hook that closes what the server opened if
+ * close() never runs. */
+export function defaultServerRuntime(
+  hippoRoot: string,
+  opts: ServerRuntimeOptions = {},
+): SqliteServerRuntime {
   const runtime = sqliteServerRuntime(hippoRoot, opts);
   const onExit = (): void => runtime.closeOnExit();
   process.once('exit', onExit);

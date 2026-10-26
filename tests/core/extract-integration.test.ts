@@ -30,7 +30,12 @@ describe('storeExtractedFacts', () => {
       { content: 'Bob prefers async standup meetings', tags: ['speaker:Bob', 'topic:standup'], valence: 'positive' },
     ];
 
-    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
+    const entries = await storeExtractedFacts(sqliteStore(dir), {
+      source,
+      facts,
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: evalNow(),
+    });
 
     expect(entries).toHaveLength(2);
 
@@ -62,7 +67,12 @@ describe('storeExtractedFacts', () => {
       { content: 'Deploy uses blue-green strategy', tags: ['speaker:Carol', 'topic:deploy'], valence: 'neutral' },
     ];
 
-    const entries = await storeExtractedFacts(sqliteStore(dir), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
+    const entries = await storeExtractedFacts(sqliteStore(dir), {
+      source,
+      facts,
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: evalNow(),
+    });
     expect(entries).toHaveLength(1);
 
     const tags = entries[0]!.tags;
@@ -84,7 +94,12 @@ describe('storeExtractedFacts', () => {
     });
     writeEntry(dir, source);
 
-    const entries = await storeExtractedFacts(sqliteStore(dir), source, [], DEFAULT_HALF_LIFE_DAYS, evalNow());
+    const entries = await storeExtractedFacts(sqliteStore(dir), {
+      source,
+      facts: [],
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      now: evalNow(),
+    });
     expect(entries).toHaveLength(0);
   });
 });

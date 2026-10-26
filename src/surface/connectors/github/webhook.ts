@@ -17,7 +17,10 @@ import {
   isGitHubPullRequestReviewCommentEvent,
   type GitHubWebhookEnvelope,
 } from './types.js';
-import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
+import {
+  ingestEvent as ingestGitHubEvent,
+  type IngestEvent as GitHubIngestEvent,
+} from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -36,7 +39,8 @@ import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
 import type { ConnectorContext, WebhookPorts } from '../ingest.js';
 import { errorFields, log } from '../../../base/util/log.js';
 
-/** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
+/** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ
+ * replay alike. */
 export function githubPreviousSecret(): string | undefined {
   return previousSecretInForce(
     GITHUB_PREVIOUS,
@@ -46,14 +50,30 @@ export function githubPreviousSecret(): string | undefined {
 }
 
 export function warnGitHubPreviousSecretOpen(): void {
-  warnIfOpenEnded(GITHUB_PREVIOUS, envGitHubWebhookSecretPrevious(), envGitHubWebhookSecretPreviousUntil());
+  warnIfOpenEnded(
+    GITHUB_PREVIOUS,
+    envGitHubWebhookSecretPrevious(),
+    envGitHubWebhookSecretPreviousUntil(),
+  );
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
-async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
+/** Reads the raw body and refuses it unless the signature matches the current or the previous
+ * secret. */
+async function readSignedBody(
+  request: WebhookRequest,
+  secret: string,
+  sigStr: string,
+): Promise<string> {
   const rawBytes = await readWebhookBody(request);
   const previousSecret = githubPreviousSecret();
-  if (!verifyGitHubSignature({ rawBody: rawBytes, signature: sigStr, webhookSecret: secret, previousSecret })) {
+  if (
+    !verifyGitHubSignature({
+      rawBody: rawBytes,
+      signature: sigStr,
+      webhookSecret: secret,
+      previousSecret,
+    })
+  ) {
     throw new HttpError(401, 'invalid GitHub signature');
   }
   return rawBytes.toString('utf8');
@@ -62,22 +82,16 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
  *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409
  *  on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
-export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
+export async function handleGitHubEventsWebhook(
+  request: WebhookRequest,
+  ports: WebhookPorts,
+): Promise<void> {
   const { req, res, opts } = request;
-  // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
+  // Secret and signature header before the body, so a caller with neither cannot make the server
+  // buffer one.
   const secret = envGitHubWebhookSecret();
-  if (!secret) {
-    closeIfBodyUnread(request);
-    res.writeHead(404, JSON_HEADERS);
-    res.end(JSON.stringify({ error: 'not found' }));
-    return;
-  }
-  const sigHdr = req.headers['x-hub-signature-256'];
-  const eventHdr = req.headers['x-github-event'];
-  const deliveryHdr = req.headers['x-github-delivery'];
-  const sigStr = isHeaderString(sigHdr) ? sigHdr : null;
-  const eventName = isHeaderString(eventHdr) ? eventHdr : null;
-  const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
+  if (!secret) return refuseUnconfigured(request);
+  const { sigStr, eventName, deliveryId } = readGitHubHeaders(req);
 
   if (sigStr === null || !isWellFormedGitHubSignature(sigStr)) {
     closeIfBodyUnread(request);
@@ -85,8 +99,9 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
   }
   const rawBody = await readSignedBody(request, secret, sigStr);
 
-  // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human can replay later.
-  // The delivery id header is unsigned, so a captured body resent under a fresh id must still hit the same hold.
+  // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human
+  // can replay later. The delivery id header is unsigned, so a captured body resent under a fresh
+  // id must still hit the same hold.
   const replayKey = sigStr;
   await claimOrRefuse(ports.store, replayKey);
   try {
@@ -100,24 +115,55 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
       signature: sigStr,
     });
   } catch (err) {
-    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
+    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get
+    // through.
     await freeHold(ports.store, replayKey);
     throw err;
   }
 }
 
-// GitHub signs no timestamp, so a captured delivery verifies forever. The event log keeps each idempotency key for
-// good, so the signature hold must not run out first: a century outlives any store, and the sweep never reaches it.
+function refuseUnconfigured(request: WebhookRequest): void {
+  closeIfBodyUnread(request);
+  request.res.writeHead(404, JSON_HEADERS);
+  request.res.end(JSON.stringify({ error: 'not found' }));
+}
+
+/** Each GitHub header, or null unless it came as a single string. */
+interface GitHubHeaders {
+  readonly sigStr: string | null;
+  readonly eventName: string | null;
+  readonly deliveryId: string | null;
+}
+
+function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
+  const sigHdr = req.headers['x-hub-signature-256'];
+  const eventHdr = req.headers['x-github-event'];
+  const deliveryHdr = req.headers['x-github-delivery'];
+  return {
+    sigStr: isHeaderString(sigHdr) ? sigHdr : null,
+    eventName: isHeaderString(eventHdr) ? eventHdr : null,
+    deliveryId: isHeaderString(deliveryHdr) ? deliveryHdr : null,
+  };
+}
+
+// GitHub signs no timestamp, so a captured delivery verifies forever. The event log keeps each
+// idempotency key for good, so the signature hold must not run out first: a century outlives any
+// store, and the sweep never reaches it.
 const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.connectorEvents.claimDelivery(claim))) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  if (!(await store.connectorEvents.claimDelivery(claim))) {
+    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  }
 }
 
 async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
   await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
-    log.warn('github webhook: could not free the replay hold of a failed delivery', errorFields(err));
+    log.warn(
+      'github webhook: could not free the replay hold of a failed delivery',
+      errorFields(err),
+    );
   });
 }
 
@@ -173,15 +219,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     repoFullName: body.repository?.full_name ?? null,
   };
 
-  // Tenant resolution. Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
-  const resolvedTenant = await resolveTenant(
-    d.store,
-    { connector: 'github', ...routing },
-    {
-      hostTenant: envTenant(),
-      allowUnknown: envGitHubAllowUnknownInstallationFallback(),
-    },
-  );
+  const resolvedTenant = await resolveGitHubTenant(d, routing);
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,
@@ -199,7 +237,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     config: d.config,
     infra: d.infra,
   };
-  if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
+  if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.
   await parkAndAck(d, {
@@ -210,10 +248,23 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
   });
 }
 
-/** Answers ping and parks every unusable body; returns the envelope only when ingest should go on. */
+// Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
+function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<string | null> {
+  return resolveTenant(
+    d.store,
+    { connector: 'github', ...routing },
+    {
+      hostTenant: envTenant(),
+      allowUnknown: envGitHubAllowUnknownInstallationFallback(),
+    },
+  );
+}
+
+/** Answers ping and parks every unusable body; returns the envelope only when ingest should go
+ * on. */
 async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
-  // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives operators something
-  // to triage.
+  // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives
+  // operators something to triage.
   const installationFromRaw = (() => {
     const m = d.rawBody.match(/"installation"\s*:\s*\{[^}]*"id"\s*:\s*(\d+)/);
     return m ? m[1] : null;
@@ -255,20 +306,28 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
   return body;
 }
 
+interface DispatchGitHubEventOptions {
+  readonly d: SignedDelivery;
+  readonly ctx: ConnectorContext;
+  readonly body: SignedEnvelope;
+  readonly deliveryId: string;
+  readonly routing: DlqRouting;
+}
+
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
-async function dispatchGitHubEvent(
-  d: SignedDelivery,
-  ctx: ConnectorContext,
-  body: SignedEnvelope,
-  deliveryId: string,
-  routing: DlqRouting,
-): Promise<boolean> {
+async function dispatchGitHubEvent({
+  d,
+  ctx,
+  body,
+  deliveryId,
+  routing,
+}: DispatchGitHubEventOptions): Promise<boolean> {
   const action = deliveryAction(d.eventName, body);
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if the issue moves
-    // between accounts.
+    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if
+    // the issue moves between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,
@@ -276,8 +335,8 @@ async function dispatchGitHubEvent(
       bucket: 'unhandled',
     });
   } else if (action.kind === 'archive-comment') {
-    // The "deleted:" key namespace keeps this from colliding with the ingest key for the same artifact; a shared key
-    // would make hasSeenKey skip the archive.
+    // The "deleted:" key namespace keeps this from colliding with the ingest key for the same
+    // artifact; a shared key would make hasSeenKey skip the archive.
     const idempotencyKey = computeGitHubDeletionKey(action.artifactRef, action.updatedAt);
     const r = await handleGitHubCommentDeleted(ctx, {
       artifactRef: action.artifactRef,
@@ -299,8 +358,8 @@ type DeliveryAction =
   | { kind: 'archive-comment'; eventName: string; artifactRef: string; updatedAt: string | null }
   | { kind: 'manual-review' };
 
-// Dispatch by event header. Type guards cross-check the body shape against the header so a payload of one event type
-// cannot satisfy another's guard.
+// Dispatch by event header. Type guards cross-check the body shape against the header so a payload
+// of one event type cannot satisfy another's guard.
 function deliveryAction(eventName: string | null, body: SignedEnvelope): DeliveryAction | null {
   if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
     if (body.action === 'deleted') return { kind: 'manual-review' };
@@ -311,7 +370,12 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
     if (body.action === 'deleted') {
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
-      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
+      return {
+        kind: 'archive-comment',
+        eventName,
+        artifactRef,
+        updatedAt: body.comment.updated_at ?? null,
+      };
     }
     return { kind: 'ingest', event: { eventName: 'issue_comment', payload: body } };
   }
@@ -328,7 +392,12 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
       // Same "deleted:" key namespace as the issue_comment branch above.
-      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
+      return {
+        kind: 'archive-comment',
+        eventName,
+        artifactRef,
+        updatedAt: body.comment.updated_at ?? null,
+      };
     }
     return { kind: 'ingest', event: { eventName: 'pull_request_review_comment', payload: body } };
   }

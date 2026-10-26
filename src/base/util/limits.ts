@@ -1,15 +1,17 @@
-// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a misconfigured client or
-// a deliberate memory-blowup attempt.
+// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a
+// misconfigured client or a deliberate memory-blowup attempt.
 export const MAX_BODY_BYTES = 1024 * 1024;
 
-// Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound
-// logs and indexes.
+// Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values,
+// small enough to bound logs and indexes.
 export const MAX_ID_LEN = 256;
 
-// Longest session id or tool name a hook payload may put in a log row; the payload is not trusted to be short.
+// Longest session id or tool name a hook payload may put in a log row; the payload is not trusted
+// to be short.
 export const MAX_HOOK_FIELD_LEN = 128;
 
-// Cap for short free-text request fields (names, text, context, change summaries, reasons), on HTTP and MCP alike.
+// Cap for short free-text request fields (names, text, context, change summaries, reasons), on HTTP
+// and MCP alike.
 export const MAX_SHORT_FIELD_LEN = 4096;
 
 // A content-like field can be as long as the body that carries it.
@@ -24,13 +26,16 @@ export const MAX_ARRAY_ITEMS = 100;
 // The basis-point scale: a rate of BASIS_POINTS is every session.
 export const BASIS_POINTS = 10_000;
 
-// Fresh raw rows one read returns at most, whatever count the caller asks for; the store port promises this cap.
+// Fresh raw rows one read returns at most, whatever count the caller asks for; the store port
+// promises this cap.
 export const MAX_FRESH_RAW = 200;
 
-// Working-memory entries one scope keeps, and a read returns by default; past it the lowest importance goes first.
+// Working-memory entries one scope keeps, and a read returns by default; past it the lowest
+// importance goes first.
 export const WM_MAX_ENTRIES = 20;
 
-// Session events a read returns when its caller names no limit, as `hippo session show` prints by default.
+// Session events a read returns when its caller names no limit, as `hippo session show` prints by
+// default.
 export const SESSION_EVENT_LIMIT = 8;
 
 // Page size every list surface (CLI, HTTP, store) falls back to when the caller names none.
@@ -39,14 +44,14 @@ export const DEFAULT_LIST_LIMIT = 100;
 // Days of git history `hippo learn --git` and hippo_learn scan when the caller names none.
 export const DEFAULT_LEARN_DAYS = 7;
 
-// Ceiling for a caller-named list page; hippo.db's `LIMIT ?` and one response's size bound it, and every list surface
-// shares it.
+// Ceiling for a caller-named list page; hippo.db's `LIMIT ?` and one response's size bound it, and
+// every list surface shares it.
 export const MAX_LIST_LIMIT = 1000;
 
 export const MAX_AUDIT_LIMIT = 10_000;
 
-// Cap on a reply body read from a peer (LLM API, hippo server, reranker); honest replies are a few KB, and 1 MiB
-// leaves room for a verbose envelope.
+// Cap on a reply body read from a peer (LLM API, hippo server, reranker); honest replies are a few
+// KB, and 1 MiB leaves room for a verbose envelope.
 export const MAX_REPLY_BYTES = 1024 * 1024;
 
 /** The one list-limit rule: absent means the default; a positive integer up to the ceiling passes.
@@ -57,5 +62,7 @@ export function resolveListLimit(
   maxLimit: number = Infinity,
 ): number | undefined {
   if (requested === undefined) return defaultLimit;
-  return Number.isInteger(requested) && requested > 0 && requested <= maxLimit ? requested : undefined;
+  return Number.isInteger(requested) && requested > 0 && requested <= maxLimit
+    ? requested
+    : undefined;
 }

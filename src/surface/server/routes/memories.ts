@@ -16,7 +16,12 @@ import {
   parseLimitParam,
   validateIdSegment,
 } from '../validation.js';
-import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
+import {
+  MAX_ARRAY_ITEMS,
+  MAX_CONTENT_LEN,
+  MAX_ID_LEN,
+  MAX_SHORT_FIELD_LEN,
+} from '../../../base/util/limits.js';
 import { isJsonBoolean, type JsonValue } from '../../../base/util/json.js';
 import type { SleepResult } from '../../../api/index.js';
 import { sleepEventLines } from '../../render/sleep-events.js';
@@ -49,7 +54,12 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
     scope: getString(body, 'scope', MAX_ID_LEN),
     owner: getString(body, 'owner', MAX_ID_LEN),
     artifactRef: getString(body, 'artifactRef', MAX_SHORT_FIELD_LEN),
-    tags: getStringArray(body, 'tags', MAX_ARRAY_ITEMS, MAX_ID_LEN),
+    tags: getStringArray({
+      obj: body,
+      key: 'tags',
+      maxItems: MAX_ARRAY_ITEMS,
+      maxItemLen: MAX_ID_LEN,
+    }),
     project: getCallerProject(body),
     personal: personalRaw === true,
     salienceGate: forceRaw !== true,
@@ -67,7 +77,10 @@ export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): P
 }
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
-export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleArchiveMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason', MAX_SHORT_FIELD_LEN);
@@ -79,7 +92,10 @@ export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest,
   return;
 }
 
-export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleSupersedeMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content', MAX_CONTENT_LEN);
@@ -101,28 +117,42 @@ export async function handlePromoteMemory(
   return;
 }
 
-export async function handleForgetMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleForgetMemory(
+  { res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const result = await forget(ctx, id);
   sendJson(res, 200, result);
   return;
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the ids this client's
-// last recall or context call showed, and returns {applied, ids}, so callers can tell "no recent recall" from "all ids
-// skipped". Each applied id writes one audit_log row (op='outcome').
+// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the
+// ids this client's last recall or context call showed, and returns {applied, ids}, so callers can
+// tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row
+// (op='outcome').
 export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
   if (!isJsonBoolean(good)) {
     throw new HttpError(400, 'good is required (boolean)');
   }
-  // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the count, and writes
-  // the mirrors after its job. Auth runs first, so only a caller with a key reaches it.
-  const ids = getStringArray(body, 'ids', MAX_OUTCOME_IDS, MAX_ID_LEN, {
-    nonEmpty: 'raw',
-    rejectNull: true,
-    messages: { notArray: 'ids must be an array of non-empty strings', count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap` },
+  // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the
+  // count, and writes the mirrors after its job. Auth runs first, so only a caller with a key
+  // reaches it.
+  const ids = getStringArray({
+    obj: body,
+    key: 'ids',
+    maxItems: MAX_OUTCOME_IDS,
+    maxItemLen: MAX_ID_LEN,
+    rule: {
+      nonEmpty: 'raw',
+      rejectNull: true,
+      messages: {
+        notArray: 'ids must be an array of non-empty strings',
+        count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap`,
+      },
+    },
   });
   if (ids !== undefined) {
     const { applied } = await outcome(ctx, ids, good);
@@ -135,18 +165,21 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   return;
 }
 
-/** The reply keeps `details` as the printed lines where the result carries events, so the JSON shape is as it was. */
+/** The reply keeps `details` as the printed lines where the result carries events, so the JSON
+ * shape is as it was. */
 function sleepReply(result: SleepResult): Record<string, JsonValue> {
   return Object.fromEntries(
     Object.entries(result).map(([key, value]): [string, JsonValue] =>
-      key === 'events' ? ['details', sleepEventLines(result.events ?? [], result.dryRun)] : [key, value],
+      key === 'events'
+        ? ['details', sleepEventLines(result.events ?? [], result.dryRun)]
+        : [key, value],
     ),
   );
 }
 
-// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
-// hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the trust boundary. Body {dry_run?,
-// no_share?}; returns SleepResult JSON.
+// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep
+// spans the WHOLE hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the
+// trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
 export async function handleRunSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];

@@ -9,15 +9,20 @@ export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<strin
   return new Set(rows.flatMap((row) => (row.name === undefined ? [] : [row.name])));
 }
 
-export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+export function tableHasColumn(
+  db: DatabaseSyncLike,
+  tableName: string,
+  columnName: string,
+): boolean {
   return tableColumns(db, tableName).has(columnName);
 }
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
-  const row = cachedStatement(db, `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
-    | { name?: string }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`,
+  ).get(tableName) as { name?: string } | undefined;
   return !!row?.name;
 }
 
@@ -32,7 +37,8 @@ export function listTableNames(db: DatabaseSyncLike): string[] {
   return rows.map((r) => r.name);
 }
 
-/** Row count of one table; null when the table is missing or unreadable, which callers show as unknown. */
+/** Row count of one table; null when the table is missing or unreadable, which callers show as
+ * unknown. */
 export function countTableRows(db: DatabaseSyncLike, table: string): number | null {
   try {
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as
@@ -51,7 +57,8 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
 }
 
 /**
- * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows.
+ * Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a
+ * fixed number of rows.
  */
 export const CONSOLIDATION_RUNS_KEPT = 50;
 

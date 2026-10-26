@@ -1,6 +1,7 @@
-/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede chain) and optional
- * linked receipts. The `incidents` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET
- * NULL) is for recall. linked_memory_ids must all exist in the SAME tenant or save throws before the insert. */
+/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede
+ * chain) and optional linked receipts. The `incidents` table is the source of truth; the memory
+ * mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. linked_memory_ids must all
+ * exist in the SAME tenant or save throws before the insert. */
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
@@ -14,7 +15,12 @@ import {
   type IncidentStatus,
   type ObjectRefusal,
 } from '../../base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../../base/ports/store.js';
+import type {
+  IncidentOpen,
+  IncidentOpenRefusal,
+  IncidentResolve,
+  Objects,
+} from '../../base/ports/store.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 
@@ -30,11 +36,13 @@ export interface SaveIncidentOptions {
   /** Memory ids (linked receipts) that are this incident's evidence. Each must exist in the same tenant;
    *  cross-tenant/nonexistent ids are rejected. */
   linkedMemoryIds?: string[];
-  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK pass none). */
+  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK
+   * pass none). */
   extraTags?: string[];
 }
 
-// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own save.
+// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own
+// save.
 export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',
@@ -44,19 +52,34 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   closeRefusal: 'already closed',
 };
 
-/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new mirror starts on. */
-function incidentOpen(
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveIncidentOptions,
-  actor: string,
-  now: Date,
-): IncidentOpen {
+interface IncidentOpenOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly opts: SaveIncidentOptions;
+  readonly actor: string;
+  readonly now: Date;
+}
+
+/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new
+ * mirror starts on. */
+function incidentOpen({
+  baseHalfLifeDays,
+  tenantId,
+  opts,
+  actor,
+  now,
+}: IncidentOpenOptions): IncidentOpen {
   assertTenantId('openIncident', tenantId);
   const incidentText = requireText(opts.incidentText, MAX_SHORT_FIELD_LEN, 'incidentText');
   const at = now.toISOString();
   const content = opts.context ? `${incidentText}\n\nContext: ${opts.context}` : incidentText;
-  const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] }, now);
+  const mirror = objectMirror({
+    baseHalfLifeDays,
+    tenantId,
+    source: 'incident',
+    text: { content, tags: opts.extraTags ?? [] },
+    now,
+  });
   const fields = {
     incidentText,
     context: opts.context ?? undefined,
@@ -74,21 +97,30 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
   throw new Error('failed to reload saved incident row');
 }
 
-/** Opens an incident with its mirror memory (content "<text>
+export interface OpenIncidentOptions {
+  readonly baseHalfLifeDays: number;
+  readonly tenantId: string;
+  readonly opts: SaveIncidentOptions;
+  readonly by: ActedBy;
+}
 
-Context: <context>" when context is given) in one write; a linked memory outside the tenant refuses the whole write. */
+/** Opens an incident with its mirror memory (content "<text>
+ *
+ * Context: <context>" when context is given) in one write; a linked memory outside the tenant
+ * refuses the whole write. */
 export async function openIncident(
   objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveIncidentOptions,
-  by: ActedBy,
+  { baseHalfLifeDays, tenantId, opts, by }: OpenIncidentOptions,
 ): Promise<Incident> {
-  const open = incidentOpen(baseHalfLifeDays, tenantId, opts, by.actor, by.now);
+  const open = incidentOpen({ baseHalfLifeDays, tenantId, opts, actor: by.actor, now: by.now });
   return opened(tenantId, await objects.saveObject(tenantId, 'incident', open));
 }
 
-function resolving(tenantId: string, resolutionText: string, actor: string, now: Date): IncidentResolve {
+function resolving(
+  tenantId: string,
+  resolutionText: string,
+  { actor, now }: ActedBy,
+): IncidentResolve {
   assertTenantId('resolveOpenIncident', tenantId);
   const text = requireText(resolutionText, MAX_SHORT_FIELD_LEN, 'resolutionText');
   return { text, actor, at: now.toISOString() };
@@ -99,24 +131,30 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   if (written.refused === 'missing') {
     throw new NotFoundError(`incident ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`incident ${id} not found after UPDATE`);
+  if (written.refused !== 'status') {
+    throw new NotFoundError(`incident ${id} not found after UPDATE`);
+  }
   throw new ConflictError(
     `incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
   );
 }
 
-/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is not open are told
- * apart. */
+export interface ResolveOpenIncidentOptions {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly resolutionText: string;
+  readonly by: ActedBy;
+}
+
+/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is
+ * not open are told apart. */
 export async function resolveOpenIncident(
   objects: Objects,
-  tenantId: string,
-  id: number,
-  resolutionText: string,
-  by: ActedBy,
+  { tenantId, id, resolutionText, by }: ResolveOpenIncidentOptions,
 ): Promise<Incident> {
   return resolved(
     tenantId,
     id,
-    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, by.actor, by.now)),
+    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, by)),
   );
 }

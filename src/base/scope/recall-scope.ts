@@ -1,22 +1,23 @@
 /**
- * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny rule to
- * searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports these and re-exports them for
- * back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`).
+ * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny
+ * rule to searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports
+ * these and re-exports them for back-compat (`api.isPrivateScope`, tests importing
+ * `passesScopeFilterForRecall`).
  */
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 
 /**
- * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in
- * `listSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both
- * paths silently (the module-load assertion below pins this).
+ * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by
+ * the SQL clause in `listSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty,
+ * or quarantine scopes would pass both paths silently (the module-load assertion below pins this).
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
 /**
- * @internal Runtime guard against blanking a load-bearing literal array; `as const` arrays widen via `readonly T[]` at
- * the call site, so the empty case is reachable and testable. */
+ * @internal Runtime guard against blanking a load-bearing literal array; `as const` arrays widen
+ *   via `readonly T[]` at the call site, so the empty case is reachable and testable. */
 export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
   if (arr.length === 0) {
     throw new Error(`${name} cannot be empty — would silently allow quarantine scopes`);
@@ -26,9 +27,9 @@ export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
 assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 /**
- * Source-agnostic private-scope detector: private means `<lowercase-source>:private:<rest>` (`slack:private:Cabc`; not
- * `slack:public:x`, null, '', 'private:foo'). The single source of truth for api.recall, the MCP server, the CLI and
- * search-both.ts, so connector work cannot drift.
+ * Source-agnostic private-scope detector: private means `<lowercase-source>:private:<rest>`
+ * (`slack:private:Cabc`; not `slack:public:x`, null, '', 'private:foo'). The single source of truth
+ * for api.recall, the MCP server, the CLI and search-both.ts, so connector work cannot drift.
  */
 export const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
 
@@ -46,7 +47,8 @@ export const PERSONAL_SCOPE_PREFIX = 'personal:private:';
 // The scope must fit the 256-character scope caps, so the owner gets what the prefix leaves.
 export const PERSONAL_OWNER_MAX = MAX_ID_LEN - PERSONAL_SCOPE_PREFIX.length;
 
-/** True for a `personal:private:<owner>` scope, any case, so a case variant is never mistaken for a team scope. */
+/** True for a `personal:private:<owner>` scope, any case, so a case variant is never mistaken
+ * for a team scope. */
 export function isPersonalScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   return /^personal:private:/i.test(scope);
@@ -58,20 +60,21 @@ export function isQuarantineScope(scope: string | null | undefined): boolean {
   return scope != null && scope.startsWith(QUARANTINE_SCOPE_PREFIX);
 }
 
-/** Scope a quarantined memory is stored under; matches PRIVATE_SCOPE_RE so every default-deny site hides it. */
+/** Scope a quarantined memory is stored under; matches PRIVATE_SCOPE_RE so every default-deny
+ * site hides it. */
 export function quarantineScopeFor(original: string | null): string {
   return `${QUARANTINE_SCOPE_PREFIX}${original ?? 'unscoped'}`;
 }
 
-/** Recall scope filter: 'default-deny' (exclude RECALL_DEFAULT_DENY_SCOPES), 'exact' (scope = value),
- * 'default-deny-or-exact' (both; CLI `--scope`); a store's reads apply it as data. */
+/** Recall scope filter: 'default-deny' (exclude RECALL_DEFAULT_DENY_SCOPES), 'exact' (scope =
+ * value), 'default-deny-or-exact' (both; CLI `--scope`); a store's reads apply it as data. */
 export type RecallScopeFilter =
   | { mode: 'default-deny'; ownScope?: string }
   | { mode: 'exact'; value: string }
   | { mode: 'default-deny-or-exact'; value: string; ownScope?: string };
 
-/** None requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set, unless it is
- * personal, which only `ownScope` opens. */
+/** None requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the
+ * default set, unless it is personal, which only `ownScope` opens. */
 export function recallScopeFilter(
   requestedScope: string | undefined,
   mode: 'exact' | 'additive',
@@ -99,14 +102,15 @@ export function assertClientScope(scope: string | null | undefined): void {
   }
 }
 
-/** The personal half of readerReaches alone: any non-personal scope, or the caller's own personal one. */
+/** The personal half of readerReaches alone: any non-personal scope, or the caller's own
+ * personal one. */
 export function ownScopeTouches(ownScope: string | null, scope: string | null): boolean {
   return !isPersonalScope(scope) || scope === ownScope;
 }
 
-/** JS half of the recall default-deny rule (SQL half: `listSearchRows`). A non-empty `requested` needs an exact match;
- * otherwise `<source>:private:*` and `RECALL_DEFAULT_DENY_SCOPES` buckets are denied, while null, public scopes and the
- * caller's `ownScope` pass.
+/** JS half of the recall default-deny rule (SQL half: `listSearchRows`). A non-empty `requested`
+ * needs an exact match; otherwise `<source>:private:*` and `RECALL_DEFAULT_DENY_SCOPES` buckets are
+ * denied, while null, public scopes and the caller's `ownScope` pass.
  */
 export function passesScopeFilterForRecall(
   scope: string | null,
@@ -120,13 +124,20 @@ export function passesScopeFilterForRecall(
 }
 
 /**
- * CLI `--scope` variant: an explicit `--scope X` UNLOCKS scope X on top of the default-admitted set rather than
- * narrowing to X (api.recall keeps 'exact').
- * Includes private/quarantine scopes (owner access); a named personal scope never unlocks: the CLI has no caller
- * identity.
+ * CLI `--scope` variant: an explicit `--scope X` UNLOCKS scope X on top of the default-admitted set
+ * rather than narrowing to X (api.recall keeps 'exact'). Includes private/quarantine scopes (owner
+ * access); a named personal scope never unlocks: the CLI has no caller identity.
  */
-export function passesCliRecallScopeFilter(scope: string | null, requested: string | undefined): boolean {
-  if (requested !== undefined && requested !== '' && !isPersonalScope(requested) && scope === requested) {
+export function passesCliRecallScopeFilter(
+  scope: string | null,
+  requested: string | undefined,
+): boolean {
+  if (
+    requested !== undefined &&
+    requested !== '' &&
+    !isPersonalScope(requested) &&
+    scope === requested
+  ) {
     return true;
   }
   return passesScopeFilterForRecall(scope, undefined);
@@ -144,14 +155,13 @@ export class ScopeForbiddenError extends ForbiddenError {
 }
 
 /**
- * True for scopes default-deny hides (`<source>:private:*` and the quarantine buckets); naming one explicitly unlocks
- * it, so naming one needs authorization. */
+ * True for scopes default-deny hides (`<source>:private:*` and the quarantine buckets); naming
+ * one explicitly unlocks it, so naming one needs authorization. */
 export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
-  // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string literals; widening the array lets .includes() take
-  // any scope.
-  // `:private:` anywhere, any case, matches the SQL default-deny in the adapter's search-rows.ts, so JS never admits
-  // what SQL hides.
+  // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string literals; widening the array
+  // lets .includes() take any scope. `:private:` anywhere, any case, matches the SQL default-deny
+  // in the adapter's search-rows.ts, so JS never admits what SQL hides.
   return (
     isPrivateScope(scope) ||
     /:private:/i.test(scope) ||
@@ -159,15 +169,16 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
   );
 }
 
-/** The identity a scope check runs against: a role, any scope grants, and the person who owns the key. */
+/** The identity a scope check runs against: a role, any scope grants, and the person who owns
+ * the key. */
 export interface ScopeActor {
   role: 'admin' | 'member';
   scopes?: readonly string[];
   owner?: string;
 }
 
-/** A caller as a store's write by id receives it: its own personal scope, its role, its restricted-scope grants and the
- * person behind its key, who may change the team rows they own. */
+/** A caller as a store's write by id receives it: its own personal scope, its role, its
+ * restricted-scope grants and the person behind its key, who may change the team rows they own. */
 export interface ScopeReader {
   readonly ownScope: string | null;
   readonly role: 'admin' | 'member';
@@ -181,31 +192,33 @@ export function scopeReaderOf(actor: ScopeActor): ScopeReader {
   return actor.owner ? { ...withGrants, owner: actor.owner } : withGrants;
 }
 
-/** Personal rows answer to their owner alone: role and grants never open one. Else admin reads all; a member needs an
- * exact grant on a restricted scope. A null scope reads. */
+/** Personal rows answer to their owner alone: role and grants never open one. Else admin reads
+ * all; a member needs an exact grant on a restricted scope. A null scope reads. */
 export function readerReaches(reader: ScopeReader, scope: string | null): boolean {
   if (isPersonalScope(scope)) return scope === reader.ownScope;
   if (reader.role === 'admin' || !isRestrictedScope(scope)) return true;
   return scope !== null && (reader.grants ?? []).includes(scope);
 }
 
-/** Where a row sits and who it records as its writer: the owner remember stamped, which a member key can only set to
- * its own. */
+/** Where a row sits and who it records as its writer: the owner remember stamped, which a member
+ * key can only set to its own. */
 export interface WrittenRow {
   readonly scope: string | null;
   readonly owner: string | null;
 }
 
-/** Forget, archive, supersede and pin need more than reach: a personal row is its owner's, as readerReaches says; a
- * team row changes for an admin or the person who owns it, and a row with no owner for an admin alone. */
+/** Forget, archive, supersede and pin need more than reach: a personal row is its owner's, as
+ * readerReaches says; a team row changes for an admin or the person who owns it, and a row with
+ * no owner for an admin alone. */
 export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
   if (!readerReaches(reader, row.scope)) return false;
   if (isPersonalScope(row.scope) || reader.role === 'admin') return true;
   return Boolean(reader.owner) && row.owner === reader.owner;
 }
 
-/** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row the reader may not change
- * throws a 403 naming the key that can: the caller already sees the row, so saying so leaks nothing. */
+/** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row
+ * the reader may not change throws a 403 naming the key that can: the caller already sees the
+ * row, so saying so leaks nothing. */
 export function assertWriteRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
@@ -214,14 +227,19 @@ export function assertWriteRight(
 ): asserts row is WrittenRow {
   if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
   if (readerMayChange(reader, row)) return;
-  const fix = row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
+  const fix =
+    row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
   throw new ForbiddenError(`memory ${id} ${fix}`);
 }
 
-const WRITTEN_BY_ANOTHER = 'was written by someone else: change it with the key that wrote it or an admin key';
+const WRITTEN_BY_ANOTHER =
+  'was written by someone else: change it with the key that wrote it or an admin key';
 
-/** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed on restricted rows. */
-export function targetReader(target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] }): ScopeReader {
+/** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed
+ * on restricted rows. */
+export function targetReader(
+  target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] },
+): ScopeReader {
   return { ...target, role: target.role ?? 'member' };
 }
 

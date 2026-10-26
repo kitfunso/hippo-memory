@@ -34,11 +34,13 @@ import { strengthOf, type Context, type ContextWith } from '../types.js';
 export interface LearnProfile {
   readonly tags: readonly string[];
   readonly source: string;
-  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag, count and embed each row. */
+  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag, count and
+   * embed each row. */
   readonly full: boolean;
 }
 
-// SHORTCUT: two profiles keep each surface's rows as they were; fold MCP onto the CLI profile once it may invalidate.
+// SHORTCUT: two profiles keep each surface's rows as they were; fold MCP onto the CLI profile once
+// it may invalidate.
 export const CLI_LEARN: LearnProfile = Object.freeze({
   tags: Object.freeze([ERROR_TAG, 'git-learned']),
   source: 'git-learn',
@@ -77,7 +79,10 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: ContextWith<'lessonWrites'>, opts: LearnOptions): Promise<LearnResult> {
+export async function learn(
+  ctx: ContextWith<'lessonWrites'>,
+  opts: LearnOptions,
+): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -87,10 +92,14 @@ export async function learn(ctx: ContextWith<'lessonWrites'>, opts: LearnOptions
   const config = ctx.config;
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);
   if (parsed.length === 0) return { status: 'no-lessons', ...none };
-  // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions
-  // git-learn-gate-placement says why.
+  // The gate filters the loop input, so a dropped lesson neither stores nor invalidates;
+  // docs/decisions git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
-  return { status: 'scanned', lowInfo: dropped.length, ...(await writeLessons(ctx, kept, opts, config)) };
+  return {
+    status: 'scanned',
+    lowInfo: dropped.length,
+    ...(await writeLessons(ctx, kept, opts, config)),
+  };
 }
 
 interface QueuedLesson {
@@ -98,10 +107,10 @@ interface QueuedLesson {
   key: string;
 }
 
-/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches
- * against them. */
+/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
+ * a later lesson matches against them. */
 interface LessonBatch {
-  readonly ctx: Context;
+  readonly ctx: ContextWith<'lessonWrites'>;
   readonly writes: LessonWrites;
   readonly live: MemoryEntry[];
   readonly keys: Set<string>;
@@ -109,8 +118,8 @@ interface LessonBatch {
   readonly full: boolean;
 }
 
-/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest
- * of the git-log scan. */
+/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and
+ * must not abort the rest of the git-log scan. */
 async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]): Promise<void> {
   if (queued.length === 0) return;
   const { ctx, writes, live, keys, counts } = batch;
@@ -148,7 +157,11 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
 }
 
 /** The keys of the rows that may hold a lesson, the only rows that can be its copy. */
-async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[]): Promise<Set<string>> {
+async function knownKeys(
+  ctx: Context,
+  writes: LessonWrites,
+  lessons: readonly string[],
+): Promise<Set<string>> {
   const held = await writes.textsHolding(ctx.tenantId, lessons, personalScopeOf(ctx.actor));
   return storedTextKeys(held);
 }
@@ -161,7 +174,11 @@ interface LessonMemoryInputs {
   readonly now: Date;
 }
 
-function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMemoryInputs): MemoryEntry {
+function newLessonMemory(
+  lesson: string,
+  profile: LearnProfile,
+  inputs: LessonMemoryInputs,
+): MemoryEntry {
   const { tenantId, config, fitSource, pathTags, now } = inputs;
   const entry = createMemory(
     lesson,
@@ -181,16 +198,21 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
 }
 
 interface TenantScan {
-  /** The rows a lesson's migration target can weaken; every lesson written this batch joins them. */
+  /** The rows a lesson's migration target can weaken; every lesson written this batch joins
+   * them. */
   readonly live: MemoryEntry[];
   readonly fitSource: SchemaFitSource;
   /** Duplicate keys of what the caller can read. */
   readonly keys: Set<string>;
 }
 
-/** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the caller can read only the
- * tag counts, texts and duplicate keys that scoring a lesson needs. */
-async function scanTenant(ctx: Context, targets: readonly InvalidationTarget[], pageRows: number): Promise<TenantScan> {
+/** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the
+ * caller can read only the tag counts, texts and duplicate keys that scoring a lesson needs. */
+async function scanTenant(
+  ctx: Context,
+  targets: readonly InvalidationTarget[],
+  pageRows: number,
+): Promise<TenantScan> {
   const matches = invalidationMatcher(targets);
   const live: MemoryEntry[] = [];
   const tagCounts = new Map<string, number>();
@@ -217,12 +239,55 @@ async function writeLessons(
 ): Promise<LessonCounts> {
   const { tenantId } = ctx;
   const { profile } = opts;
-  const store = ctx.store;
-  const writes = store.lessonWrites;
-  // One pass serves the batch: invalidation matches against `live`, which follows every write below. Schema fit needs
-  // every readable row, and each lesson is scored against them as they were before the batch.
-  const targets = profile.full ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? []) : [];
-  const scan = profile.full ? await scanTenant(ctx, targets, opts.pageRows ?? TENANT_PAGE_ROWS) : undefined;
+  const { batch, fitSource } = await openLessonBatch(ctx, lessons, opts);
+  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
+  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the
+  // queue first.
+  const queue: QueuedLesson[] = [];
+  for (const lesson of lessons) {
+    const key = duplicateKey(lesson);
+    if (batch.keys.has(key)) {
+      batch.counts.skipped++;
+      continue;
+    }
+    const target = profile.full ? extractInvalidationTarget(lesson) : null;
+    if (target) await invalidateAfterLanding(batch, queue, target);
+    const entry = newLessonMemory(lesson, profile, {
+      tenantId,
+      config,
+      fitSource,
+      pathTags,
+      now: ctx.infra.clock(),
+    });
+    queue.push({ entry, key });
+    if (profile.full) batch.live.push(entry);
+    batch.keys.add(key);
+  }
+  await landLessons(batch, queue.splice(0));
+  return batch.counts;
+}
+
+interface OpenedLessonBatch {
+  readonly batch: LessonBatch;
+  readonly fitSource: SchemaFitSource | undefined;
+}
+
+async function openLessonBatch(
+  ctx: ContextWith<'lessonWrites'>,
+  lessons: readonly string[],
+  opts: LearnOptions,
+): Promise<OpenedLessonBatch> {
+  const { profile } = opts;
+  const writes = ctx.store.lessonWrites;
+  // One pass serves the batch: invalidation matches against `live`, which follows every write
+  // below. Schema fit needs every readable row, and each lesson is scored against them as they were
+  // before the batch.
+  const targets = profile.full
+    ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? [])
+    : [];
+  const scan = profile.full
+    ? await scanTenant(ctx, targets, opts.pageRows ?? TENANT_PAGE_ROWS)
+    : undefined;
   const live = scan?.live ?? [];
   const fitSource = scan?.fitSource;
   const batch: LessonBatch = {
@@ -233,34 +298,26 @@ async function writeLessons(
     full: profile.full,
     counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
   };
-  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the queue first.
-  const queue: QueuedLesson[] = [];
-  for (const lesson of lessons) {
-    const key = duplicateKey(lesson);
-    if (batch.keys.has(key)) {
-      batch.counts.skipped++;
-      continue;
-    }
-    const target = profile.full ? extractInvalidationTarget(lesson) : null;
-    if (target) {
-      await landLessons(batch, queue.splice(0));
-      const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
-      if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
-    }
-    const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags, now: ctx.infra.clock() });
-    queue.push({ entry, key });
-    if (profile.full) live.push(entry);
-    batch.keys.add(key);
-  }
+  return { batch, fitSource };
+}
+
+async function invalidateAfterLanding(
+  batch: LessonBatch,
+  queue: QueuedLesson[],
+  target: InvalidationTarget,
+): Promise<void> {
+  const { store, tenantId } = batch.ctx;
   await landLessons(batch, queue.splice(0));
-  return batch.counts;
+  const { invalidated } = await invalidateMatchingAmong(store, batch.live, target, tenantId);
+  if (invalidated > 0) {
+    batch.counts.invalidations.push({ from: target.from, count: invalidated });
+  }
 }
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
-/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
- * `options.onlyId` names. */
+/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or
+ * only the one `options.onlyId` names. */
 export async function memoryInvalidate(
   ctx: ContextWith<'learning' | 'lessonWrites'>,
   target: InvalidationTarget,

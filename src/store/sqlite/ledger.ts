@@ -24,26 +24,37 @@ import type { OnHandle } from './open.js';
 import { answered, bound } from './bound.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
-// One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
-// `items`; readers outside this repo depend on these rows, so their shape is fixed.
+// One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate
+// in basis points in `items`; readers outside this repo depend on these rows, so their shape is
+// fixed.
 /** The session's first stored arm, or null; never writes. */
-function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId: TenantId): PilotArm | null {
+function readPilotArm(
+  db: DatabaseSyncLike,
+  sessionId: string,
+  tenantId: TenantId,
+): PilotArm | null {
   const row = firstPilotArmHash(db, sessionId, tenantId);
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 
-/** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
-// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a handle opened in
-// that scope.
+interface EnsurePilotArmOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly rateBp: number;
+  readonly opts?: { ownTenantOnly?: boolean; now?: string };
+}
+
+/** The stored arm, else the hash arm written once; on any error the hash arm comes back
+ * unrecorded. */
+// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a
+// handle opened in that scope.
 function ensurePilotArm(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  rateBp: number,
-  opts: { ownTenantOnly?: boolean; now?: string } = {},
+  { tenantId, sessionId, rateBp, opts = {} }: EnsurePilotArmOptions,
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
-  // On one machine a session has one arm, so any tenant's row counts unless the caller holds only its own.
+  // On one machine a session has one arm, so any tenant's row counts unless the caller holds only
+  // its own.
   const readTenant = opts.ownTenantOnly ? tenantId : ALL_TENANTS;
   try {
     // A stored row is the common case after the first prompt, so it must not take the write lock.
@@ -71,22 +82,25 @@ function ensurePilotArm(
       { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
     );
   } catch (err) {
-    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
+    // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash
+    // arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`, errorFields(err));
     return hashed;
   }
 }
 
-// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.
+// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no
+// database.
 const SQLITE_CORRUPT = 11;
 const SQLITE_NOTADB = 26;
 
-/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`), or the write failed for
- * a reason nobody planned for (`unexpected`). */
+/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`),
+ * or the write failed for a reason nobody planned for (`unexpected`). */
 type LedgerSkip = 'busy' | 'absent' | 'unexpected';
 
-/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a hippo.db
- * SQLite cannot read; the command that owns the store reports that, and a hook must stay quiet about it. */
+/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a
+ * hippo.db SQLite cannot read; the command that owns the store reports that, and a hook must
+ * stay quiet about it. */
 function ledgerSkipClass<E>(error: E): LedgerSkip {
   if (isSqliteBusy(error)) return 'busy';
   const code = error instanceof Error && 'errcode' in error ? error.errcode : undefined;
@@ -94,8 +108,9 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
   return errorMessage(error).includes('no such table: token_ledger') ? 'absent' : 'unexpected';
 }
 
-/** Says why a ledger row did not land, at the level its class earns: busy warns once through noteStoreBusy, absent is
- * debug with no stack, unexpected warns once with the error class and stack. */
+/** Says why a ledger row did not land, at the level its class earns: busy warns once through
+ * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and
+ * stack. */
 function noteLedgerRowSkipped<E>(error: E, session: RequestStores | undefined): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {
@@ -106,11 +121,19 @@ function noteLedgerRowSkipped<E>(error: E, session: RequestStores | undefined): 
     log.debug(`token ledger row skipped: ${expectedErrorText(error)}`);
     return;
   }
-  log.warnThenDebug('token-ledger-row', `token ledger row skipped: ${errorMessage(error)}`, errorFields(error));
+  log.warnThenDebug(
+    'token-ledger-row',
+    `token ledger row skipped: ${errorMessage(error)}`,
+    errorFields(error),
+  );
 }
 
 /** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
-function recordRows(db: DatabaseSyncLike, turn: LedgerTurn, session: RequestStores | undefined): void {
+function recordRows(
+  db: DatabaseSyncLike,
+  turn: LedgerTurn,
+  session: RequestStores | undefined,
+): void {
   try {
     for (const use of turn.uses) {
       if (turn.perRow !== true) {
@@ -128,8 +151,13 @@ function recordRows(db: DatabaseSyncLike, turn: LedgerTurn, session: RequestStor
   }
 }
 
-/** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
-function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
+/** The delivery event on the rows' own handle, so it costs no second open; a failed write is
+ * logged. */
+function recordDelivery(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): void {
   try {
     writeDeliveryEventOnHandle(db, input, prune);
   } catch (error) {
@@ -137,14 +165,16 @@ function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: 
   }
 }
 
-/** The opener a ledger writes through, the session its busy skips tell, and its delivery prune schedule. */
+/** The opener a ledger writes through, the session its busy skips tell, and its delivery prune
+ * schedule. */
 interface LedgerWiring {
   readonly on: OnHandle;
   readonly session: RequestStores | undefined;
   readonly prune: DeliveryPruneSchedule;
 }
 
-/** Books a turn's rows, then its delivery event; a store that will not open still gets the event tried on its own. */
+/** Books a turn's rows, then its delivery event; a store that will not open still gets the event
+ * tried on its own. */
 function recordTurnVia({ on, session, prune }: LedgerWiring, turn: LedgerTurn): void {
   const { delivery } = turn;
   let opened = false;
@@ -161,7 +191,8 @@ function recordTurnVia({ on, session, prune }: LedgerWiring, turn: LedgerTurn): 
   }
 }
 
-/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on its ledger. */
+/** `read`, or `fallback` once the failure is noted on `session`, so a hook never fails on its
+ * ledger. */
 function noting<T>(session: RequestStores | undefined, read: () => T, fallback: () => T): T {
   try {
     return read();
@@ -171,7 +202,8 @@ function noting<T>(session: RequestStores | undefined, read: () => T, fallback: 
   }
 }
 
-/** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
+/** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the
+ * hash arm. */
 function pilotArm(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -181,14 +213,17 @@ function pilotArm(
 ): PilotArm {
   const { ownTenantOnly } = opts;
   return opts.write
-    ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
-    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ?? hashArm(sessionId, rateBp));
+    ? ensurePilotArm(db, { tenantId, sessionId, rateBp, opts: { ownTenantOnly } })
+    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ??
+        hashArm(sessionId, rateBp));
 }
 
-/** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since its delivery event is
- * tried again on its own when the open fails; a busy skip tells `session`, so a hook's later writes skip at once. */
+/** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since
+ * its delivery event is tried again on its own when the open fails; a busy skip tells `session`,
+ * so a hook's later writes skip at once. */
 export function sqliteLedger(on: OnHandle, session?: RequestStores): Ledger {
-  // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
+  // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on
+  // every event.
   const wiring: LedgerWiring = { on, session, prune: deliveryPruneSchedule() };
   return {
     recordTurn: (turn) => answered(() => recordTurnVia(wiring, turn)),

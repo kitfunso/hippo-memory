@@ -7,8 +7,8 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 import type { Context } from './types.js';
 import { DAY_MS } from '../base/util/time.js';
 
-/** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must
- * not fail the recall or context call. */
+/** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since
+ * a ledger failure must not fail the recall or context call. */
 export async function recordTokens(
   ctx: Context,
   surface: TokenSurface,
@@ -36,18 +36,24 @@ export async function recordTokens(
 /** Days a token or failure report covers when the caller names none. */
 export const DEFAULT_REPORT_WINDOW_DAYS = 30;
 
-/** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent, skipped as unchanged and
- * re-read, per surface, with session counts and mean tokens per session. */
+/** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent,
+ * skipped as unchanged and re-read, per surface, with session counts and mean tokens per
+ * session. */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): Promise<TokenSummary> {
   return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 
-/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
-export function failureSummary(ctx: Context, opts: { days?: number } = {}): Promise<FailureSummary> {
+/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default
+ * 30). */
+export function failureSummary(
+  ctx: Context,
+  opts: { days?: number } = {},
+): Promise<FailureSummary> {
   return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 
 function reportWindowStart(days: number | undefined, now: Date): string {
-  const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : DEFAULT_REPORT_WINDOW_DAYS;
+  const span =
+    days !== undefined && Number.isFinite(days) && days > 0 ? days : DEFAULT_REPORT_WINDOW_DAYS;
   return new Date(now.getTime() - span * DAY_MS).toISOString();
 }

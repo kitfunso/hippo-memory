@@ -1,5 +1,6 @@
-// The eval kit's snake_case forms. Frozen eval scripts read and write MemoryWire keys, so each function here wraps the
-// domain function its name starts with and converts at the edge; a script takes one by re-pointing its import line.
+// The eval kit's snake_case forms. Frozen eval scripts read and write MemoryWire keys, so each
+// function here wraps the domain function its name starts with and converts at the edge; a script
+// takes one by re-pointing its import line.
 
 import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
@@ -29,7 +30,10 @@ export type WireStrengthInputs = Pick<
   | 'outcome_negative'
 >;
 
-export function createMemoryWire(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryWire {
+export function createMemoryWire(
+  content: string,
+  options: Partial<CreateMemoryOptions> = {},
+): MemoryWire {
   return toWire(createMemory(content, options));
 }
 
@@ -51,7 +55,8 @@ export function calculateStrengthWire(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
-  // SAFETY: calculateStrength reads only the eight keys WireStrengthInputs carries; fromWire leaves the rest undefined.
+  // SAFETY: calculateStrength reads only the eight keys WireStrengthInputs carries; fromWire leaves
+  // the rest undefined.
   return calculateStrength(fromWire(entry as MemoryWire), now, options);
 }
 

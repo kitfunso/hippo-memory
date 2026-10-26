@@ -1,4 +1,5 @@
-// JSON-RPC 2.0 wire types, the error codes, and the one place a reply is built, so no transport words a reply twice.
+// JSON-RPC 2.0 wire types, the error codes, and the one place a reply is built, so no transport
+// words a reply twice.
 import type { JsonValue } from '../../base/util/json.js';
 
 export const PARSE_ERROR = -32700;
@@ -13,8 +14,8 @@ export interface McpRequest {
   jsonrpc: '2.0';
   id: number | string;
   method: string;
-  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of `params` (tools/call
-  // below) narrows via the isJson* predicates first.
+  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of
+  // `params` (tools/call below) narrows via the isJson* predicates first.
   params?: Record<string, JsonValue>;
 }
 

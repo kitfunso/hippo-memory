@@ -1,4 +1,5 @@
-// Opaque list cursors for the /v1 routes and the dashboard: base64url JSON of the last returned row's sort key and id.
+// Opaque list cursors for the /v1 routes and the dashboard: base64url JSON of the last returned
+// row's sort key and id.
 import { BadRequestError } from '../base/errors/api-errors.js';
 import type { KeysetPosition } from '../base/util/keyset.js';
 import { type JsonValue, isJsonString, isJsonNumber } from '../base/util/json.js';
@@ -38,12 +39,22 @@ function toPosition(
 }
 
 /**
- * The position a `?cursor=` names, or undefined when the param is absent; anything this server did not mint is a 400.
+ * The position a `?cursor=` names, or undefined when the param is absent; anything this server did
+ * not mint is a 400.
  */
-export function parseCursor(raw: string | null, keyPart: CursorPart, idPart: CursorPart): KeysetPosition | undefined {
+export function parseCursor(
+  raw: string | null,
+  keyPart: CursorPart,
+  idPart: CursorPart,
+): KeysetPosition | undefined {
   if (raw === null) return undefined;
-  const parsed = raw.length <= MAX_CURSOR_CHARS && CURSOR_RE.test(raw) ? decodeJson(raw) : undefined;
+  const parsed =
+    raw.length <= MAX_CURSOR_CHARS && CURSOR_RE.test(raw) ? decodeJson(raw) : undefined;
   const pos = toPosition(parsed, keyPart, idPart);
-  if (!pos) throw new BadRequestError('cursor is malformed; pass next_cursor from the previous page unchanged');
+  if (!pos) {
+    throw new BadRequestError(
+      'cursor is malformed; pass next_cursor from the previous page unchanged',
+    );
+  }
   return pos;
 }

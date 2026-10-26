@@ -1,6 +1,6 @@
-// The embedding index's write lock beside hippo.db: an O_EXCL "<pid>:<token>" file that every process on the folder
-// honours. Our token is a lock we leaked; our PID with another token is a live worker thread, unless the lock
-// predates this process (a reused PID).
+// The embedding index's write lock beside hippo.db: an O_EXCL "<pid>:<token>" file that every
+// process on the folder honours. Our token is a lock we leaked; our PID with another token is a
+// live worker thread, unless the lock predates this process (a reused PID).
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -33,8 +33,8 @@ function lockHeld(lockPath: string): boolean {
   return holderAlive(pid, () => mtimeMs >= Date.now() - process.uptime() * 1000);
 }
 
-/** Takes the lock under `hippoRoot`, breaking a dead holder's; the token to unlock with, or null while a live holder
- * has it. */
+/** Takes the lock under `hippoRoot`, breaking a dead holder's; the token to unlock with, or null
+ * while a live holder has it. */
 export function tryEmbedLock(hippoRoot: string): string | null {
   const lockPath = path.join(hippoRoot, EMBED_LOCK_FILE);
   for (;;) {
@@ -48,8 +48,9 @@ export function tryEmbedLock(hippoRoot: string): string | null {
   }
 }
 
-/** Only the waiter that creates the breaker file removes the dead holder's lock, and it re-reads the holder first: a
- * waiter that lost the race sees a lock another waiter has just retaken and leaves it. */
+/** Only the waiter that creates the breaker file removes the dead holder's lock, and it re-reads
+ * the holder first: a waiter that lost the race sees a lock another waiter has just retaken and
+ * leaves it. */
 function breakStaleLock(lockPath: string): boolean {
   const breaker = `${lockPath}.breaker`;
   try {

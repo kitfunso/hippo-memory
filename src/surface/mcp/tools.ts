@@ -1,15 +1,24 @@
 // Tool definitions and input schemas served by tools/list.
 
 import type { ToolInputSchema } from './tool-args.js';
-import { DEFAULT_RECALL_BUDGET, DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_RECALL_BUDGET,
+  DEFAULT_SEARCH_CANDIDATE_LIMIT,
+} from '../../base/rank/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../api/assemble.js';
 import { DEFAULT_DRILL_DOWN_LIMIT, MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
-import { DEFAULT_LEARN_DAYS, MAX_FRESH_RAW, MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import {
+  DEFAULT_LEARN_DAYS,
+  MAX_FRESH_RAW,
+  MAX_ID_LEN,
+  MAX_LIST_LIMIT,
+} from '../../base/util/limits.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
 // ── Tool definitions ──
 
-// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
+// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while
+// bounding one call's work.
 const FRESH_TAIL_NOTE = `(default ${DEFAULT_FRESH_TAIL_COUNT}). These are never evicted.`;
 const FRESH_TAIL_DESCRIPTION = `Recent raw rows always kept verbatim ${FRESH_TAIL_NOTE}`;
 const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
@@ -60,7 +69,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         fresh_tail_session_id: {
           type: 'string',
-          description: 'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide.',
+          description:
+            'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide.',
         },
         summarize_overflow: {
           type: 'boolean',
@@ -242,7 +252,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_status',
-    description: 'Check memory health: counts, strengths, at-risk memories, last consolidation time.',
+    description:
+      'Check memory health: counts, strengths, at-risk memories, last consolidation time.',
     inputSchema: {
       type: 'object' as const,
       properties: {},
@@ -269,20 +280,26 @@ export const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'hippo_resolve',
-    description: 'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
+    description:
+      'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         conflict_id: { type: 'number', description: 'The conflict ID to resolve' },
         keep: { type: 'string', description: 'ID of the memory to keep' },
-        forget: { type: 'boolean', description: 'Delete the loser instead of weakening (default: false)' },
+        forget: {
+          type: 'boolean',
+          description: 'Delete the loser instead of weakening (default: false)',
+        },
         rejectLoser: {
           type: 'boolean',
-          description: "Tombstone the loser's value too, so it refuses re-ingestion (implies removal; default: false)",
+          description:
+            "Tombstone the loser's value too, so it refuses re-ingestion (implies removal; default: false)",
         },
         reason: {
           type: 'string',
-          description: 'Reason recorded on the tombstone when rejectLoser is set (default: a conflict-context string)',
+          description:
+            'Reason recorded on the tombstone when rejectLoser is set (default: a conflict-context string)',
         },
       },
       required: ['conflict_id', 'keep'],
@@ -332,5 +349,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
-// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the same bad value.
-export const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([['hippo_recall', new Set(['scorer_window'])]]);
+// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the
+// same bad value.
+export const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([
+  ['hippo_recall', new Set(['scorer_window'])],
+]);

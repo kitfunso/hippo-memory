@@ -1,6 +1,7 @@
-/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency default, OpenAI / Voyage /
- * Cohere are opt-in via native `fetch`. Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored
- * identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex. `embed()` MAY throw on hard transport/auth
+/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency
+ * default, OpenAI / Voyage / Cohere are opt-in via native `fetch`. Local `id` is the bare model
+ * string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>`
+ * (`embeddingIndexIdentity`), so changes reindex. `embed()` MAY throw on hard transport/auth
  * failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
 
 import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../base/embeddings/local.js';
@@ -44,7 +45,8 @@ const DEFAULT_API_BATCH_SIZE = 64;
 /** Per-request timeout for API embedding calls. A provider/proxy that accepts the connection but never responds must
  *  not hang embed/recall indefinitely. */
 const REQUEST_TIMEOUT_MS = 30_000;
-// Under a caller's deadline a longer Retry-After hands the reply back at once; the remote rerankers use the same cap.
+// Under a caller's deadline a longer Retry-After hands the reply back at once; the remote rerankers
+// use the same cap.
 const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
@@ -60,9 +62,13 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
   isAvailable(): boolean {
     return this.enabled && this.embedder.isAvailable();
   }
-  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
-    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared
-    // pipeline.
+  async embed(
+    texts: string[],
+    role?: EmbeddingRole,
+    call: EmbedCallOptions = {},
+  ): Promise<number[][]> {
+    // A model that cannot load fails the call, as an API outage does; items then run one at a time
+    // on the shared pipeline.
     if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
@@ -114,8 +120,8 @@ const API_PROVIDER_SPECS = {
     // OpenAI has no asymmetric query/passage input type for embeddings.
     buildBody: (model, texts) => ({ model, input: texts }),
     extractVectors: (json) => {
-      // SAFETY: OpenAI's documented embeddings envelope; embedChunk validates vector count and non-emptiness afterward,
-      // so a malformed response degrades to [] here and throws there.
+      // SAFETY: OpenAI's documented embeddings envelope; embedChunk validates vector count and
+      // non-emptiness afterward, so a malformed response degrades to [] here and throws there.
       const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
     },
@@ -131,8 +137,8 @@ const API_PROVIDER_SPECS = {
       return body;
     },
     extractVectors: (json) => {
-      // SAFETY: Voyage's documented embeddings envelope; embedChunk validates vector count and non-emptiness afterward,
-      // so a malformed response degrades to [] here and throws there.
+      // SAFETY: Voyage's documented embeddings envelope; embedChunk validates vector count and
+      // non-emptiness afterward, so a malformed response degrades to [] here and throws there.
       const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
     },
@@ -164,7 +170,8 @@ function redact(text: string, secret: string | undefined): string {
   return text.split(secret).join('***');
 }
 
-/** A cause with the key cut out: the caught error's own text or cause chain can echo the Authorization header. */
+/** A cause with the key cut out: the caught error's own text or cause chain can echo the
+ * Authorization header. */
 function redactedCause<E>(err: E, key: string | undefined): Error {
   const copy = new Error(redact(errorMessage(err), key));
   if (err instanceof Error) copy.name = err.name;
@@ -177,14 +184,22 @@ function l2normalize(v: number[]): number[] {
   return v.map((x) => x / length);
 }
 
+interface ApiProviderSettings {
+  readonly kind: 'openai' | 'voyage' | 'cohere';
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly batchSize: number;
+  readonly enabled: boolean;
+}
+
 class ApiEmbeddingProvider implements EmbeddingProvider {
-  constructor(
-    readonly kind: 'openai' | 'voyage' | 'cohere',
-    readonly model: string,
-    private readonly baseUrl: string,
-    private readonly batchSize: number,
-    private readonly enabled: boolean = true,
-  ) {}
+  readonly kind: 'openai' | 'voyage' | 'cohere';
+  readonly model: string;
+
+  constructor(private readonly settings: ApiProviderSettings) {
+    this.kind = settings.kind;
+    this.model = settings.model;
+  }
 
   get id(): string {
     return `${this.kind}:${this.model}`;
@@ -195,10 +210,14 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   isAvailable(): boolean {
-    return this.enabled && !!envByName(this.keyEnv)?.trim();
+    return this.settings.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
-  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
+  async embed(
+    texts: string[],
+    role?: EmbeddingRole,
+    call: EmbedCallOptions = {},
+  ): Promise<number[][]> {
     if (texts.length === 0) return [];
     const key = envByName(this.keyEnv)?.trim();
     if (!key) {
@@ -210,8 +229,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     }
 
     const out: number[][] = [];
-    for (let i = 0; i < texts.length; i += this.batchSize) {
-      const chunk = texts.slice(i, i + this.batchSize);
+    for (let i = 0; i < texts.length; i += this.settings.batchSize) {
+      const chunk = texts.slice(i, i + this.settings.batchSize);
       const vecs = await this.embedChunk(chunk, key, role, call.signal);
       for (const v of vecs) out.push(v.length > 0 ? l2normalize(v) : v);
     }
@@ -229,25 +248,35 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
-    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract violation, not a
-    // per-item miss: throw so a reindex aborts atomically and the explicit backfill surfaces it, instead of saving
-    // []-padded rows.
+    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract
+    // violation, not a per-item miss: throw so a reindex aborts atomically and the explicit
+    // backfill surfaces it, instead of saving []-padded rows.
     if (vectors.length !== chunk.length) {
       throw new Error(
-        redact(`${this.kind} embeddings returned ${vectors.length} vectors for ${chunk.length} inputs`, key),
+        redact(
+          `${this.kind} embeddings returned ${vectors.length} vectors for ${chunk.length} inputs`,
+          key,
+        ),
       );
     }
     for (let i = 0; i < vectors.length; i++) {
       if (!vectors[i] || vectors[i].length === 0) {
-        throw new Error(redact(`${this.kind} embeddings returned an empty vector at index ${i}`, key));
+        throw new Error(
+          redact(`${this.kind} embeddings returned an empty vector at index ${i}`, key),
+        );
       }
     }
     return vectors;
   }
 
-  private async postChunk(chunk: string[], key: string, role?: EmbeddingRole, signal?: AbortSignal): Promise<Response> {
+  private async postChunk(
+    chunk: string[],
+    key: string,
+    role?: EmbeddingRole,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     const spec = API_PROVIDER_SPECS[this.kind];
-    const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
+    const url = `${this.settings.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     try {
       return await fetchWithRetry(
         url,
@@ -262,8 +291,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         },
         {
           timeoutMs: REQUEST_TIMEOUT_MS,
-          // Embedding the same text twice changes nothing on the far side, so a dropped connection or a stalled attempt
-          // is replayed.
+          // Embedding the same text twice changes nothing on the far side, so a dropped connection
+          // or a stalled attempt is replayed.
           retryTransport: true,
           maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
         },
@@ -276,7 +305,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  /** The body of an OK reply; any other status, or a body that is not JSON, throws with the key cut out. */
+  /** The body of an OK reply; any other status, or a body that is not JSON, throws with the key
+   * cut out. */
   private async responseJson(resp: Response, key: string, inputs: number): Promise<JsonValue> {
     if (!resp.ok) {
       let detail = '';
@@ -284,15 +314,24 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
       } catch (err) {
         // The error thrown below already carries the status; the body is only extra detail.
-        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`, errorFields(err));
+        log.debug(
+          `${this.kind} embeddings error body unreadable: ${errorMessage(err)}`,
+          errorFields(err),
+        );
       }
       throw new Error(
-        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),
+        redact(
+          `${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`,
+          key,
+        ),
       );
     }
 
     try {
-      return await readCappedJson(resp, EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT);
+      return await readCappedJson(
+        resp,
+        EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT,
+      );
     } catch (err) {
       const msg = errorMessage(err);
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), {
@@ -306,7 +345,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
 function validateBaseUrl(url: string | undefined, fallback: string): string {
   const candidate = url?.trim();
   if (!candidate) return fallback;
-  parseOutboundUrl(candidate, 'config.embeddings.apiBaseUrl');
+  parseOutboundUrl(candidate, { setting: 'config.embeddings.apiBaseUrl' });
   return candidate;
 }
 
@@ -315,27 +354,32 @@ export interface ResolveProviderOptions {
   model?: string;
   /** Explicit provider override (mainly for tests). */
   provider?: EmbeddingProviderKind;
-  /** The Transformers.js package a local provider loads from, with its own models; the process's shared embedder when
-   * unset. */
+  /** The Transformers.js package a local provider loads from, with its own models; the process's
+   * shared embedder when unset. */
   transformers?: LocalTransformers;
 }
 
-/** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it
- * surfaces via `isAvailable()`); only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so
- * hot-path callers wrap it. */
-export function resolveEmbeddingProvider(cfg: EmbeddingsConfig, opts: ResolveProviderOptions = {}): EmbeddingProvider {
+/** Build the active embedding provider from config (or an explicit override). A missing key
+ * never throws here (it surfaces via `isAvailable()`); only an invalid config (e.g. insecure
+ * apiBaseUrl) throws, deliberately loud, so hot-path callers wrap it. */
+export function resolveEmbeddingProvider(
+  cfg: EmbeddingsConfig,
+  opts: ResolveProviderOptions = {},
+): EmbeddingProvider {
   const requested = opts.provider ?? cfg.provider ?? 'local';
-  // An explicit embeddings.enabled=false hard-disables embedding for BOTH local and API providers; for API this
-  // prevents unwanted paid off-box calls.
+  // An explicit embeddings.enabled=false hard-disables embedding for BOTH local and API providers;
+  // for API this prevents unwanted paid off-box calls.
   const enabled = cfg.enabled !== false;
 
   if (requested === 'local') {
-    const embedder = opts.transformers ? createLocalEmbedder(opts.transformers) : sharedLocalEmbedder;
+    const embedder = opts.transformers
+      ? createLocalEmbedder(opts.transformers)
+      : sharedLocalEmbedder;
     return new LocalEmbeddingProvider(resolveEmbeddingModel(cfg, opts.model), enabled, embedder);
   }
   if (!isApiProviderKind(requested)) {
-    // Fail loud on a typo'd provider rather than silently using local (which would reindex with the local model and
-    // clobber the intended identity).
+    // Fail loud on a typo'd provider rather than silently using local (which would reindex with the
+    // local model and clobber the intended identity).
     throw new Error(
       `Unknown embeddings.provider '${requested}'. Valid values: local, ` +
         `${API_PROVIDER_KINDS.filter((k) => k !== 'local').join(', ')}.`,
@@ -344,14 +388,17 @@ export function resolveEmbeddingProvider(cfg: EmbeddingsConfig, opts: ResolvePro
 
   const kind = requested;
   const spec = API_PROVIDER_SPECS[kind];
-  // If no API model was chosen (config left the local default in place), fall back to the provider's flagship model
-  // rather than POSTing a local model id.
+  // If no API model was chosen (config left the local default in place), fall back to the
+  // provider's flagship model rather than POSTing a local model id.
   const requestedModel = (opts.model ?? cfg.model)?.trim();
-  const model = requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : spec.defaultModel;
+  const model =
+    requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL
+      ? requestedModel
+      : spec.defaultModel;
   const baseUrl = validateBaseUrl(cfg.apiBaseUrl, spec.defaultBaseUrl);
   const batchSize =
     cfg.batchSize !== undefined && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0
       ? cfg.batchSize
       : DEFAULT_API_BATCH_SIZE;
-  return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
+  return new ApiEmbeddingProvider({ kind, model, baseUrl, batchSize, enabled });
 }

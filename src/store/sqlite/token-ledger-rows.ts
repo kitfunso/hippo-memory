@@ -1,4 +1,5 @@
-// SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction and the arithmetic.
+// SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction
+// and the arithmetic.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import { placeholders } from '../../db/sql.js';
@@ -22,7 +23,16 @@ export function insertTokenRow(db: DatabaseSyncLike, row: TokenRowInput): void {
     db,
     `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(row.ts, row.tenantId, row.sessionId, row.surface, row.event, row.items, row.tokens, row.blockHash);
+  ).run(
+    row.ts,
+    row.tenantId,
+    row.sessionId,
+    row.surface,
+    row.event,
+    row.items,
+    row.tokens,
+    row.blockHash,
+  );
 }
 
 export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): void {
@@ -36,12 +46,17 @@ interface LedgerAnchor {
   block_hash: string | null;
 }
 
+/** One session's ledger rows on one surface. */
+interface LedgerSurfaceOptions {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly surface: string;
+}
+
 /** The session's newest inject or reset row on a surface. */
 export function latestInjectOrReset(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  surface: string,
+  { tenantId, sessionId, surface }: LedgerSurfaceOptions,
 ): LedgerAnchor | undefined {
   return cachedStatement(
     db,
@@ -53,9 +68,7 @@ export function latestInjectOrReset(
 
 export function countSkipsAfter(
   db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  surface: string,
+  { tenantId, sessionId, surface }: LedgerSurfaceOptions,
   afterId: number,
 ): { n: number } | undefined {
   return cachedStatement(
@@ -76,7 +89,11 @@ interface SurfaceTotalsRow {
   sessions: number;
 }
 
-export function surfaceTotals(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SurfaceTotalsRow[] {
+export function surfaceTotals(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SurfaceTotalsRow[] {
   return cachedStatement(
     db,
     `SELECT surface,
@@ -100,7 +117,8 @@ interface SessionTotalsRow {
   tokens: number | null;
 }
 
-/** Window-wide session counts; `rereadSurfaces` are the hook surfaces whose sessions count as hook sessions. */
+/** Window-wide session counts; `rereadSurfaces` are the hook surfaces whose sessions count as
+ * hook sessions. */
 export function sessionTotals(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -127,7 +145,11 @@ interface SessionTokenRow {
   injections: number;
 }
 
-export function sessionTokenRows(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokenRow[] {
+export function sessionTokenRows(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SessionTokenRow[] {
   return cachedStatement(
     db,
     `SELECT session_id,
@@ -161,10 +183,10 @@ export function injectedBlocks(
 }
 
 export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
-  cachedStatement(db, `DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`).run(
-    tenantId,
-    sessionId,
-  );
+  cachedStatement(
+    db,
+    `DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`,
+  ).run(tenantId, sessionId);
 }
 
 /** The first stored pilot arm hash for a session in `tenantId`. */

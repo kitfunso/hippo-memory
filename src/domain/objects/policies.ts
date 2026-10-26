@@ -15,7 +15,11 @@ import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 
-export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>(['active', 'superseded', 'closed']);
+export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
+  'active',
+  'superseded',
+  'closed',
+]);
 
 export interface SavePolicyOptions {
   policyName: string;
@@ -44,23 +48,41 @@ export interface ListPoliciesOptions {
 export function normalizePolicyDate(input: string, label: string = 'date'): string {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestError(`policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`);
+    throw new BadRequestError(
+      `policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`,
+    );
   }
   return d.toISOString();
 }
 
-/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to > valid_from. */
-export function validatePolicyDates(validFromRaw: string | undefined, validToRaw: string | undefined, nowIso: string) {
-  const validFrom = validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
-  const validTo = validToRaw !== undefined && validToRaw !== null ? normalizePolicyDate(validToRaw, 'valid_to') : null;
+/** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to >
+ * valid_from. */
+export function validatePolicyDates(
+  validFromRaw: string | undefined,
+  validToRaw: string | undefined,
+  nowIso: string,
+) {
+  const validFrom =
+    validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
+  const validTo =
+    validToRaw !== undefined && validToRaw !== null
+      ? normalizePolicyDate(validToRaw, 'valid_to')
+      : null;
   if (validTo !== null && validTo <= validFrom) {
-    throw new BadRequestError(`policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`);
+    throw new BadRequestError(
+      `policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`,
+    );
   }
   return { validFrom, validTo };
 }
 
 /** Recall-surface content for the memory mirror: name + rule + effective range. */
-function buildPolicyContent(policyName: string, policyText: string, validFrom: string, validTo: string | null): string {
+function buildPolicyContent({
+  policyName,
+  policyText,
+  validFrom,
+  validTo,
+}: Pick<Policy, 'policyName' | 'policyText' | 'validFrom' | 'validTo'>): string {
   const range = validTo ? `${validFrom} to ${validTo}` : `${validFrom} onward`;
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
@@ -75,12 +97,13 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
     const policyName = requireText(opts.policyName, MAX_SHORT_FIELD_LEN, 'policyName');
     const policyText = requireText(opts.policyText, MAX_SHORT_FIELD_LEN, 'policyText');
     const at = now.toISOString();
-    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side, because
-    // backdating valid_from to midnight would report the policy in force earlier that day.
+    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on
+    // the read side, because backdating valid_from to midnight would report the policy in force
+    // earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
       fields: { policyName, policyText, validFrom, validTo },
-      content: buildPolicyContent(policyName, policyText, validFrom, validTo),
+      content: buildPolicyContent({ policyName, policyText, validFrom, validTo }),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesPolicyId,
       changeSummary: opts.changeSummary,
@@ -89,7 +112,11 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
   },
 };
 
-export function loadPolicies(objects: Objects, tenantId: string, opts: ListPoliciesOptions = {}): Promise<Policy[]> {
+export function loadPolicies(
+  objects: Objects,
+  tenantId: string,
+  opts: ListPoliciesOptions = {},
+): Promise<Policy[]> {
   return listObjects(objects, POLICY, tenantId, opts);
 }
 
@@ -112,7 +139,8 @@ function inForceQuery(
   opts: { name?: string; limit?: number },
 ): PoliciesInForceQuery {
   assertTenantId('policiesAsOf', tenantId);
-  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is used as given.
+  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is
+  // used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')
     : normalizePolicyDate(asOfDate, 'asOfDate');

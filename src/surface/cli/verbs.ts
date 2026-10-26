@@ -1,4 +1,5 @@
-// Every CLI verb, one row each: dispatch, flags, help and the help listing's order all read this table.
+// Every CLI verb, one row each: dispatch, flags, help and the help listing's order all read this
+// table.
 
 import { MEMORY_VERBS } from './verbs/memory.js';
 import { HEALTH_VERBS } from './verbs/health.js';
@@ -19,8 +20,8 @@ export interface ServedGroups {
 /** The store the CLI opens: hippo.db, which sets every optional group. */
 export const CLI_STORE: ServedGroups = { kind: 'sqlite', groups: OPTIONAL_GROUPS };
 
-/** Throws the StoreNotPortedError an unported path throws when `store` lacks a group the verb needs; main asks before
- * the verb opens anything. */
+/** Throws the StoreNotPortedError an unported path throws when `store` lacks a group the verb
+ * needs; main asks before the verb opens anything. */
 export function assertVerbPorted(row: VerbRow, store: ServedGroups): void {
   const missing = row.needs?.find((group) => !store.groups.includes(group));
   if (missing !== undefined) throw new StoreNotPortedError(store.kind, missing);

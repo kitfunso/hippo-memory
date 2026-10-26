@@ -1,7 +1,9 @@
-// hippo.db's own refusals: each is a StoreBlockedError, so the layers above map it to 501 by the base class alone.
+// hippo.db's own refusals: each is a StoreBlockedError, so the layers above map it to 501 by the
+// base class alone.
 import { StoreBlockedError } from '../base/util/store-blocked.js';
 
-/** A hippo.db open refused: a folder marked for another store, or a store whose SQLite work runs on worker threads. */
+/** A hippo.db open refused: a folder marked for another store, or a store whose SQLite work runs
+ * on worker threads. */
 export class SqliteBlockedError extends StoreBlockedError {
   constructor(storeKind: string, message: string) {
     super(storeKind, message);
@@ -9,7 +11,8 @@ export class SqliteBlockedError extends StoreBlockedError {
   }
 }
 
-/** A hippo.db open in a folder whose marker names the store that holds its memories, from the CLI as from a request. */
+/** A hippo.db open in a folder whose marker names the store that holds its memories, from the
+ * CLI as from a request. */
 export class OtherStoreFolderError extends SqliteBlockedError {
   constructor(
     storeKind: string,

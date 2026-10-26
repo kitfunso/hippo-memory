@@ -1,15 +1,16 @@
 import type { Route, RouteRequest } from './types.js';
 import { tryDecodeUri } from '../../base/util/expected-errors.js';
 
-/** What the lookup reads of a row: its method, and an exact path when it has one. The /v1 and dashboard tables both
- * fit. */
+/** What the lookup reads of a row: its method, and an exact path when it has one. The /v1 and
+ * dashboard tables both fit. */
 type LookupRow = { readonly method: string } & (
   | { readonly path: string }
   | { readonly pattern: string }
   | { readonly regex: RegExp }
 );
 
-/** A route's run for one request, bound to the path's params, or null when method or path differ. */
+/** A route's run for one request, bound to the path's params, or null when method or path
+ * differ. */
 export type RouteMatcher<T = Route, Q = RouteRequest> = (
   route: T,
   method: string,
@@ -23,7 +24,10 @@ export interface RouteMatch<T = Route, Q = RouteRequest> {
 }
 
 /** Finds the first row whose method and path match a request. */
-export type RouteLookup<T = Route, Q = RouteRequest> = (method: string, path: string) => RouteMatch<T, Q> | null;
+export type RouteLookup<T = Route, Q = RouteRequest> = (
+  method: string,
+  path: string,
+) => RouteMatch<T, Q> | null;
 
 function exactPath(row: LookupRow): string | undefined {
   return 'path' in row ? row.path : undefined;
@@ -42,19 +46,22 @@ function firstMatch<T, Q>(
   return null;
 }
 
-/** Whether a `%` escape in the path fails to decode, which is what makes a pattern row's path matcher throw. */
+/** Whether a `%` escape in the path fails to decode, which is what makes a pattern row's path
+ * matcher throw. */
 function hasMalformedEscape(path: string): boolean {
   if (!path.includes('%')) return false;
   return tryDecodeUri(path) === undefined;
 }
 
-/** First-match lookup: a literal path is one Map read, any other tests only its own method's pattern and regex rows in
- * table order; a malformed escape keeps the walk over every method, since the matcher throws on any of them. */
+/** First-match lookup: a literal path is one Map read, any other tests only its own method's
+ * pattern and regex rows in table order; a malformed escape keeps the walk over every method,
+ * since the matcher throws on any of them. */
 export function routeLookup<T extends LookupRow = Route, Q = RouteRequest>(
   rows: readonly T[],
   matches: RouteMatcher<T, Q>,
 ): RouteLookup<T, Q> {
-  // A literal key holds the row the whole-table walk picks, so a pattern row above a literal one still wins.
+  // A literal key holds the row the whole-table walk picks, so a pattern row above a literal one
+  // still wins.
   const literal: ReadonlyMap<string, T> = new Map(
     rows.flatMap((row): [string, T][] => {
       const path = exactPath(row);
@@ -64,10 +71,17 @@ export function routeLookup<T extends LookupRow = Route, Q = RouteRequest>(
   );
   const walked = rows.filter((row) => exactPath(row) === undefined);
   const walkedByMethod = new Map<string, T[]>();
-  for (const row of walked) walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
+  for (const row of walked) {
+    walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
+  }
   return (method, path) => {
     const route = literal.get(`${method} ${path}`);
     if (route !== undefined) return { route, run: matches(route, method, path)! };
-    return firstMatch(hasMalformedEscape(path) ? walked : (walkedByMethod.get(method) ?? []), matches, method, path);
+    return firstMatch(
+      hasMalformedEscape(path) ? walked : (walkedByMethod.get(method) ?? []),
+      matches,
+      method,
+      path,
+    );
   };
 }

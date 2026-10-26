@@ -14,12 +14,18 @@ import { MAX_DATE_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/uti
 import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';
 import type { KindRoutes, ObjectRequest } from './kind-routes.js';
-import { getString, isSetMember, parseJsonBody, parseLimitParam, requiredString } from '../validation.js';
+import {
+  getString,
+  isSetMember,
+  parseJsonBody,
+  parseLimitParam,
+  requiredString,
+} from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../../base/util/json.js';
 
-// Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
-// against VALID_CLOSURE_STATES.
-// DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
+// Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped;
+// closure_state is validated against VALID_CLOSURE_STATES. DoS caps: claim MAX_SHORT_FIELD_LEN
+// chars, closureNote 2048.
 async function handleCreatePrediction({ req, res, ctx }: ObjectRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = requiredString(body, 'claim', { max: MAX_SHORT_FIELD_LEN, untrimmed: true });
@@ -38,20 +44,29 @@ async function handleCreatePrediction({ req, res, ctx }: ObjectRequest): Promise
     throw new HttpError(400, 'targetDate must be an ISO date string');
   }
   const targetDateValue = getString(body, 'targetDate', MAX_DATE_LEN);
-  const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
+  const claimed = {
+    classTag,
+    claimText: claim,
+    estimateValue,
+    estimateUnit,
+    targetDate: targetDateValue,
+  };
   const prediction = await predictionRecord(ctx, claimed);
   sendJson(res, 201, { prediction });
 }
 
 /**
- * Which rows a list reads; a status other than all or open needs a class, as no store reads one closed state across
- * classes.
+ * Which rows a list reads; a status other than all or open needs a class, as no store reads one
+ * closed state across classes.
  */
 function listFilter(classTag: string | undefined, status: string): PredictionFilter {
   if (status === 'all') return { classTag };
   if (status === 'open') return { classTag, closureState: 'open' };
   if (!isSetMember(VALID_CLOSURE_STATES, status)) {
-    throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
+    throw new HttpError(
+      400,
+      `status must be one of: open | closed | closed-unknown | all (got "${status}")`,
+    );
   }
   if (!classTag) {
     throw new HttpError(400, 'status filter (non-open) requires class param');
@@ -64,13 +79,17 @@ async function handleListPredictions({ res, ctx, query }: ObjectRequest): Promis
   const status = query.get('status') ?? 'all';
   const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const predictions = await predictionList(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
+  const predictions = await predictionList(ctx, {
+    ...listFilter(classTag, status),
+    limit: limit + 1,
+    after,
+  });
   const page = pageOf(predictions, limit, byCreatedAt);
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
 
-// Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch order cannot matter
-// ('stats' is not a number, but routing it first is safer).
+// Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch
+// order cannot matter ('stats' is not a number, but routing it first is safer).
 async function handlePredictionStats({ res, ctx, query }: ObjectRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {

@@ -158,7 +158,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Retired idea',
     });
-    await closeObject(objectsAt(home), DECISION, 'default', dc.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: dc.id, actor: CLI_ACTOR, now: evalNow() });
     // one of each other type
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       policyName: 'Data retention',
@@ -236,7 +236,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       decisionText: 'replacement',
       supersedesDecisionId: d1.id,
     });
-    await closeObject(objectsAt(home), DECISION, 'default', d2.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: d2.id, actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
     // d1 (superseded) extracted; d2 (closed) excluded -> no relation (successor missing)
     expect(r.byType.decision).toBe(1);
@@ -250,7 +250,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     await extractGraph(sqliteStore(home), 'default');
     expect(entityCount(home)).toBe(1);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'second' });
-    await closeObject(objectsAt(home), DECISION, 'default', d.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: d.id, actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType.decision).toBe(1); // 'second' present, 'first' (now closed) gone
     expect(loadEntities(home, 'default', { limit: 100 }).map((e) => e.name)).toEqual(['second']);
@@ -407,7 +407,12 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     let pauses = 0;
     const closeOlderOnce = async (): Promise<void> => {
       if (pauses++ === 0) {
-        await closeObject(objectsAt(home), DECISION, 'default', older.id, { actor: CLI_ACTOR, now: evalNow() });
+        await closeObject(objectsAt(home), DECISION, {
+          tenantId: 'default',
+          id: older.id,
+          actor: CLI_ACTOR,
+          now: evalNow(),
+        });
       }
       await yieldOnce();
     };

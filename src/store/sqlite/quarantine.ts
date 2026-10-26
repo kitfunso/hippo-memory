@@ -1,4 +1,5 @@
-// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with their audit rows.
+// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
+// their audit rows.
 import { appendAuditEvents } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -29,7 +30,8 @@ import { handleStamp } from './handle-clock.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 interface QuarantineDbRow {
   tenant_id: string;
   memory_id: string;
@@ -41,7 +43,8 @@ interface QuarantineDbRow {
   decided_by: string | null;
 }
 
-const SELECT_COLUMNS = 'tenant_id, memory_id, original_scope, reason, status, quarantined_at, decided_at, decided_by';
+const SELECT_COLUMNS =
+  'tenant_id, memory_id, original_scope, reason, status, quarantined_at, decided_at, decided_by';
 
 function fromDbRow(row: QuarantineDbRow): QuarantineRow {
   return {
@@ -49,7 +52,8 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
     memoryId: row.memory_id,
     originalScope: row.original_scope,
     reason: row.reason,
-    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of status.
+    // SAFETY: the quarantine INSERT and this module's UPDATE statements are the only writers of
+    // status.
     status: row.status as QuarantineStatus,
     quarantinedAt: row.quarantined_at,
     decidedAt: row.decided_at,
@@ -57,7 +61,11 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
   };
 }
 
-function readQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
+function readQuarantineRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  memoryId: string,
+): QuarantineRow | null {
   const row = cachedStatement(
     db,
     `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`,
@@ -65,15 +73,24 @@ function readQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: str
   return row ? fromDbRow(row) : null;
 }
 
+interface ListQuarantineRowsOptions {
+  readonly tenantId: string;
+  readonly status?: QuarantineStatus | 'all';
+  readonly limit?: number;
+  readonly afterRow?: KeysetPosition;
+}
+
 function listQuarantineRows(
   db: DatabaseSyncLike,
-  tenantId: string,
-  status: QuarantineStatus | 'all' = 'pending',
-  limit = QUARANTINE_LIST_LIMIT,
-  afterRow?: KeysetPosition,
+  {
+    tenantId,
+    status = 'pending',
+    limit = QUARANTINE_LIST_LIMIT,
+    afterRow,
+  }: ListQuarantineRowsOptions,
 ): QuarantineRow[] {
-  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the
-  // queue.
+  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history,
+  // drop it from the queue.
   const live =
     status === 'pending'
       ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = ' +
@@ -103,7 +120,8 @@ interface RecordQuarantineOptions {
   actor: string;
 }
 
-/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write transaction. */
+/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write
+ * transaction. */
 export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
   cachedStatement(
     db,
@@ -121,7 +139,17 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
   ]);
 }
 
-function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
+/** Who decides on which tenant's quarantined memory. */
+interface DecisionOptions {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly actor: string;
+}
+
+function approveQuarantineRow(
+  db: DatabaseSyncLike,
+  { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
+): void {
   cachedStatement(
     db,
     `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
@@ -129,7 +157,10 @@ function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: 
   ).run(handleStamp(db), decidedBy, tenantId, memoryId);
 }
 
-function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
+function rejectQuarantineRow(
+  db: DatabaseSyncLike,
+  { tenantId, id: memoryId, actor: decidedBy }: DecisionOptions,
+): void {
   cachedStatement(
     db,
     `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
@@ -143,7 +174,7 @@ function listQuarantined(
   tenantId: string,
   { status, limit, after }: QuarantineListQuery,
 ): QuarantinedMemory[] {
-  const rows = listQuarantineRows(db, tenantId, status, limit, after);
+  const rows = listQuarantineRows(db, { tenantId, status, limit, afterRow: after });
   const entries = readEntriesByIds(
     db,
     rows.map((row) => row.memoryId),
@@ -153,70 +184,100 @@ function listQuarantined(
 }
 
 /** The pending record, or why a decision on `id` is refused. */
-function pendingOrRefusal(db: DatabaseSyncLike, tenantId: string, id: string): QuarantineRow | QuarantineRefusal {
+function pendingOrRefusal(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+): QuarantineRow | QuarantineRefusal {
   const row = readQuarantineRow(db, tenantId, id);
   if (!row) return { outcome: 'not_quarantined' };
   if (row.status !== 'pending') return { outcome: 'already_decided', status: row.status };
   return row;
 }
 
-/** Puts the memory back under its original scope; the scope guard refuses a row moved since it was quarantined. */
-function approveQuarantined(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineApproval {
-  return withWriteScopeOr<QuarantineApproval, QuarantineApproval>(db, 'quarantine_approve', (rollback) => {
-    const row = pendingOrRefusal(db, tenantId, id);
-    if ('outcome' in row) return rollback(row);
-    const quarantineScope = quarantineScopeFor(row.originalScope);
-    const updated = cachedStatement(
-      db,
-      `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
-    ).run(row.originalScope, id, tenantId, quarantineScope);
-    if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
-    approveQuarantineRow(db, tenantId, id, actor);
-    appendAuditEvents(db, [
-      {
-        tenantId,
-        actor,
-        op: 'quarantine_approve',
-        targetId: id,
-        metadata: { originalScope: row.originalScope },
-      },
-    ]);
-    return { outcome: 'approved' };
-  });
+/** Puts the memory back under its original scope; the scope guard refuses a row moved since it
+ * was quarantined. */
+function approveQuarantined(
+  db: DatabaseSyncLike,
+  { tenantId, id, actor }: DecisionOptions,
+): QuarantineApproval {
+  return withWriteScopeOr<QuarantineApproval, QuarantineApproval>(
+    db,
+    'quarantine_approve',
+    (rollback) => {
+      const row = pendingOrRefusal(db, tenantId, id);
+      if ('outcome' in row) return rollback(row);
+      const quarantineScope = quarantineScopeFor(row.originalScope);
+      const updated = cachedStatement(
+        db,
+        `UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`,
+      ).run(row.originalScope, id, tenantId, quarantineScope);
+      if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
+      approveQuarantineRow(db, { tenantId, id, actor });
+      appendAuditEvents(db, [
+        {
+          tenantId,
+          actor,
+          op: 'quarantine_approve',
+          targetId: id,
+          metadata: { originalScope: row.originalScope },
+        },
+      ]);
+      return { outcome: 'approved' };
+    },
+  );
 }
 
 /** Marks the record rejected; the memory row is left as stored. */
-function rejectQuarantined(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineRejection {
-  return withWriteScopeOr<QuarantineRejection, QuarantineRejection>(db, 'quarantine_reject', (rollback) => {
-    const row = pendingOrRefusal(db, tenantId, id);
-    if ('outcome' in row) return rollback(row);
-    rejectQuarantineRow(db, tenantId, id, actor);
-    appendAuditEvents(db, [{ tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} }]);
-    return { outcome: 'rejected' };
-  });
+function rejectQuarantined(
+  db: DatabaseSyncLike,
+  { tenantId, id, actor }: DecisionOptions,
+): QuarantineRejection {
+  return withWriteScopeOr<QuarantineRejection, QuarantineRejection>(
+    db,
+    'quarantine_reject',
+    (rollback) => {
+      const row = pendingOrRefusal(db, tenantId, id);
+      if ('outcome' in row) return rollback(row);
+      rejectQuarantineRow(db, { tenantId, id, actor });
+      appendAuditEvents(db, [
+        { tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} },
+      ]);
+      return { outcome: 'rejected' };
+    },
+  );
 }
 
-/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the quarantine scope, which still
- * hides the memory. */
-function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, id: string): void {
+/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the
+ * quarantine scope, which still hides the memory. */
+function rewriteMirror(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  id: string,
+): void {
   try {
     const restored = readEntry(db, id, tenantId);
     if (restored) writeEntryMirrors(files.hippoRoot, restored);
   } catch (err) {
-    log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`, errorFields(err));
+    log.error(
+      `quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
-interface Decision {
-  readonly tenantId: string;
-  readonly id: string;
+interface Decision extends DecisionOptions {
   readonly decision: 'approve' | 'reject';
-  readonly actor: string;
 }
 
-function decide(db: DatabaseSyncLike, files: StoreFiles, { tenantId, id, decision, actor }: Decision) {
-  if (decision === 'reject') return rejectQuarantined(db, tenantId, id, actor);
-  const result = approveQuarantined(db, tenantId, id, actor);
+function decide(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  { tenantId, id, decision, actor }: Decision,
+) {
+  if (decision === 'reject') return rejectQuarantined(db, { tenantId, id, actor });
+  const result = approveQuarantined(db, { tenantId, id, actor });
   if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
   return result;
 }
@@ -224,11 +285,13 @@ function decide(db: DatabaseSyncLike, files: StoreFiles, { tenantId, id, decisio
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   const quarantine: QuarantineCalls = {
     ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
-    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror folders.
+    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror
+    // folders.
     ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
       on,
       {
-        decideQuarantined: (db, tenantId, id, decision, actor) => decide(db, files, { tenantId, id, decision, actor }),
+        decideQuarantined: (db, tenantId, id, decision, actor) =>
+          decide(db, files, { tenantId, id, decision, actor }),
       },
       openStore,
     ),

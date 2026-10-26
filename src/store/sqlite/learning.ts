@@ -20,6 +20,8 @@ export function sqliteLearning({ on, files }: Handles): Learning {
       { addTagToEntries: (db, ...args) => addTagToEntries(db, files, ...args) },
       openStore,
     ),
-    ...bound<Pick<Learning, 'confirmedOutcomeTimes'>>(on, { confirmedOutcomeTimes: confirmedOutcomeTimes }),
+    ...bound<Pick<Learning, 'confirmedOutcomeTimes'>>(on, {
+      confirmedOutcomeTimes: confirmedOutcomeTimes,
+    }),
   };
 }

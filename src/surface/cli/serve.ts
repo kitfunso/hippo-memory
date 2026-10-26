@@ -6,22 +6,43 @@ import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js
 import { envBodyTimeoutMs, envPort, envTlsCert, envTlsKey } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
+import {
+  type CommandContext,
+  boolFlag,
+  numberFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { cliStdioHost } from './api-context.js';
-import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
+import {
+  DEFAULT_DASHBOARD_PORT,
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../server/defaults.js';
 import type { DashboardHandle } from '../server/dashboard-listener.js';
 import { localKeyPath } from '../server/local-key.js';
 
-export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleDashboard({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
   const { DashboardListenError, serveDashboard } = await import('../server/dashboard-listener.js');
   const { builtStaticRoot } = await import('../dashboard/static-file.js');
   const token = randomBytes(32).toString('base64url');
-  const opts = { hippoRoot, tenantId, port, token, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() };
+  const opts = {
+    hippoRoot,
+    tenantId,
+    port,
+    token,
+    handleSignals: true,
+    bodyDeadlineMs: envBodyTimeoutMs(),
+  };
   let dashboard: DashboardHandle;
   try {
     dashboard = await serveDashboard(opts);
@@ -30,24 +51,29 @@ export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandCon
     reportListenFailure(port, err.cause);
     return;
   }
-  printDashboardBanner(hippoRoot, dashboard.port, dashboard.ticket(), builtStaticRoot());
+  printDashboardBanner({
+    hippoRoot,
+    port: dashboard.port,
+    ticket: dashboard.ticket(),
+    staticRoot: builtStaticRoot(),
+  });
   // A later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C
 }
 
 export async function handleMcp(): Promise<void> {
-  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is transport-agnostic, so we
-  // explicitly attach the stdio loop here. (HTTP/SSE transport is wired in src/server.ts and imports the same module
-  // without triggering stdin handlers.)
+  // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is
+  // transport-agnostic, so we explicitly attach the stdio loop here. (HTTP/SSE transport is wired
+  // in src/server.ts and imports the same module without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
   mod.startStdioLoop(cliStdioHost());
   // Server runs until stdin closes, so we never reach here
   await new Promise(() => {}); // hang forever
 }
 
-/** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and HIPPO_TLS_KEY; undefined when
- * neither is set. */
+/** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and
+ * HIPPO_TLS_KEY; undefined when neither is set. */
 function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
   // A flag with no value exits here; falling back to cleartext would hide the mistake.
   const certPath = stringFlagOrExit(flags, 'tls-cert') ?? envTlsCert();
@@ -66,8 +92,8 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   }
 }
 
-/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains
- * itself. */
+/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that
+ * changed it explains itself. */
 function keyRuleLine(hippoRoot: string): string {
   return (
     'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ' +

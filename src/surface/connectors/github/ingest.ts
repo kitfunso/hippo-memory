@@ -1,6 +1,7 @@
-// GitHub event ingest, once per idempotency key. The key comes from the event's own content, never from the unsigned
-// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast
-// path: the store logs the key in the memory's own transaction, which is what holds when two workers race.
+// GitHub event ingest, once per idempotency key. The key comes from the event's own content, never
+// from the unsigned X-GitHub-Delivery header, so a replay cannot get past it by rotating the
+// delivery id. The pre-check is only the fast path: the store logs the key in the memory's own
+// transaction, which is what holds when two workers race.
 
 import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
@@ -78,9 +79,15 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-export async function ingestEvent(ctx: ConnectorContext, input: IngestInput): Promise<IngestResult> {
+export async function ingestEvent(
+  ctx: ConnectorContext,
+  input: IngestInput,
+): Promise<IngestResult> {
   const events = ctx.store.connectorEvents;
-  const idempotencyKey = computeIdempotencyKey(eventArtifactRef(input.event), eventUpdatedAt(input.event));
+  const idempotencyKey = computeIdempotencyKey(
+    eventArtifactRef(input.event),
+    eventUpdatedAt(input.event),
+  );
   const event: ConnectorEvent = {
     connector: 'github',
     idempotencyKey,
@@ -88,11 +95,12 @@ export async function ingestEvent(ctx: ConnectorContext, input: IngestInput): Pr
     eventName: input.event.eventName,
   };
 
-  // Fast path: pre-check. Avoids running the transform / opening a write tx for the common already-seen case (GitHub
-  // auto-retries with the same body).
+  // Fast path: pre-check. Avoids running the transform / opening a write tx for the common
+  // already-seen case (GitHub auto-retries with the same body).
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
-  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the transform.
+  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
+  // transform.
   return rememberWithEventLog(ctx, event, transformEvent(input.event));
 }

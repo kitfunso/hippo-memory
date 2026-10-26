@@ -7,31 +7,55 @@ import type { SqlFragment } from '../../db/sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
-import { type MemoryRow, MEMORY_SELECT_COLUMNS, MEMORY_SEARCH_COLUMNS, rowToEntry } from './rows.js';
+import {
+  type MemoryRow,
+  MEMORY_SELECT_COLUMNS,
+  MEMORY_SEARCH_COLUMNS,
+  rowToEntry,
+} from './rows.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../db/sql.js';
 import type { OriginFilter } from '../../base/ports/store/types.js';
 import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
-import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../../base/ports/store/vectors.js';
+import {
+  VECTOR_CANDIDATE_LIMIT,
+  type VectorCandidateSpec,
+} from '../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { LIKE_WINDOW_ROWS } from '../rules/windows.js';
 
-/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
- * its JS twin. */
-function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | undefined): SqlFragment {
+/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
+ * in recall-scope.ts is its JS twin. */
+function recallScopeClause(
+  col: 'm.' | '',
+  scopeFilter: RecallScopeFilter | undefined,
+): SqlFragment {
   if (scopeFilter === undefined) return { sql: '', params: [] };
-  if (scopeFilter.mode === 'exact') return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
+  if (scopeFilter.mode === 'exact') {
+    return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
+  }
   const admit = scopeAdmitSql(col, scopeFilter.ownScope);
-  if (scopeFilter.mode === 'default-deny') return { sql: ` AND ${admit.sql}`, params: admit.params };
-  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
-  return { sql: ` AND (${admit.sql} OR ${col}scope = ?)`, params: [...admit.params, scopeFilter.value] };
+  if (scopeFilter.mode === 'default-deny') {
+    return { sql: ` AND ${admit.sql}`, params: admit.params };
+  }
+  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
+  // included.
+  return {
+    sql: ` AND (${admit.sql} OR ${col}scope = ?)`,
+    params: [...admit.params, scopeFilter.value],
+  };
 }
 
-// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
-function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | undefined): SqlFragment {
+// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows
+// out of the LIMIT.
+function withProject(
+  scope: SqlFragment,
+  col: 'm.' | '',
+  origin: OriginFilter | undefined,
+): SqlFragment {
   if (origin === undefined) return scope;
   // A string is the shape published callers passed before a project could carry several names.
   const originProjects = [origin].flat();
@@ -63,12 +87,16 @@ interface SearchRowsOptions {
   readonly originProjects?: OriginFilter;
 }
 
+interface ListSearchRowsOptions {
+  readonly query: string;
+  readonly limit: number;
+  readonly tenantId: TenantId;
+  readonly options?: SearchRowsOptions;
+}
+
 function listSearchRows(
   db: DatabaseSyncLike,
-  query: string,
-  limit: number,
-  tenantId: TenantId,
-  options: SearchRowsOptions = {},
+  { query, limit, tenantId, options = {} }: ListSearchRowsOptions,
 ): MemoryRow[] {
   const { scopeFilter, includeSuperseded = true, originProjects } = options;
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
@@ -87,8 +115,8 @@ function listSearchRows(
   const rows = listLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
-  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded fallback would misstate
-  // the candidate-pool size.
+  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded
+  // fallback would misstate the candidate-pool size.
   return listAllCandidates(db, p, limit);
 }
 
@@ -104,11 +132,11 @@ function searchPredicates(
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantAnd(tenantId).params;
 
-  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
-  // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
+  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this
+  // only guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches between ' AND' and
-  // ' WHERE' by caller context.
+  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches
+  // between ' AND' and ' WHERE' by caller context.
   const archivedClauseTenantOnly = one ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
@@ -140,7 +168,12 @@ function listAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: num
 }
 
 /** FTS5 bm25 matches; empty when none match or FTS5 cannot run the query. */
-function listFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
+function listFtsCandidates(
+  db: DatabaseSyncLike,
+  terms: string[],
+  p: SearchPredicates,
+  limit: number,
+): MemoryRow[] {
   try {
     const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
     // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
@@ -167,11 +200,19 @@ function listFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredi
   }
 }
 
-/** Substring matches in content or tags: the trigram index answers each term of 3 or more characters over every
- * admitted row, and LIKE tests the rest over the newest admitted rows. */
-function listLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
-  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has no index at all.
-  const indexed = isFtsAvailable(db) ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS) : [];
+/** Substring matches in content or tags: the trigram index answers each term of 3 or more
+ * characters over every admitted row, and LIKE tests the rest over the newest admitted rows. */
+function listLikeCandidates(
+  db: DatabaseSyncLike,
+  terms: string[],
+  p: SearchPredicates,
+  limit: number,
+): MemoryRow[] {
+  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has
+  // no index at all.
+  const indexed = isFtsAvailable(db)
+    ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS)
+    : [];
   const windowed = terms.filter((term) => !indexed.includes(term));
   const arms = [
     ...(indexed.length > 0 ? [trigramArm(indexed, p)] : []),
@@ -199,11 +240,16 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
       `SELECT ${MEMORY_SEARCH_COLUMNS}, m.updated_at FROM memories_trigram t CROSS JOIN memories m ` +
       `ON m.rowid = t.rowid WHERE memories_trigram MATCH ?` +
       `${p.tenantPredicate}${p.archivedClauseAlias}${p.aliasScope.sql}${p.currentAlias}`,
-    params: [terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR '), ...p.tenantParams, ...p.scopeParams],
+    params: [
+      terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR '),
+      ...p.tenantParams,
+      ...p.scopeParams,
+    ],
   };
 }
 
-/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the whole store. */
+/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the
+ * whole store. */
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
   const where = terms
     .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
@@ -212,7 +258,8 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
     const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
-  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own order needs no sort.
+  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
+  // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
   return {
     sql:
@@ -224,7 +271,11 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
 }
 
 /** The arms' rows, each once, most recently updated first. */
-function unionByRecency(db: DatabaseSyncLike, arms: readonly SqlFragment[], limit: number): MemoryRow[] {
+function unionByRecency(
+  db: DatabaseSyncLike,
+  arms: readonly SqlFragment[],
+  limit: number,
+): MemoryRow[] {
   return cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM (${arms.map((arm) => arm.sql).join(' UNION ')}) ` +
@@ -239,12 +290,13 @@ export function listSearchEntries(
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId: TenantId,
 ): MemoryEntry[] {
-  return listSearchRows(db, query, limit, tenantId).map(rowToEntry);
+  return listSearchRows(db, { query, limit, tenantId }).map(rowToEntry);
 }
 
-/** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
- * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
- * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
+/** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty
+ * `requestedScope` default-denies (admits `ownScope`); else exact match. SQL `NOT LIKE
+ * '%:private:%'` runs before the LIMIT so private rows cannot starve admitted ones;
+ * `passesScopeFilterForRecall` is the exact post-filter. */
 export function listRecallEntries(
   db: DatabaseSyncLike,
   query: string,
@@ -260,10 +312,20 @@ export function listRecallEntries(
     ownScope,
   } = options;
   const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
-  return listSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
+  return listSearchRows(db, {
+    query,
+    limit,
+    tenantId,
+    options: {
+      scopeFilter,
+      includeSuperseded,
+      originProjects,
+    },
+  }).map(rowToEntry);
 }
 
-/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
+/** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it
+ * can. */
 export async function listVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
@@ -303,7 +365,9 @@ const vocabReady = new WeakSet<DatabaseSyncLike>();
 
 function ensureRarestVocab(db: DatabaseSyncLike): void {
   if (vocabReady.has(db)) return;
-  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
+  db.exec(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`,
+  );
   vocabReady.add(db);
 }
 
@@ -319,7 +383,8 @@ export function pickRarestFtsQuery(
   ensureRarestVocab(db);
   const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
-  // One cached shape per term count: an IN list over a virtual table needs one mark per term to keep its lookups.
+  // One cached shape per term count: an IN list over a virtual table needs one mark per term to
+  // keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,

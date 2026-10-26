@@ -1,6 +1,7 @@
-// `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits, error replies and the
-// drain come from boot.ts and lifecycle.ts; only the route table and its session are the dashboard's.
-import type { ServerResponse } from 'node:http';
+// `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits,
+// error replies and the drain come from boot.ts and lifecycle.ts; only the route table and its
+// session are the dashboard's.
+import type { Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
 import { requireGroups } from '../../base/ports/store.js';
@@ -17,7 +18,12 @@ import { answerRequest } from './failure-replies.js';
 import { startDashboardReader } from './dashboard-reader.js';
 import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
 import { dashboardTickets } from './dashboard-session.js';
-import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
+import {
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  drainAndClose,
+  setKeepAliveTimeouts,
+  shutdownBoundMs,
+} from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -61,8 +67,12 @@ export class DashboardListenError extends Error {
   }
 }
 
-/** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOptions, { store, storeFor, host }: ServerRuntime): DashboardServing {
+/** What every request shares: the reader thread on its own store connection, and a Context on
+ * the store's workers. */
+function servingFor(
+  opts: DashboardOptions,
+  { store, storeFor, host }: ServerRuntime,
+): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
   const now = opts.now ?? ((): number => clock().getTime());
@@ -72,7 +82,10 @@ function servingFor(opts: DashboardOptions, { store, storeFor, host }: ServerRun
   const dashboardStore = requireGroups(store, DASHBOARD_GROUPS);
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
-    reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),
+    reader: startDashboardReader(
+      { hippoRoot, tenantId },
+      { now, cacheClock: opts.cacheClock ?? Date.now },
+    ),
     context: (limits) => ({
       hippoRoot,
       tenantId,
@@ -87,25 +100,16 @@ function servingFor(opts: DashboardOptions, { store, storeFor, host }: ServerRun
   };
 }
 
-/** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never claims the API server's
- * pidfile, so both can serve one store. */
+/** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never
+ * claims the API server's pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
   const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
-  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.
-  const counts = { handlerDeadlines: 0 };
-  const server = createListener(undefined, (req, res) => {
-    res.once('finish', runtime.afterResponse);
-    inflight.add(res);
-    res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, (limits) => answerDashboard(serving, { req, res, limits }), {
-      slowWarnMs: undefined,
-      counts,
-    });
-  });
+  const server = dashboardListener(serving, runtime, inflight);
   setKeepAliveTimeouts(server);
-  // The reader thread closes before the runtime, which closes its held connection last, so that close is the last.
+  // The reader thread closes before the runtime, which closes its held connection last, so that
+  // close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
     await runtime.close();
@@ -123,10 +127,32 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
     return stopping;
   };
   if (opts.handleSignals) {
-    installSignalHandlers('dashboard', { run: stop, boundMs: shutdownBoundMs(DEFAULT_SHUTDOWN_DRAIN_MS) });
+    installSignalHandlers('dashboard', {
+      run: stop,
+      boundMs: shutdownBoundMs(DEFAULT_SHUTDOWN_DRAIN_MS),
+    });
   }
   // SAFETY: listenOn bound a TCP port, so address() is an AddressInfo.
   const { port } = server.address() as AddressInfo;
   const ticket = (): string => serving.access.tickets.mint(Date.now());
   return { port, url: `http://${DASHBOARD_HOST}:${port}`, stop, server, ticket };
+}
+
+function dashboardListener(
+  serving: DashboardServing,
+  runtime: ServerRuntime,
+  inflight: Set<ServerResponse>,
+): Server {
+  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API
+  // server's.
+  const counts = { handlerDeadlines: 0 };
+  return createListener(undefined, (req, res) => {
+    res.once('finish', runtime.afterResponse);
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
+    answerRequest(req, res, (limits) => answerDashboard(serving, { req, res, limits }), {
+      slowWarnMs: undefined,
+      counts,
+    });
+  });
 }

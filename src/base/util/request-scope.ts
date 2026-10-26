@@ -1,5 +1,5 @@
-// A request's log id, and the deadline type its Context carries. A leaf module, so the logger can read the request id
-// without importing the store layer.
+// A request's log id, and the deadline type its Context carries. A leaf module, so the logger can
+// read the request id without importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /** What the one ambient scope carries. */
@@ -10,14 +10,15 @@ interface RequestScope {
 
 const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
 
-/** How long a request may run: 120 s, or the HIPPO_REQUEST_DEADLINE_MS value the root read, where 0 turns it off. */
+/** How long a request may run: 120 s, or the HIPPO_REQUEST_DEADLINE_MS value the root read,
+ * where 0 turns it off. */
 export function requestDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_REQUEST_DEADLINE_MS;
 }
 
 /**
- * When a request must be answered, and the store calls it still waits on: the store ends each of those soon after `at`,
- * with the outcome only it knows.
+ * When a request must be answered, and the store calls it still waits on: the store ends each of
+ * those soon after `at`, with the outcome only it knows.
  */
 export class RequestDeadline {
   /** Epoch milliseconds. */
@@ -42,8 +43,8 @@ export class RequestDeadline {
   }
 
   /**
-   * Runs `fn` now, or once the last store call the request waits on has settled; every function registered meanwhile
-   * runs, in order.
+   * Runs `fn` now, or once the last store call the request waits on has settled; every function
+   * registered meanwhile runs, in order.
    */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
@@ -51,13 +52,15 @@ export class RequestDeadline {
   }
 }
 
-/** What a root hands one request's calls: the deadline its reply waits on, and the signal that fires past it. */
+/** What a root hands one request's calls: the deadline its reply waits on, and the signal that
+ * fires past it. */
 export interface RequestLimits {
   readonly deadline?: RequestDeadline | undefined;
   readonly signal?: AbortSignal | undefined;
 }
 
-// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on its Context.
+// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on its
+// Context.
 export const requestScopes = new AsyncLocalStorage<RequestScope>();
 
 /** The id of the request this code runs for, if any. */
@@ -65,7 +68,8 @@ export function currentRequestId(): string | undefined {
   return requestScopes.getStore()?.requestId;
 }
 
-/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and promises it starts. */
+/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and
+ * promises it starts. */
 export function runWithRequestId<T>(requestId: string | undefined, fn: () => T): T {
   return requestScopes.run({ requestId }, fn);
 }

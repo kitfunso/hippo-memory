@@ -1,4 +1,5 @@
-// The `hippo-memory/eval` entry: the feature eval suite, its synthetic corpus and the regression check.
+// The `hippo-memory/eval` entry: the feature eval suite, its synthetic corpus and the regression
+// check.
 import {
   buildSyntheticCorpus as corpusAt,
   runFeatureEval as featureEvalAt,
@@ -14,8 +15,11 @@ export function buildSyntheticCorpus(): ReturnType<typeof corpusAt> {
   return corpusAt(evalNow());
 }
 
-/** The feature eval under `switches`, the environment's when the caller names none, at HIPPO_FAKE_NOW or the wall
- * clock. */
-export function runFeatureEval(version: string, switches: EvalSwitches = evalSwitches()): Promise<EvalSuiteResult> {
+/** The feature eval under `switches`, the environment's when the caller names none, at
+ * HIPPO_FAKE_NOW or the wall clock. */
+export function runFeatureEval(
+  version: string,
+  switches: EvalSwitches = evalSwitches(),
+): Promise<EvalSuiteResult> {
   return featureEvalAt(version, switches, evalNow());
 }

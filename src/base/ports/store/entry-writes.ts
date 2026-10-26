@@ -7,8 +7,9 @@ export interface EntryWrite {
   readonly actor: string;
 }
 
-/** Who acts on which of a tenant's rows: a row `readerReaches` refuses the caller is out of reach, as recall would not
- * show it, and forget, archive, supersede and pin also refuse a row `readerMayChange` refuses. */
+/** Who acts on which of a tenant's rows: a row `readerReaches` refuses the caller is out of
+ * reach, as recall would not show it, and forget, archive, supersede and pin also refuse a row
+ * `readerMayChange` refuses. */
 export interface EntryTarget extends Omit<ScopeReader, 'role'> {
   /** Absent reads as a member key with no grants (see `targetReader`). */
   readonly role?: ScopeReader['role'];
@@ -38,43 +39,54 @@ export interface PinWrite extends EntryRemoval {
   readonly pinned: boolean;
 }
 
-/** The memory-row writes behind remember, outcome, pin, supersede, archive and forget. Each writes its audit rows in
- * the write's own transaction, a child row's change marks its level 2 or 3 summary parent dirty (one
- * summary_marked_dirty row on the flip), and the schema's rules hold. */
+/** The memory-row writes behind remember, outcome, pin, supersede, archive and forget. Each
+ * writes its audit rows in the write's own transaction, a child row's change marks its level 2
+ * or 3 summary parent dirty (one summary_marked_dirty row on the flip), and the schema's rules
+ * hold. */
 export interface EntryWrites {
-  /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's tenant; an undefined
-   * origin_project takes the store's fallback. An id another tenant holds rejects with ConflictError. Content the
-   * tenant tombstoned rejects with RejectedValueError; one reject_refusal row follows the rollback, best effort. */
+  /** Upserts the row, its full-text row and one remember row ({kind, scope}) in the entry's
+   * tenant; an undefined origin_project takes the store's fallback. An id another tenant holds
+   * rejects with ConflictError. Content the tenant tombstoned rejects with RejectedValueError;
+   * one reject_refusal row follows the rollback, best effort. */
   writeEntry(write: EntryWrite): Promise<void>;
-  /** Per id in order, a row of the tenant within reach gets `entryAfterOutcome` (rewrite as writeEntry does) and one
-   * outcome row ({good}); other ids skipped. Each read holds the row's lock to commit, so a concurrent supersede is not
-   * undone. Resolves to the ids applied, repeats kept. */
+  /** Per id in order, a row of the tenant within reach gets `entryAfterOutcome` (rewrite as
+   * writeEntry does) and one outcome row ({good}); other ids skipped. Each read holds the row's
+   * lock to commit, so a concurrent supersede is not undone. Resolves to the ids applied,
+   * repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
-  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); refuses a row as forget does. */
+  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); refuses a row as forget
+   * does. */
   setPinned(pin: PinWrite): Promise<MemoryEntry>;
-  /** Sets the old row's superseded_by if the caller may change it and it is not yet superseded (both checked in the
-   * transaction), else rejects as forget does or with ConflictError. Then writes the successor as writeEntry does and
-   * one supersede row ({newId}), all or nothing. */
+  /** Sets the old row's superseded_by if the caller may change it and it is not yet superseded
+   * (both checked in the transaction), else rejects as forget does or with ConflictError. Then
+   * writes the successor as writeEntry does and one supersede row ({newId}), all or nothing. */
   supersede(write: SupersedeWrite): Promise<void>;
-  /** Moves a raw row to raw_archive (metadata only, no content), deletes it and its full-text row and writes one
-   * archive_raw row ({reason}); resolves to the archived_at written. Refuses a row as forget does, and any other kind
-   * with BadRequestError. */
+  /** Moves a raw row to raw_archive (metadata only, no content), deletes it and its full-text
+   * row and writes one archive_raw row ({reason}); resolves to the archived_at written. Refuses
+   * a row as forget does, and any other kind with BadRequestError. */
   archiveRaw(archive: RawArchive): Promise<string>;
-  /** Deletes the row and its full-text row and writes one forget row; a raw row rejects, being append-only. In the
-   * write's transaction a row is refused as `assertWriteRight` refuses it: NotFoundError or a 403 ForbiddenError.
-   * Archive and forget then add one to the store-wide forgotten counter, best effort. */
+  /** Deletes the row and its full-text row and writes one forget row; a raw row rejects, being
+   * append-only. In the write's transaction a row is refused as `assertWriteRight` refuses it:
+   * NotFoundError or a 403 ForbiddenError. Archive and forget then add one to the store-wide
+   * forgotten counter, best effort. */
   forget(removal: EntryRemoval): Promise<void>;
 }
 
 /** The reads and writes behind git auto-learn's batch. */
 export interface LessonWrites {
-  /** Content, source and origin of the tenant's rows that may hold one of `texts`, as `captures.textsHolding` reads
-   * them, among the rows a team member or `ownScope`'s owner may touch. */
-  textsHolding(tenantId: string, texts: readonly string[], ownScope: string | null): Promise<HeldText[]>;
-  /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those projects' and user-global. */
+  /** Content, source and origin of the tenant's rows that may hold one of `texts`, as
+   * `captures.textsHolding` reads them, among the rows a team member or `ownScope`'s owner may
+   * touch. */
+  textsHolding(
+    tenantId: string,
+    texts: readonly string[],
+    ownScope: string | null,
+  ): Promise<HeldText[]>;
+  /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those
+   * projects' and user-global. */
   contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
-  /** Writes each entry in one transaction; a rejected value writes its refusal row and is skipped. Resolves to the ids
-   * written. */
+  /** Writes each entry in one transaction; a rejected value writes its refusal row and is
+   * skipped. Resolves to the ids written. */
   writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
   /** Rewrites each entry in one transaction, all or none. */
   writeTogether(entries: readonly MemoryEntry[]): Promise<void>;

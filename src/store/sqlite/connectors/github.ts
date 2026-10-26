@@ -2,7 +2,13 @@
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
-import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
+import {
+  eventMemory,
+  eventRecord,
+  eventSeen,
+  markEventSeen,
+  type EventLogSpec,
+} from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
@@ -32,21 +38,24 @@ export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string):
   return eventMemory(db, GITHUB_LOG, idempotencyKey);
 }
 
-/** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
+/** False when the key was already logged, so a caller inside a write scope can roll its own row
+ * back. */
 export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  return markEventSeen(
-    db,
-    GITHUB_LOG,
-    entry.idempotencyKey,
-    [
+  return markEventSeen(db, {
+    log: GITHUB_LOG,
+    key: entry.idempotencyKey,
+    extra: [
       ['delivery_id', entry.deliveryId],
       ['event_name', entry.eventName],
     ],
-    entry.memoryId,
-  );
+    memoryId: entry.memoryId,
+  });
 }
 
-export function githubEventRecord(db: DatabaseSyncLike, idempotencyKey: string): ConnectorEventRecord {
+export function githubEventRecord(
+  db: DatabaseSyncLike,
+  idempotencyKey: string,
+): ConnectorEventRecord {
   return eventRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
@@ -66,21 +75,29 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
 
-/** The installation's tenant when one is named, else the one tenant that registered the repository; with no match, or
- * a repository two tenants registered, how many rows it could have come from. */
+/** The installation's tenant when one is named, else the one tenant that registered the
+ * repository; with no match, or a repository two tenants registered, how many rows it could have
+ * come from. */
 export function githubRoute(
   db: DatabaseSyncLike,
-  { installationId, repoFullName }: { installationId?: string | null; repoFullName?: string | null },
+  {
+    installationId,
+    repoFullName,
+  }: { installationId?: string | null; repoFullName?: string | null },
 ): TenantRoute {
   if (installationId) {
-    const row = cachedStatement(db, `SELECT tenant_id FROM github_installations WHERE installation_id = ?`).get(
-      installationId,
-    ) as { tenant_id?: string } | undefined;
-    return row?.tenant_id ? { tenantId: row.tenant_id } : { tenantId: null, routes: rowCount(db, 'installations') };
+    const row = cachedStatement(
+      db,
+      `SELECT tenant_id FROM github_installations WHERE installation_id = ?`,
+    ).get(installationId) as { tenant_id?: string } | undefined;
+    return row?.tenant_id
+      ? { tenantId: row.tenant_id }
+      : { tenantId: null, routes: rowCount(db, 'installations') };
   }
   const tenants = repoFullName ? repoTenants(db, repoFullName) : [];
   if (tenants.length === 1) return { tenantId: tenants[0]! };
-  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes to neither.
+  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes
+  // to neither.
   if (tenants.length > 1) {
     log.warn('github webhook: two tenants registered this repository; refusing the route', {
       repo: repoFullName ?? undefined,
@@ -90,7 +107,8 @@ export function githubRoute(
   return { tenantId: null, routes: rowCount(db, 'installations') + rowCount(db, 'repositories') };
 }
 
-/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner from a shared name. */
+/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner
+ * from a shared name. */
 function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
   const sql = `SELECT DISTINCT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY tenant_id LIMIT 2`;
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
@@ -100,7 +118,9 @@ function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
 
 function rowCount(db: DatabaseSyncLike, table: 'installations' | 'repositories'): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM github_${table}`).get() as { c: number | bigint };
+  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM github_${table}`).get() as {
+    c: number | bigint;
+  };
   return Number(row.c);
 }
 
@@ -132,7 +152,9 @@ export function saveGitHubCursor(
   keepSaved: boolean,
 ): void {
   const column = HWM_COLUMN[stream];
-  const kept = keepSaved ? `COALESCE(github_cursors.${column}, excluded.${column})` : `excluded.${column}`;
+  const kept = keepSaved
+    ? `COALESCE(github_cursors.${column}, excluded.${column})`
+    : `excluded.${column}`;
   cachedStatement(
     db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)

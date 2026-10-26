@@ -151,7 +151,7 @@ const mcpCtx = {
 const onSession = (session) => {
   const store = inSqliteSession(localStore, session);
   const openGlobal = (root) => sqliteStore(root, { session });
-  return { store, reach: contextReach(sqliteReach(localRoot, store, undefined, openGlobal), loadConfig) };
+  return { store, reach: contextReach(sqliteReach({ hippoRoot: localRoot, store, openGlobal }), loadConfig) };
 };
 
 // A transport runs each tool call on its host's session (the server per request, stdio per frame).

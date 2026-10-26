@@ -1,6 +1,6 @@
-// hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the dashboard's SQL
-// functions, so the rows a read hands to JavaScript never grow with the tenant. The commit signal uses one held
-// connection.
+// hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the
+// dashboard's SQL functions, so the rows a read hands to JavaScript never grow with the tenant. The
+// commit signal uses one held connection.
 import * as fs from 'node:fs';
 import {
   closeHippoDb,
@@ -38,7 +38,14 @@ import {
   useDashboardFunctions,
 } from './dashboard-functions.js';
 import { MemoryLists } from './dashboard-lists.js';
-import { IN_PROJECT, kindIn, LIVE, OPEN_PAIRS, quarantinedIn, supersededIn } from './dashboard-sql.js';
+import {
+  IN_PROJECT,
+  kindIn,
+  LIVE,
+  OPEN_PAIRS,
+  quarantinedIn,
+  supersededIn,
+} from './dashboard-sql.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound } from './bound.js';
 
@@ -110,54 +117,65 @@ function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): Dashboar
       n: number;
     };
     return {
-      projects: rows.map((row) => projectTally(row.origin, row.tally, conflictsOf.get(row.origin) ?? 0)),
+      projects: rows.map((row) =>
+        projectTally(row.origin, row.tally, conflictsOf.get(row.origin) ?? 0),
+      ),
       excluded: excluded(db, tenantId),
       openConflicts: Number(all.n),
     };
   });
 }
 
-function scatter(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: number, tally: ProjectTally) {
+/** The named binds of one project's reads. */
+interface ProjectBinds {
+  readonly tenant: string;
+  readonly origin: Origin;
+  readonly now: number;
+}
+
+function scatterPoints(db: DatabaseSyncLike, binds: ProjectBinds, maxAgeDays: number): ScatterRows {
+  // SAFETY: each column is named in the SELECT; layer holds a Layer value.
+  const rows = cachedStatement(
+    db,
+    `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
+      `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
+  ).all({ ...binds, cap: SCATTER_POINTS_MAX }) as Array<{
+    id: string;
+    layer: Layer;
+    age: number;
+    strength: number;
+    band: number;
+  }>;
+  const points = rows.map((r) => ({
+    id: r.id,
+    ageDays: r.age,
+    strength: r.strength,
+    layer: layerIndex(r.layer),
+    band: r.band,
+  }));
+  return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
+}
+
+interface ScatterOptions {
+  readonly tenantId: string;
+  readonly origin: Origin;
+  readonly nowMs: number;
+  readonly tally: ProjectTally;
+}
+
+function scatter(db: DatabaseSyncLike, { tenantId, origin, nowMs, tally }: ScatterOptions) {
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
-  if (tally.live <= SCATTER_POINTS_MAX) {
-    // SAFETY: each column is named in the SELECT; layer holds a Layer value.
-    const rows = cachedStatement(
-      db,
-      `SELECT id, layer, hippo_days(created, :now) AS age, hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
-        `hippo_band(${FACT_COLUMNS}, :now) AS band FROM memories WHERE ${IN_PROJECT} ORDER BY created, id LIMIT :cap`,
-    ).all({
-      tenant: tenantId,
-      origin,
-      now: nowMs,
-      cap: SCATTER_POINTS_MAX,
-    }) as Array<{
-      id: string;
-      layer: Layer;
-      age: number;
-      strength: number;
-      band: number;
-    }>;
-    const points = rows.map((r) => ({
-      id: r.id,
-      ageDays: r.age,
-      strength: r.strength,
-      layer: layerIndex(r.layer),
-      band: r.band,
-    }));
-    return { mode: 'points', maxAgeDays, points } satisfies ScatterRows;
-  }
+  const binds = { tenant: tenantId, origin, now: nowMs };
+  if (tally.live <= SCATTER_POINTS_MAX) return scatterPoints(db, binds, maxAgeDays);
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,
     `SELECT hippo_scatter_grid(${FACT_COLUMNS}, :now, :span) AS cells FROM memories WHERE ${IN_PROJECT}`,
-  ).get({
-    tenant: tenantId,
-    origin,
-    now: nowMs,
-    span: Math.log10(maxAgeDays + 1),
-  }) as { cells: SqlValue };
+  ).get({ ...binds, span: Math.log10(maxAgeDays + 1) }) as { cells: SqlValue };
   const t = tallyOf(row.cells);
-  const cells = LAYER_ORDER.map((_, l) => Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)));
+  const cells = LAYER_ORDER.map((_, l) =>
+    Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)),
+  );
   return { mode: 'grid', maxAgeDays, cells } satisfies ScatterRows;
 }
 
@@ -184,7 +202,7 @@ function project(
       `WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs WHERE pa IS :origin OR pb IS :origin`,
     ).get({ tenant: tenantId, origin }) as { n: number };
     const tally = projectTally(origin, row.tally, Number(conflicts.n));
-    return { tally, scatter: scatter(db, tenantId, origin, nowMs, tally) };
+    return { tally, scatter: scatter(db, { tenantId, origin, nowMs, tally }) };
   });
 }
 
@@ -209,11 +227,13 @@ function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchT
   }));
 }
 
-/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held reader, so its
- * statement is prepared once. */
+/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held
+ * reader, so its statement is prepared once. */
 function hasVector(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
-  return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+  return (
+    cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined
+  );
 }
 
 /** Opens the store writable with the dashboard's functions scored by `rules`. */
@@ -237,10 +257,13 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
   let lists: MemoryLists | null = null;
   return {
     reader: () => {
-      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) held = openHippoDbReadOnly(hippoRoot);
+      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) {
+        held = openHippoDbReadOnly(hippoRoot);
+      }
       return held;
     },
-    // The first list runs the open the other reads run, so a pending migration lands before it sorts.
+    // The first list runs the open the other reads run, so a pending migration lands before it
+    // sorts.
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();
@@ -256,14 +279,18 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
   };
 }
 
-/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
- * dashboard's functions scored by `rules`; memory pages run on the held reader, whose sorted lists outlive a read.
- * While no hippo.db exists they answer empty and create none. */
+/** Reads run on a fresh writable open, which runs any pending migration and legacy import first
+ * and carries the dashboard's functions scored by `rules`; memory pages run on the held reader,
+ * whose sorted lists outlive a read. While no hippo.db exists they answer empty and create none. */
 export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}): DashboardReads {
   const { on, files } = handlesOf(hippoRoot, rules);
   const open = dashboardOpener(files);
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
-  const scans = bound<Scans>(on, { totals, project, search, openConflictsOf: openConflictsNaming }, open);
+  const scans = bound<Scans>(
+    on,
+    { totals, project, search, openConflictsOf: openConflictsNaming },
+    open,
+  );
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
   const { reader, listsOn, close } = heldReader(hippoRoot, files, () => on(() => undefined, open));
   return {
@@ -276,7 +303,8 @@ export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}):
       stored()
         ? scans.totals(tenantId, nowMs)
         : Promise.resolve({ projects: [], excluded: noneExcluded(), openConflicts: 0 }),
-    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null)),
+    project: (tenantId, origin, nowMs) =>
+      stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null),
     memoryPage: (tenantId, query, nowMs) =>
       answered(() => {
         const db = reader();

@@ -1,12 +1,25 @@
-// First-class object verbs for decisions: record one (optionally superseding an older one's memory), list, get, close.
+// First-class object verbs for decisions: record one (optionally superseding an older one's
+// memory), list, get, close.
 
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { Decision } from '../../base/records/object-types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { decisionIdByMemory, decisionMemoryWeaken } from '../../api/objects/object-kinds.js';
-import { objectClose, objectCreate, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
+import {
+  objectClose,
+  objectCreate,
+  objectGet,
+  objectList,
+  objectStates,
+} from '../../api/objects/objects.js';
 import { printError } from './output.js';
-import { type CliFlags, type CommandContext, flagValueless, nonEmptyStringFlag, stringFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  flagValueless,
+  nonEmptyStringFlag,
+  stringFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import type { ContextWith } from '../../api/types.js';
@@ -54,7 +67,12 @@ function decideClose(ctx: ContextWith<'objects'>, args: string[]): Promise<void>
   return closeObjectVerb(args, DECISION, (id) => objectClose(ctx, 'decision', id));
 }
 
-export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleDecide({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -65,18 +83,23 @@ export async function handleDecide({ hippoRoot, tenantId, args, flags }: Command
   await decideCreate(ctx, subcommand, flags);
 }
 
-async function decideCreate(ctx: ContextWith<'objects'>, decisionText: string, flags: CliFlags): Promise<void> {
+async function decideCreate(
+  ctx: ContextWith<'objects'>,
+  decisionText: string,
+  flags: CliFlags,
+): Promise<void> {
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
-  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
-  // non-superseding decision.
+  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than
+  // silently creating a non-superseding decision.
   if (flagValueless(flags, 'supersedes')) {
     fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // Commit the table create+supersede first (inside the save's SAVEPOINT) and weaken the old memory last,
-  // best-effort, so a memory-write failure cannot leave the memory stale while the table shows the supersession.
+  // Commit the table create+supersede first (inside the save's SAVEPOINT) and weaken the old memory
+  // last, best-effort, so a memory-write failure cannot leave the memory stale while the table
+  // shows the supersession.
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
@@ -109,8 +132,8 @@ async function weakenOrWarn(
   oldEntry: MemoryEntry,
   supersedesMemId: string | null,
 ): Promise<void> {
-  // Best-effort and last: the decision already committed. Failing here would make a retry find no active decision for
-  // the old memory and create a duplicate active successor, so warn instead.
+  // Best-effort and last: the decision already committed. Failing here would make a retry find no
+  // active decision for the old memory and create a duplicate active successor, so warn instead.
   try {
     await decisionMemoryWeaken(ctx, oldEntry);
   } catch (e) {

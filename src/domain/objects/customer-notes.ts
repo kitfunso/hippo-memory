@@ -12,7 +12,11 @@ import type { CustomerNote, NoteStatus } from '../../base/records/object-types.j
 
 export type { CustomerNote, NoteStatus } from '../../base/records/object-types.js';
 
-export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>(['active', 'superseded', 'closed']);
+export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
+  'active',
+  'superseded',
+  'closed',
+]);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the 4096 short-field
  *  convention. */

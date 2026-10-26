@@ -1,5 +1,5 @@
-// Writes and removes hippo's OpenCode plugin, and takes an old JSON hooks block out of opencode.json, which OpenCode's
-// schema rejects.
+// Writes and removes hippo's OpenCode plugin, and takes an old JSON hooks block out of
+// opencode.json, which OpenCode's schema rejects.
 import * as fs from 'node:fs';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { tryReadJsonFile } from '../../host/json-file.js';
@@ -34,7 +34,8 @@ function migrateLegacyOpencodeHooksBlock() {
 export function installOpencodePlugin(): OpencodePluginInstallResult {
   const pluginPath = resolveOpencodePluginPath();
   const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
-  // A marker-only match with stale content is rewritten, so plugin-source patches reach existing installs.
+  // A marker-only match with stale content is rewritten, so plugin-source patches reach existing
+  // installs.
   if (fs.existsSync(pluginPath) && isCurrentPlugin(fs.readFileSync(pluginPath, 'utf8'))) {
     return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
   }
@@ -45,11 +46,15 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
 export function uninstallOpencodePlugin(): boolean {
   const pluginPath = resolveOpencodePluginPath();
   let removedFile = false;
-  if (fs.existsSync(pluginPath) && fs.readFileSync(pluginPath, 'utf8').includes(HIPPO_OPENCODE_PLUGIN_MARKER)) {
+  if (
+    fs.existsSync(pluginPath) &&
+    fs.readFileSync(pluginPath, 'utf8').includes(HIPPO_OPENCODE_PLUGIN_MARKER)
+  ) {
     fs.unlinkSync(pluginPath);
     removedFile = true;
   }
-  // The legacy migration runs on uninstall too: a user removing hippo entirely must be left with a launchable opencode.
+  // The legacy migration runs on uninstall too: a user removing hippo entirely must be left with a
+  // launchable opencode.
   const { migrated } = migrateLegacyOpencodeHooksBlock();
   return removedFile || migrated;
 }

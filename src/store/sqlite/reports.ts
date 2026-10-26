@@ -31,7 +31,8 @@ type CorrectionLinkDbRow = {
   source_created: string | null;
 };
 
-/** The ` AND` range that resumes after `after` on the given created and id columns, and the arguments it binds. */
+/** The ` AND` range that resumes after `after` on the given created and id columns, and the
+ * arguments it binds. */
 function afterRange(created: string, id: string, after: ReportPage['after']): SqlFragment {
   if (!after) return { sql: '', params: [] };
   return {
@@ -40,8 +41,8 @@ function afterRange(created: string, id: string, after: ReportPage['after']): Sq
   };
 }
 
-/** A page of the superseded rows joined to their successor and that row's extraction source: the pairs the report
- * lists, and no other row. */
+/** A page of the superseded rows joined to their successor and that row's extraction source: the
+ * pairs the report lists, and no other row. */
 function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
   const range = afterRange('old.created', 'old.id', page.after);
   const rows = cachedStatement(
@@ -71,7 +72,9 @@ const RAW = "kind = 'raw'";
 function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as { n: number };
+    const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as {
+      n: number;
+    };
     const range = afterRange('created', 'id', page.after);
     // SAFETY: the SELECT names exactly these four columns.
     const gaps = cachedStatement(
@@ -94,7 +97,8 @@ function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePag
   });
 }
 
-/** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
+/** Strength tallies and the open-conflict count on one snapshot, so they never straddle another
+ * process's write. */
 function memoryStatus(
   db: DatabaseSyncLike,
   rules: StoreModel,
@@ -103,7 +107,7 @@ function memoryStatus(
   atRiskBelow: number,
 ): StrengthTallies & { openConflicts: number } {
   return withReadSnapshot(db, () => ({
-    ...strengthTallies(db, rules, tenantId, now, atRiskBelow),
+    ...strengthTallies(db, { rules, tenantId, now, atRiskBelow }),
     openConflicts: countOpenConflicts(db, tenantId),
   }));
 }

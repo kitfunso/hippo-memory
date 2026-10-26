@@ -34,7 +34,11 @@ export function computeTemporalRange(entries: MemoryEntry[]): TemporalRange {
 const TEMPORAL_BOOST_FLOOR = 0.8;
 const TEMPORAL_BOOST_SPAN = 0.4;
 
-export function temporalBoost(entry: MemoryEntry, direction: TemporalDirection, range: TemporalRange): number {
+export function temporalBoost(
+  entry: MemoryEntry,
+  direction: TemporalDirection,
+  range: TemporalRange,
+): number {
   if (!direction) return 1.0;
 
   const span = range.maxTime - range.minTime;
@@ -53,5 +57,8 @@ export function temporalBoost(entry: MemoryEntry, direction: TemporalDirection, 
 /** The query's temporal cue and, only when there is one, the pool's time range. */
 export function temporalContext(query: string, entries: MemoryEntry[]) {
   const direction = detectTemporalDirection(query);
-  return { direction, range: direction ? computeTemporalRange(entries) : { minTime: 0, maxTime: 0 } };
+  return {
+    direction,
+    range: direction ? computeTemporalRange(entries) : { minTime: 0, maxTime: 0 },
+  };
 }

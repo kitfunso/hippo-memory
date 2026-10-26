@@ -1,5 +1,6 @@
-// Which sentences of a session's final reply carry a lesson, and the digest text built from them. No file or store
-// access: surface/capture/session-digest.ts reads the transcript, api/memories/session-digest.ts writes the row.
+// Which sentences of a session's final reply carry a lesson, and the digest text built from them.
+// No file or store access: surface/capture/session-digest.ts reads the transcript,
+// api/memories/session-digest.ts writes the row.
 import { USER_SEGMENT } from '../../base/util/home-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 
@@ -16,7 +17,10 @@ const MAX_DIGEST_CHARS = 1200;
 
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
 
-function rewriteRepoPaths(sentence: string, relativePath: (absolute: string) => string | null): string {
+function rewriteRepoPaths(
+  sentence: string,
+  relativePath: (absolute: string) => string | null,
+): string {
   return sentence.replace(ABSOLUTE_PATH, (token) => {
     const trail = /[.:!]+$/.exec(token)?.[0] ?? '';
     const rel = relativePath(token.slice(0, token.length - trail.length));
@@ -91,7 +95,8 @@ function proseText(text: string): string {
   return kept.join('\n');
 }
 
-/** Sentences of the reply; code spans and "e.g." are held out of the split so their dots never end a sentence. */
+/** Sentences of the reply; code spans and "e.g." are held out of the split so their dots never
+ * end a sentence. */
 export function digestSentences(text: string): string[] {
   const held: string[] = [];
   const masked = proseText(text).replace(PROTECTED, (m) => `\uE000${held.push(m) - 1}\uE001`);
@@ -115,7 +120,9 @@ function echoWindows(texts: readonly string[]): Set<string> {
   const windows = new Set<string>();
   for (const text of texts) {
     const tokens = echoTokens(text);
-    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++) windows.add(tokens.slice(i, i + ECHO_WINDOW).join(' '));
+    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++) {
+      windows.add(tokens.slice(i, i + ECHO_WINDOW).join(' '));
+    }
   }
   return windows;
 }
@@ -145,18 +152,21 @@ interface Candidate {
   score: number;
 }
 
-/** Surviving sentences, best first: anchored or reasoned ones rank above the rest, earlier wins a tie. */
+/** Surviving sentences, best first: anchored or reasoned ones rank above the rest, earlier wins
+ * a tie. */
 function rankedSentences(
   finalText: string,
   windows: ReadonlySet<string>,
   relativePath: (absolute: string) => string | null,
 ): Candidate[] {
   const kept: Candidate[] = [];
-  // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that no pattern matches.
+  // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that
+  // no pattern matches.
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, relativePath);
-    // A home-directory path names its user and the store may be shared, so such a sentence is dropped.
+    // A home-directory path names its user and the store may be shared, so such a sentence is
+    // dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });
@@ -167,7 +177,9 @@ function changedLine(files: readonly string[]): string {
   for (let shown = Math.min(files.length, MAX_FILES); shown > 0; shown--) {
     const more = files.length - shown;
     const line = maskEmails(
-      redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`),
+      redactSecretsStrict(
+        `Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`,
+      ),
     );
     if (line.length <= MAX_DIGEST_CHARS) return line;
   }
@@ -192,7 +204,11 @@ export interface DigestDraft {
 
 /** The digest text, or null when nothing survives the filters. Sentences print in reply order. */
 export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
-  const ranked = rankedSentences(sources.finalText, echoWindows(sources.echoTexts), sources.relativePath);
+  const ranked = rankedSentences(
+    sources.finalText,
+    echoWindows(sources.echoTexts),
+    sources.relativePath,
+  );
   const changed = changedLine(sources.files);
   // The cap drops whole sentences, lowest-ranked first, and keeps the Changed line.
   for (let kept = ranked.slice(0, MAX_SENTENCES); ; kept = kept.slice(0, -1)) {

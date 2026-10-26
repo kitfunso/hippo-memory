@@ -9,8 +9,9 @@ import type { AuditPrune } from '../../base/ports/store/audit.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { handleStamp } from './handle-clock.js';
 
-// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
-// replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
+// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot
+// serialize without a replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays
+// assignable as a JSON.stringify replacer.
 type JsonValueWithBigInt = JsonValue | bigint;
 
 function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
@@ -24,14 +25,18 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
 const AUDIT_ROW_COLUMNS = 'ts, tenant_id, actor, op, target_id, metadata_json';
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (${AUDIT_ROW_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`;
 
-// Every column is text, so one JSON array binds any number of rows and the statement's text never changes.
+// Every column is text, so one JSON array binds any number of rows and the statement's text never
+// changes.
 const INSERT_AUDIT_ROWS_SQL =
   `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
   `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +
   `json_extract(value, '$[3]'), json_extract(value, '$[4]') FROM json_each(?) ORDER BY key`;
 
 /** Writes `events` in one statement, ids in their order; a failure writes none of them. */
-export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendAuditOptions[]): void {
+export function appendAuditEvents(
+  db: DatabaseSyncLike,
+  events: readonly AppendAuditOptions[],
+): void {
   const [only] = events;
   if (only === undefined) return;
   // The plain INSERT for the common single row skips json_each.
@@ -39,7 +44,10 @@ export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendA
     cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(handleStamp(db), ...auditRowValues(only));
     return;
   }
-  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(handleStamp(db), JSON.stringify(events.map(auditRowValues)));
+  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(
+    handleStamp(db),
+    JSON.stringify(events.map(auditRowValues)),
+  );
 }
 
 function auditRowValues(opts: AppendAuditOptions): [string, string, string, string | null, string] {
@@ -76,22 +84,30 @@ export function listAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): 
 /** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`).get(
-    tenantId,
-    cutoff,
-  ) as { c: number | bigint };
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`,
+  ).get(tenantId, cutoff) as { c: number | bigint };
   return Number(row.c);
 }
 
 /** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
 function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(tenantId, cutoff);
+  const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(
+    tenantId,
+    cutoff,
+  );
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike listAuditEvents it has
- * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
-export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
+/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike
+ * listAuditEvents it has no row cap, and the ts range rides the (tenant_id, ts) index so older
+ * rows are never read. */
+export function confirmedOutcomeTimes(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  since: string,
+): Map<string, string> {
   const rows = cachedStatement(
     db,
     `SELECT target_id, MAX(ts) AS ts FROM audit_log
@@ -121,8 +137,8 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
     ts: r.ts,
     tenantId: r.tenant_id,
     actor: r.actor,
-    // SAFETY: audit_log.op is only ever written by appendAuditEvent, whose opts.op is typed AuditOp at the INSERT call
-    // site, so every stored value is a valid AuditOp.
+    // SAFETY: audit_log.op is only ever written by appendAuditEvent, whose opts.op is typed AuditOp
+    // at the INSERT call site, so every stored value is a valid AuditOp.
     op: r.op as AuditOp,
     targetId: r.target_id,
     metadata: safeJsonParse(r.metadata_json, r.id),
@@ -140,8 +156,8 @@ export interface FailedAuditEvent {
   error: unknown;
 }
 
-/** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that
- * failed, for the caller to report. */
+/** Appends each event as its own write on one handle, so a row that fails drops only itself.
+ * Returns the rows that failed, for the caller to report. */
 export function recordAuditEventsRowByRow(
   db: DatabaseSyncLike,
   events: readonly AppendAuditOptions[],
@@ -157,8 +173,8 @@ export function recordAuditEventsRowByRow(
   return failed;
 }
 
-/** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands
- * alone; returns the row count. */
+/** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write
+ * scope, so neither lands alone; returns the row count. */
 export function pruneAuditRows(db: DatabaseSyncLike, prune: AuditPrune): number {
   const { tenantId, cutoff, actor, olderThanDays } = prune;
   if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);

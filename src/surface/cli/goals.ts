@@ -39,7 +39,8 @@ function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
   if (!sessionId) {
     fail('session id required (set HIPPO_SESSION_ID or pass --session-id)');
   }
-  const tenantId = (stringFlagOrExit(flags, 'tenant-id') ?? defaultTenantId).trim() || DEFAULT_TENANT_ID;
+  const tenantId =
+    (stringFlagOrExit(flags, 'tenant-id') ?? defaultTenantId).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
 
@@ -68,10 +69,17 @@ function readGoalLevel(flags: CliFlags): number | undefined {
   return parsed;
 }
 
-async function pushGoal(hippoRoot: string, defaultTenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function pushGoal(
+  hippoRoot: string,
+  defaultTenantId: string,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const rawName = args.join(' ').trim();
   if (!rawName) {
-    fail('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
+    fail(
+      'Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]',
+    );
   }
   // Sanitize at WRITE time so corrupt names never enter the DB.
   const name = sanitizeGoalName(rawName);
@@ -105,7 +113,11 @@ async function pushGoal(hippoRoot: string, defaultTenantId: string, args: string
   console.log(goal.id);
 }
 
-async function listGoals(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
+async function listGoals(
+  hippoRoot: string,
+  defaultTenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   const { sessionId, tenantId } = resolveGoalSession(flags, defaultTenantId);
   const showAll = boolFlag(flags, 'all');
   const goals = await api.goalList(cliApiContext(hippoRoot, tenantId), { sessionId, all: showAll });
@@ -115,7 +127,8 @@ async function listGoals(hippoRoot: string, defaultTenantId: string, flags: CliF
     return;
   }
 
-  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not asserted.
+  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not
+  // asserted.
   const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,
@@ -141,7 +154,12 @@ async function listGoals(hippoRoot: string, defaultTenantId: string, flags: CliF
   }
 }
 
-async function completeGoal(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function completeGoal(
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
@@ -181,7 +199,12 @@ async function resumeGoal(hippoRoot: string, tenantId: string, args: string[]): 
   console.log('ok');
 }
 
-export async function handleGoal({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleGoal({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0];
   if (!sub) {
     fail('Usage: hippo goal <push|list|complete|suspend|resume> [args]');

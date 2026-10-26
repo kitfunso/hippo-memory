@@ -15,8 +15,8 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or
- * plain text with one memory per line. */
+/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects,
+ * `{"memories": [...]}`, or plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
@@ -74,7 +74,8 @@ function splitMarkdown(content: string): string[] {
 }
 
 /**
- * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open.
+ * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the
+ * chunk still open.
  */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
@@ -165,21 +166,13 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    if (/^\d+\.\s+/.test(trimmed)) {
+    const ruleStart = cursorRuleStart(trimmed);
+    if (ruleStart !== null) {
       if (current.trim()) {
         chunks.push(current.trim());
         current = '';
       }
-      current = trimmed.replace(/^\d+\.\s+/, '').trim();
-      continue;
-    }
-
-    if (/^[-*]\s+/.test(trimmed)) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^[-*]\s+/, '').trim();
+      current = ruleStart;
       continue;
     }
 
@@ -195,12 +188,21 @@ function parseCursorFile(content: string): string[] {
   });
 }
 
+/** The rule text a numbered item or bullet opens, or null when the line opens no rule. */
+function cursorRuleStart(trimmed: string): string | null {
+  if (/^\d+\.\s+/.test(trimmed)) return trimmed.replace(/^\d+\.\s+/, '').trim();
+  if (/^[-*]\s+/.test(trimmed)) return trimmed.replace(/^[-*]\s+/, '').trim();
+  return null;
+}
+
 const CURSOR_RULE_FILE = /\.mdc?$/i;
 
 /** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
 export function importCursorInto(sourcePath: string, options: TargetedImport): ImportResult {
   const files = fs.statSync(sourcePath).isDirectory()
-    ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) => path.join(sourcePath, rel))
+    ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) =>
+        path.join(sourcePath, rel),
+      )
     : [sourcePath];
   const chunks = files.flatMap((file) => {
     const raw = fs.readFileSync(file, 'utf8');
@@ -210,7 +212,8 @@ export function importCursorInto(sourcePath: string, options: TargetedImport): I
 }
 
 /**
- * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line.
+ * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines
+ * or one per line.
  */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');

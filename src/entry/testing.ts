@@ -1,4 +1,5 @@
-// Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond the major version.
+// Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond
+// the major version.
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import {
   batchWriteAndDeleteInFolder,
@@ -9,11 +10,17 @@ import {
 } from '../surface/testing-kit.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../base/scope/read-admission.js';
-export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../surface/testing-kit.js';
+export {
+  initStore,
+  loadAllEntries,
+  loadEmbeddingIndex,
+  writeEntry,
+} from '../surface/testing-kit.js';
 export type { WriteEntryOptions } from '../surface/testing-kit.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 export { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from './object-saves.js';
-// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
+// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these
+// forms.
 export type { MemoryWire } from '../base/memory/memory-wire.js';
 export {
   ambientSecretAdmitWire,
@@ -38,19 +45,31 @@ export {
   writeIndexMirror,
 } from '../surface/testing-kit.js';
 
-// The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the hippo.db adapter.
+// The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the
+// hippo.db adapter.
 export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {
   return loadAllEntries(hippoRoot).map(toWire);
 }
 
-export function writeEntryWire(hippoRoot: string, entry: MemoryWire, opts?: WriteEntryOptions): void {
+export function writeEntryWire(
+  hippoRoot: string,
+  entry: MemoryWire,
+  opts?: WriteEntryOptions,
+): void {
   writeEntry(hippoRoot, fromWire(entry), opts);
 }
 
-export function upsertEntryRowWire(db: Parameters<typeof upsertEntryRow>[0], entry: MemoryWire): void {
+export function upsertEntryRowWire(
+  db: Parameters<typeof upsertEntryRow>[0],
+  entry: MemoryWire,
+): void {
   upsertEntryRow(db, fromWire(entry));
 }
 
-export function batchWriteAndDeleteWire(hippoRoot: string, toWrite: MemoryWire[], toDeleteIds: string[]): string[] {
+export function batchWriteAndDeleteWire(
+  hippoRoot: string,
+  toWrite: MemoryWire[],
+  toDeleteIds: string[],
+): string[] {
   return batchWriteAndDeleteInFolder(hippoRoot, toWrite.map(fromWire), toDeleteIds);
 }

@@ -1,10 +1,16 @@
-// The dashboard's reads answered from one thread of their own: each runs a synchronous aggregate over a tenant's rows,
-// so on the server thread it would hold every other request.
+// The dashboard's reads answered from one thread of their own: each runs a synchronous aggregate
+// over a tenant's rows, so on the server thread it would hold every other request.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { MemoryQuery } from '../../api/dashboard/queries.js';
-import type { MemoryDetail, MemoryPage, Overview, ProjectDetail, SearchResult } from '../../api/dashboard/types.js';
+import type {
+  MemoryDetail,
+  MemoryPage,
+  Overview,
+  ProjectDetail,
+  SearchResult,
+} from '../../api/dashboard/types.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { replyError, type FailureReply } from './failure-reply.js';
@@ -16,7 +22,8 @@ export interface DashboardReader {
   memories(key: string, query: MemoryQuery, fresh: boolean): Promise<MemoryPage | null>;
   search(text: string, fresh: boolean): Promise<SearchResult>;
   memory(id: string, fresh: boolean): Promise<MemoryDetail | null>;
-  /** After a dashboard write: moves the snapshot id when it committed, and answers the detail of `entry` when given. */
+  /** After a dashboard write: moves the snapshot id when it committed, and answers the detail of
+   * `entry` when given. */
   written(changed: boolean, entry?: MemoryEntry): Promise<MemoryDetail | null>;
   close(): Promise<void>;
 }
@@ -25,17 +32,32 @@ export interface DashboardReader {
 export type ReaderOp =
   | { readonly op: 'overview'; readonly fresh: boolean }
   | { readonly op: 'project'; readonly key: string; readonly fresh: boolean }
-  | { readonly op: 'memories'; readonly key: string; readonly query: MemoryQuery; readonly fresh: boolean }
+  | {
+      readonly op: 'memories';
+      readonly key: string;
+      readonly query: MemoryQuery;
+      readonly fresh: boolean;
+    }
   | { readonly op: 'search'; readonly text: string; readonly fresh: boolean }
   | { readonly op: 'memory'; readonly memoryId: string; readonly fresh: boolean }
   | { readonly op: 'written'; readonly changed: boolean; readonly entry?: MemoryEntry }
   | { readonly op: 'close' };
 
 /** An op as sent, with its id and the clock readings it runs at. */
-export type ReaderCall = ReaderOp & { readonly id: number; readonly nowMs: number; readonly wallMs: number };
+export type ReaderCall = ReaderOp & {
+  readonly id: number;
+  readonly nowMs: number;
+  readonly wallMs: number;
+};
 
 /** What a call answers: the value of the DashboardReader method that sent it. */
-export type ReaderValue = Overview | ProjectDetail | MemoryPage | SearchResult | MemoryDetail | null;
+export type ReaderValue =
+  | Overview
+  | ProjectDetail
+  | MemoryPage
+  | SearchResult
+  | MemoryDetail
+  | null;
 
 export type ReaderReply =
   | { readonly id: number; readonly ok: true; readonly value: ReaderValue }
@@ -54,8 +76,11 @@ export interface ReaderClocks {
   readonly cacheClock: () => number;
 }
 
-// Resolved from the package root, so a server run from TypeScript source starts the same built file.
-const THREAD_ENTRY = fileURLToPath(new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url));
+// Resolved from the package root, so a server run from TypeScript source starts the same built
+// file.
+const THREAD_ENTRY = fileURLToPath(
+  new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url),
+);
 
 const READER_GONE = 'the dashboard reader has stopped';
 
@@ -70,7 +95,8 @@ interface ReaderState {
   gone?: Error;
 }
 
-/** Settles each call from the thread's reply, and every call left once the thread exits; resolves on that exit. */
+/** Settles each call from the thread's reply, and every call left once the thread exits;
+ * resolves on that exit. */
 function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
   worker.on('message', (reply: ReaderReply) => {
     const waiting = state.pending.get(reply.id);
@@ -92,11 +118,16 @@ function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
   });
 }
 
-/** Starts the reader thread for `init`'s tenant; close() lets it close its store and waits for it to exit. */
+/** Starts the reader thread for `init`'s tenant; close() lets it close its store and waits for
+ * it to exit. */
 export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): DashboardReader {
-  // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of Node's
-  // experimental-module warning.
-  const worker = new Worker(THREAD_ENTRY, { env: SHARE_ENV, execArgv: ['--no-warnings'], workerData: init });
+  // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of
+  // Node's experimental-module warning.
+  const worker = new Worker(THREAD_ENTRY, {
+    env: SHARE_ENV,
+    execArgv: ['--no-warnings'],
+    workerData: init,
+  });
   // The listener keeps the process alive; the thread alone must not.
   worker.unref();
   const state: ReaderState = { pending: new Map() };
@@ -106,7 +137,8 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
     new Promise<T>((resolve, reject) => {
       if (state.gone !== undefined) return reject(state.gone);
       const id = ++nextId;
-      // SAFETY: the thread answers each op with the value its DashboardReader method names, which is T below.
+      // SAFETY: the thread answers each op with the value its DashboardReader method names, which
+      // is T below.
       state.pending.set(id, { resolve: (value) => resolve(value as T), reject });
       const sent: ReaderCall = { ...op, id, nowMs: clocks.now(), wallMs: clocks.cacheClock() };
       worker.postMessage(sent);
@@ -117,9 +149,11 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
     memories: (key, query, fresh) => call({ op: 'memories', key, query, fresh }),
     search: (text, fresh) => call({ op: 'search', text, fresh }),
     memory: (memoryId, fresh) => call({ op: 'memory', memoryId, fresh }),
-    written: (changed, entry) => call({ op: 'written', changed, ...(entry !== undefined && { entry }) }),
+    written: (changed, entry) =>
+      call({ op: 'written', changed, ...(entry !== undefined && { entry }) }),
     close: async () => {
-      // The process must not end before the thread has closed its store, as when a failed listen leaves nothing else.
+      // The process must not end before the thread has closed its store, as when a failed listen
+      // leaves nothing else.
       worker.ref();
       if (state.gone === undefined) await call<null>({ op: 'close' });
       await exited;

@@ -1,4 +1,5 @@
-// Qwen Code's auto memory: markdown notes under its base folder, or inside the project when it keeps them local.
+// Qwen Code's auto memory: markdown notes under its base folder, or inside the project when it
+// keeps them local.
 import path from 'node:path';
 import { splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
@@ -11,10 +12,16 @@ export function sanitizeCwd(p: string, platform: NodeJS.Platform): string {
 
 function baseDir(ctx: AdapterContext): string {
   const { env } = ctx;
-  return env.QWEN_CODE_MEMORY_BASE_DIR || env.QWEN_RUNTIME_DIR || env.QWEN_HOME || path.join(ctx.home, '.qwen');
+  return (
+    env.QWEN_CODE_MEMORY_BASE_DIR ||
+    env.QWEN_RUNTIME_DIR ||
+    env.QWEN_HOME ||
+    path.join(ctx.home, '.qwen')
+  );
 }
 
-/** The nearest folder at or above `start` holding a `.git` entry; a file counts, so a linked worktree keeps its own. */
+/** The nearest folder at or above `start` holding a `.git` entry; a file counts, so a linked
+ * worktree keeps its own. */
 function gitRoot(ctx: AdapterContext, start: string): string | null {
   for (let dir = start; ;) {
     if (ctx.files.exists(path.join(dir, '.git'))) return dir;
@@ -27,7 +34,8 @@ function gitRoot(ctx: AdapterContext, start: string): string | null {
 function projectDir(ctx: AdapterContext, base: string, projectRoot: string): string {
   const root = path.resolve(projectRoot);
   if (ctx.env.QWEN_CODE_MEMORY_LOCAL === '1') return path.join(root, '.qwen', 'memory');
-  const key = ctx.env.QWEN_CODE_MEMORY_PROJECT_SCOPE === 'workspace' ? root : (gitRoot(ctx, root) ?? root);
+  const key =
+    ctx.env.QWEN_CODE_MEMORY_PROJECT_SCOPE === 'workspace' ? root : (gitRoot(ctx, root) ?? root);
   return path.join(base, 'projects', sanitizeCwd(key, ctx.platform), 'memory');
 }
 
@@ -45,6 +53,11 @@ export const qwenCodeAdapter: Adapter = {
     if (scope === 'user') dir = path.join(base, 'memories');
     else if (ctx.projectRoot !== undefined) dir = projectDir(ctx, base, ctx.projectRoot);
     const container = dir === null ? null : readFolderStore(ctx.files, dir, scope, NOTES);
-    return { tool: 'qwen-code', home: base, containers: container ? [container] : [], warnings: [] };
+    return {
+      tool: 'qwen-code',
+      home: base,
+      containers: container ? [container] : [],
+      warnings: [],
+    };
   },
 };

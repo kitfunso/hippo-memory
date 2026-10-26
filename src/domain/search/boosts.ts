@@ -1,5 +1,10 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
-import { CHURN_STALE_TAG, DAG_LEVEL, EXTRACTED_TAG, type MemoryEntry } from '../../base/memory/entry.js';
+import {
+  CHURN_STALE_TAG,
+  DAG_LEVEL,
+  EXTRACTED_TAG,
+  type MemoryEntry,
+} from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import {
   NO_RANK_ABLATION,
@@ -16,16 +21,18 @@ import { clamp } from '../../base/util/stats.js';
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
-// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is demoted.
+// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is
+// demoted.
 const SCOPE_MATCH_BOOST = 1.5;
 const SCOPE_MISMATCH_BOOST = 0.5;
 const EXTRACTION_TAG_BOOST = 1.3;
-// The outcome nudge is 1 + slope * tanh(net / 2), clamped so one outcome streak cannot swamp lexical rank.
+// The outcome nudge is 1 + slope * tanh(net / 2), clamped so one outcome streak cannot swamp
+// lexical rank.
 const OUTCOME_NUDGE_SLOPE = 0.15;
 const OUTCOME_NUDGE_MIN = 0.85;
 const OUTCOME_NUDGE_MAX = 1.15;
-// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most of its lexical
-// score.
+// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most
+// of its lexical score.
 export const STRENGTH_RANK_FLOOR = 0.5;
 export const STRENGTH_RANK_SPAN = 0.5;
 const RECENCY_RANK_FLOOR = 0.8;
@@ -46,21 +53,30 @@ function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): nu
   return Math.exp(-ageDays / (ablation.recencyDays ?? RECENCY_SCALE_DAYS));
 }
 
-/** A multiplier near 1 that follows the net outcome score through tanh, kept inside [min, max]. The always-on boost
- * and the value-aware rank differ only in these four inputs. */
-export function outcomeNudge(net: number, slope: number, min: number, max: number): number {
-  return clamp(1 + slope * Math.tanh(net), min, max);
+/** A multiplier near 1 that follows the net outcome score through tanh, kept inside [min, max].
+ * The always-on boost and the value-aware rank differ only in these four inputs. */
+export function outcomeNudge(
+  net: number,
+  { slope, min, max }: { readonly slope: number; readonly min: number; readonly max: number },
+): number {
+  return clamp(1 + slope * Math.tanh(net), { min, max });
 }
 
-/** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it too. */
+/** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it
+ * too. */
 export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
-  return outcomeNudge((pos - neg) / 2, OUTCOME_NUDGE_SLOPE, OUTCOME_NUDGE_MIN, OUTCOME_NUDGE_MAX);
+  return outcomeNudge((pos - neg) / 2, {
+    slope: OUTCOME_NUDGE_SLOPE,
+    min: OUTCOME_NUDGE_MIN,
+    max: OUTCOME_NUDGE_MAX,
+  });
 }
 
-/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same deboost. */
+/** A DAG summary is a topic summary (level 2) or an entity profile (level 3); both take the same
+ * deboost. */
 export function isDagSummary(entry: MemoryEntry): boolean {
   return entry.dagLevel === DAG_LEVEL.topic || entry.dagLevel === DAG_LEVEL.entity;
 }
@@ -68,13 +84,15 @@ export function isDagSummary(entry: MemoryEntry): boolean {
 const isDeboost = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value > 0 && value <= 1;
 
-/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then 0.85; values outside (0, 1] fall through. */
+/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then 0.85; values outside
+ * (0, 1] fall through. */
 export function resolveSummaryDeboost(perCall?: number, configured?: number): number {
   if (isDeboost(perCall)) return perCall;
   return isDeboost(configured) ? configured : DEFAULT_SUMMARY_DEBOOST;
 }
 
-/** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get 1.0. */
+/** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get
+ * 1.0. */
 function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
   if (!isDagSummary(entry) || !entry.lastRebuiltAt) return 1.0;
   const rebuiltMs = new Date(entry.lastRebuiltAt).getTime();
@@ -88,7 +106,8 @@ export interface SummaryScoring {
   freshness: boolean;
 }
 
-/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores bit-identical. */
+/** The sync BM25 path applies no summary scoring; multiplying by exactly 1 keeps its scores
+ * bit-identical. */
 export const NO_SUMMARY_SCORING: SummaryScoring = { deboost: 1, freshness: false };
 
 export function summaryScoring(options: {
@@ -104,7 +123,10 @@ export function summaryScoring(options: {
 
 export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScoring) {
   if (!isDagSummary(entry)) return { deboost: 1.0, freshness: 1.0 };
-  return { deboost: s.deboost, freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0 };
+  return {
+    deboost: s.deboost,
+    freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0,
+  };
 }
 
 export function strengthRecencyMultipliers(
@@ -112,12 +134,14 @@ export function strengthRecencyMultipliers(
   ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>,
 ) {
   return {
-    strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
+    strength:
+      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
 
-/** What a ranking's strength and recency read from its caller: the eval switches and the root's settings. */
+/** What a ranking's strength and recency read from its caller: the eval switches and the root's
+ * settings. */
 export interface RankRun {
   readonly switches?: EvalSwitches;
   readonly runtime?: RuntimeSettings;
@@ -161,8 +185,13 @@ export interface AppliedBoosts {
   summaryFreshnessBoost: number;
 }
 
-/** Applies every rank multiplier one at a time, in a fixed order, so float rounding matches across paths. */
-export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostContext): AppliedBoosts {
+/** Applies every rank multiplier one at a time, in a fixed order, so float rounding matches
+ * across paths. */
+export function applyRankBoosts(
+  score: number,
+  entry: MemoryEntry,
+  ctx: BoostContext,
+): AppliedBoosts {
   const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);

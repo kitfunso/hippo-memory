@@ -1,5 +1,5 @@
-// /v1/incidents routes: open, list, show, resolve and close. The lifecycle is open, resolved, closed with no supersede,
-// so linkedMemoryIds takes supersedesDecisionId's place on create.
+// /v1/incidents routes: open, list, show, resolve and close. The lifecycle is open, resolved,
+// closed with no supersede, so linkedMemoryIds takes supersedesDecisionId's place on create.
 import { incidentOpen, incidentResolve } from '../../../api/objects/object-kinds.js';
 import { sendJson } from '../../http/http-util.js';
 import { parseJsonBody, getString, getStringArray, requiredString } from '../validation.js';
@@ -12,20 +12,28 @@ const MAX_LINKED_MEMORY_IDS = 256;
 
 function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined {
   const entry = `each linkedMemoryIds entry must be a non-empty string <= ${MAX_SHORT_FIELD_LEN} chars`;
-  return getStringArray(body, 'linkedMemoryIds', MAX_LINKED_MEMORY_IDS, MAX_SHORT_FIELD_LEN, {
-    nonEmpty: 'raw',
-    messages: {
-      notArray: 'linkedMemoryIds must be an array of memory ids',
-      itemType: entry,
-      empty: entry,
-      length: entry,
+  return getStringArray({
+    obj: body,
+    key: 'linkedMemoryIds',
+    maxItems: MAX_LINKED_MEMORY_IDS,
+    maxItemLen: MAX_SHORT_FIELD_LEN,
+    rule: {
+      nonEmpty: 'raw',
+      messages: {
+        notArray: 'linkedMemoryIds must be an array of memory ids',
+        itemType: entry,
+        empty: entry,
+        length: entry,
+      },
     },
   });
 }
 
 async function handleResolveIncident(rr: ObjectRequest, id: number): Promise<void> {
   const { req, res, ctx } = rr;
-  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
+  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', {
+    max: MAX_SHORT_FIELD_LEN,
+  });
   sendJson(res, 200, { incident: await incidentResolve(ctx, id, resolutionText) });
 }
 

@@ -1,9 +1,20 @@
-import { MemoryEntry, EXTRACTED_TAG, Layer, EmotionalValence, createMemory } from '../../base/memory/entry.js';
+import {
+  MemoryEntry,
+  EXTRACTED_TAG,
+  Layer,
+  EmotionalValence,
+  createMemory,
+} from '../../base/memory/entry.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { describeLlmFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
+import {
+  describeLlmFailure,
+  llmFailureFields,
+  type Llm,
+  type LlmFailure,
+} from '../../base/ports/llm.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -19,8 +30,9 @@ export interface ExtractOptions {
   llm: Llm;
   model?: string;
   /**
-   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the model
-   * call itself failed. Without it each failure logs a warn with its error fields.
+   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is
+   * set when the model call itself failed. Without it each failure logs a warn with its error
+   * fields.
    */
   onError?: (msg: string, failure?: LlmFailure) => void;
   /** The request's abort signal; the model call stops when it fires. */
@@ -95,10 +107,12 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
     const itemTags = item.tags;
     const tags = Array.isArray(itemTags) ? itemTags.filter((t) => isJsonString(t)) : [];
-    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings
-    // of EmotionalValence.
+    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the
+    // four literal strings of EmotionalValence.
     const valence: EmotionalValence =
-      isJsonString(item.valence) && validValences.has(item.valence) ? (item.valence as EmotionalValence) : 'neutral';
+      isJsonString(item.valence) && validValences.has(item.valence)
+        ? (item.valence as EmotionalValence)
+        : 'neutral';
 
     facts.push({ content: item.content, tags, valence });
   }
@@ -108,12 +122,16 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
+export interface StoreExtractedFactsOptions {
+  readonly source: MemoryEntry;
+  readonly facts: ExtractedFact[];
+  readonly baseHalfLifeDays: number;
+  readonly now: Date;
+}
+
 export async function storeExtractedFacts(
   store: StoreWith<'learning'>,
-  source: MemoryEntry,
-  facts: ExtractedFact[],
-  baseHalfLifeDays: number,
-  now: Date,
+  { source, facts, baseHalfLifeDays, now }: StoreExtractedFactsOptions,
 ): Promise<MemoryEntry[]> {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
@@ -131,8 +149,8 @@ export async function storeExtractedFacts(
     }
     const entry = buildExtractedEntry(fact, source, inheritedTags, { baseHalfLifeDays, now });
 
-    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
-    // (reject_refusal), so skip and count.
+    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry
+    // already audited it (reject_refusal), so skip and count.
     try {
       await store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
     } catch (err) {
@@ -170,8 +188,8 @@ function buildExtractedEntry(
         source: source.source,
         extractedFrom: source.id,
         scope: source.scope,
-        // Without it createMemory stamps 'default', and extracted facts leave the tenant of the episodic memory
-        // they were extracted from.
+        // Without it createMemory stamps 'default', and extracted facts leave the tenant of the
+        // episodic memory they were extracted from.
         tenantId: source.tenantId,
         baseHalfLifeDays,
       },

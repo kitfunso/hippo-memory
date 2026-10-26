@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Hippo CLI entry point: parses argv and dispatches each verb through the table in surface/cli/verbs.ts.
-// `hippo help` prints the verb list from that table, so no list is kept here.
+// Hippo CLI entry point: parses argv and dispatches each verb through the table in
+// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import * as fs from 'node:fs';
@@ -20,17 +20,30 @@ import {
   printSlackBackfillUsage,
   printSlackWorkspacesUsage,
 } from './surface/cli/usage.js';
-import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './surface/cli/flags.js';
+import {
+  type FlagKind,
+  type VerbFlags,
+  flagKind,
+  isKnownFlag,
+  undeclaredFlags,
+} from './surface/cli/flags.js';
 import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { runCliCommand } from './surface/cli/cli-runtime.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
-function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
+function dryRunRefusal(
+  command: string,
+  spec: VerbSpec | undefined,
+  args: string[],
+  flags: CliFlags,
+): string | null {
   const only = spec?.dryRun;
   const honoured =
-    only === undefined ? spec?.flags.switches?.includes('dry-run') : only !== false && only.honoured(args, flags);
+    only === undefined
+      ? spec?.flags.switches?.includes('dry-run')
+      : only !== false && only.honoured(args, flags);
   if (honoured) return null;
   const where = only ? ` outside \`hippo ${command} ${only.form}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
@@ -38,7 +51,8 @@ function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string
 
 function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
-    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array member.
+    // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array
+    // member.
     (flags[key] as string[]).push(value);
   } else {
     flags[key] = [value];
@@ -46,8 +60,8 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its own branch here instead of the swallow-avoidance
-  // short-circuit in setSeparatedFlag.
+  // Glued form has no following token to swallow, so a switch gets its own branch here instead of
+  // the swallow-avoidance short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {
@@ -58,7 +72,12 @@ function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKin
 }
 
 /** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
-function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined, kind: FlagKind): number {
+function setSeparatedFlag(
+  flags: CliFlags,
+  key: string,
+  next: string | undefined,
+  kind: FlagKind,
+): number {
   if (kind === 'switch' && (next === 'true' || next === 'false')) {
     // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
     flags[key] = next;
@@ -96,7 +115,8 @@ export function parseArgs(argv: string[]) {
         i += setSeparatedFlag(flags, key, rest[i + 1], flagKind(declared, key));
       }
     } else if (part === '-h') {
-      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
+      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still
+      // passes one.
       flags['help'] = true;
       i++;
     } else {
@@ -115,8 +135,8 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   return true;
 }
 
-// Repair-only: never first-installs, because silently swapping the codex binary on routine commands is a consent
-// violation and reads as binary hijacking to supply-chain scanners.
+// Repair-only: never first-installs, because silently swapping the codex binary on routine commands
+// is a consent violation and reads as binary hijacking to supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -135,7 +155,10 @@ const COMMAND_INDEX: ReadonlyMap<string, VerbSpec> = new Map(
 );
 
 export function usageText(): string {
-  const blocks = [...ROWS.flatMap((row) => row.usage ?? []), ...ROWS.flatMap((row) => row.listedLast ?? [])];
+  const blocks = [
+    ...ROWS.flatMap((row) => row.usage ?? []),
+    ...ROWS.flatMap((row) => row.listedLast ?? []),
+  ];
   return USAGE_HEADER + blocks.join('') + USAGE_EXAMPLES;
 }
 
@@ -177,8 +200,8 @@ function rejectEmptyScope(flags: CliFlags): void {
   }
 }
 
-// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard because each
-// comparison against it is false.
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard
+// because each comparison against it is false.
 function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
@@ -188,8 +211,8 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   }
 }
 
-// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single coercion of an
-// inline value would be correct for every one of them.
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single
+// coercion of an inline value would be correct for every one of them.
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
@@ -203,7 +226,9 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   // card checks its flags per subcommand, with a stricter message.
   if (command === 'card') return;
   for (const [name, advice] of Object.entries(spec?.removedFlags ?? {})) {
-    if (Object.hasOwn(flags, name)) fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
+    if (Object.hasOwn(flags, name)) {
+      fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
+    }
   }
   const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');
   const unknown = Object.keys(flags).filter((key) => !isKnownFlag(key));
@@ -211,14 +236,24 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
-  const ignored = declared ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run') : unknown;
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
+  // ignored.
+  const ignored = declared
+    ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
+    : unknown;
   if (ignored.length > 0) {
-    printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+    printError(
+      `hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`,
+    );
   }
 }
 
-async function main(command: string, args: string[], flags: CliFlags, hippoRoot: string): Promise<void> {
+async function main(
+  command: string,
+  args: string[],
+  flags: CliFlags,
+  hippoRoot: string,
+): Promise<void> {
   if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
@@ -235,7 +270,9 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
   rejectNonNumericFlags(flags, spec?.flags);
   rejectValuedSwitches(flags, spec?.flags);
   checkUnknownFlags(command, flags, spec);
-  const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, spec, args, flags) : null;
+  const refusal = Object.hasOwn(flags, 'dry-run')
+    ? dryRunRefusal(command, spec, args, flags)
+    : null;
   if (refusal) {
     printError(refusal);
     throw new CliExit(2);
@@ -246,11 +283,13 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
     throw new CliExit(1);
   }
   assertVerbPorted(spec, CLI_STORE);
-  const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
+  const run = (): void | Promise<void> =>
+    spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
+ * side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
@@ -263,13 +302,16 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await runCliCommand(() => main(command, args, flags, getHippoRoot(process.cwd())));
   } catch (err) {
-    // The verb printed its own message. The process ends as a success does, never by process.exit, which on Windows
-    // aborts Node (libuv async.c) while a fetch still has work in flight.
+    // The verb printed its own message. The process ends as a success does, never by process.exit,
+    // which on Windows aborts Node (libuv async.c) while a fetch still has work in flight.
     if (err instanceof CliExit) {
       process.exitCode = err.code;
       return;
     }
-    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
+    printError(
+      'Error:',
+      isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err,
+    );
     // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
       const fields = errorFields(err);
@@ -283,8 +325,13 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 
 // bin/hippo.js calls runCli(); this keeps `node dist/cli.js` working while an import runs nothing.
 const entryPath = process.argv[1];
-if (entryPath && fs.existsSync(entryPath) && fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)) {
-  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the store root) lands here.
+if (
+  entryPath &&
+  fs.existsSync(entryPath) &&
+  fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)
+) {
+  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the
+  // store root) lands here.
   runCli().catch((err) => {
     log.error('hippo: the command could not start', errorFields(err));
     process.exitCode = 1;

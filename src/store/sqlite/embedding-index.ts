@@ -1,9 +1,15 @@
-// hippo.db's EmbeddingIndex: sessions by id, each holding the lock token and the rebuild it took, so a session stays on
-// the thread that opened it. The model checks take the opener, since an unreadable index there reads as none.
+// hippo.db's EmbeddingIndex: sessions by id, each holding the lock token and the rebuild it took,
+// so a session stays on the thread that opened it. The model checks take the opener, since an
+// unreadable index there reads as none.
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { listEveryTenantEntryIds } from './entry-reads.js';
-import type { EmbeddingIndex, IndexStep, IndexStepAnswers, IndexStepKind } from '../../base/ports/store/vectors.js';
+import type {
+  EmbeddingIndex,
+  IndexStep,
+  IndexStepAnswers,
+  IndexStepKind,
+} from '../../base/ports/store/vectors.js';
 import {
   type VectorRebuild,
   beginVectorRebuild,
@@ -23,8 +29,8 @@ import { answered } from './bound.js';
 import { dropVectorStaging, upsertVectors } from '../../db/vector-store.js';
 import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
 
-// The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild keeps one open; a
-// worker's handle outlives it, so the table is dropped too.
+// The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild
+// keeps one open; a worker's handle outlives it, so the table is dropped too.
 function beginRebuild(open: Handles['open']): VectorRebuild {
   const db = open();
   try {
@@ -47,7 +53,9 @@ interface Session {
   rebuild: VectorRebuild | null;
 }
 
-type Steps = { readonly [K in IndexStepKind]: (session: Session, step: IndexStep<K>) => IndexStepAnswers[K] };
+type Steps = {
+  readonly [K in IndexStepKind]: (session: Session, step: IndexStep<K>) => IndexStepAnswers[K];
+};
 
 function rebuildOf(session: Session): VectorRebuild {
   if (session.rebuild === null) throw new Error('no vector rebuild is open on this session');
@@ -72,7 +80,9 @@ function rebuildSteps(
       return session.token !== null;
     },
     begin: (session) => {
-      if (session.rebuild !== null) throw new Error('a vector rebuild is already open on this session');
+      if (session.rebuild !== null) {
+        throw new Error('a vector rebuild is already open on this session');
+      }
       session.rebuild = beginRebuild(open);
     },
     stage: (session, { rows }) => rebuildOf(session).stage(rows),
@@ -89,7 +99,8 @@ function rebuildSteps(
   };
 }
 
-// A particle's start strength is scored, so seed and reset score by the store's loss-aversion rules.
+// A particle's start strength is scored, so seed and reset score by the store's loss-aversion
+// rules.
 function indexSteps({ on, open, files }: Handles): Steps {
   return {
     ...rebuildSteps(open, files.hippoRoot),

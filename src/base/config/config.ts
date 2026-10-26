@@ -1,12 +1,17 @@
 /**
- * Hippo's config: its shape, its defaults and the rule for each key of .hippo/config.json. src/host reads the file.
+ * Hippo's config: its shape, its defaults and the rule for each key of .hippo/config.json. src/host
+ * reads the file.
  */
 
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from '../rank/search-types.js';
+import {
+  DEFAULT_LOCAL_BUMP,
+  DEFAULT_MMR_LAMBDA,
+  DEFAULT_RECALL_BUDGET,
+} from '../rank/search-types.js';
 import type { JsonValue } from '../util/json.js';
 import {
   basisPoints,
@@ -42,9 +47,9 @@ export interface HippoConfig {
     enabled: boolean | 'auto'; // 'auto' = use if dependency installed (local) / key present (api)
     model: string;
     hybridWeight: number;
-    /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
-     * API embedder needing the provider's
-     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
+    /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' |
+     * 'voyage' | 'cohere' = opt-in API embedder needing the provider's API key in env
+     * (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
      *  provider. */
@@ -78,16 +83,16 @@ export interface HippoConfig {
   autoTraceCapture: boolean;
   /** Only promote sessions whose session_complete event is within N days. */
   autoTraceWindowDays: number;
-  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each turn
-   * within the token budget. */
+  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are
+   * re-injected each turn within the token budget. */
   pinnedInject: {
     enabled: boolean;
     budget: number;
     /** Skip a block identical to the one already injected this session
      *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
-    /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the
-     * latest turn (default 10; 0 never resends). */
+    /** Resend an unchanged block after this many consecutive skips, so long sessions still see
+     * pinned rules near the latest turn (default 10; 0 never resends). */
     refreshTurns: number;
     /** Gate the hook's backfill on the prompt's own content instead of the five newest memories. Default true: the same
      *  overlap for fewer tokens. */
@@ -103,9 +108,10 @@ export interface HippoConfig {
     /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
   };
-  /** Memory scope isolation (default true): ambient context (`hippo context`, the hook, /v1/context, MCP hippo_context)
-   * excludes OTHER projects' memories; explicit recall is unaffected. False disables the ORIGIN PARTITION only: the
-   * secret veto is unconditional, and no flag re-includes secret-flagged rows. */
+  /** Memory scope isolation (default true): ambient context (`hippo context`, the hook,
+   * /v1/context, MCP hippo_context) excludes OTHER projects' memories; explicit recall is
+   * unaffected. False disables the ORIGIN PARTITION only: the secret veto is unconditional, and
+   * no flag re-includes secret-flagged rows. */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -124,15 +130,16 @@ export interface HippoConfig {
   ambient: {
     enabled: boolean;
   };
-  /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen weights
-   * (src/domain/consolidate/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not
-   * user-tunable. */
+  /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen
+   * weights (src/domain/consolidate/memory-value-weights.ts) only run when enabled; the rescue
+   * budget is a code constant, not user-tunable. */
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (sqlite/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
-   * threshold there instead of deleting it (`hippo dormant restore|forget <id>`); a faded memory the secret detector
-   * flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
+  /** Dormant memories (sqlite/dormant.ts), on by default: the sleep decay pass moves a memory
+   * that faded below the threshold there instead of deleting it (`hippo dormant restore|forget
+   * <id>`); a faded memory the secret detector flags is always deleted. `{"enabled": false}`
+   * restores delete-on-fade. */
   dormant: {
     enabled: boolean;
     /** Days a dormant memory is kept before sleep deletes it for good.
@@ -144,7 +151,8 @@ export interface HippoConfig {
   churnStaleness: {
     enabled: boolean;
   };
-  /** Which agents' own memories init, sleep and session end import: tool ids, null for every tool, [] for none. */
+  /** Which agents' own memories init, sleep and session end import: tool ids, null for every
+   * tool, [] for none. */
   agentMemories: {
     tools: string[] | null;
   };
@@ -171,11 +179,13 @@ export interface HippoConfig {
   vectorGraph: {
     maxVectors: number;
   };
-  /** What the composition root read from the environment for this command or request; config.json never sets it. */
+  /** What the composition root read from the environment for this command or request;
+   * config.json never sets it. */
   runtime?: RuntimeSettings;
 }
 
-/** Process settings a root reads from env vars; each absent field takes the default its reader names. */
+/** Process settings a root reads from env vars; each absent field takes the default its reader
+ * names. */
 export interface RuntimeSettings {
   /** HIPPO_ANCHORING=off turns the anchoring hint off; on by default. */
   readonly anchoringHint?: boolean;
@@ -193,13 +203,15 @@ export interface RuntimeSettings {
   readonly dagRebuildCap?: number;
   /** HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL: the scope recall boosts. */
   readonly activeScope?: string;
-  /** HIPPO_LOSS_AVERSION_RATIO, which scales an error memory's strength; strength scoring applies its floor. */
+  /** HIPPO_LOSS_AVERSION_RATIO, which scales an error memory's strength; strength scoring
+   * applies its floor. */
   readonly lossAversionRatio?: number;
   /** Where the CLEF rerankers send a request; without it they keep the native order. */
   readonly clef?: ClefSettings;
 }
 
-/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers AI. */
+/** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers
+ * AI. */
 export interface ClefSettings {
   /** HIPPO_CLEF_ENDPOINT, trimmed. */
   readonly endpoint?: string;
@@ -338,7 +350,8 @@ function enabledBlock(fallback: { enabled: boolean }): Reader<{ enabled: boolean
   }));
 }
 
-// A config file keeps the snake_case physics keys, such as G_query; each reads into its camelCase field.
+// A config file keeps the snake_case physics keys, such as G_query; each reads into its camelCase
+// field.
 function physicsFields(read: FieldReader): PhysicsConfig {
   const P = D.physics;
   return {
@@ -366,9 +379,13 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     budget: read('budget', count(P.budget)),
     skipUnchanged: read('skipUnchanged', flag(P.skipUnchanged)),
     refreshTurns: read('refreshTurns', count(P.refreshTurns)),
-    // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as the default.
+    // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as
+    // the default.
     promptRecall: read('promptRecall', flag(false, P.promptRecall)),
-    promptRecallMetric: read('promptRecallMetric', choice(P.promptRecallMetric, 'jaccard', 'cosine')),
+    promptRecallMetric: read(
+      'promptRecallMetric',
+      choice(P.promptRecallMetric, 'jaccard', 'cosine'),
+    ),
     promptRecallThreshold: read('promptRecallThreshold', fraction(P.promptRecallThreshold)),
     promptRecallMinShared: read('promptRecallMinShared', count(P.promptRecallMinShared)),
     promptRecallMaxItems: read('promptRecallMaxItems', count(P.promptRecallMaxItems)),
@@ -376,7 +393,8 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
   };
 }
 
-// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as the fallback.
+// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as the
+// fallback.
 const CONFIG_TABLE: readonly ConfigEntry[] = [
   // Every writer starts a memory on this, and a zero or negative half-life scores zero strength.
   configKey('defaultHalfLifeDays', positive(D.defaultHalfLifeDays)),
@@ -394,8 +412,8 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'embeddings',
-    // `provider` is not read here: an unknown one must reach resolveEmbeddingProvider, which refuses it rather than
-    // falling back to local.
+    // `provider` is not read here: an unknown one must reach resolveEmbeddingProvider, which
+    // refuses it rather than falling back to local.
     block('an object like {"enabled": "auto"}', D.embeddings, (read) => ({
       enabled: read('enabled', flagOrAuto(D.embeddings.enabled)),
       model: read('model', text(D.embeddings.model)),
@@ -422,7 +440,9 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'replay',
-    block('an object like {"count": 5}', D.replay, (read) => ({ count: read('count', count(D.replay.count)) })),
+    block('an object like {"count": 5}', D.replay, (read) => ({
+      count: read('count', count(D.replay.count)),
+    })),
   ),
   configKey('autoTraceCapture', flag(D.autoTraceCapture)),
   configKey('autoTraceWindowDays', count(D.autoTraceWindowDays)),
@@ -489,7 +509,8 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
 ];
 
-/** The config a parsed config.json gives: each key it sets over the defaults; src/host/config-file.ts reads it. */
+/** The config a parsed config.json gives: each key it sets over the defaults;
+ * src/host/config-file.ts reads it. */
 export function configOverDefaults(raw: ConfigFile): HippoConfig {
   const config: HippoConfig = { ...DEFAULT_CONFIG };
   for (const entry of CONFIG_TABLE) entry.apply(raw, config);

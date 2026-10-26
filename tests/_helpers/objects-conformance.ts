@@ -178,16 +178,16 @@ export interface DraftOptions {
 
 export function saving(c: KindCase, n: number, opts: DraftOptions = {}): Draft {
   const { at = T1, group = 'alpha', tenantId = TENANT_A } = opts;
-  const mirror = objectMirror(
-    loadConfig(fixture.dir).defaultHalfLifeDays,
+  const mirror = objectMirror({
+    baseHalfLifeDays: loadConfig(fixture.dir).defaultHalfLifeDays,
     tenantId,
-    c.kind,
-    {
+    source: c.kind,
+    text: {
       content: `${c.kind} ${n}`,
       tags: ['conformance'],
     },
-    new Date(),
-  );
+    now: new Date(),
+  });
   return {
     n,
     group,
@@ -352,16 +352,16 @@ interface OpeningOptions {
 
 export function opening(n: number, opts: OpeningOptions = {}): Opening {
   const { at = T1, tenantId = TENANT_A } = opts;
-  const mirror = objectMirror(
-    loadConfig(fixture.dir).defaultHalfLifeDays,
+  const mirror = objectMirror({
+    baseHalfLifeDays: loadConfig(fixture.dir).defaultHalfLifeDays,
     tenantId,
-    'incident',
-    {
+    source: 'incident',
+    text: {
       content: `incident ${n}`,
       tags: ['conformance'],
     },
-    new Date(),
-  );
+    now: new Date(),
+  });
   return {
     n,
     tenantId,

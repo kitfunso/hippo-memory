@@ -1,4 +1,5 @@
-// Verbs that move memories in and out: watch, learn, import, export, promote, sync, share and peers.
+// Verbs that move memories in and out: watch, learn, import, export, promote, sync, share and
+// peers.
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -12,7 +13,12 @@ import { runWatched } from './run-watched.js';
 import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { detailLines } from '../../base/memory/agent-memory-report.js';
-import { importChatGPTInto, importClaudeInto, importCursorInto, importGenericFileInto } from '../importers/sources.js';
+import {
+  importChatGPTInto,
+  importClaudeInto,
+  importCursorInto,
+  importGenericFileInto,
+} from '../importers/sources.js';
 import { importMarkdownInto } from '../importers/markdown.js';
 import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
@@ -32,7 +38,7 @@ import {
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requireInit, learnFromRepo } from './shared.js';
+import { requireInit, learnFromRepo, type LearnFromRepoOptions } from './shared.js';
 import { fmt } from './print.js';
 import {
   type CliFlags,
@@ -59,7 +65,8 @@ function watchedCommand(args: readonly string[]): string[] {
   if (args.length === 0) {
     fail(WATCH_USAGE);
   }
-  // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
+  // A quoted 1.x command line would now run as one program name, so it is refused rather than
+  // guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
     fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\`.`);
   }
@@ -81,8 +88,8 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
     throw new CliExit(exitCode);
   }
 
-  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with the message below and
-  // still exit with the wrapped command's real exit code.
+  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with
+  // the message below and still exit with the wrapped command's real exit code.
   try {
     await rememberFailedCommand(cliApiContext(hippoRoot, tenantId), { command, exitCode, stderr });
 
@@ -90,7 +97,9 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
     printError(`\nHippo learned from failure: "${preview}"`);
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      printError(`\nHippo: this failure matches a rejected value (${err.reason ?? 'no reason given'}); not stored.`);
+      printError(
+        `\nHippo: this failure matches a rejected value (${err.reason ?? 'no reason given'}); not stored.`,
+      );
     } else {
       throw err;
     }
@@ -112,32 +121,45 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
   const reposFlag = nonEmptyStringFlag(flags, 'repos');
   if (reposFlag) {
-    const repos = reposFlag
-      .split(',')
-      .map((r) => r.trim())
-      .filter(Boolean);
-    let totalAdded = 0;
-    let totalSkipped = 0;
-
-    for (const repo of repos) {
-      const label = path.basename(repo);
-      const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, repo, days, label);
-      totalAdded += added;
-      totalSkipped += skipped;
-    }
-
-    console.log(
-      `Git learn complete: ${totalAdded} new lessons added, ` +
-        `${totalSkipped} duplicates skipped across ${repos.length} repos.`,
-    );
+    await learnFromRepos(reposFlag, { hippoRoot, tenantId, days });
   } else {
-    const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
+    const { added, skipped } = await learnFromRepo({
+      hippoRoot,
+      tenantId,
+      repoPath: process.cwd(),
+      days,
+    });
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
 }
 
-/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
- * that finishes them. */
+/** `--repos a,b`: learns each repo under its folder name, then prints the totals. */
+async function learnFromRepos(
+  reposFlag: string,
+  base: Omit<LearnFromRepoOptions, 'repoPath' | 'label'>,
+): Promise<void> {
+  const repos = reposFlag
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  let totalAdded = 0;
+  let totalSkipped = 0;
+
+  for (const repo of repos) {
+    const label = path.basename(repo);
+    const { added, skipped } = await learnFromRepo({ ...base, repoPath: repo, label });
+    totalAdded += added;
+    totalSkipped += skipped;
+  }
+
+  console.log(
+    `Git learn complete: ${totalAdded} new lessons added, ` +
+      `${totalSkipped} duplicates skipped across ${repos.length} repos.`,
+  );
+}
+
+/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how
+ * many wait and the command that finishes them. */
 async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): Promise<void> {
   let waiting: string;
   try {
@@ -153,8 +175,9 @@ async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err:
   );
 }
 
-/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
- * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
+/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the
+ * process alive until it settles, and awaiting would block the CLI on model load; `hippo embed`
+ * is the backstop if interrupted. */
 function backfillVectors(ctx: CliContext, embedCommand: string): void {
   void memoryEmbedMissing(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
@@ -162,25 +185,59 @@ function backfillVectors(ctx: CliContext, embedCommand: string): void {
 function warnRedacted(count: number | undefined): void {
   if (count) {
     const noun = count === 1 ? 'entry' : 'entries';
-    printError(`Warning: secret-shaped text was redacted from ${count} imported ${noun} before storing`);
+    printError(
+      `Warning: secret-shaped text was redacted from ${count} imported ${noun} before storing`,
+    );
   }
 }
 
-export async function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleImport({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags = stringListFlag(flags, 'tag') ?? [];
 
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
-  if (boolFlag(flags, 'agents')) return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  if (boolFlag(flags, 'agents')) {
+    return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+  }
 
   if (useGlobal) {
     cliInitGlobal();
   } else {
     requireInit(hippoRoot);
   }
+  await importIntoStore({
+    hippoRoot,
+    tenantId,
+    targetRoot,
+    args,
+    flags,
+    useGlobal,
+    dryRun,
+    extraTags,
+  });
+}
 
+interface ImportRun {
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly targetRoot: string;
+  readonly args: string[];
+  readonly flags: CliFlags;
+  readonly useGlobal: boolean;
+  readonly dryRun: boolean;
+  readonly extraTags: string[];
+}
+
+/** A vault folder or one file, written to the store `--global` picked. */
+async function importIntoStore(run: ImportRun): Promise<void> {
+  const { hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
   const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
@@ -190,12 +247,20 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     target: { root: targetRoot, batch: cliImportBatch(targetRoot), clock: cliInfra().clock },
   };
 
-  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
-  // tenant-scoped api calls, so the tenant is resolved and passed through. --global is unsupported (the connector
-  // raw-archive path is tenant-local).
+  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it
+  // writes through tenant-scoped api calls, so the tenant is resolved and passed through. --global
+  // is unsupported (the connector raw-archive path is tenant-local).
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) {
-    return await importVaultFolder({ hippoRoot, tenantId, folderPath: vault, flags, importOptions, useGlobal, dryRun });
+    return await importVaultFolder({
+      hippoRoot,
+      tenantId,
+      folderPath: vault,
+      flags,
+      importOptions,
+      useGlobal,
+      dryRun,
+    });
   }
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
@@ -211,19 +276,39 @@ interface PickedImporter {
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
   if (boolFlag(flags, 'chatgpt')) {
-    return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPTInto, importerName: 'ChatGPT' };
+    return {
+      filePath: stringFlagOrExit(flags, 'chatgpt'),
+      importer: importChatGPTInto,
+      importerName: 'ChatGPT',
+    };
   }
   if (boolFlag(flags, 'claude')) {
-    return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaudeInto, importerName: 'Claude' };
+    return {
+      filePath: stringFlagOrExit(flags, 'claude'),
+      importer: importClaudeInto,
+      importerName: 'Claude',
+    };
   }
   if (boolFlag(flags, 'cursor')) {
-    return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursorInto, importerName: 'Cursor' };
+    return {
+      filePath: stringFlagOrExit(flags, 'cursor'),
+      importer: importCursorInto,
+      importerName: 'Cursor',
+    };
   }
   if (boolFlag(flags, 'file')) {
-    return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFileInto, importerName: 'File' };
+    return {
+      filePath: stringFlagOrExit(flags, 'file'),
+      importer: importGenericFileInto,
+      importerName: 'File',
+    };
   }
   if (boolFlag(flags, 'markdown')) {
-    return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdownInto, importerName: 'Markdown' };
+    return {
+      filePath: stringFlagOrExit(flags, 'markdown'),
+      importer: importMarkdownInto,
+      importerName: 'Markdown',
+    };
   }
   // Positional: try to auto-detect from extension
   if (args[0]) return { filePath: args[0], importer: importGenericFileInto, importerName: 'File' };
@@ -237,7 +322,12 @@ interface ImportFromFileOptions {
   readonly tenantId: string;
 }
 
-function importFromFile(targetRoot: string, args: string[], flags: CliFlags, options: ImportFromFileOptions): void {
+function importFromFile(
+  targetRoot: string,
+  args: string[],
+  flags: CliFlags,
+  options: ImportFromFileOptions,
+): void {
   const { importOptions, useGlobal, dryRun, tenantId } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
@@ -256,19 +346,26 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
 
   // The importers' writeEntry sites don't embed, so the new rows are embedded here in one pass.
   if (!dryRun && result.imported >= 1) {
-    backfillVectors(cliApiContext(targetRoot, tenantId), useGlobal ? 'hippo embed --global' : 'hippo embed');
+    backfillVectors(
+      cliApiContext(targetRoot, tenantId),
+      useGlobal ? 'hippo embed --global' : 'hippo embed',
+    );
   }
 
   const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
-  printFileImportSummary(result, importerName, filePath, storeLabel, dryRun);
+  printFileImportSummary(result, { importerName, filePath, storeLabel, dryRun });
+}
+
+interface FileImportSummary {
+  readonly importerName: string;
+  readonly filePath: string;
+  readonly storeLabel: string;
+  readonly dryRun: boolean;
 }
 
 function printFileImportSummary(
   result: ImportResult,
-  importerName: string,
-  filePath: string,
-  storeLabel: string,
-  dryRun: boolean,
+  { importerName, filePath, storeLabel, dryRun }: FileImportSummary,
 ): void {
   console.log(`\nImport ${importerName}: ${filePath}`);
   console.log(`  Source entries found:  ${result.total}`);
@@ -300,7 +397,8 @@ async function importAgentMemories(
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
   const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
-  // A folder without a store of its own imports as session end would there, so its notes are not hidden.
+  // A folder without a store of its own imports as session end would there, so its notes are not
+  // hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
       ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)
@@ -343,29 +441,43 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
   if (!stringFlag(flags, 'name')?.trim()) {
-    // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
-    // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
-    fail('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
+    // --name keys the destructive source-deletion sync; a folder-basename default lets
+    // same-basename vaults clobber each other, and a valueless `--name` (boolean true) would
+    // silently import under vault:true:*.
+    fail(
+      'hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).',
+    );
   }
   if (hasFlag(flags, 'scope') && !stringFlag(flags, 'scope')?.trim()) {
-    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed
-    // private form, since a bare `private` scope is not treated as private by recall and importVault rejects it.
+    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the
+    // source-prefixed private form, since a bare `private` scope is not treated as private by
+    // recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
   }
 }
 
-function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: CliContext, dryRun: boolean): void {
+function printVaultSummary(
+  vaultResult: ImportResult,
+  folderPath: string,
+  ctx: CliContext,
+  dryRun: boolean,
+): void {
   console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
   console.log(`  Notes found:           ${vaultResult.total}`);
-  console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
+  console.log(
+    `  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`,
+  );
   console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
   if ((vaultResult.rejected ?? 0) > 0) {
     console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
   }
   warnRedacted(vaultResult.redacted);
-  console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
+  console.log(
+    `  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`,
+  );
   console.log(`  Store:                 ${ctx.hippoRoot}`);
-  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file import does.
+  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file
+  // import does.
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
@@ -380,8 +492,12 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = boolFlag(flags, 'cross-project');
-  const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), { includeCrossProject });
-  const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
+  const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), {
+    includeCrossProject,
+  });
+  const skipNote = includeCrossProject
+    ? ''
+    : ' (other-project rows skipped; use --cross-project to include them)';
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
@@ -395,27 +511,15 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }
 
-export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleShare({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const shareId = args[0];
   if (shareId === '--auto' || boolFlag(flags, 'auto')) {
-    requireInit(hippoRoot);
-    const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
-    const dryRun = boolFlag(flags, 'dry-run');
-    const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), { minScore, dryRun });
-    if (results.length === 0) {
-      console.log('No memories meet the sharing threshold.');
-    } else if (dryRun) {
-      console.log(`Would share ${results.length} memories:\n`);
-      for (const e of results) {
-        const score = api.transferScore(e);
-        console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`);
-      }
-    } else {
-      console.log(`Shared ${results.length} memories to global store.`);
-      for (const e of results) {
-        console.log(`  ${e.id} <- ${e.source}`);
-      }
-    }
+    await shareAuto(hippoRoot, tenantId, flags);
   } else if (shareId) {
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
@@ -439,14 +543,44 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   }
 }
 
+/** `hippo share --auto`: shares every memory at or above the transfer threshold. */
+async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+  requireInit(hippoRoot);
+  const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
+  const dryRun = boolFlag(flags, 'dry-run');
+  const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), {
+    minScore,
+    dryRun,
+  });
+  if (results.length === 0) {
+    console.log('No memories meet the sharing threshold.');
+  } else if (dryRun) {
+    console.log(`Would share ${results.length} memories:\n`);
+    for (const e of results) {
+      const score = api.transferScore(e);
+      console.log(
+        `  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`,
+      );
+    }
+  } else {
+    console.log(`Shared ${results.length} memories to global store.`);
+    for (const e of results) {
+      console.log(`  ${e.id} <- ${e.source}`);
+    }
+  }
+}
+
 export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
+  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer
+  // discovery.
   const allTenants = boolFlag(flags, 'all-tenants');
   const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {
-    const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantId}")`;
+    const scopeLabel = allTenants
+      ? 'global store (all tenants)'
+      : `global store (tenant "${tenantId}")`;
     console.log(`${plural(peers.length, 'project')} contributing to ${scopeLabel}:\n`);
     for (const p of peers) {
       console.log(
@@ -457,7 +591,12 @@ export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext
   }
 }
 
-export async function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleExport({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const format = stringFlagOrExit(flags, 'format') || 'json';
   const outputPath = args[0] || null;

@@ -147,7 +147,12 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       summary: 'x2',
       supersedesBriefId: b.id,
     });
-    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), PROJECT_BRIEF, {
+      tenantId: 'default',
+      id: c.id,
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
     expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([

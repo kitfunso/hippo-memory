@@ -8,7 +8,10 @@ import type { HippoConfig } from '../../base/config/config.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
 /** The groups every connector reaches: its event log, and the writes that commit with an event. */
-export const CONNECTOR_GROUPS = ['connectorWrites', 'connectorEvents'] as const satisfies readonly OptionalGroup[];
+export const CONNECTOR_GROUPS = [
+  'connectorWrites',
+  'connectorEvents',
+] as const satisfies readonly OptionalGroup[];
 export type ConnectorGroup = (typeof CONNECTOR_GROUPS)[number];
 export type ConnectorStore = StoreWith<ConnectorGroup>;
 export type ConnectorContext = ContextWith<ConnectorGroup>;
@@ -27,8 +30,8 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory, so a
- * redelivery acks instead of retrying. */
+/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are
+ * logged with no memory, so a redelivery acks instead of retrying. */
 export async function rememberWithEventLog(
   ctx: ConnectorContext,
   event: ConnectorEvent,
@@ -38,8 +41,11 @@ export async function rememberWithEventLog(
   try {
     // No actor fallback: every caller builds ctx with its connector subject.
     const result = await rememberUntrusted(ctx, { ...opts, event });
-    // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
-    if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
+    // Another worker logged this key between the pre-check and the write: its memory stands and
+    // ours was not stored.
+    if (result.duplicate) {
+      return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
+    }
     return { status: 'ingested', memoryId: result.id };
   } catch (e) {
     // A tombstone refusal is permanent, so a DLQ retry would hit it forever.

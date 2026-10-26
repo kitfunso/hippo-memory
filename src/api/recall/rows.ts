@@ -1,5 +1,5 @@
-// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON
-// rows.
+// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume
+// packet and the JSON rows.
 
 import { confidenceFacets } from '../../base/memory/strength.js';
 import { Layer } from '../../base/memory/entry.js';
@@ -13,21 +13,25 @@ import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
-import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
+import {
+  passesCliRecallScopeFilter,
+  passesScopeFilterForRecall,
+} from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
-/** The global store beside this one ('' when the call reaches none), whether this one is it, and the boosting scope. */
+/** The global store beside this one ('' when the call reaches none), whether this one is it, and
+ * the boosting scope. */
 export interface RecallStoreSetting {
   readonly globalRoot: string;
   readonly primaryIsGlobal: boolean;
   readonly activeScope: string | null;
 }
 
-/** Which stores a recall reads under `ctx`, with `activeScope` (an explicit scope merged with the detected one), which
- * only boosts. */
+/** Which stores a recall reads under `ctx`, with `activeScope` (an explicit scope merged with
+ * the detected one), which only boosts. */
 export function recallStoreSetting(ctx: Context, activeScope: string | null): RecallStoreSetting {
   return {
     globalRoot: ctx.reach?.global?.root ?? '',
@@ -38,14 +42,18 @@ export function recallStoreSetting(ctx: Context, activeScope: string | null): Re
 
 export interface RecallRowOrigin {
   readonly globalOn: boolean;
-  /** True when a ranked row came from the global store: this store is it, or the merge tagged the row global. */
+  /** True when a ranked row came from the global store: this store is it, or the merge tagged
+   * the row global. */
   readonly isGlobal: (r: SearchResult) => boolean;
 }
 
 /** Whether the call reaches a global store, and which ranked rows came from it. */
 export function recallRowOrigin(ctx: Context, setting: RecallStoreSetting): RecallRowOrigin {
   const globalOn = ctx.reach?.global !== undefined;
-  return { globalOn, isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true) };
+  return {
+    globalOn,
+    isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true),
+  };
 }
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
@@ -63,7 +71,8 @@ export async function scopeHiddenCount(
   return probe.filter((e) => !passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
 }
 
-/** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
+/** The active snapshot, its session's latest handoff and last five events, each kept only when
+ * its scope passes. */
 export async function loadScopedContinuity(
   ctx: Context,
   setting: RecallStoreSetting,
@@ -79,7 +88,8 @@ export async function loadScopedContinuity(
   } = await ctx.store.continuity(ctx.tenantId, CONTINUITY_EVENT_LIMIT, null);
   // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
-  const passes = (r: { scope?: string | null }): boolean => passesScopeFilterForRecall(r.scope ?? null, effectiveScope);
+  const passes = (r: { scope?: string | null }): boolean =>
+    passesScopeFilterForRecall(r.scope ?? null, effectiveScope);
   return {
     activeSnapshot: rawSnapshot && passes(rawSnapshot) ? rawSnapshot : null,
     sessionHandoff: rawHandoff && passes(rawHandoff) ? rawHandoff : null,
@@ -92,16 +102,22 @@ export interface RecallRerankerPick {
   readonly defaultTopK: number;
 }
 
-/** The reranker `name` picks from the Context's registry and the top-k it takes by default; an unknown name throws, a
- * blank one picks none. */
-export function recallRerankerPick(ctx: Pick<Context, 'infra'>, name: string): RecallRerankerPick | null {
+/** The reranker `name` picks from the Context's registry and the top-k it takes by default; an
+ * unknown name throws, a blank one picks none. */
+export function recallRerankerPick(
+  ctx: Pick<Context, 'infra'>,
+  name: string,
+): RecallRerankerPick | null {
   const fn = rerankerOf(ctx, name);
   if (!fn) return null;
-  return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K };
+  return {
+    fn,
+    defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K,
+  };
 }
 
-/** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a
- * recall; a blank name picks none. */
+/** A registry reranker that sends `clef` when a call names no transport of its own, for a script
+ * that reranks outside a recall; a blank name picks none. */
 export function rerankerWithClef(
   ctx: Pick<Context, 'infra'>,
   name: string | null | undefined,
@@ -109,10 +125,12 @@ export function rerankerWithClef(
 ): RerankerFn | null {
   const fn = rerankerOf(ctx, name);
   if (fn === null) return null;
-  return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? clef });
+  return (query, results, options) =>
+    fn(query, results, { ...options, clef: options?.clef ?? clef });
 }
 
-/** How a shown list is cut to a token budget: each row by its own cost, then the rendered text as a whole. */
+/** How a shown list is cut to a token budget: each row by its own cost, then the rendered text
+ * as a whole. */
 export interface RecallFit<R> {
   /** Tokens the rows may spend: the budget less what prints ahead of them. */
   readonly room: number;
@@ -126,13 +144,14 @@ export interface RecallFit<R> {
   readonly textOf: (rendered: R) => string;
 }
 
-/** Renders the ranked rows `room` holds, then drops the lowest-ranked one until the text fits `budget` or only `floor`
- * rows remain. */
+/** Renders the ranked rows `room` holds, then drops the lowest-ranked one until the text fits
+ * `budget` or only `floor` rows remain. */
 export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
   const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
   let kept = fitted.length;
   let rendered = fit.render(fitted.slice(0, kept));
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each
+  // drop.
   while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
     kept--;
     rendered = fit.render(fitted.slice(0, kept));
@@ -163,13 +182,21 @@ export interface RecallJsonRow {
   rerankTrace?: SearchResult['rerankTrace'];
 }
 
-export function recallJsonRow(
-  r: SearchResult,
-  query: string,
-  showWhy: boolean,
-  isGlobal: boolean,
-  now: Date,
-): RecallJsonRow {
+export interface RecallJsonRowOptions {
+  readonly r: SearchResult;
+  readonly query: string;
+  readonly showWhy: boolean;
+  readonly isGlobal: boolean;
+  readonly now: Date;
+}
+
+export function recallJsonRow({
+  r,
+  query,
+  showWhy,
+  isGlobal,
+  now,
+}: RecallJsonRowOptions): RecallJsonRow {
   const base: RecallJsonRow = {
     id: r.entry.id,
     score: r.score,

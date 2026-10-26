@@ -3,8 +3,8 @@ import type { Migration } from './types.js';
 export const v46: Migration = {
   version: 46,
   up: (db) => {
-    // Failure log (src/store/sqlite/failure-log.ts): hashes only, since failure text can carry paths and secrets.
-    // Additive only: no min_compatible_binary bump.
+    // Failure log (src/store/sqlite/failure-log.ts): hashes only, since failure text can carry
+    // paths and secrets. Additive only: no min_compatible_binary bump.
     db.exec(`
         CREATE TABLE IF NOT EXISTS failure_log (
           id          INTEGER PRIMARY KEY AUTOINCREMENT,

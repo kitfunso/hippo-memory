@@ -7,7 +7,8 @@ import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import type { SummarySettled } from '../../base/ports/store/consolidation.js';
 
-/** A rebuild's result for one summary; `bumpRebuildCount` is false for the zero-child case, true for a normal one. */
+/** A rebuild's result for one summary; `bumpRebuildCount` is false for the zero-child case, true
+ * for a normal one. */
 export interface RebuildPatch {
   /** New content for a normal rebuild; the summary's own for zero children. */
   content: string;
@@ -20,20 +21,28 @@ export interface RebuildPatch {
   now: Date;
 }
 
-/** Lands `patch` on the summary while it is still dirty: `changed` false means another sleep settled it first, and
- * `refused` means a tombstone kept the new content out while the counts still landed. */
+/** Lands `patch` on the summary while it is still dirty: `changed` false means another sleep
+ * settled it first, and `refused` means a tombstone kept the new content out while the counts
+ * still landed. */
 export async function applyRebuild(
   store: StoreWith<'consolidation'>,
   summary: MemoryEntry,
   patch: RebuildPatch,
 ): Promise<SummarySettled> {
   const { id, tenantId } = summary;
-  const content = patch.bumpRebuildCount ? { text: patch.content, rebuiltAt: patch.now.toISOString() } : undefined;
+  const content = patch.bumpRebuildCount
+    ? { text: patch.content, rebuiltAt: patch.now.toISOString() }
+    : undefined;
   const settled = await store.consolidation.settleSummary({
     id,
     tenantId,
     actor: patch.actor,
-    fields: { content, descendantCount: patch.descendantCount, earliestAt: patch.earliestAt, latestAt: patch.latestAt },
+    fields: {
+      content,
+      descendantCount: patch.descendantCount,
+      earliestAt: patch.earliestAt,
+      latestAt: patch.latestAt,
+    },
     audit: [
       {
         tenantId,
@@ -60,8 +69,9 @@ export async function applyRebuild(
   return settled;
 }
 
-/** Clears the dirty mark a fresh summary got from linking its own children, or the same sleep would rebuild it at
- * twice the model cost; `source` tells an L2 build from an L3 one in the audit row. */
+/** Clears the dirty mark a fresh summary got from linking its own children, or the same sleep
+ * would rebuild it at twice the model cost; `source` tells an L2 build from an L3 one in the
+ * audit row. */
 export async function settleFreshSummary(
   store: StoreWith<'consolidation'>,
   summary: Pick<MemoryEntry, 'id' | 'tenantId' | 'dagLevel'>,
@@ -74,7 +84,13 @@ export async function settleFreshSummary(
     tenantId,
     actor,
     audit: [
-      { tenantId, actor, op: 'summary_marked_clean', targetId: id, metadata: { dag_level: summary.dagLevel, source } },
+      {
+        tenantId,
+        actor,
+        op: 'summary_marked_clean',
+        targetId: id,
+        metadata: { dag_level: summary.dagLevel, source },
+      },
     ],
   });
 }

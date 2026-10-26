@@ -1,4 +1,5 @@
-// A folder whose files are the items, as Claude Code, Gemini, Qwen and Copilot keep them: one reader for all four.
+// A folder whose files are the items, as Claude Code, Gemini, Qwen and Copilot keep them: one
+// reader for all four.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import type { Container, MemoryItem } from './types.js';
@@ -7,16 +8,34 @@ import type { Scope } from '../../base/memory/agent-memory-tools.js';
 export interface FolderRules {
   readonly recursive: boolean;
   readonly include: (rel: string) => boolean;
-  /** The stored text and time of a file read in full, or null when the tool would not count it as a note. */
-  readonly item: (text: string, mtimeMs: number) => { readonly text: string; readonly updatedAt: number } | null;
+  /** The stored text and time of a file read in full, or null when the tool would not count it
+   * as a note. */
+  readonly item: (
+    text: string,
+    mtimeMs: number,
+  ) => { readonly text: string; readonly updatedAt: number } | null;
 }
 
-/** Null when the folder is missing; a file that could not be read is `skipped`, so its row is left alone. */
-export function readFolderStore(files: AgentFiles, dir: string, scope: Scope, rules: FolderRules): Container | null {
+/** Null when the folder is missing; a file that could not be read is `skipped`, so its row is
+ * left alone. */
+export function readFolderStore(
+  files: AgentFiles,
+  dir: string,
+  scope: Scope,
+  rules: FolderRules,
+): Container | null {
   const listing = files.listFiles(dir, { recursive: rules.recursive });
   if (listing.status === 'missing') return null;
   if (listing.status === 'unreadable') {
-    return { scope, path: dir, readable: false, items: [], skipped: [], warnings: [listing.reason], textKeyed: false };
+    return {
+      scope,
+      path: dir,
+      readable: false,
+      items: [],
+      skipped: [],
+      warnings: [listing.reason],
+      textKeyed: false,
+    };
   }
   const items: MemoryItem[] = [];
   const skipped: string[] = [];
@@ -34,7 +53,8 @@ export function readFolderStore(files: AgentFiles, dir: string, scope: Scope, ru
   return { scope, path: dir, readable: true, items, skipped, warnings, textKeyed: false };
 }
 
-/** Markdown notes directly in, or anywhere under, the folder, with the tool's index file left out. */
+/** Markdown notes directly in, or anywhere under, the folder, with the tool's index file left
+ * out. */
 export function markdownNotes(rel: string): boolean {
   return rel.endsWith('.md') && rel !== 'MEMORY.md';
 }

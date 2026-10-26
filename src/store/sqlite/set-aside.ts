@@ -1,5 +1,5 @@
-// Takes an imported agent note out of recall on the caller's transaction; the note sync and the project repair both use
-// it.
+// Takes an imported agent note out of recall on the caller's transaction; the note sync and the
+// project repair both use it.
 import { appendAuditEvents } from './audit.js';
 import type { StoreModel } from './open.js';
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
@@ -11,14 +11,18 @@ import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
 import type { SetAsideResult, SetAsideWhy } from '../../base/ports/store/project-tags.js';
 import { handleNow } from './handle-clock.js';
 
-/** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant,
- * restorable. */
+export interface SetAsideRowOptions {
+  readonly tag: string;
+  readonly row: MemoryEntry;
+  readonly why: SetAsideWhy;
+  readonly rules: StoreModel;
+}
+
+/** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other
+ * goes dormant, restorable. */
 export function setAsideRow(
   db: DatabaseSyncLike,
-  tag: string,
-  row: MemoryEntry,
-  why: SetAsideWhy,
-  rules: StoreModel,
+  { tag, row, why, rules }: SetAsideRowOptions,
 ): SetAsideResult {
   const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
   const audit = (metadata: Record<string, string | boolean>): void =>

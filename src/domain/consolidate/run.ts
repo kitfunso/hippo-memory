@@ -22,7 +22,8 @@ export interface ConsolidationResult {
   /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`; sqlite/dormant.ts).
    *  Always 0 when that is off. */
   dormant: number;
-  /** Dormant memories deleted for good this sleep because they outlived `dormant.retentionDays` without a restore. */
+  /** Dormant memories deleted for good this sleep because they outlived `dormant.retentionDays`
+   * without a restore. */
   dormantExpired: number;
   merged: number;
   semanticCreated: number;
@@ -34,20 +35,22 @@ export interface ConsolidationResult {
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
-  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep) see structured data, not a
-  // parsed line.
+  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep) see
+  // structured data, not a parsed line.
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
-  // Hardening pass: tombstone-refused rebuilds are split out of `rebuilt` so the stat does not absorb refusals
-  // (metadata is still applied and dirty cleared; counters only, see applyRebuildResult's return contract).
+  // Hardening pass: tombstone-refused rebuilds are split out of `rebuilt` so the stat does not
+  // absorb refusals (metadata is still applied and dirty cleared; counters only, see
+  // applyRebuildResult's return contract).
   summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
   entityProfilesCreated: number;
   dryRun: boolean;
   /** What the run did, in order; the CLI and /v1/sleep render each event as a line. */
   events: ConsolidateEvent[];
-  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops `events`. */
+  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops
+   * `events`. */
   phaseFailures: PhaseFailure[];
   physicsSimulated: number;
   /** Ids the decay pass removes (or would remove, under dryRun). */
@@ -60,13 +63,15 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
   return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
 }
 
-/** The store a consolidation runs on: its own group, the learning group extraction writes through, and the lesson and
- * audit writes its passes make. */
-export type ConsolidationStore = StoreWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>;
+/** The store a consolidation runs on: its own group, the learning group extraction writes
+ * through, and the lesson and audit writes its passes make. */
+export type ConsolidationStore = StoreWith<
+  'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'
+>;
 
 /**
- * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one
- * transaction.
+ * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of
+ * `units` whole in one transaction.
  */
 export interface SleepRun {
   /** The caller's tenant, whose completed sessions become traces. */
@@ -82,8 +87,8 @@ export interface SleepRun {
   rows: SleepRows;
   retirable: (entry: MemoryEntry) => boolean;
   /**
-   * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones
-   * here first.
+   * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so
+   * both check tombstones here first.
    */
   tombstones: TombstoneChecks;
   survivors: Survivors;
@@ -124,8 +129,8 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
   };
 }
 
-/** Logs the failure with its stack, keeps it in the result for callers that run the sleep elsewhere, and adds the
- * event the sleep report shows. */
+/** Logs the failure with its stack, keeps it in the result for callers that run the sleep
+ * elsewhere, and adds the event the sleep report shows. */
 export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string, error: E): void {
   const failure = {
     phase,
@@ -134,10 +139,14 @@ export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string
   };
   result.phaseFailures.push(failure);
   result.events.push({ kind: 'phaseSkipped', phase, message: failure.message });
-  log.warn(`consolidate: ${phase} pass failed and was skipped: ${failure.message}`, errorFields(error));
+  log.warn(
+    `consolidate: ${phase} pass failed and was skipped: ${failure.message}`,
+    errorFields(error),
+  );
 }
 
-/** Logs each phase failure a consolidation result carries, for a caller that ran it out of sight. */
+/** Logs each phase failure a consolidation result carries, for a caller that ran it out of
+ * sight. */
 export function logPhaseFailures(result: ConsolidationResult): void {
   for (const { phase, message, fields } of result.phaseFailures) {
     log.warn(`consolidate: ${phase} pass failed and was skipped: ${message}`, fields);

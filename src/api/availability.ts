@@ -1,9 +1,8 @@
 import { DAY_MS, HOUR_MS } from '../base/util/time.js';
 import { median } from '../base/util/stats.js';
-// Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool
-// were passed over.
-// Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the
-// callers.
+// Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the
+// same matched pool were passed over. Soft warning only (never filters or reorders) and PURE: no
+// I/O or env reads; the HIPPO_AVAILABILITY gate lives in the callers.
 
 /** A minimal age reference: a memory id plus its ISO-8601 creation timestamp (MemoryEntry.created, canonical ISO per
  *  the src/base/memory/entry.ts invariant). */
@@ -24,7 +23,8 @@ export interface AvailabilityHint {
   /** Median age in days of the matched candidate pool it was drawn from. */
   poolMedianAgeDays: number;
   /**
-   * Count of pool entries older than the top-K median age that were NOT returned (older relevant matches passed over).
+   * Count of pool entries older than the top-K median age that were NOT returned (older relevant
+   * matches passed over).
    */
   olderCandidatesPassedOver: number;
   /** Human-readable summary surfaced to the agent. */
@@ -59,14 +59,18 @@ export const DEFAULT_MIN_POOL = 10;
 export const DEFAULT_MIN_OLDER_PASSED_OVER = 3;
 
 function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] {
-  return refs.map((e) => ({ id: e.id, ts: Date.parse(e.created) })).filter((e) => Number.isFinite(e.ts));
+  return refs
+    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
+    .filter((e) => Number.isFinite(e.ts));
 }
 
 /**
- * Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were
- * passed over; else null.
- * Entries with an unparseable `created` are dropped so a malformed row cannot poison the medians with NaN. */
-export function detectAvailabilityBias(opts: DetectAvailabilityBiasOptions): AvailabilityHint | null {
+ * Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older
+ * and older matches were passed over; else null. Entries with an unparseable `created` are
+ * dropped so a malformed row cannot poison the medians with NaN. */
+export function detectAvailabilityBias(
+  opts: DetectAvailabilityBiasOptions,
+): AvailabilityHint | null {
   const now = opts.now ?? Date.now();
   const recencyWindowMs = opts.recencyWindowMs ?? DEFAULT_RECENCY_WINDOW_MS;
   const recentFractionThreshold = opts.recentFractionThreshold ?? DEFAULT_RECENT_FRACTION_THRESHOLD;
@@ -87,28 +91,46 @@ export function detectAvailabilityBias(opts: DetectAvailabilityBiasOptions): Ava
   const poolMedianAgeDays = median(pool.map((e) => (now - e.ts) / DAY_MS));
   if (poolMedianAgeDays <= topKMedianAgeDays) return null;
 
-  const topKIds = new Set(topK.map((e) => e.id));
-  const olderCandidatesPassedOver = pool.filter(
-    (e) => !topKIds.has(e.id) && (now - e.ts) / DAY_MS > topKMedianAgeDays,
-  ).length;
+  const olderCandidatesPassedOver = countOlderPassedOver(pool, topK, now, topKMedianAgeDays);
   if (olderCandidatesPassedOver < minOlderPassedOver) return null;
 
-  const pct = Math.round(recentFraction * 100);
+  return availabilityHint(
+    {
+      recentCount,
+      returnedCount: topK.length,
+      recentFraction,
+      topKMedianAgeDays,
+      poolMedianAgeDays,
+      olderCandidatesPassedOver,
+    },
+    recencyWindowMs,
+  );
+}
+
+type Stamped = { id: string; ts: number };
+
+function countOlderPassedOver(
+  pool: readonly Stamped[],
+  topK: readonly Stamped[],
+  now: number,
+  topKMedianAgeDays: number,
+): number {
+  const topKIds = new Set(topK.map((e) => e.id));
+  return pool.filter((e) => !topKIds.has(e.id) && (now - e.ts) / DAY_MS > topKMedianAgeDays).length;
+}
+
+function availabilityHint(
+  figures: Omit<AvailabilityHint, 'summary' | 'source'>,
+  recencyWindowMs: number,
+): AvailabilityHint {
+  const { recentCount, returnedCount, olderCandidatesPassedOver } = figures;
+  const pct = Math.round(figures.recentFraction * 100);
   const windowHours = Math.round(recencyWindowMs / HOUR_MS);
   const summary =
-    `Availability bias risk: ${recentCount} of ${topK.length} returned results are from the ` +
+    `Availability bias risk: ${recentCount} of ${returnedCount} returned results are from the ` +
     `last ${windowHours}h (${pct}%), but ${olderCandidatesPassedOver} older matched memories ` +
-    `were passed over. Returned median age ${topKMedianAgeDays.toFixed(1)}d vs pool median ` +
-    `${poolMedianAgeDays.toFixed(1)}d. The most relevant answer may not be the most recent.`;
-
-  return {
-    recentCount,
-    returnedCount: topK.length,
-    recentFraction,
-    topKMedianAgeDays,
-    poolMedianAgeDays,
-    olderCandidatesPassedOver,
-    summary,
-    source: 'j2-recency',
-  };
+    `were passed over. Returned median age ${figures.topKMedianAgeDays.toFixed(1)}d vs pool ` +
+    `median ${figures.poolMedianAgeDays.toFixed(1)}d. The most relevant answer may not be the ` +
+    `most recent.`;
+  return { ...figures, summary, source: 'j2-recency' };
 }

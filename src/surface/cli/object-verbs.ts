@@ -1,10 +1,11 @@
-// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide,
-// incident, predict) share.
+// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief,
+// note, decide, incident, predict) share.
 
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
 
-/** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
+/** The member of `states` named by `status`, or exit 1 with the message that lists every allowed
+ * value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {
   const found = [...states].find((s) => s === status);
   if (found === undefined) {
@@ -14,7 +15,10 @@ export function requireStatus<S extends string>(status: string, states: Readonly
 }
 
 /** `--status` checked against the kind's states; undefined when absent or `all`. */
-export function statusFilter<S extends string>(flags: CliFlags, states: ReadonlySet<S>): S | undefined {
+export function statusFilter<S extends string>(
+  flags: CliFlags,
+  states: ReadonlySet<S>,
+): S | undefined {
   const status = stringFlag(flags, 'status')?.trim() ?? 'all';
   return status === 'all' ? undefined : requireStatus(status, states);
 }
@@ -26,7 +30,10 @@ export interface ObjectListSpec<O, S extends string> {
   readonly printRow: (o: O) => void;
 }
 
-export async function listObjectsVerb<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
+export async function listObjectsVerb<O, S extends string>(
+  flags: CliFlags,
+  spec: ObjectListSpec<O, S>,
+): Promise<void> {
   const limit = parseListLimit(flags);
   const status = statusFilter(flags, spec.states);
   const results = await spec.load(status === undefined ? { limit } : { status, limit });
@@ -54,7 +61,8 @@ export function foundOrExit<O>(found: O | null | undefined, noun: string, id: nu
   return found;
 }
 
-/** How a kind is named in usage lines (`cmd`), in messages (`noun`) and in the invalid-id error (`idLabel`). */
+/** How a kind is named in usage lines (`cmd`), in messages (`noun`) and in the invalid-id error
+ * (`idLabel`). */
 export interface ObjectNames {
   readonly cmd: string;
   readonly noun: string;

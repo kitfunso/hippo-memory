@@ -1,4 +1,5 @@
-// hippo.db's GraphRebuild group: a rebuild's ops through the row writers in graph-writes.ts, one transaction a call.
+// hippo.db's GraphRebuild group: a rebuild's ops through the row writers in graph-writes.ts, one
+// transaction a call.
 import { type DatabaseSyncLike, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { clock } from '../../base/util/write-budget.js';
 import type {
@@ -22,13 +23,23 @@ import {
 import { type OnHandle, waitingOpener } from './open.js';
 import { bound } from './bound.js';
 
-function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
+function insertDesiredRelation(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  rel: DesiredRelation,
+): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
   const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
-  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) {
+  if (
+    fromEntityId === undefined ||
+    toEntityId === undefined ||
+    !objectInForce(db, tenantId, rel.sourceObject)
+  ) {
     return false;
   }
-  if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
+  if (relationPresent(db, { tenantId, fromEntityId, toEntityId, relType: rel.relType })) {
+    return false;
+  }
   insertRelationRow(db, tenantId, {
     fromEntityId,
     toEntityId,
@@ -39,7 +50,8 @@ function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: Desi
   return true;
 }
 
-/** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
+/** Applies one op; false when a writer since the diff made it stale, which the next run's diff
+ * repairs. */
 function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): boolean {
   switch (op.op) {
     case 'deleteEntity':
@@ -52,7 +64,8 @@ function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): bool
       if (!objectInForce(db, tenantId, op.entity.sourceObject)) return false;
       return updateEntityRow(db, tenantId, op.id, op.entity) !== null;
     case 'insertEntity':
-      // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
+      // A mirrorless object closed since the load is never enqueued again, so a stale insert would
+      // stay for good.
       if (
         !objectInForce(db, tenantId, op.entity.sourceObject) ||
         entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined
@@ -83,8 +96,9 @@ function applyGraphOpsOn(
   return { next, skipped };
 }
 
-/** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary past `opts.holdMs`;
- * returns where the next chunk starts and how many ops were skipped as stale. */
+/** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary
+ * past `opts.holdMs`; returns where the next chunk starts and how many ops were skipped as
+ * stale. */
 function applyGraphOps(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -94,7 +108,8 @@ function applyGraphOps(
   return runGraphRebuildTransaction(db, tenantId, (tx) => applyGraphOpsOn(tx, tenantId, ops, opts));
 }
 
-// Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
+// Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could
+// otherwise fail.
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {

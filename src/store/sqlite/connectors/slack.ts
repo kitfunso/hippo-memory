@@ -1,9 +1,15 @@
-// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and
-// workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
+// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the
+// dead-letter queue and workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
-import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
+import {
+  eventMemory,
+  eventRecord,
+  eventSeen,
+  markEventSeen,
+  type EventLogSpec,
+} from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
@@ -16,23 +22,28 @@ import { handleStamp } from '../handle-clock.js';
 
 // Backfill cursors
 
-export function slackCursor(db: DatabaseSyncLike, tenantId: string, channelId: string): string | null {
-  const row = cachedStatement(db, `SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`).get(
-    tenantId,
-    channelId,
-  ) as { latest_ts?: string } | undefined;
+export function slackCursor(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  channelId: string,
+): string | null {
+  const row = cachedStatement(
+    db,
+    `SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`,
+  ).get(tenantId, channelId) as { latest_ts?: string } | undefined;
   return row?.latest_ts ?? null;
 }
 
 /** `keepSaved` leaves a timestamp already saved as it is. */
 export function saveSlackCursor(
   db: DatabaseSyncLike,
-  tenantId: string,
-  channelId: string,
+  { tenantId, channelId }: { readonly tenantId: string; readonly channelId: string },
   latestTs: string,
   keepSaved: boolean,
 ): void {
-  const kept = keepSaved ? 'COALESCE(slack_cursors.latest_ts, excluded.latest_ts)' : 'excluded.latest_ts';
+  const kept = keepSaved
+    ? 'COALESCE(slack_cursors.latest_ts, excluded.latest_ts)'
+    : 'excluded.latest_ts';
   cachedStatement(
     db,
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
@@ -49,9 +60,14 @@ export function slackEventSeen(db: DatabaseSyncLike, eventId: string): boolean {
   return eventSeen(db, SLACK_LOG, eventId);
 }
 
-/** Records the event unless a row already holds its id; false means another writer got there first. */
-export function markSlackEventSeen(db: DatabaseSyncLike, eventId: string, memoryId: string | null): boolean {
-  return markEventSeen(db, SLACK_LOG, eventId, [], memoryId);
+/** Records the event unless a row already holds its id; false means another writer got there
+ * first. */
+export function markSlackEventSeen(
+  db: DatabaseSyncLike,
+  eventId: string,
+  memoryId: string | null,
+): boolean {
+  return markEventSeen(db, { log: SLACK_LOG, key: eventId, extra: [], memoryId });
 }
 
 export function slackEventMemory(db: DatabaseSyncLike, eventId: string): string | null {
@@ -77,18 +93,26 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
 ]);
 
 export function slackTeamRoute(db: DatabaseSyncLike, teamId: string): TenantRoute {
-  const row = cachedStatement(db, `SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
-    | { tenant_id?: string }
-    | undefined;
+  const row = cachedStatement(db, `SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(
+    teamId,
+  ) as { tenant_id?: string } | undefined;
   if (row?.tenant_id) return { tenantId: row.tenant_id };
 
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const total = (cachedStatement(db, `SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
+  const total = (
+    cachedStatement(db, `SELECT COUNT(*) AS c FROM slack_workspaces`).get() as {
+      c: number | bigint;
+    }
+  ).c;
   return { tenantId: null, routes: Number(total) };
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */
-export function upsertSlackWorkspace(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
+export function upsertSlackWorkspace(
+  db: DatabaseSyncLike,
+  teamId: string,
+  tenantId: string,
+): SlackWorkspace {
   const addedAt = handleStamp(db);
   cachedStatement(
     db,

@@ -1,10 +1,15 @@
-// `hippo projects`: list the project names a store holds, fold one into another, and repair old tags in one reversible
-// pass. The rules here plan from reads; the store applies each plan in one transaction.
+// `hippo projects`: list the project names a store holds, fold one into another, and repair old
+// tags in one reversible pass. The rules here plan from reads; the store applies each plan in one
+// transaction.
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { foldEdges, foldedInto, projectAudit } from '../agent-memories/project-folds.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../base/memory/agent-memory-tools.js';
+import {
+  AGENT_MEMORY_SOURCE_PREFIX,
+  toolSourcePrefix,
+  toolTag,
+} from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
@@ -26,15 +31,16 @@ export interface ProjectSummary {
   readonly live: number;
   readonly imported: number;
   readonly newest: string;
-  /** Imported notes whose text another project name also holds: a sign of a duplicate import, never a merge target. */
+  /** Imported notes whose text another project name also holds: a sign of a duplicate import,
+   * never a merge target. */
   readonly copiesElsewhere: number;
 }
 
 export interface MergeResult {
   readonly from: string;
   readonly into: string;
-  /** Imports `into` already holds for the same note, moved to dormant storage; the rest are re-tagged and the next
-   * sync files them under `into`. */
+  /** Imports `into` already holds for the same note, moved to dormant storage; the rest are
+   * re-tagged and the next sync files them under `into`. */
   readonly setAside: readonly string[];
   readonly restamped: readonly string[];
   readonly dormantRestamped: readonly string[];
@@ -42,25 +48,29 @@ export interface MergeResult {
   readonly backup: string | null;
 }
 
-/** An old name whose session folders now resolve to several projects: no fold can say whose rows are whose. */
+/** An old name whose session folders now resolve to several projects: no fold can say whose rows
+ * are whose. */
 export interface ProjectCollision {
   readonly name: string;
   readonly ids: readonly string[];
 }
 
 export interface RepairResult {
-  /** Imported notes filed under the wrong project, or under a project name when a user-global import holds the same
-   * text: set aside. */
+  /** Imported notes filed under the wrong project, or under a project name when a user-global
+   * import holds the same text: set aside. */
   readonly copies: readonly string[];
-  /** Names whose recorded session folders all resolve to one other project today, folded as `merge` would. */
+  /** Names whose recorded session folders all resolve to one other project today, folded as
+   * `merge` would. */
   readonly folds: readonly ProjectFold[];
-  /** Names left unfolded because their folders now resolve to more than one project; only `merge` by hand can split
-   * them. */
+  /** Names left unfolded because their folders now resolve to more than one project; only
+   * `merge` by hand can split them. */
   readonly collisions: readonly ProjectCollision[];
   readonly toProject: readonly RowRetag[];
-  /** Parents in two projects: the merged text blends them, so it goes dormant and the parents re-merge per project. */
+  /** Parents in two projects: the merged text blends them, so it goes dormant and the parents
+   * re-merge per project. */
   readonly setAside: readonly string[];
-  /** No parent left to say which project, or pinned: left as they are, since hiding them would rest on no evidence. */
+  /** No parent left to say which project, or pinned: left as they are, since hiding them would
+   * rest on no evidence. */
   readonly untraced: readonly string[];
   readonly backup: string | null;
 }
@@ -68,8 +78,9 @@ export interface RepairResult {
 /** The machine whose session folders and working folders the global store's compactions name. */
 export type SessionMachine = Pick<Machine, 'platform' | 'env' | 'files' | 'projectIdentity'>;
 
-/** What a plan knows of the store's folder: the global store reads session folders on its machine, and a project store
- * folds only its own folder's old name, unless many people share it. */
+/** What a plan knows of the store's folder: the global store reads session folders on its
+ * machine, and a project store folds only its own folder's old name, unless many people share
+ * it. */
 export type StoreFolder =
   | { readonly isGlobal: true; readonly machine: SessionMachine }
   | {
@@ -84,10 +95,12 @@ interface Reader {
   readonly tenantId: string;
 }
 
-/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole tenant. */
+/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole
+ * tenant. */
 async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
   const filter = { ...narrowing, tenantId: r.tenantId };
-  const read = (after?: EntryCursor) => r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
+  const read = (after?: EntryCursor) =>
+    r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
   for await (const page of readPages(read)) yield* page;
 }
 
@@ -96,7 +109,9 @@ function liveRows(r: Reader, prefix: string): AsyncGenerator<MemoryEntry> {
 }
 
 /** Per project name, how many of its imports hold a text that another name's import also holds. */
-async function copiesByOrigin(imports: AsyncIterable<MemoryEntry>): Promise<Map<string | null, number>> {
+async function copiesByOrigin(
+  imports: AsyncIterable<MemoryEntry>,
+): Promise<Map<string | null, number>> {
   const holders = new Map<string, Map<string | null, number>>();
   for await (const e of imports) {
     const key = duplicateKey(e.content);
@@ -112,8 +127,12 @@ async function copiesByOrigin(imports: AsyncIterable<MemoryEntry>): Promise<Map<
   return copies;
 }
 
-/** Live rows per project name, newest write first, with how many of its imported notes are copies held elsewhere. */
-export async function listProjects(store: ProjectTagReads, tenantId: string): Promise<ProjectSummary[]> {
+/** Live rows per project name, newest write first, with how many of its imported notes are
+ * copies held elsewhere. */
+export async function listProjects(
+  store: ProjectTagReads,
+  tenantId: string,
+): Promise<ProjectSummary[]> {
   const copies = await copiesByOrigin(liveRows({ store, tenantId }, AGENT_MEMORY_SOURCE_PREFIX));
   return (await store.projectTags.originTallies(tenantId, AGENT_MEMORY_SOURCE_PREFIX))
     .map(({ origin, live, prefixed, newest }) => ({
@@ -126,7 +145,8 @@ export async function listProjects(store: ProjectTagReads, tenantId: string): Pr
     .sort((a, b) => b.newest.localeCompare(a.newest));
 }
 
-/** Refuses user-global and unknown: they are not projects, and folding them would leak or hide every row. */
+/** Refuses user-global and unknown: they are not projects, and folding them would leak or hide
+ * every row. */
 export function validateMergeNames(from: string, into: string): string | null {
   if (from.trim() === '' || into.trim() === '') {
     return 'both project names are required; user-global and unknown rows cannot be merged';
@@ -135,8 +155,8 @@ export function validateMergeNames(from: string, into: string): string | null {
   return null;
 }
 
-/** Folds project `from` into `into` for one tenant in one transaction; a dry run rolls back and writes nothing,
- * mirrors included. */
+/** Folds project `from` into `into` for one tenant in one transaction; a dry run rolls back and
+ * writes nothing, mirrors included. */
 export async function mergeProjects(
   tags: Pick<ProjectTags, 'merge'>,
   scope: ProjectTagScope,
@@ -148,8 +168,8 @@ export async function mergeProjects(
   return { from, into, ...(await tags.merge(scope, { from, into, dryRun })) };
 }
 
-/** Live imports under a project name whose exact text a user-global import holds: a session folder's notes stamped
- * with the folder it ended in. */
+/** Live imports under a project name whose exact text a user-global import holds: a session
+ * folder's notes stamped with the folder it ended in. */
 async function importCopies(r: Reader): Promise<MemoryEntry[]> {
   const userGlobal = new Set<string>();
   for await (const e of liveRows(r, AGENT_MEMORY_SOURCE_PREFIX)) {
@@ -164,7 +184,9 @@ async function importCopies(r: Reader): Promise<MemoryEntry[]> {
 }
 
 /** Each transcript the tenant's compactions recorded with its working folder, once. */
-async function transcriptsOf(r: Reader): Promise<Array<{ transcript: string; cwd: string | null }>> {
+async function transcriptsOf(
+  r: Reader,
+): Promise<Array<{ transcript: string; cwd: string | null }>> {
   const seen = new Map<string, { transcript: string; cwd: string | null }>();
   for (const { transcript, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
     if (transcript !== null) seen.set(JSON.stringify([transcript, cwd]), { transcript, cwd });
@@ -172,21 +194,31 @@ async function transcriptsOf(r: Reader): Promise<Array<{ transcript: string; cwd
   return [...seen.values()];
 }
 
-/** Each Claude session folder a compaction recorded, with the names of each project it resolves to. */
-async function sessionOwners(r: Reader, machine: SessionMachine): Promise<Map<string, Map<string, string[]>>> {
+/** Each Claude session folder a compaction recorded, with the names of each project it resolves
+ * to. */
+async function sessionOwners(
+  r: Reader,
+  machine: SessionMachine,
+): Promise<Map<string, Map<string, string[]>>> {
   const owners = new Map<string, Map<string, string[]>>();
   for (const { transcript, cwd } of await transcriptsOf(r)) {
     const project = transcriptNotesProject(transcript, cwd, machine);
     const dir = path.join(path.dirname(transcript), 'memory');
     if (project === null) continue;
     const ids = owners.get(dir) ?? new Map<string, string[]>();
-    owners.set(dir, ids.set(project.name, [...new Set([...(ids.get(project.name) ?? []), ...projectNames(project)])]));
+    owners.set(
+      dir,
+      ids.set(project.name, [
+        ...new Set([...(ids.get(project.name) ?? []), ...projectNames(project)]),
+      ]),
+    );
   }
   return owners;
 }
 
-/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its notes under
- * any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
+/** Imports to set aside. The global store also checks each Claude session folder a compaction
+ * recorded: its notes under any other project are misfiled, edited or not, and a text copy in
+ * the right folder is kept. */
 async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry[]> {
   const copies = await importCopies(r);
   if (!folder.isGlobal) return copies;
@@ -201,8 +233,8 @@ async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry
   const wrong = new Set<string>();
   for (const [dir, ids] of owners) {
     if (ids.size !== 1) continue;
-    // Its names before the id, and names folded into it, are the owner's too: the next sync moves those prefixes under
-    // the id.
+    // Its names before the id, and names folded into it, are the owner's too: the next sync moves
+    // those prefixes under the id.
     const [names] = ids.values();
     const own = new Set([...names, ...foldedInto(edges, names)]);
     for (const origin of new Set([...origins, ...own])) {
@@ -218,24 +250,31 @@ async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry
   return [...misfiled, ...copies.filter((e) => !seen.has(e.id) && !right.has(prefix(e)))];
 }
 
-/** The global store reads each name's recorded session folders, where a compaction's name came from its cwd; a project
- * store folds only its own folder name. */
+/** The global store reads each name's recorded session folders, where a compaction's name came
+ * from its cwd; a project store folds only its own folder name. */
 async function planFolds(
   r: Reader,
   folder: StoreFolder,
   globalFolds: boolean,
 ): Promise<Pick<RepairResult, 'folds' | 'collisions'>> {
-  // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
+  // A name someone merged into by hand stays: undoing their choice would rest on the resolver
+  // alone.
   const chosen = new Set(
     (await projectAudit(r.store.auditLog, r.tenantId, 'project_merge')).map((e) => e.metadata.into),
   );
   if (!folder.isGlobal) {
-    return { folds: (await ownLegacyFold(r, folder)).filter((f) => !chosen.has(f.from)), collisions: [] };
+    return {
+      folds: (await ownLegacyFold(r, folder)).filter((f) => !chosen.has(f.from)),
+      collisions: [],
+    };
   }
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
     if (origin !== '' && cwd !== null && folder.machine.files.exists(cwd)) {
-      today.set(origin, (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name));
+      today.set(
+        origin,
+        (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name),
+      );
     }
   }
   const folds: ProjectFold[] = [];
@@ -246,33 +285,44 @@ async function planFolds(
     if (names.size > 1) collisions.push({ name: from, ids: [...names].sort() });
     else if (into !== '' && into !== from) folds.push({ from, into });
   }
-  // A fold into a name that itself folds would land rows by run order; the next repair takes the rest of the chain.
+  // A fold into a name that itself folds would land rows by run order; the next repair takes the
+  // rest of the chain.
   const sources = new Set(folds.map((f) => f.from));
   return { folds: globalFolds ? folds.filter((f) => !sources.has(f.into)) : [], collisions };
 }
 
-/** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder
- * name. */
-async function ownLegacyFold(r: Reader, folder: Extract<StoreFolder, { isGlobal: false }>): Promise<ProjectFold[]> {
-  // A shared store's rows carry their callers' names, so one matching its folder's is a member's project, not a legacy
-  // tag.
+/** A project store's rows, dormant snapshots and compaction records written before its id
+ * existed carry its folder name. */
+async function ownLegacyFold(
+  r: Reader,
+  folder: Extract<StoreFolder, { isGlobal: false }>,
+): Promise<ProjectFold[]> {
+  // A shared store's rows carry their callers' names, so one matching its folder's is a member's
+  // project, not a legacy tag.
   if (folder.shared) return [];
   const { name, legacyName } = folder.project;
   if (legacyName === '' || legacyName === name) return [];
   const legacy = { tenantId: r.tenantId, origins: [legacyName] };
   const held =
     (await r.store.reports.entriesWhere(legacy, { limit: 1 })).entries.length > 0 ||
-    (await r.store.projectTags.compactionOrigins(r.tenantId)).some((c) => c.origin === legacyName) ||
+    (await r.store.projectTags.compactionOrigins(r.tenantId)).some(
+      (c) => c.origin === legacyName,
+    ) ||
     (await r.store.projectTags.dormantWhere(legacy)).length > 0;
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
-/** A repair plan with its stray imports as read, so the store can skip one that moved before the plan applies. */
+/** A repair plan with its stray imports as read, so the store can skip one that moved before the
+ * plan applies. */
 interface RepairPlanRows extends Omit<RepairResult, 'copies' | 'backup'> {
   readonly stray: readonly MemoryEntry[];
 }
 
-async function planRepair(r: Reader, folder: StoreFolder, globalFolds: boolean): Promise<RepairPlanRows> {
+async function planRepair(
+  r: Reader,
+  folder: StoreFolder,
+  globalFolds: boolean,
+): Promise<RepairPlanRows> {
   const { folds, collisions } = await planFolds(r, folder, globalFolds);
   const stray = await strayImports(r, folder);
   return { stray, folds, collisions, ...(await planUserGlobalRepair(r, folds)) };
@@ -304,7 +354,9 @@ async function planUserGlobalRepair(
   const untraced: string[] = [];
   for await (const row of mergeRows()) {
     if (row.source !== 'consolidation') continue;
-    const parents = new Set(row.parents.filter((id) => origins.has(id)).map((id) => origins.get(id) ?? null));
+    const parents = new Set(
+      row.parents.filter((id) => origins.has(id)).map((id) => origins.get(id) ?? null),
+    );
     const [only] = parents;
     if (parents.size === 1 && only === '') continue;
     if (parents.size === 1 && only) toProject.push({ id: row.id, origin: only });
@@ -321,21 +373,26 @@ async function parentOrigins(
   folds: readonly ProjectFold[],
 ): Promise<Map<string, string | null>> {
   const renamed = new Map(folds.map((f) => [f.from, f.into]));
-  const after = (origin: string | null | undefined) => (origin ? (renamed.get(origin) ?? origin) : (origin ?? null));
+  const after = (origin: string | null | undefined) =>
+    origin ? (renamed.get(origin) ?? origin) : (origin ?? null);
   const parents = new Set<string>();
   for await (const row of merges) for (const id of row.parents) parents.add(id);
   const parentIds = [...parents];
   const live = new Map<string, MemoryEntry>();
   for await (const e of rowsOf(r, { ids: parentIds })) live.set(e.id, e);
-  // A live row outranks a snapshot under its id, so only the parents with no live row are looked up dormant.
+  // A live row outranks a snapshot under its id, so only the parents with no live row are looked up
+  // dormant.
   const gone = parentIds.filter((id) => !live.has(id));
   const dormant = await r.store.projectTags.dormantWhere({ tenantId: r.tenantId, ids: gone });
-  const origins = new Map<string, string | null>(dormant.map((s) => [s.entry.id, after(s.entry.originProject)]));
+  const origins = new Map<string, string | null>(
+    dormant.map((s) => [s.entry.id, after(s.entry.originProject)]),
+  );
   for (const [id, e] of live) origins.set(id, after(e.originProject));
   return origins;
 }
 
-/** The result names only the rows the store changed: one gone or moved since the plan read it was skipped. */
+/** The result names only the rows the store changed: one gone or moved since the plan read it
+ * was skipped. */
 async function applyRepair(
   tags: Pick<ProjectTags, 'repair'>,
   scope: ProjectTagScope,
@@ -349,8 +406,8 @@ async function applyRepair(
   return { copies: done.copies, folds, collisions, toProject, setAside, untraced, backup };
 }
 
-/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges
- * by their parents; a dry run only plans. */
+/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags
+ * sleep's user-global merges by their parents; a dry run only plans. */
 export async function repairProjects(
   store: ProjectTagReads,
   scope: ProjectTagScope,
@@ -358,7 +415,9 @@ export async function repairProjects(
   opts: { dryRun: boolean },
 ): Promise<RepairResult> {
   const plan = await planRepair({ store, tenantId: scope.tenantId }, folder, true);
-  return opts.dryRun ? { ...publicPlan(plan), backup: null } : applyRepair(store.projectTags, scope, plan);
+  return opts.dryRun
+    ? { ...publicPlan(plan), backup: null }
+    : applyRepair(store.projectTags, scope, plan);
 }
 
 /** True when a repair would change nothing. */
@@ -366,8 +425,9 @@ function repairIsEmpty(r: RepairPlanRows): boolean {
   return r.stray.length + r.folds.length + r.toProject.length + r.setAside.length === 0;
 }
 
-/** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay with `hippo projects
- * repair`: their evidence is compaction folders, blind to a same-named repo that never compacted. */
+/** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
+ * with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo
+ * that never compacted. */
 export async function repairOnceOnSleep(
   store: ProjectTagReads,
   scope: ProjectTagScope,

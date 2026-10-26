@@ -1,5 +1,5 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection
- * where a replay is safe. */
+/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and
+ * on a dropped connection where a replay is safe. */
 
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
@@ -10,20 +10,23 @@ export interface RetryPolicy {
   timeoutMs: number;
   /** Total attempts including the first. */
   attempts?: number;
-  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would reach
-   * it. */
+  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts
+   * whose wait would reach it. */
   totalMs?: number;
   baseDelayMs?: number;
-  /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
+  /** A Retry-After longer than this hands the response back, so a caller with its own long pause
+   * keeps it. */
   maxDelayMs?: number;
-  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call (`retryTransport`). A write narrows it
-   * to answers that prove nothing committed. */
+  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call
+   * (`retryTransport`). A write narrows it to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
-  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out attempt is replayed. On
-   * for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
+  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out
+   * attempt is replayed. On for GET and HEAD; any other method turns it on only when a replay
+   * cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
-  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
+  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at
+   * once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   /** Replaces the clock `totalMs` is measured on. */
@@ -35,14 +38,14 @@ const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
 const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
-/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; the Anthropic client passes
- * `HIPPO_LLM_TIMEOUT_MS` as `configured`. */
+/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; the
+ * Anthropic client passes `HIPPO_LLM_TIMEOUT_MS` as `configured`. */
 export function llmTimeoutMs(configured?: number): number {
   return configured ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
-/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures would
- * hold a sleep for 3x the timeout. */
+/** One LLM call with its retries: two full attempts and the longest wait between them, where
+ * three slow failures would hold a sleep for 3x the timeout. */
 export function llmTotalMs(timeoutMs: number = llmTimeoutMs()): number {
   return 2 * timeoutMs + DEFAULT_MAX_DELAY_MS;
 }
@@ -70,8 +73,8 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set([
   'UND_ERR_HEADERS_TIMEOUT',
 ]);
 
-/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is
- * not one. */
+/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A
+ * refused connection is not one. */
 export function isTransientTransportError<E>(err: E): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === 'TimeoutError') return true;
@@ -102,7 +105,8 @@ interface RetryLogEntry {
 
 function logRetry(entry: RetryLogEntry): void {
   const { init, url, reason, attempt, attempts, delayMs } = entry;
-  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final
+  // failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
     target: redactedTarget(url),
@@ -121,8 +125,8 @@ const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> =>
     cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
   });
 
-/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its reason,
- * so no further attempt starts. */
+/** The wait between attempts. With a caller signal it ends the moment that signal aborts and
+ * rejects with its reason, so no further attempt starts. */
 async function backoffWait(
   ms: number,
   sleep: Sleep | undefined,
@@ -132,7 +136,10 @@ async function backoffWait(
   signal.throwIfAborted();
   const left = new AbortController();
   const aborted = new Promise<never>((_resolve, reject) => {
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: left.signal });
+    signal.addEventListener('abort', () => reject(signal.reason), {
+      once: true,
+      signal: left.signal,
+    });
   });
   try {
     // An injected sleep cannot be cancelled, so it is raced and left to run out.
@@ -142,16 +149,64 @@ async function backoffWait(
   }
 }
 
-/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429 refused the call
- * unrun. */
+/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429
+ * refused the call unrun. */
 const defaultRetryOn =
   (replaySafe: boolean) =>
   (res: Response): boolean =>
     res.status === 429 || (replaySafe && isRetryableStatus(res.status));
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe call (see
- * `retryTransport`), on 5xx and transport faults; the last response or error comes back as is. */
-export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
+interface RetryRun {
+  readonly url: string | URL;
+  readonly init: RequestInit;
+  readonly fetchFn: typeof fetch;
+  readonly attempts: number;
+  readonly maxDelayMs: number;
+  readonly replaySafe: boolean;
+  readonly retryOn: (res: Response) => boolean;
+  readonly now: () => number;
+  readonly deadline: number;
+  readonly fitsBudget: (delayMs: number) => boolean;
+  readonly backoffMs: (attempt: number) => number;
+}
+
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe
+ * call (see `retryTransport`), on 5xx and transport faults; the last response or error comes
+ * back as is. */
+export async function fetchWithRetry(
+  url: string | URL,
+  init: RequestInit,
+  policy: RetryPolicy,
+): Promise<Response> {
+  const run = retryRun(url, init, policy);
+  const { fetchFn, deadline, now } = run;
+  for (let attempt = 1; ; attempt++) {
+    const timeout = AbortSignal.timeout(Math.max(1, Math.min(policy.timeoutMs, deadline - now())));
+    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+    let res: Response;
+    try {
+      res = await fetchFn(url, { ...init, signal });
+    } catch (err) {
+      await backoffWait(faultDelay(run, attempt, err), policy.sleep, init.signal);
+      continue;
+    }
+    const delay = responseDelay(run, attempt, res);
+    if (delay === null) return res;
+    // Frees the pooled socket before the next attempt.
+    try {
+      await res.body?.cancel();
+    } catch (err) {
+      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to
+      // idle out.
+      log.debug('http retry: body cancel failed', errorFields(err));
+    }
+    const reason = `status ${res.status}`;
+    logRetry({ init, url, reason, attempt, attempts: run.attempts, delayMs: delay });
+    await backoffWait(delay, policy.sleep, init.signal);
+  }
+}
+
+function retryRun(url: string | URL, init: RequestInit, policy: RetryPolicy): RetryRun {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);
   const baseDelayMs = policy.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
@@ -167,37 +222,46 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     const ceiling = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
     return ceiling / 2 + random() * (ceiling / 2);
   };
+  return {
+    url,
+    init,
+    fetchFn,
+    attempts,
+    maxDelayMs,
+    replaySafe,
+    retryOn,
+    now,
+    deadline,
+    fitsBudget,
+    backoffMs,
+  };
+}
 
-  for (let attempt = 1; ; attempt++) {
-    const timeout = AbortSignal.timeout(Math.max(1, Math.min(policy.timeoutMs, deadline - now())));
-    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-    let res: Response;
-    try {
-      res = await fetchFn(url, { ...init, signal });
-    } catch (err) {
-      // The caller's own abort is a decision, not a fault, so it ends the call.
-      if (!replaySafe || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
-      const delay = backoffMs(attempt);
-      if (!fitsBudget(delay)) throw err;
-      const reason = errorCode(err) || (err instanceof Error ? err.name : 'transport');
-      logRetry({ init, url, reason, attempt, attempts, delayMs: delay });
-      await backoffWait(delay, policy.sleep, init.signal);
-      continue;
-    }
-    if (!retryOn(res) || attempt >= attempts) return res;
-
-    const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
-    if (retryAfter !== null && retryAfter > maxDelayMs) return res;
-    const delay = retryAfter ?? backoffMs(attempt);
-    if (!fitsBudget(delay)) return res;
-    // Frees the pooled socket before the next attempt.
-    try {
-      await res.body?.cancel();
-    } catch (err) {
-      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to idle out.
-      log.debug('http retry: body cancel failed', errorFields(err));
-    }
-    logRetry({ init, url, reason: `status ${res.status}`, attempt, attempts, delayMs: delay });
-    await backoffWait(delay, policy.sleep, init.signal);
+/** The wait before replaying an attempt that threw; rethrows `err` when no replay may follow. */
+function faultDelay<E>(run: RetryRun, attempt: number, err: E): number {
+  const { init, url, attempts } = run;
+  // The caller's own abort is a decision, not a fault, so it ends the call.
+  if (
+    !run.replaySafe ||
+    attempt >= attempts ||
+    init.signal?.aborted ||
+    !isTransientTransportError(err)
+  ) {
+    throw err;
   }
+  const delay = run.backoffMs(attempt);
+  if (!run.fitsBudget(delay)) throw err;
+  const reason = errorCode(err) || (err instanceof Error ? err.name : 'transport');
+  logRetry({ init, url, reason, attempt, attempts, delayMs: delay });
+  return delay;
+}
+
+/** The wait before replaying `res`, or null to hand it back. */
+function responseDelay(run: RetryRun, attempt: number, res: Response): number | null {
+  const { retryOn } = run;
+  if (!retryOn(res) || attempt >= run.attempts) return null;
+  const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
+  if (retryAfter !== null && retryAfter > run.maxDelayMs) return null;
+  const delay = retryAfter ?? run.backoffMs(attempt);
+  return run.fitsBudget(delay) ? delay : null;
 }

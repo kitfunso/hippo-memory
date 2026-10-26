@@ -20,14 +20,20 @@ export function valuesRows(rows: number, bindsPerRow: number): string {
   return Array.from({ length: rows }, () => row).join(', ');
 }
 
-/** A piece of SQL and the values its marks bind, in order: a WHERE term, or an ` AND ...` tail that may be empty. */
+/** A piece of SQL and the values its marks bind, in order: a WHERE term, or an ` AND ...` tail
+ * that may be empty. */
 export interface SqlFragment {
   readonly sql: string;
   readonly params: readonly (string | number)[];
 }
 
-/** An ` AND ...` tail selecting rows strictly after `after` in (key DESC, id DESC) order; empty when it is unset. */
-export function keysetAfter(sortCol: string, idCol: string, after: KeysetPosition | undefined): SqlFragment {
+/** An ` AND ...` tail selecting rows strictly after `after` in (key DESC, id DESC) order; empty
+ * when it is unset. */
+export function keysetAfter(
+  sortCol: string,
+  idCol: string,
+  after: KeysetPosition | undefined,
+): SqlFragment {
   if (!after) return { sql: '', params: [] };
   return { sql: ` AND (${sortCol}, ${idCol}) < (?, ?)`, params: [after.key, after.id] };
 }

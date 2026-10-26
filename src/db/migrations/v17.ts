@@ -34,7 +34,9 @@ export const v17: Migration = {
           retried_at TEXT
         )
       `);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_slack_dlq_tenant_received ON slack_dlq(tenant_id, received_at)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_slack_dlq_tenant_received ON slack_dlq(tenant_id, received_at)`,
+    );
     // Multi-tenant routing seam, empty by default: single-tenant deployments resolve via the HIPPO_TENANT fallback;
     // multi-workspace deployments populate it to map team_id -> tenant_id.
     db.exec(`

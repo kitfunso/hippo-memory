@@ -1,6 +1,6 @@
 /**
- * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB
- * columns for 384-dim vectors.
+ * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in
+ * SQLite, with BLOB columns for 384-dim vectors.
  */
 
 import type { DatabaseSyncLike } from './index.js';
@@ -33,7 +33,8 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
   `);
 }
 
-// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects PHYSICS_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 interface PhysicsRow {
   memory_id: string;
   position_blob: Uint8Array;
@@ -43,10 +44,14 @@ interface PhysicsRow {
   temperature: number;
   last_simulation: string;
 }
-const PHYSICS_COLUMNS = 'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
+const PHYSICS_COLUMNS =
+  'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
 
 /** The stored particles of `memoryIds`; an empty list reads nothing. */
-export function loadPhysicsState(db: DatabaseSyncLike, memoryIds: readonly string[]): Map<string, PhysicsParticle> {
+export function loadPhysicsState(
+  db: DatabaseSyncLike,
+  memoryIds: readonly string[],
+): Map<string, PhysicsParticle> {
   const rows: PhysicsRow[] = [];
   // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
   for (const chunk of chunked(memoryIds)) {
@@ -62,7 +67,9 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds: readonly strin
 
 /** Every stored particle, for a caller that has checked the count is small. */
 export function loadAllPhysicsState(db: DatabaseSyncLike): Map<string, PhysicsParticle> {
-  return particlesOf(cachedStatement(db, `SELECT ${PHYSICS_COLUMNS} FROM memory_physics`).all() as PhysicsRow[]);
+  return particlesOf(
+    cachedStatement(db, `SELECT ${PHYSICS_COLUMNS} FROM memory_physics`).all() as PhysicsRow[],
+  );
 }
 
 function particlesOf(rows: readonly PhysicsRow[]): Map<string, PhysicsParticle> {
@@ -82,12 +89,15 @@ function particlesOf(rows: readonly PhysicsRow[]): Map<string, PhysicsParticle> 
   return map;
 }
 
-/** How many particles are stored and the sum of their speeds, in loadAllPhysicsState's order, reading one column. */
+/** How many particles are stored and the sum of their speeds, in loadAllPhysicsState's order,
+ * reading one column. */
 export function physicsSpeedSum(db: DatabaseSyncLike) {
   let count = 0;
   let speedSum = 0;
   // SAFETY: the SELECT names exactly this one column.
-  const rows = db.prepare('SELECT velocity_blob FROM memory_physics ORDER BY rowid').iterate() as Iterable<{
+  const rows = db
+    .prepare('SELECT velocity_blob FROM memory_physics ORDER BY rowid')
+    .iterate() as Iterable<{
     velocity_blob: Uint8Array;
   }>;
   for (const row of rows) {
@@ -138,19 +148,27 @@ export function savePhysicsState(db: DatabaseSyncLike, particles: PhysicsParticl
 
 const RESET_BATCH = 64;
 
-/** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. */
+export interface ResetAllPhysicsStateOptions {
+  readonly now?: Date;
+  readonly model?: StrengthModel;
+}
+
+/** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. The first
+ * three stay positional: the frozen scripts/lifecycle-stress scripts call it that way through
+ * dist. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
-  // Kept for the frozen lifecycle-stress scripts, which pass no clock on a raw handle; the wall clock stands in.
-  now: Date = new Date(),
-  model: StrengthModel = PRODUCTION_STRENGTH,
+  { now = new Date(), model = PRODUCTION_STRENGTH }: ResetAllPhysicsStateOptions = {},
 ): number {
   return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), model, now);
 }
 
-function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string, number[]>): Generator<ParticleSeed> {
+function* seedsOf(
+  entries: Iterable<MemoryEntry>,
+  embeddingIndex: Record<string, number[]>,
+): Generator<ParticleSeed> {
   for (const entry of entries) {
     const embedding = embeddingIndex[entry.id];
     if (embedding && embedding.length > 0) yield [entry, embedding];
@@ -160,7 +178,8 @@ function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string,
 /** A memory and the vector its fresh particle starts at. */
 export type ParticleSeed = readonly [MemoryEntry, number[]];
 
-/** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch at a time. */
+/** Drops every particle, then seeds one per pair in `seeds`, which may be read lazily, a batch
+ * at a time. */
 export function resetPhysicsFromSeeds(
   db: DatabaseSyncLike,
   seeds: Iterable<ParticleSeed>,

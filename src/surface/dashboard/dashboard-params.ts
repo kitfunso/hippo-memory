@@ -1,4 +1,5 @@
-// One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an unchecked id.
+// One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an
+// unchecked id.
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { LAYERS, type Chip } from '../../api/dashboard/live.js';
@@ -16,7 +17,11 @@ export const LIMIT_MAX = 500;
 export const SEARCH_MIN = 2;
 export const SEARCH_MAX = 200;
 
-function integerParam(params: URLSearchParams, name: string, fallback: number, min: number, max: number): number {
+function integerParam(
+  params: URLSearchParams,
+  name: string,
+  { fallback, min, max }: { fallback: number; min: number; max: number },
+): number {
   const raw = params.get(name);
   if (raw === null) return fallback;
   const n = INTEGER.test(raw.trim()) ? Number(raw) : Number.NaN;
@@ -26,7 +31,12 @@ function integerParam(params: URLSearchParams, name: string, fallback: number, m
   return n;
 }
 
-function choiceParam<T extends string>(params: URLSearchParams, name: string, allowed: readonly T[], fallback: T): T {
+function choiceParam<T extends string>(
+  params: URLSearchParams,
+  name: string,
+  allowed: readonly T[],
+  fallback: T,
+): T {
   const raw = params.get(name);
   if (raw === null) return fallback;
   const hit = knownOption(allowed, raw);
@@ -57,11 +67,14 @@ function layersParam(params: URLSearchParams): number[] {
 function rangeParam(params: URLSearchParams, lo: string, hi: string): [number, number] {
   const min = finiteParam(params, lo);
   const max = finiteParam(params, hi);
-  if (min !== null && max !== null && min > max) throw new ParamError(`${lo} must not exceed ${hi}`);
+  if (min !== null && max !== null && min > max) {
+    throw new ParamError(`${lo} must not exceed ${hi}`);
+  }
   return [min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY];
 }
 
-/** Search text for the memories route: shorter than the minimum means no filter; longer than the maximum is a 400. */
+/** Search text for the memories route: shorter than the minimum means no filter; longer than the
+ * maximum is a 400. */
 function optionalSearch(params: URLSearchParams): string | null {
   const raw = params.get('q');
   if (raw === null) return null;
@@ -76,8 +89,8 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   const [smin, smax] = rangeParam(params, 'smin', 'smax');
   const sort = choiceParam(params, 'sort', SORT_KEYS, 'strength');
   return {
-    offset: integerParam(params, 'offset', 0, 0, Number.MAX_SAFE_INTEGER),
-    limit: integerParam(params, 'limit', LIMIT_DEFAULT, 1, LIMIT_MAX),
+    offset: integerParam(params, 'offset', { fallback: 0, min: 0, max: Number.MAX_SAFE_INTEGER }),
+    limit: integerParam(params, 'limit', { fallback: LIMIT_DEFAULT, min: 1, max: LIMIT_MAX }),
     sort,
     // Weakest first by default, like the mockup; retrievals starts with the most.
     dir: choiceParam(params, 'dir', ['asc', 'desc'], sort === 'retrievals' ? 'desc' : 'asc'),
@@ -88,7 +101,8 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   };
 }
 
-/** Search text for `GET /api/search`: 2 to 200 characters after trim, returned as typed (trimmed). */
+/** Search text for `GET /api/search`: 2 to 200 characters after trim, returned as typed
+ * (trimmed). */
 export function parseSearchText(params: URLSearchParams): string {
   const q = (params.get('q') ?? '').trim();
   if (q.length < SEARCH_MIN || q.length > SEARCH_MAX) {

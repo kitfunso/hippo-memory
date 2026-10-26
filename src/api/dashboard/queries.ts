@@ -1,6 +1,11 @@
-// One page of a project's memories and the cross-project search, each one bounded store read at the stamp's instant.
+// One page of a project's memories and the cross-project search, each one bounded store read at the
+// stamp's instant.
 import { round1 } from '../../base/util/format.js';
-import type { DashboardReads, DashboardSortKey, ListedRow } from '../../base/ports/store/dashboard-reads.js';
+import type {
+  DashboardReads,
+  DashboardSortKey,
+  ListedRow,
+} from '../../base/ports/store/dashboard-reads.js';
 import { BANDS, LAYERS, originOfKey, projectIdentity, round3, type Chip } from './live.js';
 import type { Stamp } from './snapshot-clock.js';
 import type { MemoryPage, MemoryRow, SearchResult } from './types.js';
@@ -61,7 +66,8 @@ function toRow(row: ListedRow): MemoryRow {
   };
 }
 
-/** One page of a project's memories under the query's sort and filters, or null when the key is unknown. */
+/** One page of a project's memories under the query's sort and filters, or null when the key is
+ * unknown. */
 export async function buildMemoryPage(
   reads: Pick<DashboardReads, 'memoryPage'>,
   stamp: Stamp,
@@ -102,14 +108,18 @@ export async function buildMemoryPage(
   };
 }
 
-/** Substring search over content and tags across every project; it reads the store and never touches recall. */
+/** Substring search over content and tags across every project; it reads the store and never
+ * touches recall. */
 export async function buildSearch(
   reads: Pick<DashboardReads, 'search'>,
   stamp: Stamp,
   text: string,
 ): Promise<SearchResult> {
   const needle = text.toLowerCase();
-  const projects = (await reads.search(stamp.tenantId, needle)).map((t) => ({ ...t, ...projectIdentity(t.origin) }));
+  const projects = (await reads.search(stamp.tenantId, needle)).map((t) => ({
+    ...t,
+    ...projectIdentity(t.origin),
+  }));
   const hits: Record<string, number> = {};
   for (const p of projects) if (p.hits > 0) hits[p.key] = p.hits;
   const nameMatches = projects

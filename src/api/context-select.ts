@@ -1,4 +1,5 @@
-// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
+// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search
+// branch.
 
 import { recallScopeFilter } from '../base/scope/recall-scope.js';
 import { calculateStrength, type StrengthModel } from '../base/memory/strength.js';
@@ -87,8 +88,9 @@ export interface ContextPools {
   global: AmbientLoadResult;
 }
 
-// Share and promote copy a memory to the global store under a new id, so equal content is the only link.
-// A pinned copy wins, then the stronger one after the ranking's own global discount; a tie keeps the local copy.
+// Share and promote copy a memory to the global store under a new id, so equal content is the only
+// link. A pinned copy wins, then the stronger one after the ranking's own global discount; a tie
+// keeps the local copy.
 export function oneCopyPerMemory(
   local: readonly MemoryEntry[],
   global: readonly MemoryEntry[],
@@ -102,7 +104,9 @@ export function oneCopyPerMemory(
     const held = best.get(entry.content);
     const wins =
       !held ||
-      (held.entry.pinned !== entry.pinned ? entry.pinned : score(entry, isGlobal) > score(held.entry, held.isGlobal));
+      (held.entry.pinned !== entry.pinned
+        ? entry.pinned
+        : score(entry, isGlobal) > score(held.entry, held.isGlobal));
     if (wins) best.set(entry.content, { entry, isGlobal });
   };
   for (const e of local) offer(e, false);
@@ -118,34 +122,38 @@ interface PromptCandidate {
   isGlobal: boolean;
 }
 
+export interface SelectPinnedOptions {
+  readonly opts: ContextOptions;
+  readonly plan: ContextPlan;
+  readonly left: number;
+  readonly pools: ContextPools;
+  readonly admission: ContextAdmission;
+}
+
 /**
- * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out
- * too.
+ * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so
+ * task state stays out too.
  */
-export function selectPinned(
-  opts: ContextOptions,
-  plan: ContextPlan,
-  left: number,
-  pools: ContextPools,
-  admission: ContextAdmission,
-): ContextResultEntry[] | null {
-  const { obs, primaryIsGlobal, config: pinnedCfg } = plan;
+export function selectPinned({
+  opts,
+  plan,
+  left,
+  pools,
+  admission,
+}: SelectPinnedOptions): ContextResultEntry[] | null {
+  const { obs, config: pinnedCfg } = plan;
   if (!pinnedCfg.pinnedInject.enabled) {
     return null;
   }
   // Effective budget: explicit opts.budget wins over config, less what the sections took.
   const effBudget = left;
   const nowP = plan.now;
-  const localEntries = pools.local.entries;
-  const globalEntries = pools.global.entries;
-  obs?.offer(localEntries, primaryIsGlobal);
-  obs?.offer(globalEntries, true);
-  const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP, plan.strength);
-  obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
+  const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent
-  // loop runs first, so pins are ranked here and reserve their share before it can spend.
+  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE
+  // budget and the recent loop runs first, so pins are ranked here and reserve their share before
+  // it can spend.
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
@@ -154,7 +162,7 @@ export function selectPinned(
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
     const candidates = (): PromptCandidate[] =>
-      promptRecallCandidates(plan, pools, admission.admit, rankedPinned, nowP);
+      promptRecallCandidates({ plan, pools, admit: admission.admit, rankedPinned, nowP });
     backfillFromPrompt(opts, plan, { pinnedCfg, candidates, picked, recentBudget });
   } else if (plan.includeRecent > 0) {
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
@@ -162,6 +170,28 @@ export function selectPinned(
 
   admitWithinBudget(rankedPinned, picked, effBudget, rejectOverBudget(obs));
   return picked.items;
+}
+
+/** The loaded rows offered to the observer, then one copy of each memory across both stores. */
+function loadedOneCopy(plan: ContextPlan, pools: ContextPools): [MemoryEntry[], MemoryEntry[]] {
+  const { obs } = plan;
+  const localEntries = pools.local.entries;
+  const globalEntries = pools.global.entries;
+  obs?.offer(localEntries, plan.primaryIsGlobal);
+  obs?.offer(globalEntries, true);
+  const [localPool, globalPool] = oneCopyPerMemory(
+    localEntries,
+    globalEntries,
+    plan.now,
+    plan.strength,
+  );
+  obs?.dropMissing(
+    [...localEntries, ...globalEntries],
+    [...localPool, ...globalPool],
+    'load',
+    'duplicate',
+  );
+  return [localPool, globalPool];
 }
 
 function rankPinned(
@@ -179,7 +209,8 @@ function rankPinned(
       const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, plan.activeScope));
       return {
         entry,
-        score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
+        score:
+          calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -194,11 +225,21 @@ interface BackfillFromPromptOptions {
   readonly recentBudget: number;
 }
 
-function rejectOverBudget(obs: DeliveryObserver | undefined): ((row: ContextResultEntry) => void) | undefined {
-  return obs && ((r) => obs.reject(r.entry, 'budget', 'budget', r.score, r.tokens));
+function rejectOverBudget(
+  obs: DeliveryObserver | undefined,
+): ((row: ContextResultEntry) => void) | undefined {
+  return (
+    obs &&
+    ((r) =>
+      obs.reject(r.entry, { stage: 'budget', reason: 'budget', score: r.score, tokens: r.tokens }))
+  );
 }
 
-function backfillFromPrompt(opts: ContextOptions, plan: ContextPlan, options: BackfillFromPromptOptions): void {
+function backfillFromPrompt(
+  opts: ContextOptions,
+  plan: ContextPlan,
+  options: BackfillFromPromptOptions,
+): void {
   const { pinnedCfg, candidates, picked, recentBudget } = options;
   const gate = promptRecallGateOf(pinnedCfg.pinnedInject);
   const p = promptTokens(opts.prompt ?? '');
@@ -216,14 +257,22 @@ function backfillFromPrompt(opts: ContextOptions, plan: ContextPlan, options: Ba
   admitWithinBudget(rows, picked, recentBudget, rejectOverBudget(plan.obs));
 }
 
+interface PromptRecallCandidatesOptions {
+  readonly plan: ContextPlan;
+  readonly pools: ContextPools;
+  readonly admit: (e: MemoryEntry) => boolean;
+  readonly rankedPinned: ContextResultEntry[];
+  readonly nowP: Date;
+}
+
 // Candidates came off the ambient load's own connection (the recall request), not a fresh open.
-function promptRecallCandidates(
-  plan: ContextPlan,
-  pools: ContextPools,
-  admit: (e: MemoryEntry) => boolean,
-  rankedPinned: ContextResultEntry[],
-  nowP: Date,
-): PromptCandidate[] {
+function promptRecallCandidates({
+  plan,
+  pools,
+  admit,
+  rankedPinned,
+  nowP,
+}: PromptRecallCandidatesOptions): PromptCandidate[] {
   const { obs, primaryIsGlobal } = plan;
   // A candidate carrying a pin's text would inject that memory a second time.
   const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
@@ -239,7 +288,7 @@ function promptRecallCandidates(
             : null;
   const eligible = (e: MemoryEntry): boolean => {
     const why = ineligibleReason(e);
-    if (why !== null && why !== 'pinned') obs?.reject(e, 'eligible', why);
+    if (why !== null && why !== 'pinned') obs?.reject(e, { stage: 'eligible', reason: why });
     return why === null;
   };
   obs?.offer(pools.local.recall ?? [], primaryIsGlobal, 'prompt-recall');
@@ -247,7 +296,12 @@ function promptRecallCandidates(
   const localEligible = (pools.local.recall ?? []).filter(eligible);
   const globalEligible = (pools.global.recall ?? []).filter(eligible);
   const { strength } = plan;
-  const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP, strength);
+  const [localCandidates, globalCandidates] = oneCopyPerMemory(
+    localEligible,
+    globalEligible,
+    nowP,
+    strength,
+  );
   obs?.dropMissing(
     [...localEligible, ...globalEligible],
     [...localCandidates, ...globalCandidates],
@@ -293,19 +347,30 @@ function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void
     ...localPool.map((entry) => ({ entry, isGlobal: plan.primaryIsGlobal })),
     ...globalPool.map((entry) => ({ entry, isGlobal: true })),
   ];
-  const recent = newestWorthSurfacing(candidates, plan.includeRecent).map(({ entry, isGlobal }) => ({
-    entry,
-    score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
-    tokens: plan.price(entry, isGlobal),
-    isGlobal,
-  }));
+  const recent = newestWorthSurfacing(candidates, plan.includeRecent).map(
+    ({ entry, isGlobal }) => ({
+      entry,
+      score: calculateStrength(entry, nowP, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1),
+      tokens: plan.price(entry, isGlobal),
+      isGlobal,
+    }),
+  );
   admitWithinBudget(recent, picked, recentBudget, rejectOverBudget(plan.obs));
 }
 
 /** No query: the strongest memories by strength, up to budget. */
-export function selectStrongest(plan: ContextPlan, left: number, pools: ContextPools): ContextResultEntry[] {
+export function selectStrongest(
+  plan: ContextPlan,
+  left: number,
+  pools: ContextPools,
+): ContextResultEntry[] {
   const { now, strength } = plan;
-  const [localPool, globalPool] = oneCopyPerMemory(pools.local.entries, pools.global.entries, now, strength);
+  const [localPool, globalPool] = oneCopyPerMemory(
+    pools.local.entries,
+    pools.global.entries,
+    now,
+    strength,
+  );
   const localRanked = localPool.map((e) => ({
     entry: e,
     score: calculateStrength(e, now, strength),
@@ -323,18 +388,28 @@ export function selectStrongest(plan: ContextPlan, left: number, pools: ContextP
   return strongestWithin(localRanked, globalRanked, left);
 }
 
-/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the 'recall' audit row. */
+export interface SelectBySearchOptions {
+  readonly plan: ContextPlan;
+  readonly left: number;
+  readonly pools: ContextPools;
+  readonly admission: ContextAdmission;
+}
+
+/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the
+ * 'recall' audit row. */
 export async function selectBySearch(
   ctx: Context,
-  plan: ContextPlan,
-  left: number,
-  pools: ContextPools,
-  admission: ContextAdmission,
+  { plan, left, pools, admission }: SelectBySearchOptions,
 ): Promise<ContextResultEntry[]> {
   const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
   const results =
     plan.hasGlobal && !plan.primaryIsGlobal
-      ? await searchBothStores(ctx, plan, { left, minResults, pools, admit: admission.bothStoresAdmit })
+      ? await searchBothStores(ctx, plan, {
+          left,
+          minResults,
+          pools,
+          admit: admission.bothStoresAdmit,
+        })
       : await searchLocalRows(ctx, plan, {
           left,
           minResults,
@@ -345,8 +420,8 @@ export async function selectBySearch(
   return results;
 }
 
-// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an excluded row fill the
-// budget or shadow its admitted duplicate.
+// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an
+// excluded row fill the budget or shadow its admitted duplicate.
 interface SearchBothStoresOptions {
   readonly left: number;
   readonly minResults: number | undefined;
@@ -361,38 +436,19 @@ async function searchBothStores(
 ): Promise<ContextResultEntry[]> {
   const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is
-  // looked up.
-  const poolIds = (pool: AmbientLoadResult): string[] => [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
-  const localIds = new Set(poolIds(pools.local));
-  const alsoLocal = await heldIds(
-    plan.local.store,
-    poolIds(pools.global).filter((id) => !localIds.has(id)),
-    ctx.tenantId,
-  );
-  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
-  const sources = {
-    local: vectorSourceOf({
-      store: plan.local.store,
-      config: plan.config,
-      onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: ctx.infra.embedderFor,
-    }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm runs.
-    global: globalVectorSource(ctx),
-  };
-  const merged = await rankBothStores(
-    plan.query,
-    sources,
-    { local: pools.local.entries, global: pools.global.entries },
-    contextVectorSpec(ctx, plan, admit),
-    {
+  const isGlobalHit = await globalHitTest(ctx, plan, pools);
+  const merged = await rankBothStores({
+    query: plan.query,
+    sources: bothVectorSources(ctx, plan),
+    entries: { local: pools.local.entries, global: pools.global.entries },
+    vectorCandidates: contextVectorSpec(ctx, plan, admit),
+    options: {
       ...engineSettings(ctx, plan),
       budget: left,
       minResults,
       cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
     },
-  );
+  });
   return merged.map((r) => ({
     entry: r.entry,
     score: r.score,
@@ -409,6 +465,38 @@ function engineSettings(ctx: Context, plan: ContextPlan) {
     cwd: ctx.infra.machine.cwd,
     switches: ctx.infra.evalSwitches,
     now: plan.now,
+  };
+}
+
+// A local pool row is local by construction; sync keeps a global row's id on its local copy, so
+// the global pool is looked up.
+async function globalHitTest(
+  ctx: Context,
+  plan: ContextPlan,
+  pools: ContextPools,
+): Promise<(e: MemoryEntry) => boolean> {
+  const poolIds = (pool: AmbientLoadResult): string[] =>
+    [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
+  const localIds = new Set(poolIds(pools.local));
+  const alsoLocal = await heldIds(
+    plan.local.store,
+    poolIds(pools.global).filter((id) => !localIds.has(id)),
+    ctx.tenantId,
+  );
+  return (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
+}
+
+function bothVectorSources(ctx: Context, plan: ContextPlan) {
+  return {
+    local: vectorSourceOf({
+      store: plan.local.store,
+      config: plan.config,
+      onHippoDb: ctx.reach?.isHippoDb,
+      embedderFor: ctx.infra.embedderFor,
+    }),
+    // Its own config.json names the global store's embedding model, read only when the vector arm
+    // runs.
+    global: globalVectorSource(ctx),
   };
 }
 
@@ -444,18 +532,24 @@ async function searchLocalRows(
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await searchByEngine(
-    vectorSourceOf({
+  const ctxResults = await searchByEngine({
+    source: vectorSourceOf({
       store,
       config: ctxConfig,
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
     query,
-    localEntries,
-    usePhysicsCtx ? ctxConfig.physics : null,
-    { ...engineSettings(ctx, plan), budget: left, minResults, cost: localCost, vectorCandidates },
-  );
+    pool: localEntries,
+    physics: usePhysicsCtx ? ctxConfig.physics : null,
+    options: {
+      ...engineSettings(ctx, plan),
+      budget: left,
+      minResults,
+      cost: localCost,
+      vectorCandidates,
+    },
+  });
   return ctxResults.map((r) => ({
     entry: r.entry,
     score: r.score,
@@ -464,8 +558,13 @@ async function searchLocalRows(
   }));
 }
 
-// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they never emit.
-async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): Promise<void> {
+// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they
+// never emit.
+async function auditContextRecall(
+  ctx: Context,
+  plan: ContextPlan,
+  resultCount: number,
+): Promise<void> {
   const row: AppendAuditOptions = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
@@ -473,7 +572,9 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
     metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
   if (plan.hasLocal) await plan.local.store.appendAuditEvents([row]);
-  if (plan.hasGlobal && !plan.primaryIsGlobal) await globalStoreInReach(ctx).appendAuditEvents([row]);
+  if (plan.hasGlobal && !plan.primaryIsGlobal) {
+    await globalStoreInReach(ctx).appendAuditEvents([row]);
+  }
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */

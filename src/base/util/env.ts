@@ -1,6 +1,6 @@
-// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other read, and on an
-// import of this module outside the roots, the adapters and the eval switches. Accessors read at call time, so a test
-// that sets a variable between cases still holds.
+// The one module in src/ that reads process.env; scripts/check-env-reads.mjs fails CI on any other
+// read, and on an import of this module outside the roots, the adapters and the eval switches.
+// Accessors read at call time, so a test that sets a variable between cases still holds.
 import type { ClefSettings, RuntimeSettings } from '../config/config.js';
 import { DEFAULT_TENANT_ID } from './tenant.js';
 
@@ -10,7 +10,8 @@ function raw(name: string): string | undefined {
 
 type FlagState = 'on' | 'off' | 'unset' | 'unknown';
 
-/** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo never opens a door. */
+/** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo
+ * never opens a door. */
 const FLAGS = {
   HIPPO_ABLATE_DECAY: false,
   HIPPO_ABLATE_RECALL_BOOST: false,
@@ -33,7 +34,8 @@ const FLAGS = {
 
 type FlagName = keyof typeof FLAGS;
 
-/** `1`, `true`, `on` and `0`, `false`, `off` (any case, trimmed) are the spellings; unset and empty are unset. */
+/** `1`, `true`, `on` and `0`, `false`, `off` (any case, trimmed) are the spellings; unset and
+ * empty are unset. */
 function flagState(name: string): FlagState {
   const value = raw(name)?.trim().toLowerCase();
   if (!value) return 'unset';
@@ -42,7 +44,8 @@ function flagState(name: string): FlagState {
   return 'unknown';
 }
 
-/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe side. */
+/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe
+ * side. */
 function bool(name: FlagName): () => boolean {
   return () => {
     const state = flagState(name);
@@ -55,16 +58,20 @@ function boolOff(name: FlagName): () => boolean {
   return () => flagState(name) === 'off';
 }
 
-/** One `NAME="value"` entry per on/off variable set to a spelling no flag accepts; serve refuses to boot on any. */
+/** One `NAME="value"` entry per on/off variable set to a spelling no flag accepts; serve refuses
+ * to boot on any. */
 export function validateFlags(): string[] {
   const bad: string[] = [];
   for (const name of Object.keys(FLAGS)) {
-    if (flagState(name) === 'unknown') bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
+    if (flagState(name) === 'unknown') {
+      bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
+    }
   }
   return bad;
 }
 
-// The reader kinds every accessor below is built from; each returns a function so a test's later stubEnv still holds.
+// The reader kinds every accessor below is built from; each returns a function so a test's later
+// stubEnv still holds.
 
 /** The value as written, unset when the variable is. */
 function text(name: string): () => string | undefined {
@@ -76,7 +83,8 @@ function trimmedText(name: string): () => string | undefined {
   return () => raw(name)?.trim() || undefined;
 }
 
-/** The value as a whole number, unset when empty or not one: parseInt would read "15s" as 15 and "1e3" as 1. */
+/** The value as a whole number, unset when empty or not one: parseInt would read "15s" as 15 and
+ * "1e3" as 1. */
 function wholeNumber(name: string): number | undefined {
   const value = raw(name)?.trim();
   if (!value) return undefined;
@@ -101,8 +109,8 @@ function nonNegInt(name: string): () => number | undefined {
 }
 
 /**
- * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner checks, support
- * bundles).
+ * The whole environment, for code that takes it as an injectable map (agent-memory machines, owner
+ * checks, support bundles).
  */
 export function processEnv(): NodeJS.ProcessEnv {
   return process.env;
@@ -127,16 +135,19 @@ export function envEvalRecencyDays(): number | null {
   return Number.isFinite(days) && days > 0 ? days : null;
 }
 
-/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to Date.toISOString output. */
+/** HIPPO_FAKE_NOW as epoch millis, or null unless it is byte-identical to Date.toISOString
+ * output. */
 export function envFakeNowMs(): number | null {
   const value = raw('HIPPO_FAKE_NOW');
   if (value === undefined || value === '') return null;
-  // Round-trip, not a regex: Date.parse accepts junk and locale dates, and a regex admits rolled-over days like 02-31.
+  // Round-trip, not a regex: Date.parse accepts junk and locale dates, and a regex admits
+  // rolled-over days like 02-31.
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
 }
 
-/** HIPPO_LOSS_AVERSION_RATIO as a number, NaN for junk; strength scoring applies the floor and the 1.0 fallback. */
+/** HIPPO_LOSS_AVERSION_RATIO as a number, NaN for junk; strength scoring applies the floor and
+ * the 1.0 fallback. */
 export function envLossAversionRatio(): number | undefined {
   const value = raw('HIPPO_LOSS_AVERSION_RATIO');
   return value === undefined ? undefined : Number(value);
@@ -149,7 +160,8 @@ const envAnchoringOff = boolOff('HIPPO_ANCHORING');
 const envAvailabilityOff = boolOff('HIPPO_AVAILABILITY');
 const envDagRebuildCap = posInt('HIPPO_DAG_REBUILD_CAP');
 
-/** The settings a root hands down in HippoConfig.runtime; an unset number or scope stays undefined. */
+/** The settings a root hands down in HippoConfig.runtime; an unset number or scope stays
+ * undefined. */
 export function envRuntimeSettings(): RuntimeSettings {
   const deboost = envSummaryDeboost();
   return {
@@ -197,7 +209,8 @@ export const envClaudeCodeSessionId = trimmedText('CLAUDE_CODE_SESSION_ID');
 const hippoScope = trimmedText('HIPPO_SCOPE');
 const gstackSkill = trimmedText('GSTACK_SKILL');
 const openclawSkill = trimmedText('OPENCLAW_SKILL');
-/** The operational scope, trimmed: HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL; null when none is set. */
+/** The operational scope, trimmed: HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL; null
+ * when none is set. */
 export function envActiveScope(): string | null {
   return hippoScope() ?? gstackSkill() ?? openclawSkill() ?? null;
 }
@@ -217,7 +230,8 @@ export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
 export function envLogLevel(): string {
   return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
 }
-/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text line. */
+/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text
+ * line. */
 export function envLogJson(): boolean {
   return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
 }
@@ -225,8 +239,8 @@ export function envLogJson(): boolean {
 // Server.
 export const envPort = text('HIPPO_PORT');
 /**
- * How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds
- * the default.
+ * How long a client waits for a running server's /health before writing to the store directly;
+ * server-detect.ts holds the default.
  */
 export const envHealthProbeMs = posInt('HIPPO_HEALTH_PROBE_MS');
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
@@ -236,17 +250,19 @@ export const envV1Rps = text('HIPPO_V1_RPS');
 export const envCallerRps = trimmedText('HIPPO_CALLER_RPS');
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export const envBodyTimeoutMs = posInt('HIPPO_BODY_TIMEOUT_MS');
-/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds the default. */
+/** How long POST /v1/sleep lets its consolidation run; surface/server/sleep-offload.ts holds the
+ * default. */
 export const envSleepTimeoutMs = posInt('HIPPO_SLEEP_TIMEOUT_MS');
-/** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request before its timeout
- * error; 0 for no deadline; base/util/request-scope.ts holds the default. */
+/** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request
+ * before its timeout error; 0 for no deadline; base/util/request-scope.ts holds the default. */
 export const envRequestDeadlineMs = nonNegInt('HIPPO_REQUEST_DEADLINE_MS');
 /**
- * How many store calls may wait for one worker thread before the next is refused; the adapter's executor.ts holds the
- * default.
+ * How many store calls may wait for one worker thread before the next is refused; the adapter's
+ * executor.ts holds the default.
  */
 export const envStoreQueueMax = posInt('HIPPO_STORE_QUEUE_MAX');
-/** How long the daily runner lets one child `hippo` step run; surface/cli/setup.ts holds the default. */
+/** How long the daily runner lets one child `hippo` step run; surface/cli/setup.ts holds the
+ * default. */
 export const envDailyStepTimeoutMs = posInt('HIPPO_DAILY_STEP_TIMEOUT_MS');
 /** Blank reads as unset, so an emptied variable falls back to the local key. */
 export const envApiKey = trimmedText('HIPPO_API_KEY');
@@ -255,7 +271,8 @@ export function envClientIpHeader(): string | undefined {
 }
 /** The peers whose HIPPO_CLIENT_IP_HEADER is believed: IPs or CIDRs. */
 export const envTrustedProxies = text('HIPPO_TRUSTED_PROXIES');
-/** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
+/** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and
+ * --tls-key flags win. */
 export const envTlsCert = trimmedText('HIPPO_TLS_CERT');
 export const envTlsKey = trimmedText('HIPPO_TLS_KEY');
 export const envMcpSseMaxStreams = posInt('MCP_SSE_MAX_STREAMS');
@@ -300,4 +317,6 @@ export const envGitHubToken = text('GITHUB_TOKEN');
 export const envGitHubWebhookSecret = text('GITHUB_WEBHOOK_SECRET');
 export const envGitHubWebhookSecretPrevious = text('GITHUB_WEBHOOK_SECRET_PREVIOUS');
 export const envGitHubWebhookSecretPreviousUntil = text('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL');
-export const envGitHubAllowUnknownInstallationFallback = bool('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
+export const envGitHubAllowUnknownInstallationFallback = bool(
+  'GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK',
+);

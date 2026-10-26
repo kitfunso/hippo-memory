@@ -251,8 +251,10 @@ describe('loadScopedContinuity', () => {
 describe('recallJsonRow and recallRerankerPick', () => {
   it('adds the --why keys, source included, only when asked', async () => {
     const top = (await rankDeploy()).results[0]!;
-    expect(recallJsonRow(top, 'deploy', false, false, evalNow())).not.toHaveProperty('source');
-    const why = recallJsonRow(top, 'deploy', true, true, evalNow());
+    expect(
+      recallJsonRow({ r: top, query: 'deploy', showWhy: false, isGlobal: false, now: evalNow() }),
+    ).not.toHaveProperty('source');
+    const why = recallJsonRow({ r: top, query: 'deploy', showWhy: true, isGlobal: true, now: evalNow() });
     expect(why.source).toBe('global');
     expect(why.reason).toBe('BM25: matched terms [deploy]');
   });

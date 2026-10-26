@@ -4,7 +4,12 @@ import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import { mcpApiContext, type GroupToolCall, type LocalToolCall, type ToolCall } from './protocol.js';
+import {
+  mcpApiContext,
+  type GroupToolCall,
+  type LocalToolCall,
+  type ToolCall,
+} from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
@@ -15,8 +20,12 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, api }: GroupToolCall<'objects'>): Promise<string> {
-  // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
+export async function runPredictBaserateTool({
+  args,
+  api,
+}: GroupToolCall<'objects'>): Promise<string> {
+  // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no
+  // surface can skip it.
   const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
   if (!classTag) {
     return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
@@ -35,16 +44,28 @@ export async function runPredictBaserateTool({ args, api }: GroupToolCall<'objec
   if (baserate.meanEstimate !== null) {
     lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
   }
-  if (baserate.meanActual !== null) lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null) lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null) lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.mae !== null) lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null) {
+    lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  }
+  if (baserate.meanRatio !== null) {
+    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  }
+  if (baserate.p50Ratio !== null) {
+    lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  }
+  if (baserate.mae !== null) {
+    lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  }
   return lines.join('\n');
 }
 
 export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
   const api = mcpApiContext(ctx);
-  const tallies = await api.store.reports.memoryStatus(api.tenantId, api.infra.clock(), AT_RISK_BELOW);
+  const tallies = await api.store.reports.memoryStatus(
+    api.tenantId,
+    api.infra.clock(),
+    AT_RISK_BELOW,
+  );
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -57,9 +78,13 @@ export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> 
 
 export async function runConflictsTool({ ctx, api }: GroupToolCall<'conflicts'>): Promise<string> {
   const lines: string[] = [];
-  for await (const page of conflictPages((p) => conflictListOpen(api, { ...p, project: ctx.project }))) {
+  for await (const page of conflictPages((p) =>
+    conflictListOpen(api, { ...p, project: ctx.project }),
+  )) {
     for (const c of page.conflicts) {
-      lines.push(`conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`);
+      lines.push(
+        `conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`,
+      );
     }
   }
   return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
@@ -76,12 +101,16 @@ export async function runResolveTool({ args, api }: GroupToolCall<'conflicts'>):
   try {
     ({ loserId } = await conflictResolve(api, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot
-    // touch.
+    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair
+    // the caller cannot touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
-  const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
+  const action = rejectLoser
+    ? 'rejected (tombstoned) and removed'
+    : forget
+      ? 'deleted'
+      : 'weakened';
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
@@ -92,7 +121,8 @@ export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise
   const apiCtx = mcpApiContext(ctx);
   // Checked before the share, whose personal-row refusal would tell another person the id exists.
   await memoryGetTouchable(apiCtx, shareId);
-  // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to the global store.
+  // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
+  // the global store.
   const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
@@ -103,6 +133,8 @@ export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
   const peers = await sharePeers(mcpApiContext(ctx));
   if (peers.length === 0) return 'No peers found.';
   return peers
-    .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)
+    .map(
+      (p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`,
+    )
     .join('\n');
 }

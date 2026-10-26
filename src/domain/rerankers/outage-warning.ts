@@ -8,7 +8,8 @@ const REPEAT_MS = 5 * MINUTE_MS;
 export interface OutageDetail {
   /** The error's class and stack, for the warning line. */
   readonly fields?: LogFields | undefined;
-  /** The request's abort signal; once it fired, the client hung up and the reranker did not fail. */
+  /** The request's abort signal; once it fired, the client hung up and the reranker did not
+   * fail. */
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -17,8 +18,8 @@ export interface OutageWarning {
   answered(): void;
 }
 
-/** Warns when `name` starts failing, at most every five minutes while it keeps failing, and once when it answers again.
- * `fallback` says what recall does meanwhile. */
+/** Warns when `name` starts failing, at most every five minutes while it keeps failing, and once
+ * when it answers again. `fallback` says what recall does meanwhile. */
 export function createOutageWarning(name: string, fallback: string): OutageWarning {
   let failures = 0;
   let unreported = 0;
@@ -31,16 +32,22 @@ export function createOutageWarning(name: string, fallback: string): OutageWarni
         unreported++;
         return;
       }
-      const skipped = unreported > 0 ? ` ${unreported} more calls failed since the last warning.` : '';
+      const skipped =
+        unreported > 0 ? ` ${unreported} more calls failed since the last warning.` : '';
       const repeat = `While it fails this repeats at most every ${REPEAT_MS / MINUTE_MS} minutes.`;
-      log.warn(`${name} reranker unavailable (${reason}); ${fallback}.${skipped} ${repeat}`, fields);
+      log.warn(
+        `${name} reranker unavailable (${reason}); ${fallback}.${skipped} ${repeat}`,
+        fields,
+      );
       warnedAt = Date.now();
       unreported = 0;
     },
     answered(): void {
       if (failures === 0) return;
       // At warn so it shows at the default level, next to the outage line it closes.
-      log.warn(`${name} reranker is answering again after ${failures} failed ${failures === 1 ? 'call' : 'calls'}.`);
+      log.warn(
+        `${name} reranker is answering again after ${failures} failed ${failures === 1 ? 'call' : 'calls'}.`,
+      );
       failures = 0;
       unreported = 0;
     },

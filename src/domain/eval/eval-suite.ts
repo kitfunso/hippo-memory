@@ -1,7 +1,7 @@
 /**
- * Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature metrics and regression
- * detection against a saved baseline.
- * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
+ * Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature
+ * metrics and regression detection against a saved baseline. Zero API calls (no LLM judge, no
+ * embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
 import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankBm25 } from '../search/bm25-search.js';
@@ -79,12 +79,22 @@ export interface RegressionReport {
 }
 
 function directRecallCase(n: number, query: string, description: string): FeatureTestCase {
-  return { id: `dr-q${n}`, category: 'direct-recall', query, expectedIds: [`dr-${n}`], description };
+  return {
+    id: `dr-q${n}`,
+    category: 'direct-recall',
+    query,
+    expectedIds: [`dr-${n}`],
+    description,
+  };
 }
 
 function directRecallCases(): FeatureTestCase[] {
   return [
-    directRecallCase(1, 'PostgreSQL migration NOT NULL constraint', 'exact keyword match on DB migration'),
+    directRecallCase(
+      1,
+      'PostgreSQL migration NOT NULL constraint',
+      'exact keyword match on DB migration',
+    ),
     directRecallCase(2, 'React useMemo performance memoizing', 'React performance optimization'),
     directRecallCase(3, 'sliding window rate limiter API', 'API rate limiting approach'),
     directRecallCase(4, 'Docker OOM memory limits worker', 'Docker memory config'),
@@ -102,7 +112,11 @@ function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[], now: 
 
 /** Extraction preference: extracted facts should rank above raw source. */
 function extractionPreferenceEntries(now: Date): MemoryEntry[] {
-  return [...infrastructureMeetingEntries(now), ...monitoringMeetingEntries(now), ...authMeetingEntries(now)];
+  return [
+    ...infrastructureMeetingEntries(now),
+    ...monitoringMeetingEntries(now),
+    ...authMeetingEntries(now),
+  ];
 }
 
 function extractionPreferenceCases(): FeatureTestCase[] {
@@ -131,7 +145,11 @@ function extractionPreferenceCases(): FeatureTestCase[] {
   ];
 }
 
-function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+function addExtractionPreference(
+  entries: MemoryEntry[],
+  cases: FeatureTestCase[],
+  now: Date,
+): void {
   entries.push(...extractionPreferenceEntries(now));
   cases.push(...extractionPreferenceCases());
 }
@@ -334,10 +352,15 @@ function noiseTargetEntries(now: Date): MemoryEntry[] {
         tags: ['topic:database', 'topic:performance'],
       },
     ),
-    mem(now, 'nr-2', 'The S3 bucket policy was misconfigured allowing public read access to customer data uploads', {
-      created: dateOffset(21),
-      tags: ['topic:security', 'topic:s3'],
-    }),
+    mem(
+      now,
+      'nr-2',
+      'The S3 bucket policy was misconfigured allowing public read access to customer data uploads',
+      {
+        created: dateOffset(21),
+        tags: ['topic:security', 'topic:s3'],
+      },
+    ),
   ];
 }
 
@@ -449,7 +472,11 @@ function featureAverages(
 }
 
 /** Ranks the synthetic corpus under `switches`, built and scored at `now`. */
-export async function runFeatureEval(version: string, switches: EvalSwitches, now: Date): Promise<EvalSuiteResult> {
+export async function runFeatureEval(
+  version: string,
+  switches: EvalSwitches,
+  now: Date,
+): Promise<EvalSuiteResult> {
   const start = Date.now();
   const { entries, cases } = buildSyntheticCorpus(now);
 
@@ -491,10 +518,14 @@ export async function runFeatureEval(version: string, switches: EvalSwitches, no
 }
 
 const REGRESSION_THRESHOLD = 0.05;
-// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the whole ranking.
+// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the
+// whole ranking.
 const EVAL_TOKEN_BUDGET = 50000;
 
-export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResult): RegressionReport {
+export function detectRegressions(
+  baseline: EvalBaseline,
+  current: EvalSuiteResult,
+): RegressionReport {
   const regressions: RegressionReport['regressions'] = [];
   const improvements: RegressionReport['improvements'] = [];
 
@@ -508,9 +539,21 @@ export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResu
       const delta = curVal - baseVal;
 
       if (delta < -REGRESSION_THRESHOLD) {
-        regressions.push({ category: feat.category, metric, baseline: baseVal, current: curVal, delta });
+        regressions.push({
+          category: feat.category,
+          metric,
+          baseline: baseVal,
+          current: curVal,
+          delta,
+        });
       } else if (delta > REGRESSION_THRESHOLD) {
-        improvements.push({ category: feat.category, metric, baseline: baseVal, current: curVal, delta });
+        improvements.push({
+          category: feat.category,
+          metric,
+          baseline: baseVal,
+          current: curVal,
+          delta,
+        });
       }
     }
   }
@@ -523,8 +566,8 @@ export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResu
 }
 
 export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
-  // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every category in
-  // buildSyntheticCorpus's cases.
+  // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every
+  // category in buildSyntheticCorpus's cases.
   const features: EvalBaseline['features'] = {} as EvalBaseline['features'];
   for (const f of result.features) {
     features[f.category] = { mrr: f.mrr, recallAt5: f.recallAt5, ndcgAt5: f.ndcgAt5 };
@@ -571,7 +614,9 @@ function formatReportLines(report: RegressionReport): string[] {
     lines.push('');
     lines.push(`REGRESSIONS DETECTED (>${pct(REGRESSION_THRESHOLD)} drop):`);
     for (const r of report.regressions) {
-      lines.push(`  ${r.category}.${r.metric}: ${pct(r.baseline)} -> ${pct(r.current)} (${deltaStr(r.delta)})`);
+      lines.push(
+        `  ${r.category}.${r.metric}: ${pct(r.baseline)} -> ${pct(r.current)} (${deltaStr(r.delta)})`,
+      );
     }
   }
   if (report.improvements.length > 0) {
@@ -592,7 +637,9 @@ function formatReportLines(report: RegressionReport): string[] {
 
 export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): string {
   const lines: string[] = [];
-  lines.push(`Hippo Eval v${result.version} — ${result.totalCases} queries, ${result.durationMs}ms`);
+  lines.push(
+    `Hippo Eval v${result.version} — ${result.totalCases} queries, ${result.durationMs}ms`,
+  );
   lines.push('');
   lines.push(
     `${pad('Feature', 24)} | ${pad('MRR', 8)} | ${pad('R@5', 8)} | ${pad('NDCG@5', 8)} | ${pad('vs baseline', 12)} | ` +

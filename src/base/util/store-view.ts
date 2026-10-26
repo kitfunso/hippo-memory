@@ -1,6 +1,7 @@
 import type { HippoStore } from '../ports/store.js';
 
-// A request's view of a store is a new object, so a note kept once per store keys on the store the view reads.
+// A request's view of a store is a new object, so a note kept once per store keys on the store the
+// view reads.
 const viewed = new WeakMap<HippoStore, HippoStore>();
 
 /** `view`, recorded as one request's view of `store`. */

@@ -7,33 +7,49 @@ import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 const DASHBOARD_URL_FILE = 'dashboard.url';
 
-/** Node ignores a file mode on Windows, so there the file goes under the profile's global hippo folder, which the user
- * profile already makes user-only; elsewhere mode 0600 does the job in the store folder. */
+/** Node ignores a file mode on Windows, so there the file goes under the profile's global hippo
+ * folder, which the user profile already makes user-only; elsewhere mode 0600 does the job in
+ * the store folder. */
 function dashboardUrlFile(hippoRoot: string, platform: NodeJS.Platform): string {
   return path.join(platform === 'win32' ? hippoHomeDir() : hippoRoot, DASHBOARD_URL_FILE);
 }
 
-/** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a terminal, like a captured
- * log, never shows the ticket, since whoever spends it first can read every memory. */
-export function printDashboardBanner(
-  hippoRoot: string,
-  port: number,
-  ticket: string,
-  staticRoot: string | null,
-  platform: NodeJS.Platform = process.platform,
-): void {
+export interface PrintDashboardBannerOptions {
+  readonly hippoRoot: string;
+  readonly port: number;
+  readonly ticket: string;
+  readonly staticRoot: string | null;
+  readonly platform?: NodeJS.Platform;
+}
+
+/** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a
+ * terminal, like a captured log, never shows the ticket, since whoever spends it first can read
+ * every memory. */
+export function printDashboardBanner({
+  hippoRoot,
+  port,
+  ticket,
+  staticRoot,
+  platform = process.platform,
+}: PrintDashboardBannerOptions): void {
   const file = dashboardUrlFile(hippoRoot, platform);
   fs.mkdirSync(path.dirname(file), PRIVATE_DIR);
   // Created fresh, so its mode holds even where an older file had a wider one.
   fs.rmSync(file, { force: true });
-  fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, {
+    flag: 'wx',
+    mode: 0o600,
+  });
   // The banner is the command's printed result, so it stays on stdout.
-  console.log(`Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`);
+  console.log(
+    `Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`,
+  );
   if (staticRoot !== null) console.log(`Serving React UI from ${staticRoot}`);
   console.log('Press Ctrl+C to stop.');
 }
 
-/** A port that will not open is the user's to fix, so it gets one plain line and a failure exit code, not a stack. */
+/** A port that will not open is the user's to fix, so it gets one plain line and a failure exit
+ * code, not a stack. */
 export function reportListenFailure(port: number, err: Error): void {
   const inUse = 'code' in err && err.code === 'EADDRINUSE';
   printError(

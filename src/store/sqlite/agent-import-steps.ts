@@ -1,16 +1,26 @@
-// One container's planned steps on the caller's write scope: the rows they name are re-read first, and a plan whose
-// rows moved on since the sync read them writes nothing.
+// One container's planned steps on the caller's write scope: the rows they name are re-read first,
+// and a plan whose rows moved on since the sync read them writes nothing.
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
-import { deleteDormantRow, dormantSnapshotsWhere, readDormantSnapshot, replaceDormantEntry } from './dormant-rows.js';
+import {
+  deleteDormantRow,
+  dormantSnapshotsWhere,
+  readDormantSnapshot,
+  replaceDormantEntry,
+} from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
 import { entryIdTaken, readEntriesInIdOrder } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
-import { renameEntrySourceAndOrigin, renameEntrySource, setEntryTagsInTx, supersedeEntry } from './entry-writes.js';
+import {
+  renameEntrySourceAndOrigin,
+  renameEntrySource,
+  setEntryTagsInTx,
+  supersedeEntry,
+} from './entry-writes.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';
@@ -36,17 +46,26 @@ interface StepsRun {
 /** The tenant's live rows under `prefix`, one bounded statement per page. */
 function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   const filter = { tenantId, sourcePrefix: prefix, live: true } as const;
-  return [...rowsInPages((after?: EntryCursor) => listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }))];
+  return [
+    ...rowsInPages((after?: EntryCursor) =>
+      listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }),
+    ),
+  ];
 }
 
-/** Null when the rows the plan read have changed: nothing is written then, and the sync plans again. */
-export function runSteps(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): StepsRun | null {
+/** Null when the rows the plan read have changed: nothing is written then, and the sync plans
+ * again. */
+export function runSteps(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  plan: ContainerApply,
+): StepsRun | null {
   const rows = standingRows(db, plan);
   return rows === null ? null : new ContainerSteps(db, files, plan, rows).run();
 }
 
-/** The rows under the plan's prefixes and those its steps name outside them, by id; null when the prefixes no longer
- * hold exactly the planned rows or an adopted row left its legacy source. */
+/** The rows under the plan's prefixes and those its steps name outside them, by id; null when
+ * the prefixes no longer hold exactly the planned rows or an adopted row left its legacy source. */
 function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, MemoryEntry> | null {
   const rows = new Map<string, MemoryEntry>();
   for (const prefix of outermost(plan.prefixes)) {
@@ -55,14 +74,22 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   if (rows.size !== plan.rows.length) return null;
   for (const want of plan.rows) {
     const row = rows.get(want.id);
-    if (row === undefined || row.source !== want.source || row.tags.includes(plan.tag) !== want.tagged) return null;
+    if (
+      row === undefined ||
+      row.source !== want.source ||
+      row.tags.includes(plan.tag) !== want.tagged
+    ) {
+      return null;
+    }
   }
   const outside = [...new Set(plan.steps.flatMap(namedIds))].filter((id) => !rows.has(id));
   for (const ids of chunked(outside)) {
     for (const row of readEntriesInIdOrder(db, ids, plan.tenantId)) rows.set(row.id, row);
   }
   const adoptable = plan.steps.every(
-    (step) => step.kind !== 'adopt' || (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
+    (step) =>
+      step.kind !== 'adopt' ||
+      (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
   );
   return adoptable ? rows : null;
 }
@@ -117,7 +144,12 @@ class ContainerSteps {
 
   private adopt(step: AdoptStep): StepOutcome {
     const row = this.row(step.id);
-    renameEntrySource(this.db, row.tenantId, row.id, step.from, step.to);
+    renameEntrySource(this.db, {
+      tenantId: row.tenantId,
+      id: row.id,
+      from: step.from,
+      to: step.to,
+    });
     return this.moved({ ...row, source: step.to });
   }
 
@@ -146,16 +178,25 @@ class ContainerSteps {
     for (const snap of dormantSnapshotsWhere(this.db, { tenantId, sourcePrefix: from })) {
       const source = to + snap.entry.source.slice(from.length);
       const originProject = origin ?? snap.entry.originProject;
-      replaceDormantEntry(this.db, tenantId, snap.entry.id, { ...snap.entry, source, originProject });
+      replaceDormantEntry(this.db, tenantId, snap.entry.id, {
+        ...snap.entry,
+        source,
+        originProject,
+      });
     }
     return 'done';
   }
 
-  /** api.supersede's steps on this transaction; false when the row is gone or another writer superseded it first. */
+  /** api.supersede's steps on this transaction; false when the row is gone or another writer
+   * superseded it first. */
   private supersede(id: string, by: string): boolean {
     const old = this.rows.get(id);
-    if (old === undefined || !supersedeEntry(this.db, old.tenantId, old.id, by)) return false;
-    if (old.dagParentId) markSummaryDirtyInTx(this.db, old.dagParentId, old.tenantId, SYNC_ACTOR);
+    if (old === undefined) return false;
+    if (!supersedeEntry(this.db, { tenantId: old.tenantId, id: old.id, newId: by })) return false;
+    if (old.dagParentId) {
+      const mark = { summaryId: old.dagParentId, tenantId: old.tenantId, actor: SYNC_ACTOR };
+      markSummaryDirtyInTx(this.db, mark);
+    }
     appendAuditEvents(this.db, [
       {
         tenantId: old.tenantId,
@@ -177,12 +218,16 @@ class ContainerSteps {
 
   private gated(entry: MemoryEntry): GatedWriteResult {
     const stamped = stampOriginProject(this.files, entry);
-    const result = gatedWrite(this.db, this.files, stamped, { actor: SYNC_ACTOR, worthCheck: false });
+    const result = gatedWrite(this.db, this.files, stamped, {
+      actor: SYNC_ACTOR,
+      worthCheck: false,
+    });
     if (result === 'written') this.mirror.push(stamped);
     return result;
   }
 
-  /** A deleted note came back unchanged: its old row returns with its id and history, under the sync's own audit op. */
+  /** A deleted note came back unchanged: its old row returns with its id and history, under the
+   * sync's own audit op. */
   private restore(step: RestoreStep): StepOutcome {
     const tenantId = this.plan.tenantId;
     const snap = readDormantSnapshot(this.db, tenantId, step.dormantId);
@@ -203,7 +248,12 @@ class ContainerSteps {
   }
 
   private setAside(id: string, why: SetAsideWhy): StepOutcome {
-    const result = setAsideRow(this.db, this.plan.tag, this.row(id), why, this.files);
+    const result = setAsideRow(this.db, {
+      tag: this.plan.tag,
+      row: this.row(id),
+      why,
+      rules: this.files,
+    });
     if (result.kind === 'untagged') this.mirror.push(result.entry);
     else this.purge.push(result.id);
     return result.kind;

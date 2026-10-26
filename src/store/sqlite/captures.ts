@@ -1,4 +1,5 @@
-// hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up the mirror folders.
+// hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up
+// the mirror folders.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
@@ -7,21 +8,33 @@ import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
-import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../../base/ports/store/capture.js';
+import type {
+  CaptureDedup,
+  CaptureWriteOptions,
+  CapturedOutcome,
+  Captures,
+} from '../../base/ports/store/capture.js';
 import { listTextsHolding } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
 
 /** The texts the rows under `dedup` hold, of the rows that may hold an entry's text. */
-function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
+function heldKeys(
+  db: DatabaseSyncLike,
+  entries: readonly MemoryEntry[],
+  dedup: CaptureDedup,
+): Set<string> {
   const texts = entries.map((entry) => entry.content);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
-  return storedTextKeys(listTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
+  return storedTextKeys(
+    listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit }),
+  );
 }
 
-/** One outcome per entry, in order, in one transaction that reads the caller's dedup again first, so a text another
- * writer stored since that read is skipped; mirrors and stats follow the commit. */
+/** One outcome per entry, in order, in one transaction that reads the caller's dedup again
+ * first, so a text another writer stored since that read is skipped; mirrors and stats follow
+ * the commit. */
 function writeCapturedEntries(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -49,7 +62,7 @@ function writeCapturedEntries(
 
 const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
   textsHolding: (db, tenantId, texts, { project, everyScope } = {}) =>
-    listTextsHolding(db, tenantId, texts, project, everyScope ? EVERY_SCOPE : undefined),
+    listTextsHolding(db, { tenantId, texts, project, admit: everyScope ? EVERY_SCOPE : undefined }),
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {

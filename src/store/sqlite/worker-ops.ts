@@ -1,21 +1,25 @@
-// What crosses between the server thread and a store worker, and which kind of worker runs each store method.
+// What crosses between the server thread and a store worker, and which kind of worker runs each
+// store method.
 import type { BaseMethods, HippoStore, StoreGroups } from '../../base/ports/store.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 import type { StoreRules } from '../../base/ports/infra.js';
 
-/** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
+/** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every
+ * write. */
 export type OpMode = 'read' | 'write';
 
-/** Where the executor sends a call: by its mode, or 'pinned-read' for a read only the first reader runs, since that
- * thread alone holds the store's vector graph and a second copy would double its memory. */
+/** Where the executor sends a call: by its mode, or 'pinned-read' for a read only the first
+ * reader runs, since that thread alone holds the store's vector graph and a second copy would
+ * double its memory. */
 export type OpRoute = OpMode | 'pinned-read';
 
 export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
 
-/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server thread.
- * Tagged by effect: predictionBaserate (audit row), bumpRecallStats and bumpRemembered (stats.json) write; an
- * `openStore` read is a read, as the writer runs that open's setup before any reader serves. */
+/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server
+ * thread. Tagged by effect: predictionBaserate (audit row), bumpRecallStats and bumpRemembered
+ * (stats.json) write; an `openStore` read is a read, as the writer runs that open's setup before
+ * any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',
@@ -192,7 +196,8 @@ export const WORKER_OPS = {
     pilotArm: 'write',
     replaceRereads: 'write',
   },
-  // A session's lock token and staged vectors sit on the thread that opened it, so every index call goes to the writer.
+  // A session's lock token and staged vectors sit on the thread that opened it, so every index call
+  // goes to the writer.
   embeddingIndex: {
     open: 'write',
     step: 'write',
@@ -272,8 +277,8 @@ export const WORKER_OPS = {
   readonly base: OpPlaces<BaseMethods>;
 };
 
-/** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any
- * reader is sent a job. */
+/** Sent by the executor itself and by no store method: the writer runs the store's open-time
+ * setup once, before any reader is sent a job. */
 export const STORE_SETUP_OP = 'setup';
 
 export type WorkerGroup = keyof typeof WORKER_OPS;
@@ -286,16 +291,20 @@ export interface WorkerInit {
   readonly mode: OpMode;
   /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
-  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it holds. */
+  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it
+   * holds. */
   readonly pinned?: boolean;
-  /** Stored vectors a store holds before the pinned reader builds its graph; VECTOR_GRAPH_THRESHOLD when omitted. */
+  /** Stored vectors a store holds before the pinned reader builds its graph;
+   * VECTOR_GRAPH_THRESHOLD when omitted. */
   readonly vectorGraphThreshold?: number | undefined;
-  /** Stored vectors past which the pinned reader keeps no graph; the config default when omitted. */
+  /** Stored vectors past which the pinned reader keeps no graph; the config default when
+   * omitted. */
   readonly vectorGraphMaxVectors?: number | undefined;
-  /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
-   * job passes its deadline. */
+  /** One shared integer the writer sets to a job's id before that job may commit; the server
+   * thread reads it when the job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
-  /** The strength model and fake clock the parent's root opened with, which the thread's store opens with. */
+  /** The strength model and fake clock the parent's root opened with, which the thread's store
+   * opens with. */
   readonly rules: StoreRules;
 }
 
@@ -308,12 +317,23 @@ export interface Job {
   readonly allTenants: readonly TenantMark[];
   /** Of the request the call belongs to, so the thread's log lines carry it. */
   readonly requestId: string | undefined;
-  /** wal_autocheckpoint as the server thread has it: a worker cannot see the checkpointer start or stop. */
+  /** wal_autocheckpoint as the server thread has it: a worker cannot see the checkpointer start
+   * or stop. */
   readonly walPages: number;
 }
 
-/** Both kinds carry the audit rows the job failed to write, since the count `/health` reports lives on the server
- * thread. */
+/** Both kinds carry the audit rows the job failed to write, since the count `/health` reports
+ * lives on the server thread. */
 export type Reply =
-  | { readonly id: number; readonly ok: true; readonly value: unknown; readonly auditFailures: number }
-  | { readonly id: number; readonly ok: false; readonly error: WireError; readonly auditFailures: number };
+  | {
+      readonly id: number;
+      readonly ok: true;
+      readonly value: unknown;
+      readonly auditFailures: number;
+    }
+  | {
+      readonly id: number;
+      readonly ok: false;
+      readonly error: WireError;
+      readonly auditFailures: number;
+    };

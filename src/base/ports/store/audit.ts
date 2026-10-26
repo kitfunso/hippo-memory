@@ -1,20 +1,21 @@
-// The audit groups: the audit list, and the maintenance that prunes it, deletes automatically and repairs quality.
+// The audit groups: the audit list, and the maintenance that prunes it, deletes automatically and
+// repairs quality.
 import type { AuditOp } from '../../records/audit-ops.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import type { AuditEvent } from './types.js';
 import type { RepairProtection } from '../../memory/memory-audit.js';
 
-/** The rows an audit list reads for `limit`: one past the cap, since GET /v1/audit reads a row ahead to tell whether
- * another page exists. */
+/** The rows an audit list reads for `limit`: one past the cap, since GET /v1/audit reads a row
+ * ahead to tell whether another page exists. */
 export const auditRowsRead = (limit: number | undefined): number =>
   Math.max(1, Math.min(limit ?? DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT + 1));
 
 /** The read behind the audit list. It writes no audit row. */
 export interface AuditLog {
-  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and by `since` (ts at or after it);
-   * `limit` reads auditRowsRead rows, and `after` resumes below the (ts, id) position a page ended
-   * on. */
+  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and by `since`
+   * (ts at or after it); `limit` reads auditRowsRead rows, and `after` resumes below the (ts,
+   * id) position a page ended on. */
   listAuditEvents(query: QueryAuditOptions): Promise<AuditEvent[]>;
 }
 
@@ -31,22 +32,31 @@ export type { RepairProtection };
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
-  /** The ids among `ids` that a typed object row names, in any tenant; an automatic pass never deletes one. */
+  /** The ids among `ids` that a typed object row names, in any tenant; an automatic pass never
+   * deletes one. */
   objectBackedAmong(ids: readonly string[]): Promise<Set<string>>;
-  /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or object-backing row; resolves to
-   * the ids deleted. */
+  /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or
+   * object-backing row; resolves to the ids deleted. */
   deleteAutomatically(
     removals: readonly { readonly id: string; readonly reason: string }[],
     actor: string,
   ): Promise<string[]>;
-  /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one audit_prune row; resolves to
-   * the count. */
+  /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one
+   * audit_prune row; resolves to the count. */
   pruneAuditRows(prune: AuditPrune): Promise<number>;
-  /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup; a row
-   * `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's write. */
-  repairQuality(tenantId: string, apply: boolean, protect: RepairProtection): Promise<QualityRepairResult>;
+  /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup;
+   * a row `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's
+   * write. */
+  repairQuality(
+    tenantId: string,
+    apply: boolean,
+    protect: RepairProtection,
+  ): Promise<QualityRepairResult>;
   /** repairQuality applied once per store; null once it ran there. */
-  repairQualityOnce(tenantId: string, protect: RepairProtection): Promise<QualityRepairResult | null>;
+  repairQualityOnce(
+    tenantId: string,
+    protect: RepairProtection,
+  ): Promise<QualityRepairResult | null>;
 }
 
 export interface AuditPrune {
@@ -60,7 +70,8 @@ export interface AuditPrune {
 }
 
 /**
- * One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot be changed safely.
+ * One tenant's plan; `supported` is false, with `blockers` naming each gap, when the schema cannot
+ * be changed safely.
  */
 export interface QualityRepairResult {
   readonly root: string;
@@ -74,8 +85,8 @@ export interface QualityRepairResult {
   readonly warnings: readonly string[];
 }
 
-/** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected`
- * is kept. */
+/** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is
+ * listed only, `protected` is kept. */
 export interface QualityRepairIssue {
   readonly id: string;
   readonly reason: string;

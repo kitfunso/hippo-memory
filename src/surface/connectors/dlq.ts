@@ -1,10 +1,14 @@
-// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of
-// defaults, one replay result.
+// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel,
+// one set of defaults, one replay result.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
 import type { ConnectorStore } from './ingest.js';
-import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../../base/ports/store.js';
+import type {
+  ConnectorDeadLetter,
+  DeadLetterConnector,
+  DeadLetterRows,
+} from '../../base/ports/store.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
 
@@ -32,8 +36,8 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the queue its rows live in and the letter that parks a row there. `Own` is the columns
- * only its table has. */
+/** What one connector supplies: the queue its rows live in and the letter that parks a row
+ * there. `Own` is the columns only its table has. */
 export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends string> {
   readonly connector: C;
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
@@ -63,10 +67,13 @@ export function listDlq<C extends DeadLetterConnector>(
   store: ConnectorStore,
   opts: { tenantId: string; limit?: number },
 ): Promise<DeadLetterRows[C][]> {
-  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, { limit: opts.limit ?? DEFAULT_LIST_LIMIT });
+  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, {
+    limit: opts.limit ?? DEFAULT_LIST_LIMIT,
+  });
 }
 
-/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome itself. */
+/** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome
+ * itself. */
 export type ReplayStatus =
   | 'not_found'
   | 'sig_missing'
@@ -94,7 +101,8 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
   return { ok: false, status, memoryId: null, retryCount, reason };
 }
 
-/** A replay that failed after the row was read: counts it exactly once, then reports the new count. */
+/** A replay that failed after the row was read: counts it exactly once, then reports the new
+ * count. */
 async function failAndBump(
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
   store: ConnectorStore,
@@ -105,8 +113,8 @@ async function failAndBump(
   return replayFailed(failure.status, row.retryCount + 1, failure.reason);
 }
 
-/** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay routes it. Another
- * tenant's row reads as absent. */
+/** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay
+ * routes it. Another tenant's row reads as absent. */
 async function replayableRow<C extends DeadLetterConnector>(
   store: ConnectorStore,
   connector: C,
@@ -115,11 +123,14 @@ async function replayableRow<C extends DeadLetterConnector>(
 ): Promise<DeadLetterRows[C] | null> {
   const [own] = await store.connectorEvents.deadLetters(connector, tenantId, { id });
   if (own !== undefined) return own;
-  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, { id });
+  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, {
+    id,
+  });
   return unroutable ?? null;
 }
 
-/** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force can get it through. */
+/** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force
+ * can get it through. */
 export interface SignatureRefusal {
   readonly status: 'sig_missing' | 'sig_fail';
   readonly reason: string;
@@ -149,14 +160,19 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
   readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a missing
- * signature. */
+/** Which parked row to replay; `force` skips the signature check. */
+export interface ReplayTarget {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly force: boolean;
+}
+
+/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted
+ * once, except a missing signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
   store: ConnectorStore,
-  tenantId: string,
-  id: number,
-  force: boolean,
+  { tenantId, id, force }: ReplayTarget,
 ): Promise<ReplayResult> {
   const row = await replayableRow(store, steps.dlq.connector, tenantId, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);

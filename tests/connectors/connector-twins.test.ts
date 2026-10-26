@@ -87,14 +87,14 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
         reason: 'no tenant',
       }),
     });
-    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, false)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), { tenantId: 'default', id, force: false })).toEqual({
       ok: false,
       status: 'sig_missing',
       memoryId: null,
       retryCount: 0,
       reason: 'no signature',
     });
-    expect(await replayParked(steps(false), sqliteStore(root), 'default', id, true)).toEqual({
+    expect(await replayParked(steps(false), sqliteStore(root), { tenantId: 'default', id, force: true })).toEqual({
       ok: false,
       status: 'unroutable',
       memoryId: null,

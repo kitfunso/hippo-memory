@@ -7,7 +7,10 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const SESSION_VERBS = {
   snapshot: verb(() => import('../continuity.js'), 'handleSnapshot', {
-    flags: { switches: ['json'], values: ['id', 'next-step', 'session', 'source', 'status', 'summary', 'task'] },
+    flags: {
+      switches: ['json'],
+      values: ['id', 'next-step', 'session', 'source', 'status', 'summary', 'task'],
+    },
     usage: [
       `
   snapshot <sub>           Persist or inspect the current active task
@@ -53,7 +56,17 @@ export const SESSION_VERBS = {
   handoff: verb(() => import('../continuity.js'), 'handleHandoff', {
     flags: {
       switches: ['json'],
-      values: ['card-id', 'id', 'next', 'outcome', 'session', 'summary', 'target-runtime', 'task', 'tests'],
+      values: [
+        'card-id',
+        'id',
+        'next',
+        'outcome',
+        'session',
+        'summary',
+        'target-runtime',
+        'task',
+        'tests',
+      ],
       lists: ['artifact', 'constraint'],
     },
     usage: [
@@ -78,7 +91,8 @@ export const SESSION_VERBS = {
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
     needs: ['cards'],
-    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not read.
+    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
+    // read.
     flags: {
       switches: ['json'],
       values: [
@@ -166,7 +180,9 @@ export const SESSION_VERBS = {
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
     flags: {},
-    removedFlags: { shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.' },
+    removedFlags: {
+      shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
+    },
     usage: [
       `
   watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)`,
@@ -193,7 +209,10 @@ export const SESSION_VERBS = {
     ],
   }),
   share: verb(() => import('../transfer.js'), 'handleShare', {
-    dryRun: { form: '--auto', honoured: (args, flags) => args[0] === '--auto' || boolFlag(flags, 'auto') },
+    dryRun: {
+      form: '--auto',
+      honoured: (args, flags) => args[0] === '--auto' || boolFlag(flags, 'auto'),
+    },
     flags: { switches: ['auto', 'dry-run', 'force'], numbers: ['min-score'] },
     usage: [
       `
@@ -256,7 +275,10 @@ export const SESSION_VERBS = {
   }),
   capture: verb(() => import('../hooks/capture.js'), 'handleCapture', {
     repairsCodexWrapper: true,
-    flags: { switches: ['dry-run', 'global', 'last-session', 'stdin'], values: ['file', 'log-file', 'transcript'] },
+    flags: {
+      switches: ['dry-run', 'global', 'last-session', 'stdin'],
+      values: ['file', 'log-file', 'transcript'],
+    },
     usage: [
       `
   capture                  Extract memories from conversation text
@@ -320,13 +342,17 @@ export const SESSION_VERBS = {
                            nothing for any other payload`,
     ],
   }),
-  '__session-end-worker': verb(() => import('../hooks/session-end-worker.js'), 'handleSessionEndWorker', {
-    dryRun: false,
-    flags: {
-      switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
-      values: ['log-file', 'session-id', 'transcript'],
+  '__session-end-worker': verb(
+    () => import('../hooks/session-end-worker.js'),
+    'handleSessionEndWorker',
+    {
+      dryRun: false,
+      flags: {
+        switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
+        values: ['log-file', 'session-id', 'transcript'],
+      },
     },
-  }),
+  ),
   'pre-compact': verb(() => import('../hooks/pre-compact.js'), 'handlePreCompact', {
     flags: { values: ['format', 'log-file', 'runtime'] },
     usage: [

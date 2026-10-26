@@ -1,5 +1,6 @@
-// The plan of a default half-life move: which memories still sit on an old base and where each one goes. Pure, so the
-// store runs it inside the move's own write scope and plan, write and audit stay one transaction.
+// The plan of a default half-life move: which memories still sit on an old base and where each one
+// goes. Pure, so the store runs it inside the move's own write scope and plan, write and audit stay
+// one transaction.
 import { deriveHalfLife, type MemoryEntry } from './entry.js';
 import { LEGACY_TYPED_HALF_LIFE } from './strength.js';
 
@@ -13,23 +14,26 @@ const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'customer_note',
 ]);
 
-/** 'retired' when the memory backs a superseded or closed typed object, 'live' when it backs only others, null when it
- * backs none. */
+/** 'retired' when the memory backs a superseded or closed typed object, 'live' when it backs
+ * only others, null when it backs none. */
 export type ObjectLink = 'retired' | 'live' | null;
 
-/** A row a move is planned from; `object` is read only while the typed move is pending, else null. */
+/** A row a move is planned from; `object` is read only while the typed move is pending, else
+ * null. */
 export interface HalfLifeRow {
   entry: MemoryEntry;
   object: ObjectLink;
 }
 
-/** What a move is planned from. The object and conflict rows are read only while the typed move is pending. */
+/** What a move is planned from. The object and conflict rows are read only while the typed move
+ * is pending. */
 export interface HalfLifeRows {
   /** The base the store's memories are on. */
   from: number;
   /** True until the store has moved its object memories off their old flat half-life. */
   typedPending: boolean;
-  /** Every row once, by created then id, through one cursor: the plan keeps only what a move needs. */
+  /** Every row once, by created then id, through one cursor: the plan keeps only what a move
+   * needs. */
   rows: Iterable<HalfLifeRow>;
   conflictAudits: Array<{ conflictId: number; loserId: string }>;
   resolvedConflicts: Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
@@ -62,11 +66,21 @@ export interface HalfLifeOutcome {
   halfLives: ReadonlyMap<string, number>;
 }
 
-type HalfLifeFields = Pick<MemoryEntry, 'halfLifeDays' | 'tags' | 'schemaFit' | 'retrievalCount' | 'supersededBy'>;
+type HalfLifeFields = Pick<
+  MemoryEntry,
+  'halfLifeDays' | 'tags' | 'schemaFit' | 'retrievalCount' | 'supersededBy'
+>;
 
-/** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each recall added 2 days. */
+/** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each
+ * recall added 2 days. */
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
-  if (entry.supersededBy || entry.tags.includes('invalidated') || entry.tags.includes('superseded')) return null;
+  if (
+    entry.supersededBy ||
+    entry.tags.includes('invalidated') ||
+    entry.tags.includes('superseded')
+  ) {
+    return null;
+  }
   const bonus = entry.halfLifeDays - written;
   const k = Math.round(bonus / 2);
   return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrievalCount ? bonus : null;
@@ -99,7 +113,8 @@ export interface HalfLifePlan {
   readonly outcome: HalfLifeOutcome;
 }
 
-/** The base move and the typed move to base `to`, planned from one pass over the rows, with what they come to. */
+/** The base move and the typed move to base `to`, planned from one pass over the rows, with what
+ * they come to. */
 export function planHalfLifeMoves(rows: HalfLifeRows, to: number): HalfLifePlan {
   const { basePlan, typedPlan, count } = planMoves(rows, to);
   const plan = [...basePlan, ...typedPlan];
@@ -143,9 +158,10 @@ function planMoves(rows: HalfLifeRows, to: number) {
     const change = { id: e.id, tenantId: e.tenantId, oldHalfLifeDays: e.halfLifeDays };
     movable.push({ change, typedBase: onTypedBase(e), base, typed, object });
   }
-  // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the
-  // source). Shape decides the rest.
-  const objectWritten = (m: Movable) => m.object !== null || (!copies.has(m.change.id) && m.typedBase);
+  // Provenance before shape: an object's memory came from its writer, a supersede copy from the
+  // base (it keeps the source). Shape decides the rest.
+  const objectWritten = (m: Movable) =>
+    m.object !== null || (!copies.has(m.change.id) && m.typedBase);
   const basePlan: HalfLifeChange[] = [];
   const typedPlan: HalfLifeChange[] = [];
   for (const m of movable) {
@@ -161,8 +177,9 @@ function planMoves(rows: HalfLifeRows, to: number) {
   return { basePlan, typedPlan, count };
 }
 
-/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row
- * (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
+/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict
+ * with no audit row (resolved before resolves were audited, or found stale) names no winner, so
+ * both sides count. */
 function conflictLosers(
   audited: HalfLifeRows['conflictAudits'],
   resolved: HalfLifeRows['resolvedConflicts'],

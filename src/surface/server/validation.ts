@@ -13,11 +13,12 @@ import {
 } from '../../base/util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
-// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is
-// the one place the `as T` assertion lives and callers narrow via the `value is T` return.
+// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no
+// narrowing, so this is the one place the `as T` assertion lives and callers narrow via the `value
+// is T` return.
 export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
-  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T`
-  // return type does the narrowing.
+  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms
+  // membership; the `value is T` return type does the narrowing.
   return set.has(value as T);
 }
 
@@ -26,13 +27,24 @@ export function parseLimitParam(
   defaultLimit = DEFAULT_LIST_LIMIT,
   maxLimit = MAX_LIST_LIMIT,
 ): number {
-  const limit = resolveListLimit(limitRaw === null ? undefined : Number(limitRaw), defaultLimit, maxLimit);
-  if (limit === undefined) throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
+  const limit = resolveListLimit(
+    limitRaw === null ? undefined : Number(limitRaw),
+    defaultLimit,
+    maxLimit,
+  );
+  if (limit === undefined) {
+    throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
+  }
   return limit;
 }
 
-/** An optional query number that must be above zero, or from zero when `allowZero`; absent is undefined. */
-export function parseNumberParam(raw: string | null, name: string, allowZero = false): number | undefined {
+/** An optional query number that must be above zero, or from zero when `allowZero`; absent is
+ * undefined. */
+export function parseNumberParam(
+  raw: string | null,
+  name: string,
+  allowZero = false,
+): number | undefined {
   if (raw === null) return undefined;
   const value = Number(raw);
   if (!Number.isFinite(value) || (allowZero ? value < 0 : value <= 0)) {
@@ -42,7 +54,12 @@ export function parseNumberParam(raw: string | null, name: string, allowZero = f
 }
 
 /** An optional query integer in min..max, refused rather than clamped; absent is undefined. */
-export function parseIntParam(raw: string | null, name: string, min: number, max: number): number | undefined {
+export function parseIntParam(
+  raw: string | null,
+  name: string,
+  min: number,
+  max: number,
+): number | undefined {
   if (raw === null) return undefined;
   const value = Number(raw);
   if (!Number.isInteger(value) || value < min || value > max) {
@@ -51,10 +68,15 @@ export function parseIntParam(raw: string | null, name: string, min: number, max
   return value;
 }
 
-/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key
- * mint reads under its own small cap. */
-export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
-  return parseJsonObjectText(await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) }));
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for an
+ * authenticated caller; the key mint reads under its own small cap. */
+export async function parseJsonBody(
+  req: IncomingMessage,
+  _authed: Context,
+): Promise<Record<string, JsonValue>> {
+  return parseJsonObjectText(
+    await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) }),
+  );
 }
 
 export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
@@ -71,8 +93,13 @@ export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   }
 }
 
-/** Absent (undefined or null) is undefined; a present value of the wrong type or over `max` characters is a 400. */
-export function getString(obj: Record<string, JsonValue>, key: string, max: number): string | undefined {
+/** Absent (undefined or null) is undefined; a present value of the wrong type or over `max`
+ * characters is a 400. */
+export function getString(
+  obj: Record<string, JsonValue>,
+  key: string,
+  max: number,
+): string | undefined {
   const v = obj[key];
   if (v === undefined || v === null) return undefined;
   if (!isJsonString(v)) throw new HttpError(400, `${key} must be a string`);
@@ -88,18 +115,26 @@ export interface RequiredStringRule {
   readonly untrimmed?: boolean;
 }
 
-export function requiredString(body: Record<string, JsonValue>, key: string, rule: RequiredStringRule): string {
+export function requiredString(
+  body: Record<string, JsonValue>,
+  key: string,
+  rule: RequiredStringRule,
+): string {
   const value = body[key];
   if (!isJsonString(value) || (rule.untrimmed ? value : value.trim()).length === 0) {
     throw new HttpError(400, `${key} ${rule.plural ? 'are' : 'is'} required (non-empty string)`);
   }
   if (value.length > rule.max) {
-    throw new HttpError(400, `${key} ${rule.plural ? 'exceed' : 'exceeds'} ${rule.max}-character cap`);
+    throw new HttpError(
+      400,
+      `${key} ${rule.plural ? 'exceed' : 'exceeds'} ${rule.max}-character cap`,
+    );
   }
   return value;
 }
 
-/** Which items a string array refuses and what each refusal says; a route with published text passes its own. */
+/** Which items a string array refuses and what each refusal says; a route with published text
+ * passes its own. */
 export interface StringArrayRule {
   /** Refuse an item that is empty (after trim when `trimmed`). */
   readonly nonEmpty?: 'raw' | 'trimmed';
@@ -115,19 +150,29 @@ export interface StringArrayRule {
   };
 }
 
-export function getStringArray(
-  obj: Record<string, JsonValue>,
-  key: string,
-  maxItems: number,
-  maxItemLen: number,
-  rule: StringArrayRule = {},
-): string[] | undefined {
+export interface GetStringArrayOptions {
+  readonly obj: Record<string, JsonValue>;
+  readonly key: string;
+  readonly maxItems: number;
+  readonly maxItemLen: number;
+  readonly rule?: StringArrayRule;
+}
+
+export function getStringArray({
+  obj,
+  key,
+  maxItems,
+  maxItemLen,
+  rule = {},
+}: GetStringArrayOptions): string[] | undefined {
   const v = obj[key];
   const messages = rule.messages ?? {};
   const notArray = messages.notArray ?? `${key} must be an array of strings`;
   if (v === undefined || (v === null && !rule.rejectNull)) return undefined;
   if (!Array.isArray(v)) throw new HttpError(400, notArray);
-  if (v.length > maxItems) throw new HttpError(400, messages.count ?? `${key} exceeds ${maxItems}-item cap`);
+  if (v.length > maxItems) {
+    throw new HttpError(400, messages.count ?? `${key} exceeds ${maxItems}-item cap`);
+  }
   const items: string[] = [];
   for (const item of v) {
     if (!isJsonString(item)) throw new HttpError(400, messages.itemType ?? notArray);
@@ -135,7 +180,10 @@ export function getStringArray(
       throw new HttpError(400, messages.empty ?? notArray);
     }
     if (item.length > maxItemLen) {
-      throw new HttpError(400, messages.length ?? `each ${key} entry exceeds ${maxItemLen}-character cap`);
+      throw new HttpError(
+        400,
+        messages.length ?? `each ${key} entry exceeds ${maxItemLen}-character cap`,
+      );
     }
     items.push(item);
   }
@@ -143,7 +191,8 @@ export function getStringArray(
 }
 
 /**
- * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin.
+ * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never
+ * become a row's origin.
  */
 export function getCallerProject(body: Record<string, JsonValue>): RememberOptions['project'] {
   const v = body.project;
@@ -151,26 +200,38 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
   if (!isJsonObject(v) || !isJsonString(v.name)) {
     throw new HttpError(400, 'project must be an object with a "name" string');
   }
-  if (v.name.length > MAX_ID_LEN) throw new HttpError(400, `project.name exceeds ${MAX_ID_LEN}-character cap`);
+  if (v.name.length > MAX_ID_LEN) {
+    throw new HttpError(400, `project.name exceeds ${MAX_ID_LEN}-character cap`);
+  }
   if (v.aliases === undefined) return { name: v.name };
   if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
     throw new HttpError(400, 'project.aliases must be an array of strings');
   }
-  const aliases = getStringArray(v, 'aliases', MAX_ARRAY_ITEMS, MAX_ID_LEN);
+  const aliases = getStringArray({
+    obj: v,
+    key: 'aliases',
+    maxItems: MAX_ARRAY_ITEMS,
+    maxItemLen: MAX_ID_LEN,
+  });
   return { name: v.name, aliases };
 }
 
 /**
- * Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a
- * 400, not "not found".
- * Allows every production id notArray (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since
- * `rejectEncodedSlash` stops `%2F` smuggling.
+ * Charset + length validation for `:id` captures, called right after `matchPath` so
+ * empty/overlong/illegal ids get a 400, not "not found". Allows every production id notArray
+ * (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops
+ * `%2F` smuggling.
  */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
-  if (id.length > MAX_ID_LEN) throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);
+  if (id.length > MAX_ID_LEN) {
+    throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);
+  }
   if (!ID_SEGMENT_RE.test(id)) {
-    throw new HttpError(400, `${fieldName} contains invalid characters; allowed: A-Z a-z 0-9 _ : . -`);
+    throw new HttpError(
+      400,
+      `${fieldName} contains invalid characters; allowed: A-Z a-z 0-9 _ : . -`,
+    );
   }
 }

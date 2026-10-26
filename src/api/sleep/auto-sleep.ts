@@ -1,4 +1,5 @@
-// When a write starts a background sleep and what that sleep runs; api remember and the session-close hook share it.
+// When a write starts a background sleep and what that sleep runs; api remember and the
+// session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoStore } from '../../base/ports/store.js';
@@ -8,8 +9,9 @@ import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
 
 /**
- * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes one that runs it off
- * its event loop, in a child process; stdio passes one that runs it in its own.
+ * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
+ * one that runs it off its event loop, in a child process; stdio passes one that runs it in its
+ * own.
  */
 export type AutoSleepRunner = () => Promise<void>;
 
@@ -33,8 +35,9 @@ export async function autoSleepDue(
 }
 
 /**
- * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide, so only the host
- * tenant's writes start one, one per store at a time. Never rejects: the write it follows has landed.
+ * Starts the root's auto-sleep once enough new memories have landed. Consolidation is host-wide, so
+ * only the host tenant's writes start one, one per store at a time. Never rejects: the write it
+ * follows has landed.
  */
 export async function autoSleepAfterWrite(
   ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers' | 'infra'>,
@@ -49,23 +52,31 @@ export async function autoSleepAfterWrite(
   try {
     due = (await autoSleepDue(store, tenantId, config.autoSleep, ctx.infra.clock())).due;
   } catch (err) {
-    log.warn(`auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   } finally {
     if (!due) host.latch.held = false;
   }
   if (!due) return;
-  // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
+  // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so
+  // log it.
   host
     .run()
     .catch((err) => {
-      log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));
+      log.error(
+        `auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`,
+        errorFields(err),
+      );
     })
     .finally(() => {
       host.latch.held = false;
     });
 }
 
-/** What one auto-sleep runs: the consolidation alone, its skipped passes logged by the process that ran it. */
+/** What one auto-sleep runs: the consolidation alone, its skipped passes logged by the process
+ * that ran it. */
 export async function autoSleepConsolidate(
   ctx: Pick<
     ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,

@@ -1,4 +1,5 @@
-// Bearer auth for the HTTP server: every request but the public ones sends a key, the CLI on this machine included.
+// Bearer auth for the HTTP server: every request but the public ones sends a key, the CLI on this
+// machine included.
 import { envTenant } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
@@ -20,8 +21,8 @@ import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
 
-// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not
-// local.
+// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean
+// the caller is not local.
 const PROXY_HEADERS = [
   'forwarded',
   'x-forwarded-for',
@@ -38,28 +39,34 @@ function proxyHeaderOf(req: IncomingMessage): string | undefined {
 }
 
 /**
- * A page in a browser on this machine: another site's request, or a hostile name resolved to loopback (DNS rebinding).
+ * A page in a browser on this machine: another site's request, or a hostile name resolved to
+ * loopback (DNS rebinding).
  */
 export function isForeignPage(req: IncomingMessage): boolean {
   const host = req.headers.host;
   return (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req);
 }
 
-/** True only for a request made on this machine by its own user: a proxy and a browser page are loopback too, so the
- * socket alone proves nothing. Never the auth boundary (a forwarder such as ssh -L adds no header); it only narrows
- * what a caller that is already keyed or public may see. */
+/** True only for a request made on this machine by its own user: a proxy and a browser page are
+ * loopback too, so the socket alone proves nothing. Never the auth boundary (a forwarder such as
+ * ssh -L adds no header); it only narrows what a caller that is already keyed or public may see. */
 export function isLocalCaller(req: IncomingMessage): boolean {
-  return isLoopbackAddress(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
+  return (
+    isLoopbackAddress(req.socket.remoteAddress) &&
+    proxyHeaderOf(req) === undefined &&
+    !isForeignPage(req)
+  );
 }
 
-/** The 401 a request from this machine with no key gets: the CLI finds the key `hippo serve` wrote, anything else names
- * one. */
+/** The 401 a request from this machine with no key gets: the CLI finds the key `hippo serve`
+ * wrote, anything else names one. */
 const KEY_REQUIRED_MESSAGE =
   'auth required: this server takes no request without an API key. Mint one with `hippo auth create` and send it as ' +
   '"Authorization: Bearer <key>"; the hippo CLI reads HIPPO_API_KEY, else the key `hippo serve` wrote to server.key.';
 
-/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' }, { kind:
- * 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer', token } for a non-empty token. */
+/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): {
+ * kind: 'absent' }, { kind: 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer',
+ * token } for a non-empty token. */
 type AuthHeader = { kind: 'absent' } | { kind: 'malformed' } | { kind: 'bearer'; token: string };
 
 export function readAuthHeader(req: IncomingMessage): AuthHeader {
@@ -94,7 +101,8 @@ type ContextOptions = AuthOptions &
   Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
   Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
 
-// Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
+// Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
+// `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
   'api_key',
   'localhost',
@@ -114,14 +122,16 @@ export function isReservedActor(subject: string): boolean {
   return RESERVED_ACTOR_NAMES.some((n) => lower === n || lower.startsWith(`${n}:`));
 }
 
-// C0, DEL, Unicode format characters (zero-width, bidi) and the line and paragraph separators all hide in a log line.
+// C0, DEL, Unicode format characters (zero-width, bidi) and the line and paragraph separators all
+// hide in a log line.
 const HIDDEN_CHAR = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
 
 function hasControlChar(s: string): boolean {
   return HIDDEN_CHAR.test(s);
 }
 
-// Ample for a member of hundreds of private channels, one scope each; past it the answer is refused, never cut short.
+// Ample for a member of hundreds of private channels, one scope each; past it the answer is
+// refused, never cut short.
 const MAX_RESOLVED_SCOPES = 1024;
 
 /** Core owns the checks so a resolver cannot mint an actor that collides with a built-in one. */
@@ -137,7 +147,11 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;
-  const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
+  const clean: ResolvedBearer = {
+    tenantId: tenant,
+    subject,
+    role: role === 'admin' ? 'admin' : 'member',
+  };
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;
     const kept = scopes.filter((s) => isJsonString(s));
@@ -147,10 +161,14 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   return clean;
 }
 
-/** The fields with `token` cut out of every text, since a plugin may echo it into its message, stack or cause. */
+/** The fields with `token` cut out of every text, since a plugin may echo it into its message,
+ * stack or cause. */
 function withoutToken(fields: LogFields, token: string): LogFields {
   return Object.fromEntries(
-    Object.entries(fields).map(([k, v]) => [k, isJsonString(v) ? v.split(token).join('[token]') : v]),
+    Object.entries(fields).map(([k, v]) => [
+      k,
+      isJsonString(v) ? v.split(token).join('[token]') : v,
+    ]),
   );
 }
 
@@ -159,8 +177,13 @@ function logResolverFailure<E>(what: string, err: E, token: string): void {
   log.error(`auth resolver ${what}: ${message}`, withoutToken(errorFields(err), token));
 }
 
-/** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage from a revocation. */
-async function askResolver(resolver: AuthResolver, token: string, deadlineMs: number): Promise<ResolvedBearer> {
+/** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage
+ * from a revocation. */
+async function askResolver(
+  resolver: AuthResolver,
+  token: string,
+  deadlineMs: number,
+): Promise<ResolvedBearer> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
   const deadline = new Promise<never>((_, reject) => {
@@ -190,7 +213,8 @@ async function askResolver(resolver: AuthResolver, token: string, deadlineMs: nu
   return clean;
 }
 
-/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the tag. */
+/** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the
+ * tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
   owner?: string;
@@ -198,44 +222,60 @@ interface BearerIdentity extends ResolvedBearer {
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
-/** Runs before scrypt and for an unknown, revoked or expired key id; a proven key's re-check and a malformed token
- * never spend a colleague's budget. */
+/** Runs before scrypt and for an unknown, revoked or expired key id; a proven key's re-check and
+ * a malformed token never spend a colleague's budget. */
 function chargeScryptRun(req: IncomingMessage, opts: AuthOptions): void {
   const limiter = opts.failedAuthLimiter;
-  // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
+  // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a
+  // slow store.
   if (limiter && !limiter.check(clientLimitKey(req))) {
     throw new HttpError(429, 'too many key checks from this address', limiter.retryAfterSec);
   }
 }
 
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
-async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOptions): Promise<BearerIdentity> {
+async function resolveBearer(
+  req: IncomingMessage,
+  token: string,
+  opts: AuthOptions,
+): Promise<BearerIdentity> {
   // First, so the local secret never reaches resolver plugin code.
   if (isLocalKey(opts.hippoRoot, token)) {
     return { tenantId: envTenant(), subject: LOCAL_KEY_SUBJECT, role: 'member', scopes: [] };
   }
-  // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
+  // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's
+  // identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
-    const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
+    const deadlineMs =
+      t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
     let clean: ResolvedBearer;
     try {
       clean = await askResolver(opts.authResolver, token, deadlineMs);
     } catch (err) {
-      // A refused token spends the address's failed-auth budget like a wrong key; an outage (503) does not.
+      // A refused token spends the address's failed-auth budget like a wrong key; an outage (503)
+      // does not.
       if (err instanceof HttpError && err.status === 401) chargeScryptRun(req, opts);
       throw err;
     }
     // A resolver vouches for a person, never names one.
     return { ...clean, viaAuthResolver: true, owner: clean.subject };
   }
+  return resolveApiKey(req, token, opts);
+}
+
+async function resolveApiKey(
+  req: IncomingMessage,
+  token: string,
+  opts: AuthOptions,
+): Promise<BearerIdentity> {
   const address = clientLimitKey(req);
   const key = await verifyApiKeyCached(
     token,
     opts.store,
     (keyId, derive) => {
-      // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to
-      // the callers who share it.
+      // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the
+      // address's budget to the callers who share it.
       keyChecks.admit(keyId, address);
       chargeScryptRun(req, opts);
       return keyChecks.run(keyId, address, derive);
@@ -260,7 +300,8 @@ async function checkAuth(req: IncomingMessage, opts: AuthOptions): Promise<Beare
     throw new HttpError(401, 'invalid api key');
   }
   if (auth.kind === 'bearer') return resolveBearer(req, auth.token, opts);
-  // Only this machine's own user is told where the key is; a proxied caller or a page learns nothing.
+  // Only this machine's own user is told where the key is; a proxied caller or a page learns
+  // nothing.
   throw new HttpError(401, isLocalCaller(req) ? KEY_REQUIRED_MESSAGE : 'auth required');
 }
 
@@ -273,14 +314,23 @@ function bearerActor(id: BearerIdentity): Actor {
   return actor;
 }
 
-/** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than the buckets do. */
+/** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than
+ * the buckets do. */
 export const LIMITER_MAX_KEYS = 10_000;
 // One for the process, as the thread pool its derivations run on is.
 const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
 const CALLER_WARN_EVERY_MS = MINUTE_MS;
 const callerWarnedAt = new Map<string, number>();
 
-function warnCallerLimited(key: string, tenantId: string, person: string): void {
+function warnCallerLimited({
+  key,
+  tenantId,
+  person,
+}: {
+  key: string;
+  tenantId: string;
+  person: string;
+}): void {
   const now = Date.now();
   const last = callerWarnedAt.get(key);
   if (last !== undefined && now - last < CALLER_WARN_EVERY_MS) return;
@@ -290,7 +340,10 @@ function warnCallerLimited(key: string, tenantId: string, person: string): void 
     if (!oldest.done) callerWarnedAt.delete(oldest.value);
   }
   callerWarnedAt.set(key, now);
-  log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person });
+  log.warn('caller over its rate limit; its further 429s this minute are not logged', {
+    tenant: tenantId,
+    person,
+  });
 }
 
 function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
@@ -299,31 +352,40 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
   const person = ownerOrSubject(actor);
   const key = `${tenantId}\u0000${person}`;
   if (limiter.check(key)) return;
-  warnCallerLimited(key, tenantId, person);
+  warnCallerLimited({ key, tenantId, person });
   throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
 }
 
-/** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) on bad ones.
- * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so the local key stays cheap. */
-export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
+/** Builds a per-request Context from the Authorization header and remote address; throws
+ * HttpError(401) on bad ones. Reads the store only for an API-key-shaped Bearer (or any Bearer
+ * with no resolver), so the local key stays cheap. */
+export async function buildContextWithAuth(
+  req: IncomingMessage,
+  opts: ContextOptions,
+): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts, requestClientKey(req));
   chargeCaller(id.tenantId, ctx.actor, opts);
   return ctx;
 }
 
-/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must
- * re-check right before it acts. */
-export async function recheckContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
+/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a
+ * slow body read and must re-check right before it acts. */
+export async function recheckContextWithAuth(
+  req: IncomingMessage,
+  opts: ContextOptions,
+): Promise<Context> {
   return contextFor(await checkAuth(req, opts), opts, requestClientKey(req));
 }
 
 function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string): Context {
-  // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
+  // A store other than hippo.db is a team's central server, so its folder's config.json must not
+  // decide shared-ness.
   const team = !opts.onHippoDb;
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider);
-  // The reader keys on the file's stamp, so each request still sees an edit made while the server runs.
+  // The reader keys on the file's stamp, so each request still sees an edit made while the server
+  // runs.
   const config = opts.configAt(opts.hippoRoot);
   const callers = opts.callers;
   const infra = opts.infra();
@@ -332,15 +394,15 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   return { tenantId: id.tenantId, actor, store, reach, config, callers, clientKey, infra, signal };
 }
 
-/** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws
- * HttpError 401 like buildContextWithAuth. */
+/** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its
+ * own root): throws HttpError 401 like buildContextWithAuth. */
 export async function requireAuth(req: IncomingMessage, opts: AuthOptions): Promise<void> {
   const id = await checkAuth(req, opts);
   chargeCaller(id.tenantId, bearerActor(id), opts);
 }
 
-/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx
- * denial closes the stream. */
+/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick;
+ * only a definite 4xx denial closes the stream. */
 export async function heartbeatVerdict(
   req: IncomingMessage,
   opts: AuthOptions,
@@ -349,12 +411,17 @@ export async function heartbeatVerdict(
     await checkAuth(req, opts);
     return 'ok';
   } catch (err) {
-    if (!(err instanceof HttpError)) log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
-    return err instanceof HttpError && err.status < 500 && err.status !== 429 ? 'revoked' : 'unavailable';
+    if (!(err instanceof HttpError)) {
+      log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
+    }
+    return err instanceof HttpError && err.status < 500 && err.status !== 429
+      ? 'revoked'
+      : 'unavailable';
   }
 }
 
-/** Gate for any action beyond the caller's own tenant: a tenant's admin, by key or resolver, is never a host admin. */
+/** Gate for any action beyond the caller's own tenant: a tenant's admin, by key or resolver, is
+ * never a host admin. */
 export function assertCrossTenantAdmin(ctx: Context, what: string): void {
   if (ctx.actor.role !== 'admin') throw new HttpError(403, `${what} requires admin role`);
   if (!ctx.actor.hostAdmin) throw new HttpError(403, `${what} requires a host admin`);

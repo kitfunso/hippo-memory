@@ -1,11 +1,12 @@
-// What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: read-only, so a check never creates,
-// migrates or locks the store it inspects.
+// What `hippo doctor` and `hippo support-bundle` read from hippo.db's own files: read-only, so a
+// check never creates, migrates or locks the store it inspects.
 import type { JsonObject } from '../../util/json.js';
 
 export interface Diagnostics {
   /** Rejects when the store cannot be opened or its schema version read. */
   health(cutoffs: HealthCutoffs): Promise<StoreHealth>;
-  /** Schema version, oldest allowed binary and row count of every table; never reads a memory column. */
+  /** Schema version, oldest allowed binary and row count of every table; never reads a memory
+   * column. */
   inventory(): Promise<StoreInventory>;
 }
 
@@ -21,8 +22,11 @@ export interface TokenTally {
   tokensReread: number;
 }
 
-/** One read's value, or the message of the error that stopped it, so a broken table never hides the reads beside it. */
-export type Attempt<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+/** One read's value, or the message of the error that stopped it, so a broken table never hides
+ * the reads beside it. */
+export type Attempt<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly message: string };
 
 /** ISO times the health reads count from. */
 export interface HealthCutoffs {
@@ -60,6 +64,7 @@ export interface StoreInventory {
 
 /** What GET /ready asks of a store. */
 export interface Readiness {
-  /** Resolves once one cheap read has answered; rejects with the store's own error when it cannot. */
+  /** Resolves once one cheap read has answered; rejects with the store's own error when it
+   * cannot. */
   ping(): Promise<void>;
 }

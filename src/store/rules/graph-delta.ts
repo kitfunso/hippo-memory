@@ -1,5 +1,6 @@
-// The graph rebuild's diff: the ops that turn the stored rows into the derived graph, so a rebuild writes only what
-// changed and an entity keeps the id its relations hang on. hippo.db runs the same rule in SQL (sqlite/graph-delta.ts).
+// The graph rebuild's diff: the ops that turn the stored rows into the derived graph, so a rebuild
+// writes only what changed and an entity keeps the id its relations hang on. hippo.db runs the same
+// rule in SQL (sqlite/graph-delta.ts).
 import type {
   DesiredEntity,
   DesiredGraph,
@@ -31,7 +32,8 @@ export interface StoredRelation {
   source_object_id: number | null;
 }
 
-/** One tenant's stored graph as a rebuild reads it, with the kind of each memory the desired rows name. */
+/** One tenant's stored graph as a rebuild reads it, with the kind of each memory the desired
+ * rows name. */
 export interface StoredGraph {
   readonly kinds: ReadonlyMap<string, string>;
   readonly entities: readonly StoredEntity[];
@@ -50,12 +52,22 @@ function storedKey(row: StoredEntity): string | null {
   return keyText(row.entity_type, row.source_object_type, row.source_object_id);
 }
 
-export const relationKey = (from: string, to: string, relType: string): string => `${from}>${to}|${relType}`;
+/** A relation's two endpoint keys and its type. */
+interface RelationKeyOptions {
+  readonly from: string;
+  readonly to: string;
+  readonly relType: string;
+}
 
-/** Memory id to kind, so a desired row's source_kind is known before the write resolves it the same way. */
+export const relationKey = ({ from, to, relType }: RelationKeyOptions): string =>
+  `${from}>${to}|${relType}`;
+
+/** Memory id to kind, so a desired row's source_kind is known before the write resolves it the
+ * same way. */
 export type MemoryKinds = ReadonlyMap<string, string>;
 
-/** The (memory, kind) pair a write would store: a missing mirror leaves the object path, which is 'distilled'. */
+/** The (memory, kind) pair a write would store: a missing mirror leaves the object path, which
+ * is 'distilled'. */
 export function provenanceOf(memoryId: string | null, kinds: MemoryKinds): string {
   const kind = memoryId === null ? undefined : kinds.get(memoryId);
   return kind === undefined ? '|distilled' : `${memoryId}|${kind}`;
@@ -72,7 +84,8 @@ function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<strin
 
 interface EntityDelta {
   ops: GraphOp[];
-  /** Entity id to key for each stored row that survives the diff; relations are matched through it. */
+  /** Entity id to key for each stored row that survives the diff; relations are matched through
+   * it. */
   keptKeyById: Map<number, string>;
 }
 
@@ -82,7 +95,9 @@ export const wantedEntities = (desired: DesiredGraph): Map<string, DesiredEntity
 
 /** The desired relations, the first of each (from, to, type) key, in desired order. */
 export const wantedRelations = (desired: DesiredGraph): Map<string, DesiredRelation> =>
-  firstByKey(desired.relations, (r) => relationKey(entityKey(r.from), entityKey(r.to), r.relType));
+  firstByKey(desired.relations, (r) =>
+    relationKey({ from: entityKey(r.from), to: entityKey(r.to), relType: r.relType }),
+  );
 
 function diffEntities(
   stored: readonly StoredEntity[],
@@ -93,8 +108,9 @@ function diffEntities(
   const deletes: GraphOp[] = [];
   for (const row of stored) {
     const key = storedKey(row);
-    if (key === null || kept.has(key) || !wanted.has(key)) deletes.push({ op: 'deleteEntity', id: row.id });
-    else kept.set(key, row);
+    if (key === null || kept.has(key) || !wanted.has(key)) {
+      deletes.push({ op: 'deleteEntity', id: row.id });
+    } else kept.set(key, row);
   }
   const updates: GraphOp[] = [];
   const inserts: GraphOp[] = [];
@@ -125,7 +141,7 @@ function diffRelations(
     const to = keptKeyById.get(row.to_entity_id);
     // An edge on a deleted entity goes with it through the v38 cascade.
     if (from === undefined || to === undefined) continue;
-    const key = relationKey(from, to, row.rel_type);
+    const key = relationKey({ from, to, relType: row.rel_type });
     const want = wanted.get(key);
     const same =
       want !== undefined &&
@@ -137,16 +153,23 @@ function diffRelations(
     else deletes.push({ op: 'deleteRelation', id: row.id });
   }
   const inserts: GraphOp[] = [];
-  for (const [key, relation] of wanted) if (!kept.has(key)) inserts.push({ op: 'insertRelation', relation });
+  for (const [key, relation] of wanted) {
+    if (!kept.has(key)) inserts.push({ op: 'insertRelation', relation });
+  }
   return [...deletes, ...inserts];
 }
 
-/** Ops that turn `stored` into `desired`, in apply order: entity deletes, updates and inserts, then relation deletes
- * and inserts. Keeps the lowest id per natural key. */
+/** Ops that turn `stored` into `desired`, in apply order: entity deletes, updates and inserts,
+ * then relation deletes and inserts. Keeps the lowest id per natural key. */
 export function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
   const entityDelta = diffEntities(stored.entities, wantedEntities(desired), stored.kinds);
   return [
     ...entityDelta.ops,
-    ...diffRelations(stored.relations, wantedRelations(desired), entityDelta.keptKeyById, stored.kinds),
+    ...diffRelations(
+      stored.relations,
+      wantedRelations(desired),
+      entityDelta.keptKeyById,
+      stored.kinds,
+    ),
   ];
 }

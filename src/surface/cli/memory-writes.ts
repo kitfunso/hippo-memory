@@ -1,5 +1,6 @@
-// The memory writes four CLI verbs make (remember, forget, archive, promote), behind one interface with two
-// implementations: the store itself, or the `hippo serve` that answers for the folder. Each command picks one, once.
+// The memory writes four CLI verbs make (remember, forget, archive, promote), behind one interface
+// with two implementations: the store itself, or the `hippo serve` that answers for the folder.
+// Each command picks one, once.
 
 import type { ConfidenceLevel, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
 import { Layer } from '../../base/memory/entry.js';
@@ -27,7 +28,8 @@ export interface RememberRequest {
   readonly scope: string | undefined;
   readonly owner: string | undefined;
   readonly artifactRef: string | undefined;
-  // Only a write on the store honours the fields below, as the server sets its own; the verb writes locally for them.
+  // Only a write on the store honours the fields below, as the server sets its own; the verb writes
+  // locally for them.
   readonly pinned: boolean;
   readonly confidence: ConfidenceLevel;
   readonly force: boolean;
@@ -35,7 +37,8 @@ export interface RememberRequest {
   readonly source: string;
 }
 
-/** `stored`: written here, with the row as the store holds it. `relayed`: the server at `via` wrote it. */
+/** `stored`: written here, with the row as the store holds it. `relayed`: the server at `via`
+ * wrote it. */
 export type Remembered =
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number }
   | {
@@ -62,7 +65,8 @@ export interface Promoted {
   readonly globalStore?: string;
 }
 
-/** The same writes on the store and on the server. A refusal prints its reason and throws CliExit(1). */
+/** The same writes on the store and on the server. A refusal prints its reason and throws
+ * CliExit(1). */
 export interface MemoryWrites {
   remember(request: RememberRequest): Promise<Remembered>;
   forget(id: string): Promise<void>;
@@ -75,7 +79,11 @@ const SERVED_KEY_HINT =
   'one: set HIPPO_API_KEY to that key or an admin key.';
 
 /** What `hippo forget <id>` says when the store refuses it; the dry run says the same. */
-export async function forgetRefusal(ctx: ContextWith<'dormant'>, id: string, cause: unknown): Promise<string> {
+export async function forgetRefusal(
+  ctx: ContextWith<'dormant'>,
+  id: string,
+  cause: unknown,
+): Promise<string> {
   if (cause instanceof RawAppendOnlyError) {
     return (
       `Cannot forget ${id}: it is a raw, append-only memory. ` +
@@ -158,7 +166,8 @@ async function rememberHere(ctx: CliContext, request: RememberRequest): Promise<
   return { status: 'stored', entry, warnings, extraction, startedWeak };
 }
 
-/** Falling back to the store would mask a misconfiguration and drop HIPPO_API_KEY, so HIPPO_REQUIRE_SERVER throws. */
+/** Falling back to the store would mask a misconfiguration and drop HIPPO_API_KEY, so
+ * HIPPO_REQUIRE_SERVER throws. */
 function failIfServerRequired(reason: string): void {
   if (envRequireServer()) {
     throw new Error(
@@ -168,7 +177,8 @@ function failIfServerRequired(reason: string): void {
   }
 }
 
-/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on its store. */
+/** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on its
+ * store. */
 export async function pickWrites(hippoRoot: string, tenantId: string): Promise<MemoryWrites> {
   const local = localWrites(hippoRoot, tenantId);
   const server = await detectServer(hippoRoot);
@@ -193,12 +203,16 @@ function servedReason(err: Error): string {
 
 function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites): MemoryWrites {
   const apiKey = callerKey(hippoRoot);
-  const send = <T>(request: () => Promise<T>, refused: Refused, fallBack: () => Promise<T>): Promise<T> =>
-    sendOrFallBack(hippoRoot, server, { request, refused, fallBack });
+  const send = <T>(
+    request: () => Promise<T>,
+    refused: Refused,
+    fallBack: () => Promise<T>,
+  ): Promise<T> => sendOrFallBack(hippoRoot, server, { request, refused, fallBack });
   return {
     remember: (request) =>
       send(
-        async () => relayed(server, await client.postRemember(server.url, apiKey, relayedRequest(request))),
+        async () =>
+          relayed(server, await client.postRemember(server.url, apiKey, relayedRequest(request))),
         passOn,
         () => local.remember(request),
       ),
@@ -213,7 +227,7 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
     archive: (id, reason) =>
       send(
         async () => {
-          await client.postArchiveRaw(server.url, apiKey, id, reason);
+          await client.postArchiveRaw(server.url, apiKey, { id, reason });
         },
         (err) => fail(archiveRefusal(id, servedReason(err))),
         () => local.archive(id, reason),
@@ -245,9 +259,13 @@ interface ServedCall<T> {
   readonly fallBack: () => Promise<T>;
 }
 
-/** Sends one write. A request that never left runs on the store and heals the stale pidfile; one that may have landed
- * is never replayed, as every write here is non-idempotent. */
-async function sendOrFallBack<T>(hippoRoot: string, server: ServerInfo, call: ServedCall<T>): Promise<T> {
+/** Sends one write. A request that never left runs on the store and heals the stale pidfile; one
+ * that may have landed is never replayed, as every write here is non-idempotent. */
+async function sendOrFallBack<T>(
+  hippoRoot: string,
+  server: ServerInfo,
+  call: ServedCall<T>,
+): Promise<T> {
   try {
     return await call.request();
   } catch (err) {
@@ -263,7 +281,8 @@ async function sendOrFallBack<T>(hippoRoot: string, server: ServerInfo, call: Se
     }
     failIfServerRequired('the server pidfile was stale (connection refused)');
     log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));
-    // Removed only if it still names the dead server: a newer server may have rewritten it since the probe.
+    // Removed only if it still names the dead server: a newer server may have rewritten it since
+    // the probe.
     removePidfileIfOwned(hippoRoot, { pid: server.pid, startedAt: server.started_at });
     return call.fallBack();
   }

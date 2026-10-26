@@ -1,10 +1,21 @@
 import { adminActor } from '../../../api/index.js';
 import type { ConnectorContext } from '../ingest.js';
-import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
+import {
+  replayParked,
+  type ConnectorDlq,
+  type Reingest,
+  type ReplayResult,
+  type SignatureRefusal,
+} from '../dlq.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
+import {
+  isSlackEventEnvelope,
+  isSlackMessageEvent,
+  type SlackEventEnvelope,
+  type SlackMessageEvent,
+} from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { YEAR_S } from '../../../base/util/time.js';
@@ -17,7 +28,11 @@ import type {
 export type { DlqBucket, DlqItem };
 
 /** Slack's dead-letter table; `teamId` and `slackTimestamp` are the columns only it has. */
-export const slackDlq: ConnectorDlq<'slack', Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket> = {
+export const slackDlq: ConnectorDlq<
+  'slack',
+  Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>,
+  DlqBucket
+> = {
   connector: 'slack',
   letter: (row) => ({ connector: 'slack', ...row }),
 };
@@ -35,8 +50,9 @@ export interface ReplayDlqOptions {
   allowUnknownTeamFallback?: boolean;
 }
 
-/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
- * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
+/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`),
+ * re-verifying the signature with the CURRENT secret unless forced. A NULL signature needs
+ * --force; replays use today's routing. */
 export async function replaySlackDlqEntry(
   ctx: Pick<ConnectorContext, 'tenantId' | 'store' | 'config' | 'infra'>,
   id: number,
@@ -49,21 +65,24 @@ export async function replaySlackDlqEntry(
       isEnvelope: isSlackEventEnvelope,
       notEnvelope: 'not an event_callback envelope',
       reingest: (_row, envelope) =>
-        reingest(ctx, envelope, { hostTenant: ctx.tenantId, allowUnknown: opts.allowUnknownTeamFallback === true }),
+        reingest(ctx, envelope, {
+          hostTenant: ctx.tenantId,
+          allowUnknown: opts.allowUnknownTeamFallback === true,
+        }),
     },
     ctx.store,
-    ctx.tenantId,
-    id,
-    opts.force === true,
+    { tenantId: ctx.tenantId, id, force: opts.force === true },
   );
 }
 
-/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */
+/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current
+ * secret to show. */
 function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal | null {
   if (!row.signature || !row.slackTimestamp) {
     return {
       status: 'sig_missing',
-      reason: 'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
+      reason:
+        'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
     };
   }
   if (!opts.signingSecret) return null;
@@ -79,7 +98,8 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
   if (ok) return null;
   return {
     status: 'sig_fail',
-    reason: 'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
+    reason:
+      'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
   };
 }
 
@@ -88,12 +108,38 @@ async function reingest(
   envelope: JsonValue & SlackEventEnvelope,
   fallback: RouteFallback,
 ): Promise<Reingest> {
-  const tenantId = await resolveTenant(store, { connector: 'slack', teamId: envelope.team_id }, fallback);
-  if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
+  const tenantId = await resolveTenant(
+    store,
+    { connector: 'slack', teamId: envelope.team_id },
+    fallback,
+  );
+  if (!tenantId) {
+    return {
+      ok: false,
+      status: 'unroutable',
+      reason: `team_id ${envelope.team_id} still unroutable`,
+    };
+  }
   const inner = envelope.event;
-  if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
+  if (!isSlackMessageEvent(inner)) {
+    return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
+  }
 
-  const replayCtx: ConnectorContext = { tenantId, actor: adminActor('connector:slack:replay'), store, config, infra };
+  const replayCtx: ConnectorContext = {
+    tenantId,
+    actor: adminActor('connector:slack:replay'),
+    store,
+    config,
+    infra,
+  };
+  return replayMessage(replayCtx, envelope, inner);
+}
+
+async function replayMessage(
+  replayCtx: ConnectorContext,
+  envelope: JsonValue & SlackEventEnvelope,
+  inner: SlackMessageEvent,
+): Promise<Reingest> {
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
       teamId: envelope.team_id,

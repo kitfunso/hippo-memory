@@ -70,7 +70,12 @@ describe('the strength aggregates', () => {
   it('prepare one statement each for two clocks, and sum what the literal clock summed', () => {
     const { result, texts } = prepares(() => ({
       tallies: [EARLY, LATE].map((now) =>
-        strengthTallies(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, TENANT, now, 0.3),
+        strengthTallies(db, {
+          rules: { strength: PRODUCTION_STRENGTH, clock: evalNow },
+          tenantId: TENANT,
+          now,
+          atRiskBelow: 0.3,
+        }),
       ),
       ambient: [EARLY, LATE].map((now) =>
         countAmbient(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, TENANT, {

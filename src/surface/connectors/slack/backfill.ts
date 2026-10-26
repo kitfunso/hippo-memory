@@ -12,8 +12,9 @@ export type SlackHistoryFetcher = (args: {
   channelId: string;
   /** Slack's opaque pagination token. Null on first page of a backfill run. */
   cursor: string | null;
-  /** Incremental-resume bound: skip messages with ts <= oldest, from `slack_cursors.latest_ts` on the first page only.
-   * Kept apart from `cursor`: Slack treats `cursor` as an opaque token, so latest_ts there fails live. */
+  /** Incremental-resume bound: skip messages with ts <= oldest, from `slack_cursors.latest_ts`
+   * on the first page only. Kept apart from `cursor`: Slack treats `cursor` as an opaque token,
+   * so latest_ts there fails live. */
   oldest?: string;
 }) => Promise<SlackHistoryPage>;
 
@@ -31,8 +32,9 @@ export async function backfillChannel(
   ctx: ConnectorContext,
   opts: BackfillOptions,
 ): Promise<{ ingested: number; pages: number }> {
-  // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and Slack mints the
-  // next-page token. Mixing the two would feed a numeric ts as an opaque cursor and break on rerun.
+  // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and
+  // Slack mints the next-page token. Mixing the two would feed a numeric ts as an opaque cursor and
+  // break on rerun.
   const cursors = ctx.store.connectorEvents;
   const at = { connector: 'slack', tenantId: ctx.tenantId, channelId: opts.channel.id } as const;
   const resumeFrom: string | null = await cursors.cursor(at);

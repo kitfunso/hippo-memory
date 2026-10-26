@@ -1,4 +1,5 @@
-// The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed failure out.
+// The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed
+// failure out.
 
 import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
@@ -36,60 +37,83 @@ export function anthropicLlm(connection: AnthropicConnection): Llm {
 }
 
 /**
- * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the body cannot be read.
+ * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the
+ * body cannot be read.
  */
 async function errorSnippet(res: Response): Promise<string> {
   // The status is the failure reported; a body that cannot be read only costs its snippet.
-  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch((err: Error) => {
-    log.warn(`anthropic: could not read the error body of a ${res.status} reply`, errorFields(err));
-    return '';
-  });
+  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
+    (err: Error) => {
+      log.warn(
+        `anthropic: could not read the error body of a ${res.status} reply`,
+        errorFields(err),
+      );
+      return '';
+    },
+  );
   // Masked before the cut, so a key that straddles the cut is never left half shown.
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }
 
-/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'. Never throws. */
+/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'.
+ * Never throws. */
 async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Promise<LlmReply> {
   const timeoutMs = llmTimeoutMs(envLlmTimeoutMs());
   let res: Response;
   try {
-    res = await fetchWithRetry(
-      MESSAGES_URL,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': connection.apiKey,
-          'anthropic-version': API_VERSION,
-        },
-        body: JSON.stringify({
-          model: req.model ?? DEFAULT_MODEL,
-          max_tokens: req.maxTokens,
-          messages: [{ role: 'user', content: req.prompt }],
-        }),
-        signal: req.signal,
-      },
-      // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429 is.
-      {
-        timeoutMs,
-        totalMs: llmTotalMs(timeoutMs),
-        retryOn: (r) => isRetryableStatus(r.status),
-        fetchFn: connection.fetcher ?? fetch,
-      },
-    );
+    res = await postMessage(connection, req, timeoutMs);
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err), cause: err } };
   }
-  if (!res.ok) return { ok: false, failure: { kind: 'http', status: res.status, detail: await errorSnippet(res) } };
+  if (!res.ok) {
+    return {
+      ok: false,
+      failure: { kind: 'http', status: res.status, detail: await errorSnippet(res) },
+    };
+  }
 
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
     if (!isJsonObject(data)) {
-      return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
+      return {
+        ok: false,
+        failure: { kind: 'unreadable', message: 'the reply is not a JSON object' },
+      };
     }
     const text = firstText(data);
     return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
   } catch (err) {
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err), cause: err } };
   }
+}
+
+function postMessage(
+  connection: AnthropicConnection,
+  req: LlmRequest,
+  timeoutMs: number,
+): Promise<Response> {
+  return fetchWithRetry(
+    MESSAGES_URL,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': connection.apiKey,
+        'anthropic-version': API_VERSION,
+      },
+      body: JSON.stringify({
+        model: req.model ?? DEFAULT_MODEL,
+        max_tokens: req.maxTokens,
+        messages: [{ role: 'user', content: req.prompt }],
+      }),
+      signal: req.signal,
+    },
+    // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429 is.
+    {
+      timeoutMs,
+      totalMs: llmTotalMs(timeoutMs),
+      retryOn: (r) => isRetryableStatus(r.status),
+      fetchFn: connection.fetcher ?? fetch,
+    },
+  );
 }

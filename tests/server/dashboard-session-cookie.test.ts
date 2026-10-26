@@ -23,7 +23,7 @@ function cookieOver(socket: Socket): string {
   const res = new ServerResponse(req);
   try {
     const token = access.tickets.mint(Date.now());
-    expect(passDashboardSession(req, res, new URLSearchParams({ token }), access)).toBe('ticket');
+    expect(passDashboardSession({ req, res, query: new URLSearchParams({ token }), access })).toBe('ticket');
     return String(res.getHeader('set-cookie'));
   } finally {
     socket.destroy();
@@ -52,7 +52,7 @@ describe('the dashboard session cookie', () => {
       if (cookie !== undefined) req.headers.cookie = cookie;
       const res = new ServerResponse(req);
       try {
-        const kind = passDashboardSession(req, res, query, access, () => now);
+        const kind = passDashboardSession({ req, res, query, access, now: () => now });
         return { kind: String(kind), set: String(res.getHeader('set-cookie')) };
       } catch (err) {
         return { kind: err instanceof HttpError ? String(err.status) : 'error', set: '' };

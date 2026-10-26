@@ -38,8 +38,8 @@ const JUDGE_MAX_ERROR_BYTES = 4096;
 const OBSERVED_CONFIDENCE_MIN = 0.8;
 
 /**
- * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that
- * shape.
+ * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply
+ * has none of that shape.
  */
 function answerNamed(reply: JsonValue, name: string): { [key: string]: JsonValue } {
   const answers = isJsonObject(reply) ? reply.answers : undefined;
@@ -89,7 +89,8 @@ function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
   return 'inferred';
 }
 
-/** Capture-time judging must not hold a write for long: one budget for the call, shorter than the LLM calls. */
+/** Capture-time judging must not hold a write for long: one budget for the call, shorter than
+ * the LLM calls. */
 const JUDGE_TIMEOUT_MS = 15_000;
 
 async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
@@ -117,7 +118,8 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
   return null;
 }
 
-/** `null` on any failure, so a Jev outage degrades capture to today's behaviour instead of blocking the write. */
+/** `null` on any failure, so a Jev outage degrades capture to today's behaviour instead of
+ * blocking the write. */
 async function judge(content: string, opts: JudgeOptions): Promise<Judgment | null> {
   const trimmed = content.trim();
   if (trimmed.length < 3) return null;
@@ -129,7 +131,11 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
   try {
     data = await readCappedJson(res, MAX_REPLY_BYTES);
   } catch (err) {
-    log.warnThenDebug('judge-unreadable', `judge: unreadable response: ${errorMessage(err)}`, errorFields(err));
+    log.warnThenDebug(
+      'judge-unreadable',
+      `judge: unreadable response: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 
@@ -144,7 +150,10 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 }
 
 /** Judge many candidates under a bounded concurrency pool, order preserved. */
-export async function judgeOver(contents: readonly string[], opts: JudgeOptions): Promise<(Judgment | null)[]> {
+export async function judgeOver(
+  contents: readonly string[],
+  opts: JudgeOptions,
+): Promise<(Judgment | null)[]> {
   const out: (Judgment | null)[] = Array.from({ length: contents.length }, () => null);
   const limit = Math.max(1, opts.concurrency ?? MAX_CONCURRENCY);
   let cursor = 0;

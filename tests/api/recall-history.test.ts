@@ -234,7 +234,7 @@ describe('RingBuffer + helpers', () => {
   it('FIFO appends with MAX_HISTORY cap', () => {
     const ring = new RingBuffer();
     for (let i = 0; i < 15; i++) {
-      appendRecall(ring, i, `mem_${i}`, evalNow());
+      appendRecall({ ring, queryHash: i, topMemoryId: `mem_${i}`, now: evalNow() });
     }
     // Cap is 10 — first 5 should be evicted.
     expect(ring.size()).toBe(10);
@@ -276,7 +276,7 @@ describe('RingBuffer + helpers', () => {
 
   it('appendRecall stores anchoredOn when provided', () => {
     const ring = new RingBuffer();
-    appendRecall(ring, 100, 'mem_a', evalNow(), 'mem_b');
+    appendRecall({ ring, queryHash: 100, topMemoryId: 'mem_a', now: evalNow(), anchoredOn: 'mem_b' });
     const snap = snapshotRing(ring);
     expect(snap[0].anchoredOn).toBe('mem_b');
   });

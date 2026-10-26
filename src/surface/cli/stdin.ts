@@ -11,8 +11,9 @@ import { errorFields, log } from '../../base/util/log.js';
 const DEFAULT_STDIN_WAIT_MS = 1000;
 
 /**
- * `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present
- * `text` may be truncated; treating absence as a manual run is only safe when it is false. */
+ * `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not
+ * "none", and present `text` may be truncated; treating absence as a manual run is only safe
+ * when it is false. */
 export interface BoundedStdin {
   text?: string;
   timedOut: boolean;
@@ -23,8 +24,9 @@ function defaultWaitMs(): number {
 }
 
 /**
- * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms, or
- * `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk so a slow real write is not cut off, capped at `waitMs * 10`. */
+ * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms,
+ * or `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk so a slow real write is not cut off, capped
+ * at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
   try {
@@ -45,7 +47,10 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
       stdin.off('error', done);
       stdin.pause();
       stdin.unref?.();
-      resolve({ text: chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined, timedOut });
+      resolve({
+        text: chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined,
+        timedOut,
+      });
     };
     const done = (): void => finish(false);
     const onData = (c: Buffer): void => {
@@ -53,8 +58,8 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
       timer.refresh();
     };
     const timer = setTimeout(() => finish(true), waitMs);
-    // The idle timer refreshes per chunk, so a host that dribbles bytes forever without ending would never resolve
-    // without this ceiling.
+    // The idle timer refreshes per chunk, so a host that dribbles bytes forever without ending
+    // would never resolve without this ceiling.
     const hardCap = setTimeout(() => finish(true), waitMs * 10);
     stdin.on('data', onData);
     stdin.once('end', done);
@@ -62,7 +67,8 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
   });
 }
 
-// The Copilot harness's camelCase hook fields and the snake_case keys every hippo payload reader looks up.
+// The Copilot harness's camelCase hook fields and the snake_case keys every hippo payload reader
+// looks up.
 const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
   ['sessionId', 'session_id'],
   ['transcriptPath', 'transcript_path'],
@@ -72,7 +78,8 @@ const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * Copilot sends `toolArgs` as the model's raw JSON string; Claude Code and VS Code send `tool_input` already parsed.
+ * Copilot sends `toolArgs` as the model's raw JSON string; Claude Code and VS Code send
+ * `tool_input` already parsed.
  */
 function parsedToolArgs(value: JsonValue): JsonValue {
   if (!isJsonString(value)) return value;
@@ -81,24 +88,29 @@ function parsedToolArgs(value: JsonValue): JsonValue {
   return parsed === undefined ? value : parsed;
 }
 
-/** The snake_case keys a payload lacks, filled from its camelCase twins; a snake_case key already present wins. */
+/** The snake_case keys a payload lacks, filled from its camelCase twins; a snake_case key
+ * already present wins. */
 function snakeCaseFields(payload: JsonObject): JsonObject {
   const added: JsonObject = {};
   for (const [camel, snake] of CAMEL_TO_SNAKE) {
     if (camel in payload && !(snake in payload)) added[snake] = payload[camel];
   }
-  if ('toolArgs' in payload && !('tool_input' in payload)) added.tool_input = parsedToolArgs(payload.toolArgs);
+  if ('toolArgs' in payload && !('tool_input' in payload)) {
+    added.tool_input = parsedToolArgs(payload.toolArgs);
+  }
   const error = payload.error;
   // An error object gives its message, so readers that expect the documented string still get one.
   if (isJsonObjectLiteral(error) && isJsonString(error.message)) added.error = error.message;
   return added;
 }
 
-/** A hook payload with Copilot's camelCase fields copied to the snake_case keys hippo reads. The camelCase keys stay,
- * so the sessionStart reply can follow the sender's casing; text that needs no change comes back exactly as sent. */
+/** A hook payload with Copilot's camelCase fields copied to the snake_case keys hippo reads. The
+ * camelCase keys stay, so the sessionStart reply can follow the sender's casing; text that needs
+ * no change comes back exactly as sent. */
 export function normalizeHookPayload(text: string | undefined): string | undefined {
   if (text === undefined || text.trim() === '') return text;
-  // Not JSON: each reader already treats that as a malformed payload, so it passes through untouched.
+  // Not JSON: each reader already treats that as a malformed payload, so it passes through
+  // untouched.
   const payload = tryParseJson(text.trim());
   if (!isJsonObjectLiteral(payload)) return text;
   const added = snakeCaseFields(payload);
@@ -106,8 +118,8 @@ export function normalizeHookPayload(text: string | undefined): string | undefin
 }
 
 /**
- * The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through {@link
- * normalizeHookPayload}.
+ * The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through
+ * {@link normalizeHookPayload}.
  */
 export async function readHookStdin(waitMs?: number): Promise<BoundedStdin> {
   const read = await readStdinBounded(waitMs);

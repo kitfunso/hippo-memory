@@ -15,7 +15,7 @@ describe('parseOutboundUrl', () => {
   it.each(['https://api.example.com/v1', 'http://localhost:8080', 'http://127.0.0.1:9', 'http://[::1]:1234/v1'])(
     'accepts %s',
     (url) => {
-      expect(parseOutboundUrl(url, 'SETTING').href).toBe(new URL(url).href);
+      expect(parseOutboundUrl(url, { setting: 'SETTING' }).href).toBe(new URL(url).href);
     },
   );
 
@@ -26,7 +26,7 @@ describe('parseOutboundUrl', () => {
     ['a user alone', 'https://user@api.example.com/v1', 'SETTING must not embed credentials; set KEY'],
     ['an unparseable value', 'not a url', 'SETTING is not a valid URL'],
   ])('refuses %s', (_label, url, message) => {
-    expect(() => parseOutboundUrl(url, 'SETTING', 'KEY')).toThrow(message);
+    expect(() => parseOutboundUrl(url, { setting: 'SETTING', keySetting: 'KEY' })).toThrow(message);
   });
 });
 

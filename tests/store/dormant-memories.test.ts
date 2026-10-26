@@ -611,13 +611,12 @@ const objectSavers: [string, string, (home: string) => Promise<{ memoryId: strin
     'incident',
     'incidents',
     async (home) =>
-      await openIncident(
-        objectsAt(home),
-        loadConfig(home).defaultHalfLifeDays,
-        'default',
-        { incidentText: 'the billing cron charged twice on the 1st' },
-        { actor: 'cli', now: evalNow() },
-      ),
+      await openIncident(objectsAt(home), {
+        baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
+        tenantId: 'default',
+        opts: { incidentText: 'the billing cron charged twice on the 1st' },
+        by: { actor: 'cli', now: evalNow() },
+      }),
   ],
   [
     'process',

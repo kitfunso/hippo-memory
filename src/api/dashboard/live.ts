@@ -10,9 +10,14 @@ export const BANDS: readonly Band[] = ['pinned', 'strong', 'fading', 'atRisk'];
 
 export type Chip = DashboardChip;
 
-/** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
+/** The one predicate for "shown on the dashboard": not superseded, not archived, not
+ * quarantined. */
 export function isLiveMemory(entry: Pick<MemoryEntry, 'supersededBy' | 'kind' | 'scope'>): boolean {
-  return !entry.supersededBy && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope);
+  return (
+    !entry.supersededBy &&
+    (entry.kind === 'raw' || entry.kind === 'distilled') &&
+    !isQuarantineScope(entry.scope)
+  );
 }
 
 /** Wire key, display name and kind of a project. */
@@ -25,7 +30,9 @@ export interface ProjectIdentity {
 /** Wire key, display name and kind for an `origin_project` value. */
 export function projectIdentity(origin: Origin | undefined): ProjectIdentity {
   if (origin === '') return { key: 'global', name: 'Global', kind: 'global' };
-  if (origin === null || origin === undefined) return { key: 'unassigned', name: 'Unassigned', kind: 'unassigned' };
+  if (origin === null || origin === undefined) {
+    return { key: 'unassigned', name: 'Unassigned', kind: 'unassigned' };
+  }
   return { key: `p:${origin}`, name: origin, kind: 'project' };
 }
 

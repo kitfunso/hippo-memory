@@ -1,7 +1,12 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { matchedQueryTerms } from './bm25.js';
-import { applyRankBoosts, strengthRecencyMultipliers, type AppliedBoosts, type BoostContext } from './boosts.js';
+import {
+  applyRankBoosts,
+  strengthRecencyMultipliers,
+  type AppliedBoosts,
+  type BoostContext,
+} from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import type { DenseScores } from './vector.js';
 import type { ScoreBreakdown, SearchResult } from '../../base/rank/search-types.js';
@@ -32,8 +37,8 @@ interface EntryScore {
 }
 
 /**
- * Scores every pool entry; rows with no lexical hit drop out unless vectors are in play, and non-positive scores always
- * do.
+ * Scores every pool entry; rows with no lexical hit drop out unless vectors are in play, and
+ * non-positive scores always do.
  */
 export function scoreHybridPool(input: HybridScoreInput): SearchResult[] {
   const scored: SearchResult[] = [];
@@ -76,7 +81,12 @@ function scoreEntry(i: number, input: HybridScoreInput): EntryScore {
   return { base, mode, normBm25, strength, recency, boosts };
 }
 
-function hybridBreakdown(i: number, s: EntryScore, input: HybridScoreInput, queryTermSet: Set<string>): ScoreBreakdown {
+function hybridBreakdown(
+  i: number,
+  s: EntryScore,
+  input: HybridScoreInput,
+  queryTermSet: Set<string>,
+): ScoreBreakdown {
   const entry = input.entries[i];
   const b = s.boosts;
   const breakdown: ScoreBreakdown = {

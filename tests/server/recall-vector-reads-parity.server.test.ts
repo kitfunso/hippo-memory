@@ -122,7 +122,7 @@ function seedVectorStore(root: string): void {
       db,
       ADMITTED.map((r) => r.entry),
       index,
-      new Date(FAKE_NOW),
+      { now: new Date(FAKE_NOW) },
     );
     // A row with a vector and no particle ranks in physics' classic pool, as the 8-dim particle does.
     db.prepare('DELETE FROM memory_physics WHERE memory_id = ?').run('mem_l_zero');

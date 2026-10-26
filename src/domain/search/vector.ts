@@ -12,12 +12,15 @@ import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
 /**
- * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry
- * filters).
+ * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact
+ * private regex, entry filters).
  */
-export type HybridVectorCandidates = VectorCandidateSpec & { admit?: (entry: MemoryEntry) => boolean };
+export type HybridVectorCandidates = VectorCandidateSpec & {
+  admit?: (entry: MemoryEntry) => boolean;
+};
 
-/** What the vector arm produced; fields fill in step by step, so a late failure keeps the rows already added. */
+/** What the vector arm produced; fields fill in step by step, so a late failure keeps the rows
+ * already added. */
 export interface VectorArm {
   entries: MemoryEntry[];
   addedRows: boolean;
@@ -29,15 +32,18 @@ export interface VectorArm {
 /** Where the vector arm reads: the vectors `store` holds, embedded by `provider`. */
 export interface VectorSource {
   readonly store: HippoStore;
-  /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than failing the search. */
+  /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than
+   * failing the search. */
   readonly provider: () => EmbeddingProvider;
-  /** The store is hippo.db, whose index `hippo embed` rebuilds; any other store rebuilds its vectors from hippo.db. */
+  /** The store is hippo.db, whose index `hippo embed` rebuilds; any other store rebuilds its
+   * vectors from hippo.db. */
   readonly onHippoDb?: boolean;
 }
 
 export interface VectorArmOptions extends CurrentnessOptions {
   vectorCandidates?: HybridVectorCandidates;
-  /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
+  /** The deadline a caller already started for this recall's query embedding; a fresh budget
+   * when unset. */
   queryEmbedDeadline?: AbortSignal;
   /** The root's settings; a fresh budget lasts its `queryEmbedTimeoutMs`. */
   runtime?: Pick<RuntimeSettings, 'queryEmbedTimeoutMs'>;
@@ -49,15 +55,15 @@ export interface VectorArmOptions extends CurrentnessOptions {
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
 /**
- * How long one recall waits for its query vector, retries included; the root's HIPPO_QUERY_EMBED_TIMEOUT_MS overrides
- * the default.
+ * How long one recall waits for its query vector, retries included; the root's
+ * HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default.
  */
 function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
 }
 
-/** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget; the
- * request's own abort ends it as well. */
+/** One deadline for every query embedding a recall makes, so two stores or a physics fallback
+ * share the budget; the request's own abort ends it as well. */
 export function startQueryEmbedDeadline({
   runtime,
   signal,
@@ -67,8 +73,8 @@ export function startQueryEmbedDeadline({
 }
 
 /**
- * The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model still downloading.
- * Any other failure throws.
+ * The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model
+ * still downloading. Any other failure throws.
  */
 export async function embedQueryBy(
   deadline: AbortSignal,
@@ -83,9 +89,9 @@ export async function embedQueryBy(
   }
 }
 
-// Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding
-// stderr.
-// A repeat still logs, at debug and then every 100th at warn, so a fallback that keeps happening stays visible.
+// Search runs on every hook prompt, so one line per reason per process says why vectors went unused
+// without flooding stderr. A repeat still logs, at debug and then every 100th at warn, so a
+// fallback that keeps happening stays visible.
 function warnBm25Fallback(reason: string, detail: string, fields?: LogFields): void {
   log.warnThenSample(
     `search.bm25-fallback.${reason}`,
@@ -109,9 +115,12 @@ export async function vectorCandidatesOutside(
   spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
-  // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a store on another thread.
+  // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a
+  // store on another thread.
   const { admit, ...stored } = spec;
-  return (await reads.nearestEntries(queryVector, stored)).filter((e) => !inPool.has(e.id) && (admit?.(e) ?? true));
+  return (await reads.nearestEntries(queryVector, stored)).filter(
+    (e) => !inPool.has(e.id) && (admit?.(e) ?? true),
+  );
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
@@ -121,7 +130,13 @@ export async function resolveVectorArm(
   source: VectorSource | undefined,
   options: VectorArmOptions,
 ): Promise<VectorArm> {
-  const arm: VectorArm = { entries, addedRows: false, useEmbeddings: false, embeddingIndex: {}, queryVector: [] };
+  const arm: VectorArm = {
+    entries,
+    addedRows: false,
+    useEmbeddings: false,
+    embeddingIndex: {},
+    queryVector: [],
+  };
   if (!source) return arm;
   try {
     await fillVectorArm(arm, query, source, options);
@@ -141,33 +156,22 @@ async function fillVectorArm(
   const { store } = source;
   const provider = source.provider();
   if (!provider.isAvailable()) return;
-  const index = await store.vectors.embeddingIndexState();
-  if (indexNeedsRebuild(indexedModel(index), provider.id)) {
-    warnBm25Fallback('reindex', reindexHint(source));
-    return;
-  }
   const spec = options.vectorCandidates;
-  const vectors = await store.vectors.stored(
-    'vectors',
-    arm.entries.map((e) => e.id),
-  );
-  // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
-  if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
-  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(options), provider, query);
-  if (vec === null) {
-    const budgetMs = queryEmbedBudgetMs(options.runtime?.queryEmbedTimeoutMs);
+  const vectors = await usableVectors(arm, source, provider, spec);
+  if (vectors === null) return;
+  const vec = await embedWithinBudget(query, provider, options);
+  if (vec === null) return;
+  arm.queryVector = vec;
+  if (arm.queryVector.length === 0) {
     warnBm25Fallback(
-      'query-embed-budget',
-      `the ${provider.kind} embedding provider gave no query vector within ${budgetMs} ms`,
+      'empty-query-vector',
+      'the embedding provider returned no vector for the query',
     );
     return;
   }
-  arm.queryVector = vec;
-  if (arm.queryVector.length === 0) {
-    warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
-    return;
-  }
-  const added = spec ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec) : [];
+  const added = spec
+    ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec)
+    : [];
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
@@ -180,6 +184,51 @@ async function fillVectorArm(
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;
+}
+
+/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can be
+ * used. */
+async function usableVectors(
+  arm: VectorArm,
+  source: VectorSource,
+  provider: EmbeddingProvider,
+  spec: HybridVectorCandidates | undefined,
+): Promise<Map<string, ArrayLike<number>> | null> {
+  const { store } = source;
+  const index = await store.vectors.embeddingIndexState();
+  if (indexNeedsRebuild(indexedModel(index), provider.id)) {
+    warnBm25Fallback('reindex', reindexHint(source));
+    return null;
+  }
+  const vectors = await store.vectors.stored(
+    'vectors',
+    arm.entries.map((e) => e.id),
+  );
+  // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search
+  // can use.
+  if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return null;
+  return vectors;
+}
+
+/** The query's vector, or null once the embedding budget ran out. */
+async function embedWithinBudget(
+  query: string,
+  provider: EmbeddingProvider,
+  options: VectorArmOptions,
+): Promise<number[] | null> {
+  const vec = await embedQueryBy(
+    options.queryEmbedDeadline ?? startQueryEmbedDeadline(options),
+    provider,
+    query,
+  );
+  if (vec === null) {
+    const budgetMs = queryEmbedBudgetMs(options.runtime?.queryEmbedTimeoutMs);
+    warnBm25Fallback(
+      'query-embed-budget',
+      `the ${provider.kind} embedding provider gave no query vector within ${budgetMs} ms`,
+    );
+  }
+  return vec;
 }
 
 export interface DenseScores {

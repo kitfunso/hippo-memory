@@ -135,7 +135,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x2',
       supersedesPolicyId: b.id,
     });
-    await closeObject(objectsAt(home), POLICY, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), POLICY, { tenantId: 'default', id: c.id, actor: CLI_ACTOR, now: evalNow() });
     const active = await loadPolicies(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
@@ -265,7 +265,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x',
       validFrom: '2026-01-01',
     });
-    await closeObject(objectsAt(home), POLICY, 'default', p.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), POLICY, { tenantId: 'default', id: p.id, actor: CLI_ACTOR, now: evalNow() });
     expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 

@@ -12,16 +12,21 @@ import {
 import type { CallerItems, CallerItemsSaved, Compactions } from '../../base/ports/store/capture.js';
 import { bound, type Bodies } from './bound.js';
 
-/** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
- * and a `summarised` one is reused. */
+interface WriteCallerItemsOptions {
+  readonly files: StoreFiles;
+  readonly tenantId: string;
+  readonly req: CallerItems;
+  readonly log: Log;
+}
+
+/** A caller's items, already scrubbed, under its record: a retry of a finished request answers
+ * with the first count, and a `summarised` one is reused. */
 function writeCallerItems(
   db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  req: CallerItems,
-  log: Log,
+  { files, tenantId, req, log }: WriteCallerItemsOptions,
 ): number {
-  const earlier = compactionByRequest(db, tenantId, req.requestId, req.sessionId);
+  const request = { tenantId, requestId: req.requestId, sessionId: req.sessionId };
+  const earlier = compactionByRequest(db, request);
   if (earlier !== null && earlier.status !== 'summarised') return earlier.itemsWritten;
   const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };
   const text = { summary: '', items: [...req.items] };
@@ -33,10 +38,9 @@ function writeCallerItems(
       at: files.clock(),
       caller: { originProject: req.project, requestId: req.requestId },
     });
-  return saveItems(
-    db,
+  return saveItems(db, {
     files,
-    {
+    ctx: {
       tenantId,
       recordId: record.id,
       sessionId: req.sessionId,
@@ -46,8 +50,8 @@ function writeCallerItems(
       caller: { actor: req.owner, origins: req.origins },
     },
     log,
-    req.baseHalfLifeDays,
-  );
+    baseHalfLifeDays: req.baseHalfLifeDays,
+  });
 }
 
 /** A caller's items saved, with each note the save logged so the caller can show it. */
@@ -58,8 +62,13 @@ function saveCallerItems(
   req: CallerItems,
 ): CallerItemsSaved {
   const notes: string[] = [];
-  const written = writeCallerItems(db, files, tenantId, req, (message) => {
-    notes.push(message);
+  const written = writeCallerItems(db, {
+    files,
+    tenantId,
+    req,
+    log: (message) => {
+      notes.push(message);
+    },
   });
   return { written, notes };
 }

@@ -1,5 +1,5 @@
-// The dead-letter statements both connectors share; each connector names its table and columns and maps rows to its own
-// item type.
+// The dead-letter statements both connectors share; each connector names its table and columns and
+// maps rows to its own item type.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
@@ -22,11 +22,13 @@ function assertColumns(names: readonly string[]): void {
   }
 }
 
-// The driver returns each column by its stored affinity; the connector's rowToItem coerces every field.
+// The driver returns each column by its stored affinity; the connector's rowToItem coerces every
+// field.
 type DlqRawValue = string | number | bigint | null;
 type DlqRawRow = Record<string, DlqRawValue>;
 
-/** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in insert order. */
+/** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in
+ * insert order. */
 function insertDlqRow(
   db: DatabaseSyncLike,
   table: DlqTable,
@@ -43,12 +45,16 @@ function insertDlqRow(
   return Number(result.lastInsertRowid);
 }
 
+interface ListDlqRowsOptions {
+  readonly table: DlqTable;
+  readonly selectColumns: string;
+  readonly tenantId: string;
+  readonly limit: number;
+}
+
 function listDlqRows(
   db: DatabaseSyncLike,
-  table: DlqTable,
-  selectColumns: string,
-  tenantId: string,
-  limit: number,
+  { table, selectColumns, tenantId, limit }: ListDlqRowsOptions,
 ): DlqRawRow[] {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
@@ -63,20 +69,24 @@ function listDlqRows(
   ).all(tenantId, limit) as DlqRawRow[];
 }
 
+interface ReadDlqRowOptions {
+  readonly table: DlqTable;
+  readonly selectColumns: string;
+  readonly tenantId: string;
+  readonly id: number;
+}
+
 function readDlqRow(
   db: DatabaseSyncLike,
-  table: DlqTable,
-  selectColumns: string,
-  tenantId: string,
-  id: number,
+  { table, selectColumns, tenantId, id }: ReadDlqRowOptions,
 ): DlqRawRow | null {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  const row = cachedStatement(db, `SELECT ${selectColumns} FROM ${table} WHERE tenant_id = ? AND id = ?`).get(
-    tenantId,
-    id,
-  ) as DlqRawRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${selectColumns} FROM ${table} WHERE tenant_id = ? AND id = ?`,
+  ).get(tenantId, id) as DlqRawRow | undefined;
   return row ?? null;
 }
 
@@ -90,7 +100,8 @@ function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, tenantId: string,
 
 type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';
 
-/** One DLQ column: the item field it fills, its kind, and whether insert writes it (the database sets the rest). */
+/** One DLQ column: the item field it fills, its kind, and whether insert writes it (the database
+ * sets the rest). */
 export interface DlqColumn {
   field: string;
   column: string;
@@ -129,7 +140,9 @@ export function dlqAccess<Item, Insert extends object>(
   const insertColumns = columns.filter((c) => c.insert);
   // SAFETY: the column map names every field of Item with the kind that coerces it.
   const toItem = (raw: DlqRawRow): Item =>
-    Object.fromEntries(columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])])) as Item;
+    Object.fromEntries(
+      columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])]),
+    ) as Item;
   return {
     insert: (db, row) => {
       // SAFETY: every insert field of the column map is a string, null or absent on Insert.
@@ -137,9 +150,10 @@ export function dlqAccess<Item, Insert extends object>(
       const pairs = insertColumns.map((c) => [c.column, fields[c.field] ?? null] as const);
       return insertDlqRow(db, table, pairs);
     },
-    list: (db, tenantId, limit) => listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
+    list: (db, tenantId, limit) =>
+      listDlqRows(db, { table, selectColumns, tenantId, limit }).map(toItem),
     get: (db, tenantId, id) => {
-      const row = readDlqRow(db, table, selectColumns, tenantId, id);
+      const row = readDlqRow(db, { table, selectColumns, tenantId, id });
       return row ? toItem(row) : null;
     },
     markRetried: (db, tenantId, id) => markDlqRetried(db, table, tenantId, id),

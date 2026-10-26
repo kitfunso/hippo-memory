@@ -1,6 +1,6 @@
 /**
- * Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the one-time import of the old
- * JSON index.
+ * Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the
+ * one-time import of the old JSON index.
  */
 
 import * as fs from 'node:fs';
@@ -14,13 +14,16 @@ import { ZERO_NORM, cosineToQuery, norm } from '../base/rank/cosine.js';
 import { cachedStatement } from './statement-cache.js';
 import { META_KEY } from './meta.js';
 
-/** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
+/** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a
+ * renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
 export const EMBEDDING_MODEL_META_KEY = META_KEY.embeddingModel;
-// Never equal to a real index identity, so the next embed run treats it as a model change and rebuilds every vector.
+// Never equal to a real index identity, so the next embed run treats it as a model change and
+// rebuilds every vector.
 const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
 
-// No FK to memories: a vector may outlive its row until `hippo embed` prunes it, and the trigger covers deletes.
+// No FK to memories: a vector may outlive its row until `hippo embed` prunes it, and the trigger
+// covers deletes.
 export const MEMORY_VECTORS_DDL = `
   CREATE TABLE IF NOT EXISTS memory_vectors (
     memory_id TEXT PRIMARY KEY,
@@ -43,7 +46,8 @@ export function decodeVector(blob: Uint8Array): Float32Array {
   return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 
-/** Insert or replace vectors, skipping empty or non-finite ones; the caller owns any surrounding transaction. */
+/** Insert or replace vectors, skipping empty or non-finite ones; the caller owns any surrounding
+ * transaction. */
 export function upsertVectors(
   db: DatabaseSyncLike,
   rows: Iterable<readonly [string, readonly number[]]>,
@@ -62,12 +66,14 @@ export function upsertVectors(
   return written;
 }
 
-// A TEMP table: only the handle that made it sees it, and it goes with that handle, so a crash leaves nothing staged.
+// A TEMP table: only the handle that made it sees it, and it goes with that handle, so a crash
+// leaves nothing staged.
 const STAGED_VECTORS_DDL =
   'CREATE TEMP TABLE IF NOT EXISTS staged_vectors (memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB ' +
   'NOT NULL)';
 
-/** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock on hippo.db. */
+/** An empty staging table on `db` for a full rebuild's vectors; writing it takes no lock on
+ * hippo.db. */
 export function openVectorStaging(db: DatabaseSyncLike): void {
   db.exec(STAGED_VECTORS_DDL);
   db.exec('DELETE FROM temp.staged_vectors');
@@ -78,8 +84,12 @@ export function dropVectorStaging(db: DatabaseSyncLike): void {
   db.exec('DROP TABLE IF EXISTS temp.staged_vectors');
 }
 
-/** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors; answers how many. */
-export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>): number {
+/** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors;
+ * answers how many. */
+export function stageVectors(
+  db: DatabaseSyncLike,
+  rows: Iterable<readonly [string, readonly number[]]>,
+): number {
   const stmt = cachedStatement(
     db,
     'INSERT OR REPLACE INTO temp.staged_vectors (memory_id, dim, vector) VALUES (?, ?, ?)',
@@ -93,7 +103,8 @@ export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [stri
   return staged;
 }
 
-/** Replaces the whole table with the staged vectors under `model` in one transaction, as a full rebuild does. */
+/** Replaces the whole table with the staged vectors under `model` in one transaction, as a full
+ * rebuild does. */
 export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): void {
   withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
@@ -125,12 +136,15 @@ export function countVectors(db: DatabaseSyncLike): VectorCounts {
 /** Drop vectors whose memory row is gone; returns how many went. */
 export function deleteOrphanVectors(db: DatabaseSyncLike): number {
   return Number(
-    cachedStatement(db, 'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ??
-      0,
+    cachedStatement(
+      db,
+      'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)',
+    ).run().changes ?? 0,
   );
 }
 
-// SAFETY: every read cast to this row selects all its keys, and node:sqlite returns BLOBs as Uint8Array.
+// SAFETY: every read cast to this row selects all its keys, and node:sqlite returns BLOBs as
+// Uint8Array.
 type StoredVectorRow = { memory_id: string; vector: Uint8Array };
 
 // One read behind the copied and the viewed shape, so the two can never return different rows.
@@ -145,7 +159,11 @@ function eachStoredVector(
     }
   };
   if (ids === undefined) {
-    read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate() as Iterable<StoredVectorRow>);
+    read(
+      db
+        .prepare('SELECT memory_id, vector FROM memory_vectors')
+        .iterate() as Iterable<StoredVectorRow>,
+    );
     return;
   }
   const unique = [...new Set(ids)];
@@ -166,8 +184,12 @@ export function loadVectors(db: DatabaseSyncLike, ids?: readonly string[]): Map<
   return out;
 }
 
-/** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for that row. */
-export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+/** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for that
+ * row. */
+export function loadVectorViews(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+): Map<string, Float32Array> {
   const out = new Map<string, Float32Array>();
   eachStoredVector(db, ids, (id, vector) => out.set(id, vector));
   return out;
@@ -181,9 +203,10 @@ export function countStoredVectors(db: DatabaseSyncLike): number {
 
 /** Float count of the first stored row, from its blob length; the vector is never read. */
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
-  const row = cachedStatement(db, 'SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
-    | { bytes: number }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    'SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1',
+  ).get() as { bytes: number } | undefined;
   return row === undefined ? undefined : Math.floor(row.bytes / 4);
 }
 
@@ -203,12 +226,15 @@ export interface VectorRow {
 }
 
 /**
- * The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order never changes the top
- * k.
- * The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the
- * same bytes ranks alike.
+ * The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order
+ * never changes the top k. The query rounds to Float32 as stored vectors are, and scores add up in
+ * float64, so every store that feeds it the same bytes ranks alike.
  */
-export function rankVectorRows(query: readonly number[], rows: Iterable<VectorRow>, k: number): VectorMatch[] {
+export function rankVectorRows(
+  query: readonly number[],
+  rows: Iterable<VectorRow>,
+  k: number,
+): VectorMatch[] {
   const best = bestMatches(query, k);
   if (!best) return [];
   for (const { id, vector } of rows) best.offer(id, vector);
@@ -226,7 +252,8 @@ interface BestMatches {
   oneEachId(): void;
 }
 
-// One scoring loop for rows in memory and rows paged from the store, so the two can never rank apart.
+// One scoring loop for rows in memory and rows paged from the store, so the two can never rank
+// apart.
 function bestMatches(query: readonly number[], k: number): BestMatches | null {
   if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);
@@ -245,7 +272,8 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
   };
 }
 
-/** At most `k` matches with the worst at the root, so a row that makes the cut costs one log k sift. */
+/** At most `k` matches with the worst at the root, so a row that makes the cut costs one log k
+ * sift. */
 class MatchHeap {
   readonly #k: number;
   readonly #heap: VectorMatch[] = [];
@@ -279,7 +307,9 @@ class MatchHeap {
   }
 
   sorted(): VectorMatch[] {
-    return [...this.#heap].sort((a, b) => (beats(a.score, a.id, b) ? -1 : beats(b.score, b.id, a) ? 1 : 0));
+    return [...this.#heap].sort((a, b) =>
+      beats(a.score, a.id, b) ? -1 : beats(b.score, b.id, a) ? 1 : 0,
+    );
   }
 
   #worse(i: number, j: number): boolean {
@@ -295,7 +325,11 @@ class MatchHeap {
 
   /** Answers where the match at `i` came to rest. */
   #siftUp(i: number): number {
-    for (let parent = (i - 1) >> 1; i > 0 && this.#worse(i, parent); i = parent, parent = (i - 1) >> 1) {
+    for (
+      let parent = (i - 1) >> 1;
+      i > 0 && this.#worse(i, parent);
+      i = parent, parent = (i - 1) >> 1
+    ) {
       this.#swap(i, parent);
     }
     return i;
@@ -314,7 +348,8 @@ class MatchHeap {
   }
 }
 
-/** Rows the nearest-vector scan reads in one statement and scores before it yields a turn of the event loop. */
+/** Rows the nearest-vector scan reads in one statement and scores before it yields a turn of the
+ * event loop. */
 const VECTOR_SCAN_PAGE = 1024;
 
 function nextTurn(): Promise<void> {
@@ -323,33 +358,32 @@ function nextTurn(): Promise<void> {
   });
 }
 
-/** An index's nearest admitted rows among those at or below `coveredRowid`; the caller scores the rows above it. */
+/** An index's nearest admitted rows among those at or below `coveredRowid`; the caller scores
+ * the rows above it. */
 export interface ProposedMatches {
   readonly matches: readonly VectorMatch[];
   readonly coveredRowid: number;
 }
 
-/** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the caller scans. */
+/** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the caller
+ * scans. */
 export interface VectorIndex {
-  matches(
-    db: DatabaseSyncLike,
-    query: readonly number[],
-    k: number,
-    where: string,
-    params: readonly (string | number)[],
-  ): ProposedMatches | undefined;
+  matches(db: DatabaseSyncLike, ask: VectorMatchQuery): ProposedMatches | undefined;
 }
 
-/** The admitted vectors of length `?` among `memories m` rows passing `where`, narrowed by `among` (SQL ending in AND,
- * bound first). The scan and the graphs' reads share it, so a graph can never admit a row the scan would not. */
+/** The admitted vectors of length `?` among `memories m` rows passing `where`, narrowed by
+ * `among` (SQL ending in AND, bound first). The scan and the graphs' reads share it, so a graph
+ * can never admit a row the scan would not. */
 export function admittedVectorsSql(where: string, among = ''): string {
-  // CROSS JOIN keeps memory_vectors the outer loop, so a page walks its key in order instead of sorting every row.
+  // CROSS JOIN keeps memory_vectors the outer loop, so a page walks its key in order instead of
+  // sorting every row.
   return `SELECT v.rowid AS rowid, v.memory_id AS id, v.vector AS vector
     FROM memory_vectors v CROSS JOIN memories m ON m.id = v.memory_id
     WHERE ${among}v.dim = ?${where}`;
 }
 
-/** What the nearest-vector reads ask: `k` rows closest to `query` among `memories m` rows passing `where`. */
+/** What the nearest-vector reads ask: `k` rows closest to `query` among `memories m` rows
+ * passing `where`. */
 export interface VectorMatchQuery {
   query: readonly number[];
   k: number;
@@ -363,29 +397,36 @@ export interface TopVectorMatchesOptions extends VectorMatchQuery {
 
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
-export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorMatchesOptions): Promise<VectorMatch[]> {
+export async function topVectorMatches(
+  db: DatabaseSyncLike,
+  options: TopVectorMatchesOptions,
+): Promise<VectorMatch[]> {
   const { query, k, where, params, index } = options;
   const best = bestMatches(query, k);
   if (!best) return [];
-  // A graph answers for the rows it covers and the rows above them are scored exactly; with no graph every admitted
-  // vector is scored, a page at a time.
-  const proposed = index?.matches(db, query, k, where, params);
+  // A graph answers for the rows it covers and the rows above them are scored exactly; with no
+  // graph every admitted vector is scored, a page at a time.
+  const proposed = index?.matches(db, { query, k, where, params });
   if (proposed === undefined) return offerPages(db, best, options, { key: 'memory_id', after: '' });
   for (const match of proposed.matches) best.seed(match);
-  // A re-embed moves a row to a new rowid, so a row may come back above the covered one or on a later page.
+  // A re-embed moves a row to a new rowid, so a row may come back above the covered one or on a
+  // later page.
   best.oneEachId();
   return offerPages(db, best, options, { key: 'rowid', after: proposed.coveredRowid });
 }
 
-// Keyed on memory_id for a whole scan: a vector re-embedded between two pages keeps its id, so no page returns a row
-// twice.
+// Keyed on memory_id for a whole scan: a vector re-embedded between two pages keeps its id, so no
+// page returns a row twice.
 async function offerPages(
   db: DatabaseSyncLike,
   best: BestMatches,
   { query, where, params }: VectorMatchQuery,
   from: { readonly key: 'memory_id' | 'rowid'; readonly after: string | number },
 ): Promise<VectorMatch[]> {
-  const page = cachedStatement(db, `${admittedVectorsSql(where)} AND v.${from.key} > ? ORDER BY v.${from.key} LIMIT ?`);
+  const page = cachedStatement(
+    db,
+    `${admittedVectorsSql(where)} AND v.${from.key} > ? ORDER BY v.${from.key} LIMIT ?`,
+  );
   const floats = new Float32Array(query.length);
   const bytes = new Uint8Array(floats.buffer);
   let after = from.after;
@@ -420,11 +461,13 @@ function stamp(): string {
   return `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
 }
 
-// The codes a rename gets when another process holds the file open (Windows); any other failure would fail a copy too.
+// The codes a rename gets when another process holds the file open (Windows); any other failure
+// would fail a copy too.
 const RENAME_BLOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
 /**
- * Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are kept either way.
+ * Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are
+ * kept either way.
  */
 function moveAside(fp: string, aside: string): boolean {
   try {
@@ -442,7 +485,8 @@ function moveAside(fp: string, aside: string): boolean {
     try {
       fs.rmSync(fp, { force: true });
     } catch (rmErr) {
-      // The original stays for the next open to retry, so a copy left beside it would pile up one per open.
+      // The original stays for the next open to retry, so a copy left beside it would pile up one
+      // per open.
       fs.rmSync(aside, { force: true });
       throw rmErr;
     }
@@ -450,8 +494,8 @@ function moveAside(fp: string, aside: string): boolean {
   }
 }
 
-// The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and non-numeric entries are
-// dropped.
+// The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and
+// non-numeric entries are dropped.
 function parseLegacyIndex(raw: string): Map<string, number[]> | null {
   // Text that is not JSON reads as corrupt: the caller quarantines the file and logs it.
   const parsed: unknown = tryParseJson(raw);
@@ -463,9 +507,9 @@ function parseLegacyIndex(raw: string): Map<string, number[]> | null {
   return index;
 }
 
-/** Move a legacy `embeddings.json` into `memory_vectors`, then keep the file as `embeddings.json.imported-<stamp>`.
- * Runs after the migration commits, so the rename never outlives rolled-back rows; a file an older binary writes later
- * imports the same way.
+/** Move a legacy `embeddings.json` into `memory_vectors`, then keep the file as
+ * `embeddings.json.imported-<stamp>`. Runs after the migration commits, so the rename never
+ * outlives rolled-back rows; a file an older binary writes later imports the same way.
  */
 export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: string): void {
   const fp = path.join(hippoRoot, LEGACY_EMBEDDINGS_FILE);
@@ -499,7 +543,9 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
         | { value?: string }
         | undefined
     )?.value ?? '';
-  const written = withWriteScope(db, 'import_legacy_vectors', () => upsertVectors(db, index, model));
+  const written = withWriteScope(db, 'import_legacy_vectors', () =>
+    upsertVectors(db, index, model),
+  );
   const backup = `${fp}.imported-${stamp()}`;
   if (moveAside(fp, backup)) {
     log.info(

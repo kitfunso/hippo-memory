@@ -1,5 +1,5 @@
-// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local
-// log keeps.
+// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the
+// same reading the local log keeps.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../../base/util/token-text.js';
@@ -10,8 +10,8 @@ import type { CaptureErrorOutcome, RoutineRule } from '../../base/ports/store/re
 const COMMAND_HEAD_WORDS = 2;
 
 /**
- * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command
- * head).
+ * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key
+ * (untruncated, command head).
  */
 export type FailureReading =
   | { text: string; detail: string }
@@ -27,7 +27,8 @@ interface ToolFailurePayload {
   tool_input?: JsonValue;
 }
 
-/** The longest lesson text a reading gives, so a check of a sent one imports it instead of copying it. */
+/** The longest lesson text a reading gives, so a check of a sent one imports it instead of
+ * copying it. */
 export const FAILURE_TEXT_MAX_CHARS = 200;
 
 /** The user, a permission prompt or a hook said no: routine, not a lesson. */
@@ -37,7 +38,8 @@ const DECLINED = new RegExp(
   'i',
 );
 
-/** The OS or a remote host refused access (EACCES, SSH publickey): routine too, but nobody declined anything. */
+/** The OS or a remote host refused access (EACCES, SSH publickey): routine too, but nobody
+ * declined anything. */
 const OS_PERMISSION = /permission denied/i;
 
 /** Leading `cd` or `pushd` steps say where a command ran, not what it ran. */
@@ -48,8 +50,8 @@ const NO_MATCH = /\bno (?:matches|files|results) found\b/i;
 /** Shell commands whose exit code 1 means "nothing found" or "differs", not an error. */
 const QUIET_EXIT_1 = /^\s*(?:grep|rg|egrep|fgrep|find|test|\[|diff|cmp|git diff|git grep)\b/;
 
-// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/capture/copilot-failure-reading.test.ts cites
-// where each comes from.
+// Claude Code's tool names, then the Copilot CLI's and VS Code's;
+// tests/capture/copilot-failure-reading.test.ts cites where each comes from.
 const SEARCH_TOOLS: ReadonlySet<string> = new Set([
   'Grep',
   'Glob',
@@ -69,7 +71,8 @@ export function payloadString(payload: JsonValue, key: 'session_id' | 'tool_name
   return isJsonString(value) && value.trim() !== '' ? value : null;
 }
 
-/** Normalized form used to spot repeats. The failure log keeps only its hash, so changing it breaks repeat counts. */
+/** Normalized form used to spot repeats. The failure log keeps only its hash, so changing it
+ * breaks repeat counts. */
 export function failureSignature(text: string): string {
   return text
     .toLowerCase()
@@ -79,20 +82,22 @@ export function failureSignature(text: string): string {
     .trim();
 }
 
-/** The hash the failure log stores for a lesson text or a detail; one function so every writer counts repeats alike. */
+/** The hash the failure log stores for a lesson text or a detail; one function so every writer
+ * counts repeats alike. */
 export function failureHash(text: string): string {
   return blockHash(failureSignature(text));
 }
 
 /**
- * The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub`
- * runs before the cap, as a mask can be longer than what it hides. Pure. */
+ * The memory text for a failure payload, or why it is not stored; a routine skip keeps its text
+ * for the log. `scrub` runs before the cap, as a mask can be longer than what it hides. Pure. */
 export function lessonFromFailure(
   payload: JsonValue,
   scrub: (text: string) => string = (text) => text,
 ): FailureReading {
   if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
-  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all optional.
+  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all
+  // optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
   if (!isJsonString(p.error) || p.error.trim().length < 12) {
@@ -107,22 +112,31 @@ export function lessonFromFailure(
       : '';
   const head = command.trim().split(/\s+/).slice(0, COMMAND_HEAD_WORDS).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
-  const routine = (rule: RoutineRule): FailureReading => ({ skip: 'skipped-routine', rule, text, detail });
+  const routine = (rule: RoutineRule): FailureReading => ({
+    skip: 'skipped-routine',
+    rule,
+    text,
+    detail,
+  });
   if (DECLINED.test(error)) return routine('declined');
   if (OS_PERMISSION.test(error)) return routine('os-permission');
   if (NO_MATCH.test(error)) return routine('no-match');
   if (SEARCH_TOOLS.has(tool)) return routine('search-tool');
-  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) return routine('quiet-exit');
+  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) {
+    return routine('quiet-exit');
+  }
   return { text, detail };
 }
 
 /**
- * A failure as it may leave the machine: the capped lesson text and the detail's hash, never the untruncated detail.
+ * A failure as it may leave the machine: the capped lesson text and the detail's hash, never the
+ * untruncated detail.
  */
 export interface FailureReport {
   /** The payload's tool name; null when it named none. */
   tool: string | null;
-  /** Scrubbed for sharing, then cut to at most FAILURE_TEXT_MAX_CHARS; null when the payload had no readable error. */
+  /** Scrubbed for sharing, then cut to at most FAILURE_TEXT_MAX_CHARS; null when the payload had
+   * no readable error. */
   text: string | null;
   /** Why it is not stored; null for a lesson. */
   skip: Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'> | null;
@@ -131,7 +145,8 @@ export interface FailureReport {
   detail_hash: string | null;
 }
 
-/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is elsewhere. Pure. */
+/** {@link lessonFromFailure} plus the detail's hash, for a writer whose store is elsewhere.
+ * Pure. */
 export function failureReport(payload: JsonValue): FailureReport {
   const reading = lessonFromFailure(payload, scrubForSharing);
   return {

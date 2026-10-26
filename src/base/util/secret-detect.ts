@@ -1,7 +1,8 @@
 /**
- * Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in prose must not flag).
- * Flagged rows are never shared to the global store or injected as ambient context outside their project; explicit
- * recall is unaffected. Leaf module: no imports from store/api/shared.
+ * Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in
+ * prose must not flag). Flagged rows are never shared to the global store or injected as ambient
+ * context outside their project; explicit recall is unaffected. Leaf module: no imports from
+ * store/api/shared.
  */
 import { tryParseJson } from './json.js';
 
@@ -11,7 +12,8 @@ export interface SecretDetection {
   reason: string | null;
 }
 
-/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the lookup. */
+/** Tags that flag a memory as secret, lower case; detectSecret folds a tag's case before the
+ * lookup. */
 export const SECRET_TAGS: ReadonlySet<string> = new Set([
   'secret',
   'api-key',
@@ -27,28 +29,32 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/ },
   { name: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b/ },
   { name: 'github-fine-grained-pat', re: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/ },
-  // A token may end in a hyphen, where `\b` holds only before a word character: a class that holds `-` runs to its end,
-  // and a fixed length may also close on a hyphen.
+  // A token may end in a hyphen, where `\b` holds only before a word character: a class that holds
+  // `-` runs to its end, and a fixed length may also close on a hyphen.
   { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
   { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
   { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}(?:\b|(?<=-))/ },
-  // hk_ is hippo's own API key (sqlite/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes follow gitleaks'
-  // rules.
+  // hk_ is hippo's own API key (sqlite/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes
+  // follow gitleaks' rules.
   { name: 'hippo-api-key', re: /\bhk_[a-z2-7]{24}\.[a-z2-7]{32}\b/ },
   { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
   { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },
   { name: 'gitlab-token', re: /\bglpat-[\w-]{20,}/ },
   { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
-  { name: 'slack-webhook', re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/ },
+  {
+    name: 'slack-webhook',
+    re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/,
+  },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence guard), so prose
-  // like "the sk- prefix identifies API keys" does not flag but "prod API key sk_live_..." does.
+  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence
+  // guard), so prose like "the sk- prefix identifies API keys" does not flag but "prod API key
+  // sk_live_..." does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and user:password@ templates would
-  // hide code lessons from ambient context.
-  // Secret names end in the keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _
-  // (OLDPWD, bypass are not secrets).
+  // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and
+  // user:password@ templates would hide code lessons from ambient context. Secret names end in the
+  // keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD,
+  // bypass are not secrets).
   {
     name: 'secret-assignment',
     re: new RegExp(
@@ -64,7 +70,8 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
 const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
-// redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text leaves the machine.
+// redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text
+// leaves the machine.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
@@ -72,7 +79,8 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
-/** Scan a memory's tags + content for secret material; pure and deterministic, no filesystem or store access. */
+/** Scan a memory's tags + content for secret material; pure and deterministic, no filesystem or
+ * store access. */
 export function detectSecret(entry: { content: string; tags: string[] }): SecretDetection {
   for (const tag of entry.tags) {
     if (SECRET_TAGS.has(tag.toLowerCase())) {
@@ -87,12 +95,14 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
   return { flagged: false, reason: null };
 }
 
-/** Only a run's first character starts a match, so a long run is scanned once; a domain's first label opens on a
- * letter, so logo@2x.png and react@18.2.0 stay. */
-const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+/** Only a run's first character starts a match, so a long run is scanned once; a domain's first
+ * label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
+const EMAIL =
+  /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 
 /**
- * Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids.
+ * Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their
+ * patterns misfire on ids.
  */
 export function maskEmails(text: string): string {
   return text.replace(EMAIL, '[email]');
@@ -104,7 +114,8 @@ export interface SecretVet {
   warnings: string[];
 }
 
-/** Write-time veto: every caller's text gets the strict redaction, typed or not, so no secret reaches the store. */
+/** Write-time veto: every caller's text gets the strict redaction, typed or not, so no secret
+ * reaches the store. */
 export function vetSecrets(content: string): SecretVet {
   const kept = redactSecretsStrict(content);
   const warnings: string[] = [];
@@ -118,11 +129,12 @@ export function vetSecrets(content: string): SecretVet {
 const JSON_STRING = /"(?:[^"\\]|\\.)*"/g;
 
 /** Appended to a dead-letter row's error when `redactPayload` changed its body. */
-export const DLQ_REDACTED_NOTE = 'secret-shaped text redacted, signature dropped; replay needs --force';
+export const DLQ_REDACTED_NOTE =
+  'secret-shaped text redacted, signature dropped; replay needs --force';
 
 /**
- * `vetSecrets` redaction for a raw webhook body: JSON stays valid for replay, and an untouched body stays
- * byte-identical so its signature still verifies.
+ * `vetSecrets` redaction for a raw webhook body: JSON stays valid for replay, and an untouched body
+ * stays byte-identical so its signature still verifies.
  */
 export function redactPayload(raw: string): string {
   // Not JSON, so there is no structure to keep valid; redact the raw text.
@@ -137,7 +149,8 @@ export function redactPayload(raw: string): string {
 const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
 const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
 
-/** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward scan, so no ReDoS. */
+/** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward
+ * scan, so no ReDoS. */
 function redactPemBlocks(text: string): string {
   let out = '';
   let from = 0;
@@ -153,8 +166,8 @@ function redactPemBlocks(text: string): string {
 }
 
 /**
- * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and
- * JWTs.
+ * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and
+ * Basic auth headers and JWTs.
  */
 export function redactSecretsStrict(text: string): string {
   if (!text) return text;

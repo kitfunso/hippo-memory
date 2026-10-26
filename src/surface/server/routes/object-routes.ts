@@ -1,5 +1,6 @@
-// The rows of a typed-object kind, from one config: create, list, get and close for every kind, plus supersede for a
-// kind that versions. Each handler parses and replies; the work is one api call.
+// The rows of a typed-object kind, from one config: create, list, get and close for every kind,
+// plus supersede for a kind that versions. Each handler parses and replies; the work is one api
+// call.
 import type { ContextWith } from '../../../api/types.js';
 import {
   objectClose,
@@ -43,8 +44,8 @@ export interface ObjectRouteConfig<K extends ObjectKind> {
 }
 
 export interface VersionedRouteConfig<K extends SavableKind> extends ObjectRouteConfig<K> {
-  /** Checks the body, then returns the successor's write: two steps, so a bad body answers 400 before a missing row
-   * answers 404. */
+  /** Checks the body, then returns the successor's write: two steps, so a bad body answers 400
+   * before a missing row answers 404. */
   readonly revise: (body: Body) => (existing: ObjectByKind[K], id: number) => ObjectWrites[K];
 }
 
@@ -52,7 +53,10 @@ function notFound<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, id: number): 
   return new HttpError(404, `${cfg.noun} ${id} not found`);
 }
 
-async function createRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: ObjectRequest): Promise<void> {
+async function createRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: ObjectRequest,
+): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   try {
@@ -64,17 +68,27 @@ async function createRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: 
   }
 }
 
-async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: ObjectRequest): Promise<void> {
+async function listRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: ObjectRequest,
+): Promise<void> {
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
   const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const listOpts: ObjectListOptions<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
+  const listOpts: ObjectListOptions<K> = {
+    limit: limit + 1,
+    after,
+    filter: filter?.trim() || undefined,
+  };
   if (status !== 'all') {
     const states = objectStates(cfg.kind);
     if (!isSetMember(states, status)) {
-      throw new HttpError(400, `status must be one of: ${[...states].join(' | ')} | all (got "${status}")`);
+      throw new HttpError(
+        400,
+        `status must be one of: ${[...states].join(' | ')} | all (got "${status}")`,
+      );
     }
     listOpts.status = status;
   }
@@ -82,7 +96,11 @@ async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: Ob
   sendJson(res, 200, { [cfg.listField]: page.items, next_cursor: page.nextCursor });
 }
 
-async function getRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: ObjectRequest, id: number): Promise<void> {
+async function getRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: ObjectRequest,
+  id: number,
+): Promise<void> {
   const found = await objectGet(rr.ctx, cfg.kind, id);
   if (found === null) throw notFound(cfg, id);
   sendJson(rr.res, 200, { [cfg.field]: found });
@@ -103,7 +121,10 @@ async function supersedeRoute<K extends SavableKind>(
 ): Promise<void> {
   const { ctx } = rr;
   const successor = cfg.revise(await parseJsonBody(rr.req, ctx));
-  const saved = await objectSupersede(ctx, cfg.kind, id, (existing) => successor(existing, id));
+  const saved = await objectSupersede(ctx, cfg.kind, {
+    id,
+    next: (existing) => successor(existing, id),
+  });
   if (saved === null) throw notFound(cfg, id);
   sendJson(rr.res, 200, { [cfg.field]: saved });
 }
@@ -120,7 +141,8 @@ export function objectRoutes<K extends ObjectKind>(cfg: ObjectRouteConfig<K>): R
   });
 }
 
-/** Every row of a kind that versions: its supersede reads the active row, then saves the successor `revise` builds. */
+/** Every row of a kind that versions: its supersede reads the active row, then saves the
+ * successor `revise` builds. */
 export function versionedRoutes<K extends SavableKind>(cfg: VersionedRouteConfig<K>): Route[] {
   const supersede: IdHandler = (rr, id) => supersedeRoute(cfg, rr, id);
   return objectRoutes({ ...cfg, actions: { supersede, ...cfg.actions } });

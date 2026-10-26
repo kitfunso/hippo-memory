@@ -1,4 +1,5 @@
-// The one write path for text no person typed into hippo: capture, compaction items and imported agent memories.
+// The one write path for text no person typed into hippo: capture, compaction items and imported
+// agent memories.
 import { isContentWorthStoring } from '../../base/memory/memory-quality.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -11,17 +12,21 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { GatedWriteResult } from '../../base/ports/store/agent-import.js';
 import type { StoreFiles } from './open.js';
 
-/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait
- * on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that
- * transaction, which is safe because a batch that rolls back stays `summarised` and replay writes the audit again. */
+/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a
+ * second handle and wait on that lock); the caller mirrors after commit with an entry it stamped
+ * itself. The rejection audit lands inside that transaction, which is safe because a batch that
+ * rolls back stays `summarised` and replay writes the audit again. */
 export function gatedWrite(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
   opts?: { actor?: string; worthCheck?: boolean },
 ): GatedWriteResult {
-  // Off for imported agent memories: a person wrote those notes, and a one-line preference fails the check.
-  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
+  // Off for imported agent memories: a person wrote those notes, and a one-line preference fails
+  // the check.
+  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) {
+    return 'skipped:not-worth-storing';
+  }
   if (detectSecret(entry).flagged) return 'skipped:secret';
   try {
     writeEntryDbOnly(db, stampOriginProject(files, entry), opts);

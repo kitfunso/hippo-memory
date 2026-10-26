@@ -1,6 +1,6 @@
-/** Hook install and removal rules for AI coding tools, on parsed settings: Claude Code gets a JSON `hooks` block in
- * settings.json with older forms migrated, Codex an appended one, Copilot a whole file; surface/hooks-install does the
- * reads and writes. */
+/** Hook install and removal rules for AI coding tools, on parsed settings: Claude Code gets a
+ * JSON `hooks` block in settings.json with older forms migrated, Codex an appended one, Copilot
+ * a whole file; surface/hooks-install does the reads and writes. */
 
 import * as path from 'node:path';
 import {
@@ -17,8 +17,19 @@ import {
   HIPPO_POST_COMPACT_MARKER,
   copilotHooksFile,
 } from './shared.js';
-import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../../base/util/agent-homes.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
+import {
+  HIPPO_DIR,
+  claudeConfigDir,
+  codexHomeDir,
+  userHome,
+  type Homes,
+} from '../../../base/util/agent-homes.js';
+import {
+  type JsonValue,
+  isJsonString,
+  isJsonObjectLiteral,
+  type JsonObject,
+} from '../../../base/util/json.js';
 import { escapeRegex } from '../../../base/util/escape.js';
 
 // Hook timeouts by cost: a local read or write, a short store lookup, a pass that may compact.
@@ -26,7 +37,8 @@ const HOOK_SHORT_TIMEOUT_SECONDS = 5;
 const HOOK_MEDIUM_TIMEOUT_SECONDS = 10;
 const HOOK_LONG_TIMEOUT_SECONDS = 30;
 
-/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
+/** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display
+ * name. */
 export interface JsonHookPaths {
   settings: string;
   logFile: string;
@@ -42,7 +54,8 @@ export interface InstallResult {
   installedUserPromptSubmit: boolean;
   installedPreCompact: boolean;
   installedCompactResume: boolean;
-  /** PostCompact -> `hippo post-compact` (saves the summary's memories, tells the user how many). */
+  /** PostCompact -> `hippo post-compact` (saves the summary's memories, tells the user how
+   * many). */
   installedPostCompact: boolean;
   /** PostToolUseFailure -> `hippo capture-error` (failed tool calls become error memories). */
   installedCaptureError: boolean;
@@ -83,8 +96,9 @@ export function jsonHookPathsOn(target: JsonHookTarget, homes: Homes): JsonHookP
 // An unterminated quote runs to the end, as in a shell, which also keeps the scan linear.
 const QUOTED_SPAN = /'[^']*(?:'|$)|"(?:[^"\\]|\\(?:[\s\S]|$))*(?:"|$)/g;
 
-/** Hippo's command only at string start or after `(`, past env assignments and an install path, with quoted text
- * ignored: `say hippo sleep`, `echo "a; hippo sleep"` and `./backup.sh && hippo sleep` stay a user's. */
+/** Hippo's command only at string start or after `(`, past env assignments and an install path,
+ * with quoted text ignored: `say hippo sleep`, `echo "a; hippo sleep"` and `./backup.sh && hippo
+ * sleep` stay a user's. */
 function isHippoCommand(command: string, marker: string): boolean {
   const unquoted = command.replace(QUOTED_SPAN, '');
   const pattern = `(?:^|\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:[^\\s(]*[/\\\\])?${escapeRegex(marker)}(?![\\w.-])`;
@@ -100,9 +114,12 @@ function handlerCommand(handler: JsonValue | undefined): string | null {
   return isJsonObjectLiteral(handler) && isJsonString(handler.command) ? handler.command : null;
 }
 
-/** `groups` minus the handlers `isOurs` picks; a group goes only once it has no handler left. Null when no handler
- * matched. */
-function withoutHandlers(groups: JsonValue[], isOurs: (command: string) => boolean): JsonValue[] | null {
+/** `groups` minus the handlers `isOurs` picks; a group goes only once it has no handler left.
+ * Null when no handler matched. */
+function withoutHandlers(
+  groups: JsonValue[],
+  isOurs: (command: string) => boolean,
+): JsonValue[] | null {
   let removed = false;
   const kept = groups.flatMap((group): JsonValue[] => {
     if (!isJsonObjectLiteral(group) || !Array.isArray(group.hooks)) return [group];
@@ -117,8 +134,13 @@ function withoutHandlers(groups: JsonValue[], isOurs: (command: string) => boole
   return removed ? kept : null;
 }
 
-/** Removes the matching handlers from one event's groups; the event key goes once no group is left. */
-function stripHandlers(hooks: JsonObject, event: string, isOurs: (command: string) => boolean): boolean {
+/** Removes the matching handlers from one event's groups; the event key goes once no group is
+ * left. */
+function stripHandlers(
+  hooks: JsonObject,
+  event: string,
+  isOurs: (command: string) => boolean,
+): boolean {
   const groups = hooks[event];
   if (!Array.isArray(groups)) return false;
   const kept = withoutHandlers(groups, isOurs);
@@ -131,18 +153,28 @@ function stripHandlers(hooks: JsonObject, event: string, isOurs: (command: strin
 /** Every command string in `groups`; a group or handler of an unexpected shape adds none. */
 function handlerCommands(groups: JsonValue[]): string[] {
   return groups.flatMap((group) =>
-    isJsonObjectLiteral(group) && Array.isArray(group.hooks) ? group.hooks.flatMap((h) => handlerCommand(h) ?? []) : [],
+    isJsonObjectLiteral(group) && Array.isArray(group.hooks)
+      ? group.hooks.flatMap((h) => handlerCommand(h) ?? [])
+      : [],
   );
 }
 
-/** The loose "already installed?" test, on purpose weaker than isHippoCommand: a launcher or env prefix still counts,
- * and a false hit only skips an append. */
+/** The loose "already installed?" test, on purpose weaker than isHippoCommand: a launcher or env
+ * prefix still counts, and a false hit only skips an append. */
 function hookArrayContains(hookArray: JsonValue | undefined, marker: string): boolean {
-  return Array.isArray(hookArray) && handlerCommands(hookArray).some((command) => command.includes(marker));
+  return (
+    Array.isArray(hookArray) &&
+    handlerCommands(hookArray).some((command) => command.includes(marker))
+  );
 }
 
 function addIncludeRecentToPinnedCommand(command: string): string {
-  if (!isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) || command.includes('--include-recent')) return command;
+  if (
+    !isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) ||
+    command.includes('--include-recent')
+  ) {
+    return command;
+  }
   return command.includes(' --format ')
     ? command.replace(' --format ', ' --include-recent 5 --format ')
     : `${command} --include-recent 5`;
@@ -187,14 +219,19 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
   };
 }
 
-/** A command hook with a Windows form: Codex runs hooks in PowerShell there, whose execution policy can block npm's
- * hippo.ps1. */
+/** A command hook with a Windows form: Codex runs hooks in PowerShell there, whose execution
+ * policy can block npm's hippo.ps1. */
 function codexCommandHook(command: string, timeout: number): JsonObject {
-  return { type: 'command', command, commandWindows: command.replace(/^hippo /, 'hippo.cmd '), timeout };
+  return {
+    type: 'command',
+    command,
+    commandWindows: command.replace(/^hippo /, 'hippo.cmd '),
+    timeout,
+  };
 }
 
-/** Assigns `settings.hooks = {}` when it is absent, then returns it if it is an object whose `events`, where present,
- * are arrays; null when appending would overwrite anything else. */
+/** Assigns `settings.hooks = {}` when it is absent, then returns it if it is an object whose
+ * `events`, where present, are arrays; null when appending would overwrite anything else. */
 function ensureHooksObject(settings: JsonObject, events: readonly string[]): JsonObject | null {
   if (settings.hooks === undefined) settings.hooks = {};
   const hooks = settings.hooks;
@@ -203,18 +240,20 @@ function ensureHooksObject(settings: JsonObject, events: readonly string[]): Jso
   return hooks;
 }
 
-/** What an install does to one settings file: the result to report, and the settings to write, null when the file
- * stays as it is. */
+/** What an install does to one settings file: the result to report, and the settings to write,
+ * null when the file stays as it is. */
 export interface HookInstallPlan {
   readonly result: InstallResult;
   readonly write: JsonValue | null;
 }
 
-/** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo only appends and never
- * edits an entry. */
+/** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo
+ * only appends and never edits an entry. */
 function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallPlan {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObjectLiteral(settings)) return { result: { ...result, invalidJson: true }, write: null };
+  if (!isJsonObjectLiteral(settings)) {
+    return { result: { ...result, invalidJson: true }, write: null };
+  }
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
   if (hooks === null) return { result: { ...result, invalidJson: true }, write: null };
   const append = (event: string, marker: string, group: JsonObject): boolean => {
@@ -236,14 +275,14 @@ function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallP
   };
 }
 
-/** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where the execution policy can
- * block npm's hippo.ps1. */
+/** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where
+ * the execution policy can block npm's hippo.ps1. */
 function copilotCommandHook(args: string, timeoutSec: number): JsonValue[] {
   return [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec }];
 }
 
-/** No command names a path, so nothing has to be quoted for bash and PowerShell; session-end --runtime copilot picks
- * its own log file. */
+/** No command names a path, so nothing has to be quoted for bash and PowerShell; session-end
+ * --runtime copilot picks its own log file. */
 function copilotHooksTable(): JsonObject {
   return {
     version: 1,
@@ -252,13 +291,20 @@ function copilotHooksTable(): JsonObject {
         'context --pinned-only --include-recent 5 --format copilot',
         HOOK_MEDIUM_TIMEOUT_SECONDS,
       ),
-      postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', HOOK_MEDIUM_TIMEOUT_SECONDS),
+      postToolUseFailure: copilotCommandHook(
+        'capture-error --runtime copilot',
+        HOOK_MEDIUM_TIMEOUT_SECONDS,
+      ),
       preCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
-      // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact skips a snapshot saved
-      // seconds before.
+      // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact
+      // skips a snapshot saved seconds before.
       PreCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
-      // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's agentStop does nothing.
-      agentStop: copilotCommandHook('session-end --runtime copilot --turn', HOOK_LONG_TIMEOUT_SECONDS),
+      // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's
+      // agentStop does nothing.
+      agentStop: copilotCommandHook(
+        'session-end --runtime copilot --turn',
+        HOOK_LONG_TIMEOUT_SECONDS,
+      ),
       sessionEnd: copilotCommandHook('session-end --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
     },
   };
@@ -270,12 +316,14 @@ export function copilotHookEvents(): string[] {
   return isJsonObjectLiteral(hooks) ? Object.keys(hooks) : [];
 }
 
-/** A settings file's text as hippo writes it, so an install can tell an unchanged file from one it must write. */
+/** A settings file's text as hippo writes it, so an install can tell an unchanged file from one
+ * it must write. */
 export function settingsText(settings: JsonValue): string {
   return JSON.stringify(settings, null, 2) + '\n';
 }
 
-/** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */
+/** Hippo owns this whole file, so install writes the full table and a second install changes no
+ * byte. */
 export function planCopilotHooks(settingsPath: string, current: string | null): HookInstallPlan {
   const result = nothingInstalled('copilot', settingsPath);
   const table = copilotHooksTable();
@@ -292,19 +340,27 @@ export function planCopilotHooks(settingsPath: string, current: string | null): 
   };
 }
 
-/** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo entries; `settings` is
- * undefined for a file that is not JSON, which stays untouched. `compactLog` is where the compaction hooks log. */
+/** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo
+ * entries; `settings` is undefined for a file that is not JSON, which stays untouched.
+ * `compactLog` is where the compaction hooks log. */
 export function planJsonHooks(
   target: 'claude-code' | 'codex',
   paths: Pick<JsonHookPaths, 'settings' | 'logFile'>,
   settings: JsonValue | undefined,
   compactLog: string,
 ): HookInstallPlan {
-  const invalid = { result: { ...nothingInstalled(target, paths.settings), invalidJson: true }, write: null };
+  const invalid = {
+    result: { ...nothingInstalled(target, paths.settings), invalidJson: true },
+    write: null,
+  };
   if (settings === undefined) return invalid;
   if (target === 'codex') return planCodexHooks(paths.settings, settings);
   if (!isJsonObjectLiteral(settings)) return invalid;
-  return planClaudeCodeHooks(paths.settings, settings, paths.logFile, compactLog);
+  return planClaudeCodeHooks(settings, {
+    settingsPath: paths.settings,
+    logFile: paths.logFile,
+    compactLog,
+  });
 }
 
 type ClaudeHooks = Record<string, JsonValue[]>;
@@ -318,15 +374,21 @@ interface LegacyHookMigration {
 function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   const migratedFromStop = stripHandlers(hooks, 'Stop', runsHippo(HIPPO_SLEEP_MARKER));
 
-  // The legacy SessionEnd forms in the file header collapse into `hippo session-end`, but only while that entry is
-  // absent.
+  // The legacy SessionEnd forms in the file header collapse into `hippo session-end`, but only
+  // while that entry is absent.
   let migratedLegacySessionEnd = false;
   let migratedSplitSessionEnd = false;
-  if (Array.isArray(hooks.SessionEnd) && !hookArrayContains(hooks.SessionEnd, HIPPO_SESSION_END_MARKER)) {
-    const kept = withoutHandlers(hooks.SessionEnd, runsHippo(HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER));
+  if (
+    Array.isArray(hooks.SessionEnd) &&
+    !hookArrayContains(hooks.SessionEnd, HIPPO_SESSION_END_MARKER)
+  ) {
+    const kept = withoutHandlers(
+      hooks.SessionEnd,
+      runsHippo(HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER),
+    );
     if (kept !== null) {
-      // Whatever form was removed reports as the split migration; the legacy flag also marks a SessionEnd that held
-      // several groups.
+      // Whatever form was removed reports as the split migration; the legacy flag also marks a
+      // SessionEnd that held several groups.
       migratedSplitSessionEnd = true;
       migratedLegacySessionEnd = hooks.SessionEnd.length > 1;
       if (kept.length === 0) delete hooks.SessionEnd;
@@ -341,15 +403,20 @@ function claudeCommandGroup(command: string, timeout: number, matcher?: string):
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
-function appendHookIfMissing(hooks: ClaudeHooks, event: string, marker: string, group: JsonObject): boolean {
+function appendHookIfMissing(
+  hooks: ClaudeHooks,
+  event: string,
+  marker: string,
+  group: JsonObject,
+): boolean {
   if (hookArrayContains(hooks[event], marker)) return false;
   if (!Array.isArray(hooks[event])) hooks[event] = [];
   hooks[event].push(group);
   return true;
 }
 
-/** Every command hippo has written to Claude Code's settings per event, the legacy forms included; uninstall removes
- * only handlers that run one. */
+/** Every command hippo has written to Claude Code's settings per event, the legacy forms
+ * included; uninstall removes only handlers that run one. */
 const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['SessionEnd', [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER]],
   ['SessionStart', [HIPPO_LAST_SLEEP_MARKER, HIPPO_COMPACT_RESUME_MARKER]],
@@ -360,9 +427,11 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
   ['Stop', [HIPPO_SLEEP_MARKER]],
 ];
 
-// Stop is only ever migrated away, so install never appends to it and a Stop that is not a list does not block the
-// install.
-const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter((event) => event !== 'Stop');
+// Stop is only ever migrated away, so install never appends to it and a Stop that is not a list
+// does not block the install.
+const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter(
+  (event) => event !== 'Stop',
+);
 
 function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   const installedSessionEnd = appendHookIfMissing(
@@ -378,8 +447,9 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
 
-  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay in context; the
-  // fresh write tail makes lessons saved earlier in the session visible on the next prompt even before they are pinned.
+  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay
+  // in context; the fresh write tail makes lessons saved earlier in the session visible on the next
+  // prompt even before they are pinned.
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   const installedUserPromptSubmit = appendHookIfMissing(
     hooks,
@@ -387,13 +457,18 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
   );
-  return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
+  return {
+    installedSessionEnd,
+    installedSessionStart,
+    migratedPinnedInjectRecent,
+    installedUserPromptSubmit,
+  };
 }
 
 function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
-  // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer for a "Memories for
-  // hippo" list and saves a snapshot. The exit-0 contract lives in the verb itself (preCompactHook,
-  // src/surface/capture/compact.ts), not in this install-time wiring.
+  // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer
+  // for a "Memories for hippo" list and saves a snapshot. The exit-0 contract lives in the verb
+  // itself (preCompactHook, src/surface/capture/compact.ts), not in this install-time wiring.
   const installedPreCompact = appendHookIfMissing(
     hooks,
     'PreCompact',
@@ -401,9 +476,9 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     claudeCommandGroup(`hippo pre-compact --log-file "${compactLog}"`, HOOK_LONG_TIMEOUT_SECONDS),
   );
 
-  // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The matcher is an
-  // optimization, not a dependency: compact-resume checks payload.source itself, and the marker check keys on the
-  // command string, so this stays idempotent.
+  // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The
+  // matcher is an optimization, not a dependency: compact-resume checks payload.source itself, and
+  // the marker check keys on the command string, so this stays idempotent.
   const installedCompactResume = appendHookIfMissing(
     hooks,
     'SessionStart',
@@ -411,46 +486,47 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     claudeCommandGroup('hippo compact-resume', HOOK_MEDIUM_TIMEOUT_SECONDS, 'compact'),
   );
 
-  // PostCompact: saves the memories the summarizer listed and prints one line, which Claude Code only shows. PreCompact
-  // stdout, by contrast, is handed to the summarizer as instructions, so pre-compact prints just the request.
+  // PostCompact: saves the memories the summarizer listed and prints one line, which Claude Code
+  // only shows. PreCompact stdout, by contrast, is handed to the summarizer as instructions, so
+  // pre-compact prints just the request.
   const installedPostCompact = appendHookIfMissing(
     hooks,
     'PostCompact',
     HIPPO_POST_COMPACT_MARKER,
-    claudeCommandGroup(`hippo post-compact --log-file "${compactLog}"`, HOOK_MEDIUM_TIMEOUT_SECONDS),
+    claudeCommandGroup(
+      `hippo post-compact --log-file "${compactLog}"`,
+      HOOK_MEDIUM_TIMEOUT_SECONDS,
+    ),
   );
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
+/** Where Claude Code's settings live and where its session and compaction hooks log. */
+interface ClaudeHookPaths {
+  readonly settingsPath: string;
+  readonly logFile: string;
+  readonly compactLog: string;
+}
+
 function planClaudeCodeHooks(
-  settingsPath: string,
   settings: JsonObject,
-  logFile: string,
-  compactLog: string,
+  { settingsPath, logFile, compactLog }: ClaudeHookPaths,
 ): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
-  if (merge === null) {
-    return { result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true }, write: null };
-  }
+  if (merge === null) return invalidClaudeSettings(settingsPath);
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
 
-  const { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit } =
-    appendSessionHooks(hooks, logFile);
-  const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(
-    hooks,
-    compactLog,
-  );
-
-  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error` drops routine failures
-  // (interrupts, declined permissions, empty searches) and repeats. Same hook the plugin ships.
-  const installedCaptureError = appendHookIfMissing(
-    hooks,
-    'PostToolUseFailure',
-    HIPPO_CAPTURE_ERROR_MARKER,
-    claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
-  );
+  const {
+    installedSessionEnd,
+    installedSessionStart,
+    migratedPinnedInjectRecent,
+    installedUserPromptSubmit,
+  } = appendSessionHooks(hooks, logFile);
+  const { installedPreCompact, installedCompactResume, installedPostCompact } =
+    appendCompactionHooks(hooks, compactLog);
+  const installedCaptureError = appendCaptureErrorHook(hooks);
 
   const result: InstallResult = {
     target: 'claude-code',
@@ -469,13 +545,33 @@ function planClaudeCodeHooks(
   return { result, write: Object.values(result).some((v) => v === true) ? settings : null };
 }
 
+function invalidClaudeSettings(settingsPath: string): HookInstallPlan {
+  return {
+    result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true },
+    write: null,
+  };
+}
+
+function appendCaptureErrorHook(hooks: ClaudeHooks): boolean {
+  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error`
+  // drops routine failures (interrupts, declined permissions, empty searches) and repeats. Same
+  // hook the plugin ships.
+  return appendHookIfMissing(
+    hooks,
+    'PostToolUseFailure',
+    HIPPO_CAPTURE_ERROR_MARKER,
+    claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
+  );
+}
+
 /** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */
 const CODEX_HOOK_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ['UserPromptSubmit', HIPPO_PINNED_INJECT_COMMAND],
   ['SessionStart', HIPPO_COMPACT_RESUME_MARKER],
 ];
 
-/** A group loses only hippo's handlers and goes only once empty, so a user's hook beside or like hippo's stays. */
+/** A group loses only hippo's handlers and goes only once empty, so a user's hook beside or like
+ * hippo's stays. */
 function uninstallCodexHooks(hooks: JsonObject): boolean {
   let changed = false;
   for (const [event, command] of CODEX_HOOK_COMMANDS) {
@@ -484,8 +580,8 @@ function uninstallCodexHooks(hooks: JsonObject): boolean {
   return changed;
 }
 
-/** The Claude Code handlers uninstall kept that still mention a hippo command (`nice hippo sleep`, `pnpm exec hippo
- * ...`), so the user can be told to remove them by hand. */
+/** The Claude Code handlers uninstall kept that still mention a hippo command (`nice hippo
+ * sleep`, `pnpm exec hippo ...`), so the user can be told to remove them by hand. */
 function keptHippoHandlers(hooks: JsonObject): string[] {
   return CLAUDE_HOOK_MARKERS.flatMap(([event, markers]) => {
     const groups = hooks[event];
@@ -495,16 +591,21 @@ function keptHippoHandlers(hooks: JsonObject): string[] {
   });
 }
 
-/** What uninstall does to parsed settings, edited in place: the settings to write (null when nothing changed) and, for
- * Claude Code, the kept handlers that still name a hippo command. */
+/** What uninstall does to parsed settings, edited in place: the settings to write (null when
+ * nothing changed) and, for Claude Code, the kept handlers that still name a hippo command. */
 export interface HookRemovalPlan {
   readonly write: JsonObject | null;
   readonly kept: readonly string[];
 }
 
 /** Removes hippo's own hook handlers and keeps every other handler. */
-export function planHookRemoval(target: 'claude-code' | 'codex', settings: JsonValue): HookRemovalPlan {
-  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return { write: null, kept: [] };
+export function planHookRemoval(
+  target: 'claude-code' | 'codex',
+  settings: JsonValue,
+): HookRemovalPlan {
+  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) {
+    return { write: null, kept: [] };
+  }
   const hooks = settings.hooks;
   const changed = target === 'codex' ? uninstallCodexHooks(hooks) : uninstallClaudeCodeHooks(hooks);
   const kept = target === 'claude-code' ? keptHippoHandlers(hooks) : [];
@@ -513,10 +614,13 @@ export function planHookRemoval(target: 'claude-code' | 'codex', settings: JsonV
   return { write: settings, kept };
 }
 
-/** False for settings uninstall cannot edit: not a JSON object (undefined when the text did not parse), or a `hooks`
- * that is not one. */
+/** False for settings uninstall cannot edit: not a JSON object (undefined when the text did not
+ * parse), or a `hooks` that is not one. */
 export function canEditHooks(settings: JsonValue | undefined): boolean {
-  return isJsonObjectLiteral(settings) && (settings.hooks === undefined || isJsonObjectLiteral(settings.hooks));
+  return (
+    isJsonObjectLiteral(settings) &&
+    (settings.hooks === undefined || isJsonObjectLiteral(settings.hooks))
+  );
 }
 
 function uninstallClaudeCodeHooks(hooks: JsonObject): boolean {

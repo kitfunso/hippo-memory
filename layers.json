@@ -34,14 +34,12 @@
   },
   "dbReach": {
     "layer": "db",
-    "through": "store",
-    "allowed": {}
+    "through": "store"
   },
   "adapter": {
     "folder": "store/sqlite",
     "root": "surface/open-store.ts",
     "doors": ["store/sqlite/index.ts"],
-    "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" },
-    "unnamedIn": ["domain", "api"]
+    "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" }
   }
 }

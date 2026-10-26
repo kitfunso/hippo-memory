@@ -1,16 +1,26 @@
-// The SessionStart(compact) hook: re-prints the task snapshot and session trail that compaction dropped.
+// The SessionStart(compact) hook: re-prints the task snapshot and session trail that compaction
+// dropped.
 import { estimateTokens } from '../../../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { isInitialized } from '../../../host/project-identity.js';
 import { compactResumeBlock } from '../../../api/session-end.js';
 import { bookLedgerTurn } from '../../../api/ledger-db.js';
-import { flushDeliveryRecorder, startDeliveryRecorder, takeDelivery } from '../../../api/prompt-hook.js';
+import {
+  flushDeliveryRecorder,
+  startDeliveryRecorder,
+  takeDelivery,
+} from '../../../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../../../api/delivery-recorder.js';
 import { readHookStdin } from '../stdin.js';
 import { readCompactResumePayload } from '../compact-resume-payload.js';
 import { cliApiContext, cliHookRequest, cliLedgerReach } from '../api-context.js';
 import type { CommandContext } from '../flag-values.js';
-import { hookStoreRoot, hostSessionId, inPilotHoldout, resetHookInjection } from '../hook-runtime.js';
+import {
+  hookStoreRoot,
+  hostSessionId,
+  inPilotHoldout,
+  resetHookInjection,
+} from '../hook-runtime.js';
 
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
@@ -20,8 +30,9 @@ export async function handleCompactResume({ hippoRoot, tenantId }: CommandContex
   });
 }
 
-/** Prints the snapshot and trail, but no pinned memories (UserPromptSubmit re-injects them). A malformed payload or a
- * store read failure degrades to empty stdout, never a failed SessionStart. */
+/** Prints the snapshot and trail, but no pinned memories (UserPromptSubmit re-injects them). A
+ * malformed payload or a store read failure degrades to empty stdout, never a failed
+ * SessionStart. */
 async function resumeAfterCompact(
   hippoRoot: string,
   tenantId: string,
@@ -30,8 +41,9 @@ async function resumeAfterCompact(
 ): Promise<void> {
   let rec: DeliveryRecorder | null = null;
   try {
-    // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would silently
-    // create a store in a project that never ran `hippo init`, and this hook fires globally.
+    // Gate on the non-exiting isInitialized check first: the store reads below call initStore,
+    // which would silently create a store in a project that never ran `hippo init`, and this hook
+    // fires globally.
     if (!isInitialized(hippoRoot)) return;
 
     const payloadState = readCompactResumePayload(stdinText, stdinTimedOut);
@@ -59,8 +71,8 @@ async function resumeAfterCompact(
 
     if (!suppressOutput) await restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
   } catch (err) {
-    // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never
-    // sees.
+    // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr,
+    // which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`, errorFields(err));
   }
   // A no-op when the token ledger's handle already wrote the row.

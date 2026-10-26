@@ -1,5 +1,6 @@
-// The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store folder, and
-// benchmarks a handle they open themselves. The kit is synchronous and the port is not, so each seam runs on a handle.
+// The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store
+// folder, and benchmarks a handle they open themselves. The kit is synchronous and the port is not,
+// so each seam runs on a handle.
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -35,27 +36,45 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
   return loadAllEntriesIn(storeFilesOf(hippoRoot));
 }
 
-/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries does. */
+/** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries
+ * does. */
 export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
   return readEntryIn(storeFilesOf(hippoRoot), id);
 }
 
-// The forms on `files`: an eval that builds them with a session runs its calls on one handle per store.
+// The forms on `files`: an eval that builds them with a session runs its calls on one handle per
+// store.
 const openOn =
   (files: StoreFiles) =>
   (hippoRoot: string): DatabaseSyncLike =>
     openStore(hippoRoot, files.opens);
 
-export function writeEntryIn(files: StoreFiles, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(files.hippoRoot, (db) => entryWrites.writeEntryOn(db, files, entry, opts), openOn(files));
+export function writeEntryIn(
+  files: StoreFiles,
+  entry: MemoryEntry,
+  opts?: WriteEntryOptions,
+): void {
+  onHandle(
+    files.hippoRoot,
+    (db) => entryWrites.writeEntryOn(db, files, entry, opts),
+    openOn(files),
+  );
 }
 
 export function loadAllEntriesIn(files: StoreFiles): MemoryEntry[] {
-  return onHandle(files.hippoRoot, (db) => [...entryReads.iterateEveryTenantEntries(db)], openOn(files));
+  return onHandle(
+    files.hippoRoot,
+    (db) => [...entryReads.iterateEveryTenantEntries(db)],
+    openOn(files),
+  );
 }
 
 export function readEntryIn(files: StoreFiles, id: string): MemoryEntry | null {
-  return onHandle(files.hippoRoot, (db) => entryReads.readEntry(db, id, ALL_TENANTS), openOn(files));
+  return onHandle(
+    files.hippoRoot,
+    (db) => entryReads.readEntry(db, id, ALL_TENANTS),
+    openOn(files),
+  );
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. */
@@ -63,7 +82,8 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
   return onHandle(hippoRoot, (db) => vectorIndex.listAllVectors(db));
 }
 
-/** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor benchmark through this. */
+/** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor
+ * benchmark through this. */
 export function listRecallEntriesInFolder(
   hippoRoot: string,
   query: string,
@@ -73,8 +93,16 @@ export function listRecallEntriesInFolder(
 }
 
 /** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
-export function countAmbientInFolder(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter), openStore);
+export function countAmbientInFolder(
+  hippoRoot: string,
+  tenantId: string,
+  filter: AmbientStoreFilter,
+): AmbientTallies {
+  return onHandle(
+    hippoRoot,
+    (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter),
+    openStore,
+  );
 }
 
 /** `batchWriteAndDelete` on a handle of its own; an empty batch opens no store. */
@@ -84,10 +112,18 @@ export function batchWriteAndDeleteInFolder(
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
-  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) return [];
+  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) {
+    return [];
+  }
   return onHandle(
     hippoRoot,
-    (db) => batches.batchWriteAndDelete(db, storeFilesOf(hippoRoot), toWrite, toDeleteIds, opts),
+    (db) =>
+      batches.batchWriteAndDelete(db, {
+        files: storeFilesOf(hippoRoot),
+        toWrite,
+        toDeleteIds,
+        opts,
+      }),
     openStore,
   );
 }

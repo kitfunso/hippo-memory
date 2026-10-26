@@ -33,8 +33,8 @@ import { META_KEY, getMetaNumber } from '../../db/meta.js';
 
 const SCORE_DECIMALS = 3;
 
-// Mirrors are derived and rebuildable from the store, so they skip the fsyncs (the cost on Windows) and keep the
-// temp-and-rename atomicity.
+// Mirrors are derived and rebuildable from the store, so they skip the fsyncs (the cost on Windows)
+// and keep the temp-and-rename atomicity.
 function writeMirror(file: string, text: string): void {
   writeFileAtomic(file, text, { durable: false });
 }
@@ -43,8 +43,8 @@ export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
 
-/** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing
- * later. */
+/** Makes the mirror folders on a store's first open in this process; a writer makes its own
+ * folder if one goes missing later. */
 export function ensureMirrorDirectories(at: StoreAt): void {
   const { hippoRoot } = at;
   oncePerStore(at, 'mirror-folders', () => {
@@ -62,11 +62,16 @@ function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
 }
 
 function recentSessionMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
+  const file =
+    tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 
-export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snapshot: TaskSnapshot): void {
+export function writeActiveTaskMirror(
+  hippoRoot: string,
+  tenantId: string,
+  snapshot: TaskSnapshot,
+): void {
   const filePath = activeTaskMirrorPath(hippoRoot, tenantId);
   const fm = dumpFrontmatter({
     id: snapshot.id,
@@ -108,7 +113,11 @@ export function removeActiveTaskMirror(hippoRoot: string, tenantId: string): voi
   }
 }
 
-export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, events: SessionEvent[]): void {
+export function writeRecentSessionMirror(
+  hippoRoot: string,
+  tenantId: string,
+  events: SessionEvent[],
+): void {
   const filePath = recentSessionMirrorPath(hippoRoot, tenantId);
   if (events.length === 0) {
     if (fs.existsSync(filePath)) {
@@ -170,7 +179,9 @@ function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflic
   const keep = new Set(open.map(conflictMirrorName));
   for (const conflict of open) writeConflictMirror(conflictDir, conflict);
   for (const existing of fs.readdirSync(conflictDir)) {
-    if (existing !== '.gitkeep' && !keep.has(existing)) fs.unlinkSync(path.join(conflictDir, existing));
+    if (existing !== '.gitkeep' && !keep.has(existing)) {
+      fs.unlinkSync(path.join(conflictDir, existing));
+    }
   }
 }
 
@@ -192,8 +203,8 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
-// Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror is the resurrection
-// channel bootstrapLegacyStore guards against.
+// Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror is
+// the resurrection channel bootstrapLegacyStore guards against.
 const MIRROR_LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
@@ -205,15 +216,15 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/** A folder the batch writes into is listed once when this many of its entries sit in other layers and would each probe
- * it: a layer folder can hold every mirror in the store. */
+/** A folder the batch writes into is listed once when this many of its entries sit in other
+ * layers and would each probe it: a layer folder can hold every mirror in the store. */
 const LISTING_MIN_BATCH = 64;
 
 /** The names in each listed layer folder; a layer with no listing is probed file by file. */
 type LayerListing = ReadonlyMap<Layer, ReadonlySet<string>>;
 
-/** writeMarkdownMirror for many entries; returns the ids whose file it wrote. A file that fails is warned about and the
- * rest still land. */
+/** writeMarkdownMirror for many entries; returns the ids whose file it wrote. A file that fails
+ * is warned about and the rest still land. */
 export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<MemoryEntry>): string[] {
   const written: string[] = [];
   mirrorBestEffort('markdown mirrors', () => {
@@ -235,14 +246,16 @@ export function writeMarkdownMirrors(hippoRoot: string, entries: Iterable<Memory
   return written;
 }
 
-/** A stream of every row lists all four folders; a batch lists only folders it writes into that enough of its entries
- * would probe for a copy left in another layer. */
+/** A stream of every row lists all four folders; a batch lists only folders it writes into that
+ * enough of its entries would probe for a copy left in another layer. */
 function listedLayers(hippoRoot: string, entries: Iterable<MemoryEntry>): LayerListing {
   let layers: readonly Layer[] = MIRROR_LAYERS;
   if (Array.isArray(entries)) {
     const inLayer = new Map<Layer, number>();
     for (const entry of entries) inLayer.set(entry.layer, (inLayer.get(entry.layer) ?? 0) + 1);
-    layers = [...inLayer].filter(([, n]) => entries.length - n >= LISTING_MIN_BATCH).map(([layer]) => layer);
+    layers = [...inLayer]
+      .filter(([, n]) => entries.length - n >= LISTING_MIN_BATCH)
+      .map(([layer]) => layer);
   }
   return new Map(
     layers.map((layer) => {
@@ -252,9 +265,15 @@ function listedLayers(hippoRoot: string, entries: Iterable<MemoryEntry>): LayerL
   );
 }
 
-/** writeMarkdownMirror against `listed`: a copy in another layer's folder goes, found in its listing or by a probe, and
- * the entry's own file is replaced in place, so no crash leaves it missing; `made` holds the folders already made. */
-function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerListing, made: Set<string>): void {
+/** writeMarkdownMirror against `listed`: a copy in another layer's folder goes, found in its
+ * listing or by a probe, and the entry's own file is replaced in place, so no crash leaves it
+ * missing; `made` holds the folders already made. */
+function writeListedMirror(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  listed: LayerListing,
+  made: Set<string>,
+): void {
   const name = `${entry.id}.md`;
   for (const layer of MIRROR_LAYERS) {
     if (layer === entry.layer) continue;
@@ -267,18 +286,28 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
   writeMirror(path.join(dir, name), serializeEntry(entry));
 }
 
-/** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
- * can name the stuck file. */
+/** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with
+ * no reaper to retry it can name the stuck file. */
 function listEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter((file) =>
-    fs.existsSync(file),
+  return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter(
+    (file) => fs.existsSync(file),
   );
 }
 
-/** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans
- * `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the
- * mirror ended up purged. */
-export function purgeMirrorBestEffort(hippoRoot: string, id: string, isRaw: boolean, logPrefix: string): boolean {
+/** The memory whose mirror goes, whether it is raw, and the caller's log prefix. */
+interface PurgeMirrorOptions {
+  readonly id: string;
+  readonly isRaw: boolean;
+  readonly logPrefix: string;
+}
+
+/** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the
+ * reaper only scans `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to
+ * delete by hand. Returns true if the mirror ended up purged. */
+export function purgeMirrorBestEffort(
+  hippoRoot: string,
+  { id, isRaw, logPrefix }: PurgeMirrorOptions,
+): boolean {
   try {
     removeEntryMirrors(hippoRoot, id);
     return true;
@@ -329,7 +358,8 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 
   const entries: Record<string, IndexEntry> = {};
   for (const row of rows) {
-    // SAFETY: layer is only ever written from the Layer enum by this module's own INSERT/UPDATE paths.
+    // SAFETY: layer is only ever written from the Layer enum by this module's own INSERT/UPDATE
+    // paths.
     const layer = row.layer as Layer;
     entries[row.id] = {
       id: row.id,
@@ -347,9 +377,11 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 }
 
 /** The last recall's ids and its trace, the two meta keys saveIndex writes together. */
-export function readLastRecall(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a
-  // mismatched pair.
+export function readLastRecall(
+  db: DatabaseSyncLike,
+): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent
+  // saveIndex and return a mismatched pair.
   const lockstepRows = cachedStatement(
     db,
     `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
@@ -388,7 +420,8 @@ export function buildStatsFromDb(db: DatabaseSyncLike): LegacyStats {
   };
 }
 
-/** Write the `index.json` mirror file for an already-derived index. Exported for the longmemeval benchmark. */
+/** Write the `index.json` mirror file for an already-derived index. Exported for the longmemeval
+ * benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   mirrorBestEffort('index.json', () =>
     overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)),
@@ -401,22 +434,28 @@ function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2));
 }
 
-/** Mirror `stats` to stats.json at once, or, under a store runtime, hold it and write the latest within a second of
- * the last write; the database counters are always current. */
+/** Mirror `stats` to stats.json at once, or, under a store runtime, hold it and write the latest
+ * within a second of the last write; the database counters are always current. */
 export function writeStatsMirror({ hippoRoot, runtime }: StoreAt, stats: LegacyStats): void {
   const write = (): void => putStatsMirror(hippoRoot, stats);
   if (runtime) runtime.held.writeOrHold(hippoRoot, 'stats.json', write);
   else mirrorBestEffort('stats.json', write);
 }
 
-/** Runs `write` once the current job is done, off the writer's path, as the root's next `what` mirror write; a later
- * call before it runs replaces it. With no store runtime it runs on the next turn of the event loop. */
-export function deferMirrorWrite({ hippoRoot, runtime }: StoreAt, what: string, write: () => void): void {
+/** Runs `write` once the current job is done, off the writer's path, as the root's next `what`
+ * mirror write; a later call before it runs replaces it. With no store runtime it runs on the
+ * next turn of the event loop. */
+export function deferMirrorWrite(
+  { hippoRoot, runtime }: StoreAt,
+  what: string,
+  write: () => void,
+): void {
   if (runtime) runtime.held.hold(hippoRoot, what, write);
   else setImmediate(() => mirrorBestEffort(what, write));
 }
 
-// A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall keeps its blocks.
+// A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall
+// keeps its blocks.
 function overwriteInPlace(file: string, text: string): void {
   const bytes = Buffer.from(text, 'utf8');
   const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT, 0o666);
@@ -428,18 +467,21 @@ function overwriteInPlace(file: string, text: string): void {
   }
 }
 
-/** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of failing a committed
- * change. */
+/** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of
+ * failing a committed change. */
 export function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`, errorFields(err));
+    log.warn(
+      `${what} not refreshed (${errorMessage(err)}); the database write succeeded`,
+      errorFields(err),
+    );
   }
 }
 
-/** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
- * and rowid keeps each page a seek (no index covers `created, id`). */
+/** Pages through every row by rowid: each file is independent of the others, so row order does
+ * not reach the output, and rowid keeps each page a seek (no index covers `created, id`). */
 function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
   const page = cachedStatement(
     db,
@@ -461,12 +503,14 @@ export function syncMirrorFiles(at: StoreAt, db: DatabaseSyncLike): void {
     db,
     `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE status = 'open' ORDER BY updated_at DESC, id DESC`,
   ).all() as MemoryConflictRow[];
-  mirrorBestEffort('conflict mirrors', () => writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)));
+  mirrorBestEffort('conflict mirrors', () =>
+    writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)),
+  );
   writeStatsMirror(at, buildStatsFromDb(db));
 }
 
-/** syncMirrorFiles for a pass that changed only `changed` and the conflicts it stamped `conflictsAt`: every other
- * mirror is already current. */
+/** syncMirrorFiles for a pass that changed only `changed` and the conflicts it stamped
+ * `conflictsAt`: every other mirror is already current. */
 export function syncChangedMirrors(
   at: StoreAt,
   db: DatabaseSyncLike,

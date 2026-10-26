@@ -1,4 +1,5 @@
-// hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open until it settles.
+// hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open
+// until it settles.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { graphServesStore } from '../../db/vector-graph-index.js';
 import { GraphFileIndex } from '../../db/vector-graph-reader.js';
@@ -17,7 +18,10 @@ import { readStoredVectorViews, storedIndexState } from './vector-index.js';
 type RowReads = Omit<VectorReads, 'nearestEntries'>;
 
 type PartReads = {
-  readonly [P in StoredPart]: (db: DatabaseSyncLike, ids: readonly string[]) => Map<string, StoredParts[P]>;
+  readonly [P in StoredPart]: (
+    db: DatabaseSyncLike,
+    ids: readonly string[],
+  ) => Map<string, StoredParts[P]>;
 };
 
 const storedBodies: PartReads = {
@@ -30,8 +34,8 @@ const rowReadsBodies: Bodies<RowReads> = {
   stored: (db, part, ids) => storedBodies[part](db, ids),
 };
 
-/** `index` is the store worker's vector graph on the one reader thread that holds it; every other reader searches the
- * graph file saved beside hippo.db. */
+/** `index` is the store worker's vector graph on the one reader thread that holds it; every
+ * other reader searches the graph file saved beside hippo.db. */
 export function sqliteVectorReads(
   { on, onAsync, files }: Handles,
   index: VectorIndex = new GraphFileIndex(files.hippoRoot),
@@ -40,14 +44,19 @@ export function sqliteVectorReads(
   return {
     ...reads,
     // An empty list needs no handle.
-    stored: (part, ids) => (ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids)),
-    // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
+    stored: (part, ids) =>
+      ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids),
+    // The scan reads a page per event-loop turn, so the handle stays open until the promise
+    // settles.
     nearestEntries: (queryVector, spec) =>
-      onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),
+      onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(
+        rethrowInPortTerms,
+      ),
   };
 }
 
-/** Where a served store's graph may answer a nearest-row read: hippo.db under `hippoRoot`, opened as `opts` say. */
+/** Where a served store's graph may answer a nearest-row read: hippo.db under `hippoRoot`,
+ * opened as `opts` say. */
 export interface NearestAsking {
   readonly hippoRoot: string;
   readonly ask: NearestIdsAsk;
@@ -55,8 +64,9 @@ export interface NearestAsking {
   readonly opts?: SqliteStoreOptions;
 }
 
-/** `store` with its nearest-row read asking `ask` first while the store holds enough vectors, and no more than
- * `maxVectors`, for a served store to answer from its graph; a smaller store scans as fast as it hops. */
+/** `store` with its nearest-row read asking `ask` first while the store holds enough vectors,
+ * and no more than `maxVectors`, for a served store to answer from its graph; a smaller store
+ * scans as fast as it hops. */
 export function askingNearestFirst<S extends { readonly vectors: VectorReads }>(
   store: S,
   { hippoRoot, ask, maxVectors, opts }: NearestAsking,
@@ -64,8 +74,12 @@ export function askingNearestFirst<S extends { readonly vectors: VectorReads }>(
   const { on } = handlesOf(hippoRoot, opts);
   const local = store.vectors;
   const nearestEntries: VectorReads['nearestEntries'] = async (queryVector, spec) => {
-    const ids = on((db) => graphServesStore(db, maxVectors)) ? await ask(queryVector, spec) : undefined;
-    return ids === undefined ? local.nearestEntries(queryVector, spec) : on((db) => entriesInOrder(db, ids));
+    const ids = on((db) => graphServesStore(db, maxVectors))
+      ? await ask(queryVector, spec)
+      : undefined;
+    return ids === undefined
+      ? local.nearestEntries(queryVector, spec)
+      : on((db) => entriesInOrder(db, ids));
   };
   return { ...store, vectors: { ...local, nearestEntries } };
 }

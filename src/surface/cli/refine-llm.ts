@@ -1,7 +1,7 @@
 /**
- * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in;
- * idempotent via the `llm-refined` tag.
- * Calls the model through the Llm port; on any failure the original memory is untouched. */
+ * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so
+ * API-key users opt in; idempotent via the `llm-refined` tag. Calls the model through the Llm
+ * port; on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../../base/memory/entry.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
@@ -27,8 +27,8 @@ export interface RefineOptions {
   /** Ignore the llm-refined tag and re-refine everything eligible. */
   all?: boolean;
   /**
-   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are
-   * skipped.
+   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return
+   * null and are skipped.
    */
   tenantId?: string;
 }
@@ -42,8 +42,8 @@ export interface RefineResult {
 }
 
 /**
- * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API
- * call failed.
+ * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns
+ * null when the API call failed.
  */
 async function refineSemanticMemory(
   merged: string,
@@ -52,7 +52,9 @@ async function refineSemanticMemory(
 ): Promise<string | null> {
   const sourceBlock = sources
     .slice(0, MAX_REFINE_SOURCES)
-    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
+    .map(
+      (s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`,
+    )
     .join('\n\n');
 
   const prompt =
@@ -108,8 +110,8 @@ function isConsolidated(entry: MemoryEntry): boolean {
 }
 
 /**
- * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it
- * (unless `all`).
+ * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so
+ * reruns skip it (unless `all`).
  */
 export async function refineStore(hippoRoot: string, opts: RefineOptions): Promise<RefineResult> {
   const result: RefineResult = {
@@ -139,24 +141,28 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
     if (opts.limit !== undefined && processed >= opts.limit) break;
     processed++;
 
-    await refineOneEntry(ctx, reach, entry, opts, result);
+    await refineOneEntry(ctx, { reach, entry, opts, result });
   }
 
   return result;
 }
 
+interface RefineOneEntryOptions {
+  readonly reach: TenantReach;
+  readonly entry: MemoryEntry;
+  readonly opts: RefineOptions;
+  readonly result: RefineResult;
+}
+
 async function refineOneEntry(
   ctx: CliContext,
-  reach: TenantReach,
-  entry: MemoryEntry,
-  opts: RefineOptions,
-  result: RefineResult,
+  { reach, entry, opts, result }: RefineOneEntryOptions,
 ): Promise<void> {
-  // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we still refine using
-  // just the merged content.
+  // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we
+  // still refine using just the merged content.
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
-  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still works from the merged
-  // content alone.
+  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still
+  // works from the merged content alone.
   const found = new Map((await memoryListByIds(ctx, parentIds, reach)).map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 

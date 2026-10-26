@@ -1,6 +1,7 @@
-// What one process keeps between its store connections: the open steps each store has run, the request sessions still
-// open, idle read handles, and file writes held back. A composition root makes one, hands it to the stores it builds,
-// and disposes it from its own exit hook; an open given no runtime starts fresh.
+// What one process keeps between its store connections: the open steps each store has run, the
+// request sessions still open, idle read handles, and file writes held back. A composition root
+// makes one, hands it to the stores it builds, and disposes it from its own exit hook; an open
+// given no runtime starts fresh.
 import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -18,7 +19,8 @@ interface OpenSession {
   close(): void;
 }
 
-// Per pool key: a server answers several requests at once, and each closing session hands its handle back.
+// Per pool key: a server answers several requests at once, and each closing session hands its
+// handle back.
 const IDLE_PER_KEY = 4;
 
 /** The resolved path of a store's hippo.db, the key every per-store record here uses. */
@@ -59,7 +61,8 @@ export class StoreRuntime {
     this.#open.delete(session);
   }
 
-  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections' commits. */
+  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections'
+   * commits. */
   checkpointsInBackground(key: string): boolean {
     return this.#background.has(key);
   }
@@ -67,7 +70,8 @@ export class StoreRuntime {
   markBackground(key: string, on: boolean): void {
     if (on) this.#background.add(key);
     else this.#background.delete(key);
-    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close for fresh ones.
+    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close
+    // for fresh ones.
     for (const [poolKey, idle] of this.#idle) {
       if (!poolKey.startsWith(`${key}\0`)) continue;
       for (const db of idle) closeQuietly(db);
@@ -89,11 +93,14 @@ export class StoreRuntime {
   /** An open idle handle for `poolKey`, or undefined. */
   takeIdle(poolKey: string): DatabaseSyncLike | undefined {
     const idle = this.#idle.get(poolKey);
-    for (let db = idle?.pop(); db !== undefined; db = idle?.pop()) if (db.isOpen !== false) return db;
+    for (let db = idle?.pop(); db !== undefined; db = idle?.pop()) {
+      if (db.isOpen !== false) return db;
+    }
     return undefined;
   }
 
-  /** Keeps `db` for the next session on `poolKey`; false when the pool is full and the caller closes it. */
+  /** Keeps `db` for the next session on `poolKey`; false when the pool is full and the caller
+   * closes it. */
   giveIdle(poolKey: string, db: DatabaseSyncLike): boolean {
     const idle = this.#idle.get(poolKey) ?? [];
     if (idle.length >= IDLE_PER_KEY) return false;
@@ -108,8 +115,8 @@ export class StoreRuntime {
     this.#idle.clear();
   }
 
-  /** Runs the held writes, then closes the open sessions and the idle handles; each step runs if the one before
-   * throws. */
+  /** Runs the held writes, then closes the open sessions and the idle handles; each step runs if
+   * the one before throws. */
   dispose(): void {
     try {
       this.held.flush();
@@ -128,7 +135,10 @@ function closeQuietly(db: DatabaseSyncLike): void {
   try {
     if (db.isOpen !== false) db.close();
   } catch (err) {
-    log.error(`store runtime: an idle handle did not close: ${errorMessage(err)}`, errorFields(err));
+    log.error(
+      `store runtime: an idle handle did not close: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
@@ -136,6 +146,9 @@ function closeSessionQuietly(session: OpenSession): void {
   try {
     session.close();
   } catch (err) {
-    log.error(`store runtime: a request session did not close: ${errorMessage(err)}`, errorFields(err));
+    log.error(
+      `store runtime: a request session did not close: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }

@@ -24,9 +24,11 @@ import type { JsonObject } from '../../base/util/json.js';
 import { plural } from '../../base/util/format.js';
 import { handleStamp } from './handle-clock.js';
 
-// What the store says when a prediction is saved, closed or summed: audit metadata, refusal texts, baserate.
+// What the store says when a prediction is saved, closed or summed: audit metadata, refusal texts,
+// baserate.
 
-const present = (value: number | null | undefined): boolean => value !== undefined && value !== null;
+const present = (value: number | null | undefined): boolean =>
+  value !== undefined && value !== null;
 
 /** The predict_create row's metadata: ids and flags, never the claim text. */
 const predictionCreateMetadata = (
@@ -56,7 +58,8 @@ const predictionCloseMetadata = (
   has_actual: present(close.actualValue),
 });
 
-/** The refusal for a close that matched no open row: `closureState` is the row's state, or null when none exists. */
+/** The refusal for a close that matched no open row: `closureState` is the row's state, or null
+ * when none exists. */
 function closeMissError(tenantId: string, id: number, closureState: string | null): Error {
   if (closureState === null) {
     return new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
@@ -74,13 +77,22 @@ interface ClosedEstimate {
 }
 
 function emptyBaserate(classTag: string): PredictionBaserate {
-  const nulls = { meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null };
+  const nulls = {
+    meanEstimate: null,
+    meanActual: null,
+    meanRatio: null,
+    p50Ratio: null,
+    mae: null,
+  };
   return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
 }
 
-/** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
- * disagree on the arithmetic. */
-function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[]): PredictionBaserate {
+/** A class's stats over its closed rows, summed in the order given. Every store computes them
+ * here, so no two can disagree on the arithmetic. */
+function predictionBaserateOf(
+  classTag: string,
+  rows: readonly ClosedEstimate[],
+): PredictionBaserate {
   const nClosed = rows.length;
   if (nClosed === 0) return emptyBaserate(classTag);
   const ratios = rows.filter((r) => r.estimate > 0).map((r) => r.actual / r.estimate);
@@ -88,7 +100,9 @@ function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[])
   const mae = rows.reduce((s, r) => s + Math.abs(r.actual - r.estimate), 0) / nClosed;
   const meanRatio = nRatioEligible > 0 ? ratios.reduce((s, x) => s + x, 0) / nRatioEligible : null;
   const ratioPart =
-    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
+    meanRatio !== null
+      ? `averaged ${meanRatio.toFixed(2)}x actual`
+      : 'no ratio-eligible rows (all estimates were 0)';
   return {
     classTag,
     nClosed,
@@ -102,10 +116,11 @@ function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[])
   };
 }
 
-/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
- * the memory row only mirrors the claim. Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers
- * enforce the prediction's tenant matches the referenced memory's. `savePrediction` writes memory and prediction inside
- * `writeEntry`'s SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
+/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table
+ * is the source of truth; the memory row only mirrors the claim. Every helper requires tenantId;
+ * `trg_predictions_tenant_match_*` triggers enforce the prediction's tenant matches the
+ * referenced memory's. `savePrediction` writes memory and prediction inside `writeEntry`'s
+ * SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
 
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
@@ -120,7 +135,8 @@ interface ListPredictionsOptions {
   after?: KeysetPosition;
 }
 
-// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects SELECT_COLUMNS; scripts/check-row-casts.mjs proves
+// it.
 interface PredictionRow {
   id: number;
   memory_id: string | null;
@@ -148,8 +164,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
     estimateUnit: row.estimate_unit,
     targetDate: row.target_date,
     actualValue: row.actual_value,
-    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this module is the only writer and always
-    // inserts one of those literals.
+    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this module is the only
+    // writer and always inserts one of those literals.
     closureState: row.closure_state as ClosureState,
     closedAt: row.closed_at,
     closureNote: row.closure_note,
@@ -157,8 +173,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
   };
 }
 
-/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and
- * its predictions row shares that write scope, so neither lands alone. */
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
+ * check included, and its predictions row shares that write scope, so neither lands alone. */
 export function writePrediction(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -169,12 +185,17 @@ export function writePrediction(
   const now = handleStamp(db);
   const { actor } = save;
 
-  // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory write share a
-  // SAVEPOINT.
+  // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory
+  // write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
   writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
-    savedRow = insertPredictionRow(writeDb, memoryId, tenantId, save, { now, actor });
+    savedRow = insertPredictionRow(writeDb, {
+      memoryId,
+      tenantId,
+      opts: save,
+      stamp: { now, actor },
+    });
   });
 
   if (!savedRow) {
@@ -190,12 +211,16 @@ interface PredictionStamp {
   readonly actor: string;
 }
 
+interface InsertPredictionRowOptions {
+  readonly memoryId: string;
+  readonly tenantId: string;
+  readonly opts: SavePredictionOptions;
+  readonly stamp: PredictionStamp;
+}
+
 function insertPredictionRow(
   db: DatabaseSyncLike,
-  memoryId: string,
-  tenantId: string,
-  opts: SavePredictionOptions,
-  stamp: PredictionStamp,
+  { memoryId, tenantId, opts, stamp }: InsertPredictionRowOptions,
 ): PredictionRow {
   const { now, actor } = stamp;
   const result = cachedStatement(
@@ -254,9 +279,15 @@ function auditPredictionCreate(
   ]);
 }
 
-/** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
- * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-export function closePrediction(db: DatabaseSyncLike, tenantId: string, id: number, opts: PredictionClose): Prediction {
+/** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated
+ * (the predictions table is the source of truth). Accuracy is computed from (estimateValue,
+ * actualValue) at query time. */
+export function closePrediction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+  opts: PredictionClose,
+): Prediction {
   assertTenantId('closePrediction', tenantId);
   if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
     throw new BadRequestError(
@@ -266,22 +297,26 @@ export function closePrediction(db: DatabaseSyncLike, tenantId: string, id: numb
   }
   const now = handleStamp(db);
   const row = withWriteScope(db, 'close_prediction', () =>
-    closeOpenPredictionRow(db, tenantId, id, opts, { now, actor: opts.actor }),
+    closeOpenPredictionRow(db, { tenantId, id, opts, stamp: { now, actor: opts.actor } }),
   );
   return rowToPrediction(row);
+}
+
+interface CloseOpenPredictionRowOptions {
+  readonly tenantId: string;
+  readonly id: number;
+  readonly opts: PredictionClose;
+  readonly stamp: PredictionStamp;
 }
 
 /** Closes the row, reloads it and audits the close; the caller owns the transaction. */
 function closeOpenPredictionRow(
   db: DatabaseSyncLike,
-  tenantId: string,
-  id: number,
-  opts: PredictionClose,
-  stamp: PredictionStamp,
+  { tenantId, id, opts, stamp }: CloseOpenPredictionRowOptions,
 ): PredictionRow {
   const { now, actor } = stamp;
-  // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and auditing twice; zero
-  // changed rows means not found or already closed.
+  // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and
+  // auditing twice; zero changed rows means not found or already closed.
   const updateResult = cachedStatement(
     db,
     `
@@ -328,7 +363,11 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   throw closeMissError(tenantId, id, existing?.closure_state ?? null);
 }
 
-export function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+export function readPrediction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+): Prediction | null {
   assertTenantId('readPrediction', tenantId);
   const row = cachedStatement(
     db,
@@ -382,7 +421,8 @@ function listPredictionsByClass(
   return rows.map(rowToPrediction);
 }
 
-/** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
+/** Every prediction in the tenant, open and closed, across all classes: the `status=all` list
+ * without a class. */
 function listAllPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -410,9 +450,9 @@ interface BaserateRow {
   actual_value: number;
 }
 
-/** Base-rate stats for closed predictions in a class (Lovallo-Kahneman inside-vs-outside view): closure_state='closed'
- * with estimate and actual non-null; closed-unknown and open are excluded. Audit-emit is built in here, not at the 3
- * call sites, so callers cannot drift. */
+/** Base-rate stats for closed predictions in a class (Lovallo-Kahneman inside-vs-outside view):
+ * closure_state='closed' with estimate and actual non-null; closed-unknown and open are
+ * excluded. Audit-emit is built in here, not at the 3 call sites, so callers cannot drift. */
 export function computePredictionBaserate(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -424,7 +464,8 @@ export function computePredictionBaserate(
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
-  // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
+  // Ordered by id because the float sums differ with row order, and another store must reach the
+  // same figures.
   const rows = cachedStatement(
     db,
     `
@@ -443,18 +484,23 @@ export function computePredictionBaserate(
     classTag,
     rows.map((r) => ({ estimate: r.estimate_value, actual: r.actual_value })),
   );
-  // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its
-  // own hint.
-  if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
+  // An empty class is audited too, since an agent probing one is a signal; the recall path passes
+  // false and audits its own hint.
+  if (emitAudit) auditBaserateRead(db, { tenantId, actor, classTag, nClosed: baserate.nClosed });
   return baserate;
+}
+
+/** Who read which class's base rate, and how many closed predictions it held. */
+interface BaserateReadOptions {
+  readonly tenantId: string;
+  readonly actor: string;
+  readonly classTag: string;
+  readonly nClosed: number;
 }
 
 function auditBaserateRead(
   db: DatabaseSyncLike,
-  tenantId: string,
-  actor: string,
-  classTag: string,
-  nClosed: number,
+  { tenantId, actor, classTag, nClosed }: BaserateReadOptions,
 ): void {
   appendAuditEvents(db, [
     {
@@ -502,7 +548,8 @@ function listOpenPredictions(
   return rows.map(rowToPrediction);
 }
 
-/** One page of the tenant's predictions: the open ones, every one, or one class's, as the query names. */
+/** One page of the tenant's predictions: the open ones, every one, or one class's, as the query
+ * names. */
 export function listPredictions(
   db: DatabaseSyncLike,
   tenantId: string,

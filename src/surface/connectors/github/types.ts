@@ -1,15 +1,14 @@
 /**
  * GitHub webhook event shapes for the ingestion connector
- * (https://docs.github.com/en/webhooks/webhook-events-and-payloads).
- * Each guard is gated on the X-GitHub-Event header so a misrouted payload cannot satisfy a guard for the wrong event
- * type.
+ * (https://docs.github.com/en/webhooks/webhook-events-and-payloads). Each guard is gated on the
+ * X-GitHub-Event header so a misrouted payload cannot satisfy a guard for the wrong event type.
  */
 
 import { type JsonValue, isJsonString, isJsonNumber } from '../../../base/util/json.js';
 
 /**
- * `private` MUST stay optional: scope.ts maps `private: undefined` to private, and a strict boolean would reject the
- * payload before scope can fail closed.
+ * `private` MUST stay optional: scope.ts maps `private: undefined` to private, and a strict boolean
+ * would reject the payload before scope can fail closed.
  */
 export interface GitHubRepository {
   full_name: string;
@@ -94,7 +93,10 @@ export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWe
   return isJsonString(x.action) || isObjectOrArray(x.repository);
 }
 
-export function isGitHubIssueEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueEvent {
+export function isGitHubIssueEvent(
+  x: JsonValue,
+  evtHeader: string,
+): x is JsonValue & GitHubIssueEvent {
   if (evtHeader !== 'issues') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
@@ -105,7 +107,10 @@ export function isGitHubIssueEvent(x: JsonValue, evtHeader: string): x is JsonVa
   return true;
 }
 
-export function isGitHubIssueCommentEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubIssueCommentEvent {
+export function isGitHubIssueCommentEvent(
+  x: JsonValue,
+  evtHeader: string,
+): x is JsonValue & GitHubIssueCommentEvent {
   if (evtHeader !== 'issue_comment') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
@@ -118,7 +123,10 @@ export function isGitHubIssueCommentEvent(x: JsonValue, evtHeader: string): x is
   return true;
 }
 
-export function isGitHubPullRequestEvent(x: JsonValue, evtHeader: string): x is JsonValue & GitHubPullRequestEvent {
+export function isGitHubPullRequestEvent(
+  x: JsonValue,
+  evtHeader: string,
+): x is JsonValue & GitHubPullRequestEvent {
   if (evtHeader !== 'pull_request') return false;
   if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;

@@ -1,5 +1,6 @@
-// The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container writes wait the
-// caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at close.
+// The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container
+// writes wait the caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at
+// close.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,8 +22,8 @@ interface SqliteImportStores {
   isBusy<E>(err: E): boolean;
 }
 
-/** The opener a CLI verb hands the sync; `opts` are the invoking root's rules, runtime and session, which every store
- * it opens takes. */
+/** The opener a CLI verb hands the sync; `opts` are the invoking root's rules, runtime and
+ * session, which every store it opens takes. */
 export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores {
   return {
     open: (root, { busyWaitMs }) => ({
@@ -31,7 +32,8 @@ export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores
     }),
     exists: isInitialized,
     create: async (root) => inPortTerms(() => initStore(root, { grant: grantFor(opts) })),
-    // Its folder is deleted at close, so no session of the caller's may keep one of its handles open past that.
+    // Its folder is deleted at close, so no session of the caller's may keep one of its handles
+    // open past that.
     standIn: () => standIn({ ...opts, session: undefined }),
     isBusy: isStoreBusy,
   };

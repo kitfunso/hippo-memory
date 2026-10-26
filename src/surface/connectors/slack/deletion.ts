@@ -16,13 +16,16 @@ export interface DeletionResult {
   memoryId: string | null;
 }
 
-/** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction, so a crash cannot leave
- * a retry answering `not_found` where `duplicate` is due. */
-export async function handleMessageDeleted(ctx: ConnectorContext, input: DeletionInput): Promise<DeletionResult> {
+/** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction,
+ * so a crash cannot leave a retry answering `not_found` where `duplicate` is due. */
+export async function handleMessageDeleted(
+  ctx: ConnectorContext,
+  input: DeletionInput,
+): Promise<DeletionResult> {
   const events = ctx.store.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
-  // The tenant in the lookup is load-bearing: without it a deletion event from tenant A could archive tenant B's raw
-  // row sharing the same artifact_ref.
+  // The tenant in the lookup is load-bearing: without it a deletion event from tenant A could
+  // archive tenant B's raw row sharing the same artifact_ref.
   const target = await events.eventRecord(event, {
     artifactRef: `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`,
     tenantId: ctx.tenantId,

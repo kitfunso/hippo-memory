@@ -1,5 +1,6 @@
-// The sessions the composition roots (cli, server, stdio MCP) run their requests in. A busy code that escapes a
-// session's work leaves it as the port's StoreBusyError, as one from a store call does.
+// The sessions the composition roots (cli, server, stdio MCP) run their requests in. A busy code
+// that escapes a session's work leaves it as the port's StoreBusyError, as one from a store call
+// does.
 import {
   HOOK_DB_WAIT_MS,
   noteStoreBusy,
@@ -14,7 +15,8 @@ import { inPortTerms, rethrowInPortTerms } from './port-errors.js';
 
 export type RequestPreset = 'cli' | 'hook' | 'server';
 
-/** Lock wait per root; a hook also skips later writes once one wait runs out, so it never stalls its host. */
+/** Lock wait per root; a hook also skips later writes once one wait runs out, so it never stalls
+ * its host. */
 const PRESETS = {
   cli: {},
   hook: { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true },
@@ -29,12 +31,20 @@ export function openSqliteSession(preset: RequestPreset, runtime?: StoreRuntime)
 type SessionWork<T> = (session: RequestStores) => T | Promise<T>;
 
 /** Runs `fn` with a session of its own at the root's lock wait, closed when `fn` settles. */
-export function runSqliteRequest<T>(fn: SessionWork<T>, preset: RequestPreset, runtime?: StoreRuntime): Promise<T> {
+export function runSqliteRequest<T>(
+  fn: SessionWork<T>,
+  preset: RequestPreset,
+  runtime?: StoreRuntime,
+): Promise<T> {
   return withSharedStoreHandles(fn, { ...PRESETS[preset], runtime }).catch(rethrowInPortTerms);
 }
 
-/** The hook preset: a store still busy after the wait skips the hook's work with one warning, undefined and exit 0. */
-export async function runSqliteHookRequest<T>(fn: SessionWork<T>, runtime?: StoreRuntime): Promise<T | undefined> {
+/** The hook preset: a store still busy after the wait skips the hook's work with one warning,
+ * undefined and exit 0. */
+export async function runSqliteHookRequest<T>(
+  fn: SessionWork<T>,
+  runtime?: StoreRuntime,
+): Promise<T | undefined> {
   try {
     return await runSqliteRequest(fn, 'hook', runtime);
   } catch (error) {
@@ -44,7 +54,8 @@ export async function runSqliteHookRequest<T>(fn: SessionWork<T>, runtime?: Stor
   }
 }
 
-/** A synchronous batch, such as an import's writes, with a session of its own, so it opens each store once. */
+/** A synchronous batch, such as an import's writes, with a session of its own, so it opens each
+ * store once. */
 export function runSqliteBatch<T>(fn: (session: RequestStores) => T, runtime?: StoreRuntime): T {
   return inPortTerms(() => withSharedStoreHandlesSync(fn, { runtime }));
 }

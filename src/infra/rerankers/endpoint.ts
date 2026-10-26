@@ -1,28 +1,32 @@
-// The one outbound rule every hosted scorer follows: TypeSafe's address and pinned model, and one bounded, retried JSON
-// POST through the Http port its root hands the scorer.
+// The one outbound rule every hosted scorer follows: TypeSafe's address and pinned model, and one
+// bounded, retried JSON POST through the Http port its root hands the scorer.
 import type { Http } from '../../base/ports/http.js';
 
 export const TYPESAFE_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
-// Pinned, not `jev-latest`: the eval numbers were measured on this version, and the alias moves whenever the vendor
-// ships a release.
+// Pinned, not `jev-latest`: the eval numbers were measured on this version, and the alias moves
+// whenever the vendor ships a release.
 export const JEV_MODEL = 'jev-1.13.0';
 
-// A Retry-After longer than this would outlast most budgets, so the answer is handed back and the scorer falls back.
+// A Retry-After longer than this would outlast most budgets, so the answer is handed back and the
+// scorer falls back.
 const RETRY_WAIT_CAP_MS = 2_000;
 
-/** One scoring call: where it goes, the bearer token when the far side wants one, its JSON body and its budget. */
+/** One scoring call: where it goes, the bearer token when the far side wants one, its JSON body
+ * and its budget. */
 export interface ScoringRequest {
   readonly url: string;
   readonly token: string | undefined;
   readonly body: object;
   /** Bounds the whole call, retries included, so a recall or a capture never waits past it. */
   readonly budgetMs: number;
-  /** The request's own abort, which ends the post too, so a client that hung up does not leave retries running. */
+  /** The request's own abort, which ends the post too, so a client that hung up does not leave
+   * retries running. */
   readonly signal?: AbortSignal | undefined;
 }
 
 /**
- * POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes nothing on the far side.
+ * POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes
+ * nothing on the far side.
  */
 export async function postScoring(http: Http, request: ScoringRequest): Promise<Response> {
   const { url, token, body, budgetMs, signal: requestSignal } = request;

@@ -1,5 +1,6 @@
-// What a ranking runs under as plain values: the strength model and the rank switches. A root reads them
-// (src/infra/eval-switches.ts) and hands them down, so production code paths never read an env var to rank.
+// What a ranking runs under as plain values: the strength model and the rank switches. A root reads
+// them (src/infra/eval-switches.ts) and hands them down, so production code paths never read an env
+// var to rank.
 import type { RuntimeSettings } from '../config/config.js';
 import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './strength.js';
 
@@ -12,7 +13,11 @@ export interface RankAblation {
 }
 
 /** Production ranking: every rank boost on, at the 30-day recency scale. */
-export const NO_RANK_ABLATION: RankAblation = Object.freeze({ recency: false, recencyDays: null, outcomeFast: false });
+export const NO_RANK_ABLATION: RankAblation = Object.freeze({
+  recency: false,
+  recencyDays: null,
+  outcomeFast: false,
+});
 
 /** The strength model and rank switches a ranking runs under. */
 export interface EvalSwitches {
@@ -26,7 +31,8 @@ export const PRODUCTION_SWITCHES: EvalSwitches = Object.freeze({
   rank: NO_RANK_ABLATION,
 });
 
-/** The model a ranking scores strength by: the switches' model with the root's HIPPO_LOSS_AVERSION_RATIO. */
+/** The model a ranking scores strength by: the switches' model with the root's
+ * HIPPO_LOSS_AVERSION_RATIO. */
 export function strengthModelFor(
   switches: EvalSwitches | undefined,
   runtime: Pick<RuntimeSettings, 'lossAversionRatio'> | undefined,

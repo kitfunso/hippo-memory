@@ -1,19 +1,23 @@
-// Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
+// Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without
+// importing each other.
 import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAG_LEVEL } from '../../base/memory/entry.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { summaryDirtyAudit } from '../rules/audit-rows.js';
+import { summaryDirtyAudit, type SummaryDirtyOptions } from '../rules/audit-rows.js';
 
 const MARK_DIRTY_WHERE = `tenant_id = ?
        AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
        AND summary_dirty = 0
        AND kind != 'archived'`;
 
-/** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
- * audited. */
-export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, tenantId: string, actor: string): void {
+/** Runs in the caller's transaction so the mark commits or rolls back with the child change;
+ * only a 0 to 1 flip is audited. */
+export function markSummaryDirtyInTx(
+  db: DatabaseSyncLike,
+  { summaryId, tenantId, actor }: SummaryDirtyOptions,
+): void {
   const result = cachedStatement(
     db,
     `
@@ -26,15 +30,16 @@ export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, te
   ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
-    appendAuditEvents(db, [summaryDirtyAudit(summaryId, tenantId, actor, result.dag_level)]);
+    appendAuditEvents(db, [summaryDirtyAudit({ summaryId, tenantId, actor }, result.dag_level)]);
   } catch (error) {
     // The mark has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure('summary_marked_dirty', error, summaryId);
   }
 }
 
-/** markSummaryDirtyInTx's flip for many summaries of one tenant in one statement, with no audit rows: the caller writes
- * them in its own order. Returns the dag_level of each summary that flipped. */
+/** markSummaryDirtyInTx's flip for many summaries of one tenant in one statement, with no audit
+ * rows: the caller writes them in its own order. Returns the dag_level of each summary that
+ * flipped. */
 export function markSummariesDirtyInTx(
   db: DatabaseSyncLike,
   summaryIds: readonly string[],

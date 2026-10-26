@@ -1,6 +1,6 @@
 /**
- * Physics engine configuration for Hippo memory-as-physics. All constants are tunable; defaults calibrated for ~500
- * memory corpus.
+ * Physics engine configuration for Hippo memory-as-physics. All constants are tunable; defaults
+ * calibrated for ~500 memory corpus.
  */
 
 export interface PhysicsConfig {
@@ -35,8 +35,9 @@ export interface PhysicsConfig {
 }
 
 export const DEFAULT_PHYSICS_CONFIG: Readonly<PhysicsConfig> = {
-  // Off by default: the paired ablation (benchmarks/physics-ablation/) found physics worse than classic hybrid on every
-  // metric, CI excluding zero (MRR 0.68 vs 0.84, R@5 74% vs 84%). Opt in with physics.enabled 'auto' or true.
+  // Off by default: the paired ablation (benchmarks/physics-ablation/) found physics worse than
+  // classic hybrid on every metric, CI excluding zero (MRR 0.68 vs 0.84, R@5 74% vs 84%). Opt in
+  // with physics.enabled 'auto' or true.
   enabled: false,
   gQuery: 2.0,
   gMemory: 0.01,

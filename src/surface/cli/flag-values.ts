@@ -35,14 +35,18 @@ export function parseCountFlag(flags: CliFlags, name: string): number {
 }
 
 /** --budget as a non-negative integer, or `fallback` when absent; a bare or junk value exits. */
-export function parseBudgetFlag<F extends number | undefined>(flags: CliFlags, fallback: F): number | F {
+export function parseBudgetFlag<F extends number | undefined>(
+  flags: CliFlags,
+  fallback: F,
+): number | F {
   const value = flags['budget'];
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (!isStringFlag(value)) {
     fail('--budget requires an integer value (e.g. --budget 1500).');
   }
-  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
+  // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message
+  // rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
     fail(`Invalid --budget: "${value}". Must be a non-negative integer.`);
@@ -52,8 +56,8 @@ export function parseBudgetFlag<F extends number | undefined>(flags: CliFlags, f
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
-// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
-// Digits past 2^53 round to a neighboring id, so they are refused too.
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong
+// row. Digits past 2^53 round to a neighboring id, so they are refused too.
 export function parsePositiveId(idRaw: string | undefined, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
@@ -65,7 +69,9 @@ export function parsePositiveId(idRaw: string | undefined, label: string): numbe
 
 export function parseListLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
-  const limit = resolveListLimit(limitRaw !== undefined ? parseWholeNumber(String(limitRaw)) : undefined);
+  const limit = resolveListLimit(
+    limitRaw !== undefined ? parseWholeNumber(String(limitRaw)) : undefined,
+  );
   if (limit === undefined) {
     fail(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
   }
@@ -84,7 +90,8 @@ export function failLater(message: string): () => never {
   };
 }
 
-/** The whole numbers a flag accepts; without a `max` that is every integer from `min`, which is at least 1. */
+/** The whole numbers a flag accepts; without a `max` that is every integer from `min`, which is
+ * at least 1. */
 export interface IntRange {
   readonly min: number;
   readonly max?: number;
@@ -92,13 +99,19 @@ export interface IntRange {
 }
 
 /**
- * A whole-number flag within `range`: {} when absent, else the number or the refusal to raise. A value-less flag is
- * refused apart from a junk one, because Number(true) is 1 and would quietly run a 1-hop expansion.
+ * A whole-number flag within `range`: {} when absent, else the number or the refusal to raise. A
+ * value-less flag is refused apart from a junk one, because Number(true) is 1 and would quietly run
+ * a 1-hop expansion.
  */
-export function intFlagInRange(flags: CliFlags, name: string, { min, max, example }: IntRange): ParsedFlag<number> {
+export function intFlagInRange(
+  flags: CliFlags,
+  name: string,
+  { min, max, example }: IntRange,
+): ParsedFlag<number> {
   const raw = flags[name];
   if (raw === undefined) return {};
-  const [noun, bounds] = max === undefined ? ['a positive integer', ''] : ['an integer', ` ${min}..${max}`];
+  const [noun, bounds] =
+    max === undefined ? ['a positive integer', ''] : ['an integer', ` ${min}..${max}`];
   if (isBooleanFlag(raw)) {
     const hint = example === undefined ? '' : ` (e.g. --${name} ${example})`;
     return { fail: failLater(`--${name} requires ${noun} value${bounds}${hint}.`) };
@@ -133,7 +146,8 @@ export function stringListFlag(flags: CliFlags, name: string): string[] | undefi
     : undefined;
 }
 
-// A repeated flag is a list and a single value a one-item list; unlike stringListFlag it never splits on commas.
+// A repeated flag is a list and a single value a one-item list; unlike stringListFlag it never
+// splits on commas.
 export function repeatedFlag(flags: CliFlags, name: string): string[] {
   const v = flags[name];
   return Array.isArray(v) ? v : isStringFlag(v) ? [v] : [];
@@ -175,34 +189,44 @@ export interface CommandContext {
   readonly tenantId: string;
   readonly args: string[];
   readonly flags: CliFlags;
-  /** Unset in a hippo process, which runs one command, so its recall starts empty rings; a caller that runs several
-   * commands in one process passes one set to each. */
+  /** Unset in a hippo process, which runs one command, so its recall starts empty rings; a
+   * caller that runs several commands in one process passes one set to each. */
   readonly callers?: CallerState;
 }
 
-export type EngineFlags = Pick<RecallSearchOptions, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
+export type EngineFlags = Pick<
+  RecallSearchOptions,
+  'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'
+>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    fail(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    fail(
+      `Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`,
+    );
   }
   return asOf;
 }
 
-/** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
+/** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns
+ * it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics: boolFlag(flags, 'physics') || (!boolFlag(flags, 'classic') && config.physics.enabled !== false),
+    usePhysics:
+      boolFlag(flags, 'physics') ||
+      (!boolFlag(flags, 'classic') && config.physics.enabled !== false),
     physicsConfig: config.physics,
     mmr: !boolFlag(flags, 'no-mmr') && config.mmr.enabled,
     mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
-    localBump: boolFlag(flags, 'equal-sources') ? 1.0 : (numberFlag(flags, 'local-bump') ?? config.search.localBump),
+    localBump: boolFlag(flags, 'equal-sources')
+      ? 1.0
+      : (numberFlag(flags, 'local-bump') ?? config.search.localBump),
   };
 }
 
-// parseArgs turns a value-less flag into `true`; refuse rather than silently stringifying it (String(true) === 'true'),
-// mirroring handleHandoff's guard.
+// parseArgs turns a value-less flag into `true`; refuse rather than silently stringifying it
+// (String(true) === 'true'), mirroring handleHandoff's guard.
 export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;

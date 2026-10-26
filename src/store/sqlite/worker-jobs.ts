@@ -1,4 +1,5 @@
-// A store worker's side of the executor: one job at a time, on one connection the thread holds for its life.
+// A store worker's side of the executor: one job at a time, on one connection the thread holds for
+// its life.
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
@@ -26,9 +27,14 @@ import {
   WORKER_OPS,
 } from './worker-ops.js';
 
-/** Every method the op table can name, on the thread's store, each run to its end on the thread's one connection;
- * stored vectors answer as a pack, which worker-store.ts turns back into the port's Map. */
-function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | undefined, session: WorkerStores) {
+/** Every method the op table can name, on the thread's store, each run to its end on the
+ * thread's one connection; stored vectors answer as a pack, which worker-store.ts turns back
+ * into the port's Map. */
+function workerOps(
+  { hippoRoot, rules }: WorkerInit,
+  graphs: VectorGraphs | undefined,
+  session: WorkerStores,
+) {
   const handles = handlesOf(hippoRoot, { ...rules, session });
   const store = sqliteStoreOn(handles);
   const vectors = sqliteVectorReads(handles, graphs);
@@ -39,7 +45,8 @@ function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | unde
 
 type Ops = ReturnType<typeof workerOps>;
 
-/** The session every job of a thread opens through, so each open inside a job gets the thread's one connection. */
+/** The session every job of a thread opens through, so each open inside a job gets the thread's
+ * one connection. */
 class WorkerStores extends RequestStores {
   walPages: number | undefined;
   jobId = 0;
@@ -50,7 +57,11 @@ class WorkerStores extends RequestStores {
 
   constructor(init: WorkerInit, runtime: StoreRuntime) {
     // The executor sends a reader its first job only after the writer has run the setup.
-    super({ runtime, busyWaitMs: init.busyWaitMs, ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }) });
+    super({
+      runtime,
+      busyWaitMs: init.busyWaitMs,
+      ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }),
+    });
     this.#init = init;
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
@@ -61,7 +72,8 @@ class WorkerStores extends RequestStores {
     const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
-      // A reader that could write would let a method wrongly tagged 'read' take the write lock off the writer thread.
+      // A reader that could write would let a method wrongly tagged 'read' take the write lock off
+      // the writer thread.
       if (this.#init.mode === 'read') db.exec('PRAGMA query_only = ON');
       const flag = this.#commitFlag;
       if (flag) watchCommits(db, () => Atomics.store(flag, 0, this.jobId));
@@ -91,11 +103,13 @@ function runsOnWorker(group: WorkerGroup, method: string): boolean {
 type MethodsOf<T> = T extends T ? T[keyof T] : never;
 
 /** What a method the op table names can return. */
-type Ran = ReturnType<MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>>;
+type Ran = ReturnType<
+  MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>
+>;
 
 function methodsOf(ops: Ops, group: WorkerGroup) {
-  // SAFETY: every group is an object of methods, and the server thread sent the arguments the port's own signature for
-  // the one called took.
+  // SAFETY: every group is an object of methods, and the server thread sent the arguments the
+  // port's own signature for the one called took.
   return (group === 'base' ? ops : ops[group]) as Readonly<
     Record<string, ((...sent: readonly unknown[]) => Ran) | undefined>
   >;
@@ -104,7 +118,8 @@ function methodsOf(ops: Ops, group: WorkerGroup) {
 /** Runs `op`; only a method the op table places on a worker can run. */
 function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   const [group = '', method = ''] = op.split('.');
-  const run = isWorkerGroup(group) && runsOnWorker(group, method) ? methodsOf(ops, group)[method] : undefined;
+  const run =
+    isWorkerGroup(group) && runsOnWorker(group, method) ? methodsOf(ops, group)[method] : undefined;
   if (run === undefined) throw new Error(`the store worker has no op '${op}'`);
   return run(...args);
 }
@@ -125,17 +140,31 @@ async function answer(ops: Ops, { stores }: Thread, hippoRoot: string, job: Job)
         ? initStore(hippoRoot, { grant: grantFor({ session: stores }) })
         : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
     );
-    return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };
+    return {
+      id: job.id,
+      ok: true,
+      value,
+      auditFailures: auditWriteFailureCount() - failuresBefore,
+    };
   } catch (err) {
-    return { id: job.id, ok: false, error: encodeError(err), auditFailures: auditWriteFailureCount() - failuresBefore };
+    return {
+      id: job.id,
+      ok: false,
+      error: encodeError(err),
+      auditFailures: auditWriteFailureCount() - failuresBefore,
+    };
   }
 }
 
 function post(port: MessagePort, reply: Reply): void {
   try {
-    port.postMessage(reply, reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : []);
+    port.postMessage(
+      reply,
+      reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : [],
+    );
   } catch (err) {
-    // A result that cannot be copied to the server thread must still answer, or its caller would wait for ever.
+    // A result that cannot be copied to the server thread must still answer, or its caller would
+    // wait for ever.
     port.postMessage({
       id: reply.id,
       ok: false,
@@ -145,44 +174,53 @@ function post(port: MessagePort, reply: Reply): void {
   }
 }
 
-/** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with no handle on the store's
- * files. */
+// Each step still closes what is left when the one before it throws, so a failed flush leaves no
+// handle on the files. Held writes run first, then the thread's session closes, and dispose finds
+// no session left to close twice.
+function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
+  try {
+    runtime.held.flush();
+    stores.close();
+  } finally {
+    try {
+      runtime.dispose();
+    } finally {
+      port.close();
+    }
+  }
+}
+
+/** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with
+ * no handle on the store's files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
   const graphs = init.pinned
-    ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold, maxVectors: init.vectorGraphMaxVectors })
+    ? new VectorGraphs(init.hippoRoot, {
+        threshold: init.vectorGraphThreshold,
+        maxVectors: init.vectorGraphMaxVectors,
+      })
     : undefined;
-  // A thread is its own composition root: its runtime holds its mirror writes and closes its connection at stop.
+  // A thread is its own composition root: its runtime holds its mirror writes and closes its
+  // connection at stop.
   const runtime = new StoreRuntime();
   const thread: Thread = { runtime, stores: new WorkerStores(init, runtime) };
   const ops = workerOps(init, graphs, thread.stores);
-  // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
-  // Held writes run first, then the thread's session closes, and dispose finds no session left to close twice.
-  const closeThread = (): void => {
-    try {
-      runtime.held.flush();
-      thread.stores.close();
-    } finally {
-      try {
-        runtime.dispose();
-      } finally {
-        port.close();
-      }
-    }
-  };
-  // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and it waits for that
-  // job's reply.
+  // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and
+  // it waits for that job's reply.
   let last: Promise<void> = Promise.resolve();
   port.on('message', (message: Job | 'stop') => {
     if (message === 'stop') {
       graphs?.close();
       Promise.all([last, graphs?.idle()])
-        .finally(closeThread)
+        .finally(() => closeThread(thread, port))
         .catch((err) => log.error('store worker: stopping the thread failed', errorFields(err)));
       return;
     }
-    // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop above.
+    // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop
+    // above.
     last = answer(ops, thread, init.hippoRoot, message)
       .then((reply) => post(port, reply))
-      .catch((err) => log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)));
+      .catch((err) =>
+        log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)),
+      );
   });
 }
