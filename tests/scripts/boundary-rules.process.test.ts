@@ -364,4 +364,28 @@ describe('.dependency-cruiser.cjs grant rule', () => {
     );
     expect(minted).toEqual(['src/store/sqlite/forged.ts']);
   });
+
+  it('fails node:sqlite loaded anywhere but src/db/sqlite.ts and the file lock', () => {
+    const raw =
+      "import { DatabaseSync } from 'node:sqlite';\nexport const open = (p: string): unknown => new DatabaseSync(p);\n";
+    const loaded = cruise(
+      { 'src/db/sqlite.ts': raw, 'src/host/file-lock.ts': raw, 'src/store/sqlite/raw.ts': raw, 'src/db/raw.ts': raw },
+      'sqlite-in-data-layer',
+    );
+    expect(loaded.sort()).toEqual(['src/db/raw.ts', 'src/store/sqlite/raw.ts']);
+  });
+
+  it('fails a dynamic import of a src/db module, which the grant lint ban cannot see', () => {
+    const imported = cruise(
+      {
+        'src/db/connect.ts': 'export const connectWithFacts = (): number => 1;\n',
+        'src/store/sqlite/late.ts':
+          "export const open = async (): Promise<number> => (await import('../../db/connect.js')).connectWithFacts();\n",
+        'src/store/sqlite/static.ts':
+          "import { connectWithFacts } from '../../db/connect.js';\nexport const n = connectWithFacts();\n",
+      },
+      'db-dynamic-import',
+    );
+    expect(imported).toEqual(['src/store/sqlite/late.ts']);
+  });
 });
