@@ -1,6 +1,5 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { killTree } from '../../host/kill-tree.js';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
@@ -26,8 +25,9 @@ export class RunWatchedTimeoutError extends Error {
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+  kill: (pid: number) => Promise<void> = killTree,
 ): Promise<{ exitCode: number; stderr: string }> {
-  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
+  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs, kill);
 }
 
 const WATCHED_SPAWN_OPTIONS: SpawnOptions = {
@@ -38,6 +38,7 @@ const WATCHED_SPAWN_OPTIONS: SpawnOptions = {
 function watchChild(
   child: ChildProcess,
   deadlineMs: number,
+  kill: (pid: number) => Promise<void>,
 ): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     let tail = Buffer.alloc(0);
@@ -51,10 +52,9 @@ function watchChild(
     // Rejects first so the caller sees the timeout at once; the tree kill is not awaited.
     const timer = setTimeout(() => {
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
-      if (child.pid === undefined) return;
-      void killTree(child.pid).catch((err) =>
-        log.warn(`run-watched: process tree not killed: ${errorMessage(err)}`, errorFields(err)),
-      );
+      // Node reaped an exited child, so its pid may now name another process.
+      if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+      void kill(child.pid);
     }, deadlineMs);
 
     child.on('close', (code: number | null) => {

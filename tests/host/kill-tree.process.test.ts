@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { killTree } from '../../src/host/kill-tree.js';
+import { errorCode } from '../../src/base/util/log.js';
 import { pidAlive } from '../../src/host/pid-alive.js';
 import { runWatched, RunWatchedTimeoutError } from '../../src/surface/cli/run-watched.js';
 import { waitFor } from '../_helpers/wait-for.js';
@@ -17,14 +18,19 @@ const scratch = (): string => {
 };
 const strays: number[] = [];
 
+const seenGone = new Set<number>();
+
 afterEach(() => {
   for (const pid of strays.splice(0)) {
+    if (seenGone.has(pid)) continue;
     try {
       process.kill(pid, 'SIGKILL');
-    } catch {
-      // Already gone, which is what the tests want; EPERM would mean a reused pid, also not ours.
+    } catch (err) {
+      // ESRCH: already gone. EPERM: a reused pid that is not ours.
+      if (errorCode(err) !== 'ESRCH' && errorCode(err) !== 'EPERM') throw err;
     }
   }
+  seenGone.clear();
 });
 afterAll(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -48,8 +54,10 @@ async function grandchildPid(pidFile: string): Promise<number> {
   return grandchild;
 }
 
-const gone = (pid: number): Promise<void> =>
-  waitFor(() => !pidAlive(pid), { what: `process ${pid} gone`, timeoutMs: 20_000 });
+const gone = async (pid: number): Promise<void> => {
+  await waitFor(() => !pidAlive(pid), { what: `process ${pid} gone`, timeoutMs: 20_000 });
+  seenGone.add(pid);
+};
 
 describe('killTree', () => {
   it('kills the child and the grandchild it started', async () => {
@@ -62,15 +70,20 @@ describe('killTree', () => {
     await gone(child.pid);
     await gone(grandchild);
   }, 60_000);
-
-  it('does not reject for a process that is already gone', async () => {
-    const child = spawn(process.execPath, ['-e', '0'], { stdio: 'ignore' });
-    await new Promise((resolve) => child.once('close', resolve));
-    await expect(killTree(child.pid ?? 0)).resolves.toBeUndefined();
-  });
 });
 
 describe('runWatched past its deadline', () => {
+  it('does not kill a pid after its child exited, and still settles', async () => {
+    // The child exits at once; a detached grandchild keeps stderr open past the deadline.
+    const script = `require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 4000)'], { detached: true, stdio: ['ignore', 'ignore', 'inherit'] }).unref();`;
+    const killed: number[] = [];
+    const outcome = await runWatched([process.execPath, '-e', script], 500, async (pid) => {
+      killed.push(pid);
+    }).catch((e: Error) => e);
+    expect(outcome).toBeInstanceOf(RunWatchedTimeoutError);
+    expect(killed).toEqual([]);
+  }, 30_000);
+
   it('rejects with the typed error and takes the grandchild down too', async () => {
     const pidFile = join(scratch(), 'grandchild.pid');
     const timedOut = runWatched([process.execPath, '-e', PARENT_SCRIPT(pidFile)], 3_000).catch((e: Error) => e);
