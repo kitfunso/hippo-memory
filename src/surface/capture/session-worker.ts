@@ -232,9 +232,8 @@ function lockDbIdle(dir: string, id: string, nowMs: number): boolean {
   return cursor === undefined || nowMs - cursor.mtimeMs >= CURSOR_MAX_AGE_MS;
 }
 
-/** Removes an idle session's lock database: taken first, so no worker holds it. POSIX unlinks
- * while holding; win32 cannot unlink an open file, so it releases first and leaves the file when
- * another taker opened it. */
+/** Removes an idle lock database after taking it; win32 cannot unlink an open file, so it
+ * releases first and leaves the file when another taker opened it. */
 function removeIdleLockDb(file: string): boolean {
   const take = takeFileLock(file);
   if (take.kind !== 'taken') return false;

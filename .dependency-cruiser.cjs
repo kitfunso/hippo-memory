@@ -46,9 +46,7 @@ function mapProblems() {
 
 const problems = mapProblems();
 if (problems.length > 0) {
-  throw new Error(
-    `layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`,
-  );
+  throw new Error(`layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`);
 }
 
 /** One rule per layer: its files import nothing from a higher layer, type-only imports included. */
@@ -164,8 +162,7 @@ const strayStore = {
 const reachRules = [
   {
     name: 'no-io-below-host',
-    comment:
-      'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
+    comment: 'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
     severity: 'error',
     from: { path: '^src/(base|domain|api)/' },
     to: { path: IO_MODULES },
@@ -179,9 +176,7 @@ const reachRules = [
   },
   {
     name: 'sqlite-in-data-layer',
-    comment:
-      'only src/db and src/store hold a hippo.db handle; code above them reaches it through the port. ' +
-      'src/host/file-lock.ts opens a lock database that holds no data and is not hippo.db',
+    comment: 'only src/db and src/store hold a hippo.db handle, and src/host/file-lock.ts a data-free lock database; code above them reaches hippo.db through the port',
     severity: 'error',
     from: { pathNot: ['^src/(db|store)/', '^src/host/file-lock\\.ts$'] },
     to: { path: SQLITE_MODULE },
@@ -198,8 +193,7 @@ const reachRules = [
   { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },
   {
     name: 'config-file-in-surface',
-    comment:
-      'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
+    comment: 'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
     severity: 'error',
     from: { path: '^src/', pathNot: [layerPaths('surface'), layerPaths('host')] },
     to: { path: '^src/host/config-file\\.ts$', dependencyTypesNot: notType },
