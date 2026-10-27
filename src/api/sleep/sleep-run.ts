@@ -288,12 +288,22 @@ async function shareOnSleep(
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = await phases.autoShare({ store: { ...store, sharing, folderFiles } }, target, {
-    tenantId: ALL_TENANTS,
-    minScore: AUTO_SHARE_MIN_SCORE,
-    stats: autoShareStats,
-    embed: ctx.infra,
-  });
+  const shared = await phases.autoShare(
+    {
+      store: {
+        sharing,
+        folderFiles,
+        entriesWhere: (filter, page) => store.entriesWhere(filter, page),
+      },
+    },
+    target,
+    {
+      tenantId: ALL_TENANTS,
+      minScore: AUTO_SHARE_MIN_SCORE,
+      stats: autoShareStats,
+      embed: ctx.infra,
+    },
+  );
   if (shared.length > 0) {
     result.shared = shared.length;
   }

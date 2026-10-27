@@ -57,9 +57,9 @@ function placedOps(): WorkerOps {
   ) as WorkerOps;
 }
 
-/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server
- * thread: the port's effect, moved by PINNED_READS and ON_WRITER. finishRecall on lastRecall
- * strengthens the global store's rows too, from the writer thread of this one. */
+// finishRecall on lastRecall strengthens the global store's rows too, from this store's writer.
+/** Every store method but hippo.db's local files, by the port's effect, moved by PINNED_READS and
+ * ON_WRITER, so a served store runs no SQLite on the server thread. */
 export const WORKER_OPS = placedOps();
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time

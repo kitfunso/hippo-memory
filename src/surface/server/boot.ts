@@ -13,7 +13,7 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
-import { hasGroup, hasGroups, type StoreWith } from '../../base/ports/store.js';
+import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
   defaultServerRuntime,
   tenantOfApiKey,
@@ -440,13 +440,21 @@ function servedFor(
   runtime: ServerRuntime,
   { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
 ): ResolvedServeOptions {
+  // One view per store, so the served, caller and ledger stores share the view of one.
+  const views = new Map<HippoStore, HippoStore>();
+  const storeFor = <S extends HippoStore>(own: S): S => {
+    // SAFETY: each view was made by runtime.storeFor from the same `own`, so it has its type.
+    const view = (views.get(own) as S | undefined) ?? runtime.storeFor(own, limits, session);
+    views.set(own, view);
+    return view;
+  };
   return {
     ...served,
-    store: runtime.storeFor(served.store, limits, session),
+    store: storeFor(served.store),
     reachOf: (shared) => runtime.reachOf(shared, limits, session),
-    storeFor: (own) => runtime.storeFor(own, limits, session),
-    callers: served.callersFor((own) => runtime.storeFor(own, limits, session)),
-    ledgerStore: served.ledgerStore && runtime.storeFor(served.ledgerStore, limits, session),
+    storeFor,
+    callers: served.callersFor(storeFor),
+    ledgerStore: served.ledgerStore && storeFor(served.ledgerStore),
     signal: limits.signal,
   };
 }

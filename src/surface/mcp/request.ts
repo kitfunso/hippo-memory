@@ -128,9 +128,8 @@ const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
   ['hippo_peers', localTool(runPeersTool)],
 ]);
 
-/** The tools a host serves on `proved`, each group need checked here once; a tool the store lacks
- * a group for is left out, so a list hides it and a call answers not ported. Each call runs on
- * `ctx.storeFor(proved)`. */
+/** The tools a host serves on `proved`, each need checked here once and each call run on
+ * `ctx.storeFor(proved)`; a tool left out is hidden from a list and answers not ported. */
 export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
   const tools = new Map<string, StoreTool<RequiredStore>>();
   for (const [name, row] of TOOL_ROWS) {

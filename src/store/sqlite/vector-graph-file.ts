@@ -1,4 +1,5 @@
-// The sleep's save of a store's vector graph file, on a grant of the store's own.
+// The sleep's save of a store's vector graph file, on a fresh grant: no runtime, session or
+// worker fence, as a command's own open has.
 import {
   saveVectorGraphFile as saveOnGrant,
   type GraphFileOptions,
