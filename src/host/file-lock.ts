@@ -40,8 +40,7 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
-const SQLITE_IOERR = 10;
-// IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on another taker's SHARED lock.
+// IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on a SHARED lock.
 const MAX_ATTEMPTS = 3;
 const MAX_CREATES = 10;
 const WIN32 = process.platform === 'win32';
@@ -150,6 +149,8 @@ function onePass(path: string, stat: StatFn): Pass {
     before = statOrCreate(path, stat);
     if (before === undefined) return NO_FILE;
     db = new DatabaseSync(path);
+    // A take writes no file but the lock database, so no two generations of the file share a journal.
+    db.exec('PRAGMA journal_mode=MEMORY');
     db.exec('BEGIN IMMEDIATE');
     if (sameFile(before, stat(path))) {
       return { kind: 'taken', lock: holder(db, path, before, stat) };
@@ -160,12 +161,7 @@ function onePass(path: string, stat: StatFn): Pass {
     if (db !== undefined) closeLogged(db, path);
     if (primaryCode(err) === SQLITE_BUSY) return { kind: 'held' };
     // Another holder's release, between the stat and the lock, fails this open or lock.
-    if (pathMoved(path, before, stat)) return AGAIN;
-    // An unlink under an open taker fails the lock with an I/O error even when a new file reuses the inode
-    // and ctime; one more pass tells that apart from a file that cannot be read.
-    return primaryCode(err) === SQLITE_IOERR
-      ? { kind: 'again', created: false, ioError: err }
-      : unusable(path, err);
+    return pathMoved(path, before, stat) ? AGAIN : unusable(path, err);
   }
 }
 
@@ -174,13 +170,11 @@ function onePass(path: string, stat: StatFn): Pass {
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
   let passes = 0;
   let creates = 0;
-  let ioError: unknown;
   while (passes < MAX_ATTEMPTS && creates < MAX_CREATES) {
     const result = onePass(path, stat);
     if (result.kind !== 'again') return result;
-    ioError = result.ioError;
     if (result.created) creates++;
     else passes++;
   }
-  return ioError === undefined ? { kind: 'held' } : unusable(path, ioError);
+  return { kind: 'held' };
 }

@@ -154,6 +154,14 @@ describe('one process', () => {
     if (again.kind === 'taken') again.lock.release();
   });
 
+  it('writes no journal file while the lock is held', () => {
+    const path = join(scratch(), 's.lock.db');
+    const take = takeFileLock(path);
+    if (take.kind !== 'taken') throw new Error(`expected taken, got ${take.kind}`);
+    expect(existsSync(`${path}-journal`)).toBe(false);
+    take.lock.release();
+  });
+
   it('is held, not taken, when the path is replaced and locked as the take starts', () => {
     const path = join(scratch(), 's.lock.db');
     writeFileSync(path, '');
