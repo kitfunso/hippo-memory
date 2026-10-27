@@ -7,7 +7,8 @@ import { redactSecretsStrict } from '../../src/base/util/secret-detect.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { ASSIGNED_SECRET_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
 
-const RULE_CHANGED = 'the rejection key rule changed: ship a migration that sets rejection_digest to NULL in both tables';
+const RULE_CHANGED =
+  'the rejection key rule changed: ship a migration that sets rejection_digest to NULL in both tables';
 
 const GHP = runtimeJoin('ghp_', 'x1Y2z3W4v5'.repeat(3), 'Q6r7S8');
 const JWT = runtimeJoin('eyJ', 'hbGciOiJIUzI1', '.eyJ', 'zdWIiOiIxMjM0', '.sig', 'nature_part');
@@ -38,9 +39,7 @@ describe('the rejection key rule', () => {
   it('keys any markdown list by its bullets, whatever wrote it', () => {
     const text = 'Release steps\n\n- tag the build\n- push the tag';
     expect(short(otherDigests(text)), RULE_CHANGED).toEqual(['00e5a80f2e47', 'ba122791e659']);
-    expect(otherDigests(text)).toEqual(
-      [rejectionDigest('tag the build'), rejectionDigest('push the tag')].sort(),
-    );
+    expect(otherDigests(text)).toEqual([rejectionDigest('tag the build'), rejectionDigest('push the tag')].sort());
   });
 
   it('keys a raw secret row by its stored form and a stored row by itself, for every secret shape', () => {

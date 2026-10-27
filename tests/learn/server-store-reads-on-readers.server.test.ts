@@ -10,7 +10,15 @@ import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
 import { FAKE_NOW, freshStore, SESSION, TENANT } from '../_helpers/recall-golden-seed.js';
-import { cleanups, execOn, holdWriteLock, mirrorFiles, onDb, patientStore, undoAll } from '../_helpers/store-worker-server.js';
+import {
+  cleanups,
+  execOn,
+  holdWriteLock,
+  mirrorFiles,
+  onDb,
+  patientStore,
+  undoAll,
+} from '../_helpers/store-worker-server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -707,7 +715,11 @@ describe('a write the op table places on the writer thread', () => {
     expect(filled).toBeGreaterThan(0);
     expect(filled).toBe(await inProcess.rejections.fillDigests?.());
     // SAFETY: an aggregate with no GROUP BY answers one row with an INTEGER n.
-    const unkeyed = (root: string) => onDb(root, (db) => db.prepare('SELECT COUNT(*) AS n FROM memories WHERE rejection_digest IS NULL').get() as { n: number });
+    const unkeyed = (root: string) =>
+      onDb(
+        root,
+        (db) => db.prepare('SELECT COUNT(*) AS n FROM memories WHERE rejection_digest IS NULL').get() as { n: number },
+      );
     expect(roots.map(unkeyed)).toEqual([{ n: 0 }, { n: 0 }]);
   });
 });

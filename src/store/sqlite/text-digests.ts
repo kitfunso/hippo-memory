@@ -103,10 +103,8 @@ export function* digestHolderIds(
   skip: ReadonlySet<string> = new Set(),
 ): Generator<string[]> {
   const { tenantId, digest } = query;
-  const matched = (
-    // SAFETY: both arms of matchedSql answer one TEXT column named id.
-    cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[]
-  )
+  const matched = // SAFETY: both arms of matchedSql answer one TEXT column named id.
+  (cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[])
     .map((row) => row.id)
     .filter((id) => !skip.has(id));
   yield* chunked(matched, READ_PAGE_ROWS);
@@ -165,7 +163,11 @@ function fillPage(db: DatabaseSyncLike, place: Place): number {
     if (rows.length === 0) return 0;
     const owners = rows.map((row) => [row.tenant_id, row.id]);
     cachedStatement(db, sql.dropKeys).run(JSON.stringify(owners));
-    const texts = rows.map((row) => ({ tenantId: row.tenant_id, id: row.id, content: row.content }));
+    const texts = rows.map((row) => ({
+      tenantId: row.tenant_id,
+      id: row.id,
+      content: row.content,
+    }));
     insertKeys(db, place, heldKeys(texts));
     const digests = rows.map((row) => [row.tenant_id, row.k, rejectionDigest(row.content)]);
     cachedStatement(db, sql.setDigests).run(JSON.stringify(digests));
@@ -183,7 +185,7 @@ export function fillRejectionDigests(db: DatabaseSyncLike): number {
       db,
       `SELECT COUNT(*) AS n FROM ${TABLE[place]} WHERE rejection_digest IS NULL`,
     ).get() as { n: number };
-    for (let done = 0; done < n; ) {
+    for (let done = 0; done < n;) {
       const read = fillPage(db, place);
       done += read;
       filled += read;

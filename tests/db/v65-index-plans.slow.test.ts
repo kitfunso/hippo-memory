@@ -36,7 +36,11 @@ function seedVault(root: string, vault: number, others = 3000): void {
   onDb(root, (db) => {
     db.exec('BEGIN IMMEDIATE');
     for (let i = 0; i < vault; i++) {
-      const entry: MemoryEntry = { ...createMemory(`vault note ${i}`), kind: 'raw', artifactRef: `vault:notes:file${i}` };
+      const entry: MemoryEntry = {
+        ...createMemory(`vault note ${i}`),
+        kind: 'raw',
+        artifactRef: `vault:notes:file${i}`,
+      };
       upsertEntryRow(db, { ...entry, created: at(i) });
     }
     for (let i = 0; i < others; i++) upsertEntryRow(db, { ...createMemory(`other row ${i}`), created: at(i) });
@@ -81,7 +85,11 @@ describe('schema v65 index plans', () => {
     seedVault(root, 3, 3);
     onDb(root, (db) => {
       const { statements } = recordStatements(() =>
-        eventRecord(db, { connector: 'slack', eventId: 'evt-1' }, { artifactRef: 'vault:notes:file1', tenantId: 'default' }),
+        eventRecord(
+          db,
+          { connector: 'slack', eventId: 'evt-1' },
+          { artifactRef: 'vault:notes:file1', tenantId: 'default' },
+        ),
       );
       const raw = statements.find((sql) => sql.includes('artifact_ref = ?'));
       expect(raw).toBeDefined();

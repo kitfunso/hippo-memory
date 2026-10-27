@@ -252,11 +252,19 @@ describe('Rejections.fillDigests', () => {
       // A 2.x binary writes no keys; the fixture keeps them cleared, as every read stays exact without them.
       db.exec('UPDATE memories SET rejection_digest = NULL; UPDATE dormant_memories SET rejection_digest = NULL');
       // SAFETY: an aggregate with no GROUP BY answers one row with an INTEGER n.
-      rows = (db.prepare('SELECT (SELECT COUNT(*) FROM memories) + (SELECT COUNT(*) FROM dormant_memories) AS n').get() as { n: number }).n;
+      rows = (
+        db.prepare('SELECT (SELECT COUNT(*) FROM memories) + (SELECT COUNT(*) FROM dormant_memories) AS n').get() as {
+          n: number;
+        }
+      ).n;
     } finally {
       db.close();
     }
-    const side = await conforms([(g) => g.fillDigests?.() ?? -1, (g) => g.fillDigests?.() ?? -1, byText(SHARED)]);
+    const side = await conforms([
+      (g) => g.fillDigests?.() ?? Promise.resolve(-1),
+      (g) => g.fillDigests?.() ?? Promise.resolve(-1),
+      byText(SHARED),
+    ]);
     expect(value<number>(side, 0)).toBe(rows);
     expect(value<number>(side, 1)).toBe(0);
     expect(value<AppliedRejection>(side, 2).removedIds.sort()).toEqual([seeded.note.id, seeded.copy.id].sort());

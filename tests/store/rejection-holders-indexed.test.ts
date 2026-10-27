@@ -45,7 +45,7 @@ const live = (db: DatabaseSyncLike, content: string, extra: Partial<MemoryEntry>
 };
 const dormant = (db: DatabaseSyncLike, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => {
   const entry = { ...createMemory(content, { source: 'consolidation' }), ...extra };
-  insertDormantRow(db, { entry, strength: 0.01, reason: 'decayed', dormantAt: DORMANT_AT });
+  insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: DORMANT_AT });
   return entry;
 };
 
@@ -154,9 +154,13 @@ const CELLS: readonly Cell[] = [
       };
       const moved = JSON.stringify({ ...JSON.parse(entry_json), id: 'moved-2x' });
       // replaceDormantEntry's statement as 2.x sends it, with no digest.
-      db.prepare(
-        'UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?',
-      ).run('moved-2x', row.content, moved, 'default', row.id);
+      db.prepare('UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?').run(
+        'moved-2x',
+        row.content,
+        moved,
+        'default',
+        row.id,
+      );
     },
   },
   {

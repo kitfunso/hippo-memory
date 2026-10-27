@@ -83,7 +83,7 @@ function liveRow(db: DatabaseSyncLike, content = MERGED, extra: Partial<MemoryEn
 }
 
 function dormantRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
-  insertDormantRow(db, { entry, strength: 0.01, reason: 'decayed', dormantAt: '2020-01-01T00:00:00.000Z' });
+  insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: '2020-01-01T00:00:00.000Z' });
 }
 
 /** A 2.x INSERT: every column but the two keys, copied from `from`. */
@@ -111,7 +111,9 @@ describe('migration v65', () => {
       v65.up(db);
       expect(changes()).toBe(before);
       // SAFETY: the SELECT names one TEXT column, name.
-      const indexes = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>;
+      const indexes = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{
+        name: string;
+      }>;
       expect(indexes.map((i) => i.name)).not.toContain('idx_memories_current');
       expect(keysOf(db, merged.id)).toEqual(noKeys);
       expect(fillRejectionDigests(db)).toBe(3);
@@ -175,7 +177,7 @@ describe('migration v65', () => {
     });
   });
 
-  it('drops the keys of a row that goes, and only that tenant\'s', async () => {
+  it("drops the keys of a row that goes, and only that tenant's", async () => {
     await withDb(async (db) => {
       const deleted = liveRow(db);
       db.prepare('DELETE FROM memories WHERE id = ?').run(deleted.id);
