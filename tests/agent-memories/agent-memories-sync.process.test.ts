@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
-import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
+import { supersedeNow } from '../_helpers/supersede-now.js';
+import type { ContainerApplied, ContainerApply } from '../../src/base/ports/store/agent-import.js';
+import type { ImportStores } from '../../src/domain/agent-memories/types.js';
 import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
@@ -63,6 +65,24 @@ const sync = (): Promise<ImportReport> =>
     machine: w.machine,
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
+
+/** The real stores; `gate` runs once, at the import's first container write, after every read its plan made. */
+function gatedStores(gate: (plan: ContainerApply) => Promise<void>): ImportStores {
+  const real = sqliteImportStores({});
+  let passed: Promise<void> | undefined;
+  return {
+    ...real,
+    open: (root, opts) => {
+      const store = real.open(root, opts);
+      const applyContainer = async (plan: ContainerApply): Promise<ContainerApplied> => {
+        passed ??= gate(plan);
+        await passed;
+        return store.agentImport.applyContainer(plan);
+      };
+      return { ...store, agentImport: { applyContainer } };
+    },
+  };
+}
 
 function legacyRow(content: string, file: string): MemoryEntry {
   const entry = createMemory(content, {
@@ -201,20 +221,24 @@ describe('agent memory sync', () => {
     note(projectNotes(w), 'staging.md', STAGING);
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
 
-    const winner = await stageSupersedeWinner(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.');
+    const planned: string[] = [];
+    let successorId = '';
     const report = await importForStore(w.local, {
       run: TEST_RUN,
       configAt: loadConfig,
       tenantId: 'default',
-      stores: sqliteImportStores({}),
+      stores: gatedStores(async (plan) => {
+        planned.push(...plan.steps.flatMap((step) => (step.kind === 'write' ? step.supersedes : [])));
+        successorId = await supersedeNow(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.');
+      }),
       machine: w.machine,
-      busyWaitMs: 5000,
     });
-    await winner.committed;
 
+    // A plan read after the other writer's commit names its successor instead, a legacy row of the same file.
+    expect(planned).toEqual([edited.id]);
     // replaced: the plan still held the row, so the import did reach its supersede step with a stale copy.
     expect(claude(report)).toMatchObject({ replaced: 1, imported: 0 });
-    expect(readEntry(w.local, edited.id)?.supersededBy).toBe(winner.successorId);
+    expect(readEntry(w.local, edited.id)?.supersededBy).toBe(successorId);
     expect(auditCount(w.local, 'supersede')).toBe(1);
   });
 
