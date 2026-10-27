@@ -24,15 +24,21 @@ import type { Captures, CompactionHooks, Compactions } from './store/capture.js'
 import type { ProjectTags } from './store/project-tags.js';
 import type { AgentImport } from './store/agent-import.js';
 import type { Goals } from './store/goals.js';
-import type { Reports } from './store/reports.js';
+import type { EntryFilter, PageRequest, Reports } from './store/reports.js';
 import type { Dormant } from './store/dormant.js';
 import type { FailureLog } from './store/rejections.js';
-export type { FolderStore, GlobalTargetGroup, StoreReach } from './store/reach.js';
+export type {
+  FolderStore,
+  GlobalGroup,
+  GlobalTargetGroup,
+  StoreReach,
+} from './store/reach.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
   GetActiveGoalsOptions,
   ContinuityKey,
+  EntryPage,
   PlanningFallacyEvidence,
   AppendAuditOptions,
 } from './store/types.js';
@@ -52,7 +58,21 @@ interface OptionalGroups
     MaintenanceGroups,
     ConnectorGroups,
     RecordGroups,
-    ReviewGroups {}
+    ReviewGroups {
+  /** Without it recall ranks by BM25 alone and nearest answers 501. */
+  readonly vectors: VectorReads;
+  /** embedMemory and embedAll with a store need it and `vectors`. */
+  readonly vectorWrites: VectorWrites;
+  /** Without it drill and assemble answer 501. */
+  readonly dagReads: DagReads;
+  /** Without it recall expands no graph and the graph view answers 501. */
+  readonly graphReads: GraphReads;
+  /** The continuity, session-end and working-memory paths. */
+  readonly sessions: Sessions;
+  readonly goals: Goals;
+  /** Status, tokens, failures and the memory listings. */
+  readonly reports: Reports;
+}
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
 export type OptionalGroup = keyof OptionalGroups;
@@ -87,10 +107,18 @@ export const OPTIONAL_GROUPS = [
   'cards',
   'conflicts',
   'rejections',
+  'vectors',
+  'vectorWrites',
+  'dagReads',
+  'graphReads',
+  'sessions',
+  'goals',
+  'reports',
 ] as const satisfies readonly OptionalGroup[];
 
-/** The groups a sleep runs on: its own, and the objects its graph pass reads. */
-export type SleepGroup = keyof SleepGroups | 'objects';
+/** The groups a sleep runs on: its own, the objects and graph its graph pass reads, and the
+ * vectors its physics pass moves. */
+export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads' | 'vectors';
 
 /** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
  * context writes no last recall for the CLI's no-ids outcome to read. */
@@ -149,23 +177,13 @@ export interface MaintenanceGroups {
   readonly agentImport: AgentImport;
 }
 
-/** What recall, remember and context read, and the key writes auth makes: every store sets these
- * whole. */
+/** What remember, recall and context write and read, and the key writes auth makes: every store
+ * sets these whole. */
 interface RequiredGroups {
-  readonly vectors: VectorReads;
   readonly keyWrites: KeyWrites;
-  /** embedMemory and embedAll with a store need it and `vectors`. */
-  readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
-  readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
-  readonly graphReads: GraphReads;
-  /** The continuity, session-end and working-memory paths. */
-  readonly sessions: Sessions;
-  readonly goals: Goals;
-  /** Status, tokens, failures and the memory listings. */
-  readonly reports: Reports;
 }
 
 /** A store a sleep can run on. */
@@ -216,8 +234,11 @@ export function requireGroups<G extends OptionalGroup>(
 /** The smallest store: every required group and base method, none of the optional groups. */
 export type RequiredStore = Omit<HippoStore, OptionalGroup>;
 
-/** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
-export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
+/** A store that sets the optional groups `G`, as a surface proves once before it calls in; `F`
+ * are the groups a feature reads where it states its fallback, so they may be unset. */
+export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> = RequiredStore &
+  Pick<StoreGroups, G> &
+  Partial<Pick<StoreGroups, F>>;
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 
@@ -237,6 +258,10 @@ export interface HippoStore
   /** The rows of `tenantId` among `ids`, any number of them, ordered by created, then content,
    * then id, all ascending; the input order is ignored. */
   entriesByIds(ids: readonly string[], tenantId: TenantId): Promise<MemoryEntry[]>;
+  /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host
+   * admin, the api checks). One read for each walk of a filtered set of rows, so no group keeps
+   * a read per caller. */
+  entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
   /** The session's active goals and their policies, read together so a goal and its policy never
    * disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;

@@ -3,8 +3,8 @@
 // commit.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AuditLog } from './audit.js';
-import type { EntryFilter, Reports } from './reports.js';
-import type { DormantSnapshot } from './types.js';
+import type { EntryFilter, PageRequest } from './reports.js';
+import type { DormantSnapshot, EntryPage } from './types.js';
 
 export interface ProjectTags {
   /** Every project name with live rows, in the order its first row was written. */
@@ -29,7 +29,7 @@ export interface ProjectTags {
  * offers on read-only handles. */
 export interface ProjectTagReads {
   readonly projectTags: ProjectTags;
-  readonly reports: Pick<Reports, 'entriesWhere'>;
+  entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
   readonly auditLog: Pick<AuditLog, 'listAuditEvents'>;
 }
 

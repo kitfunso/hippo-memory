@@ -15,8 +15,9 @@ import {
   compactResumeText,
 } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
+import { newRowsOn } from './callers.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
-import type { Context } from './types.js';
+import type { Context, ContextWith } from './types.js';
 import type { Ledger } from '../base/ports/store.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff
@@ -38,7 +39,7 @@ export interface SessionClose {
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
  * failure and never throws. The handoff goes first, while the snapshot writeSessionEndHandoff
  * reads is still active. */
-export async function closeEndedSession(ctx: Context, close: SessionClose): Promise<void> {
+export async function closeEndedSession(ctx: ContextWith<'sessions'>, close: SessionClose): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');
@@ -48,7 +49,7 @@ export async function closeEndedSession(ctx: Context, close: SessionClose): Prom
 }
 
 async function writeEndHandoff(
-  ctx: Context,
+  ctx: ContextWith<'sessions'>,
   sessionId: string,
   close: SessionClose,
 ): Promise<void> {
@@ -80,7 +81,7 @@ async function writeEndHandoff(
 // If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is
 // the backstop.
 async function closeSnapshot(
-  ctx: Context,
+  ctx: ContextWith<'sessions'>,
   sessionId: string | null,
   line: (message: string) => void,
 ): Promise<void> {
@@ -100,7 +101,7 @@ async function closeSnapshot(
 
 /** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
 function rereadLedgers(ctx: Context): Ledger[] {
-  const local = (ctx.reach?.hasLocal ?? true) ? ctx.store.ledger : undefined;
+  const local = ctx.reach?.hasLocal === false ? undefined : ctx.reach?.ledger?.ledger;
   // A call on the global store reaches it twice, as itself and as the global store beside it.
   const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.store.ledger;
   return [local, global].filter((ledger) => ledger !== undefined);
@@ -146,7 +147,7 @@ export async function bookSessionRereads(
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none
  * or another session's snapshot. */
 export async function compactResumeBlock(
-  ctx: Context,
+  ctx: ContextWith<'sessions'>,
   payloadSessionId: string | null,
 ): Promise<string | null> {
   const { sessions } = ctx.store;
@@ -242,7 +243,7 @@ function hasOwnStore(ctx: Context): boolean {
 
 /** The store a session's end writes to: the folder's own, else the global one; null when neither
  * exists. */
-function endStore(ctx: Context): Context | null {
+function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null {
   if (hasOwnStore(ctx)) return ctx;
   const global = ctx.reach?.global;
   if (global === undefined) return null;
@@ -258,7 +259,7 @@ function endStore(ctx: Context): Context | null {
 /** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's
  * end always. */
 async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: Context,
+  ctx: ContextWith<'sessions' | 'reports'>,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its
@@ -273,7 +274,7 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   const prefix = `turn close, session ${w.sessionId}`;
   try {
     const { enabled, count, threshold, due } = await autoSleepDue(
-      ctx.store,
+      newRowsOn(ctx.store),
       ctx.tenantId,
       ctx.config.autoSleep,
       ctx.infra.clock(),
@@ -327,7 +328,7 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
 /** Books re-reads, sleeps, captures, digests and closes one ended session of the folder `ctx`
  * names, in that order. */
 export async function sessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }>(
-  ctx: Context,
+  ctx: ContextWith<'sessions' | 'reports'>,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
   const rereadLog = await bookSessionRereads(ctx, w.transcriptPath, w.sessionId).catch((err) => {

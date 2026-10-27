@@ -2,7 +2,13 @@
 // error.
 
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
-import type { HippoStore, StoreReach } from '../base/ports/store.js';
+import type {
+  FolderFiles,
+  GlobalGroup,
+  Ledger,
+  RequiredStore,
+  StoreReach,
+} from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type {
   GlobalTargetGroup,
@@ -40,7 +46,15 @@ export interface Actor {
  * its ledger. */
 export interface GlobalInReach {
   readonly root: string;
-  readonly store: StoreWith<'learning'>;
+  readonly store: StoreWith<GlobalGroup>;
+  readonly config: HippoConfig;
+}
+
+/** A store a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
+export interface LedgerHome {
+  readonly ledger: Ledger;
+  /** Where the store sits, which its delivery rows name by hash. */
+  readonly folderFiles: FolderFiles;
   readonly config: HippoConfig;
 }
 
@@ -49,6 +63,8 @@ export interface GlobalInReach {
 export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'> {
   readonly global?: GlobalInReach;
   readonly globalTarget?: GlobalTargetInReach;
+  /** The Context's own store as a ledger home, set by a root whose store keeps a ledger. */
+  readonly ledger?: LedgerHome;
 }
 
 /** The global write target a host builds: without `embedderFor` the context's own embedder
@@ -62,8 +78,9 @@ export type GlobalTargetInReach = Omit<
 export interface Context {
   tenantId: string;
   actor: Actor;
-  /** Built by a composition root; every api function reads and writes storage only through it. */
-  readonly store: HippoStore;
+  /** Built by a composition root; every api function reads and writes storage only through it,
+   * and reaches an optional group only through `ContextWith`, which a surface proved at boot. */
+  readonly store: RequiredStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an
    * integrator's store. */
   reach?: ContextReach;
@@ -107,6 +124,7 @@ export function contextReach(
   reach: StoreReach,
   configAt: (root: string) => HippoConfig,
   embedderFor: EmbedderFor,
+  ledger?: LedgerHome,
 ): ContextReach {
   const { global, globalTarget, ...rest } = reach;
   // Both name the operator's global store, so one load serves both.
@@ -115,7 +133,7 @@ export function contextReach(
     if (last?.root !== root) last = { root, config: configAt(root) };
     return last.config;
   };
-  let withConfig: ContextReach = rest;
+  let withConfig: ContextReach = ledger === undefined ? rest : { ...rest, ledger };
   if (global !== undefined) {
     withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
   }
@@ -135,8 +153,10 @@ export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
 }
 
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api
- * checks nothing. */
-export type ContextWith<G extends OptionalGroup> = Context & { readonly store: StoreWith<G> };
+ * checks nothing. `F` are groups the feature reads where it states its fallback. */
+export type ContextWith<G extends OptionalGroup = never, F extends OptionalGroup = never> = Context & {
+  readonly store: StoreWith<G, F>;
+};
 
 /** A context whose store sets the groups a sleep runs on. */
 export type SleepContext = ContextWith<SleepGroup>;

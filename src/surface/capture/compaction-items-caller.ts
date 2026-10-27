@@ -27,7 +27,7 @@ export interface CallerItemsResult {
  * or deferred here.
  */
 export async function saveCompactionItemsForCaller(
-  given: EntryContext<ContextWith<'compactions'>>,
+  given: EntryContext<ContextWith<'compactions' | 'sessions'>>,
   req: CallerItemsRequest,
 ): Promise<CallerItemsResult> {
   const ctx = withEntryInfra(given);

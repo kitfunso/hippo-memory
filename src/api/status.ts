@@ -24,7 +24,7 @@ export interface StoreStatus {
 
 /** Lifetime stats and row counts for the whole store. Every tenant, so the host admin only. */
 export async function storeStatus(
-  ctx: Context,
+  ctx: ContextWith<'reports'>,
   now: Date,
   atRiskBelow: number,
 ): Promise<StoreStatus> {
@@ -35,7 +35,7 @@ export async function storeStatus(
 
 /** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host
  * admin only. */
-export async function lastSleepAt(ctx: Context): Promise<string | undefined> {
+export async function lastSleepAt(ctx: ContextWith<'reports'>): Promise<string | undefined> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const runs = (await ctx.store.reports.stats()).consolidation_runs;
   const last = Array.isArray(runs) ? runs[runs.length - 1] : undefined;
@@ -97,14 +97,14 @@ async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin
  * only. */
-export async function correctionLatencyReport(ctx: Context): Promise<CorrectionLatencyReport> {
+export async function correctionLatencyReport(ctx: ContextWith<'reports'>): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildCorrectionLatency(await allCorrectionLinks(ctx.store.reports));
 }
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
  * only. */
-export async function provenanceCoverageReport(ctx: Context): Promise<ProvenanceCoverage> {
+export async function provenanceCoverageReport(ctx: ContextWith<'reports'>): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildProvenanceCoverage(await allRawProvenance(ctx.store.reports));
 }

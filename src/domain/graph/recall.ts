@@ -15,7 +15,7 @@ import {
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { RequiredStore, StoreGroups } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -30,7 +30,7 @@ export const DEFAULT_MAX_NEIGHBORS = 25;
  *  below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
-type GraphStore = Pick<HippoStore, 'graphReads' | 'entriesByIds'>;
+type GraphStore = Pick<StoreGroups, 'graphReads'> & Pick<RequiredStore, 'entriesByIds'>;
 type GraphHit = SearchResult & { graphVia: GraphVia };
 
 export interface GraphExpandOptions {
@@ -313,7 +313,7 @@ export async function graphExpandRecall(
   const hitsByOrigin = new Map<string, GraphHit[]>();
 
   // Expand against each distinct store the seeds may live in (local + global).
-  const stores = global && global !== store ? [store, global] : [store];
+  const stores = global && global.graphReads !== store.graphReads ? [store, global] : [store];
   for (const each of stores) {
     await produceHitsForStore(
       each,

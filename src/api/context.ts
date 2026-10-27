@@ -47,7 +47,7 @@ import {
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { keepShownIds } from './recall/last-recalled.js';
-import { type Context, type ContextReach, ownerOrSubject, strengthOf } from './types.js';
+import { type Context, type ContextReach, type ContextWith, ownerOrSubject, strengthOf } from './types.js';
 import type {
   ContextCandidateFilter,
   AmbientRecallRequest,
@@ -474,11 +474,10 @@ async function loadRawTaskState(
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
     scopeFilter: 'default-deny',
   } as const;
-  return {
-    snapshot,
-    handoff: await store.sessions.read(ctx.tenantId, 'handoff', unfinished, key),
-    events: [],
-  };
+  // A store that keeps no session rows has no handoff to offer.
+  const { sessions } = store;
+  const handoff = sessions && (await sessions.read(ctx.tenantId, 'handoff', unfinished, key));
+  return { snapshot, handoff: handoff ?? null, events: [] };
 }
 
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped,
@@ -733,7 +732,7 @@ interface RecordRetrievalOptions {
 
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
-  ctx: Context,
+  ctx: ContextWith<never, 'lastRecall'>,
   { opts, plan, selected, activeSnapshot }: RecordRetrievalOptions,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);

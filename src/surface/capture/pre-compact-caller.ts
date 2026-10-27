@@ -39,7 +39,7 @@ async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> 
 }
 
 export async function preCompactForCaller(
-  given: EntryContext<ContextWith<'compactions'>>,
+  given: EntryContext<ContextWith<'compactions' | 'sessions'>>,
   req: CallerPreCompactRequest,
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
@@ -73,7 +73,7 @@ export async function preCompactForCaller(
 
 /** True when the owner's snapshot was saved. */
 async function saveOwnerSnapshot(
-  ctx: Context,
+  ctx: ContextWith<'sessions'>,
   sessionId: string,
   key: ContinuityKey,
   state: WorkingState,

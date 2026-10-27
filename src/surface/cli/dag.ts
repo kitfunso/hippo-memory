@@ -145,10 +145,7 @@ async function assembleSession({
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = !boolFlag(flags, 'no-summarize-older');
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx: api.Context = {
-    ...cliApiContext(hippoRoot, tenantId),
-    actor: api.adminActor('cli:assemble'),
-  };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
   const opts: api.AssembleOptions = {};
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
@@ -198,10 +195,7 @@ async function drillIntoSummary({
 }: DrillIntoSummaryOptions): Promise<void> {
   requireInit(hippoRoot);
   const opts = drillDownOptions(flags);
-  const ctx: api.Context = {
-    ...cliApiContext(hippoRoot, tenantId),
-    actor: api.adminActor('cli:drill'),
-  };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
   const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) failDrill(r, summaryId);
   if (boolFlag(flags, 'json')) {

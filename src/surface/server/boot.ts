@@ -13,6 +13,7 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
+import { hasGroup, hasGroups, type StoreWith } from '../../base/ports/store.js';
 import {
   defaultServerRuntime,
   tenantOfApiKey,
@@ -28,7 +29,7 @@ import { JSON_HEADERS, sendJson } from '../http/http-util.js';
 import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
-import { createCallerState } from '../../api/callers.js';
+import { createCallerState, newRowsOn, type CallerState } from '../../api/callers.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   drainAndClose,
@@ -379,7 +380,10 @@ function servedOptsFor(
   };
   // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
   const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
-  const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
+  // The count reads the store's reports, so a store without them starts no sleep.
+  const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
+  const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
+  const callers = createCallerState(autoSleep);
   return {
     ...opts,
     routes,
@@ -393,7 +397,9 @@ function servedOptsFor(
     configAt: configReader(envRuntimeSettings),
     callerLimiter,
     failedAuthLimiter,
-    callers: createCallerState(autoSleep),
+    callers,
+    callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
+    ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
     infra: rootInfra(runtime.host),
     sleeps,
     counts,
@@ -434,8 +440,17 @@ function servedFor(
     store: runtime.storeFor(served.store, limits, session),
     reachOf: (shared) => runtime.reachOf(shared, limits, session),
     storeFor: (own) => runtime.storeFor(own, limits, session),
+    callers: served.callersFor((own) => runtime.storeFor(own, limits, session)),
+    ledgerStore: served.ledgerStore && runtime.storeFor(served.ledgerStore, limits, session),
     signal: limits.signal,
   };
+}
+
+/** The server's callers for one request: the shared latch, and the count on the request's store. */
+function callersOnRequest(callers: CallerState, counted?: StoreWith<'reports'>): CallerState {
+  const { autoSleep } = callers;
+  if (autoSleep === undefined || counted === undefined) return callers;
+  return { ...callers, autoSleep: { ...autoSleep, newSince: newRowsOn(counted) } };
 }
 
 async function listenAndDescribe(

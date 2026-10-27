@@ -7,7 +7,7 @@ import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
-import type { StoreReach } from '../../base/ports/store.js';
+import type { StoreReach, StoreWith } from '../../base/ports/store.js';
 import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
@@ -139,6 +139,11 @@ export type ResolvedServeOptions = ServeOptions & {
   failedAuthLimiter: RateLimiter;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
+  /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
+   * which `storeFor` maps. */
+  callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
+  /** The served store as a ledger home, proved at boot; unset for a store that keeps no ledger. */
+  ledgerStore?: StoreWith<'ledger' | 'folderFiles'>;
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;

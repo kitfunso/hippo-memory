@@ -62,13 +62,13 @@ interface Draft {
 
 /** The tenant's live rows whose source starts with `prefix`, oldest first. */
 export async function liveUnder(
-  store: Pick<ImportStore, 'reports'>,
+  store: Pick<ImportStore, 'entriesWhere'>,
   tenantId: string,
   prefix: string,
 ): Promise<MemoryEntry[]> {
   const under = { tenantId, sourcePrefix: prefix, live: true } as const;
   return readAll((after?: EntryCursor) =>
-    store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+    store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
   );
 }
 

@@ -159,10 +159,11 @@ const baseReadsBodies: Bodies<
 };
 
 const entryReadsBodies: Bodies<
-  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>
+  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'entriesWhere' | 'freshRawEntries'>
 > = {
   searchRecallEntries: listRecallEntries,
   entriesByIds: readEntriesInIdOrder,
+  entriesWhere: listEntriesWhere,
   freshRawEntries: listFreshRawMemories,
 };
 
@@ -270,7 +271,7 @@ export function sqliteDiagnosticsStore(
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
-    reports: bound<ProjectTagReads['reports']>(
+    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
       on,
       { entriesWhere: listEntriesWhere },
       openHippoDbReadOnly,

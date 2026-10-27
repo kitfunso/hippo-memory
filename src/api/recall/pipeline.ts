@@ -6,7 +6,7 @@ import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
-import { graphExpandRecall } from '../../domain/graph/recall.js';
+import { graphExpandRecall, type GraphExpandOptions } from '../../domain/graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankMultihop } from '../../domain/search/multihop.js';
@@ -49,7 +49,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { isJsonNumber } from '../../base/util/json.js';
 
 import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
@@ -63,7 +63,8 @@ import type { ActiveGoals } from '../../base/ports/store/types.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  readonly store: HippoStore;
+  /** Its vectors and graph join the ranking where it keeps them; without them it ranks by BM25. */
+  readonly store: StoreWith<never, 'vectors' | 'graphReads'>;
   readonly config: HippoConfig;
   readonly onHippoDb?: boolean;
 }
@@ -548,6 +549,14 @@ export function withMissing(first: MemoryEntry[], second: MemoryEntry[]): Memory
   return [...first, ...second.filter((e) => !held.has(e.id))];
 }
 
+/** The graph a store keeps, as graph expansion walks it; a store that keeps none has no
+ * neighbours to add. */
+function graphOf(store: RankSource['store']): GraphExpandOptions['store'] | undefined {
+  const { graphReads } = store;
+  if (graphReads === undefined) return undefined;
+  return { graphReads, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
+}
+
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
 async function expandGraph(
   ctx: RankRecallCtx,
@@ -555,7 +564,8 @@ async function expandGraph(
   graph: RecallGraphHops,
   state: RankState,
 ): Promise<void> {
-  if (graph.hops <= 0) return;
+  const local = graphOf(ctx.store);
+  if (graph.hops <= 0 || local === undefined) return;
   const { requested } = poolScope(opts);
   // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
   // hide both.
@@ -563,8 +573,8 @@ async function expandGraph(
   state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,
     maxNeighbors: graph.maxNeighbors,
-    store: ctx.store,
-    global: ctx.global?.store,
+    store: local,
+    global: ctx.global && graphOf(ctx.global.store),
     tenantId: ctx.tenantId,
     includeSuperseded: opts.includeSuperseded,
     asOf: opts.asOf,

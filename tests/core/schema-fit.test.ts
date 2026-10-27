@@ -153,7 +153,7 @@ describe('contextReads.schemaFit', () => {
     } finally {
       closeHippoDb(db);
     }
-    const page = await sqliteStore(root).reports.entriesWhere(
+    const page = await sqliteStore(root).entriesWhere(
       { tenantId: 'default' },
       { limit: windowRows, newest: true },
     );

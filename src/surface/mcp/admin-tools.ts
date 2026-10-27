@@ -59,8 +59,7 @@ export async function runPredictBaserateTool({
   return lines.join('\n');
 }
 
-export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
-  const api = mcpApiContext(ctx);
+export async function runStatusTool({ config, api }: GroupToolCall<'reports'>): Promise<string> {
   const tallies = await api.store.reports.memoryStatus(
     api.tenantId,
     api.infra.clock(),

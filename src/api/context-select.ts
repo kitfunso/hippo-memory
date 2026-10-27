@@ -589,7 +589,7 @@ function globalInReach(ctx: Context): GlobalInReach {
 }
 
 /** The global store's vectors, embedded by the model its own config.json names. */
-function globalVectorSource(ctx: Context): VectorSource {
+function globalVectorSource(ctx: Context): VectorSource | undefined {
   const { store, config } = globalInReach(ctx);
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: ctx.infra.embedderFor });
 }

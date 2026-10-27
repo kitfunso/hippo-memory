@@ -99,7 +99,7 @@ type AuthOptions = Pick<
 
 type ContextOptions = AuthOptions &
   Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
-  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
+  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
 // `clinton@corp`.
@@ -382,11 +382,17 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   // A store other than hippo.db is a team's central server, so its folder's config.json must not
   // decide shared-ness.
   const team = !opts.onHippoDb;
-  // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server
   // runs.
   const config = opts.configAt(opts.hippoRoot);
+  const { ledgerStore } = opts;
+  const ledger = ledgerStore && {
+    ledger: ledgerStore.ledger,
+    folderFiles: ledgerStore.folderFiles,
+    config,
+  };
+  // Per request, never cached at serve: the global store can be created while the server runs.
+  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider, ledger);
   const callers = opts.callers;
   const infra = opts.infra();
   const actor = bearerActor(id);

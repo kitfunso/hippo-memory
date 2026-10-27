@@ -14,7 +14,8 @@ import type { RuntimeSettings } from '../../base/config/config.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
+import type { VectorReads } from '../../base/ports/store-index.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import {
   churnStaleFactor,
   rankStrength,
@@ -65,7 +66,7 @@ export interface PhysicsSearchOptions {
   /** Same as hybridSearch's: rows nearest the query join the pool before physics scoring. */
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors and particles are read; hippo.db under `hippoRoot` when unset. */
-  store?: HippoStore;
+  store?: StoreWith<never, 'vectors' | 'graphReads'>;
   /** The root's environment settings, as hybridSearch takes them. */
   runtime?: RuntimeSettings;
   /** The strength model and rank switches the caller runs under; absent, production ranking. */
@@ -77,7 +78,7 @@ export interface PhysicsSearchOptions {
 /** physicsSearch's options once the caller names its store; the folder fields belong to the
  * published wrapper. */
 export type PhysicsRankOptions = Omit<PhysicsSearchOptions, 'hippoRoot' | 'store'> & {
-  /** Where vectors and particles are read; without one nothing ranks. */
+  /** Where vectors and particles are read; without one the rows rank as hybridSearch's BM25. */
   source?: VectorSource;
 };
 
@@ -106,8 +107,9 @@ export async function rankPhysics(
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   const { source } = options;
-  if (entries.length === 0 || !source) return [];
-  const { store } = source;
+  if (entries.length === 0) return [];
+  // A store that keeps no vectors has no particles either, so it ranks as hybrid does on BM25.
+  if (!source) return hybridSearch(query, entries, options);
   const hybrid = { ...options, source };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without
   // them.
@@ -124,10 +126,10 @@ export async function rankPhysics(
   );
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   const pool = currentEntries(
-    await withVectorCandidates(store.vectors, entries, queryVector, options.vectorCandidates),
+    await withVectorCandidates(source.vectors, entries, queryVector, options.vectorCandidates),
     options,
   );
-  const physicsMap = await loadCandidateParticles(store.vectors, pool);
+  const physicsMap = await loadCandidateParticles(source.vectors, pool);
   if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
   return rankByParticles(query, pool, physicsMap, {
     queryVector,
@@ -188,7 +190,7 @@ async function physicsQueryVector(
     const provider = source.provider();
     if (!provider.isAvailable()) return null;
     if (
-      indexNeedsRebuild(indexedModel(await source.store.vectors.embeddingIndexState()), provider.id)
+      indexNeedsRebuild(indexedModel(await source.vectors.embeddingIndexState()), provider.id)
     ) {
       return null;
     }

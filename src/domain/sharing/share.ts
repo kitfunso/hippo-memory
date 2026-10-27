@@ -34,6 +34,7 @@ import type { SharingStore } from './text-keys.js';
 import type {
   EntrySignals,
   PageRequest,
+  RequiredStore,
   StoreGroups,
   StoreHome,
   StoreWith,
@@ -155,7 +156,7 @@ export function transferScore(entry: MemoryEntry): number {
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
   local: { readonly store: StoreWith<'folderFiles'> },
-  global: ConfiguredFolder<SharingStore>,
+  global: ConfiguredFolder<SharingStore & StoreWith<'vectors' | 'vectorWrites'>>,
   id: string,
   options: { force?: boolean; tenantId: string; skipEmbed?: boolean; embed: EmbedRun },
 ): Promise<MemoryEntry | null> {
@@ -177,7 +178,7 @@ export async function shareMemory(
   // embedMemory rewrites the whole index per call.
   if (!options.skipEmbed) {
     const target = {
-      store: global.store,
+      groups: { vectors: global.store.vectors, vectorWrites: global.store.vectorWrites },
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
       failureNotices: options.embed.failureNotices,
@@ -339,7 +340,7 @@ function isNewAndClean(
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can
  * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
-  { sharing, reports }: Pick<StoreGroups, 'sharing' | 'reports'>,
+  store: Pick<StoreGroups, 'sharing'> & Pick<RequiredStore, 'entriesWhere'>,
   minScore: number,
   tenantId: TenantId,
 ): AsyncGenerator<MemoryEntry[]> {
@@ -348,8 +349,8 @@ async function* autoSharePages(
     const page: PageRequest = { limit: READ_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
-        ? await sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
-        : await reports.entriesWhere({ tenantId }, page);
+        ? await store.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
+        : await store.entriesWhere({ tenantId }, page);
     yield entries;
     after = next;
   } while (after !== null);
@@ -425,7 +426,9 @@ async function shareCandidates({
  * opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
-  from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles' | 'reports'> },
+  from: {
+    readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> & Pick<RequiredStore, 'entriesWhere'>;
+  },
   global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
   options: {
     minScore?: number;

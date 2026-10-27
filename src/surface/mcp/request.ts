@@ -106,14 +106,14 @@ function localTool(run: LocalToolHandler): ToolBinder {
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolBinder> = new Map<string, ToolBinder>([
   ['hippo_recall', anyStore(runRecallTool)],
-  ['hippo_assemble', anyStore(runAssembleTool)],
-  ['hippo_drill', anyStore(runDrillTool)],
+  ['hippo_assemble', needing(['dagReads'], runAssembleTool)],
+  ['hippo_drill', needing(['dagReads'], runDrillTool)],
   ['hippo_predict_baserate', needing(['objects'], runPredictBaserateTool)],
   ['hippo_remember', anyStore(runRememberTool)],
   ['hippo_outcome', anyStore(runOutcomeTool)],
   ['hippo_context', anyStore(runContextTool)],
-  ['hippo_status', anyStore(runStatusTool)],
-  ['hippo_learn', needing(['lessonWrites'], runLearnTool)],
+  ['hippo_status', needing(['reports'], runStatusTool)],
+  ['hippo_learn', needing(['lessonWrites', 'vectors', 'vectorWrites'], runLearnTool)],
   ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
   ['hippo_resolve', needing(['conflicts'], runResolveTool)],
   ['hippo_share', localTool(runShareTool)],

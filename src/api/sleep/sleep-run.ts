@@ -13,7 +13,7 @@ import {
 } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { strengthOf, type Context, type SleepContext } from '../types.js';
+import { strengthOf, type Context, type ContextWith, type SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import { globalTargetOf } from '../infra.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
@@ -21,7 +21,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import type { StoreWith } from '../../base/ports/store.js';
+import type { SleepGroup, StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial:
@@ -36,7 +36,7 @@ export interface SleepPhases {
     store: StoreWith<'consolidation'>,
   ) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
   extractGraph: (
-    store: StoreWith<'graphRebuild' | 'objects'>,
+    store: StoreWith<'graphRebuild' | 'graphReads' | 'objects'>,
     tenantId: string,
   ) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
@@ -219,7 +219,7 @@ async function* entryPages(
 ): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
-    const page = await store.reports.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
+    const page = await store.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);
@@ -269,13 +269,14 @@ async function runQualityAudit(
 }
 
 async function shareOnSleep(
-  ctx: SleepContext,
+  ctx: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>,
   phases: SleepPhases,
   result: SleepResult,
 ): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
-  const { sharing, folderFiles, reports } = ctx.store;
+  const { store } = ctx;
+  const { sharing, folderFiles } = store;
   if (
     !ctx.config.autoShareOnSleep ||
     target === undefined ||
@@ -287,7 +288,7 @@ async function shareOnSleep(
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = await phases.autoShare({ store: { sharing, folderFiles, reports } }, target, {
+  const shared = await phases.autoShare({ store: { ...store, sharing, folderFiles } }, target, {
     tenantId: ALL_TENANTS,
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,

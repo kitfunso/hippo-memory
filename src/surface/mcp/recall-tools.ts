@@ -12,7 +12,7 @@ import { sharedStoreOf } from '../../api/types.js';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
-import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
+import { mcpApiContext, ownsServerCwd, type GroupToolCall, type ToolCall } from './protocol.js';
 import { toolRecallText } from './tool-recall.js';
 import {
   formatMemories,
@@ -52,7 +52,11 @@ export async function runRecallTool({ ctx, args }: ToolCall): Promise<string> {
   });
 }
 
-export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> {
+export async function runAssembleTool({
+  args,
+  ctx,
+  api,
+}: GroupToolCall<'dagReads'>): Promise<string> {
   const sessionId = stringArg(args, 'session_id', MAX_ID_LEN);
   if (!sessionId) return 'No session_id provided.';
   const budget = numberArg(args, 'budget');
@@ -65,7 +69,7 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
     assembleExtra.freshTailCount = freshTailCount;
   }
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
-  const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
+  const r = await apiAssemble(api, sessionId, {
     summarizeOlder,
     project: ctx?.project,
     ...assembleExtra,
@@ -74,7 +78,7 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
   return assembleText(r);
 }
 
-export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
+export async function runDrillTool({ args, ctx, api }: GroupToolCall<'dagReads'>): Promise<string> {
   const summaryId = stringArg(args, 'summary_id', MAX_ID_LEN);
   if (!summaryId) return 'No summary_id provided.';
   const limit = numberArg(args, 'limit');
@@ -87,7 +91,7 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
   if (budget !== undefined && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
   const opts = { ...drillExtra, project: ctx?.project, cost: drillCost };
-  const r = await apiDrillDown(mcpApiContext(ctx), summaryId, opts);
+  const r = await apiDrillDown(api, summaryId, opts);
   if ('failure' in r) {
     // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
     // missing, because telling scope_blocked apart would leak private-row existence.

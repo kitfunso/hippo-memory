@@ -174,7 +174,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     'auditMaintenance.objectBackedAmong',
     async (s) =>
       s.auditMaintenance.objectBackedAmong(
-        (await s.reports.entriesWhere({ tenantId: TENANT }, { limit: 100 })).entries.map((e) => e.id),
+        (await s.entriesWhere({ tenantId: TENANT }, { limit: 100 })).entries.map((e) => e.id),
       ),
     /'sem_/,
   ),
@@ -221,16 +221,16 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read(
     'reports.entriesWhere',
     async (s) => [
-      await s.reports.entriesWhere({ tenantId: TENANT }, { limit: 3 }),
-      await s.reports.entriesWhere(
+      await s.entriesWhere({ tenantId: TENANT }, { limit: 3 }),
+      await s.entriesWhere(
         { tenantId: TENANT, kinds: ['raw'], live: true, sessionId: SESSION },
         { limit: 10, newest: true },
       ),
-      await s.reports.entriesWhere(
+      await s.entriesWhere(
         { tenantId: TENANT, kinds: ['raw'], artifactRefPrefix: 'vault:golden:' },
         { limit: 10 },
       ),
-      await s.reports.entriesWhere({ tenantId: TENANT, source: 'cli', tag: 'deploy', live: true }, { limit: 10 }),
+      await s.entriesWhere({ tenantId: TENANT, source: 'cli', tag: 'deploy', live: true }, { limit: 10 }),
     ],
     new RegExp(String.raw`id: 'mem_[\s\S]*mem_x_raw[\s\S]*vault:golden:rollout\.md[\s\S]*${PLAIN}`),
   ),
