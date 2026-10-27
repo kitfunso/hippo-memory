@@ -4,6 +4,7 @@ import { rmSync } from 'node:fs';
 import { HOOK_DB_WAIT_MS, SERVER_DB_WAIT_MS } from '../../src/db/index.js';
 import { runSqliteRequest } from '../../src/store/sqlite/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -22,7 +23,7 @@ describe('runSqliteRequest presets', () => {
     roots.push(root);
     const waitAfterNoteBusy = (preset: 'hook' | 'server'): Promise<number> =>
       runSqliteRequest((session) => {
-        const db = session.get(root);
+        const db = grantFor({ session }).open(root);
         session.noteBusy();
         // SAFETY: PRAGMA busy_timeout answers one row with a numeric `timeout` column.
         return (db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;

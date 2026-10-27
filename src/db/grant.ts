@@ -5,7 +5,7 @@ import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { assertStoreFolder, openHippoDbReadOnly } from './open.js';
-import type { RequestStores } from './request-stores.js';
+import { SESSION_OPEN, type RequestStores } from './request-stores.js';
 import type { StoreRuntime } from './store-runtime.js';
 import { SqliteBlockedError } from './sqlite-blocked.js';
 
@@ -57,7 +57,7 @@ export class DbGrant {
   openWithFacts(hippoRoot: string, busyWaitMs?: number): OpenedDb {
     DbGrant.#allow(this, hippoRoot);
     const session = this.#session;
-    if (session !== undefined) return session.getWithFacts(hippoRoot, { busyWaitMs });
+    if (session !== undefined) return session[SESSION_OPEN](hippoRoot, { busyWaitMs });
     return connectWithFacts({ hippoRoot, runtime: this.#runtime }, busyWaitMs);
   }
 

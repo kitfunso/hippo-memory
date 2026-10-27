@@ -86,6 +86,21 @@
                 "regex": "(^|/)(open|index)[.]js$",
                 "importNames": ["openHippoDb", "openHippoDbReadOnly"],
                 "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              },
+              {
+                "regex": "(^|/)connect[.]js$",
+                "importNames": ["connectWithFacts"],
+                "message": "A hippo.db connection in src goes through its store's DbGrant (src/db/grant.ts)."
+              },
+              {
+                "regex": "(^|/)request-stores[.]js$",
+                "importNames": ["SESSION_OPEN"],
+                "message": "A session's hippo.db handle is opened through its store's DbGrant (src/db/grant.ts)."
+              },
+              {
+                "regex": "(^|/)sqlite[.]js$",
+                "importNames": ["DatabaseSync"],
+                "message": "A SQLite connection in src is made in src/db/connect.ts, open.ts or grant.ts; reach hippo.db through its store's DbGrant."
               }
             ]
           }
@@ -95,6 +110,109 @@
     {
       "files": ["src/db/open.ts", "src/db/index.ts", "src/db/grant.ts"],
       "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/db/request-stores.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(open|index)[.]js$",
+                "importNames": ["openHippoDb", "openHippoDbReadOnly"],
+                "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              },
+              {
+                "regex": "(^|/)request-stores[.]js$",
+                "importNames": ["SESSION_OPEN"],
+                "message": "A session's hippo.db handle is opened through its store's DbGrant (src/db/grant.ts)."
+              },
+              {
+                "regex": "(^|/)sqlite[.]js$",
+                "importNames": ["DatabaseSync"],
+                "message": "A SQLite connection in src is made in src/db/connect.ts, open.ts or grant.ts; reach hippo.db through its store's DbGrant."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/store/sqlite/worker-jobs.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(open|index)[.]js$",
+                "importNames": ["openHippoDb", "openHippoDbReadOnly"],
+                "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              },
+              {
+                "regex": "(^|/)connect[.]js$",
+                "importNames": ["connectWithFacts"],
+                "message": "A hippo.db connection in src goes through its store's DbGrant (src/db/grant.ts)."
+              },
+              {
+                "regex": "(^|/)sqlite[.]js$",
+                "importNames": ["DatabaseSync"],
+                "message": "A SQLite connection in src is made in src/db/connect.ts, open.ts or grant.ts; reach hippo.db through its store's DbGrant."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/db/connect.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(open|index)[.]js$",
+                "importNames": ["openHippoDb", "openHippoDbReadOnly"],
+                "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              },
+              {
+                "regex": "(^|/)request-stores[.]js$",
+                "importNames": ["SESSION_OPEN"],
+                "message": "A session's hippo.db handle is opened through its store's DbGrant (src/db/grant.ts)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/db/continuity-tables.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(open|index)[.]js$",
+                "importNames": ["openHippoDb", "openHippoDbReadOnly"],
+                "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              },
+              {
+                "regex": "(^|/)connect[.]js$",
+                "importNames": ["connectWithFacts"],
+                "message": "A hippo.db connection in src goes through its store's DbGrant (src/db/grant.ts)."
+              },
+              {
+                "regex": "(^|/)request-stores[.]js$",
+                "importNames": ["SESSION_OPEN"],
+                "message": "A session's hippo.db handle is opened through its store's DbGrant (src/db/grant.ts)."
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "files": ["src/store/sqlite/**/*.ts"],

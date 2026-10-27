@@ -150,8 +150,8 @@ describe('RequestStores.close', () => {
     try {
       const { root: other } = makeStore('request-stores-second');
       const stores = new RequestStores();
-      const first = stores.get(root);
-      const second = stores.get(other);
+      const first = grantFor({ session: stores }).open(root);
+      const second = grantFor({ session: stores }).open(other);
       const realClose = first.close.bind(first);
       first.close = () => {
         realClose();

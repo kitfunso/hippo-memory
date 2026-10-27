@@ -34,6 +34,7 @@ import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -406,7 +407,8 @@ describe('chunked consolidation flush', () => {
         const ctx = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
         await runSleep(onSession(ctx, session), { noShare: true }, { consolidate: atNow });
         // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
-        return (session.get(fx.root).prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
+        return (grantFor({ session }).open(fx.root).prepare('PRAGMA busy_timeout').get() as { timeout: number })
+          .timeout;
       },
       { busyWaitMs: HOOK_DB_WAIT_MS },
     );

@@ -3,6 +3,7 @@
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
+import { SESSION_OPEN } from '../../db/request-stores.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { errorFields, log } from '../../base/util/log.js';
@@ -66,9 +67,9 @@ class WorkerStores extends RequestStores {
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
 
-  // The one path every open of the scope takes: `get` is a wrapper over it.
-  override getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
-    const opened = super.getWithFacts(hippoRoot, opts);
+  // The one path every open of the scope takes.
+  override [SESSION_OPEN](hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
+    const opened = super[SESSION_OPEN](hippoRoot, opts);
     const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
