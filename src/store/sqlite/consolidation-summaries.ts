@@ -4,6 +4,8 @@ import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { tombstoneOf } from './rejection.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { withHeldDigests } from './text-digests.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, parseJsonArray, rowToEntry } from './rows.js';
 import { refusalAudit } from '../rules/audit-rows.js';
 import { syncFtsRow } from './entry-row.js';
@@ -122,6 +124,7 @@ const STILL_DIRTY = `WHERE id = ?
             RETURNING content, tags_json`;
 const SETTLE_CONTENT_SQL = `UPDATE memories
               SET content = ?,
+                  rejection_digest = ?,
                   descendant_count = ?,
                   earliest_at = ?,
                   latest_at = ?,
@@ -172,16 +175,24 @@ function settleFields(
   // transaction.
   const tombstone = content ? tombstoneOf(db, tenantId, content.text) : null;
   const at = [descendantCount, earliestAt, latestAt] as const;
-  const row =
-    content && !tombstone
-      ? (cachedStatement(db, SETTLE_CONTENT_SQL).get(
-          redactSecretsStrict(content.text),
-          ...at,
-          content.rebuiltAt,
-          id,
-          tenantId,
-        ) as SettledRow | undefined)
-      : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
+  const settled =
+    content && !tombstone ? { ...content, text: redactSecretsStrict(content.text) } : undefined;
+  const row = settled
+    ? withHeldDigests(
+        db,
+        'live',
+        [{ tenantId, id, content: settled.text }],
+        () =>
+          cachedStatement(db, SETTLE_CONTENT_SQL).get(
+            settled.text,
+            rejectionDigest(settled.text),
+            ...at,
+            settled.rebuiltAt,
+            id,
+            tenantId,
+          ) as SettledRow | undefined,
+      )
+    : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
   if (!row) return { changed: false, refused: false };
   // A bare UPDATE leaves memories_fts behind, so the row's text is indexed again.
   syncFtsRow(db, { id, content: row.content, tags: parseJsonArray(row.tags_json) });

@@ -13,6 +13,9 @@ import type { EntryFilter } from '../../base/ports/store/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { redactEntry } from '../../base/util/secret-detect.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { withHeldDigests, type KeyedText } from './text-digests.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import {
   dormantListCap,
@@ -43,27 +46,36 @@ const DORMANT_COLUMNS = 'tenant_id, id, content, entry_json, reason, strength, d
 export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
   // One stored form binds both columns, so parseSnapshot's content check still holds.
   const entry = redactEntry(move.entry);
-  cachedStatement(
-    db,
-    `
-    INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+  withHeldDigests(db, 'dormant', [keyedText(entry)], () =>
+    cachedStatement(
+      db,
+      `
+    INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at,
+      rejection_digest)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tenant_id, id) DO UPDATE SET
       content = excluded.content,
       entry_json = excluded.entry_json,
       reason = excluded.reason,
       strength = excluded.strength,
-      dormant_at = excluded.dormant_at
+      dormant_at = excluded.dormant_at,
+      rejection_digest = excluded.rejection_digest
   `,
-  ).run(
-    entry.tenantId,
-    entry.id,
-    entry.content,
-    JSON.stringify(toWire(entry)),
-    move.reason,
-    move.strength,
-    move.dormantAt,
+    ).run(
+      entry.tenantId,
+      entry.id,
+      entry.content,
+      JSON.stringify(toWire(entry)),
+      move.reason,
+      move.strength,
+      move.dormantAt,
+      rejectionDigest(entry.content),
+    ),
   );
+}
+
+function keyedText(entry: MemoryEntry): KeyedText {
+  return { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, id: entry.id, content: entry.content };
 }
 
 /** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot,
@@ -218,10 +230,20 @@ export function replaceDormantEntry(
   given: MemoryEntry,
 ): void {
   const entry = redactEntry(given);
-  cachedStatement(
-    db,
-    `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`,
-  ).run(entry.id, entry.content, JSON.stringify(toWire(entry)), tenantId, id);
+  withHeldDigests(db, 'dormant', [{ tenantId, id: entry.id, content: entry.content }], () =>
+    cachedStatement(
+      db,
+      `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ?, rejection_digest = ? ` +
+        `WHERE tenant_id = ? AND id = ?`,
+    ).run(
+      entry.id,
+      entry.content,
+      JSON.stringify(toWire(entry)),
+      rejectionDigest(entry.content),
+      tenantId,
+      id,
+    ),
+  );
 }
 
 /** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot

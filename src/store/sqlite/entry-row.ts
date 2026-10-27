@@ -20,6 +20,8 @@ import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 import { redactEntry } from '../../base/util/secret-detect.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { withHeldDigests, type KeyedText } from './text-digests.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -47,13 +49,20 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   if (holder !== undefined && holder.tenant_id !== (entry.tenantId ?? DEFAULT_TENANT_ID)) {
     throw new CrossTenantIdError(entry.id);
   }
-  db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
+  const stored = redactEntry(entry);
+  withHeldDigests(db, 'live', [keyedText(stored)], () =>
+    db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(stored)),
+  );
   return holder === undefined;
 }
 
-// The duplicate read's key goes with every row write; no read selects it, so it stays out of
-// MEMORY_ROW_COLUMNS.
-const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash'] as const;
+function keyedText(entry: MemoryEntry): KeyedText {
+  return { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, id: entry.id, content: entry.content };
+}
+
+// The duplicate read's key and the rejection key go with every row write; no read selects them,
+// so they stay out of MEMORY_ROW_COLUMNS.
+const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash', 'rejection_digest'] as const;
 const UPDATED_COLUMNS = WRITTEN_COLUMNS.slice(1);
 
 const UPSERT_MEMORY_SQL =
@@ -70,19 +79,21 @@ export function updateMemoryRows(
   entries: readonly MemoryEntry[],
 ): readonly string[] {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
-  for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
-    cachedStatement(
-      db,
-      `WITH v(${WRITTEN_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, WRITTEN_COLUMNS.length)}) ` +
-        `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
-    ).run(...chunk.flatMap(memoryRowValues));
-  }
-  return entries.filter((entry) => redactEntry(entry) !== entry).map((entry) => entry.id);
+  const stored = entries.map(redactEntry);
+  withHeldDigests(db, 'live', stored.map(keyedText), () => {
+    for (const chunk of chunked(stored, rowsPerStatement(WRITTEN_COLUMNS.length))) {
+      cachedStatement(
+        db,
+        `WITH v(${WRITTEN_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, WRITTEN_COLUMNS.length)}) ` +
+          `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
+      ).run(...chunk.flatMap(memoryRowValues));
+    }
+  });
+  return entries.filter((entry, i) => stored[i] !== entry).map((entry) => entry.id);
 }
 
-/** Bind values for WRITTEN_COLUMNS, in its order, from the entry's stored form. */
-function memoryRowValues(given: MemoryEntry): Array<string | number | null> {
-  const entry = redactEntry(given);
+/** Bind values for WRITTEN_COLUMNS, in its order, from an entry in its stored form. */
+function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
   // time in SQL.
   const created = isoInstant(entry.created) ?? entry.created;
@@ -125,6 +136,7 @@ function memoryRowValues(given: MemoryEntry): Array<string | number | null> {
     entry.latestAt ?? null,
     entry.dagLevel3BuiltAt ?? null,
     duplicateHash(entry.content),
+    rejectionDigest(entry.content),
   ];
 }
 

@@ -46,6 +46,7 @@ import { bound } from './bound.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { handleStamp } from './handle-clock.js';
+import { fillRejectionDigests } from './text-digests.js';
 
 type HoldsValue = (text: string) => boolean;
 
@@ -361,5 +362,10 @@ export function sqliteRejections({ on, files }: Handles): Rejections {
       openStore,
     ),
     ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
+    ...bound<Required<Pick<Rejections, 'fillDigests'>>>(
+      on,
+      { fillDigests: fillRejectionDigests },
+      openStore,
+    ),
   };
 }

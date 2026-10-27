@@ -179,6 +179,7 @@ export const WORKER_OPS = {
     lift: 'write',
     list: 'read',
     refusedAmong: 'read',
+    fillDigests: 'write',
   },
   failureLog: {
     record: 'write',
