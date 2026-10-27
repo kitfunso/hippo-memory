@@ -22,7 +22,7 @@ import {
   storedModel,
   VECTOR_GRAPH_THRESHOLD,
 } from './vector-graph-rows.js';
-import type { ProposedMatches, VectorIndex, VectorMatchQuery } from './vector-store.js';
+import type { ProposedMatches, VectorIndex, VectorMatchQuery } from './vector-match.js';
 import { cachedStatement } from './statement-cache.js';
 
 // Longest a build holds the thread before a waiting job may run.

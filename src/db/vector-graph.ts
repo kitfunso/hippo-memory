@@ -254,7 +254,7 @@ export function searchView(
   }
   const qNorm = norm(query);
   const vectorOf = opts.vectorOf;
-  // A directionless query or row scores 0, where the full scan in vector-store.ts drops it.
+  // A directionless query or row scores 0, where the full scan in vector-match.ts drops it.
   const score = (n: number): number =>
     qNorm < ZERO_NORM ? 0 : (cosineToQuery(query, qNorm, vectorOf(n)) ?? 0);
   const seen = new Map<number, boolean>();
