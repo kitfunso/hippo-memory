@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { earlyUnstubs, misnamedTests, onceStubs, unscrubbedEnvReads } from '../../scripts/check-test-env.mjs';
+import {
+  earlyUnstubs,
+  longTimeouts,
+  misnamedTests,
+  onceStubs,
+  unscrubbedEnvReads,
+} from '../../scripts/check-test-env.mjs';
+import { ownTimeouts } from '../../scripts/lib/test-classes.mjs';
 
 describe('onceStubs', () => {
   it('flags a stub made once under an afterEach unstub, at module scope, in a describe body or in beforeAll', () => {
@@ -68,18 +75,20 @@ describe('earlyUnstubs', () => {
 const CHILD = `import { spawn } from 'node:${['child', 'process'].join('_')}';\n`;
 const SERVER = `await ${['ser', 've'].join('')}({ port: 0 });\n`;
 
-function misnamedIn(files: Record<string, string>): { file: string; has: string; want: string }[] {
+function inTree<T>(files: Record<string, string>, read: (dir: string) => T): T {
   const root = mkdtempSync(join(tmpdir(), 'hippo-test-names-'));
   try {
     for (const [p, text] of Object.entries(files)) {
       mkdirSync(dirname(join(root, 'tests', p)), { recursive: true });
       writeFileSync(join(root, 'tests', p), text);
     }
-    return misnamedTests(join(root, 'tests'));
+    return read(join(root, 'tests'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
+
+const misnamedIn = (files: Record<string, string>) => inTree(files, misnamedTests);
 
 describe('misnamedTests', () => {
   it('flags a test whose name does not match the child, server or nothing it starts', () => {
@@ -98,14 +107,12 @@ describe('misnamedTests', () => {
     ]);
   });
 
-  it('puts a unit test with a long timeout of its own in the slow project, and leaves the slow name alone', () => {
-    const withTimeout = (ms: string): string => `it('x', () => {\n}, ${ms});\n`;
+  it('keeps a unit test with a long timeout in unit, and leaves a slow name that starts nothing alone', () => {
     const files = {
-      'long.test.ts': withTimeout('90_000'),
-      'ok.test.ts': withTimeout('30_000'),
+      'long.test.ts': "it('x', () => {\n}, 90_000);\n",
       'named.slow.test.ts': "import { x } from '../../src/x.js';\n",
     };
-    expect(misnamedIn(files)).toEqual([{ file: 'tests/long.test.ts', has: 'unit', want: 'slow' }]);
+    expect(misnamedIn(files)).toEqual([]);
   });
 
   it('follows a _helpers module that starts a child, through a helper that imports it', () => {
@@ -140,5 +147,90 @@ describe('misnamedTests', () => {
 
   it('passes the real env.ts', () => {
     expect(unscrubbedEnvReads(readFileSync('src/base/util/env.ts', 'utf8'))).toEqual([]);
+  });
+});
+
+const FN = '() => {}';
+const at = (source: string) => ownTimeouts(source, 'x.test.ts').map((t) => t.ms);
+
+describe('ownTimeouts', () => {
+  it('reads the timeout of every test, suite and hook form, with its modifiers', () => {
+    const forms = [
+      `it('a', ${FN}, 20_000);`,
+      `test('a', ${FN}, { timeout: 20_000 });`,
+      `describe('a', { timeout: 20_000 }, ${FN});`,
+      `suite('a', ${FN}, 20000);`,
+      ...['beforeEach', 'afterEach', 'beforeAll', 'afterAll', 'aroundEach', 'aroundAll'].map(
+        (h) => `${h}(${FN}, 20_000);`,
+      ),
+      `onTestFinished(${FN}, 20_000);`,
+      `ctx.onTestFailed(${FN}, 20_000);`,
+      `it.each([1])('a', ${FN}, 20_000);`,
+      `test.for([1])('a', ${FN}, 20_000);`,
+      `it.skipIf(slow)('a', ${FN}, 20_000);`,
+      `it.runIf(fast)('a', ${FN}, 20_000);`,
+      `it.only('a', ${FN}, 20_000);`,
+      `it.skip('a', ${FN}, 20_000);`,
+      `it.concurrent.each([1])('a', ${FN}, 20_000);`,
+      `describe.sequential('a', ${FN}, 20_000);`,
+      `it.fails('a', ${FN}, 20_000);`,
+    ];
+    for (const form of forms) expect(at(form), form).toEqual([20_000]);
+  });
+
+  it('follows an alias of a test function: a renamed import, a const and test.extend', () => {
+    const source = [
+      "import { it as check } from 'vitest';",
+      'const plain = test;',
+      'const withDb = test.extend({});',
+      `check('a', ${FN}, 20_000);`,
+      `plain('a', ${FN}, 21_000);`,
+      `withDb('a', ${FN}, 22_000);`,
+    ].join('\n');
+    expect(ownTimeouts(source, 'x.test.ts')).toEqual([
+      { line: 4, ms: 20_000 },
+      { line: 5, ms: 21_000 },
+      { line: 6, ms: 22_000 },
+    ]);
+  });
+
+  it('reads vi.setConfig, vi.waitFor and expect.poll', () => {
+    expect(at('vi.setConfig({ testTimeout: 20_000, hookTimeout: 21_000 });')).toEqual([20_000, 21_000]);
+    expect(at(`await vi.waitFor(${FN}, { timeout: 20_000 });`)).toEqual([20_000]);
+    expect(at(`await vi.waitFor(${FN}, 20_000);`)).toEqual([20_000]);
+    expect(at(`await expect.poll(${FN}, { timeout: 20_000 }).toBe(1);`)).toEqual([20_000]);
+  });
+
+  it('gives null for a timeout it cannot read: a name or a spread', () => {
+    expect(at(`it('a', ${FN}, LONG);`)).toEqual([null]);
+    expect(at(`it('a', ${FN}, { ...o });`)).toEqual([null]);
+  });
+
+  it('skips calls that are not tests and text that only looks like one', () => {
+    const source = [
+      `it('a', ${FN}, 10_000);`,
+      `const s = "it('a', ${FN}, 20000); setTimeout(${FN}, 20000)";`,
+      `setTimeout(${FN}, 20000);`,
+      'await fetchWithRetry(url, {}, { timeoutMs: 60_000 });',
+      `it('b', ${FN});`,
+    ].join('\n');
+    expect(at(source)).toEqual([10_000]);
+  });
+});
+
+describe('longTimeouts', () => {
+  it('lists each timeout over 10 s or unreadable, in any test file the eval config does not run', () => {
+    const files = {
+      'a.test.ts': `it('a', ${FN}, 20_000);\nit('b', ${FN}, 10_000);\n`,
+      'b.process.test.ts': `it('a', ${FN}, LONG);\n`,
+      'eval/token-eval-other.test.ts': `it('a', ${FN}, 20_000);\n`,
+      'eval/token-eval-ab-run.test.ts': `it('a', ${FN}, 600_000);\n`,
+      'ok.test.ts': `it('a', ${FN});\n`,
+    };
+    expect(inTree(files, longTimeouts)).toEqual([
+      { file: 'tests/a.test.ts', line: 1, ms: 20_000 },
+      { file: 'tests/b.process.test.ts', line: 1, ms: null },
+      { file: 'tests/eval/token-eval-other.test.ts', line: 1, ms: 20_000 },
+    ]);
   });
 });

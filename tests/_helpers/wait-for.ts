@@ -1,3 +1,8 @@
+/** The default deadline of an awaited event: a test's own wait never runs past it unless it names why. */
+export const EVENT_DEADLINE_MS = 10_000;
+/** The longest any wait or child run may take, so it fails before vitest's 60 s worker RPC timeout does. */
+export const HANG_GUARD_MS = 45_000;
+
 export interface WaitForOptions {
   readonly timeoutMs?: number;
   readonly intervalMs?: number;
@@ -9,7 +14,7 @@ export interface WaitForOptions {
 
 /** Polls `check` until it returns true; throws at the deadline so a missed event fails where it was awaited. */
 export async function waitFor(check: () => boolean | Promise<boolean>, opts: WaitForOptions = {}): Promise<void> {
-  const { timeoutMs = 10_000, intervalMs = 20, what = 'condition', retryOnThrow = false } = opts;
+  const { timeoutMs = EVENT_DEADLINE_MS, intervalMs = 20, what = 'condition', retryOnThrow = false } = opts;
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
   for (;;) {
