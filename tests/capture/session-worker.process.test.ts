@@ -18,8 +18,7 @@ import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;
 let sessions: string;
-/** The sessions folder's files, leaving out the lock database a finished worker keeps. */
-const left = (): string[] => fs.readdirSync(sessions).filter((n) => !n.endsWith('.lock.db'));
+const left = (): string[] => fs.readdirSync(sessions);
 const file = (suffix: string): string => path.join(sessions, `${ID}${suffix}`);
 
 beforeEach(() => {
@@ -101,6 +100,24 @@ describe('runSessionWorker', () => {
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
     expect(left()).toEqual([]);
+  });
+
+  it('looks at the queue again after a release even when it ran nothing, and stops after five rounds', async () => {
+    // A folder where takeQueued renames the request to makes every take fail: ran stays false and the request stays queued.
+    fs.mkdirSync(file(`.queued.${process.pid}`));
+    fs.writeFileSync(path.join(file(`.queued.${process.pid}`), 'keep'), '');
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work);
+      expect(runs).toEqual([]);
+      const lines = write.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('cannot take the queued request'));
+      expect(lines).toHaveLength(5);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it('lets only one of two acquirers in one process run at a time: the second queues and its run waits for the first', async () => {
@@ -261,7 +278,7 @@ describe('pruning the sessions folder', () => {
     expect(left()).toEqual([]);
   });
 
-  it('keeps fresh files, the lock database of a queued or recent session and every queued request', () => {
+  it('keeps fresh files, the lock database of any session and every queued request', () => {
     const keep = [
       'b.cursor.json',
       'b.cursor.json.123.tmp',
@@ -282,18 +299,6 @@ describe('pruning the sessions folder', () => {
     age('c.queued.99', 400);
     expect(pruneSessionFiles(Date.now())).toBe(0);
     expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
-  });
-
-  it('removes an idle lock database, but not one a live worker holds', async () => {
-    fs.writeFileSync(path.join(sessions, 'e.lock.db'), '');
-    const holder = await holdInChild(file('.lock.db'));
-    try {
-      expect(pruneSessionFiles(Date.now())).toBe(1);
-      expect(fs.existsSync(path.join(sessions, 'e.lock.db'))).toBe(false);
-      expect(fs.existsSync(file('.lock.db'))).toBe(true);
-    } finally {
-      await kill(holder);
-    }
   });
 
   it('does nothing, and does not throw, when the folder is missing', () => {

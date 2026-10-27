@@ -1,7 +1,8 @@
 // A lock the operating system holds for a live process: BEGIN EXCLUSIVE on a small lock database
-// takes a LockFileEx (win32) or fcntl (POSIX) lock that dies with its holder, so nothing ages or breaks one.
+// takes a LockFileEx (win32) or fcntl (POSIX) lock that dies with its holder. Only a holder unlinks the
+// file, at release; a take checks that the path names the same file before its open and after its lock.
 import { createRequire } from 'node:module';
-import { statSync } from 'node:fs';
+import { closeSync, openSync, statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 
@@ -29,7 +30,7 @@ export interface FileIdentity {
 export type StatFn = (path: string) => FileIdentity | undefined;
 
 export interface FileLock {
-  /** Frees the lock; the file stays. Never throws, idempotent. */
+  /** Frees the lock and removes the file when no other taker has it open. Never throws, idempotent. */
   release(): void;
 }
 
@@ -39,11 +40,13 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
-// Two takers starting together can each fail the same EXCLUSIVE upgrade; a jittered retry lets one win.
-const BUSY_TRIES = 2;
-const BUSY_JITTER_MS = 4;
-const pause = new Int32Array(new SharedArrayBuffer(4));
+// SQLite's own wait: a lock still busy after it had a real holder, and a pair of starting takers sort themselves out.
+const LOCK_WAIT_MS = 100;
 const MAX_ATTEMPTS = 3;
+const MAX_CREATES = 10;
+const WIN32 = process.platform === 'win32';
+// win32 refuses an unlink while another taker has the file open; that taker unlinks at its own release.
+const OPEN_FILE_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 
 // bigint, since a win32 file index can pass 2^53
 const statIdentity: StatFn = (path) => {
@@ -88,59 +91,87 @@ function unusable<E>(path: string, err: E): LockTake {
   }
 }
 
-function holder(db: LockConnection, path: string): FileLock {
+function unlinkIfHeld(path: string, held: FileIdentity, stat: StatFn): void {
+  try {
+    if (!sameFile(stat(path), held)) return;
+    unlinkSync(path);
+  } catch (err) {
+    const code = errorCode(err);
+    if (code === 'ENOENT' || (WIN32 && OPEN_FILE_CODES.has(code))) return;
+    log.warn(`lock file ${path} was not removed: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
+function holder(db: LockConnection, path: string, held: FileIdentity, stat: StatFn): FileLock {
   let released = false;
   return {
     release() {
       if (released) return;
       released = true;
-      closeLogged(db, path);
+      try {
+        if (WIN32) closeLogged(db, path);
+        unlinkIfHeld(path, held, stat);
+      } finally {
+        if (!WIN32) closeLogged(db, path);
+      }
     },
   };
 }
 
-function beginExclusive(db: LockConnection): void {
-  for (let tries = 1; ; tries++) {
-    try {
-      db.exec('BEGIN EXCLUSIVE');
-      return;
-    } catch (err) {
-      if (primaryCode(err) !== SQLITE_BUSY || tries === BUSY_TRIES) throw err;
-      Atomics.wait(pause, 0, 0, 1 + Math.random() * BUSY_JITTER_MS);
-    }
+type Pass = LockTake | { readonly kind: 'again'; readonly created: boolean };
+const AGAIN: Pass = { kind: 'again', created: false };
+const NO_FILE: Pass = { kind: 'again', created: true };
+
+/** Creates the lock file when it is missing, so the stat before the open has a file to name. */
+function statOrCreate(path: string, stat: StatFn): FileIdentity | undefined {
+  const found = stat(path);
+  if (found !== undefined) return found;
+  closeSync(openSync(path, 'a'));
+  return stat(path);
+}
+
+/** True when the path no longer names `before`; a stat that fails counts as unchanged. */
+function pathMoved(path: string, before: FileIdentity | undefined, stat: StatFn): boolean {
+  if (before === undefined) return false;
+  try {
+    return !sameFile(before, stat(path));
+  } catch (err) {
+    log.warn(`lock file ${path} could not be checked: ${errorMessage(err)}`, errorFields(err));
+    return false;
   }
 }
 
-type Pass = LockTake | { readonly kind: 'again' };
-
-/** One open, stat and lock. A changed or missing path, or a busy lock, is another pass: the file
- * is never unlinked under a taker, so only a prune's unlink can change the path. */
 function onePass(path: string, stat: StatFn): Pass {
+  let before: FileIdentity | undefined;
   let db: LockConnection | undefined;
-  let opened: FileIdentity | undefined;
   try {
-    db = new DatabaseSync(path, { timeout: 0 });
-    opened = stat(path);
-    beginExclusive(db);
-    if (sameFile(opened, stat(path))) return { kind: 'taken', lock: holder(db, path) };
+    before = statOrCreate(path, stat);
+    if (before === undefined) return NO_FILE;
+    db = new DatabaseSync(path, { timeout: LOCK_WAIT_MS });
+    db.exec('BEGIN EXCLUSIVE');
+    if (sameFile(before, stat(path))) {
+      return { kind: 'taken', lock: holder(db, path, before, stat) };
+    }
     closeLogged(db, path);
-    return { kind: 'again' };
+    return AGAIN;
   } catch (err) {
     if (db !== undefined) closeLogged(db, path);
-    if (primaryCode(err) === SQLITE_BUSY) return { kind: 'again' };
-    // A prune that unlinked the path under this open fails the lock with an I/O error.
-    return opened !== undefined && !sameFile(opened, stat(path))
-      ? { kind: 'again' }
-      : unusable(path, err);
+    if (primaryCode(err) === SQLITE_BUSY) return { kind: 'held' };
+    // Another holder's release, between the stat and the lock, fails this open or lock.
+    return pathMoved(path, before, stat) ? AGAIN : unusable(path, err);
   }
 }
 
 /** Takes the lock database at `path` (its folder must exist): taken, held by a live connection, or
- * unusable. Release only closes; the file stays for the next take. */
+ * unusable. Only a holder unlinks, at release; a take checks the file across its open. */
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
-  for (let pass = 0; pass < MAX_ATTEMPTS; pass++) {
+  let passes = 0;
+  let creates = 0;
+  while (passes < MAX_ATTEMPTS && creates < MAX_CREATES) {
     const result = onePass(path, stat);
     if (result.kind !== 'again') return result;
+    if (result.created) creates++;
+    else passes++;
   }
   return { kind: 'held' };
 }

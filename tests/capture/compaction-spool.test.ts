@@ -28,7 +28,7 @@ const log = (message: string): void => {
 };
 const spoolDir = (): string => path.join(root, 'compactions-spool');
 /** The spool folder's files, leaving out the lock database a finished run keeps. */
-const listing = (): string[] => fs.readdirSync(spoolDir()).filter((n) => n !== 'replay.lock.db');
+const listing = (): string[] => fs.readdirSync(spoolDir());
 const lockFile = (): string => path.join(spoolDir(), 'replay.lock.db');
 const stamp = (ms: number): string => String(ms).padStart(13, '0');
 const realFs: SpoolFs = fs;
@@ -214,7 +214,7 @@ describe('one replayer at a time', () => {
     expect(seen).toEqual([]);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatch(/^spool lock not taken: /);
-    expect(listing().sort()).toEqual([`${A}.a0.json`]);
+    expect(listing().sort()).toEqual([`${A}.a0.json`, 'replay.lock.db']);
     expect(fs.statSync(lockFile()).isDirectory()).toBe(true);
   });
 });

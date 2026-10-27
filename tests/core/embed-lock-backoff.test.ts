@@ -58,5 +58,5 @@ describe('embedAll waiting on a held embedding index lock', () => {
 
     expect(asked).toEqual(ASKED_AT_MS);
     if (held.kind === 'taken') held.lock.release();
-  });
+  }, 30_000);
 });

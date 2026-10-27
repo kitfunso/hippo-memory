@@ -1,7 +1,8 @@
 // The lock is the operating system's: one holder per file, freed the moment its holder dies.
 import { afterAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,6 +15,11 @@ const HOLDER = join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
 const LOOPER = join(import.meta.dirname, '..', '_helpers', 'lock-looper.mjs');
 const DIST_LOCK = join(import.meta.dirname, '..', '..', 'dist', 'host', 'file-lock.js');
 const ROUNDS = 20;
+
+// SAFETY: node:sqlite's DatabaseSync has this shape at runtime; the module ships no bundled types here.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void };
+};
 
 const made: string[] = [];
 const scratch = (): string => {
@@ -98,6 +104,7 @@ describe('four processes looping take and release', () => {
       spawn(process.execPath, [LOOPER, join(dir, 'loop.lock.db'), log, '2000'], { stdio: 'ignore' }),
     );
     await Promise.all(kids.map(exited));
+    expect(kids.map((kid) => kid.exitCode)).toEqual([0, 0, 0, 0]);
     const lines = readFileSync(log, 'utf8').trim().split('\n');
     let inside: string | null = null;
     const entered = new Set<string>();
@@ -134,17 +141,52 @@ describe('one process', () => {
     if (first.kind === 'taken') first.lock.release();
   });
 
-  it('takes a missing path, keeps the file after release, and takes again', () => {
+  it('takes a missing path, removes the file at release, and takes again', () => {
     const path = join(scratch(), 's.lock.db');
     const first = takeFileLock(path);
     if (first.kind !== 'taken') throw new Error(`expected taken, got ${first.kind}`);
     expect(existsSync(path)).toBe(true);
     first.lock.release();
     first.lock.release();
-    expect(existsSync(path)).toBe(true);
+    expect(existsSync(path)).toBe(false);
     const again = takeFileLock(path);
     expect(again.kind).toBe('taken');
     if (again.kind === 'taken') again.lock.release();
+  });
+
+  it('is held, not taken, when the path is replaced and locked as the take starts', () => {
+    const path = join(scratch(), 's.lock.db');
+    writeFileSync(path, '');
+    let rival: { exec(sql: string): void; close(): void } | undefined;
+    let calls = 0;
+    const stat: StatFn = (p) => {
+      if (calls++ === 0) {
+        unlinkSync(p);
+        rival = new DatabaseSync(p);
+        rival.exec('BEGIN EXCLUSIVE');
+      }
+      return identity(p);
+    };
+    try {
+      expect(takeFileLock(path, stat).kind).toBe('held');
+    } finally {
+      rival?.close();
+    }
+  });
+
+  it('gives unusable with the original error when the recovery stat throws', () => {
+    const path = join(scratch(), 's.lock.db');
+    mkdirSync(path);
+    let calls = 0;
+    const stat: StatFn = (p) => {
+      if (calls++ > 0) throw new Error('stat failed');
+      return identity(p);
+    };
+    const take = takeFileLock(path, stat);
+    if (take.kind !== 'unusable') throw new Error(`expected unusable, got ${take.kind}`);
+    const cause = take.cause;
+    if (!(cause instanceof Error) || !('errcode' in cause)) throw new Error('the cause carries no errcode');
+    expect(Number(cause.errcode) & 0xff).toBe(14);
   });
 
   it('reports a directory at the lock path as unusable, with the SQLite primary code', () => {
@@ -157,7 +199,7 @@ describe('one process', () => {
     expect(Number(cause.errcode) & 0xff).toBe(14);
   });
 
-  it('counts a path that changes identity after the lock as held, and leaves the file', () => {
+  it('counts a path that changes identity after the lock as held', () => {
     const path = join(scratch(), 's.lock.db');
     expect(
       takeFileLock(
@@ -165,7 +207,6 @@ describe('one process', () => {
         driftingStat(() => true),
       ).kind,
     ).toBe('held');
-    expect(existsSync(path)).toBe(true);
     const real = takeFileLock(path);
     expect(real.kind).toBe('taken');
     if (real.kind === 'taken') real.lock.release();

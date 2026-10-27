@@ -89,7 +89,7 @@ describe('embeddings.json cross-process lock', () => {
     await kill(await holdInChild(lockPath));
     expect(await embedAll(localIndex(root))).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
-    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(fs.existsSync(lockPath)).toBe(false);
   });
 
   it('waits for a live holder, then writes once the lock is released', async () => {

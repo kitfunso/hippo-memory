@@ -102,6 +102,9 @@ function takeQueued(queued: string): WorkerMode | null {
   }
 }
 
+// A request takeQueued cannot take stays queued for the next worker instead of spinning here.
+const MAX_ROUNDS = 5;
+
 /** Runs `work` unless a live worker holds this session, which then runs the request after its
  * own so the last reply is never dropped. */
 export async function runSessionWorker(
@@ -112,22 +115,21 @@ export async function runSessionWorker(
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
+  let rounds = 0;
   for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
     if (take.kind === 'unusable') {
       warnUnusableLockOnce(files.lock, take.cause);
       return work(mode);
     }
-    let ran = false;
     try {
       for (let next = takeQueued(files.queued); next !== null; next = takeQueued(files.queued)) {
-        ran = true;
         await work(next);
       }
     } finally {
       take.lock.release();
     }
-    // A request queued after the last take found the lock still held and left, so it runs here.
-    if (!ran || !fs.existsSync(files.queued)) return;
+    // A taker that found the lock held left its request queued, so look again after every release.
+    if (!fs.existsSync(files.queued) || ++rounds >= MAX_ROUNDS) return;
   }
 }
 
@@ -208,7 +210,6 @@ export function saveTurnPosition(
   }
 }
 
-const WIN32 = process.platform === 'win32';
 const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
 const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
 
@@ -221,40 +222,8 @@ function pruneLimit(name: string): number | null {
   return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
 }
 
-const LOCK_DB = '.lock.db';
-const BUSY_UNLINK = new Set(['EBUSY', 'EPERM', 'EACCES']);
-
-/** A session's lock database is idle when it has no queued request and its cursor is gone or
- * past its age. */
-function lockDbIdle(dir: string, id: string, nowMs: number): boolean {
-  if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
-  const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });
-  return cursor === undefined || nowMs - cursor.mtimeMs >= CURSOR_MAX_AGE_MS;
-}
-
-/** Removes an idle lock database after taking it; win32 cannot unlink an open file, so it
- * releases first and leaves the file when another taker opened it. */
-function removeIdleLockDb(file: string): boolean {
-  const take = takeFileLock(file);
-  if (take.kind !== 'taken') return false;
-  try {
-    if (!WIN32) fs.unlinkSync(file);
-  } finally {
-    take.lock.release();
-  }
-  if (WIN32) {
-    try {
-      fs.unlinkSync(file);
-    } catch (err) {
-      if (BUSY_UNLINK.has(errorCode(err))) return false;
-      throw err;
-    }
-  }
-  return true;
-}
-
-/** Removes cursor files and leftovers of the old text locks past their age, and the lock database
- * of a session that is idle. Never throws; returns the number removed. */
+/** Removes cursor files and leftovers of the old text locks past their age. Never throws; returns
+ * the number removed. */
 export function pruneSessionFiles(nowMs: number): number {
   const dir = sessionsDir();
   let removed = 0;
@@ -270,11 +239,6 @@ export function pruneSessionFiles(nowMs: number): number {
   for (const name of names) {
     const file = path.join(dir, name);
     try {
-      if (name.endsWith(LOCK_DB)) {
-        const idle = lockDbIdle(dir, name.slice(0, -LOCK_DB.length), nowMs);
-        if (idle && removeIdleLockDb(file)) removed++;
-        continue;
-      }
       const limit = pruneLimit(name);
       if (limit === null) continue;
       const stat = fs.statSync(file, { throwIfNoEntry: false });
