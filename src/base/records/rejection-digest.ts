@@ -2,6 +2,7 @@
 // reaching the store.
 import { createHash } from 'node:crypto';
 import { textForms } from '../util/secret-detect.js';
+import { heldTexts } from '../util/same-text.js';
 
 /** Normalize content for rejection digests: NFC, lowercase, collapse whitespace runs, trim. No
  * punctuation stripping: over-normalizing causes false refusals, worse than misses. */
@@ -19,4 +20,12 @@ export function rejectionDigest(content: string): string {
  * or tombstone keeps the raw digest. */
 export function contentDigests(text: string): readonly string[] {
   return textForms(text).map(rejectionDigest);
+}
+
+/** The digests a stored text answers to besides its own, sorted: each form of it and of each
+ * bullet it holds, read as merged whatever wrote it, so the stored keys cover every row's source. */
+export function otherDigests(content: string): string[] {
+  const own = rejectionDigest(content);
+  const texts = [content, ...heldTexts({ content, source: 'consolidation' })];
+  return [...new Set(texts.flatMap(contentDigests))].filter((d) => d !== own).sort();
 }
