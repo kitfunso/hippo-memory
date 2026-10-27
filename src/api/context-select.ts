@@ -1,31 +1,15 @@
-// contextGet's selection stages: the pinned-only branch, the strongest-first branch and the search
-// branch.
-
-import { recallScopeFilter } from '../base/scope/recall-scope.js';
+// contextGet's selection stages: the pinned-only branch and the strongest-first branch.
 import { calculateStrength, type StrengthModel } from '../base/memory/strength.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
-import { auditQueryFields } from '../base/records/audit-report.js';
-import type { ContextReads, RequiredStore, StoreWith } from '../base/ports/store.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
-import { rankBothStores } from '../domain/sharing/search-both.js';
-import { searchByEngine } from '../domain/search/engine.js';
-import { vectorSourceOf } from '../domain/search/hybrid.js';
-import type { HybridVectorCandidates, VectorSource } from '../domain/search/vector.js';
-import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../base/rank/search-types.js';
+import { DEFAULT_LOCAL_BUMP } from '../base/rank/search-types.js';
 import { compareScoredResults } from '../base/rank/compare.js';
 import { scopeMatch } from '../base/rank/active-scope.js';
 import { scopeBoostFor } from '../domain/search/boosts.js';
-import { type HippoConfig } from '../base/config/config.js';
-import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { AmbientAdmission } from '../base/scope/read-admission.js';
+import type { HippoConfig } from '../base/config/config.js';
 import { promptTokens, contentTokens, gatePromptRecall } from '../base/rank/prompt-recall.js';
 import type { DeliveryObserver } from './delivery-recorder.js';
-import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
-import { heldIds } from './recall/finish.js';
-import type { Context, GlobalInReach } from './types.js';
-import type { AmbientLoadResult } from '../base/ports/store/context-reads.js';
-import type { AppendAuditOptions } from '../base/ports/store/types.js';
-
+import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
   admitWithinBudget,
   newestWorthSurfacing,
@@ -34,60 +18,10 @@ import {
   strongestWithin,
   type Picked,
 } from '../domain/context/select-policy.js';
+import type { ContextPlan } from './context-plan.js';
+import type { ContextAdmission, ContextPools } from './context-pools.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
-
-/** One store contextGet reads rows from: its base search and its context reads. */
-export interface ContextSource {
-  /** Sessions is read only for the unfinished handoff, where its absence means none. */
-  readonly store: StoreWith<never, 'sessions'>;
-  readonly reads: ContextReads;
-}
-
-/** What contextGet resolved from opts and config before it read a row. */
-export interface ContextPlan {
-  /** The served store, else hippo.db under the root. */
-  local: ContextSource;
-  pinnedOnly: boolean;
-  limit: number;
-  includeRecent: number;
-  activeScope: string;
-  exactScope: string | undefined;
-  /** The caller's personal scope, from its authenticated owner; the default deny admits it. */
-  ownScope: string | undefined;
-  query: string;
-  hasLocal: boolean;
-  hasGlobal: boolean;
-  globalRoot: string;
-  primaryIsGlobal: boolean;
-  hasLocalTaskState: boolean;
-  sharedStore: boolean;
-  config: HippoConfig;
-  currentProject: ProjectRef;
-  includeCrossProject: boolean;
-  originProject: readonly string[] | undefined;
-  promptRecallPending: boolean;
-  cost: ContextCost | undefined;
-  price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;
-  obs: DeliveryObserver | undefined;
-  /** The instant the whole read scores strength at, by the model its Context runs under. */
-  now: Date;
-  strength: StrengthModel;
-}
-
-/** The ambient admit rules. */
-export interface ContextAdmission {
-  /** `admit` as data, for a store to apply. */
-  rule: AmbientAdmission;
-  admit: (e: MemoryEntry) => boolean;
-  /** What the two-store search admits: `admit` without the own-session compaction rule. */
-  bothStoresAdmit: (e: MemoryEntry) => boolean;
-}
-
-export interface ContextPools {
-  local: AmbientLoadResult;
-  global: AmbientLoadResult;
-}
 
 // Share and promote copy a memory to the global store under a new id, so equal content is the only
 // link. A pinned copy wins, then the stronger one after the ranking's own global discount; a tie
@@ -387,210 +321,4 @@ export function selectStrongest(
   }));
 
   return strongestWithin(localRanked, globalRanked, left);
-}
-
-export interface SelectBySearchOptions {
-  readonly plan: ContextPlan;
-  readonly left: number;
-  readonly pools: ContextPools;
-  readonly admission: ContextAdmission;
-}
-
-/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the
- * 'recall' audit row. */
-export async function selectBySearch(
-  ctx: Context,
-  { plan, left, pools, admission }: SelectBySearchOptions,
-): Promise<ContextResultEntry[]> {
-  const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
-  const results =
-    plan.hasGlobal && !plan.primaryIsGlobal
-      ? await searchBothStores(ctx, plan, {
-          left,
-          minResults,
-          pools,
-          admit: admission.bothStoresAdmit,
-        })
-      : await searchLocalRows(ctx, plan, {
-          left,
-          minResults,
-          localEntries: pools.local.entries,
-          admit: admission.admit,
-        });
-  await auditContextRecall(ctx, plan, results.length);
-  return results;
-}
-
-// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an
-// excluded row fill the budget or shadow its admitted duplicate.
-interface SearchBothStoresOptions {
-  readonly left: number;
-  readonly minResults: number | undefined;
-  readonly pools: ContextPools;
-  readonly admit: (e: MemoryEntry) => boolean;
-}
-
-async function searchBothStores(
-  ctx: Context,
-  plan: ContextPlan,
-  options: SearchBothStoresOptions,
-): Promise<ContextResultEntry[]> {
-  const { left, minResults, pools, admit } = options;
-  const { cost, price } = plan;
-  const isGlobalHit = await globalHitTest(ctx, plan, pools);
-  const merged = await rankBothStores({
-    query: plan.query,
-    sources: bothVectorSources(ctx, plan),
-    entries: { local: pools.local.entries, global: pools.global.entries },
-    vectorCandidates: contextVectorSpec(ctx, plan, admit),
-    options: {
-      ...engineSettings(ctx, plan),
-      budget: left,
-      minResults,
-      cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
-    },
-  });
-  return merged.map((r) => ({
-    entry: r.entry,
-    score: r.score,
-    tokens: price(r.entry, isGlobalHit(r.entry)),
-    isGlobal: isGlobalHit(r.entry),
-  }));
-}
-
-/** What both context engine calls rank under, built once so a new ranking input reaches each. */
-function engineSettings(ctx: Context, plan: ContextPlan) {
-  return {
-    scope: plan.activeScope,
-    runtime: ctx.config.runtime,
-    cwd: ctx.infra.machine.cwd,
-    switches: ctx.infra.evalSwitches,
-    now: plan.now,
-  };
-}
-
-// A local pool row is local by construction; sync keeps a global row's id on its local copy, so
-// the global pool is looked up.
-async function globalHitTest(
-  ctx: Context,
-  plan: ContextPlan,
-  pools: ContextPools,
-): Promise<(e: MemoryEntry) => boolean> {
-  const poolIds = (pool: AmbientLoadResult): string[] =>
-    [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
-  const localIds = new Set(poolIds(pools.local));
-  const alsoLocal = await heldIds(
-    plan.local.store,
-    poolIds(pools.global).filter((id) => !localIds.has(id)),
-    ctx.tenantId,
-  );
-  return (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
-}
-
-function bothVectorSources(ctx: Context, plan: ContextPlan) {
-  return {
-    local: vectorSourceOf({
-      store: plan.local.store,
-      config: plan.config,
-      onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: ctx.infra.embedderFor,
-    }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm
-    // runs.
-    global: globalVectorSource(ctx),
-  };
-}
-
-/** The vector arm under the lexical window's own tenant, scope and current-row rules. */
-function contextVectorSpec(
-  ctx: Context,
-  plan: ContextPlan,
-  admit: (e: MemoryEntry) => boolean,
-): HybridVectorCandidates {
-  return {
-    tenantId: ctx.tenantId,
-    scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope),
-    includeSuperseded: false,
-    admit,
-  };
-}
-
-interface SearchLocalRowsOptions {
-  readonly left: number;
-  readonly minResults: number | undefined;
-  readonly localEntries: MemoryEntry[];
-  readonly admit: (e: MemoryEntry) => boolean;
-}
-
-async function searchLocalRows(
-  ctx: Context,
-  plan: ContextPlan,
-  options: SearchLocalRowsOptions,
-): Promise<ContextResultEntry[]> {
-  const { left, minResults, localEntries, admit } = options;
-  const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
-  const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
-  const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
-  const vectorCandidates = contextVectorSpec(ctx, plan, admit);
-  const store = plan.local.store;
-  const ctxResults = await searchByEngine({
-    source: vectorSourceOf({
-      store,
-      config: ctxConfig,
-      onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: ctx.infra.embedderFor,
-    }),
-    query,
-    pool: localEntries,
-    physics: usePhysicsCtx ? ctxConfig.physics : null,
-    options: {
-      ...engineSettings(ctx, plan),
-      budget: left,
-      minResults,
-      cost: localCost,
-      vectorCandidates,
-    },
-  });
-  return ctxResults.map((r) => ({
-    entry: r.entry,
-    score: r.score,
-    tokens: price(r.entry, primaryIsGlobal),
-    isGlobal: primaryIsGlobal,
-  }));
-}
-
-// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they
-// never emit.
-async function auditContextRecall(
-  ctx: Context,
-  plan: ContextPlan,
-  resultCount: number,
-): Promise<void> {
-  const row: AppendAuditOptions = {
-    tenantId: ctx.tenantId,
-    actor: ctx.actor.subject,
-    op: 'recall',
-    metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
-  };
-  if (plan.hasLocal) await plan.local.store.appendAuditEvents([row]);
-  if (plan.hasGlobal && !plan.primaryIsGlobal) {
-    await globalStoreInReach(ctx).appendAuditEvents([row]);
-  }
-}
-
-/** The operator's global store, which planContext proved present before it set hasGlobal. */
-export function globalStoreInReach(ctx: Context): RequiredStore {
-  return globalInReach(ctx).store;
-}
-
-function globalInReach(ctx: Context): GlobalInReach {
-  const global = ctx.reach?.global;
-  if (global === undefined) throw new Error('hasGlobal without a global store in reach');
-  return global;
-}
-
-/** The global store's vectors, embedded by the model its own config.json names. */
-function globalVectorSource(ctx: Context): VectorSource | undefined {
-  const { store, config } = globalInReach(ctx);
-  return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: ctx.infra.embedderFor });
 }
