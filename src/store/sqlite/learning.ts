@@ -1,5 +1,6 @@
 import { confirmedOutcomeTimes } from './audit.js';
-import { listEntriesMentioning, readEntry } from './entry-reads.js';
+import { listEntriesMentioning } from './entry-mentions.js';
+import { readEntry } from './entry-reads.js';
 import { addTagToEntries } from './entry-writes.js';
 import type { Learning } from '../../base/ports/store/learning.js';
 import type { Handles } from './open.js';
