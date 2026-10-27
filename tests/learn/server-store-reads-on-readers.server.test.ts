@@ -328,6 +328,8 @@ const READS: readonly Read[] = [
       }),
     'mem_p_fill0',
   ),
+  // The resolved root both stores open, so their vector writes share one embed turn.
+  read('vectorWrites.indexKey', (s) => s.vectorWrites.indexKey(), /[/\\]/),
   read(
     'contextReads.ambientCandidates',
     (s) =>

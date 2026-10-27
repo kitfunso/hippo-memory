@@ -196,10 +196,10 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
 
 // The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
 function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
-  const key = embedLockKey(hippoRoot);
   return {
     ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
-    indexKey: () => Promise.resolve(key),
+    // Resolved at use, as the handle is: building a store reads no path.
+    indexKey: async () => embedLockKey(hippoRoot),
   };
 }
 
