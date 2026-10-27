@@ -17,7 +17,7 @@ import {
   waitingFiles,
 } from './spool-files.js';
 import { importFile } from './spool-import.js';
-import type { SpoolImporter } from './spool-record.js';
+import { type SpoolImporter, spoolBody } from './spool-record.js';
 import { promoteTmp, recoverStaleClaims } from './spool-recovery.js';
 
 const LOCK = 'replay.lock.db';
@@ -45,18 +45,11 @@ export function spool(options: SpoolOptions): void {
   const { hippoRoot, tenantId, payload, text, at, fsx = fs } = options;
   const file = spoolFile(hippoRoot);
   fsx.mkdirSync(path.dirname(file), PRIVATE_DIR);
-  const body = {
-    tenantId,
-    sessionId: payload.sessionId,
-    trigger: payload.trigger,
-    cwd: payload.cwd,
-    transcriptPath: payload.transcriptPath,
-    at: at.toISOString(),
-    summary: text.summary,
-    items: text.items,
-  };
   // Renamed into place so a replayer listing `.json` files never reads half a file.
-  fsx.writeFileSync(`${file}.tmp`, JSON.stringify(body), { encoding: 'utf8', flag: 'wx' });
+  fsx.writeFileSync(`${file}.tmp`, spoolBody(tenantId, payload, text, at), {
+    encoding: 'utf8',
+    flag: 'wx',
+  });
   // A rename that stays busy leaves a whole tmp, which a replay promotes once it is STALE_MS old.
   retryBusy(() => fsx.renameSync(`${file}.tmp`, file));
 }

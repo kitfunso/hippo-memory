@@ -24,6 +24,25 @@ export type SpoolImporter = (
   recorded: () => void,
 ) => Promise<StepFailure | null>;
 
+/** The JSON text of one spooled compaction, which parseSpooled reads back. */
+export function spoolBody(
+  tenantId: string,
+  payload: PostCompactPayload,
+  text: CompactionText,
+  at: Date,
+): string {
+  return JSON.stringify({
+    tenantId,
+    sessionId: payload.sessionId,
+    trigger: payload.trigger,
+    cwd: payload.cwd,
+    transcriptPath: payload.transcriptPath,
+    at: at.toISOString(),
+    summary: text.summary,
+    items: text.items,
+  });
+}
+
 /** null when the text is not a spooled compaction. */
 export function parseSpooled(text: string, fallbackTenantId: string): SpooledCompaction | null {
   // A half-written spool file holds no compaction; the caller treats null as unreadable.

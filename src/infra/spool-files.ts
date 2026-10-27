@@ -1,4 +1,5 @@
-// The spool folder's names, fs seam and retrying fs steps; every other spool file builds on these.
+// The spool folder's name grammar (stems, claim and tmp patterns) and the busy-retrying fs steps
+// every spool module shares.
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorFields, errorMessage, type LogFields } from '../base/util/log.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';

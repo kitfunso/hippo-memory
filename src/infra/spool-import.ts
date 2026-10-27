@@ -13,7 +13,7 @@ import {
   stamp,
 } from './spool-files.js';
 import { type SpoolImporter, parseSpooled } from './spool-record.js';
-import { moveBad, putBack, removeClaim } from './spool-recovery.js';
+import { moveBad, putBack, removeClaim } from './spool-claims.js';
 
 type FileOutcome = 'imported' | 'skipped' | 'stop';
 
