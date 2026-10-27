@@ -50,4 +50,17 @@ describe('check-open-core', () => {
     commit('src/sso-note.ts', 'export {};\n', 'feat: note\n\nopen-core: reviewed');
     expect(run()).toBe(0);
   });
+
+  it('passes copilot-report and fails pilot report in every spelling', () => {
+    commit('src/surface/cli/copilot-report.ts', 'export {};\n', 'feat: copilot report');
+    expect(run()).toBe(0);
+    commit('src/surface/cli/setup.ts', "import './copilot-report.js';\n", 'feat: import');
+    expect(run()).toBe(0);
+    commit('src/x/pilot-report.ts', 'export {};\n', 'feat: pilot path');
+    expect(run()).toBe(1);
+    commit('src/x/a.ts', 'export const pilot_report = 1;\n', 'feat: underscore');
+    expect(run()).toBe(1);
+    commit('src/x/b.ts', "export const t = 'pilot report';\n", 'feat: spaced');
+    expect(run()).toBe(1);
+  });
 });
