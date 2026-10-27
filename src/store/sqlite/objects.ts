@@ -47,11 +47,11 @@ import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-
 import { cachedStatement } from '../../db/statement-cache.js';
 import {
   closePrediction,
-  computePredictionBaserate,
   listPredictions,
   readPrediction,
   writePrediction,
 } from './predictions.js';
+import { computePredictionBaserate } from './prediction-baserate.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { META_KEY } from '../../db/meta.js';
