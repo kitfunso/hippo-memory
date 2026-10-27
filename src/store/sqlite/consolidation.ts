@@ -27,12 +27,8 @@ import type {
 } from '../../base/ports/store/consolidation.js';
 import { appendAuditEvents } from './audit.js';
 import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
-import {
-  iterateEveryTenantEntries,
-  iterateRowsWithObjects,
-  listDuplicateCandidates,
-  listEntryIdsPage,
-} from './entry-reads.js';
+import { iterateEveryTenantEntries, listEntryIdsPage } from './entry-reads.js';
+import { iterateRowsWithObjects, listDuplicateCandidates } from './sleep-scans.js';
 import { setHalfLives } from './entry-writes.js';
 import { type Handles, type StoreFiles, waitingOpener } from './open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../rules/half-life.js';

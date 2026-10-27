@@ -1,7 +1,7 @@
 // MCP and the CLI resolve a conflict through one api function, so each refuses the same bad input the dashboard refuses.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
-import { handleResolve } from '../../src/surface/cli/curate.js';
+import { handleResolve } from '../../src/surface/cli/conflicts.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';

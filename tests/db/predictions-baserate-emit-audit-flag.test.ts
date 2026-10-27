@@ -10,8 +10,8 @@
  * a forward-claim phrase would pollute the channel.
  *
  * This test locks both code paths in computePredictionBaserate:
- *   - n=0 (empty class) path at predictions.ts:447 region
- *   - n>0 (populated class) path at predictions.ts:490 region
+ *   - n=0 (empty class) path
+ *   - n>0 (populated class) path
  *
  * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 2, Task 9).
  * Project rule: always use real DB for tests.

@@ -196,11 +196,13 @@ describe('.oxlintrc.json CLI rules', () => {
       'src/surface/cli/finish.ts': call('finishRecall'),
       'src/surface/cli/write.ts': call('writeEntry'),
       'src/surface/cli/recall.ts': call('recordTokens'),
+      'src/surface/cli/recall-flags.ts': call('recordTokens'),
+      'src/surface/cli/recall-block.ts': call('recordTokens'),
       'src/surface/cli/usage.ts': call('recordTokens'),
     });
     expect(hits.get('src/surface/cli/rank.ts')).toContain(IMPORT);
     expect(hits.get('src/surface/cli/tenant.ts')).toContain(IMPORT);
-    for (const file of ['bump', 'finish', 'write', 'recall']) {
+    for (const file of ['bump', 'finish', 'write', 'recall', 'recall-flags', 'recall-block']) {
       expect(hits.get(`src/surface/cli/${file}.ts`)).toEqual([PROPERTY]);
     }
     expect(hits.get('src/surface/cli/usage.ts')).toBeUndefined();

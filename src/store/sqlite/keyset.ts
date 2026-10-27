@@ -5,8 +5,9 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { orderSql, STORE_ORDER } from '../rules/order.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
+import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 import type { IdPage } from '../../base/ports/store/vectors.js';
+import { rowToEntry, type MemoryRow } from './rows.js';
 
 /** What a page in loadAllEntries' order asks for; `newest` walks that order backwards, newest
  * row first. */
@@ -67,6 +68,16 @@ export function entryPage<R extends EntryCursor>(
       ? everyTenantRows(range, keep, order)
       : oneTenantRows(tenantAnd(tenantId), range, order);
   return keysetPage(read(rows, keep), page.limit, entryCursorOf);
+}
+
+/** entryPage over whole rows, decoded. */
+export function entriesPage(
+  tenantId: TenantId,
+  page: EntryPageRequest,
+  read: EntryRowsRead<MemoryRow>,
+): EntryPage {
+  const { rows, next } = entryPage(tenantId, page, read);
+  return { entries: rows.map(rowToEntry), next };
 }
 
 function oneTenantRows(tenant: SqlFragment, range: SqlFragment, order: string): EntryRows {

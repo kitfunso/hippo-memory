@@ -8,7 +8,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { KeysetPosition } from '../../src/base/util/keyset.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
-import { handleConflicts } from '../../src/surface/cli/curate.js';
+import { handleConflicts } from '../../src/surface/cli/conflicts.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

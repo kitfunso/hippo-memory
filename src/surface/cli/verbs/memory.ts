@@ -221,7 +221,7 @@ export const MEMORY_VERBS = {
     --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`,
     ],
   }),
-  trace: verb(() => import('../remember.js'), 'handleTrace', {
+  trace: verb(() => import('../trace.js'), 'handleTrace', {
     flags: {
       switches: ['json'],
       values: ['outcome', 'session', 'source', 'steps', 'task'],
@@ -316,7 +316,7 @@ export const MEMORY_VERBS = {
     --global               Sleep the global store (the daily job does this once a day)`,
     ],
   }),
-  'daily-runner': verb(() => import('../setup.js'), 'handleDailyRunner', {
+  'daily-runner': verb(() => import('../daily-runner.js'), 'handleDailyRunner', {
     needs: ['reports'],
     flags: {},
     usage: [

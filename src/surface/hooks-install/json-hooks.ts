@@ -18,9 +18,7 @@ import {
 } from './rules/json-hooks.js';
 import { defaultPreCompactLogPath, sleepLogPathOn, type JsonHookTarget } from './rules/shared.js';
 
-// What a caller of the installer names beside it: the Copilot events it adds and the reminder Codex
-// needs before it runs a new hook.
-export { copilotHookEvents } from './rules/json-hooks.js';
+// What a caller of the installer names beside it: the reminder Codex needs before it runs a new hook.
 export { CODEX_TRUST_LINE } from './rules/shared.js';
 
 /** The paths for `target` under this process's home folder; reads and writes nothing. */
