@@ -27,6 +27,9 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
+import { storeRefinement } from '../../src/api/memories/refine.js';
+import { importEntries } from '../../src/entry/importers.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import { replaceDetectedConflicts } from '../_helpers/root-forms-parts/conflicts.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -96,6 +99,10 @@ async function driveMemories(): Promise<string> {
     value: 'the build is red',
     reason: text('rejected_values.reason'),
   });
+  const refined = createMemory('a merged memory before its rewrite');
+  await store.entryWrites.writeEntry({ entry: refined, actor: 'tester' });
+  await storeRefinement(apiCtx(root, TENANT, { subject: 'tester', role: 'admin' }), refined, text('memories.content'));
+  importEntries([text('memories.content')], text('memories.source'), [], { hippoRoot: root, tenantId: TENANT });
   return other.id;
 }
 
@@ -139,6 +146,7 @@ async function driveSessions(): Promise<void> {
       task: text('task_snapshots.task'),
       summary: text('task_snapshots.summary'),
       nextStep: text('task_snapshots.next_step'),
+      source: text('task_snapshots.source'),
       sessionId: 's1',
     },
     null,
@@ -146,6 +154,7 @@ async function driveSessions(): Promise<void> {
   await sessions.save(TENANT, 'event', {
     sessionId: 's1',
     eventType: 'note',
+    source: text('session_events.source'),
     task: text('session_events.task'),
     content: text('session_events.content'),
     metadata: { note: text('session_events.metadata_json') },
@@ -172,8 +181,12 @@ async function driveSessions(): Promise<void> {
     content: text('working_memory.content'),
     metadata: { note: text('working_memory.metadata_json') },
   });
-  const card = await cards.create(TENANT, { title: text('cards.title'), contract: text('cards.contract') });
-  await cards.comment(TENANT, card.id, 'tester', text('card_comments.body'));
+  const card = await cards.create(TENANT, {
+    title: text('cards.title'),
+    contract: text('cards.contract'),
+    repo: text('cards.repo'),
+  });
+  await cards.comment(TENANT, card.id, text('card_comments.author'), text('card_comments.body'));
   await goals.push(TENANT, {
     sessionId: 's1',
     goalName: text('goal_stack.goal_name'),
@@ -309,6 +322,49 @@ function mirrorFiles(dir: string): string[] {
 }
 
 const VETTED = [...COLUMN_CLASSES].flatMap(([column, cls]) => ('vetted' in cls ? [column] : []));
+const REFUSED = [...COLUMN_CLASSES].flatMap(([column, cls]) => ('refused' in cls ? [column] : []));
+
+const KEY = `k-${SECRET}`;
+
+// The FTS tables' hidden columns and sqlite_sequence.seq hold no caller text.
+const SCHEMA_EXCEPTIONS: ReadonlySet<string> = new Set([
+  'memories_fts.memories_fts',
+  'memories_fts.rank',
+  'memories_trigram.memories_trigram',
+  'memories_trigram.rank',
+  'sqlite_sequence.seq',
+]);
+
+/** For each key column, the API write that sends it a secret-shaped key. */
+function keyWrites(): Record<string, () => Promise<unknown>> {
+  const { sessions, goals } = sqliteStore(root);
+  const event = (over: object) =>
+    sessions.save(TENANT, 'event', { sessionId: 's1', eventType: 'note', content: 'x', ...over });
+  const wm = (over: object) => sessions.save(TENANT, 'working_memory', { scope: 'repo', content: 'x', ...over });
+  const handoff = (over: object) =>
+    sessions.save(TENANT, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'x', ...over } }, null);
+  const snapshot = (over: object) =>
+    sessions.save(TENANT, 'snapshot', { task: 't', summary: 's', nextStep: 'n', ...over }, null);
+  return {
+    'session_events.session_id': () => event({ sessionId: KEY }),
+    'session_events.event_type': () => event({ eventType: KEY }),
+    'session_events.scope': () => event({ scope: KEY }),
+    'working_memory.scope': () => wm({ scope: KEY }),
+    'working_memory.session_id': () => wm({ sessionId: KEY }),
+    'working_memory.task_id': () => wm({ taskId: KEY }),
+    'session_handoffs.session_id': () => handoff({ sessionId: KEY }),
+    'session_handoffs.scope': () => handoff({ scope: KEY }),
+    'session_handoffs.outcome': () => handoff({ outcome: KEY }),
+    'session_handoffs.target_runtime': () => handoff({ targetRuntime: KEY }),
+    'session_handoffs.card_id': () => handoff({ cardId: KEY }),
+    'goal_stack.session_id': () => goals.push(TENANT, { sessionId: KEY, goalName: 'g' }),
+    'goal_stack.parent_goal_id': () => goals.push(TENANT, { sessionId: 's1', goalName: 'g', parentGoalId: KEY }),
+    'predictions.class_tag': () =>
+      savePrediction(root, TENANT, { classTag: KEY, claimText: 'the release ships on friday', estimateValue: 1 }),
+    'task_snapshots.session_id': () => snapshot({ sessionId: KEY }),
+    'task_snapshots.scope': () => snapshot({ scope: KEY }),
+  };
+}
 
 let scan: HeldColumn[];
 
@@ -340,6 +396,28 @@ describe('the secret boundary over the whole store', () => {
     expect(unclassed).toEqual([]);
   });
 
+  it('every text or untyped column of a fresh store is classed in the census', () => {
+    const fresh = openHippoDb(makeRoot('secret-boundary-schema'));
+    try {
+      // SAFETY: the SELECT projects sqlite_master's name column only.
+      const tables = fresh.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as { name: string }[];
+      const unclassed = tables.flatMap(({ name: table }) => {
+        // SAFETY: table_xinfo returns one row per column with its name and declared type.
+        const columns = fresh.prepare(`SELECT name, type FROM pragma_table_xinfo(?)`).all(table) as {
+          name: string;
+          type: string;
+        }[];
+        return columns
+          .filter((c) => c.type === '' || /TEXT|CHAR|CLOB/i.test(c.type))
+          .map((c) => `${table}.${c.name}`)
+          .filter((column) => !COLUMN_CLASSES.has(column) && !SCHEMA_EXCEPTIONS.has(column));
+      });
+      expect(unclassed).toEqual([]);
+    } finally {
+      closeHippoDb(fresh);
+    }
+  });
+
   it('no mirror file holds the secret', () => {
     const files = mirrorFiles(root);
     expect(files.length).toBeGreaterThan(0);
@@ -355,6 +433,23 @@ describe('the secret boundary over the whole store', () => {
       );
     expect(hits(control('memories.content'))).toBeGreaterThan(0);
     expect(hits(FILL)).toBe(0);
+  });
+});
+
+describe('key columns', () => {
+  it('every key column the census refuses has a write that sends it a secret', () => {
+    expect(Object.keys(keyWrites()).sort()).toEqual([...REFUSED].sort());
+  });
+
+  it.each(REFUSED)('%s refuses a secret-shaped key and stores nothing', async (column) => {
+    await expect(keyWrites()[column]!()).rejects.toThrow(/holds secret-shaped text/);
+    const table = column.slice(0, column.indexOf('.'));
+    const name = column.slice(column.indexOf('.') + 1);
+    // SAFETY: count(*) returns one row shaped { n }.
+    const held = withDb(
+      (db) => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE instr("${name}", ?) > 0`).get(FILL) as { n: number },
+    );
+    expect(held.n).toBe(0);
   });
 });
 

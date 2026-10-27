@@ -191,7 +191,15 @@ function insertCardComment(
     INSERT INTO card_comments (card_id, author, body, created_at, tenant_id)
     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
   `,
-  ).run(cardId, author, redactSecretsStrict(body), now, tenantId, cardId, tenantId);
+  ).run(
+    cardId,
+    redactSecretsStrict(author),
+    redactSecretsStrict(body),
+    now,
+    tenantId,
+    cardId,
+    tenantId,
+  );
   if (Number(result.changes ?? 0) === 0) {
     throw unknownCard(cardId);
   }
@@ -310,7 +318,7 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
       id,
       redactSecretsStrict(input.title),
       status,
-      input.repo ?? null,
+      storedOrNull(input.repo),
       storedOrNull(input.contract),
       input.budget ?? null,
       now,

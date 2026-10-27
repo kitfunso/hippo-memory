@@ -1,4 +1,5 @@
 // hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
+import { refuseSecretKeys } from '../../base/records/secret-keys.js';
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { median } from '../../base/util/stats.js';
 import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
@@ -183,6 +184,7 @@ export function writePrediction(
   save: PredictionSave,
 ): Prediction {
   assertTenantId('savePrediction', tenantId);
+  refuseSecretKeys({ classTag: save.classTag });
   const now = handleStamp(db);
   const { actor } = save;
 

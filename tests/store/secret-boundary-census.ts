@@ -1,10 +1,10 @@
-// Every text column hippo.db holds, classed: vetted at the sink that binds it (the writer a scan drives), or out with a reason from a closed list.
+// Every text column hippo.db holds, classed: vetted at the sink that binds it, a key the sink refuses when secret-shaped, or out with a reason from a closed list.
 // Free text and JSON text are never out; secret-boundary.slow.test.ts fails a column it finds holding text that this table does not class.
 
 /** The closed list of reasons a text column may hold caller input unredacted. */
 export type OutReason = 'id' | 'hash' | 'enum' | 'number' | 'timestamp' | 'tag label' | 'path';
 
-export type ColumnClass = { readonly vetted: string } | { readonly out: OutReason };
+export type ColumnClass = { readonly vetted: string } | { readonly refused: string } | { readonly out: OutReason };
 
 const id = { out: 'id' } as const;
 const hash = { out: 'hash' } as const;
@@ -14,6 +14,8 @@ const at = { out: 'timestamp' } as const;
 const tag = { out: 'tag label' } as const;
 const path = { out: 'path' } as const;
 const vetted = (writer: string): ColumnClass => ({ vetted: writer });
+/** A key a caller later looks up by value: its sink refuses a secret-shaped one. */
+const refused = (writer: string): ColumnClass => ({ refused: writer });
 
 // Columns every object table shares.
 const OBJECT_TAIL = {
@@ -48,7 +50,13 @@ const CENSUS = {
     target_id: id,
     metadata_json: vetted('appendAuditEvents'),
   },
-  card_comments: { card_id: id, author: id, body: vetted('card comment'), created_at: at, tenant_id: id },
+  card_comments: {
+    card_id: id,
+    author: vetted('card comment'),
+    body: vetted('card comment'),
+    created_at: at,
+    tenant_id: id,
+  },
   card_deps: { parent: id, child: id, tenant_id: id, created_at: at },
   card_runs: {
     card: id,
@@ -66,7 +74,7 @@ const CENSUS = {
     title: vetted('createCard'),
     status: enumeration,
     assignee_runtime: enumeration,
-    repo: path,
+    repo: vetted('createCard'),
     contract: vetted('createCard'),
     lease_until: at,
     heartbeat_at: at,
@@ -180,10 +188,10 @@ const CENSUS = {
   goal_recall_log: { goal_id: id, memory_id: id, tenant_id: id, session_id: id, recalled_at: at },
   goal_stack: {
     id: id,
-    session_id: id,
+    session_id: refused('pushGoal'),
     tenant_id: id,
     goal_name: vetted('pushGoal'),
-    parent_goal_id: id,
+    parent_goal_id: refused('pushGoal'),
     status: enumeration,
     success_condition: vetted('pushGoal'),
     retrieval_policy_id: id,
@@ -276,7 +284,7 @@ const CENSUS = {
   predictions: {
     memory_id: id,
     tenant_id: id,
-    class_tag: tag,
+    class_tag: refused('predict'),
     claim_text: vetted('predict'),
     estimate_unit: vetted('predict'),
     target_date: at,
@@ -321,18 +329,18 @@ const CENSUS = {
   },
   retrieval_policy: { id: id, goal_id: id, policy_type: enumeration },
   session_events: {
-    session_id: id,
+    session_id: refused('appendSessionEvent'),
     task: vetted('appendSessionEvent'),
-    event_type: enumeration,
+    event_type: refused('appendSessionEvent'),
     content: vetted('appendSessionEvent'),
-    source: enumeration,
+    source: vetted('appendSessionEvent'),
     metadata_json: vetted('appendSessionEvent'),
     created_at: at,
     tenant_id: id,
-    scope: enumeration,
+    scope: refused('appendSessionEvent'),
   },
   session_handoffs: {
-    session_id: id,
+    session_id: refused('saveSessionHandoff'),
     repo_root: path,
     task_id: vetted('saveSessionHandoff'),
     summary: vetted('saveSessionHandoff'),
@@ -340,12 +348,12 @@ const CENSUS = {
     artifacts_json: vetted('saveSessionHandoff'),
     created_at: at,
     tenant_id: id,
-    scope: enumeration,
+    scope: refused('saveSessionHandoff'),
     constraints_json: vetted('saveSessionHandoff'),
     evidence_json: vetted('saveSessionHandoff'),
-    outcome: enumeration,
-    target_runtime: enumeration,
-    card_id: id,
+    outcome: refused('saveSessionHandoff'),
+    target_runtime: refused('saveSessionHandoff'),
+    card_id: refused('saveSessionHandoff'),
     owner_subject: id,
     origin_project: path,
   },
@@ -376,20 +384,20 @@ const CENSUS = {
     summary: vetted('saveActiveTaskSnapshot'),
     next_step: vetted('saveActiveTaskSnapshot'),
     status: enumeration,
-    source: enumeration,
+    source: vetted('saveActiveTaskSnapshot'),
     created_at: at,
     updated_at: at,
-    session_id: id,
+    session_id: refused('saveActiveTaskSnapshot'),
     tenant_id: id,
-    scope: enumeration,
+    scope: refused('saveActiveTaskSnapshot'),
     owner_subject: id,
     origin_project: path,
   },
   token_ledger: { ts: at, tenant_id: id, session_id: id, surface: enumeration, event: enumeration, block_hash: hash },
   working_memory: {
-    scope: enumeration,
-    session_id: id,
-    task_id: id,
+    scope: refused('wmPush'),
+    session_id: refused('wmPush'),
+    task_id: refused('wmPush'),
     content: vetted('wmPush'),
     metadata_json: vetted('wmPush'),
     created_at: at,

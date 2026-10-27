@@ -1,5 +1,6 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
 // binding.
+import { refuseSecretKeys } from '../../base/records/secret-keys.js';
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import {
   HOOK_DB_WAIT_MS,
@@ -114,6 +115,7 @@ function insertSessionEventRow(
   event: SessionEventInput,
   now: string,
 ): number {
+  refuseSecretKeys({ sessionId: event.sessionId, eventType: event.eventType, scope: event.scope });
   const result = cachedStatement(
     db,
     `
@@ -126,7 +128,7 @@ function insertSessionEventRow(
     storedOrNull(event.task),
     event.eventType,
     redactSecretsStrict(event.content),
-    event.source ?? 'cli',
+    redactSecretsStrict(event.source ?? 'cli'),
     event.scope ?? null,
     redactPayload(JSON.stringify(event.metadata ?? {})),
     tenantId,
@@ -386,6 +388,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
  * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
+  refuseSecretKeys({ scope: item.scope, sessionId: item.sessionId, taskId: item.taskId });
   const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
     const result = cachedStatement(

@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
+import { refuseSecretKeys } from '../../base/records/secret-keys.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -174,6 +175,8 @@ export function saveSessionHandoff(
   key?: ContinuityKey | null,
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
+  const { sessionId, cardId, targetRuntime, scope, outcome } = handoff;
+  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome });
   const stamp = key ? continuityStamp(key) : null;
   const now = handleStamp(db);
 
