@@ -1,4 +1,5 @@
 // What one sync does to one container's rows: a pure function of the items read and the rows found.
+import { storedItemKey } from './source.js';
 
 export interface PlanItem {
   readonly key: string;
@@ -85,13 +86,13 @@ export function planContainer(input: PlanInput): ContainerPlan {
     planItem({
       input,
       item,
-      rows: live.get(item.key) ?? [],
-      snaps: dormant.get(item.key) ?? [],
+      rows: live.get(storedItemKey(item.key)) ?? [],
+      snaps: dormant.get(storedItemKey(item.key)) ?? [],
       draft,
     });
   }
 
-  const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
+  const read = new Set([...input.items.map((i) => i.key), ...input.skipped].map(storedItemKey));
   const gone = new Map<string, string[]>();
   for (const [key, rows] of live) {
     const tagged = rows.filter((r) => r.tagged).map((r) => r.id);
@@ -155,7 +156,7 @@ function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   const goneBy = groupBy([...gone.keys()], headingOf);
   const freshBy = groupBy(
     fresh.map((w, i) => ({ w, i })),
-    (f) => headingOf(f.w.key),
+    (f) => headingOf(storedItemKey(f.w.key)),
   );
   for (const [heading, keys] of goneBy) {
     const news = freshBy.get(heading) ?? [];

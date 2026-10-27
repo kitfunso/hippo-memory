@@ -24,7 +24,7 @@ import {
   type PlanItem,
 } from './plan.js';
 import { emptyTally, type Tally } from '../../base/memory/agent-memory-report.js';
-import { MIN_ITEM_CHARS, splitSource, storedText } from './source.js';
+import { MIN_ITEM_CHARS, splitSource, storedItemKey, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 
 export interface ContainerOutcome {
@@ -162,7 +162,7 @@ async function dormantSnapshots(
   }: { readonly liveKeys: ReadonlySet<string>; readonly refusals: ReadonlyMap<string, Refusal> },
 ): Promise<DormantSnapshot[]> {
   const needed = w.container.items.some(
-    (item) => !refusals.has(item.key) && !liveKeys.has(item.key),
+    (item) => !refusals.has(item.key) && !liveKeys.has(storedItemKey(item.key)),
   );
   if (!needed) return [];
   const under = await s.store.projectTags.dormantWhere({

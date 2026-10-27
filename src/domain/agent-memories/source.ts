@@ -33,22 +33,31 @@ export function containerPrefix(tool: ToolId, container: string): string {
   return `${toolSourcePrefix(tool)}${container}/`;
 }
 
+/** A note's key as a row's source holds it: the stored form, plus `~` and 12 hex of the raw key when
+ * redaction changed it, so two keys that differ only in a secret stay two. */
+export function storedItemKey(key: string): string {
+  const stored = redactSecretsStrict(key);
+  return stored === key ? key : `${stored}~${sha256Hex(key).slice(0, ID_SUFFIX_CHARS)}`;
+}
+
 export function itemSource(
   prefix: string,
   { key, text }: { readonly key: string; readonly text: string },
 ): string {
-  return `${prefix}${key}#${itemHash(text)}`;
+  return `${prefix}${storedItemKey(key)}#${itemHash(text)}`;
 }
 
-/** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name
- * may hold one too. */
+/** The stored key and hash of a source under `prefix`; the hash follows the last `#`, since a file
+ * name may hold one too. A raw older key comes back stored, so it matches its note once. */
 export function splitSource(
   source: string,
   prefix: string,
 ): { readonly key: string; readonly hash: string } {
   const rest = source.slice(prefix.length);
   const cut = rest.lastIndexOf('#');
-  return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
+  return cut < 0
+    ? { key: storedItemKey(rest), hash: '' }
+    : { key: storedItemKey(rest.slice(0, cut)), hash: rest.slice(cut + 1) };
 }
 
 function capped(text: string): string {
