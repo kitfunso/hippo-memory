@@ -1,9 +1,7 @@
 {
   "src/domain/consolidate/dedupe.ts": 2,
-  "src/base/records/card.ts": 1,
-  "src/surface/importers/core.ts": 3,
-  "src/surface/importers/vault.ts": 1,
-  "src/domain/learn/invalidation.ts": 1,
   "src/domain/objects/skills.ts": 2,
-  "src/domain/trust/quarantine.ts": 1
+  "src/domain/trust/quarantine.ts": 1,
+  "src/surface/importers/core.ts": 3,
+  "src/surface/importers/vault.ts": 1
 }

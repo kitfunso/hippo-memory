@@ -17,16 +17,18 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  hashQueryText,
   buildSessionKey,
-  detectAnchoring,
   RingBuffer,
   getOrCreateRing,
   appendRecall,
   snapshotRing,
+} from '../../src/api/recall/session-rings.js';
+import {
+  hashQueryText,
+  detectAnchoring,
   type RecallHistoryEntry,
   type RecallHistorySnapshot,
-} from '../../src/api/recall/finish.js';
+} from '../../src/api/recall/anchoring.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: string): RecallHistoryEntry {

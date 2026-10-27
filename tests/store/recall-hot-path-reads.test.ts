@@ -66,19 +66,17 @@ describe('rankRecall with a global store', () => {
       query: 'zephyrine cache',
       budget: 4000,
       cost: (r) => r.tokens,
-      window: { limit: 10 },
+      limit: 10,
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
-      search: {
-        usePhysics: false,
-        physicsConfig: loadConfig(root).physics,
-        multihop: false,
-        mmr: false,
-        mmrLambda: 0.7,
-        localBump: 1.2,
-        explain: false,
-      },
+      usePhysics: false,
+      physicsConfig: loadConfig(root).physics,
+      multihop: false,
+      mmr: false,
+      mmrLambda: 0.7,
+      localBump: 1.2,
+      explain: false,
     };
   }
 

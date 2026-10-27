@@ -9,7 +9,8 @@ import type {
   PlanningFallacyOutput,
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
-import { hashQueryText, sessionRing } from '../../api/recall/finish.js';
+import { sessionRing } from '../../api/recall/session-rings.js';
+import { hashQueryText } from '../../api/recall/anchoring.js';
 import {
   handoffText,
   printedTokens,

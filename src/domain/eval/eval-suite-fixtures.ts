@@ -1,4 +1,4 @@
-/** Hand-written memories and builders for the synthetic feature corpus in eval-suite.ts. */
+/** The hand-written memories the corpus in eval-suite-corpus.ts is built from. */
 
 import { createMemory, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { DAY_MS } from '../../base/util/time.js';

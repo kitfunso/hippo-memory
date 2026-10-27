@@ -1,14 +1,14 @@
-// Reads a store's config.json from disk; src/base/config/config.ts holds its shape, its defaults
-// and each key's rule.
+// Reads a store's config.json from disk; src/base/config/config-keys.ts holds each key's rule and
+// config.ts the shape and the defaults.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  configOverDefaults,
   DEFAULT_CONFIG,
   type ConfigFile,
   type HippoConfig,
   type RuntimeSettings,
 } from '../base/config/config.js';
+import { configOverDefaults } from '../base/config/config-keys.js';
 import { isJsonObject, type JsonValue } from '../base/util/json.js';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { realpathOrResolve } from './real-path.js';

@@ -3,7 +3,7 @@
 import { knownOption } from '../../base/util/json.js';
 import { resolveListLimit } from '../../base/util/limits.js';
 import type { CallerState } from '../../api/callers.js';
-import type { RecallSearchOptions } from '../../api/recall/pipeline.js';
+import type { RankRecallEngine } from '../../api/recall/pipeline.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { fail } from './exit.js';
 
@@ -195,7 +195,7 @@ export interface CommandContext {
 }
 
 export type EngineFlags = Pick<
-  RecallSearchOptions,
+  RankRecallEngine,
   'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'
 >;
 

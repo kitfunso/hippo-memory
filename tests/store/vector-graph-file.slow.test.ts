@@ -8,7 +8,8 @@ import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../..
 import { saveVectorGraphFile } from '../../src/store/sqlite/vector-graph-file.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
+import { type VectorIndex } from '../../src/db/vector-match.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
 import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';

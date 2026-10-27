@@ -189,7 +189,8 @@ export type {
   ContextResult,
   ContextResultEntry,
 } from './context-types.js';
-export { DEFAULT_CONTEXT_BUDGET, NO_QUERY, contextGet, oneCopyPerMemory } from './context.js';
+export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context.js';
+export { NO_QUERY } from './context-plan.js';
 export { contextProjectFor, type ProjectFacts } from './context-project.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';

@@ -9,9 +9,9 @@ import {
   embedAll,
   embedMemoryDetached,
   folderEmbedTarget,
-  indexStep,
   type EmbedRun,
 } from '../domain/search/embed-memories.js';
+import { indexStep } from '../domain/search/embed-index-target.js';
 import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 

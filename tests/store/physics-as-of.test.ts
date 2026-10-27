@@ -145,20 +145,18 @@ describe('rankRecall in physics mode with asOf', () => {
     query: 'deploy pipeline',
     budget: 100_000,
     cost: (r) => r.tokens,
-    window: { limit: 10 },
+    limit: 10,
     includeSuperseded: false,
     asOf: CUT,
     explicitScope: null,
     activeScope: null,
-    search: {
-      usePhysics,
-      physicsConfig: loadConfig(root).physics,
-      multihop: false,
-      mmr: false,
-      mmrLambda: 0.7,
-      localBump: 1.2,
-      explain,
-    },
+    usePhysics,
+    physicsConfig: loadConfig(root).physics,
+    multihop: false,
+    mmr: false,
+    mmrLambda: 0.7,
+    localBump: 1.2,
+    explain,
   });
   const rank = async (explain: boolean, usePhysics: boolean): Promise<string[]> =>
     (

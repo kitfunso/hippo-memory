@@ -17,15 +17,8 @@ import { embeddingInputText } from '../../src/base/embeddings/index-identity.js'
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
-import {
-  decodeVector,
-  deleteOrphanVectors,
-  encodeVector,
-  rankVectorRows,
-  topVectorMatches,
-  type VectorMatch,
-  type VectorRow,
-} from '../../src/db/vector-store.js';
+import { decodeVector, deleteOrphanVectors, encodeVector } from '../../src/db/vector-store.js';
+import { rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../../src/db/vector-match.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';
