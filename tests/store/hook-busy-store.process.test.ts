@@ -18,6 +18,7 @@ import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-wri
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -36,7 +37,7 @@ function runHook(args: string[], input: string) {
     cwd: projectDir,
     input,
     encoding: 'utf8',
-    timeout: 60000,
+    timeout: HANG_GUARD_MS,
   });
   return {
     status: res.status,

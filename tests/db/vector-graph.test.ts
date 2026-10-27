@@ -1,10 +1,7 @@
 // The handwritten HNSW graph against an exact scan of the same vectors.
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mulberry32 } from '../_helpers/property.js';
 import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from '../../src/db/vector-graph.js';
-
-// Some cases build two 3000-node graphs, which can pass the unit budget on a busy runner.
-vi.setConfig({ testTimeout: 20_000 });
 
 const DIM = 64;
 const N = 3000;

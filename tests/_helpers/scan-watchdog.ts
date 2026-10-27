@@ -1,11 +1,12 @@
 import { types } from 'node:util';
 import { runInNewContext } from 'node:vm';
+import { EVENT_DEADLINE_MS } from './wait-for.js';
 
 /** The hostile input size: linear scans take well under a second, quadratic ones hours. */
 export const ONE_MIB = 1024 * 1024;
 
 /** Far past a linear scan of ONE_MIB on a loaded runner, so only a super-linear pattern reaches it. */
-export const WATCHDOG_MS = 15_000;
+export const WATCHDOG_MS = EVENT_DEADLINE_MS;
 
 /**
  * Runs `scan(text)` under a watchdog that stops the thread itself, which a test timeout cannot do to synchronous

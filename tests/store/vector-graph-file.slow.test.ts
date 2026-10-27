@@ -16,9 +16,6 @@ import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
 
-// Each case builds a graph of 1,500 nodes, which can pass the unit budget on a busy runner.
-vi.setConfig({ testTimeout: 30_000 });
-
 const DIM = 32;
 const ROWS = 1_500;
 const MODEL = 'test:vectors';

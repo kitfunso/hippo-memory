@@ -32,7 +32,7 @@ describe('process.exit inside a command store runtime', () => {
     ].join('\n');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       encoding: 'utf-8',
-      timeout: 30_000,
+      timeout: 10_000,
     });
     expect(child.stdout.trim(), `run \`npm run build\` first if the import failed:\n${child.stderr}`).toBe('exiting');
     expect(child.status).toBe(0);

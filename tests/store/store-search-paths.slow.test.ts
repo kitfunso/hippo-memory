@@ -149,7 +149,7 @@ describe('loadSearchEntries paths', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 30_000);
+  });
 
   it('substring path: a part-word finds a row older than the 2,000 newest, through the trigram index', () => {
     const db = openHippoDb(root);
@@ -172,7 +172,7 @@ describe('loadSearchEntries paths', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 30_000);
+  });
 
   it('Full-store fallback path: terms that match nothing in FTS5 or LIKE return every row', () => {
     writeEntry(root, makeRaw('one row'));

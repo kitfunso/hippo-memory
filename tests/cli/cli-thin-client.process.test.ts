@@ -255,7 +255,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 53_000);
+  });
 
   // Starts a server process and a CLI process for each path.
   it('remember --error stores the same tags and half-life whether it routes or takes the direct path', async () => {
@@ -293,7 +293,7 @@ describe('cli thin-client mode', () => {
       rmSync(routedWorkspace, { recursive: true, force: true });
       rmSync(directWorkspace, { recursive: true, force: true });
     }
-  }, 37_000);
+  });
 
   it('self-heals on a stale pidfile', async () => {
     const workspace = makeWorkspace();
@@ -682,7 +682,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 38_000);
+  });
 
   // Starts a server process and a CLI process for remember and for forget.
   it('a routed forget on the local key of a row with no writer fails with the 403 text and the HIPPO_API_KEY hint', async () => {
@@ -713,7 +713,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 38_000);
+  });
 
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();

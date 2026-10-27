@@ -490,7 +490,7 @@ describe('subpath exports resolve', () => {
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       cwd: REPO,
       encoding: 'utf-8',
-      timeout: 30_000,
+      timeout: 10_000,
     });
     expect(child.status, child.stderr).toBe(0);
     expect(child.stdout.trim()).toBe(type);

@@ -100,7 +100,7 @@ describe('hippo dashboard listener', () => {
     const port = await boundPort(holder);
     const s = project();
 
-    const run = hippoRun(['dashboard', '--port', String(port)], { cwd: s.proj, env: s.env, timeout: 60_000 });
+    const run = hippoRun(['dashboard', '--port', String(port)], { cwd: s.proj, env: s.env });
 
     expect(ownStderr(run.stderr)).toBe(
       `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.\n`,

@@ -243,7 +243,7 @@ describe('hippo serve over TLS', () => {
       cwd: home,
       env: childEnv({}),
       encoding: 'utf8',
-      timeout: 20_000,
+      timeout: 10_000,
       windowsHide: true,
     });
     expect(run.status).toBe(1);

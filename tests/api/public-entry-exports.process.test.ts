@@ -22,7 +22,7 @@ function importBuiltEntry<T>(script: string): T {
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     cwd: REPO_ROOT,
     encoding: 'utf-8',
-    timeout: 30_000,
+    timeout: 10_000,
   });
   if (child.status !== 0) {
     throw new Error(

@@ -231,7 +231,7 @@ beforeAll(async () => {
     });
     seedVectors(root);
   });
-}, 120_000);
+});
 
 afterAll(() => {
   rmSync(templates.dir, { recursive: true, force: true });

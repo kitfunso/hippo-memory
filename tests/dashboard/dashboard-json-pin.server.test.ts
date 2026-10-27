@@ -85,7 +85,7 @@ beforeAll(async () => {
   seedOthers(store.hippoRoot);
   writeEntriesTogether(store.hippoRoot, bigRows());
   dash = await startDashboard(store.hippoRoot);
-}, 120_000);
+});
 
 afterAll(async () => {
   await dash.close();

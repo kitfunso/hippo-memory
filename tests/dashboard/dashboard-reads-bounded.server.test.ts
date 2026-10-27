@@ -95,7 +95,7 @@ beforeAll(() => {
     { memory_a_id: 'mem_b003', memory_b_id: 'mem_beta1', reason: 'across projects', score: 0.8 },
   ]);
   embed(store.hippoRoot, ['mem_b001', 'mem_b004', 'mem_beta1']);
-}, 120_000);
+});
 
 afterAll(() => {
   store.cleanup();

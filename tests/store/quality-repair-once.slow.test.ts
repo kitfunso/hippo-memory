@@ -104,7 +104,7 @@ describe('repairQualityOnce', () => {
     }
     expect(flag(root)).toBe('');
     expect((await repairQualityOnce(storeFilesOf(root), 'default'))?.appliedIds).toEqual([bad.id]);
-  }, 30_000);
+  });
 
   it('leaves a store whose schema it cannot repair unmarked', async () => {
     const bad = seed(root, CUT);

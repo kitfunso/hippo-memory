@@ -20,9 +20,10 @@ import { makeRoot, makeStore, type MadeStore } from '../_helpers/make-root.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { hippoRunAsync } from '../_helpers/spawn-hippo.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { VECTOR_GRAPH_THRESHOLD } from '../../src/db/vector-graph-rows.js';
 
-// Past the graph threshold of 1,000 vectors, so the CLI asks the server; the first case fails if the threshold rises.
-const ROWS = 1_100;
+// At the graph threshold, the fewest vectors that make the CLI ask the server.
+const ROWS = VECTOR_GRAPH_THRESHOLD;
 const QUERY = 'deploys pipelines';
 const PROJECT = 'nearest-demo';
 // In this order on every copy, so the retrieval bumps of the first leave the same store for the second.
@@ -60,7 +61,7 @@ function run(base: string, args: readonly string[]): Promise<Run> {
       HIPPO_API_KEY: '',
       OPENAI_API_KEY: 'sk-test',
     },
-    timeout: 25_000,
+    timeout: 10_000,
   });
 }
 
@@ -91,7 +92,7 @@ beforeAll(async () => {
   }
   expect(await embedAll(localIndex(template))).toBe(ROWS);
   fakeNow = new Date(Date.now() + 60_000).toISOString();
-}, 60_000);
+});
 
 afterAll(async () => {
   await embeddings.close();
@@ -131,7 +132,7 @@ describe('hippo recall and hippo context beside a hippo serve on the same store'
     }
     expect(asked.length).toBeGreaterThanOrEqual(COMMANDS.length);
     expect(asked.every((spec) => spec.tenantId === 'default')).toBe(true);
-  }, 60_000);
+  });
 
   it('scans its own store after one warn line when the server takes the read and never answers', async () => {
     const direct = await run(copyOfTemplate().base, COMMANDS[0]);
@@ -163,5 +164,5 @@ describe('hippo recall and hippo context beside a hippo serve on the same store'
     expect(fellBack.stdout).toBe(direct.stdout);
     expect(posts).toContain('POST /v1/vectors/nearest');
     expect(fellBack.stderr.split(HOP_WARN)).toHaveLength(2);
-  }, 60_000);
+  });
 });

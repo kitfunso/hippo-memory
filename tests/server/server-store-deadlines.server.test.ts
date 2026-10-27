@@ -228,7 +228,6 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
       );
       expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
     },
-    120_000,
   );
 });
 

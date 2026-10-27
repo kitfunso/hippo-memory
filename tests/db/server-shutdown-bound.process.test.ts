@@ -177,7 +177,6 @@ describe('serve() shutdown bound', () => {
         ),
       );
     },
-    35_000,
   );
 
   it('exits 0 on SIGTERM when stop() finishes, with no bound line', async () => {

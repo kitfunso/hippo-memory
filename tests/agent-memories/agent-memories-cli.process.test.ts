@@ -8,6 +8,7 @@ import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 
 const HIPPO_BIN = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -68,7 +69,7 @@ function hippoSpawned(
     input: opts.input ?? '',
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
-    timeout: 60_000,
+    timeout: HANG_GUARD_MS,
   });
 }
 

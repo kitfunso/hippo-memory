@@ -12,7 +12,8 @@ import { handleConflicts } from '../../src/surface/cli/curate.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
 
 const LIST_READ = /ORDER BY mc\.updated_at DESC, mc\.id DESC LIMIT \?$/;
 let root: string;
@@ -33,7 +34,7 @@ function seedConflicts(n: number): void {
       tenantId: i % 4 < 2 ? 'default' : 'other',
     }),
   );
-  writeEntriesTogether(root, rows);
+  writeRowsOnly(root, rows);
   const pairs = Array.from({ length: n }, (_, i) => ({
     memory_a_id: rows[2 * i]!.id,
     memory_b_id: rows[2 * i + 1]!.id,
@@ -103,6 +104,5 @@ describe('hippo conflicts pages', () => {
       expect(json.reads).toBe(jsonReads);
       expect(json.peak).toBeLessThanOrEqual(1001);
     },
-    120_000,
   );
 });

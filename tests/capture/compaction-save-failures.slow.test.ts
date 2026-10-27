@@ -31,7 +31,7 @@ const payload = (): PostCompactPayload => ({
 });
 
 // Each case holds the lock while the save waits out COMPACTION_DB_WAIT_MS, so it runs for seconds by design.
-describe('saveCompaction reports each failure once', { timeout: 30_000 }, () => {
+describe('saveCompaction reports each failure once', () => {
   it('a busy store spools the summary and says so once, with no error log', async () => {
     const errors = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const db = openHippoDb(s.hippoRoot);
