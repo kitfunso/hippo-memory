@@ -119,6 +119,13 @@ const storeReach = [
     to: { path: layerPaths(dbReach.layer) },
   },
   {
+    name: 'db-grant-mint',
+    comment: 'only the SQLite adapter mints a hippo.db grant; other code imports the DbGrant type',
+    severity: 'error',
+    from: { path: '^src/', pathNot: '^src/store/sqlite/grant\\.ts$' },
+    to: { path: '^src/db/grant\\.ts$', dependencyTypesNot: ['type-only', 'type-import'] },
+  },
+  {
     name: 'api-store-port',
     comment: 'the api reads the store through the port in src/base/ports and takes shared rules from src/base',
     severity: 'error',

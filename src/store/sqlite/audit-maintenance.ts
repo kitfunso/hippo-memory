@@ -35,7 +35,6 @@ import type {
 import { openStore } from './handles.js';
 import { answered, bound, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../../base/ports/store.js';
-import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { getMeta, pragmaUserVersion, setMeta, META_KEY } from '../../db/meta.js';
@@ -392,13 +391,13 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
       answered(() =>
-        withUnmigratedDb(files.hippoRoot, { readOnly: !apply, grant: files.opens.grant }, (db) =>
+        files.opens.grant.withUnmigrated(files.hippoRoot, !apply, (db) =>
           repairOn(db, files, { tenantId, apply, protect }),
         ),
       ),
     repairQualityOnce: (tenantId, protect) =>
       answered(() =>
-        withUnmigratedDb(files.hippoRoot, { readOnly: false, grant: files.opens.grant }, (db) =>
+        files.opens.grant.withUnmigrated(files.hippoRoot, false, (db) =>
           repairQualityOnce(db, files, tenantId, protect),
         ),
       ),

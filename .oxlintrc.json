@@ -77,8 +77,24 @@
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
           { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)(open|index)[.]js$",
+                "importNames": ["openHippoDb", "openHippoDbReadOnly"],
+                "message": "A hippo.db open in src goes through its store's DbGrant (src/db/grant.ts); openHippoDb is the unscoped connection for scripts and tests."
+              }
+            ]
+          }
         ]
       }
+    },
+    {
+      "files": ["src/db/open.ts", "src/db/index.ts", "src/db/grant.ts"],
+      "rules": { "no-restricted-imports": "off" }
     },
     {
       "files": ["src/store/sqlite/**/*.ts"],

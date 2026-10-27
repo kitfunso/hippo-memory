@@ -13,7 +13,7 @@ import * as entryReads from './entry-reads.js';
 import * as entryWrites from './entry-writes.js';
 import type { WriteEntryOptions } from './entry-writes.js';
 import { onHandle, openStore, storeFilesOf } from './handles.js';
-import type { StoreFiles } from './open.js';
+import { readWrite, type StoreFiles } from './open.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { listRecallEntries } from './search-rows.js';
 import * as vectorIndex from './vector-index.js';
@@ -79,7 +79,12 @@ export function readEntryIn(files: StoreFiles, id: string): MemoryEntry | null {
 
 /** Every stored vector keyed by memory id; `{}` when none. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  return onHandle(hippoRoot, (db) => vectorIndex.listAllVectors(db));
+  const files = storeFilesOf(hippoRoot);
+  return onHandle(
+    hippoRoot,
+    (db) => vectorIndex.listAllVectors(db),
+    (root) => readWrite(root, files.opens),
+  );
 }
 
 /** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor
@@ -89,7 +94,11 @@ export function listRecallEntriesInFolder(
   query: string,
   options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => listRecallEntries(db, query, options), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => listRecallEntries(db, query, options),
+    openOn(storeFilesOf(hippoRoot)),
+  );
 }
 
 /** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
@@ -98,10 +107,11 @@ export function countAmbientInFolder(
   tenantId: string,
   filter: AmbientStoreFilter,
 ): AmbientTallies {
+  const files = storeFilesOf(hippoRoot);
   return onHandle(
     hippoRoot,
-    (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter),
-    openStore,
+    (db) => ambient.countAmbient(db, files, tenantId, filter),
+    openOn(files),
   );
 }
 
@@ -115,15 +125,10 @@ export function batchWriteAndDeleteInFolder(
   if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) {
     return [];
   }
+  const files = storeFilesOf(hippoRoot);
   return onHandle(
     hippoRoot,
-    (db) =>
-      batches.batchWriteAndDelete(db, {
-        files: storeFilesOf(hippoRoot),
-        toWrite,
-        toDeleteIds,
-        opts,
-      }),
-    openStore,
+    (db) => batches.batchWriteAndDelete(db, { files, toWrite, toDeleteIds, opts }),
+    openOn(files),
   );
 }

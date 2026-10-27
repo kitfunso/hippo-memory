@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createVectorGraph, insertNode, searchGraph } from '../../dist/db/vector-graph.js';
 import { VectorGraphs } from '../../dist/db/vector-graph-index.js';
-import { saveVectorGraphFile } from '../../dist/db/vector-graph-build.js';
+import { saveVectorGraphFile } from '../../dist/store/sqlite/vector-graph-file.js';
 import { graphFilePath } from '../../dist/db/vector-graph-file.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';

@@ -256,3 +256,78 @@ describe('.oxlintrc.json test env rule', () => {
     expect(writes('tests/_helpers/env.ts')).toBe(0);
   });
 });
+
+describe('.oxlintrc.json store-group and grant rules', () => {
+  it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
+    const hits = lint({
+      'src/api/whole.ts':
+        "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
+      'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
+    });
+    expect(hits.get('src/api/whole.ts')).toContain(IMPORT);
+    expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
+  });
+
+  it('fails an unscoped hippo.db open in src, and passes it in the db files that make one', () => {
+    const open = (name: string, from: string): string =>
+      `import { ${name} } from '${from}';\nexport const o = ${name};\n`;
+    const hits = lint({
+      'src/store/sqlite/opens.ts': open('openHippoDb', '../../db/index.js'),
+      'src/db/reads.ts': open('openHippoDbReadOnly', './open.js'),
+      'src/db/deep/reads.ts': open('openHippoDb', '../open.js'),
+      'src/db/grant.ts': open('openHippoDbReadOnly', './open.js'),
+      'src/db/index.ts': "export { openHippoDb } from './open.js';\n",
+    });
+    expect(hits.get('src/store/sqlite/opens.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/reads.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/deep/reads.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/grant.ts')).toBeUndefined();
+    expect(hits.get('src/db/index.ts')).toBeUndefined();
+  });
+});
+
+const DEPCRUISE = join(REPO, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruiser.mjs');
+
+interface Violation {
+  readonly from: string;
+  readonly rule: { readonly name: string };
+}
+
+/** Runs the repo's depcruise rules over `files` in a fresh folder; the files each `rule` names. */
+function cruise(files: Record<string, string>, rule: string): string[] {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-deps-')));
+  try {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), text);
+    }
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { module: 'nodenext' } }));
+    const config = join(REPO, '.dependency-cruiser.cjs');
+    const args = [DEPCRUISE, 'src', '--config', config, '--output-type', 'json'];
+    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8' });
+    // SAFETY: depcruise's json output carries summary.violations, each with its from path and rule name.
+    const { summary } = JSON.parse(r.stdout) as { summary: { violations: Violation[] } };
+    return summary.violations.filter((v) => v.rule.name === rule).map((v) => v.from);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('.dependency-cruiser.cjs grant rule', () => {
+  it('fails a value import of db/grant.ts outside the adapter grant, and passes a type import', () => {
+    const grant = 'export class DbGrant {}\nexport const mintDbGrant = (): DbGrant => new DbGrant();\n';
+    const minted = cruise(
+      {
+        'src/db/grant.ts': grant,
+        'src/store/sqlite/grant.ts':
+          "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
+        'src/store/sqlite/forged.ts':
+          "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
+        'src/store/sqlite/typed.ts':
+          "import type { DbGrant } from '../../db/grant.js';\nexport const t = (g: DbGrant): DbGrant => g;\n",
+      },
+      'db-grant-mint',
+    );
+    expect(minted).toEqual(['src/store/sqlite/forged.ts']);
+  });
+});

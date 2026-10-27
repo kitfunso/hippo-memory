@@ -45,7 +45,7 @@ function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEnt
         strength: a.strength,
       });
     },
-    openStore,
+    (r) => openStore(r, storeFilesOf(r).opens),
   );
 }
 

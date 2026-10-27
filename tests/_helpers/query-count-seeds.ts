@@ -11,7 +11,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { adminActor } from '../../src/api/types.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from './root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { removeDir } from './remove-dir.js';
 
 export const SIZES = [10, 200] as const;
@@ -50,7 +50,7 @@ export function seed(
 ): void {
   writeEntriesTogether(ctx.hippoRoot, entries);
   if (!after) return;
-  const db = openStore(ctx.hippoRoot);
+  const db = openStore(ctx.hippoRoot, storeFilesOf(ctx.hippoRoot).opens);
   try {
     for (const e of entries) after(db, e);
   } finally {

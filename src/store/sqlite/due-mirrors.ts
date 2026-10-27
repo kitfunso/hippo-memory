@@ -7,7 +7,6 @@ import {
   closeHippoDb,
   type DatabaseSyncLike,
   getHippoDbPath,
-  openHippoDb,
   withWriteScope,
 } from '../../db/index.js';
 import { oncePerStore, type StoreAt } from '../../db/connect.js';
@@ -63,7 +62,7 @@ export function recoverDueMirrors(at: StoreAt, db: DatabaseSyncLike, due?: boole
 function rewriteDueMirrorsIn({ hippoRoot, runtime }: StoreAt): void {
   // A store removed before its deferred rewrite has nothing left to mirror.
   if (!fs.existsSync(getHippoDbPath(hippoRoot))) return;
-  const db = openHippoDb(hippoRoot, { grant: grantFor({ runtime }) });
+  const db = grantFor({ runtime }).open(hippoRoot);
   try {
     rewriteDueMirrors(db, hippoRoot);
   } finally {

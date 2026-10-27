@@ -2,7 +2,7 @@
 // store worker after its own build. A build reads rows a page at a time on a read-only handle, so
 // no writer ever waits on it.
 import { errorFields, log } from '../base/util/log.js';
-import { openHippoDbReadOnly } from './open.js';
+import type { DbGrant } from './grant.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { cachedStatement } from './statement-cache.js';
 import { encodeGraphFile, saveGraphFile } from './vector-graph-file.js';
@@ -66,12 +66,13 @@ function fileDrifted(db: DatabaseSyncLike, hippoRoot: string, dim: number): bool
 /** Saves a store worker's freshly built `rows` when the file on disk is missing or has drifted;
  * a failure is one warn line, since reads still have the worker's graph and the scan. */
 export async function saveGraphIfDrifted(
+  grant: DbGrant,
   hippoRoot: string,
   rows: GraphRows,
   turn: Turn,
 ): Promise<void> {
   try {
-    const db = openHippoDbReadOnly(hippoRoot);
+    const db = grant.openReadOnly(hippoRoot);
     let drifted: boolean;
     try {
       drifted = storedModel(db) === rows.model && fileDrifted(db, hippoRoot, rows.graph.dim);
@@ -148,6 +149,7 @@ export interface GraphFileOptions {
  * with no server still gets one. Never throws: a sleep finishes without it, and reads scan until
  * a later run saves it. */
 export async function saveVectorGraphFile(
+  grant: DbGrant,
   hippoRoot: string,
   opts: GraphFileOptions,
 ): Promise<void> {
@@ -159,7 +161,7 @@ export async function saveVectorGraphFile(
     return false;
   };
   try {
-    const db = openHippoDbReadOnly(hippoRoot);
+    const db = grant.openReadOnly(hippoRoot);
     try {
       const rows = await buildIfDue(db, hippoRoot, opts.maxVectors, turn);
       if (rows === undefined || !(await writeGraphFile(hippoRoot, rows, turn))) return;

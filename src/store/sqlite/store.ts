@@ -5,12 +5,7 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvents, listAuditEvents } from './audit.js';
-import {
-  getHippoDbPath,
-  openHippoDbReadOnly,
-  type DatabaseSyncLike,
-  type RequestStores,
-} from '../../db/index.js';
+import { getHippoDbPath, type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { recordTokenUse } from './token-ledger.js';
@@ -53,7 +48,7 @@ import { readLatestHandoff } from './handoffs.js';
 import { updateStats } from './index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys.js';
-import type { Handles, OnHandle, StoreFiles } from './open.js';
+import { type Handles, type OnHandle, readOnly, type StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './bound.js';
 import type {
@@ -141,7 +136,7 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
  * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
-    ledger: sqliteLedger(handles.on, handles.files.opens.grant?.session),
+    ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),
     promotion: sqlitePromotion(handles),
     folderFiles: sqliteFolderFiles(handles),
@@ -269,13 +264,9 @@ export function sqliteDiagnosticsStore(
   const { on } = handles;
   return {
     diagnostics: sqliteDiagnostics(on),
-    projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
-    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
-      on,
-      { entriesWhere: listEntriesWhere },
-      openHippoDbReadOnly,
-    ),
-    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, openHippoDbReadOnly),
+    projectTags: sqliteProjectTags(handles, readOnly),
+    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(on, { entriesWhere: listEntriesWhere }),
+    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, readOnly),
   };
 }
 

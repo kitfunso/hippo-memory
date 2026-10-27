@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { packageScriptsAt } from '../../src/domain/learn/churn-git.js';
-import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 let dir: string;
@@ -24,7 +24,11 @@ describe('legacy index.json and stats.json shapes', () => {
     fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
     // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
     const memoryCount = (): number =>
-      onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStore);
+      onHandle(
+        root,
+        (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n,
+        (r) => openStore(r, storeFilesOf(r).opens),
+      );
     expect(memoryCount()).toBe(0);
     expect(memoryCount()).toBe(0);
     expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);

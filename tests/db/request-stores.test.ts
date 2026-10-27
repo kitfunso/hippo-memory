@@ -23,7 +23,7 @@ const busyTimeout = (db: DatabaseSyncLike): number =>
   Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
 /** An open on `session`, as a store built with it makes. */
-const openIn = (session: RequestStores): DatabaseSyncLike => openHippoDb(root, { grant: grantFor({ session }) });
+const openIn = (session: RequestStores): DatabaseSyncLike => grantFor({ session }).open(root);
 
 describe('withSharedStoreHandles', () => {
   it('work that outlives its session gets a connection of its own, which closeHippoDb closes', async () => {

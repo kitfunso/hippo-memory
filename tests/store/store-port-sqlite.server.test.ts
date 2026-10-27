@@ -66,10 +66,14 @@ import {
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
 import type { AppendAuditOptions } from '../../src/base/ports/store/types.js';
-import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { handlesOf, onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
+
+/** openStore on a handle of the root's own, as onHandle takes an opener of the root alone. */
+const openOwn = (root: string) => openStore(root, storeFilesOf(root).opens);
 
 type Kind = 'local' | 'wide';
 interface Outcome<T> {
@@ -389,7 +393,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
     // The planning-fallacy reads of a recall; its audit rows stay with the caller.
     const { direct, port } = await parity(
-      (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openStore),
+      (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openOwn),
       (store) => store.planningFallacyEvidence(TENANT, tokens),
     );
     expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
@@ -593,10 +597,8 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         } finally {
           closeHippoDb(db);
         }
-        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, {
-          strength: PRODUCTION_STRENGTH,
-          clock: evalNow,
-        });
+        const rules = { strength: PRODUCTION_STRENGTH, clock: evalNow };
+        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, rules, grantFor({}));
       },
       (store) => store.finishRecall(finishWrites()),
     );
