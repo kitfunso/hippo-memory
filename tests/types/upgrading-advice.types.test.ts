@@ -110,25 +110,155 @@ describe('UPGRADING-3.0 advice', () => {
     typeOnly(() => {
       const global = (root: string, store: GlobalStore): GlobalInReach => ({ root, store, config: loadConfig(root) });
       const target: GlobalTarget = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
+      const shorthand = (store: GlobalTarget['store'], config: GlobalTarget['config']): GlobalTarget => ({
+        store,
+        config,
+      });
+      expectTypeOf(shorthand).returns.toEqualTypeOf<GlobalTarget>();
       expectTypeOf(global).returns.toEqualTypeOf<GlobalInReach>();
       expectTypeOf(target).toEqualTypeOf<GlobalTarget>();
     });
   });
 
+  // Nothing below this line counts as compiled code.
   it('compiles every statement and object literal the guide gives, as the guide writes it', () => {
-    const squash = (text: string): string => text.replace(/\s+/g, '').replace(/,(?=[)}\]])/g, '');
-    const guide = readFileSync(new URL('../../docs/UPGRADING-3.0.md', import.meta.url), 'utf8');
-    const compiled = squash(
-      readFileSync(new URL(import.meta.url), 'utf8')
-        .split('\n')
-        .filter((line) => !/^\s*(\/\/|\/?\*)/.test(line))
-        .join('\n'),
-    );
-    const code = [...guide.matchAll(/`([^`\n]+)`/g)]
-      .map(([, span]) => span)
-      .filter((span) => /^(const |if \(|await )/.test(span) || /^\{ .*(\.\.\.|\(|\w\.\w)/.test(span));
-
-    expect(code.length).toBeGreaterThan(8);
-    expect(code.filter((span) => !compiled.includes(squash(span)))).toEqual([]);
+    expect(uncovered()).toEqual([]);
   });
 });
+
+const squash = (text: string): string => text.replace(/\s+/g, '').replace(/,(?=[)}\]])/g, '');
+const STATEMENT = /^(const |if \(|await )/;
+const FIELDS = 'names the fields of a type the port declares, which tsc checks there';
+const JSON_BODY = 'an HTTP body, not TypeScript';
+
+/** The code this file compiles: no comment, no line a `@ts-expect-error` holds, nothing after the check. */
+function compiledText(): string {
+  const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n');
+  const end = lines.findIndex((line) => line.includes('Nothing below this line counts as compiled code.'));
+  const kept: string[] = [];
+  let expectingError = false;
+  for (const line of lines.slice(0, end)) {
+    if (/^\s*\/\/\s*@ts-expect-error/.test(line)) expectingError = true;
+    else if (expectingError) expectingError = !/[;}]\s*$/.test(line);
+    else if (!/^\s*(\/\/|\/?\*)/.test(line)) kept.push(line);
+  }
+  return squash(kept.join('\n'));
+}
+
+/** Each statement or object span in the guide's advice column that this file does not compile and
+ * UNCOMPILED_SPANS does not name, as `row: span`; a UNCOMPILED_SPANS entry the guide no longer holds is listed too. */
+function uncovered(): string[] {
+  const compiled = compiledText();
+  const guide = readFileSync(new URL('../../docs/UPGRADING-3.0.md', import.meta.url), 'utf8');
+  const misses: string[] = [];
+  const seen = new Set<string>();
+  for (const line of guide.split('\n')) {
+    if (!line.startsWith('| ') || line.startsWith('| ---')) continue;
+    const [first = '', ...advice] = line.slice(2).split(' | ');
+    const row = /`([^`\n]+)`/.exec(first)?.[1] ?? first;
+    for (const [, span = ''] of advice.join(' | ').matchAll(/`([^`\n]+)`/g)) {
+      if (!STATEMENT.test(span) && !span.startsWith('{ ')) continue;
+      if (compiled.includes(squash(span))) continue;
+      const skipped = UNCOMPILED_SPANS.some((s) => s.row === row && s.spans.includes(span));
+      if (skipped && !STATEMENT.test(span)) seen.add(`${row}: ${span}`);
+      else misses.push(`${row}: ${span}`);
+    }
+  }
+  const stale = UNCOMPILED_SPANS.flatMap((s) => s.spans.map((span) => `${s.row}: ${span}`)).filter((k) => !seen.has(k));
+  return [...misses, ...stale.map((k) => `stale ${k}`)];
+}
+
+/** Shape spans the guide shows and this file does not compile, by row, each with its reason. */
+const UNCOMPILED_SPANS: readonly {
+  readonly row: string;
+  readonly spans: readonly string[];
+  readonly reason: string;
+}[] = [
+  { row: 'initStore(hippoRoot, opts?)', spans: ['{ runtime?, session?, busyWaitMs? }'], reason: FIELDS },
+  { row: 'cards.list(tenantId, { status })', spans: ['{ cards, next }'], reason: FIELDS },
+  { row: 'HippoStore', spans: ['{ written, notes }'], reason: FIELDS },
+  {
+    row: 'EmbeddingIndex.pruneListPending()',
+    spans: ["{ kind: 'pending', page: { limit, afterId } }", '{ ids, next }'],
+    reason: FIELDS,
+  },
+  {
+    row: 'Learning.entriesMentioning(tokens, tag, tenantId)',
+    spans: ['{ limit, after }', '{ entries, next }'],
+    reason: FIELDS,
+  },
+  { row: 'Conflicts.list(tenantId, status)', spans: ['{ rows, next }'], reason: FIELDS },
+  {
+    row: 'Conflicts.resolve(tenantId, { conflictId, keepId, forgetLoser }, { rejectLoserValue, rejectedBy, reason })',
+    spans: ['{ id, scope }', "{ kind: 'weaken' }", "{ kind: 'remove' }", "{ kind: 'reject', ownScope }"],
+    reason: FIELDS,
+  },
+  {
+    row: 'ContextReads.ambientCandidates(tenantId, { recentNeeded, admit, recall?, origins? })',
+    spans: ['{ id, reason }'],
+    reason: FIELDS,
+  },
+  { row: 'entryWrites', spans: ['{ pinned }'], reason: FIELDS },
+  {
+    row: 'AuditMaintenance.repairQuality(tenantId, apply)',
+    spans: ['{ pinned, raw, trusted, objectBacked }'],
+    reason: FIELDS,
+  },
+  {
+    row: 'hippo dashboard',
+    spans: ['{ "error" }', '{ "error": "internal server error", "requestId" }'],
+    reason: JSON_BODY,
+  },
+  { row: 'POST /v1/outcome', spans: ['{ "applied": 0, "ids": [] }'], reason: JSON_BODY },
+  { row: 'DormantRestoreRequest.inReach', spans: ['{ halfLifeDays, strength }'], reason: FIELDS },
+  {
+    row: 'reports.correctionEntries()',
+    spans: ['{ oldId, newId, correctedAt, sourceCreated }', '{ id, owner, artifactRef }'],
+    reason: FIELDS,
+  },
+  { row: 'POST /v1/memories', spans: ['{ "skipped": { "reason", "score" } }'], reason: JSON_BODY },
+  { row: 'LoserFate', spans: ["{ kind: 'weaken', halfLifeFactor, minHalfLifeDays }"], reason: FIELDS },
+  { row: 'embeddingIndex.summary()', spans: ['{ vectors, dims }'], reason: FIELDS },
+  { row: 'EntryTarget', spans: ['{ scope, owner }'], reason: FIELDS },
+  {
+    row: 'consolidation',
+    spans: [
+      '{ from, outcome, fts, sleepCount, recentRuns, sessions }',
+      '{ summaries, more }',
+      '{ removedIds, expired }',
+    ],
+    reason: FIELDS,
+  },
+  { row: 'reports.entriesPage(tenantId, page)', spans: ['{ limit, after?, newest? }', '{ tenantId }'], reason: FIELDS },
+  { row: 'sharing.textKeysHolding(tenantId, texts)', spans: ['{ tenantId }'], reason: FIELDS },
+  {
+    row: 'contextReads.unfinishedHandoff',
+    spans: [
+      '{ source, tag, live: true }',
+      "{ kinds: ['raw'], artifactRefPrefix }",
+      "{ kinds: ['raw'], live: true, sessionId, origins }",
+    ],
+    reason: FIELDS,
+  },
+  { row: 'projectTags.entriesFromOrigin', spans: ['{ origin, transcript, cwd }'], reason: FIELDS },
+  { row: 'embeddingIndex', spans: ['{ id, key }'], reason: FIELDS },
+  {
+    row: 'graphReads.entitiesForMemories(tenantId, memoryIds)',
+    spans: ["{ by: 'memory', ids }", "{ by: 'entity', ids }", "{ by: 'neighbor', ids, limit }"],
+    reason: FIELDS,
+  },
+  {
+    row: 'connectorEvents.deletionTarget',
+    spans: [
+      '{ artifactRef, tenantId }',
+      '{ duplicate, archived }',
+      '{ tenantId, actor, artifactRef, reason }',
+      '{ tenantId }',
+      '{ tenantId: null, routes }',
+      '{ id }',
+      "{ connector: 'slack', tenantId, channelId }",
+      "{ connector: 'github', tenantId, repo, stream }",
+    ],
+    reason: FIELDS,
+  },
+];
