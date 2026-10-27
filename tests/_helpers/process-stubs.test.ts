@@ -17,6 +17,21 @@ describe('callMatching', () => {
     await expect(waited).resolves.toEqual([0]);
   });
 
+  it('rejects with the error a predicate throws, on a later call too, and stops looking', async () => {
+    const spy = vi.fn();
+    const boom = new Error('bad args');
+    const waited = callMatching(
+      spy,
+      (n) => {
+        if (n === 'x') throw boom;
+        return false;
+      },
+      { what: 'never', deadlineMs: 2_000 },
+    );
+    spy('x');
+    await expect(waited).rejects.toBe(boom);
+  });
+
   it('rejects at its deadline, naming what never came', async () => {
     const spy = vi.fn();
     spy(1);

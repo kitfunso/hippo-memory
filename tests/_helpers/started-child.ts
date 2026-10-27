@@ -1,6 +1,7 @@
 // The one way a test runs an async child: each wait is on a printed line or the exit, with its own deadline, and the
 // whole process tree is gone before the test's folder is removed.
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import { killTree } from '../../src/host/kill-tree.js';
 import { trackLive } from './make-root.js';
 import { EVENT_DEADLINE_MS, checkDeadline } from './wait-for.js';
@@ -10,6 +11,8 @@ export interface StartOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** Written to stdin, which is then closed; without it stdin stays open for send(). */
   readonly input?: string;
+  /** 'ignore' starts the child with no stdin at all, as a hook run by a host that gives it none. */
+  readonly stdin?: 'pipe' | 'ignore';
   /** Default for each line() and exited() call, which each start their own deadline. */
   readonly deadlineMs?: number;
   /** Required when a deadline is over EVENT_DEADLINE_MS. */
@@ -69,13 +72,11 @@ export function startNode(args: readonly string[], opts: StartOptions = {}): Sta
 export function startCommand(command: string, args: readonly string[], opts: StartOptions = {}): StartedChild {
   const defaultMs = checkDeadline(opts.deadlineMs ?? EVENT_DEADLINE_MS, 'startNode', opts.reason);
   // POSIX: its own process group, so stop() reaches a grandchild whose parent already exited.
-  const child = spawn(command, [...args], {
-    cwd: opts.cwd,
-    env: opts.env,
-    stdio: 'pipe',
-    windowsHide: true,
-    detached: process.platform !== 'win32',
-  });
+  const base = { cwd: opts.cwd, env: opts.env, windowsHide: true, detached: process.platform !== 'win32' };
+  const child: ChildProcess & { stdout: Readable; stderr: Readable } =
+    opts.stdin === 'ignore'
+      ? spawn(command, [...args], { ...base, stdio: ['ignore', 'pipe', 'pipe'] })
+      : spawn(command, [...args], { ...base, stdio: 'pipe' });
   // Listened for before anything else: a spawn that fails (a missing cwd) emits 'error' with no pid.
   let spawnError: Error | null = null;
   child.on('error', (err) => {
@@ -113,10 +114,15 @@ export function startCommand(command: string, args: readonly string[], opts: Sta
   });
   // A child that exits before reading stdin makes a write fail with EPIPE; it is named in any failure, as its exit is.
   let stdinError = '';
-  child.stdin.on('error', (err) => {
+  const stdin = child.stdin;
+  stdin?.on('error', (err) => {
     stdinError = `; stdin: ${err.message}`;
   });
-  if (opts.input !== undefined) child.stdin.end(opts.input);
+  const input = (): NonNullable<typeof stdin> => {
+    if (stdin === null) throw new Error(`child ${pid} was started with stdin: 'ignore'`);
+    return stdin;
+  };
+  if (opts.input !== undefined) input().end(opts.input);
 
   const state = (): string => {
     const how = exit === null ? 'still running' : `exited with ${exit.code ?? exit.signal}`;
@@ -163,9 +169,9 @@ export function startCommand(command: string, args: readonly string[], opts: Sta
       return awaitEvent(what, ms, settle, () => exit !== null);
     },
     send(text) {
-      child.stdin.write(text);
+      input().write(text);
     },
-    endInput: () => new Promise((resolve) => child.stdin.end(resolve)),
+    endInput: () => new Promise((resolve) => input().end(resolve)),
     closeOutput() {
       child.stdout.destroy();
     },

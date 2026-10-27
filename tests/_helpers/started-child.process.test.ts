@@ -65,6 +65,15 @@ describe('startNode', () => {
     await child.stop();
   });
 
+  it("stdin: 'ignore' gives the child no stdin, so its read ends at once and send() throws", async () => {
+    const child = startNode(['-e', `process.stdin.on('end', () => console.log('eof')); process.stdin.resume();`], {
+      stdin: 'ignore',
+    });
+    expect(() => child.send('x')).toThrow(/stdin: 'ignore'/);
+    await expect(child.line(/^eof$/, 'the end of stdin', 3_000)).resolves.toBeTruthy();
+    await child.stop();
+  });
+
   it('rejects at once when the child exits without the line', async () => {
     const child = startNode(['-e', `process.stdout.write('bye\\n'); process.exit(3)`]);
     // The deadline's message says "within"; this one says the child exited, so the exit ended the wait.

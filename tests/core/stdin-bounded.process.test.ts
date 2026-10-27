@@ -67,7 +67,7 @@ async function spawnBounded(
   const child = startNode([HIPPO_JS, ...args], {
     cwd,
     env,
-    input: stdin.mode === 'ignore' ? '' : undefined,
+    stdin: stdin.mode === 'ignore' ? 'ignore' : 'pipe',
     deadlineMs: KILL_GUARD_MS,
     reason: 'a red-phase hang fails here naming the command; step 0 measured a run at up to 3.4 s',
   });
@@ -81,7 +81,7 @@ async function spawnBounded(
     if (stdin.delayMs) setTimeout(write, stdin.delayMs);
     else write();
   }
-  // 'idle': stdin stays open, untouched. 'ignore': stdin is ended at once.
+  // 'idle': stdin stays open, untouched. 'ignore': the child has no stdin.
   try {
     const { code, signal, stdout, stderr } = await child.exited();
     return { status: code, signal, stdout, stderr, elapsedMs: Date.now() - start };

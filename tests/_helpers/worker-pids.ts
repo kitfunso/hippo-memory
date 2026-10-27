@@ -54,22 +54,24 @@ export function workerPids(dir: string): number[] {
     });
 }
 
-/** Rejects unless exactly `expected` workers were recorded, then waits until each has exited. */
+/** Waits until each recorded worker has exited, then rejects unless exactly `expected` were recorded. */
 async function pidsGone(dir: string, expected: number, what: string): Promise<void> {
   const pids = workerPids(dir);
-  if (pids.length !== expected) {
-    throw new Error(`${what}: expected ${expected} session-end worker(s), the spawn record holds ${pids.length}`);
-  }
   await waitFor(() => pids.every((pid) => !pidAlive(pid)), {
     what: `${what}: workers ${pids.join(', ')} exited`,
     timeoutMs: WORKER_GONE_MS,
     intervalMs: 50,
     reason: WORKER_REASON,
   });
+  if (pids.length !== expected) {
+    throw new Error(`${what}: expected ${expected} session-end worker(s), the spawn record holds ${pids.length}`);
+  }
 }
 
-/** Waits for the `expected` workers recorded under `dir` to exit, then removes `dir`. */
+/** Waits for the workers recorded under `dir` to exit, then removes `dir`; the first failure is the one thrown. */
 export async function removeAfterWorkers(dir: string, expected: number, what: string): Promise<void> {
-  await pidsGone(dir, expected, what);
-  await removeWhenStopped(dir);
+  const failures: Error[] = [];
+  await pidsGone(dir, expected, what).catch((err: Error) => failures.push(err));
+  await removeWhenStopped(dir).catch((err: Error) => failures.push(err));
+  if (failures.length > 0) throw failures[0];
 }

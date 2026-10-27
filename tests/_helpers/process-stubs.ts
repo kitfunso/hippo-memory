@@ -60,7 +60,14 @@ export function callMatching(
   const deadline = Date.now() + deadlineMs;
   return new Promise((resolve, reject) => {
     const look = (): void => {
-      const hit = spy.mock.calls.find((args) => test(...args));
+      let hit: unknown[] | undefined;
+      try {
+        hit = spy.mock.calls.find((args) => test(...args));
+      } catch (err) {
+        // From a timer, a throw would be uncaught in the worker; the wait is where the test can see it.
+        reject(err);
+        return;
+      }
       if (hit) resolve(hit);
       else if (Date.now() >= deadline) reject(new Error(`${what} not called within ${deadlineMs} ms`));
       else setTimeout(look, 5);
