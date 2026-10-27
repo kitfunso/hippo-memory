@@ -35,10 +35,10 @@ import {
 import {
   rankCtxOf,
   rankRecall,
-  withMissing,
   type RankRecallOptions,
   type RankRecallResult,
 } from './pipeline.js';
+import { withMissing } from './rank-search.js';
 import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
