@@ -602,8 +602,8 @@ export function writeInOwnTenant(
 
 /** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction,
  * hippo.db's form of the port's row lock, each a set statement whatever the id count. Returns
- * one entry per applied id with repeats, as callers count them. An outcome never changes
- * content, so the rejected-value guard has nothing to check. */
+ * one entry per applied id with repeats, as callers count them. An outcome adds no text, so the
+ * rejected-value guard has nothing to check; its rewrite can only redact a legacy row's. */
 function applyOutcomeOn(
   db: DatabaseSyncLike,
   outcome: OutcomeWrite,
@@ -621,14 +621,17 @@ function applyOutcomeOn(
       applied.push(updated);
     }
     const rows = [...latest.values()];
-    updateMemoryRows(db, rows);
-    // A good outcome drops the churn-stale tag; only those rows' indexed text changes.
-    const retagged = rows.filter((row) => row.tags.join(' ') !== read.get(row.id)?.tags.join(' '));
-    if (retagged.length > 0) {
+    const redacted = new Set(updateMemoryRows(db, rows));
+    // A good outcome drops the churn-stale tag, and a legacy row's text may redact; only those
+    // rows' indexed text changes.
+    const reindexed = rows.filter(
+      (row) => redacted.has(row.id) || row.tags.join(' ') !== read.get(row.id)?.tags.join(' '),
+    );
+    if (reindexed.length > 0) {
       replaceFtsRows(
         db,
-        retagged,
-        retagged.map((row) => row.id),
+        reindexed,
+        reindexed.map((row) => row.id),
       );
     }
     const parents = [...new Set(rows.flatMap((row) => (row.dagParentId ? [row.dagParentId] : [])))];

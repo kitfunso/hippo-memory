@@ -9,6 +9,7 @@ import {
 import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
+import { redactEntry } from '../util/secret-detect.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
@@ -97,9 +98,9 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
   };
 }
 
-/** Serialize a MemoryEntry to markdown with YAML frontmatter. */
+/** Serialize a MemoryEntry's stored form to markdown with YAML frontmatter. */
 export function serializeEntry(entry: MemoryEntry): string {
-  const wire = toWire(entry);
+  const wire = toWire(redactEntry(entry));
   const frontmatter = entryFrontmatter(wire);
   // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case
   // (mirrors the plan's task 7 guidance).

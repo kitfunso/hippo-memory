@@ -19,6 +19,7 @@ import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { duplicateHash } from '../../base/util/same-text.js';
+import { redactEntry } from '../../base/util/secret-detect.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -62,8 +63,12 @@ const UPSERT_MEMORY_SQL =
   `updated_at = datetime('now')`;
 
 /** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of
- * rows. The caller owns the transaction, the rejection guard and the full-text rows. */
-export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
+ * rows. The caller owns the transaction, the rejection guard and the full-text rows. Returns the
+ * ids whose stored text differs from the entry given, so the caller re-indexes them. */
+export function updateMemoryRows(
+  db: DatabaseSyncLike,
+  entries: readonly MemoryEntry[],
+): readonly string[] {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
   for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
     cachedStatement(
@@ -72,10 +77,12 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
         `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
     ).run(...chunk.flatMap(memoryRowValues));
   }
+  return entries.filter((entry) => redactEntry(entry) !== entry).map((entry) => entry.id);
 }
 
-/** Bind values for WRITTEN_COLUMNS, in its order. */
-function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
+/** Bind values for WRITTEN_COLUMNS, in its order, from the entry's stored form. */
+function memoryRowValues(given: MemoryEntry): Array<string | number | null> {
+  const entry = redactEntry(given);
   // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
   // time in SQL.
   const created = isoInstant(entry.created) ?? entry.created;
@@ -145,7 +152,7 @@ export function syncFtsRow(
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
-      entry.content,
+      redactEntry(entry).content,
       entry.tags.join(' '),
     );
   } catch (err) {
@@ -209,7 +216,7 @@ export function replaceFtsRows(
   const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
   for (const row of toInsert) {
     try {
-      insert.run(row.id, row.content, row.tags.join(' '));
+      insert.run(row.id, redactEntry(row).content, row.tags.join(' '));
     } catch (err) {
       markFtsDrifted(db);
       log.warnThenSample(
