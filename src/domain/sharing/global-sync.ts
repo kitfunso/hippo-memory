@@ -6,7 +6,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
-import { detectSecret } from '../../base/util/secret-detect.js';
+import { detectSecret, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
@@ -36,7 +36,9 @@ export async function syncGlobalToLocal(
   return copyMissingRows(into, global.store, rules, opts.embed);
 }
 
-const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
+// The text as stored, so a raw legacy row and the redacted copy a sync wrote match.
+const textKey = (e: { tenantId: string; content: string }): string =>
+  `${e.tenantId}\n${redactSecretsStrict(e.content)}`;
 
 /** Global rows of every tenant that the local store holds by neither id nor tenant and text,
  * oldest first; each page asks the local store about its own ids and texts only. */

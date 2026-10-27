@@ -9,6 +9,7 @@ import {
 } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
+import { holdsTextSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
@@ -205,8 +206,9 @@ export function listSessionEvents(
     params.push(options.session_id);
   }
   if (options.task) {
-    clauses.push('task = ?');
-    params.push(options.task);
+    const task = holdsTextSql('task', options.task);
+    clauses.push(task.sql);
+    params.push(...task.params);
   }
 
   const limit = Math.max(1, Math.trunc(options.limit ?? SESSION_EVENT_LIMIT));

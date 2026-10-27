@@ -9,7 +9,12 @@ import {
 } from '../../base/session/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
+import {
+  redactPayload,
+  redactSecretsStrict,
+  sameStoredText,
+  storedOrNull,
+} from '../../base/util/secret-detect.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
 import {
@@ -48,9 +53,9 @@ function transcriptSource(
   if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
   // A retried session end reads the same transcript, so it must not add a second revision.
   const same =
-    existing?.taskId === derived.task &&
-    existing.summary === derived.summary &&
-    existing.nextAction === derived.nextStep;
+    sameStoredText(existing?.taskId, derived.task) &&
+    sameStoredText(existing?.summary, derived.summary) &&
+    sameStoredText(existing?.nextAction, derived.nextStep);
   if (existing && same) return null;
   const snapshot = { ...derived, scope: null };
   return { snapshot, evidence: { ...evidence, derivedFrom: 'transcript' }, fromTranscript: true };
@@ -87,7 +92,7 @@ function sessionEndHandoff(
   const { snapshot } = source;
   const carry =
     existing != null &&
-    existing.taskId === snapshot.task &&
+    sameStoredText(existing.taskId, snapshot.task) &&
     (existing.scope ?? null) === (snapshot.scope ?? null);
   return {
     version: 1,

@@ -161,8 +161,8 @@ export function checkRejectionGuard(
     entryId,
   ) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
-  if (!introducesContent(storedRow, tenantId, rejectionDigest(redactSecretsStrict(content))))
-    return;
+  const digest = rejectionDigest(redactSecretsStrict(content));
+  if (!introducesContent(storedRow, tenantId, digest)) return;
   throw rejectedValueError(tombstone, entryId);
 }
 

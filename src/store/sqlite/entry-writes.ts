@@ -1,6 +1,7 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
 // and the shared entry write path.
-import { redactSecretsStrict, textForms } from '../../base/util/secret-detect.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { holdsTextSql } from './rule-sql.js';
 import { type MemoryEntry, markRetrieved } from '../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../base/memory/keep-rules.js';
 import {
@@ -421,19 +422,17 @@ interface RenameEntrySourceOptions {
   readonly to: string;
 }
 
-// A stored source may be either form of the caller's text (a legacy row keeps it raw).
-const FORMS = '(SELECT value FROM json_each(?))';
-
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or
  * superseded it first. */
 export function renameEntrySource(
   db: DatabaseSyncLike,
   { tenantId, id, from, to }: RenameEntrySourceOptions,
 ): number {
+  const held = holdsTextSql('source', from);
   const moved = cachedStatement(
     db,
-    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source IN ${FORMS} AND superseded_by IS NULL`,
-  ).run(redactSecretsStrict(to), id, tenantId, JSON.stringify(textForms(from)));
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND ${held.sql} AND superseded_by IS NULL`,
+  ).run(redactSecretsStrict(to), id, tenantId, ...held.params);
   return Number(moved.changes ?? 0);
 }
 
@@ -446,11 +445,12 @@ export function renameEntrySourceAndOrigin(
   options: RenameSourceOptions,
 ): number {
   const { from, to, origin } = options;
+  const held = holdsTextSql('source', from);
   const done = cachedStatement(
     db,
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
-      `AND source IN ${FORMS}`,
-  ).run(redactSecretsStrict(to), origin, id, tenantId, JSON.stringify(textForms(from)));
+      `AND ${held.sql}`,
+  ).run(redactSecretsStrict(to), origin, id, tenantId, ...held.params);
   return Number(done.changes ?? 0);
 }
 

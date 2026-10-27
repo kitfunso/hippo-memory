@@ -13,6 +13,7 @@ import {
 } from './graph-rows.js';
 import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../base/ports/store/graph.js';
 import { chunked } from '../../base/util/chunked.js';
+import { holdsTextSql } from './rule-sql.js';
 import type {
   GraphRows,
   GraphReads,
@@ -41,13 +42,14 @@ function listEntitiesByName(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`listEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
+  const named = holdsTextSql('name', name);
   const rows = cachedStatement(
     db,
     `
-    SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
+    SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND ${named.sql}
     ORDER BY id ASC LIMIT ?
   `,
-  ).all(tenantId, name, limit) as EntityRow[];
+  ).all(tenantId, ...named.params, limit) as EntityRow[];
   return rows.map(rowToEntity);
 }
 

@@ -200,6 +200,11 @@ export function redactEntry<T extends { content: string; source?: string | null 
   return source === entry.source ? { ...entry, content } : { ...entry, content, source };
 }
 
+/** True when `held` is `given` as stored; a raw legacy copy of the same text matches too. */
+export function sameStoredText(held: string | null | undefined, given: string): boolean {
+  return held != null && redactSecretsStrict(held) === redactSecretsStrict(given);
+}
+
 /** Every form a stored copy of `text` may hold: the stored form, then the raw text when a row
  * written before redaction keeps it. */
 export function textForms(text: string): readonly string[] {
