@@ -77,10 +77,8 @@ export const CARD_TRANSITIONS: CardTransitions = {
   shelved: [],
 };
 
-// SHORTCUT: one fixed lease for every claim; add a per-claim lease when the W3 dispatcher
-// heartbeats on a timer.
-/** How long a claim or a heartbeat keeps a running card's lease before reclaimExpiredCards may
- * return it to ready. */
+/** One fixed lease: a heartbeat renews it, and a runtime silent this long is what reclaimExpiredCards
+ * returns to ready. */
 export const CARD_LEASE_MS = 4 * HOUR_MS;
 
 /** Throws on any move CARD_TRANSITIONS does not allow, before a status write touches the row. */
