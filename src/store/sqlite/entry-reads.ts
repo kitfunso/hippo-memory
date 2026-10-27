@@ -21,12 +21,12 @@ import { tenantAnd, TENANT_IS } from './tenant.js';
 import { listEntriesWhere } from './entry-filter.js';
 import {
   afterIdAnd,
+  entriesPage,
   entryPage,
   ENTRY_PAGE_ORDER,
   idPageOf,
   type EntryPageRequest,
   type EntryRows,
-  type EntryRowsRead,
 } from './keyset.js';
 import type {
   DuplicateCandidates,
@@ -343,16 +343,6 @@ function ftsMentionRows(
   ).all(...upTo.params, ...within.params, limit) as MemoryRow[];
   const ids = new Set(hits.map((row) => row.id));
   return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(oldestFirst).slice(0, limit);
-}
-
-/** entryPage over whole rows, decoded. */
-function entriesPage(
-  tenantId: TenantId,
-  page: EntryPageRequest,
-  read: EntryRowsRead<MemoryRow>,
-): EntryPage {
-  const { rows, next } = entryPage(tenantId, page, read);
-  return { entries: rows.map(rowToEntry), next };
 }
 
 /** A page of rows in loadAllEntries' order, with only the columns that say whether another store
