@@ -219,7 +219,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
   read(
-    'reports.entriesWhere',
+    'base.entriesWhere',
     async (s) => [
       await s.entriesWhere({ tenantId: TENANT }, { limit: 3 }),
       await s.entriesWhere(

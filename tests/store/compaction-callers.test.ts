@@ -15,7 +15,8 @@ import { failureTarget } from '../_helpers/failure-target.js';
 import { snapshotFields, WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
 import { compactResumeText } from '../../src/api/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { bindSessionOwner, compactResumeForCaller, type Context } from '../../src/server.js';
+import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
+import type { ContextWith, EntryContext } from '../../src/api/types.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { handlesOf, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { sqliteCompactionHooks } from '../../src/store/sqlite/compaction-hooks.js';
@@ -214,7 +215,7 @@ describe('preCompactForCaller', () => {
 });
 
 describe('compactResumeForCaller', () => {
-  const resume = (ctx: Context, source = 'compact') =>
+  const resume = (ctx: EntryContext<ContextWith<'sessions'>>, source = 'compact') =>
     compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
   it("source not compact gives ''", async () => {

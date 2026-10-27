@@ -1,7 +1,7 @@
 // Where-you-left-off: the active task snapshot with the session events that follow it.
 
 import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
-import type { Context, ContextWith } from './types.js';
+import type { ContextWith } from './types.js';
 
 /** Session events the continuity block carries beside the snapshot and handoff, the newest kept. */
 export const CONTINUITY_EVENT_LIMIT = 5;

@@ -6,7 +6,7 @@ import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
-import { graphExpandRecall, type GraphExpandOptions } from '../../domain/graph/recall.js';
+import { graphExpandRecall, graphOf } from '../../domain/graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankMultihop } from '../../domain/search/multihop.js';
@@ -63,7 +63,6 @@ import type { ActiveGoals } from '../../base/ports/store/types.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  /** Its vectors and graph join the ranking where it keeps them; without them it ranks by BM25. */
   readonly store: StoreWith<never, 'vectors' | 'graphReads'>;
   readonly config: HippoConfig;
   readonly onHippoDb?: boolean;
@@ -547,14 +546,6 @@ async function engineSearch(
 export function withMissing(first: MemoryEntry[], second: MemoryEntry[]): MemoryEntry[] {
   const held = new Set(first.map((e) => e.id));
   return [...first, ...second.filter((e) => !held.has(e.id))];
-}
-
-/** The graph a store keeps, as graph expansion walks it; a store that keeps none has no
- * neighbours to add. */
-function graphOf(store: RankSource['store']): GraphExpandOptions['store'] | undefined {
-  const { graphReads } = store;
-  if (graphReads === undefined) return undefined;
-  return { graphReads, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
 }
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */

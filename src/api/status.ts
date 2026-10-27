@@ -13,7 +13,7 @@ import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, type Context, type ContextWith } from './types.js';
+import { requireHostAdmin, type ContextWith } from './types.js';
 import type { ParticleStats, StoredVectorSummary } from '../base/ports/store.js';
 import { indexStep } from '../domain/search/embed-memories.js';
 

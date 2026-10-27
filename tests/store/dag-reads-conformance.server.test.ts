@@ -115,7 +115,7 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
-async function conformsOn<G extends 'dagReads' | 'reports', R>(
+async function conformsOn<G extends 'dagReads' | 'base', R>(
   group: G,
   calls: readonly GroupCall<G, R>[],
 ): Promise<R[]> {
@@ -137,7 +137,7 @@ interface RawWindow {
 
 // The read assemble makes: a session's live raw rows, the newest `cap` of them oldest first when `cap` is positive.
 const window =
-  (cap: number, over: Partial<RawWindow> = {}): GroupCall<'reports', string[]> =>
+  (cap: number, over: Partial<RawWindow> = {}): GroupCall<'base', string[]> =>
   async (g) => {
     const { tenantId, sessionId, origins } = { tenantId: TENANT_A, sessionId: SESSION, ...over };
     const raws = { tenantId, kinds: ['raw'], live: true, sessionId, origins: origins && ['', ...origins] } as const;
@@ -147,7 +147,7 @@ const window =
         : await readAll((after?: EntryCursor) => g.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }));
     return rows.map((r) => r.id);
   };
-const raws = (calls: readonly GroupCall<'reports', string[]>[]): Promise<string[][]> => conformsOn('reports', calls);
+const raws = (calls: readonly GroupCall<'base', string[]>[]): Promise<string[][]> => conformsOn('base', calls);
 const count =
   (over: Partial<SessionRawCount> = {}): Call<number> =>
   (g) =>
@@ -179,7 +179,7 @@ afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
 });
 
-describe("Reports.entriesWhere over a session's raw rows", () => {
+describe("entriesWhere over a session's raw rows", () => {
   it('reads nothing for an empty session id, an unknown session and an unknown tenant', async () => {
     expect(
       await raws([

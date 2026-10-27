@@ -8,7 +8,6 @@ import {
   mcpApiContext,
   type GroupToolCall,
   type LocalToolCall,
-  type ToolCall,
 } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';

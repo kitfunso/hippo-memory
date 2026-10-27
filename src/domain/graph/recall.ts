@@ -15,7 +15,7 @@ import {
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
-import type { RequiredStore, StoreGroups } from '../../base/ports/store.js';
+import type { RequiredStore, StoreGroups, StoreWith } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -31,6 +31,14 @@ export const DEFAULT_MAX_NEIGHBORS = 25;
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
 type GraphStore = Pick<StoreGroups, 'graphReads'> & Pick<RequiredStore, 'entriesByIds'>;
+
+/** The graph a store keeps, as expansion walks it; a store that keeps none has no neighbours to
+ * add. */
+export function graphOf(store: StoreWith<never, 'graphReads'>): GraphStore | undefined {
+  const { graphReads } = store;
+  if (graphReads === undefined) return undefined;
+  return { graphReads, entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
+}
 type GraphHit = SearchResult & { graphVia: GraphVia };
 
 export interface GraphExpandOptions {

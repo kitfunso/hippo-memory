@@ -15,7 +15,11 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import { OTHER_STORE_MARKER, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import type { StoreWith } from '../../src/base/ports/store.js';
+
+// The vector groups an add-on store keeps so its embeds go through vectorWrites.
+const VECTOR_GROUPS = ['vectors', 'vectorWrites'] as const;
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -70,9 +74,9 @@ interface HippoDbIndex {
 
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
-function on(hippoRoot: string, store: HippoStore): EmbedTarget {
+function on(hippoRoot: string, store: StoreWith<'vectors' | 'vectorWrites'>): EmbedTarget {
   return {
-    store,
+    groups: { vectors: store.vectors, vectorWrites: store.vectorWrites },
     embeddings: loadConfig(hippoRoot).embeddings,
     embedderFor: resolveEmbeddingProvider,
     failureNotices: new FailureNotices(),
@@ -149,7 +153,7 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const run = (): Promise<number> => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a'));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -207,7 +211,7 @@ describe('embedAll with a store', () => {
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
@@ -235,7 +239,7 @@ describe('embedAll with a store', () => {
 describe('embedMemory with a store', () => {
   it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const entry = seeded[1];
     await embedMemoryInto(on(hippoRoot, side.store), entry);
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
@@ -255,12 +259,12 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const side = portOnlySide(copyOf(oldIndexed));
+      const side = portOnlySide(copyOf(oldIndexed), VECTOR_GROUPS);
       const staleVectors = {
         ...side.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),
       };
-      const store: HippoStore = stale ? { ...side.store, vectors: staleVectors } : side.store;
+      const store = stale ? { ...side.store, vectors: staleVectors } : side.store;
       const ids = seeded.map((e) => e.id);
       const [before, requests] = [await side.store.vectors.stored('vectors', ids), embeddings.requests()];
       await embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]);

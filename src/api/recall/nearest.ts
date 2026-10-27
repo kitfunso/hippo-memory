@@ -6,7 +6,7 @@ import {
   type RecallScopeFilter,
 } from '../../base/scope/recall-scope.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
-import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
+import { sharedStoreOf, type ContextWith } from '../types.js';
 
 /** The ids of the rows nearest `vector` that pass `spec`, nearest first. Refuses a spec for
  * another tenant, a scope the caller may not request, and on a shared store a spec that names no

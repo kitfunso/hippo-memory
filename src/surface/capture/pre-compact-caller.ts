@@ -1,6 +1,6 @@
 // PreCompact for a caller on another machine: the record and the owner's snapshot go under its
 // tenant and project; only a refused bind or the holdout arm withholds the instruction.
-import type { Context, ContextWith, EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';

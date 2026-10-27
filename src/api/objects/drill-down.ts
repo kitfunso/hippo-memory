@@ -6,7 +6,7 @@ import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { Context, ContextWith } from '../types.js';
+import type { ContextWith } from '../types.js';
 
 export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;

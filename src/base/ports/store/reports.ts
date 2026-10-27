@@ -4,7 +4,7 @@ import type { ConfidenceLevel, Layer, MemoryKind } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
 import type { FailureSummary } from './rejections.js';
 import type { TokenSummary } from './ledger.js';
-import type { EntryCursor, EntryPage } from './types.js';
+import type { EntryCursor } from './types.js';
 
 /** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {
