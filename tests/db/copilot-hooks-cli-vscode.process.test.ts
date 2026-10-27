@@ -267,8 +267,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     await waitForLog(logFile(), TURN_DONE);
   });
 
-  // A lock holder process, two bounded lock waits in the hook, then a worker that saves once the lock is gone.
-  it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
+  // A lock holder, the hook's bounded lock waits, then one worker that saves; the skip after a save is the first test's.
+  it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
     const busy = await stop(transcript, { env: { ...s.env, ...SHORT_BUSY_WAIT } });
@@ -280,9 +280,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-
-    expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
-    expect(memoriesWith(FIRST_LESSON)).toBe(1);
   });
 
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
