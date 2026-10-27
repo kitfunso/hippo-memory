@@ -51,7 +51,7 @@ describe('verb groups', () => {
   });
 
   it('every verb whose code reaches one of the seven groups that left the required store names it', () => {
-    // The groups grep over src/surface/cli (PR census), verb by verb.
+    // The feature groups each verb's code under src/surface/cli reads, found by grep, so a verb that reads one names it.
     const reached = {
       status: ['reports', 'vectors'],
       provenance: ['reports'],

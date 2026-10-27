@@ -1,5 +1,5 @@
 // An api or domain read of an optional group with a fallback (an F group) sits at one of seven pinned
-// sites, each with the reason no root binds it (PR body, section 3); a new one fails here until it is named.
+// sites, each with the reason no root binds it (beside each pin below); a new one fails here until it is named.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -21,24 +21,28 @@ function groupInterfaces(): string[] {
 }
 
 function fallbackReads(): string[] {
-  const optionalMember = new RegExp(`\\w+\\?: (?:${groupInterfaces().join('|')})\\b`);
+  const optionalMember = new RegExp(`\\w+\\?:\\s+(?:${groupInterfaces().join('|')})\\b`, 'g');
   const fallbackForms = [
-    /ContextWith<[^<>]*,[^<>]*>/,
-    /StoreWith<[^<>]*,[^<>]*>/,
-    /Partial<Pick<StoreGroups/,
-    /Partial<StoreGroups>/,
-    /Pick<Partial<StoreGroups/,
+    /ContextWith<[^<>]*,[^<>]*>/g,
+    /StoreWith<[^<>]*,[^<>]*>/g,
+    /Partial<\s*Pick<\s*StoreGroups/g,
+    /Partial<\s*StoreGroups\s*>/g,
+    /Pick<\s*Partial<\s*StoreGroups/g,
     optionalMember,
   ];
   const found: string[] = [];
   for (const file of [...tsFiles(join(REPO, 'src/api')), ...tsFiles(join(REPO, 'src/domain'))]) {
     const path = relative(REPO, file).split(sep).join('/');
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
-      for (const form of fallbackForms) {
-        const hit = form.exec(line)?.[0];
-        // The generic definition itself, which names no group.
-        if (hit !== undefined && hit !== 'StoreWith<G, F>') found.push(`${path}: ${hit}`);
+    // The whole file, comment lines out, so a type the formatter breaks over lines still matches.
+    const text = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n');
+    for (const form of fallbackForms) {
+      for (const [hit] of text.matchAll(form)) {
+        const flat = hit.replace(/\s+/g, ' ').replace('< ', '<').replace(' >', '>');
+        // A generic's own definition, which names no group.
+        if (!flat.includes(' extends ') && flat !== 'StoreWith<G, F>') found.push(`${path}: ${flat}`);
       }
     }
   }

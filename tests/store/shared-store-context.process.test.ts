@@ -169,6 +169,23 @@ describe('context reads on a shared store', () => {
     }
   });
 
+  it('warns once per process when two servers serve two store objects', async () => {
+    onceKeysPerCase();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const first = await start(true, { contextProjectIsolation: false });
+    const firstHome = home;
+    try {
+      expect((await contextTexts(first, '?project=acme%2Fapp')).status).toBe(200);
+      const second = await start(true, { contextProjectIsolation: false });
+      expect((await contextTexts(second, '?project=acme%2Fapp')).status).toBe(200);
+      expect(warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation'))).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      await first.stop();
+      rmSync(firstHome, { recursive: true, force: true });
+    }
+  });
+
   it('MCP hippo_context with no project header answers with an error refusal', async () => {
     const h = await start(true);
     expect(await mcpContext(h)).toEqual({ text: GATE, isError: true });
