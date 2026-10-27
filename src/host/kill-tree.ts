@@ -24,18 +24,23 @@ function send(pid: number, signal: NodeJS.Signals): void {
 /** Parent of each process, from one `ps` snapshot. Rejects when ps cannot run. */
 function parentsByPid(): Promise<Map<number, number>> {
   return new Promise((resolve, reject) => {
-    execFile('ps', ['-A', '-o', 'pid=,ppid='], { timeout: PS_MS }, (err, stdout) => {
-      if (err !== null) {
-        reject(err);
-        return;
-      }
-      const parents = new Map<number, number>();
-      for (const line of stdout.split('\n')) {
-        const [pid, ppid] = line.trim().split(/\s+/).map(Number);
-        if (Number.isInteger(pid) && Number.isInteger(ppid)) parents.set(pid, ppid);
-      }
-      resolve(parents);
-    });
+    execFile(
+      'ps',
+      ['-A', '-o', 'pid=,ppid='],
+      { timeout: PS_MS, windowsHide: true },
+      (err, stdout) => {
+        if (err !== null) {
+          reject(err);
+          return;
+        }
+        const parents = new Map<number, number>();
+        for (const line of stdout.split('\n')) {
+          const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+          if (Number.isInteger(pid) && Number.isInteger(ppid)) parents.set(pid, ppid);
+        }
+        resolve(parents);
+      },
+    );
   });
 }
 
