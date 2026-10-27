@@ -1,4 +1,4 @@
-// hippo.db's EmbeddingIndex: sessions by id, each holding the lock token and the rebuild it took,
+// hippo.db's EmbeddingIndex: sessions by id, each holding the lock and the rebuild it took,
 // so a session stays on the thread that opened it. The model checks take the opener, since an
 // unreadable index there reads as none.
 import { randomUUID } from 'node:crypto';
@@ -27,7 +27,8 @@ import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import { answered } from './bound.js';
 import { dropVectorStaging, upsertVectors } from '../../db/vector-store.js';
-import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
+import type { FileLock } from '../../host/file-lock.js';
+import { embedLockKey, tryEmbedLock } from './embed-lock.js';
 
 // The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild
 // keeps one open; a worker's handle outlives it, so the table is dropped too.
@@ -47,9 +48,9 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
-/** What a session took: the lock's token, and a rebuild begun and not yet committed. */
+/** What a session took: the lock, and a rebuild begun and not yet committed. */
 interface Session {
-  token: string | null;
+  lock: FileLock | null;
   rebuild: VectorRebuild | null;
 }
 
@@ -62,11 +63,11 @@ function rebuildOf(session: Session): VectorRebuild {
   return session.rebuild;
 }
 
-function closeSession(session: Session, hippoRoot: string): void {
+function closeSession(session: Session): void {
   try {
     session.rebuild?.close();
   } finally {
-    if (session.token !== null) releaseEmbedLock(hippoRoot, session.token);
+    session.lock?.release();
   }
 }
 
@@ -76,8 +77,8 @@ function rebuildSteps(
 ): Pick<Steps, 'lock' | 'begin' | 'stage' | 'commit' | 'close'> {
   return {
     lock: (session) => {
-      session.token ??= tryEmbedLock(hippoRoot);
-      return session.token !== null;
+      session.lock ??= tryEmbedLock(hippoRoot);
+      return session.lock !== null;
     },
     begin: (session) => {
       if (session.rebuild !== null) {
@@ -95,7 +96,7 @@ function rebuildSteps(
         rebuild.close();
       }
     },
-    close: (session) => closeSession(session, hippoRoot),
+    close: closeSession,
   };
 }
 
@@ -130,7 +131,7 @@ export function sqliteEmbeddingIndex(handles: Handles): EmbeddingIndex {
     open: () =>
       answered(() => {
         const id = randomUUID();
-        sessions.set(id, { token: null, rebuild: null });
+        sessions.set(id, { lock: null, rebuild: null });
         return { id, key: embedLockKey(handles.files.hippoRoot) };
       }),
     step: (id, step) =>

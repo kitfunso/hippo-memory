@@ -3,6 +3,7 @@
 import type { HeldText } from './types.js';
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
+import type { LogFields } from '../../util/log.js';
 
 // `hippo capture`'s reads and writes: each row is mirrored beside the folder, and the caller embeds
 // what was captured.
@@ -168,6 +169,8 @@ export interface OpenCompaction extends CompactionRef {
 export interface StepFailure {
   readonly busy: boolean;
   readonly message: string;
+  /** The thrown error's class, stack and cause chain, for the structured log. */
+  readonly fields?: LogFields;
 }
 
 export interface ItemsSaved {

@@ -245,6 +245,11 @@ How far capture has read one session's transcript. Capture saves it only after a
 the end, so a run that failed reads the same turns again.
 _Avoid_: turn cursor, position file, bookmark
 
+**File lock**:
+A lock database whose RESERVED lock (taken with BEGIN IMMEDIATE) names the one process allowed to do a piece of local work;
+the operating system frees it when that process dies.
+_Avoid_: lease (a card's), claim (a spool file's)
+
 **Compaction record**:
 The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it
 `started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,

@@ -1,5 +1,7 @@
 import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import * as fs from 'node:fs';
+import nodeFs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { replayCompactions, saveCompaction } from '../../src/surface/capture/compaction-record.js';
@@ -21,7 +23,7 @@ import {
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { log as hippoLog } from '../../src/base/util/log.js';
+import { log as hippoLog, type LogFields } from '../../src/base/util/log.js';
 
 const MINUTE = 60_000;
 const ITEMS = [
@@ -42,6 +44,9 @@ afterEach(() => {
 });
 
 const ago = (minutes: number): string => new Date(Date.now() - minutes * MINUTE).toISOString();
+// The lock file stays between replays and is reused, so a listing of spooled records leaves it out.
+const spoolFiles = (dir: string): string[] => fs.readdirSync(dir).filter((n) => n !== 'replay.lock.db');
+
 const log = (message: string): void => {
   logs.push(message);
 };
@@ -247,7 +252,7 @@ describe('replay of records a killed hook left', () => {
     );
     fs.writeFileSync(path.join(spool, 's2-1.json'), '{ not json');
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
-    expect(fs.readdirSync(spool).sort()).toEqual(['s2-1.unreadable.bad']);
+    expect(spoolFiles(spool).sort()).toEqual(['s2-1.unreadable.bad']);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([
       { session_id: 's1', status: 'done', items_written: 2, summary: 'the summary' },
@@ -471,7 +476,7 @@ describe('two replayers working the same store', () => {
     const past = new Date(Date.now() - 20 * MINUTE);
     fs.utimesSync(claimed, past, past);
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
-    expect(fs.readdirSync(spoolDir())).toEqual([]);
+    expect(spoolFiles(spoolDir())).toEqual([]);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
   });
@@ -483,12 +488,12 @@ describe('two replayers working the same store', () => {
       `CREATE TRIGGER block_compaction_insert BEFORE INSERT ON compactions BEGIN SELECT RAISE(ABORT, 'blocked'); END`,
     );
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(0);
-    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.a1.json']);
+    expect(spoolFiles(spoolDir())).toEqual(['s1-1.a1.json']);
     expect(logs.join('\n')).toContain('spool file s1-1.json failed to import (try 1 of 3)');
 
     run(s.hippoRoot, `DROP TRIGGER block_compaction_insert`);
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
-    expect(fs.readdirSync(spoolDir())).toEqual([]);
+    expect(spoolFiles(spoolDir())).toEqual([]);
   });
 
   it('records each spool file under the tenant it was spooled for', async () => {
@@ -596,8 +601,62 @@ describe('the daily runner finishes the global store', () => {
     const daily = await runHippo(['daily-runner'], s.dir, s.env);
     expect(daily.status).toBe(0);
     expect(daily.stdout).toContain('Finished saving 1 compaction left over in the global store.');
-    expect(fs.readdirSync(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);
+    expect(spoolFiles(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);
     expect(compactionMemories(s.globalRoot)).toHaveLength(2);
     expect(compactionRows(s.globalRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+  });
+});
+
+describe('a replay failure keeps its error fields', () => {
+  const caught: { message: string; fields: LogFields | undefined }[] = [];
+  const logFields = (message: string, fields?: LogFields): void => {
+    caught.push({ message, fields });
+  };
+  beforeEach(() => {
+    caught.length = 0;
+  });
+
+  it('the whole replay failing passes the class and stack', async () => {
+    const notADirectory = path.join(s.dir, 'a-file');
+    fs.writeFileSync(notADirectory, 'x');
+    await replayCompactions(compactionFolder(path.join(notADirectory, 'store')), logFields);
+    const failed = caught.find((c) => c.message.startsWith('replay failed'));
+    expect(failed?.fields).toMatchObject({ errorClass: expect.any(String), stack: expect.any(String) });
+  });
+
+  it('a transcript fill failing passes the record id with the error', async () => {
+    const transcript = path.join(s.proj, 't.jsonl');
+    fs.writeFileSync(transcript, transcriptLine(29, true, CONTINUED(ITEMS)) + '\n');
+    seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
+    const folder = compactionFolder(s.hippoRoot);
+    const hooks = {
+      ...folder.store.compactionHooks,
+      fill: async (): Promise<never> => {
+        throw new Error('fill refused');
+      },
+    };
+    await replayCompactions({ ...folder, store: { ...folder.store, compactionHooks: hooks } }, logFields);
+    const failed = caught.find((c) => c.message.startsWith('transcript fill of cmp-1 failed'));
+    expect(failed?.fields).toMatchObject({ recordId: 'cmp-1', errorClass: 'Error' });
+  });
+
+  it('a spool import failing passes the class and stack', async () => {
+    writeSpool('s1-1.json');
+    const real = nodeFs.readdirSync;
+    // SAFETY: the stub forwards every call but the spool folder's to readdirSync; a spy cannot spell its overloads.
+    const stub = ((dir: fs.PathLike, ...rest: never[]) => {
+      if (String(dir).endsWith('compactions-spool')) throw new Error('EIO: simulated');
+      return real(dir, ...rest);
+    }) as typeof nodeFs.readdirSync;
+    vi.spyOn(nodeFs, 'readdirSync').mockImplementation(stub);
+    syncBuiltinESMExports();
+    try {
+      await replayCompactions(compactionFolder(s.hippoRoot), logFields);
+    } finally {
+      vi.restoreAllMocks();
+      syncBuiltinESMExports();
+    }
+    const failed = caught.find((c) => c.message.startsWith('spool import failed'));
+    expect(failed?.fields).toMatchObject({ errorClass: 'Error', stack: expect.any(String) });
   });
 });

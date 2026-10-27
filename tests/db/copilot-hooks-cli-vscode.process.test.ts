@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoDbPath } from '../../src/db/index.js';
+import { takeFileLock } from '../../src/host/file-lock.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import { waitFor } from '../_helpers/wait-for.js';
@@ -110,6 +111,12 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
   const sessionFile = (suffix: string, id = VSCODE_SESSION): string =>
     path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
+  /** Whether a live worker holds the session lock; a free lock the probe takes is released at once. */
+  const sessionLockHeld = (): boolean => {
+    const take = takeFileLock(sessionFile('.lock.db'));
+    if (take.kind === 'taken') take.lock.release();
+    return take.kind !== 'taken';
+  };
 
   function stopPayload(transcript: string, over: { cwd?: string; sessionId?: string } = {}): string {
     const payload = copilotPayload('Stop', over.cwd ?? s.proj, transcript);
@@ -296,17 +303,14 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     await waitFor(() => !pidAlive(pid), { what: `worker ${pid} dead`, timeoutMs: WORKER_WAIT_MS });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
-    expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
+    expect(fs.existsSync(sessionFile('.lock.db'))).toBe(true);
     // The temp file shows the kill landed between the write and the rename.
     expect(fs.existsSync(sessionFile(`.cursor.json.${pid}.tmp`))).toBe(true);
 
     expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), {
-      what: 'session lock released',
-      timeoutMs: WORKER_WAIT_MS,
-    });
+    await waitFor(() => !sessionLockHeld(), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
   });
@@ -326,7 +330,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       timeoutMs: WORKER_WAIT_MS,
     });
     fault.release();
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
+    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} exited`, timeoutMs: 60_000 });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
@@ -354,14 +358,14 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(secondStop.status, secondStop.stderr).toBe(0);
     await waitForLog(secondLog, TURN_DONE, 50_000);
     expect(pidAlive(pid)).toBe(true);
-    expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
+    expect(sessionLockHeld()).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
     expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
 
     fault.release();
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
+    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} exited`, timeoutMs: 60_000 });
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
