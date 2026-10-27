@@ -11,7 +11,7 @@ import { deriveHalfLife, type MemoryEntry } from '../../base/memory/entry.js';
 import { holdsTextSql, scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrors } from './entry-writes.js';
-import { auditingRefusal } from './entry-lifecycle.js';
+import { auditingRefusal } from './entry-writes.js';
 import { markGraphDirty } from './graph-queue.js';
 import { removeGraphEntitiesForObject } from './graph-writes.js';
 import {

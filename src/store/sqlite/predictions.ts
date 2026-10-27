@@ -5,7 +5,7 @@ import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles } from './open.js';
-import { writeEntryRow } from './entry-lifecycle.js';
+import { writeEntryRow } from './entry-writes.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { appendAuditEvents } from './audit.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';

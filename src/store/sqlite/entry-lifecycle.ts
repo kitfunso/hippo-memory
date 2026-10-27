@@ -2,16 +2,10 @@
 import { type MemoryEntry } from '../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../base/memory/keep-rules.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
-import {
-  RejectedValueError,
-  ConflictError,
-  memoryNotFoundText,
-  NotFoundError,
-} from '../../base/errors/api-errors.js';
+import { ConflictError, memoryNotFoundText, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx } from './summary-dirty.js';
 import { summaryDirtyAudit } from '../rules/audit-rows.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { auditRejectionRefusal } from './audit-event.js';
 import { appendAuditEvents } from './audit.js';
 import { readEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, replaceFtsRows, updateMemoryRows } from './entry-row.js';
@@ -23,7 +17,6 @@ import { assertWriteRight, readerReaches, targetReader } from '../../base/scope/
 import { recordTraceOutcome } from './recall-trace.js';
 import type {
   EntryTarget,
-  EntryWrite,
   EntryWrites,
   OutcomeWrite,
   RawArchive,
@@ -38,10 +31,11 @@ import { bound } from './bound.js';
 import { readMemoryReach } from './tenant-lookup.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import {
-  WriteEntryInternalOptions,
+  auditingRefusal,
   rememberAuditMetadata,
   writeEntryDbOnly,
   writeEntryMirrors,
+  writeEntryRow,
 } from './entry-writes.js';
 
 /** A tenant's row `id` and the row `newId` that supersedes it. */
@@ -101,19 +95,6 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
   };
 }
 
-/** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the
- * row. */
-export function writeEntryRow(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  { entry, actor }: EntryWrite,
-  afterWrite?: WriteEntryInternalOptions['afterWrite'],
-): void {
-  const stamped = stampOriginProject(files, entry);
-  writeInOwnTenant(db, stamped, actor, afterWrite);
-  writeEntryMirrors(files.hippoRoot, stamped);
-}
-
 /** A trace link follows the commit on the same handle and names only the ids applied, so a
  * rolled-back outcome leaves none. */
 export function writeOutcome(
@@ -166,32 +147,6 @@ function assertMayChange(db: DatabaseSyncLike, target: EntryTarget, id: string):
   const reach = readMemoryReach(db, id);
   const own = reach?.tenantId === target.tenantId ? reach : undefined;
   assertWriteRight(targetReader(target), own, id, memoryNotFoundText(id));
-}
-
-/** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the
- * aborted one cannot undo. */
-export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
-  try {
-    return write();
-  } catch (err) {
-    if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
-    throw err;
-  }
-}
-
-/** writeEntryRow on the caller's handle, so a sibling group can read on it after the scope has
- * unwound. */
-export function writeInOwnTenant(
-  db: DatabaseSyncLike,
-  entry: MemoryEntry,
-  actor: string,
-  afterWrite?: WriteEntryInternalOptions['afterWrite'],
-): void {
-  auditingRefusal(db, actor, () =>
-    withWriteScope(db, 'write_entry_in_tenant', () => {
-      writeEntryDbOnly(db, entry, { actor, afterWrite });
-    }),
-  );
 }
 
 /** One BEGIN IMMEDIATE (the port's row lock) of set statements; one entry per applied id, repeats

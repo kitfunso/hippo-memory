@@ -1,4 +1,4 @@
-// hippo.db's per-row stat writes: retrieval strength, tags, half-lives and the in-transaction delete.
+// hippo.db's per-row stat writes: retrieval strength, tags and half-lives.
 import { type MemoryEntry, markRetrieved } from '../../base/memory/entry.js';
 import {
   closeHippoDb,
@@ -7,10 +7,9 @@ import {
   withWriteScope,
 } from '../../db/index.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
-import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { readEntriesByIds } from './entry-reads.js';
-import { syncFtsRow, deleteFtsRow } from './entry-row.js';
+import { syncFtsRow } from './entry-row.js';
 import type { StoreModel } from './open.js';
 import { bindHandleClock } from './handle-clock.js';
 import type { StrengthenOptions } from '../../base/ports/store/recall-writes.js';
@@ -113,19 +112,6 @@ export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void
     `UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
   ).run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
   syncFtsRow(db, entry);
-}
-
-/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's
- * dormant move does, and marks its summary parent dirty. */
-export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  cachedStatement(db, 'DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(
-    entry.id,
-    entry.tenantId,
-  );
-  deleteFtsRow(db, entry.id);
-  if (entry.dagParentId) {
-    markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
-  }
 }
 
 // The last value given for an id wins, as a row-by-row write left it: UPDATE FROM applies any one

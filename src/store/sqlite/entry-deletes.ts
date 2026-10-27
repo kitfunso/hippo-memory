@@ -1,4 +1,5 @@
 // hippo.db's row deletes: one row or many, with forget rows, dirty parents and mirror purges.
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { AUTO_DELETABLE } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
@@ -189,4 +190,17 @@ function readDeleteTargets(
     for (const row of found) rows.set(row.id, row);
   }
   return rows;
+}
+
+/** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's
+ * dormant move does, and marks its summary parent dirty. */
+export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  cachedStatement(db, 'DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(
+    entry.id,
+    entry.tenantId,
+  );
+  deleteFtsRow(db, entry.id);
+  if (entry.dagParentId) {
+    markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
+  }
 }

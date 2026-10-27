@@ -10,6 +10,7 @@ import { readEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
+import type { EntryWrite } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export interface WriteEntryOptions {
@@ -196,4 +197,43 @@ export function rememberAuditMetadata(entry: MemoryEntry) {
 /** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */
 export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
+}
+
+/** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the
+ * row. */
+export function writeEntryRow(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  { entry, actor }: EntryWrite,
+  afterWrite?: WriteEntryInternalOptions['afterWrite'],
+): void {
+  const stamped = stampOriginProject(files, entry);
+  writeInOwnTenant(db, stamped, actor, afterWrite);
+  writeEntryMirrors(files.hippoRoot, stamped);
+}
+
+/** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the
+ * aborted one cannot undo. */
+export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
+  try {
+    return write();
+  } catch (err) {
+    if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
+    throw err;
+  }
+}
+
+/** writeEntryRow on the caller's handle, so a sibling group can read on it after the scope has
+ * unwound. */
+export function writeInOwnTenant(
+  db: DatabaseSyncLike,
+  entry: MemoryEntry,
+  actor: string,
+  afterWrite?: WriteEntryInternalOptions['afterWrite'],
+): void {
+  auditingRefusal(db, actor, () =>
+    withWriteScope(db, 'write_entry_in_tenant', () => {
+      writeEntryDbOnly(db, entry, { actor, afterWrite });
+    }),
+  );
 }
