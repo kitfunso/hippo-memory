@@ -5,7 +5,8 @@ import { AUTO_DELETABLE } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { introducesContent, rejectedValues } from './rejection.js';
-import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { contentDigests } from '../../base/records/rejection-digest.js';
+import { redactEntry } from '../../base/util/secret-detect.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { insertDormantRow } from './dormant-rows.js';
@@ -558,7 +559,8 @@ function plannedWrite(
   const liveRow = liveRows.get(op.id);
   const live = liveRow ? rowToEntry(liveRow) : undefined;
   const row = batchRow(op, base, live);
-  return row ? [{ row, base, live, liveRow }] : [];
+  // Redacted only here, after the merge, so mergeOwnChanges compares unredacted texts.
+  return row ? [{ row: redactEntry(row), given: row.content, base, live, liveRow }] : [];
 }
 
 // A refused write is skipped, never thrown, so the rest lands.
@@ -584,6 +586,8 @@ function applyPlannedWrites(
  * the live row's columns. */
 interface PlannedWrite {
   readonly row: MemoryEntry;
+  /** The row's content before redaction, whose every form the tombstone probe checks. */
+  readonly given: string;
   readonly base: MemoryEntry | undefined;
   readonly live: MemoryEntry | undefined;
   readonly liveRow: MemoryRow | undefined;
@@ -618,11 +622,13 @@ function refusedWrites(
   }
   const refused = new Map<string, RejectedValueRow>();
   for (const [tenantId, writes] of byTenant) {
-    const digests = writes.map((write) => rejectionDigest(write.row.content));
-    const tombstones = rejectedValues(db, tenantId, digests);
+    const forms = writes.map((write) => contentDigests(write.given));
+    const tombstones = rejectedValues(db, tenantId, forms.flat());
     writes.forEach((write, i) => {
-      const tombstone = tombstones.get(digests[i]!);
-      if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!)) {
+      const digests = forms[i]!;
+      const tombstone = digests.map((d) => tombstones.get(d)).find((t) => t !== undefined);
+      // digests[0] is the stored form's, the text the row lands as.
+      if (tombstone && introducesContent(write.liveRow, tenantId, digests[0]!)) {
         refused.set(write.row.id, tombstone);
       }
     });
