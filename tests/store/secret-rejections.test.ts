@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { BadRequestError, RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
-import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { insertRejectedValue, listRejectedValues } from '../../src/store/sqlite/rejection.js';
 import { batchWriteAndDelete } from '../../src/store/sqlite/delete-and-batch.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -19,6 +18,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import { plantLegacyRow } from '../_helpers/legacy-rows.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 
 const ghp = (fill: string): string => runtimeJoin('ghp_', fill.repeat(36));
@@ -50,20 +50,7 @@ async function write(content: string): Promise<MemoryEntry> {
   return entry;
 }
 
-/** A row as a release before the boundary left it: raw text in memories, its full-text row and its mirror. */
-function plantLegacy(content: string): MemoryEntry {
-  const entry = createMemory(content);
-  withDb((db) => {
-    upsertEntryRow(db, entry);
-    db.prepare('UPDATE memories SET content = ? WHERE id = ?').run(content, entry.id);
-    db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
-    db.prepare('INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)').run(entry.id, content, '');
-  });
-  const dir = path.join(root, entry.layer);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${entry.id}.md`), `---\nid: ${entry.id}\n---\n\n${content}\n`);
-  return entry;
-}
+const plantLegacy = (content: string): MemoryEntry => plantLegacyRow(root, content);
 
 function rawHolders(): string[] {
   return withDb((db) => {

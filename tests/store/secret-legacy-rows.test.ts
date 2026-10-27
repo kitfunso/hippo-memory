@@ -3,15 +3,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { batchWriteAndDelete, commitInChunks } from '../../src/store/sqlite/delete-and-batch.js';
 import { recoverDueMirrors } from '../../src/store/sqlite/due-mirrors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { storeFilesOf } from '../_helpers/test-session.js';
-import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import { plantLegacyRow } from '../_helpers/legacy-rows.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 
 const GHP = runtimeJoin('ghp_', 'q'.repeat(36));
@@ -36,19 +35,7 @@ function mirrorFile(entry: MemoryEntry): string {
   return path.join(root, entry.layer, `${entry.id}.md`);
 }
 
-/** A row a release before the boundary wrote: raw in memories, its full-text row and its mirror. */
-function plantLegacy(content: string): MemoryEntry {
-  const entry = createMemory(content);
-  withDb((db) => {
-    upsertEntryRow(db, entry);
-    db.prepare('UPDATE memories SET content = ? WHERE id = ?').run(content, entry.id);
-    db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
-    db.prepare('INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)').run(entry.id, content, '');
-  });
-  fs.mkdirSync(path.dirname(mirrorFile(entry)), { recursive: true });
-  fs.writeFileSync(mirrorFile(entry), `---\nid: ${entry.id}\n---\n\n${content}\n`);
-  return { ...entry, content };
-}
+const plantLegacy = (content: string): MemoryEntry => plantLegacyRow(root, content);
 
 function rawCopies(): number {
   return withDb((db) => {
