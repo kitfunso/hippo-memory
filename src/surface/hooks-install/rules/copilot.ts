@@ -1,9 +1,11 @@
 // GitHub Copilot: what hippo writes in its hooks file, its MCP server key and its instructions,
 // under the Copilot home and each VS Code User folder; surface/hooks-install/copilot.ts reads and
 // writes the files.
+
 import { isDeepStrictEqual } from 'node:util';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
+import { HOOK_LONG_TIMEOUT_SECONDS, HOOK_MEDIUM_TIMEOUT_SECONDS } from './install-plan.js';
 
 const MCP_KEY = 'hippo';
 
@@ -286,4 +288,45 @@ export interface CopilotUninstallResult {
   readonly mcp: McpRemoveStatus | McpFailure;
   readonly instructions: InstructionsRemoveStatus;
   readonly vscode: readonly VscodeUninstallResult[];
+}
+
+/** One Copilot entry with a PowerShell twin: VS Code runs only `powershell` on Windows, where
+ * the execution policy can block npm's hippo.ps1. */
+function copilotCommandHook(args: string, timeoutSec: number): JsonValue[] {
+  return [{ type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec }];
+}
+
+/** No command names a path, so nothing has to be quoted for bash and PowerShell; session-end
+ * --runtime copilot picks its own log file. */
+export function copilotHooksTable(): JsonObject {
+  return {
+    version: 1,
+    hooks: {
+      sessionStart: copilotCommandHook(
+        'context --pinned-only --include-recent 5 --format copilot',
+        HOOK_MEDIUM_TIMEOUT_SECONDS,
+      ),
+      postToolUseFailure: copilotCommandHook(
+        'capture-error --runtime copilot',
+        HOOK_MEDIUM_TIMEOUT_SECONDS,
+      ),
+      preCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
+      // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact
+      // skips a snapshot saved seconds before.
+      PreCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
+      // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's
+      // agentStop does nothing.
+      agentStop: copilotCommandHook(
+        'session-end --runtime copilot --turn',
+        HOOK_LONG_TIMEOUT_SECONDS,
+      ),
+      sessionEnd: copilotCommandHook('session-end --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
+    },
+  };
+}
+
+/** The events in hippo's Copilot hooks file, in file order, for setup to name. */
+export function copilotHookEvents(): string[] {
+  const hooks = copilotHooksTable().hooks;
+  return isJsonObjectLiteral(hooks) ? Object.keys(hooks) : [];
 }

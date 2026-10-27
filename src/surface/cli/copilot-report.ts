@@ -1,19 +1,19 @@
 // The lines `hippo hook` and `hippo setup` print when they install or remove Copilot's files.
 
 import * as path from 'node:path';
-import { copilotHookEvents } from '../hooks-install/json-hooks.js';
-import type {
-  CopilotInstallResult,
-  CopilotUninstallResult,
-  InstructionsInstallStatus,
-  InstructionsRemoveStatus,
-  McpFailure,
-  McpHost,
-  McpMergeStatus,
-  McpRemoveStatus,
-  VscodeInstallResult,
-  VscodeInstructionsInstallStatus,
-  VscodeInstructionsRemoveStatus,
+import {
+  copilotHookEvents,
+  type CopilotInstallResult,
+  type CopilotUninstallResult,
+  type InstructionsInstallStatus,
+  type InstructionsRemoveStatus,
+  type McpFailure,
+  type McpHost,
+  type McpMergeStatus,
+  type McpRemoveStatus,
+  type VscodeInstallResult,
+  type VscodeInstructionsInstallStatus,
+  type VscodeInstructionsRemoveStatus,
 } from '../hooks-install/rules/copilot.js';
 import {
   COPILOT_CLI_MCP,
