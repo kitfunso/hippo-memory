@@ -401,7 +401,7 @@
       }
     },
     {
-      "files": ["src/surface/cli/recall.ts", "src/surface/cli/explain.ts"],
+      "files": ["src/surface/cli/recall*.ts", "src/surface/cli/explain.ts"],
       "rules": {
         "id-denylist": [
           "error",

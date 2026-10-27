@@ -24,7 +24,7 @@ import type {
   WorkingMemoryPush,
 } from '../../base/ports/store/sessions.js';
 import type { UntracedSession } from '../../base/ports/store/consolidation.js';
-import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
+import { removeActiveTaskMirror, writeRecentSessionMirror } from './session-mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey } from '../../base/ports/store/types.js';
 import type { JsonObject } from '../../base/util/json.js';

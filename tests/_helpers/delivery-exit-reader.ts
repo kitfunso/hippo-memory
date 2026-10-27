@@ -2,7 +2,7 @@
 import { expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/delivery-ledger.js';
 import type {
   DeliveryCandidateInput,
   DeliveryEventInput,

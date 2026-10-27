@@ -1,0 +1,362 @@
+// The delivery ledger writer: one event and its candidates per write, then the retention prune.
+
+import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import type { OnHandle } from './open.js';
+import {
+  DELIVERY_LEDGER_VERSION,
+  isBoundaryEvent,
+  type DeliveryEventInput,
+} from '../../base/session/delivery.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
+import { chunked } from '../../base/util/chunked.js';
+import { cachedStatement } from '../../db/statement-cache.js';
+import { DAY_MS } from '../../base/util/time.js';
+import { pruneRecallTraces } from './recall-trace.js';
+
+// How long the delivery ledger and the recall traces stay.
+
+/** Delivery events, and recall traces with no outcome that are not the store's last recall, are
+ * kept this long. */
+const RETENTION_DAYS = 90;
+
+/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real
+ * clock, so a far-future fake time spares real rows. */
+const deliveryCutoff = (ts: string, nowMs: number): string =>
+  new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
+
+/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the
+ * hook. */
+const DELIVERY_LEDGER_WAIT_MS = 50;
+
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this
+ * close are one fire twice. */
+const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
+
+const DELIVERY_EVENT_COLUMNS = [
+  'ts',
+  'ledger_version',
+  'tenant_id',
+  'runtime',
+  'event_type',
+  'surface',
+  'store_hash',
+  'write_store',
+  'project_hash',
+  'session_id',
+  'session_state',
+  'host_turn_id',
+  'turn_seq',
+  'duplicate_of',
+  'prompt_hash',
+  'prompt_length',
+  'query_hash',
+  'recall_trace_id',
+  'block_state',
+  'prompt_recall',
+  'considered_count',
+  'filtered_count',
+  'selected_count',
+  'emitted_count',
+  'rejected_count',
+  'rejected_unlisted',
+  'sections_shown',
+  'sections_dropped',
+  'budget_tokens',
+  'selected_tokens',
+  'injected_tokens',
+  'static_hash',
+  'recall_hash',
+  'emitted_hash',
+  'elapsed_ms',
+  'tool_use_id',
+  'failure_id',
+] as const;
+
+function readDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  const rows = cachedStatement(
+    db,
+    `
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+    ORDER BY id
+  `,
+  ).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  const at = Date.parse(input.ts);
+  return (
+    rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null
+  );
+}
+
+function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
+  if (input.toolUseId === undefined || input.toolUseId === null) return null;
+  const row = cachedStatement(
+    db,
+    `
+    SELECT id FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
+    ORDER BY id LIMIT 1
+  `,
+  ).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as
+    | { id: number }
+    | undefined;
+  return row?.id ?? null;
+}
+
+function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  if (input.eventType === 'tool-failure') return readDuplicateToolFailure(db, input);
+  // A boundary has no prompt, and two compactions of one session never start within the window, so
+  // time alone decides.
+  if (isBoundaryEvent(input.eventType)) return readDuplicateBoundary(db, input);
+  if (input.hostTurnId !== null) {
+    const row = cachedStatement(
+      db,
+      `
+      SELECT id FROM delivery_events
+      WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND host_turn_id = ? AND turn_seq IS NOT NULL
+      ORDER BY id LIMIT 1
+    `,
+    ).get(input.tenantId, input.sessionId, input.eventType, input.hostTurnId) as
+      | { id: number }
+      | undefined;
+    return row?.id ?? null;
+  }
+  if (input.promptHash === null) return null;
+  const rows = cachedStatement(
+    db,
+    `
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND prompt_hash = ? AND host_turn_id IS NULL AND turn_seq
+    IS NOT NULL
+    ORDER BY id
+  `,
+  ).all(input.tenantId, input.sessionId, input.eventType, input.promptHash) as Array<{
+    id: number;
+    ts: string;
+  }>;
+  const at = Date.parse(input.ts);
+  // Absolute difference: two hook processes can commit out of ts order.
+  return (
+    rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null
+  );
+}
+
+function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
+  const row = cachedStatement(
+    db,
+    `
+    SELECT MAX(turn_seq) AS m FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+  `,
+  ).get(input.tenantId, input.sessionId, input.eventType) as { m: number | null };
+  return (row.m ?? 0) + 1;
+}
+
+function deliveryEventValues(
+  input: DeliveryEventInput,
+  turnSeq: number | null,
+  duplicateOf: number | null,
+) {
+  return [
+    input.ts,
+    DELIVERY_LEDGER_VERSION,
+    input.tenantId,
+    input.runtime,
+    input.eventType,
+    input.surface,
+    input.storeHash,
+    input.writeStore,
+    input.projectHash,
+    input.sessionId,
+    input.sessionState,
+    input.hostTurnId,
+    turnSeq,
+    duplicateOf,
+    input.promptHash,
+    input.promptLength,
+    input.queryHash,
+    input.recallTraceId,
+    input.blockState,
+    input.promptRecall ? 1 : 0,
+    input.consideredCount,
+    input.filteredCount,
+    input.selectedCount,
+    input.emittedCount,
+    input.rejectedCount,
+    input.rejectedUnlisted,
+    input.sectionsShown,
+    input.sectionsDropped,
+    input.budgetTokens,
+    input.selectedTokens,
+    input.injectedTokens,
+    input.staticHash,
+    input.recallHash,
+    input.emittedHash,
+    Math.round(input.elapsedMs),
+    input.toolUseId ?? null,
+    input.failureId ?? null,
+  ];
+}
+
+const DELIVERY_CANDIDATE_COLUMNS = [
+  'event_id',
+  'tenant_id',
+  'memory_id',
+  'source_store',
+  'pool',
+  'stage',
+  'outcome',
+  'reason',
+  'cand_rank',
+  'score',
+  'tokens',
+] as const;
+
+/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not
+ * give back bit for bit. */
+function insertDeliveryCandidates(
+  db: DatabaseSyncLike,
+  eventId: number,
+  input: DeliveryEventInput,
+): void {
+  const width = DELIVERY_CANDIDATE_COLUMNS.length;
+  const columns = DELIVERY_CANDIDATE_COLUMNS.join(', ');
+  for (const chunk of chunked(input.candidates, rowsPerStatement(width))) {
+    cachedStatement(
+      db,
+      `INSERT INTO delivery_candidates (${columns}) VALUES ${valuesRows(chunk.length, width)}`,
+    ).run(
+      ...chunk.flatMap((c) => [
+        eventId,
+        input.tenantId,
+        c.memoryId,
+        c.sourceStore,
+        c.pool,
+        c.stage,
+        c.outcome,
+        c.reason,
+        c.rank,
+        c.score,
+        c.tokens,
+      ]),
+    );
+  }
+}
+
+/** How often a store prunes its delivery ledger and old recall traces: each prune walks the
+ * expired rows, so a busy server skips most. */
+const DELIVERY_PRUNE_EVERY_MS = 60_000;
+
+/** When a store last pruned its delivery ledger; each store holds its own, so the minute is
+ * counted per store. */
+export interface DeliveryPruneSchedule {
+  due(nowMs: number): boolean;
+  pruned(nowMs: number): void;
+}
+
+/** A schedule that has never pruned, so its first write prunes. */
+export function deliveryPruneSchedule(): DeliveryPruneSchedule {
+  let last = Number.NEGATIVE_INFINITY;
+  return {
+    // A clock set back by a minute or more prunes too, rather than waiting out the gap.
+    due: (nowMs) => Math.abs(nowMs - last) >= DELIVERY_PRUNE_EVERY_MS,
+    pruned: (nowMs) => {
+      last = nowMs;
+    },
+  };
+}
+
+/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after
+ * an upgrade holds the hook's write lock briefly; the rest of a backlog goes on the next prunes. */
+const TRACE_PRUNE_BATCH = 1000;
+
+function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
+  const cutoff = deliveryCutoff(eventTs, nowMs);
+  cachedStatement(
+    db,
+    `DELETE FROM delivery_events WHERE id IN (SELECT id FROM delivery_events WHERE ts < ? ORDER BY ts LIMIT ?)`,
+  ).run(cutoff, TRACE_PRUNE_BATCH);
+  pruneRecallTraces(db, cutoff, TRACE_PRUNE_BATCH);
+}
+
+/** One event plus its candidates in one write transaction, then a prune when `prune` is due;
+ * fail-soft. The caller must not hold a transaction on `db`. */
+function writeDeliveryEvent(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): number | null {
+  try {
+    const now = Date.now();
+    const pruning = prune.due(now);
+    const eventId = withWriteScope(db, 'write_delivery_event', () => {
+      // Missing-session and sub-agent events are not turns of a session, so they get no number and
+      // no duplicate check.
+      const isTurn =
+        input.sessionId !== null &&
+        (input.sessionState === 'payload' || input.sessionState === 'env');
+      const duplicateOf = isTurn ? readDuplicateTurn(db, input) : null;
+      const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
+      const values = deliveryEventValues(input, turnSeq, duplicateOf);
+      const id = Number(
+        cachedStatement(
+          db,
+          `
+        INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
+        VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
+      `,
+        ).run(...values).lastInsertRowid,
+      );
+      insertDeliveryCandidates(db, id, input);
+      if (pruning) pruneExpired(db, input.ts, now);
+      return id;
+    });
+    // Only after the commit, so a rolled-back prune leaves the next write due.
+    if (pruning) prune.pruned(now);
+    return eventId;
+  } catch (error) {
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
+    return null;
+  }
+}
+
+/** Write on the request's handle, or a short-lived one, waiting at most {@link
+ * DELIVERY_LEDGER_WAIT_MS} for the lock. Fail-soft. */
+export function writeDeliveryEventVia(
+  on: OnHandle,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): number | null {
+  let writing = false;
+  try {
+    return on((db) => {
+      writing = true;
+      return writeDeliveryEventOnHandle(db, input, prune);
+    });
+  } catch (error) {
+    if (writing) throw error;
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
+    return null;
+  }
+}
+
+/** On a caller's open handle, which saves a second open and close per turn; the handle's own
+ * lock wait comes back after. A caller holding only a handle gets a fresh schedule, so each of
+ * its writes prunes. */
+export function writeDeliveryEventOnHandle(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule = deliveryPruneSchedule(),
+): number | null {
+  const prior = Math.trunc(
+    Number((cachedStatement(db, 'PRAGMA busy_timeout').get() as { timeout: number }).timeout),
+  );
+  db.exec(`PRAGMA busy_timeout = ${DELIVERY_LEDGER_WAIT_MS}`);
+  try {
+    return writeDeliveryEvent(db, input, prune);
+  } finally {
+    db.exec(`PRAGMA busy_timeout = ${prior}`);
+  }
+}

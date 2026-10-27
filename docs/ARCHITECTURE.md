@@ -267,12 +267,18 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `readCompactResumePayload`: Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
 - `readCompactResumePayload`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 
-### src/surface/cli/curate.ts
-- `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only - a BEFORE-DELETE trigger aborts any delete. rawArchive is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
+### src/surface/cli/conflicts.ts
 - `handleResolve`: AT1: --reject-loser tombstones the loser's normalized digest so it cannot be re-asserted later, in addition to removing it (kind-aware). --reason defaults to a conflict-context string when omitted (resolve already has the conflict id + keepId; unlike `hippo reject`, a reason is not strictly required here).
+
+### src/surface/cli/rejections.ts
 - `reject banner`: AT1: reject / rejections / unreject docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 - `handleReject`: --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no content, so reason is its only human-readable identity.
+
+### src/surface/cli/curate-held.ts
 - `handleQuarantine`: `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence).
+
+### src/surface/cli/curate.ts
+- `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only - a BEFORE-DELETE trigger aborts any delete. rawArchive is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
 
 ### src/surface/cli/dag.ts
 - `handleDag`: Tree view: v0.30 / E5 renders L3 entity profiles as roots (with L2 children indented), then orphan L2 summaries (no L3 parent) at top level. Pre-E5 behavior was L2-only roots; rendering now covers L3.
@@ -312,9 +318,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleFailures`: `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13).
 - `handleFailures`: Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
 
-### src/surface/cli/transfer.ts
+### src/surface/cli/learn.ts
 - `cmdWatch`: AT1 (plan §3 containment): mechanical content from a failed command — a rejection-guard refusal here must not crash the watcher. Skip silently (loud enough via the message below) and still exit with the wrapped command's real exit code.
+
+### src/surface/cli/memory-import.ts
 - `handleImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + rawArchive deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
+
+### src/surface/cli/transfer.ts
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
 ### src/base/rank/compare.ts
@@ -671,7 +681,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: without this migration a store would mix old-base and new-base memories, a state the decay evaluation never tested (docs/evals/2026-09-24-decay-default-prereg.md, Migration). The rule, declared there before any run:
 - `conflictLosers`: A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count.
 
-### src/surface/hooks-install/rules/json-hooks.ts
+### src/surface/hooks-install/rules/claude-hooks.ts
 - `hasLegacySplitSessionEnd`: Returns true when `hooks.SessionEnd` still contains either of the legacy v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`) without the current consolidated `hippo session-end` entry.
 
 ### src/domain/objects/incidents.ts
