@@ -12,7 +12,8 @@ export {
 } from './protocol.js';
 export { handleMcpRequest } from './request.js';
 export { startStdioLoop } from './stdio.js';
-import { envMcpStdio } from '../../base/util/env.js';
+import { envBusyWaitMs, envMcpStdio } from '../../base/util/env.js';
+import { setDefaultBusyWaitMs } from '../open-store.js';
 import { startStdioLoop } from './stdio.js';
 
 // Auto-start only as the main module (node dist/surface/mcp/server.js or the cli's import('../mcp/server.js'));
@@ -28,6 +29,8 @@ const isMainModule = (() => {
 })();
 
 if (isMainModule) {
+  const wait = envBusyWaitMs();
+  if (wait !== undefined) setDefaultBusyWaitMs(wait);
   // The CLI owns the store build, so running this file directly opens the same store `hippo mcp`
   // does.
   const { cliStdioHost } = await import('../cli/api-context.js');

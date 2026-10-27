@@ -4,7 +4,7 @@ import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
-import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
+import { defaultBusyWaitMs } from './busy.js';
 import { connectWithFacts, getHippoDbPath } from './connect.js';
 import { sessionOf, type RequestStores } from './request-stores.js';
 import { OtherStoreFolderError } from './sqlite-blocked.js';
@@ -78,7 +78,7 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
   assertStoreFolder(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
-    db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}`);
+    db.exec(`PRAGMA busy_timeout = ${defaultBusyWaitMs()}`);
     if (tableExists(db, 'meta')) assertBinaryCompatible(db);
     return db;
   } catch (error) {

@@ -10,7 +10,7 @@ import {
   withWriteScope,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { DEFAULT_BUSY_WAIT_MS, withWriteScopeOr } from '../../src/db/busy.js';
+import { defaultBusyWaitMs, withWriteScopeOr } from '../../src/db/busy.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
@@ -128,12 +128,12 @@ describe('withWriteScope busyWaitMs', () => {
     }
   });
 
-  it('with no wait named, gives up once its clock passes DEFAULT_BUSY_WAIT_MS, the busy_timeout an open sets', async () => {
+  it('with no wait named, gives up once its clock passes defaultBusyWaitMs(), the busy_timeout an open sets', async () => {
     const db = openHippoDb(root);
     let clock = 1_000_000;
     let waits = 0;
     try {
-      expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
+      expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number })?.timeout).toBe(defaultBusyWaitMs());
       db.exec('PRAGMA busy_timeout = 0');
       await holdWriteLock();
       vi.spyOn(Date, 'now').mockImplementation(() => clock);
@@ -152,7 +152,7 @@ describe('withWriteScope busyWaitMs', () => {
           {},
         ),
       ).toThrow(/locked|busy/i);
-      expect(waits).toBe(DEFAULT_BUSY_WAIT_MS / 100);
+      expect(waits).toBe(defaultBusyWaitMs() / 100);
     } finally {
       vi.restoreAllMocks();
       closeHippoDb(db);

@@ -3,7 +3,7 @@
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
-import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
+import { defaultBusyWaitMs } from './busy.js';
 import type { StoreRuntime } from './store-runtime.js';
 
 // WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long
@@ -31,7 +31,7 @@ const WORKER_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(workerData.dbPath);
-db.exec('PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}');
+db.exec('PRAGMA busy_timeout = ' + workerData.busyWaitMs);
 db.exec('PRAGMA synchronous = NORMAL');
 const pass = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
 parentPort.on('message', (message) => {
@@ -84,7 +84,7 @@ function newCheckpointWorker(
   const started = new Worker(WORKER_SOURCE, {
     eval: true,
     execArgv: ['--no-warnings'],
-    workerData: { dbPath: key, maxPasses: MAX_PASSES },
+    workerData: { dbPath: key, maxPasses: MAX_PASSES, busyWaitMs: defaultBusyWaitMs() },
   });
   started.unref();
   started.on('message', onSettled);

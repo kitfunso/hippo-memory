@@ -1,4 +1,3 @@
-import { envBusyWaitMs } from '../base/util/env.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
@@ -18,9 +17,20 @@ export function isSqliteBusy(cause: unknown): boolean {
   return code === SQLITE_BUSY || code === SQLITE_LOCKED || code === SQLITE_BUSY_SNAPSHOT;
 }
 
-/** The lock wait of an open that names none: its busy_timeout and every explicit wait below.
- * HIPPO_BUSY_WAIT_MS, a whole number of ms, replaces the 5000 default for the process. */
-export const DEFAULT_BUSY_WAIT_MS = envBusyWaitMs() ?? 5000;
+let defaultWaitMs = 5000;
+
+/** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
+export function defaultBusyWaitMs(): number {
+  return defaultWaitMs;
+}
+
+// Process-wide because HIPPO_BUSY_WAIT_MS is: a root reads it once and sets it before a store opens.
+export function setDefaultBusyWaitMs(ms: number): void {
+  if (!Number.isInteger(ms) || ms <= 0) {
+    throw new RangeError(`the default lock wait must be a positive whole number of ms, not ${ms}`);
+  }
+  defaultWaitMs = ms;
+}
 
 // The wait blocks its thread, the only one in a CLI or hook run, so a wait past this gets one line
 // naming the file.
@@ -39,7 +49,7 @@ function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): voi
 export function execWithBusyRetry(
   db: DatabaseSyncLike,
   sql: string,
-  timeoutMs = DEFAULT_BUSY_WAIT_MS,
+  timeoutMs = defaultBusyWaitMs(),
 ): void {
   const startedAt = Date.now();
   const deadline = startedAt + timeoutMs;
