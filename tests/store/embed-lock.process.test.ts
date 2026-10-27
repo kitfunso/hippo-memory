@@ -115,7 +115,7 @@ describe('embeddings.json cross-process lock', () => {
     fetchMock.mockImplementation(async () => {
       throw new Error('provider down');
     });
-    await embedAll(localIndex(root)).catch(() => undefined);
+    await expect(embedAll(localIndex(root))).rejects.toThrow('provider down');
     const take = takeFileLock(path.join(root, LOCK_FILE));
     expect(take.kind).toBe('taken');
     if (take.kind === 'taken') take.lock.release();
