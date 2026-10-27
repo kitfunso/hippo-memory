@@ -1,5 +1,5 @@
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
-import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { contentDigests } from '../../base/records/rejection-digest.js';
 import type { SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SleepBegin, UntracedSession } from '../../base/ports/store/consolidation.js';
 import { sampleForReplay } from './replay.js';
@@ -34,11 +34,11 @@ export async function promoteSessionTraces(
   const built = sessions.flatMap((session) => sessionTrace(run, run.tenantId, session) ?? []);
   const rejected = await run.tombstones.rejectedAmong(
     run.tenantId,
-    built.map(({ trace }) => rejectionDigest(trace.content)),
+    built.map(({ trace }) => trace.content),
   );
   let tracesSkippedRejected = 0;
   for (const { trace, outcome, sessionId } of built) {
-    if (rejected.has(rejectionDigest(trace.content))) {
+    if (rejected.has(trace.content)) {
       await auditRejectedTrace(run, trace, sessionId);
       tracesSkippedRejected++;
       continue;
@@ -130,14 +130,13 @@ async function auditRejectedTrace(
   trace: MemoryEntry,
   sessionId: string,
 ): Promise<void> {
-  const traceDigest = rejectionDigest(trace.content);
-  const tombstone = await run.tombstones.find(trace.tenantId, traceDigest);
+  const tombstone = await run.tombstones.find(trace.tenantId, trace.content);
   await run.tombstones.auditOrCount({
     tenantId: trace.tenantId,
     actor: 'sleep',
     op: 'reject_refusal',
     metadata: {
-      digest: traceDigest,
+      digest: tombstone?.digest ?? contentDigests(trace.content)[0],
       reason: tombstone?.reason ?? null,
       sourceSessionId: sessionId,
     },
