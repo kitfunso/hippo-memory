@@ -481,7 +481,11 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     const before = embeddings.requests();
     let port: PortOnlySide | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const onPort = await runPass(c, { withGlobal: true, embedded: true }, (root) => (port = portOnlySide(root)));
+    const onPort = await runPass(
+      c,
+      { withGlobal: true, embedded: true },
+      (root) => (port = portOnlySide(root, ['vectors', 'graphReads', 'sessions'])),
+    );
     expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
     expect(onPort.rows.local).toEqual(onHippoDb.rows.local);
     expect(onPort.rows.global).toEqual(globalRows);
