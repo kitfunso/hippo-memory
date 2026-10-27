@@ -227,7 +227,12 @@ export const envMcpStdio = bool('HIPPO_MCP_STDIO');
 export const envRequireServer = bool('HIPPO_REQUIRE_SERVER');
 const envRequireSessionScopedFreshTail = bool('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
 export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
-export const envBusyWaitMs = posInt('HIPPO_BUSY_WAIT_MS');
+const busyWaitMs = posInt('HIPPO_BUSY_WAIT_MS');
+/** Over SQLite's int busy_timeout reads as unset, so a root keeps the default instead of failing to start. */
+export const envBusyWaitMs = (): number | undefined => {
+  const ms = busyWaitMs();
+  return ms !== undefined && ms <= 2 ** 31 - 1 ? ms : undefined;
+};
 export function envLogLevel(): string {
   return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
 }

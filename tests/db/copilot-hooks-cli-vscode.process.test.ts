@@ -282,6 +282,18 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   });
 
+  // The worker the hook spawns, run here: SQLite's busy_timeout waits log nothing, so the oracle is the clock. Three
+  // waits at the 5 s default take 15 s at least; at the knob's 300 ms the run ends well inside 12 s.
+  it('the worker run takes its lock wait from HIPPO_BUSY_WAIT_MS, so a busy store fails it in seconds', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
+    const workerArgs = ['__session-end-worker', '--log-file', logFile(), '--transcript', transcript];
+    const started = Date.now();
+    await hippo([...workerArgs, '--session-id', VSCODE_SESSION, '--turn'], s.proj, { ...s.env, ...SHORT_BUSY_WAIT });
+    expect(Date.now() - started).toBeLessThan(12_000);
+    expect(fs.readFileSync(logFile(), 'utf8')).toContain('capture failed: database is locked');
+  });
+
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     const fault = cursorSaveFault('kill');

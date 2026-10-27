@@ -9,10 +9,16 @@ import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
 import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
-import { defaultDashboardReads, defaultStore } from '../open-store.js';
+import { defaultDashboardReads, defaultStore, setDefaultBusyWaitMs } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
+import type {
+  ReaderCall,
+  ReaderInit,
+  ReaderReply,
+  ReaderThreadData,
+  ReaderValue,
+} from './dashboard-reader.js';
 import { failureReply } from './failure-reply.js';
 import { rootInfra } from '../../infra/ports.js';
 
@@ -122,6 +128,8 @@ function answer(port: MessagePort, reply: ReaderReply): void {
 }
 
 if (parentPort) {
-  // SAFETY: dashboard-reader.ts is the only code that starts this file, and it passes a ReaderInit.
-  serveReads(parentPort, workerData as ReaderInit);
+  // SAFETY: dashboard-reader.ts is the only code that starts this file, and it passes a ReaderThreadData.
+  const data = workerData as ReaderThreadData;
+  setDefaultBusyWaitMs(data.busyWaitMs);
+  serveReads(parentPort, data);
 }

@@ -19,7 +19,7 @@ export {
 } from './server-runtime.js';
 export type { SqliteStoreOptions } from './grant.js';
 export { StoreRuntime } from '../../db/store-runtime.js';
-export { setDefaultBusyWaitMs } from '../../db/busy.js';
+export { defaultBusyWaitMs, setDefaultBusyWaitMs } from '../../db/busy.js';
 export type { RequestStores } from '../../db/index.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
 export { askingNearestFirst } from './vector-reads.js';

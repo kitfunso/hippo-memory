@@ -18,6 +18,7 @@ export function isSqliteBusy(cause: unknown): boolean {
 }
 
 let defaultWaitMs = 5000;
+const MAX_BUSY_WAIT_MS = 2 ** 31 - 1;
 
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export function defaultBusyWaitMs(): number {
@@ -26,8 +27,11 @@ export function defaultBusyWaitMs(): number {
 
 // Process-wide because HIPPO_BUSY_WAIT_MS is: a root reads it once and sets it before a store opens.
 export function setDefaultBusyWaitMs(ms: number): void {
-  if (!Number.isInteger(ms) || ms <= 0) {
-    throw new RangeError(`the default lock wait must be a positive whole number of ms, not ${ms}`);
+  // SQLite's busy_timeout is a C int.
+  if (!Number.isInteger(ms) || ms <= 0 || ms > MAX_BUSY_WAIT_MS) {
+    throw new RangeError(
+      `the default lock wait must be a whole number of ms from 1 to ${MAX_BUSY_WAIT_MS}, not ${ms}`,
+    );
   }
   defaultWaitMs = ms;
 }

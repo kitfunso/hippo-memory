@@ -13,9 +13,15 @@ import {
   defaultStore,
   runStoreRequest,
   saveVectorGraphFile,
+  setDefaultBusyWaitMs,
   type StoreSession,
 } from '../open-store.js';
-import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
+import {
+  envBusyWaitMs,
+  envLossAversionRatio,
+  envRuntimeSettings,
+  envTenant,
+} from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
 import { failureReply } from './failure-reply.js';
@@ -33,6 +39,9 @@ const storeIn = (session: StoreSession) => (root: string) =>
   defaultStore(root, { ...evalStoreRules(envLossAversionRatio()), session });
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
+// sleep-offload.ts spawns this file directly, past src/cli.ts, so it sets the lock wait as that root does.
+const wait = envBusyWaitMs();
+if (wait !== undefined) setDefaultBusyWaitMs(wait);
 const childInfra = rootInfra(childHost);
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global

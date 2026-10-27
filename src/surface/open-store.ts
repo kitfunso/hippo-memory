@@ -18,6 +18,7 @@ export {
   runSqliteBatch as runStoreBatch,
   runSqliteHookRequest as runStoreHookRequest,
   runSqliteRequest as runStoreRequest,
+  defaultBusyWaitMs,
   saveVectorGraphFile,
   setDefaultBusyWaitMs,
   sqliteDashboardReads as defaultDashboardReads,
