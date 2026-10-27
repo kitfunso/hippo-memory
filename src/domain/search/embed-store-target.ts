@@ -1,4 +1,4 @@
-// The SQLite store adapter: vector pages written through the store, under the same embed turn.
+// The vector-groups adapter: vector pages written through a store, under the same embed turn.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { Clock } from '../../base/ports/infra.js';
@@ -24,7 +24,6 @@ import type { EmbedOutcome, EmbedWith, EmbedAdapter } from './embed-memories.js'
 import { embedTurns } from './embed-turns.js';
 import { noteSkippedEmbedding, warnEmbedFailureOnce, OTHER_MODEL_INDEX } from './embed-failures.js';
 
-// Rows per entriesWithoutVector read.
 const WITHOUT_VECTOR_PAGE = 64;
 
 interface WriteVectorPageOptions {

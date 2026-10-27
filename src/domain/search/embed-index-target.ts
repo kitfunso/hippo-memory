@@ -20,7 +20,6 @@ import type { EmbedOutcome, EmbedWith, EmbedAdapter } from './embed-memories.js'
 import { embedTurns } from './embed-turns.js';
 import { noteSkippedEmbedding, warnEmbedFailureOnce, OTHER_MODEL_INDEX } from './embed-failures.js';
 
-// Ids per entriesByIds read.
 const ENTRIES_BY_ID_PAGE = 64;
 
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.

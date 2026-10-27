@@ -1,5 +1,4 @@
-// The event row the delivery recorder writes: the payload facts, the picked and rejected rows
-// and the counts.
+// The event row the delivery recorder writes.
 import {
   hookPayloadSessionId,
   hookPayloadString,

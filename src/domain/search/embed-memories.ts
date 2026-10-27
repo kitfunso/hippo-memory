@@ -1,6 +1,4 @@
-// Embeds memories into the vector index: asks the target's embedder for the configured provider,
-// computes each vector and hands it to the store, which only keeps it (src/base/ports/store.ts
-// VectorWrites).
+// Embeds memories into the vector index: picks the adapter for a target and runs embedAll and embedMemoryInto on it.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { rankStrength } from './boosts.js';

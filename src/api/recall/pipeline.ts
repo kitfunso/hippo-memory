@@ -1,6 +1,4 @@
-// The one recall ranker: every recall loads, searches, expands, re-ranks and filters here under the
-// profile its caller picks, with no writes and no direct output. Callers own parsing, printing,
-// budget fitting and persistence.
+// The one recall ranker's entry point: rankRecall runs the pool, search and stage steps for a profile.
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
