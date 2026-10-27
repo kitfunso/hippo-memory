@@ -61,7 +61,11 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
           { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." }
         ],
         "unicorn/no-process-exit": "error",
@@ -76,7 +80,11 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." }
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          }
         ]
       }
     },
@@ -87,7 +95,11 @@
         "no-restricted-properties": [
           "error",
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." }
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          }
         ]
       }
     },
@@ -131,8 +143,15 @@
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "property": "hippoRoot", "message": "The api reads what the folder gave from a port method." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
           { "property": "requireGroup", "message": "Groups are bound at boot; api code uses the store it is given." },
           { "property": "hasGroup", "message": "Groups are bound at boot; api code uses the store it is given." }
         ],
@@ -159,13 +178,26 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "requireGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "requireGroup",
+            "message": "Groups are bound at boot; domain code uses the store it is given."
+          },
           { "property": "hasGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
           { "object": "globalThis", "property": "fetch", "message": "Domain code reaches the network through a port." }
         ],
-        "no-restricted-globals": ["error", { "name": "fetch", "message": "Domain code reaches the network through a port." }],
+        "no-restricted-globals": [
+          "error",
+          { "name": "fetch", "message": "Domain code reaches the network through a port." }
+        ],
         "no-restricted-imports": [
           "error",
           {
@@ -197,9 +229,19 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "bumpRecallStats",
+            "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it."
+          },
           { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." }
         ],
@@ -224,13 +266,29 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "bumpRecallStats",
+            "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it."
+          },
           { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
-          { "property": "finishRecall", "message": "The CLI recalls through retrieveWithCliCore(), which writes every recall row." },
-          { "property": "writeEntry", "message": "A CLI verb changes rows through a src/api function that takes the Context." }
+          {
+            "property": "finishRecall",
+            "message": "The CLI recalls through retrieveWithCliCore(), which writes every recall row."
+          },
+          {
+            "property": "writeEntry",
+            "message": "A CLI verb changes rows through a src/api function that takes the Context."
+          }
         ],
         "no-restricted-imports": [
           "error",
@@ -272,13 +330,29 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "bumpRecallStats",
+            "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it."
+          },
           { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
-          { "property": "finishRecall", "message": "The CLI recalls through retrieveWithCliCore(), which writes every recall row." },
-          { "property": "writeEntry", "message": "A CLI verb changes rows through a src/api function that takes the Context." },
+          {
+            "property": "finishRecall",
+            "message": "The CLI recalls through retrieveWithCliCore(), which writes every recall row."
+          },
+          {
+            "property": "writeEntry",
+            "message": "A CLI verb changes rows through a src/api function that takes the Context."
+          },
           { "property": "recordTokens", "message": "retrieveWithCliCore() books the recall's token row." }
         ]
       }
@@ -295,9 +369,19 @@
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "bumpRecallStats",
+            "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it."
+          },
           { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "requireGroup", "message": "A route calls a src/api function that takes the Context." }
@@ -323,16 +407,26 @@
         "no-restricted-properties": [
           "error",
           { "object": "process", "property": "env", "message": "Read the environment through src/base/util/env.ts." },
-          { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
-          { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
-          { "property": "bumpRecallStats", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
+          {
+            "object": "globalThis",
+            "property": "process",
+            "message": "Name the process global, so the env rule sees it."
+          },
+          {
+            "property": "prepare",
+            "message": "SQL runs in src/db and src/store; reach the database through the port."
+          },
+          {
+            "property": "bumpRecallStats",
+            "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it."
+          },
           { "property": "noteRecall", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." },
           { "property": "lastShown", "message": "Pass recordAs to retrieve(); src/api/recall/finish.ts records it." }
         ]
       }
     },
     {
-      "files": ["src/db/busy.ts"],
+      "files": ["src/db/busy.ts", "src/host/file-lock.ts"],
       "rules": { "boundaries/no-hand-transaction": "off" }
     },
     {
