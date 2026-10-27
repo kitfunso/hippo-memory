@@ -389,3 +389,43 @@ describe('.dependency-cruiser.cjs grant rule', () => {
     expect(imported).toEqual(['src/store/sqlite/late.ts']);
   });
 });
+
+/** The files scripts/check-sqlite-loads.mjs names over `files` in a fresh folder. */
+function sqliteLoads(files: Record<string, string>): string[] {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-sqlite-')));
+  try {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), text);
+    }
+    const script = join(REPO, 'scripts', 'check-sqlite-loads.mjs');
+    const r = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf-8' });
+    return [...r.stderr.matchAll(/^ {2}(src\/\S+):\d+ /gm)].map(([, file]) => file);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('scripts/check-sqlite-loads.mjs', () => {
+  it('fails node:sqlite through a renamed createRequire or getBuiltinModule, and a computed import in the data layer', () => {
+    const loader = "const { DatabaseSync } = require('node:sqlite');\nexport { DatabaseSync };\n";
+    const named = sqliteLoads({
+      'src/db/sqlite.ts': loader,
+      'src/host/file-lock.ts': loader,
+      'src/db/wal-checkpointer.ts': "export const SOURCE = `const { DatabaseSync } = require('node:sqlite');`;\n",
+      'src/store/sqlite/renamed.ts':
+        "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nexport const m = load('node:sqlite');\n",
+      'src/store/sqlite/builtin.ts': "export const m = process.getBuiltinModule('node:sqlite');\n",
+      'src/store/sqlite/worker.ts': "export const SOURCE = `require('node:sqlite')`;\n",
+      'src/db/computed.ts':
+        "const where = '../db/connect.js';\nexport const open = async (): Promise<unknown> => import(where);\n",
+      'src/db/literal.ts': "export const open = async (): Promise<unknown> => import('./connect.js');\n",
+    });
+    expect(named.sort()).toEqual([
+      'src/db/computed.ts',
+      'src/store/sqlite/builtin.ts',
+      'src/store/sqlite/renamed.ts',
+      'src/store/sqlite/worker.ts',
+    ]);
+  });
+});
