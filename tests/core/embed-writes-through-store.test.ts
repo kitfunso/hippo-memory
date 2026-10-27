@@ -270,6 +270,22 @@ describe('embedAll with a store', () => {
     }
   });
 
+  it('gives a store opened through a link one index key before its folder is made and after', async () => {
+    const parent = makeRoot('embed-unmade');
+    // Beside the folder, so makeRoot's remove of it never meets the link.
+    const link = `${parent}-link`;
+    try {
+      symlinkSync(parent, link, process.platform === 'win32' ? 'junction' : 'dir');
+      const before = await sqliteStore(join(link, 'later')).vectorWrites.indexKey();
+      mkdirSync(join(parent, 'later'));
+      expect(await sqliteStore(join(link, 'later')).vectorWrites.indexKey()).toBe(before);
+      expect(await sqliteStore(join(parent, 'later')).vectorWrites.indexKey()).toBe(before);
+    } finally {
+      // unlink removes the link alone, never the folder it points at.
+      unlinkSync(link);
+    }
+  });
+
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
     const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const [first] = seeded;
