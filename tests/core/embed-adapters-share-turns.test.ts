@@ -26,7 +26,8 @@ describe('embed adapters', () => {
   it('hold one turn per index key across the index adapter and the store adapter', async () => {
     let indexTouched = 0;
     let storeTouched = 0;
-    const indexOn = {
+    // SAFETY: only the calls this adapter makes before the first step are faked.
+    const indexOn: EmbedTarget = {
       ...common,
       rows: { entriesByIds: async () => [] },
       embeddingIndex: {
@@ -36,8 +37,9 @@ describe('embed adapters', () => {
           throw new Error('stop after the first step');
         },
       },
-    } as unknown as EmbedTarget;
-    const storeOn = {
+    } as never;
+    // SAFETY: only the calls this adapter makes before the first read are faked.
+    const storeOn: EmbedTarget = {
       ...common,
       strength: PRODUCTION_STRENGTH,
       clock: evalNow,
@@ -50,7 +52,7 @@ describe('embed adapters', () => {
           },
         },
       },
-    } as unknown as EmbedTarget;
+    } as never;
     let release: () => void = () => undefined;
     const held = embedTurns.run(KEY, () => new Promise<void>((resolve) => (release = resolve)));
     const runs = Promise.allSettled([embedAll(indexOn), embedAll(storeOn)]);
