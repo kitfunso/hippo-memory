@@ -129,6 +129,17 @@ Permission for one member API key to read one restricted scope. Admin keys, the 
 stdio MCP need none.
 _Avoid_: ACL entry, share, permission
 
+**Store group**:
+A named set of store methods a store sets whole. Four are required; a surface proves an
+optional one at boot, except a fallback group, which an api feature reads where it states its
+fallback.
+_Avoid_: capability
+
+**Database grant**:
+The value the SQLite adapter makes that lets one hippo.db open use a runtime, a request's
+session or the worker fence (`DbGrant`).
+_Avoid_: grant alone, which reads as a **Scope grant**
+
 **Auth resolver**:
 A function the server asks to vouch for a bearer token that is not an API key. Tokens are routed
 by shape: an `hk_` token goes only to API-key validation, any other token only to the resolver.
