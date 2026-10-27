@@ -1,6 +1,6 @@
 # Vector graph file (wave 1020j)
 
-Goal: every nearest-row read searches a graph (src/db/vector-store.ts:350).
+Goal: every nearest-row read searches a graph (`topVectorMatches` in src/db/vector-match.ts).
 
 ## The file
 

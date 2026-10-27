@@ -63,8 +63,8 @@ describe('fallback reads of optional groups', () => {
         "src/api/recall/pipeline.ts: StoreWith<never, 'vectors' | 'graphReads'>",
         "src/domain/graph/recall.ts: StoreWith<never, 'graphReads'>",
         // 4. The unfinished-handoff read on plan.local.store.
-        "src/api/context-select.ts: StoreWith<never, 'sessions'>",
-        "src/api/context.ts: StoreWith<never, 'sessions'>",
+        "src/api/context-plan.ts: StoreWith<never, 'sessions'>",
+        "src/api/context-plan.ts: StoreWith<never, 'sessions'>",
         // 5. lastRecall: published entries hand in any store.
         "src/api/context.ts: ContextWith<never, 'lastRecall'>",
         // 6. embeddingIndex: published entries hand in any store or folder.

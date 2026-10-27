@@ -132,6 +132,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ambientAdmitEntry`: - S2 envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
 - `ambientAdmitEntry`: - S3 origin partition: other-project rows are excluded unless `includeCrossProject`.
 - `ambientSecretAdmit`: v39 S4: the secret half of the ambient policy on its own, for callers that apply their own scope rule.
+
+### src/api/context-pools.ts
 - `loadAmbientEntries`: DF3's quality floor runs on the recent-N slice AFTER this load, so the load counts by it too, or it stops short of a store whose newest rows are junk.
 
 ### src/api/sleep/dormant.ts
@@ -177,7 +179,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallResult.anchoringHint`: v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated when api.recall's `opts.recallHistory` snapshot + the just-computed top-1 satisfy R1 (query_repeat) or R2 (memory_dominance).
 - `RecallResult.availabilityHint`: v1.13.x / J2 — availability/recency-bias hint.
 - `RecallSuppressionSummary`: v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
-- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/api/recall/finish.ts).
+- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/api/recall/anchoring.ts).
 - `RecallSuppressionSummary.suppressedByInterference`: Future B4-depth work may add additional sources (e.g. vlPFC inhibition scores). No `interference_suppression` table is built — the v1.12.13 doc that referenced one was speculative; J1 uses caller-side in-memory rings instead.
 
 ### src/api/recall/recall.ts
@@ -249,7 +251,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `extractFromPatterns`: T1 preserves the keyword only when it carries SEMANTIC SIGN — a negation or modality ("never", "must not", "do not ever", "always"). Dropping those inverts the meaning, which is the whole point of T1. ... (AT1's rejected-value digest hashes the bare content).
 
 ### src/domain/learn/churn-git.ts
-- `module header`: Git subprocess helpers for FE2 churn-staleness (src/domain/learn/invalidation.ts).
+- `module header`: Git subprocess helpers for FE2 churn-staleness (src/domain/learn/churn-evidence.ts).
 
 ### src/surface/cli/audit.ts
 - `audit subcommands banner`: Audit log subcommands (A5 stub auth — `hippo audit list`)
@@ -555,7 +557,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 - Recall at the new threshold: `MODE=store` (a real store, the store worker's graph against the exact scan, `NOISE=2`) gave recall@10 of 1.000 at 1,000, 2,000 and 5,000 vectors, for all rows and for one tenant of three. Graph p50 at 1,000 was 2.14 ms against 4.11 ms for the scan.
 - `maxVectors` (config `vectorGraph.maxVectors`, default 200,000): from 1,000 to 50,000 vectors the graph held 1.6 to 2.3 KB of heap a vector, so the default is about 400 MB in the server's store worker. Over the cap the store logs one warn line with the count and drops the graph; reads then use the saved graph file while it still covers the store, and scan once it does not.
-- The paged scan (`topVectorMatches` in src/db/vector-store.ts): with no graph, a read takes `VECTOR_SCAN_PAGE` (1,024) vectors a statement on the memory_vectors key and keeps the best k in a heap, so memory stays flat as the store grows. Its time still grows with the store, as the table shows.
+- The paged scan (`topVectorMatches` in src/db/vector-match.ts): with no graph, a read takes `VECTOR_SCAN_PAGE` (1,024) vectors a statement on the memory_vectors key and keeps the best k in a heap, so memory stays flat as the store grows. Its time still grows with the store, as the table shows.
 - The daemon hop (`askingNearestFirst` in src/store/sqlite/vector-reads.ts, `serverNearestAsk` in src/surface/cli/server-nearest.ts): a CLI or hook store whose hippo.db holds between the threshold and the cap asks a running `hippo serve` on the same store for the nearest ids (`POST /v1/vectors/nearest`), then reads those rows from its own store, so the output is the same as the direct path. A smaller store scans: the scan is as fast as the HTTP hop. A server that does not answer in 1 s costs one warn line, then the local scan.
 
 ### src/db/vector-graph-rows.ts
@@ -811,7 +813,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `archiveRawMemory`: v0.30 / E2 — DAG live-coupling: archive of a child under a level-2 summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark commits atomically with the archive. row.dag_parent_id was fetched via SELECT * at L28 (schema v28 includes it).
 - `archiveRawMemory`: afterArchive hook (v0.39 commit 3): connector-level idempotency markers (e.g. slack_event_log) must commit atomically with the archive itself.
 
-### src/api/recall/finish.ts
+### src/api/recall/anchoring.ts
 - `module header`: J1 anchoring detector (recall-recurrence) — pure module. Implements two detection rules from ROADMAP-RESEARCH.md L546: R1 query_repeat ... R2 memory_dominance ...
 - `module header`: Per the plan v3 architectural decision: each pipeline (api.recall via HTTP, cmdRecall, MCP hippo_recall) owns its OWN ring buffer Map keyed by (tenant, session).
 - `module header`: Plan: docs/plans/2026-05-26-j1-anchoring-detector.md. Composes with J3.2: AnchoringHint + PlanningFallacyHint are independent signals; both can fire on the same recall.
@@ -1038,7 +1040,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `listSearchRows`: no switch forces the LIKE-fallback path; nothing in the environment or the API can. A part-word query (`kapp` for `kappa`) misses FTS5's whole-word tokens and reaches the LIKE branch, which is how tests exercise it without poisoning the on-disk FTS state.
 - `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/store/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
 - `listLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
-- `listVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
+- `listVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-match.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
 - `listFtsCandidates`: orders by bm25(memories_fts) and returns no score column (3.0); every column is m.<col> AS <col> so rowToEntry sees the same shape as the other paths.
 - `loadRecallSearchEntries`: Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths and `searchBothHybrid` recall mode (v1.25.0).
 - `loadRecallSearchEntries`: `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall mode (its `tenantId` option is optional); `listSearchRows` already treats undefined as "no tenant filter" for legacy callers.
