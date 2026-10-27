@@ -79,8 +79,8 @@ function copyChunk(
   ) as CopyDbRow[];
 }
 
-/** The rows `read` admits that may hold one of `texts`, a superset of the copies heldTextKeys
- * finds: the texts the index can name first, a row once per chunk it matches. */
+/** The rows `read` admits that may hold one of `texts` in either form, stored or raw: each form the
+ * index can name is probed first, a row once per chunk it matches. */
 export function rowsHoldingTexts(
   db: DatabaseSyncLike,
   read: CopyRead,

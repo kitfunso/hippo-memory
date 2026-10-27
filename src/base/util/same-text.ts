@@ -1,6 +1,5 @@
-// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart
-// from spacing. A digit, sign or word that differs is a different value, so nothing looser may
-// count as a copy.
+// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal as stored,
+// apart from spacing. A digit, sign or word outside a secret that differs is a different value.
 import type { MemoryEntry } from '../memory/entry.js';
 import { redactSecretsStrict } from './secret-detect.js';
 

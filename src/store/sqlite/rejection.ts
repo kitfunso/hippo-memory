@@ -173,9 +173,8 @@ interface StoredContentRow {
   readonly tenant_id: string | null;
 }
 
-/** True when writing content whose stored form has `digest` under `tenantId` over `stored`, the
- * row the id holds now, introduces it: a new row, a move to the tenant, or changed stored text. The
- * guard refuses only these, so a rewrite that only redacts a legacy row passes. */
+/** True when a write of stored digest `digest` introduces it over `stored`: a new row, a tenant move
+ * or changed stored text, so a rewrite that only redacts a legacy row passes the guard. */
 export function introducesContent(
   stored: StoredContentRow | undefined,
   tenantId: string,

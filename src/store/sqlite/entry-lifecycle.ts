@@ -194,10 +194,8 @@ export function writeInOwnTenant(
   );
 }
 
-/** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction,
- * hippo.db's form of the port's row lock, each a set statement whatever the id count. Returns
- * one entry per applied id with repeats, as callers count them. An outcome adds no text, so the
- * rejected-value guard has nothing to check; its rewrite can only redact a legacy row's. */
+/** One BEGIN IMMEDIATE (the port's row lock) of set statements; one entry per applied id, repeats
+ * kept. An outcome adds no text, so no guard runs; its rewrite can only redact a legacy row's. */
 function applyOutcomeOn(
   db: DatabaseSyncLike,
   outcome: OutcomeWrite,

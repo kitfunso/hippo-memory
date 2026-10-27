@@ -62,9 +62,8 @@ const UPSERT_MEMORY_SQL =
   `ON CONFLICT(id) DO UPDATE SET ${UPDATED_COLUMNS.map((c) => `${c} = excluded.${c}`).join(', ')}, ` +
   `updated_at = datetime('now')`;
 
-/** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of
- * rows. The caller owns the transaction, the rejection guard and the full-text rows. Returns the
- * ids whose stored text differs from the entry given, so the caller re-indexes them. */
+/** The upsert's update arm, one UPDATE per chunk; the caller owns the transaction, guard and FTS
+ * rows, and re-indexes the ids returned, whose stored text differs from the entry given. */
 export function updateMemoryRows(
   db: DatabaseSyncLike,
   entries: readonly MemoryEntry[],

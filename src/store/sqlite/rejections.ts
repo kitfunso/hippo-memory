@@ -294,8 +294,8 @@ function applyRejection(
       normalizedChars: normalizeValueForRejection(stored).length,
     }),
   );
-  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
-  // needs a schema migration, held until approved.
+  // SHORTCUT: hashes every text of the tenant in each form (two digests when it redacts), a page at a
+  // time with no lock held; a digest column needs a schema migration, held until approved.
   const holdsValue: HoldsValue = (text) => contentDigests(text).includes(digest);
   const found = listHolderIds(db, rejection, holdsValue);
   const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
