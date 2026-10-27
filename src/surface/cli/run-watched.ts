@@ -1,5 +1,6 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
+import { killTree } from '../../host/kill-tree.js';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */
@@ -46,11 +47,10 @@ function watchChild(
       process.stderr.write(chunk);
     });
 
-    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one), so on Windows
-    // a grandchild can outlive it; a process-tree kill is the upgrade path.
+    // Rejects first so the caller sees the timeout at once; the tree kill is not awaited.
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
+      if (child.pid !== undefined) void killTree(child.pid);
     }, deadlineMs);
 
     child.on('close', (code: number | null) => {
