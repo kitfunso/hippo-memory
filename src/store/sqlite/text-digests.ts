@@ -103,10 +103,12 @@ export function* digestHolderIds(
   skip: ReadonlySet<string> = new Set(),
 ): Generator<string[]> {
   const { tenantId, digest } = query;
-  const matched = // SAFETY: both arms of matchedSql answer one TEXT column named id.
-    (cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[])
-      .map((row) => row.id)
-      .filter((id) => !skip.has(id));
+  // SAFETY: both arms of matchedSql answer one TEXT column named id.
+  const matched = (
+    cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[]
+  )
+    .map((row) => row.id)
+    .filter((id) => !skip.has(id));
   yield* chunked(matched, READ_PAGE_ROWS);
   const seen = new Set([...skip, ...matched]);
   let after: string | number = FIRST_KEY[place];
