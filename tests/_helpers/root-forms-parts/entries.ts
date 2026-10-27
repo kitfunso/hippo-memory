@@ -3,6 +3,7 @@
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
+import * as statusTallies from '../../../src/store/sqlite/status-tallies.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
@@ -88,7 +89,7 @@ export function loadTextsHolding(
 }
 
 export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.tallySources(db, tenantId), openStore);
+  return onHandle(hippoRoot, (db) => statusTallies.tallySources(db, tenantId), openStore);
 }
 
 export function memoriesBackingAmong(hippoRoot: string, ids: readonly string[]): Set<string> {

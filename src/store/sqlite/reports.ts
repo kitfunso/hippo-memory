@@ -12,7 +12,7 @@ import type {
   Reports,
   StrengthTallies,
 } from '../../base/ports/store/reports.js';
-import { statusCounts, strengthTallies } from './candidates.js';
+import { statusCounts, strengthTallies } from './status-tallies.js';
 import { countOpenConflicts } from './conflicts.js';
 import { countAllEntries } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';

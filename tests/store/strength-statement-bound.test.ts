@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
-import { strengthTallies } from '../../src/store/sqlite/candidates.js';
+import { strengthTallies } from '../../src/store/sqlite/status-tallies.js';
 import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';

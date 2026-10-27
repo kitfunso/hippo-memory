@@ -1,5 +1,5 @@
 // The built-in store's sharing reads: the existing functions, bound to this store.
-import { tallySources } from './candidates.js';
+import { tallySources } from './status-tallies.js';
 import { listEntriesWithSignals, listEntryTextKeysPage, readTakenIds } from './entry-reads.js';
 import { listTextKeysHolding } from './copy-rows.js';
 import type { OnHandle } from './open.js';
