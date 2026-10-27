@@ -10,6 +10,7 @@ import { parseStoredObject } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { WM_MAX_ENTRIES } from '../../base/util/limits.js';
 import { handleStamp } from './handle-clock.js';
+import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
 /** Working Memory: bounded buffer for current-state notes, separate from long-term memory;
  * scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
 
@@ -63,8 +64,8 @@ export function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemo
       item.sessionId ?? null,
       item.taskId ?? null,
       item.importance ?? 0,
-      item.content,
-      JSON.stringify(item.metadata ?? {}),
+      redactSecretsStrict(item.content),
+      redactPayload(JSON.stringify(item.metadata ?? {})),
       now,
       now,
       tenantId,

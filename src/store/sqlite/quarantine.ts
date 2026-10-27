@@ -1,6 +1,7 @@
 // hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
 // their audit rows.
 import { appendAuditEvents } from './audit.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
@@ -127,7 +128,13 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
     db,
     `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
      VALUES (?, ?, ?, ?, 'pending', ?)`,
-  ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, handleStamp(db));
+  ).run(
+    opts.tenantId,
+    opts.memoryId,
+    opts.originalScope,
+    redactSecretsStrict(opts.reason),
+    handleStamp(db),
+  );
   appendAuditEvents(db, [
     {
       tenantId: opts.tenantId,

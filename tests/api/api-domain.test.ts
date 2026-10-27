@@ -143,6 +143,13 @@ describe('api domain — recall/forget/promote/supersede', () => {
     async (_kind, scope, content, text) => {
       const row = createMemory(content, { tenantId: 'default', ...scope });
       writeEntry(home, row);
+      // Writes store secrets redacted, so the secret case is a legacy row a release before kept raw.
+      const legacy = openHippoDb(home);
+      try {
+        legacy.prepare('UPDATE memories SET content = ? WHERE id = ?').run(content, row.id);
+      } finally {
+        closeHippoDb(legacy);
+      }
       const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
 
       const err = await promote(ctx, row.id).catch((e: Error) => e);

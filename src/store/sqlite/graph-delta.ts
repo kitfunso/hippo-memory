@@ -4,6 +4,7 @@ import { withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DesiredGraph, GraphOp } from '../../base/ports/store/graph.js';
 import { entityKey, wantedEntities, wantedRelations } from '../rules/graph-delta.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 // provenanceOf for the desired row joined to memories as `m`; IFNULL spells a NULL kind as the JS
 // template does.
@@ -15,7 +16,8 @@ const KEPT = `kept AS MATERIALIZED (
   SELECT min(id) AS id, k FROM (SELECT id, ${STORED_KEY} AS k FROM entities WHERE tenant_id = ?)
   WHERE k IN (SELECT k FROM want_e) GROUP BY k)`;
 
-// json_each(?) holds one [key, name, memoryId] per wanted entity in desired order.
+// json_each(?) holds one [key, stored name, memoryId] per wanted entity in desired order; the stored
+// name is the one insertEntityRow writes, so a raw legacy row is rewritten once.
 const ENTITY_DELTA = `WITH want_e AS MATERIALIZED (
   SELECT w.key AS idx, json_extract(w.value, '$[0]') AS k, json_extract(w.value, '$[1]') AS name, ${PROVENANCE} AS prov
   FROM json_each(?) w LEFT JOIN memories m ON m.id = json_extract(w.value, '$[2]')),
@@ -65,7 +67,9 @@ export function graphDeltaOn(
 ): GraphOp[] {
   const entities = [...wantedEntities(desired).values()];
   const relations = [...wantedRelations(desired)];
-  const entityJson = JSON.stringify(entities.map((e) => [entityKey(e), e.name, e.memoryId]));
+  const entityJson = JSON.stringify(
+    entities.map((e) => [entityKey(e), redactSecretsStrict(e.name), e.memoryId]),
+  );
   const relationJson = JSON.stringify(
     relations.map(([key, r]) => [key, r.memoryId, r.sourceObject.type, r.sourceObject.id]),
   );

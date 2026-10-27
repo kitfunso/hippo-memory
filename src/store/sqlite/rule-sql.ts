@@ -20,6 +20,7 @@ import {
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import { rewardFactorAt } from '../../db/decay-key.js';
 import { SPACE_CODES } from '../rules/copies.js';
+import { textForms } from '../../base/util/secret-detect.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
@@ -126,3 +127,11 @@ export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): Sql
 /** Admits every scope, for a reader that sees the whole store, such as the CLI on its own
  * machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
+
+/** `column` holds `text` in a form a row may keep it: the stored form, or raw from before redaction. */
+export function holdsTextSql(column: string, text: string): SqlFragment {
+  return {
+    sql: `${column} IN (SELECT value FROM json_each(?))`,
+    params: [JSON.stringify(textForms(text))],
+  };
+}

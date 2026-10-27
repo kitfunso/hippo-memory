@@ -2,6 +2,11 @@
 // the shared save writes, its insert values and audit keys. A status column carries a CHECK
 // constraint, so a row declares it as the kind's status union.
 import { isJsonString } from '../../base/util/json.js';
+import {
+  redactPayload,
+  redactSecretsStrict as stored,
+  storedOrNull,
+} from '../../base/util/secret-detect.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import type { SourceObjectType } from '../../base/ports/store/graph.js';
 import type {
@@ -236,7 +241,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     graphType: 'decision',
     insert: {
       columns: ['decision_text', 'context'],
-      values: (w) => [w.decisionText, w.context ?? null],
+      values: (w) => [stored(w.decisionText), storedOrNull(w.context)],
     },
   },
   incident: {
@@ -254,7 +259,11 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     rowTo: rowToProcess,
     insert: {
       columns: ['process_name', 'description', 'steps'],
-      values: (w) => [w.processName, w.description ?? null, JSON.stringify(w.steps)],
+      values: (w) => [
+        stored(w.processName),
+        storedOrNull(w.description),
+        redactPayload(JSON.stringify(w.steps)),
+      ],
     },
   },
   policy: {
@@ -266,7 +275,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     graphType: 'policy',
     insert: {
       columns: ['policy_name', 'policy_text', 'valid_from', 'valid_to'],
-      values: (w) => [w.policyName, w.policyText, w.validFrom, w.validTo],
+      values: (w) => [stored(w.policyName), stored(w.policyText), w.validFrom, w.validTo],
     },
   },
   skill: {
@@ -277,7 +286,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     rowTo: rowToSkill,
     insert: {
       columns: ['skill_name', 'instructions', 'trigger_text'],
-      values: (w) => [w.name, w.instructions, w.trigger],
+      values: (w) => [stored(w.name), stored(w.instructions), storedOrNull(w.trigger)],
     },
   },
   project_brief: {
@@ -290,7 +299,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     graphType: 'project',
     insert: {
       columns: ['repo', 'summary'],
-      values: (w) => [w.repo, w.summary],
+      values: (w) => [w.repo, stored(w.summary)],
     },
   },
   customer_note: {
@@ -303,7 +312,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     graphType: 'customer',
     insert: {
       columns: ['customer', 'note'],
-      values: (w) => [w.customer, w.note],
+      values: (w) => [stored(w.customer), stored(w.note)],
     },
   },
 };

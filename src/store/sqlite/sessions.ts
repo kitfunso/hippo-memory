@@ -2,6 +2,8 @@
 // binding.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { type DatabaseSyncLike } from '../../db/index.js';
+import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
+import { holdsTextSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type {
@@ -110,12 +112,12 @@ function insertSessionEventRow(
     `,
   ).run(
     event.sessionId,
-    event.task ?? null,
+    storedOrNull(event.task),
     event.eventType,
-    event.content,
+    redactSecretsStrict(event.content),
     event.source ?? 'cli',
     event.scope ?? null,
-    JSON.stringify(event.metadata ?? {}),
+    redactPayload(JSON.stringify(event.metadata ?? {})),
     tenantId,
     now,
   );
@@ -193,8 +195,9 @@ export function listSessionEvents(
     params.push(options.session_id);
   }
   if (options.task) {
-    clauses.push('task = ?');
-    params.push(options.task);
+    const task = holdsTextSql('task', options.task);
+    clauses.push(task.sql);
+    params.push(...task.params);
   }
 
   const limit = Math.max(1, Math.trunc(options.limit ?? SESSION_EVENT_LIMIT));

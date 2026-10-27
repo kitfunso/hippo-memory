@@ -12,11 +12,11 @@ import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_h
 
 const GHP = runtimeJoin('ghp_', 'x1Y2z3W4v5'.repeat(3), 'Q6r7S8');
 const JWT = runtimeJoin('eyJ', 'hbGciOiJIUzI1', '.eyJ', 'zdWIiOiIxMjM0', '.sig', 'nature_part');
-const SHAPES = [...ASSIGNED_SECRET_LINES, `token ${GHP}`, `Authorization: Bearer ${JWT}`, JWT];
+const SECRET_SAMPLES = [...ASSIGNED_SECRET_LINES, `token ${GHP}`, `Authorization: Bearer ${JWT}`, JWT];
 
 describe('the stored form', () => {
   it('is the same after a second pass over every secret shape', () => {
-    for (const text of SHAPES) {
+    for (const text of SECRET_SAMPLES) {
       const once = redactSecretsStrict(text);
       expect(once, text).not.toBe(text);
       expect(redactSecretsStrict(once), text).toBe(once);
@@ -24,7 +24,7 @@ describe('the stored form', () => {
   });
 
   it('answers the same on repeat calls, so the shared global patterns keep no state', () => {
-    for (const text of [...SHAPES, ...ORDINARY_CONFIG_LINES]) {
+    for (const text of [...SECRET_SAMPLES, ...ORDINARY_CONFIG_LINES]) {
       expect(redactSecretsStrict(text)).toBe(redactSecretsStrict(text));
       expect(detectSecret({ content: text, tags: [] })).toEqual(detectSecret({ content: text, tags: [] }));
     }

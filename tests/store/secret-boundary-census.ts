@@ -16,11 +16,18 @@ const path = { out: 'path' } as const;
 const vetted = (writer: string): ColumnClass => ({ vetted: writer });
 
 // Columns every object table shares.
-const OBJECT_TAIL = { memory_id: id, tenant_id: id, status: enumeration, superseded_at: at, closed_at: at, created_at: at };
+const OBJECT_TAIL = {
+  memory_id: id,
+  tenant_id: id,
+  status: enumeration,
+  superseded_at: at,
+  closed_at: at,
+  created_at: at,
+};
 const VERSIONED_TAIL = { ...OBJECT_TAIL, change_summary: vetted('object supersede') };
 
 /** Table, then column, then its class. */
-export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, ColumnClass>>>> = {
+const CENSUS = {
   api_key_scope_grants: { key_id: id, scope: enumeration, granted_at: at },
   api_keys: {
     key_id: id,
@@ -33,7 +40,14 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     owner_subject: id,
     expires_at: at,
   },
-  audit_log: { ts: at, tenant_id: id, actor: id, op: enumeration, target_id: id, metadata_json: vetted('object save audit') },
+  audit_log: {
+    ts: at,
+    tenant_id: id,
+    actor: id,
+    op: enumeration,
+    target_id: id,
+    metadata_json: vetted('appendAuditEvents'),
+  },
   card_comments: { card_id: id, author: id, body: vetted('card comment'), created_at: at, tenant_id: id },
   card_deps: { parent: id, child: id, tenant_id: id, created_at: at },
   card_runs: {
@@ -72,8 +86,8 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     transcript_path: path,
     started_at: at,
     summarised_at: at,
-    summary: vetted('compaction summary'),
-    items_json: vetted('compaction summary'),
+    summary: vetted('insertSummarizedCompaction'),
+    items_json: vetted('insertSummarizedCompaction'),
     status: enumeration,
     request_id: id,
   },
@@ -112,8 +126,8 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   dormant_memories: {
     tenant_id: id,
     id: id,
-    content: vetted('dormant move'),
-    entry_json: vetted('dormant move'),
+    content: vetted('insertDormantRow'),
+    entry_json: vetted('insertDormantRow'),
     reason: enumeration,
     dormant_at: at,
   },
@@ -149,8 +163,8 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   },
   github_dlq: {
     tenant_id: id,
-    raw_payload: vetted('dead letter'),
-    error: vetted('dead letter'),
+    raw_payload: vetted('parkInDlq'),
+    error: vetted('parkInDlq'),
     event_name: enumeration,
     delivery_id: id,
     signature: hash,
@@ -176,7 +190,14 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     created_at: at,
     completed_at: at,
   },
-  graph_extraction_queue: { tenant_id: id, memory_id: id, kind: enumeration, status: enumeration, enqueued_at: at, processed_at: at },
+  graph_extraction_queue: {
+    tenant_id: id,
+    memory_id: id,
+    kind: enumeration,
+    status: enumeration,
+    enqueued_at: at,
+    processed_at: at,
+  },
   incidents: {
     ...OBJECT_TAIL,
     incident_text: vetted('incident open'),
@@ -192,10 +213,10 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     layer: enumeration,
     tags_json: tag,
     emotional_valence: enumeration,
-    source: vetted('remember'),
+    source: vetted('writeEntry'),
     conflicts_with_json: id,
     confidence: enumeration,
-    content: vetted('remember'),
+    content: vetted('writeEntry'),
     updated_at: at,
     parents_json: id,
     trace_outcome: enumeration,
@@ -215,17 +236,17 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     dag_level_3_built_at: at,
     origin_project: path,
   },
-  memories_fts: { id: id, content: vetted('remember'), tags: tag },
+  memories_fts: { id: id, content: vetted('writeEntry'), tags: tag },
   memories_fts_config: { k: enumeration, v: num },
-  memories_fts_content: { c0: id, c1: vetted('remember'), c2: tag },
+  memories_fts_content: { c0: id, c1: vetted('writeEntry'), c2: tag },
   memories_fts_idx: { segid: num, term: hash, pgno: num },
-  memories_trigram: { content: vetted('remember'), tags_json: tag },
+  memories_trigram: { content: vetted('writeEntry'), tags_json: tag },
   memories_trigram_config: { k: enumeration, v: num },
   memories_trigram_idx: { segid: num, term: hash, pgno: num },
   memory_conflicts: {
     memory_a_id: id,
     memory_b_id: id,
-    reason: vetted('conflict detection'),
+    reason: vetted('replaceDetectedConflicts'),
     status: enumeration,
     detected_at: at,
     updated_at: at,
@@ -236,7 +257,7 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     tenant_id: id,
     memory_id: id,
     original_scope: enumeration,
-    reason: vetted('connector quarantine'),
+    reason: vetted('recordQuarantine'),
     status: enumeration,
     quarantined_at: at,
     decided_at: at,
@@ -274,9 +295,9 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   raw_archive: {
     memory_id: id,
     archived_at: at,
-    reason: vetted('archive raw'),
+    reason: vetted('archiveRaw'),
     archived_by: id,
-    payload_json: vetted('archive raw'),
+    payload_json: vetted('archiveRaw'),
     mirror_cleaned_at: at,
   },
   recall_trace_outcomes: { ts: at, tenant_id: id, outcome: enumeration, memory_ids_json: id },
@@ -285,12 +306,19 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   rejected_values: {
     tenant_id: id,
     digest: hash,
-    reason: vetted('reject'),
+    reason: vetted('rejections.apply'),
     rejected_by: id,
     rejected_at: at,
     source_memory_id: id,
   },
-  relations: { tenant_id: id, rel_type: enumeration, memory_id: id, source_kind: enumeration, source_object_type: enumeration, created_at: at },
+  relations: {
+    tenant_id: id,
+    rel_type: enumeration,
+    memory_id: id,
+    source_kind: enumeration,
+    source_object_type: enumeration,
+    created_at: at,
+  },
   retrieval_policy: { id: id, goal_id: id, policy_type: enumeration },
   session_events: {
     session_id: id,
@@ -306,7 +334,7 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   session_handoffs: {
     session_id: id,
     repo_root: path,
-    task_id: id,
+    task_id: vetted('saveSessionHandoff'),
     summary: vetted('saveSessionHandoff'),
     next_action: vetted('saveSessionHandoff'),
     artifacts_json: vetted('saveSessionHandoff'),
@@ -331,8 +359,8 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
   slack_cursors: { tenant_id: id, channel_id: id, latest_ts: at, updated_at: at },
   slack_dlq: {
     tenant_id: id,
-    raw_payload: vetted('dead letter'),
-    error: vetted('dead letter'),
+    raw_payload: vetted('parkInDlq'),
+    error: vetted('parkInDlq'),
     received_at: at,
     retried_at: at,
     team_id: id,
@@ -368,4 +396,11 @@ export const TEXT_COLUMNS: Readonly<Record<string, Readonly<Record<string, Colum
     updated_at: at,
     tenant_id: id,
   },
-};
+} satisfies Readonly<Record<string, Readonly<Record<string, ColumnClass>>>>;
+
+/** `table.column` to its class; a column missing here is unclassed. */
+export const COLUMN_CLASSES: ReadonlyMap<string, ColumnClass> = new Map(
+  Object.entries(CENSUS).flatMap(([table, columns]) =>
+    Object.entries(columns).map(([column, cls]): [string, ColumnClass] => [`${table}.${column}`, cls]),
+  ),
+);

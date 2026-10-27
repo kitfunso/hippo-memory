@@ -2,6 +2,7 @@
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { syncChangedMirrors } from './mirrors.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { readEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { StoreFiles } from './open.js';
@@ -162,7 +163,7 @@ function upsertDetectedConflicts(
     upsert.run(
       conflict.memory_a_id,
       conflict.memory_b_id,
-      conflict.reason,
+      redactSecretsStrict(conflict.reason),
       conflict.score,
       detectedAt,
       detectedAt,

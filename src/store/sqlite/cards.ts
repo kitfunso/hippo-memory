@@ -1,5 +1,6 @@
 // hippo.db's Cards group: the agent work board.
 import { generateId } from '../../base/memory/entry.js';
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import {
   withWriteScope,
   withWriteScopeOr,
@@ -190,7 +191,7 @@ function insertCardComment(
     INSERT INTO card_comments (card_id, author, body, created_at, tenant_id)
     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
   `,
-  ).run(cardId, author, body, now, tenantId, cardId, tenantId);
+  ).run(cardId, author, redactSecretsStrict(body), now, tenantId, cardId, tenantId);
   if (Number(result.changes ?? 0) === 0) {
     throw unknownCard(cardId);
   }
@@ -307,10 +308,10 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
     `,
     ).run(
       id,
-      input.title,
+      redactSecretsStrict(input.title),
       status,
       input.repo ?? null,
-      input.contract ?? null,
+      storedOrNull(input.contract),
       input.budget ?? null,
       now,
       now,

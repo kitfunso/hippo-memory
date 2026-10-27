@@ -11,6 +11,7 @@ import {
 } from '../../base/scope/api-key.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
+import { storedOrNull } from '../../base/util/secret-detect.js';
 import { keysetAfter } from '../../db/sql.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -55,7 +56,7 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
     key.keyId,
     key.keyHash,
     key.tenantId,
-    key.label,
+    storedOrNull(key.label),
     key.createdAt,
     key.role,
     key.ownerSubject,

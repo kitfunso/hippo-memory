@@ -11,6 +11,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { restoreRawText } from '../_helpers/legacy-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 
@@ -58,6 +59,8 @@ function seedLocal(): string[] {
       });
       const created = new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString();
       writeEntryDbOnly(db, { ...base, ...extra, created });
+      // The secret row is a legacy one: writes now redact, and the veto guards rows kept raw.
+      if (i === 900) restoreRawText(db, [base]);
       ids.push(base.id);
     }
     db.exec('COMMIT');

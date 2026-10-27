@@ -53,7 +53,9 @@ function plantLegacy(content: string): MemoryEntry {
 function rawCopies(): number {
   return withDb((db) => {
     const live = db.prepare('SELECT count(*) AS n FROM memories WHERE instr(content, ?) > 0').get(GHP) as { n: number };
-    const fts = db.prepare('SELECT count(*) AS n FROM memories_fts WHERE instr(content, ?) > 0').get(GHP) as { n: number };
+    const fts = db.prepare('SELECT count(*) AS n FROM memories_fts WHERE instr(content, ?) > 0').get(GHP) as {
+      n: number;
+    };
     return live.n + fts.n;
   });
 }
@@ -63,10 +65,15 @@ describe('legacy raw rows', () => {
     const legacy = plantLegacy(RAW);
     expect(rawCopies()).toBe(2);
     await withDb((db) =>
-      commitInChunks(db, storeFilesOf(root), [{ refreshes: [{ id: legacy.id, strength: 0.4 }], writes: [], deletes: [], dormant: [] }], {
-        snapshot: new Map(),
-        budget: { holdMs: Infinity, clock: () => 0, pause: async () => {} },
-      }),
+      commitInChunks(
+        db,
+        storeFilesOf(root),
+        [{ refreshes: [{ id: legacy.id, strength: 0.4 }], writes: [], deletes: [], dormant: [] }],
+        {
+          snapshot: new Map(),
+          budget: { holdMs: Infinity, clock: () => 0, pause: async () => {} },
+        },
+      ),
     );
     expect(rawCopies()).toBe(0);
     expect(readEntry(root, legacy.id)?.content).toBe(STORED);

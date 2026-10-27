@@ -186,6 +186,11 @@ export function redactSecretsStrict(text: string): string {
   return result;
 }
 
+/** The stored form of an optional text column; null when there is no text. */
+export function storedOrNull(text: string | null | undefined): string | null {
+  return text == null ? null : redactSecretsStrict(text);
+}
+
 /** The entry as stored, content and source redacted; the same object when redaction changes
  * nothing. */
 export function redactEntry<T extends { content: string; source?: string | null }>(entry: T): T {
@@ -193,6 +198,11 @@ export function redactEntry<T extends { content: string; source?: string | null 
   const source = entry.source && redactSecretsStrict(entry.source);
   if (content === entry.content && source === entry.source) return entry;
   return source === entry.source ? { ...entry, content } : { ...entry, content, source };
+}
+
+/** True when `held` is `given` as stored; a raw legacy copy of the same text matches too. */
+export function sameStoredText(held: string | null | undefined, given: string): boolean {
+  return held != null && redactSecretsStrict(held) === redactSecretsStrict(given);
 }
 
 /** Every form a stored copy of `text` may hold: the stored form, then the raw text when a row
