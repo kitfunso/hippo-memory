@@ -1,15 +1,8 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
 // binding.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
-import {
-  HOOK_DB_WAIT_MS,
-  sessionOf,
-  withWriteScope,
-  type DatabaseSyncLike,
-} from '../../db/index.js';
-import { raiseMinBinary } from '../../db/meta.js';
+import { type DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type {
   SessionCalls,
@@ -19,16 +12,11 @@ import type {
   SessionReadArgs,
   Sessions,
   SessionSaveArgs,
-  WorkingMemoryItem,
-  WorkingMemoryFilter,
-  WorkingMemoryPush,
 } from '../../base/ports/store/sessions.js';
 import type { UntracedSession } from '../../base/ports/store/consolidation.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey } from '../../base/ports/store/types.js';
-import type { JsonObject } from '../../base/util/json.js';
-import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
   readHandoff,
   readLatestHandoff,
@@ -46,9 +34,10 @@ import {
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { RECENT_MIRROR_EVENTS, TRACE_EVENT_ROWS } from '../rules/windows.js';
-import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../base/util/limits.js';
-import { handleNow, handleStamp } from './handle-clock.js';
-
+import { SESSION_EVENT_LIMIT } from '../../base/util/limits.js';
+import { handleStamp } from './handle-clock.js';
+import { sessionOwnerOrBind } from './session-owners.js';
+import { wmClear, wmPush, wmRead } from './working-memory.js';
 /** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
   db: DatabaseSyncLike,
@@ -255,233 +244,6 @@ export function listUntracedSessions(
   const events = new Map<string, SessionEvent[]>(ids.map((id) => [id, []]));
   for (const row of rows) events.get(row.session_id)?.push(rowToSessionEvent(row));
   return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
-}
-
-/** The owner a session id is bound to, or null. */
-function readSessionOwner(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-): string | null {
-  const row = cachedStatement(
-    db,
-    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
-  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
-  return row?.owner_subject ?? null;
-}
-
-/** A session's first owner and when it was bound. */
-interface OwnerRowOptions {
-  readonly tenantId: string;
-  readonly sessionId: string;
-  readonly owner: string;
-  readonly createdAt: string;
-}
-
-/** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
-function insertOwnerRow(
-  db: DatabaseSyncLike,
-  { tenantId, sessionId, owner, createdAt }: OwnerRowOptions,
-): number {
-  const result = cachedStatement(
-    db,
-    `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
-  ).run(tenantId, sessionId, owner, createdAt);
-  return Number(result.changes ?? 0);
-}
-
-/** Drops bindings created before `cutoffIso`, by idx_session_owners_created_at. */
-function deleteSessionOwnersBefore(db: DatabaseSyncLike, cutoffIso: string): void {
-  cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
-}
-
-/** One caller's claim on a session id. */
-interface SessionOwnerBinding {
-  readonly tenantId: string;
-  readonly sessionId: string;
-  readonly owner: string;
-  /** Bindings older than this are pruned in the write that adds a new one. */
-  readonly retentionMs: number;
-}
-
-/** Binds under the write lock and returns the stored owner, which is not `owner` when a
- * concurrent first bind won. */
-function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
-  const { tenantId, sessionId, owner, retentionMs } = binding;
-  withWriteScope(
-    db,
-    'bind_session_owner',
-    () => {
-      const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
-      const bound = insertOwnerRow(db, row);
-      // An older binary supersedes across owners, so the first binding shuts it out in the same
-      // transaction.
-      if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
-      // knows.
-      deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
-    },
-    { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
-  );
-  // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
-  return readSessionOwner(db, tenantId, sessionId);
-}
-
-/** The owner stored for the session id, binding `binding.owner` first when none is stored. */
-function sessionOwnerOrBind(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string,
-  owner: string,
-  retentionMs: number,
-): string | null {
-  // A bound session is the common case after the first prompt, so it must not take the write lock.
-  return (
-    readSessionOwner(db, tenantId, sessionId) ??
-    insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
-  );
-}
-
-/** Working Memory: bounded buffer for current-state notes, separate from long-term memory;
- * scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
-
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-interface WorkingMemoryRow {
-  id: number;
-  scope: string;
-  session_id: string | null;
-  task_id: string | null;
-  importance: number;
-  content: string;
-  metadata_json: string;
-  created_at: string;
-  updated_at: string;
-}
-
-function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
-  // Damaged metadata logs once and reads as empty: the item still lists with its content.
-  const metadata: JsonObject =
-    parseStoredObject(
-      { table: 'working_memory', id: row.id, column: 'metadata_json' },
-      row.metadata_json,
-    ) ?? {};
-  return {
-    id: row.id,
-    scope: row.scope,
-    sessionId: row.session_id,
-    taskId: row.task_id,
-    importance: Number(row.importance),
-    content: row.content,
-    metadata,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
- * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
-function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
-  const now = handleStamp(db);
-  return withWriteScope(db, 'wm_push', () => {
-    const result = cachedStatement(
-      db,
-      `
-      INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at,
-      updated_at, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    ).run(
-      item.scope,
-      item.sessionId ?? null,
-      item.taskId ?? null,
-      item.importance ?? 0,
-      item.content,
-      JSON.stringify(item.metadata ?? {}),
-      now,
-      now,
-      tenantId,
-    );
-
-    const id = Number(result.lastInsertRowid ?? 0);
-
-    evictOverCapacity(db, item.scope, tenantId);
-
-    return id;
-  });
-}
-
-function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
-  // Evict if over capacity for this scope.
-  const countRow = cachedStatement(
-    db,
-    `
-    SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
-  `,
-  ).get(scope, tenantId) as { cnt: number } | undefined;
-
-  const count = Number(countRow?.cnt ?? 0);
-  if (count > WM_MAX_ENTRIES) {
-    const excess = count - WM_MAX_ENTRIES;
-    cachedStatement(
-      db,
-      `
-      DELETE FROM working_memory
-      WHERE id IN (
-        SELECT id FROM working_memory
-        WHERE scope = ? AND tenant_id = ?
-        ORDER BY importance ASC, created_at ASC, id ASC
-        LIMIT ?
-      )
-    `,
-    ).run(scope, tenantId, excess);
-  }
-}
-
-/** The WHERE clause and arguments that narrow working memory to one tenant and, when set, a
- * scope and a session. */
-function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
-  const clauses = ['tenant_id = ?'];
-  const params = [tenantId];
-  if (filter.scope) {
-    clauses.push('scope = ?');
-    params.push(filter.scope);
-  }
-  if (filter.sessionId) {
-    clauses.push('session_id = ?');
-    params.push(filter.sessionId);
-  }
-  return { sql: `WHERE ${clauses.join(' AND ')}`, params };
-}
-
-/** Read working memory entries, sorted by importance DESC. */
-function wmRead(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  filter: WorkingMemoryFilter & { readonly limit?: number },
-): WorkingMemoryItem[] {
-  const where = wmWhere(tenantId, filter);
-  const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
-  const rows = cachedStatement(
-    db,
-    `
-    SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
-    FROM working_memory
-    ${where.sql}
-    ORDER BY importance DESC, created_at DESC, id DESC
-    LIMIT ?
-  `,
-  ).all(...where.params, limit) as WorkingMemoryRow[];
-
-  return rows.map(rowToItem);
-}
-
-/** Clear (delete) working memory entries. Returns the count deleted. */
-function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
-  const where = wmWhere(tenantId, filter);
-  const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(
-    ...where.params,
-  );
-  return Number(result.changes ?? 0);
 }
 
 function saveAny(
