@@ -42,8 +42,9 @@ const warnedLocks = new Set<string>();
 function warnUnusableLockOnce<E>(lock: string, cause: E): void {
   if (warnedLocks.has(lock)) return;
   warnedLocks.add(lock);
+  const why = `${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}`;
   logger.warn(
-    `session worker: lock ${lock} cannot be taken (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}), so the work runs without it`,
+    `session worker: lock ${lock} cannot be taken (${why}), so the work runs without it`,
     errorFields(cause),
   );
 }

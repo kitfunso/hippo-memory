@@ -3,6 +3,7 @@
 
 import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
+import type { Log } from '../../infra/compaction-spool.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -659,7 +660,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
 }
 
 async function finishGlobalCompactions(globalRoot: string, tenantId: string): Promise<void> {
-  const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
+  const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
   const finished = await replayCompactions(
     { root: globalRoot, store: cliStore(globalRoot), tenantId },
     warn,

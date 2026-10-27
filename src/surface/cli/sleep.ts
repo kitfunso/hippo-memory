@@ -7,6 +7,7 @@ import { processGit } from '../../infra/git-runner.js';
 import { importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { replayCompactions } from '../capture/compaction-record.js';
+import type { Log } from '../../infra/compaction-spool.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
 import * as api from '../../api/index.js';
 import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
@@ -153,7 +154,7 @@ async function runSleepCommand(
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run
   // writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
-    const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
+    const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
     const finished = await replayCompactions(
       { root: hippoRoot, store: cliStore(hippoRoot), tenantId },
       warn,

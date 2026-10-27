@@ -19,6 +19,7 @@ import {
   type HookRuntime,
 } from '../../base/session/capture-contract.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
+import type { Log } from '../../infra/compaction-spool.js';
 import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
@@ -416,7 +417,10 @@ export async function postCompactHook(
   options: PostCompactOptions,
 ): Promise<string | null> {
   const logFile = options.logFile ?? defaultPreCompactLogPath(processHomes());
-  const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
+  const log: Log = (message, fields) => {
+    appendPreCompactLog(logFile, `post-compact: ${message}`);
+    if (fields !== undefined) logger.error(`post-compact: ${message}`, fields);
+  };
   const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
   try {
     if (!isInitialized(hippoRoot)) {
@@ -437,7 +441,7 @@ export async function postCompactHook(
         try {
           await options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
         } catch (err) {
-          log(`agent memory import failed: ${errorMessage(err)}`);
+          log(`agent memory import failed: ${errorMessage(err)}`, errorFields(err));
         }
       }
     }
@@ -446,7 +450,7 @@ export async function postCompactHook(
     }
     return line;
   } catch (err) {
-    log(`failed: ${errorMessage(err)}`);
+    log(`failed: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }

@@ -131,7 +131,7 @@ function settleCode<T>(step: () => T, log: Log, what: string): SettledStep<T> {
   } catch (err) {
     const code = errorCode(err);
     if (code === 'ENOENT') return { settled: 'gone', code };
-    log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`);
+    log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`, { ...errorFields(err), errno: code });
     return { settled: 'busy', code };
   }
 }
@@ -462,13 +462,14 @@ interface ImportFailedOptions {
 function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
   const { dir, claim, entry, text, recorded, failure, log } = options;
   const { name } = entry;
-  const { busy, message } = failure;
+  const { busy, message, fields } = failure;
   if (recorded) {
     // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
     log(
       busy
         ? `spool file ${name} saved; its memories wait for the next sleep (store busy)`
         : `spool file ${name} saved; writing its memories failed: ${message}`,
+      fields,
     );
     return busy ? 'stop' : 'skipped';
   }
@@ -480,7 +481,7 @@ function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
   const next = entry.attempt + 1;
   if (next < MAX_ATTEMPTS) {
     putBack({ fsx, dir, claim, stem: entry.stem, attempt: next, log });
-    log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${message}`);
+    log(`spool file ${name} failed to import (try ${next} of ${MAX_ATTEMPTS}): ${message}`, fields);
   } else if (
     moveBad(fsx, dir, claim, {
       stem: entry.stem,
@@ -490,7 +491,7 @@ function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
       raw: text,
     })
   ) {
-    log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${message}`);
+    log(`spool file ${name} set aside as .bad after ${MAX_ATTEMPTS} tries: ${message}`, fields);
   }
   return 'skipped';
 }
@@ -527,7 +528,7 @@ async function importFile(options: ImportFileOptions): Promise<FileOutcome> {
   try {
     failure = await importOne(spooled, markRecorded);
   } catch (err) {
-    failure = { busy: isStoreBusy(err), message: errorMessage(err) };
+    failure = { busy: isStoreBusy(err), message: errorMessage(err), fields: errorFields(err) };
   }
   if (failure !== null) {
     return importFailed(fsx, { dir, claim, entry, text, recorded, failure, log });
