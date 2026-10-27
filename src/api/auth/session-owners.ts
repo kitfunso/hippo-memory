@@ -11,7 +11,10 @@ const BINDING_RETENTION_DAYS = 90;
 /** Binds `sessionId` to the caller's owner on first use, through the store's sessions group; a
  * session another owner holds is a 409, so the client can set it aside. A failure rejects, never
  * throws. */
-export async function bindSessionOwner(ctx: EntryContext<ContextWith<'sessions'>>, sessionId: string): Promise<void> {
+export async function bindSessionOwner(
+  ctx: EntryContext<ContextWith<'sessions'>>,
+  sessionId: string,
+): Promise<void> {
   assertTenantId('bindSessionOwner', ctx.tenantId);
   const owner = ownerOrSubject(ctx.actor);
   const retentionMs = BINDING_RETENTION_DAYS * DAY_MS;

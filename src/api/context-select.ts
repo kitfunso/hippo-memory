@@ -5,7 +5,7 @@ import { recallScopeFilter } from '../base/scope/recall-scope.js';
 import { calculateStrength, type StrengthModel } from '../base/memory/strength.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { auditQueryFields } from '../base/records/audit-report.js';
-import type { ContextReads, HippoStore } from '../base/ports/store.js';
+import type { ContextReads, RequiredStore, StoreWith } from '../base/ports/store.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
 import { rankBothStores } from '../domain/sharing/search-both.js';
 import { searchByEngine } from '../domain/search/engine.js';
@@ -39,7 +39,8 @@ const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
-  readonly store: HippoStore;
+  /** Sessions is read only for the unfinished handoff, where its absence means none. */
+  readonly store: StoreWith<never, 'sessions'>;
   readonly reads: ContextReads;
 }
 
@@ -578,7 +579,7 @@ async function auditContextRecall(
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */
-export function globalStoreInReach(ctx: Context): HippoStore {
+export function globalStoreInReach(ctx: Context): RequiredStore {
   return globalInReach(ctx).store;
 }
 

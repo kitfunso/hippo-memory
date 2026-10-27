@@ -33,6 +33,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -87,7 +88,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       1,
       'hippo_recall',
       { query: 'omega', budget: 200 },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -96,7 +97,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
@@ -125,7 +126,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       2,
       'hippo_recall',
       { query: 'omega', budget: 200 },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -134,7 +135,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     // Extract Cutoff totalCandidates value via regex.
@@ -157,7 +158,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       3,
       'hippo_recall',
       { query: 'nothing' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -166,7 +167,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     expect(text).not.toMatch(/## Cutoff/);
@@ -194,7 +195,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       4,
       'hippo_recall',
       { query: 'omega', budget: 200 },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -203,7 +204,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     const cutoffIdx = text.indexOf('## Cutoff');

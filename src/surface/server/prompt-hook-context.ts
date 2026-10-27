@@ -36,5 +36,8 @@ async function folderReach(
     openGlobal: undefined,
     host: entryHost,
   });
-  return contextReach(reach, loadConfig, resolveEmbeddingProvider);
+  const ledger = hasGroup(store, 'ledger')
+    ? { ledger: store.ledger, folderFiles: store.folderFiles, config: loadConfig(folder) }
+    : undefined;
+  return contextReach(reach, loadConfig, resolveEmbeddingProvider, ledger);
 }

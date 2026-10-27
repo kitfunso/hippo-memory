@@ -4,11 +4,7 @@ import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import {
-  mcpApiContext,
-  type GroupToolCall,
-  type LocalToolCall,
-} from './protocol.js';
+import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';

@@ -15,6 +15,7 @@ import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
+import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
@@ -82,13 +83,16 @@ function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
   };
 }
 
+/** The store kind the CLI opens: hippo.db, with every group. */
+export type CliStore = HippoStore & StoreGroups;
+
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never
  * names the adapter. A `hippo serve` on the same store answers its nearest-row reads from the
  * graph it holds. */
 export function cliStore(
   hippoRoot: string,
   session: StoreSession | undefined = commandSession,
-): HippoStore & StoreGroups {
+): CliStore {
   const opts = cliStoreOptions(session);
   const maxVectors = cliConfig(hippoRoot).vectorGraph.maxVectors;
   return askingNearestFirst(defaultStore(hippoRoot, opts), {
@@ -251,9 +255,10 @@ function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep
  * that runs in process. One host per stdio loop, so its callers live as long as the loop, which
  * runs as one command on that command's runtime. */
-export function cliStdioHost(): McpHost {
+export function cliStdioHost(): McpHost<CliStore> {
   const hostTenantId = envTenant();
   const shared = createCallerState();
+  const tools = allMcpTools();
   // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
   // names no folder, and each frame counts on its own store.
   const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
@@ -267,7 +272,7 @@ export function cliStdioHost(): McpHost {
   };
   const contextIn =
     (session: StoreSession, signal: AbortSignal) =>
-    (hippoRoot: string, tenantId: string): McpContext => {
+    (hippoRoot: string, tenantId: string): McpContext<CliStore> => {
       const store = cliStore(hippoRoot, session);
       return {
         hippoRoot,
@@ -277,6 +282,8 @@ export function cliStdioHost(): McpHost {
         hostAdmin: true,
         stdio: true,
         store,
+        storeFor: (own) => own,
+        tools,
         config: cliConfig(hippoRoot),
         reach: cliReach(hippoRoot, store, session),
         callers: callersOn(hippoRoot, store),

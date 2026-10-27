@@ -16,6 +16,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { withEntryInfra } from '../../src/surface/entry-infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -172,7 +173,7 @@ describe('stdio MCP tool calls', () => {
       cliStdioHost().runFrame(new AbortController().signal, (contextFor) =>
         handleMcpRequest(
           { ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } },
-          { ...ctx, store: contextFor(root, 'default').store },
+          mcpContext({ ...ctx, store: contextFor(root, 'default').store }),
         ),
       );
     let replies: Array<McpResponse | null> = [];

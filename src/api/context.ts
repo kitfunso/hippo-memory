@@ -27,7 +27,7 @@ import {
   type AmbientState,
   type AmbientTallies,
 } from '../base/memory/ambient.js';
-import type { HippoStore } from '../base/ports/store.js';
+import type { StoreWith } from '../base/ports/store.js';
 import {
   passesScopeFilterForRecall,
   assertScopeRequestAllowed,
@@ -47,7 +47,13 @@ import {
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { keepShownIds } from './recall/last-recalled.js';
-import { type Context, type ContextReach, type ContextWith, ownerOrSubject, strengthOf } from './types.js';
+import {
+  type Context,
+  type ContextReach,
+  type ContextWith,
+  ownerOrSubject,
+  strengthOf,
+} from './types.js';
 import type {
   ContextCandidateFilter,
   AmbientRecallRequest,
@@ -58,7 +64,6 @@ import type {
 import type { ContinuityKey } from '../base/ports/store/types.js';
 import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
 import { CONTINUITY_EVENT_LIMIT } from './continuity.js';
-import { storeBehind } from '../base/util/store-view.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -106,7 +111,7 @@ interface RecentRequest {
 }
 
 /** A store's base search and context reads, both required on the port. */
-function sourceOf(store: HippoStore): ContextSource {
+function sourceOf(store: StoreWith<never, 'sessions'>): ContextSource {
   return { store, reads: store.contextReads };
 }
 
@@ -257,20 +262,6 @@ function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boo
   );
 }
 
-const isolationWarned = new WeakSet<HippoStore>();
-
-/**
- * A laptop config copied onto a team store must not open every member's rows to every prompt, so
- * the flag loses there.
- */
-function warnIsolationIgnored(store: HippoStore): void {
-  if (isolationWarned.has(store)) return;
-  isolationWarned.add(store);
-  log.warn(
-    '"contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.',
-  );
-}
-
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
@@ -343,7 +334,14 @@ function readsCrossProject(ctx: Context, opts: ContextOptions, sharedStore: bool
   if (sharedStore && projectId(opts.currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
-  if (sharedStore && !isolationEnabled) warnIsolationIgnored(storeBehind(ctx.store));
+  // A laptop config copied onto a team store must not open every member's rows to every prompt.
+  if (sharedStore && !isolationEnabled) {
+    log.once(
+      'context-isolation-ignored',
+      'warn',
+      '"contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.',
+    );
+  }
   return opts.crossProject === true || (!isolationEnabled && !sharedStore);
 }
 

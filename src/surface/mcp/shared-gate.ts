@@ -1,6 +1,6 @@
 // Which MCP tools run on a shared store, and which need the caller's project first.
 import { sharedStoreOf } from '../../api/types.js';
-import type { McpContext } from './protocol.js';
+import type { McpCaller } from './protocol.js';
 
 // A shared store holds many repos' rows, so a memory tool needs the caller's project and four tools
 // never run.
@@ -14,7 +14,7 @@ const OPEN_WITHOUT_PROJECT: ReadonlySet<string> = new Set(['hippo_predict_basera
 
 /** The refusal text for this call, or undefined when it may run; the stdio host is the
  * operator's own process and is never gated. */
-export function sharedStoreRefusal(name: string, ctx: McpContext): string | undefined {
+export function sharedStoreRefusal(name: string, ctx: McpCaller): string | undefined {
   if (ctx.stdio === true || !sharedStoreOf(ctx)) return undefined;
   const off = OFF_ON_SHARED.get(name);
   if (off !== undefined) return `${name} is off on a shared store: it ${off}`;

@@ -13,7 +13,11 @@ export interface LedgerReach {
 }
 
 function homeOf(global: GlobalInReach): LedgerHome {
-  return { ledger: global.store.ledger, folderFiles: global.store.folderFiles, config: global.config };
+  return {
+    ledger: global.store.ledger,
+    folderFiles: global.store.folderFiles,
+    config: global.config,
+  };
 }
 
 /** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller

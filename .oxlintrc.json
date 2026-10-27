@@ -125,7 +125,16 @@
     {
       "files": ["src/api/**/*.ts"],
       "rules": {
-        "id-denylist": ["error", "sqliteStoreOn", "hippoRoot", "requireGroup", "hasGroup"],
+        "id-denylist": [
+          "error",
+          "sqliteStoreOn",
+          "hippoRoot",
+          "requireGroup",
+          "hasGroup",
+          "requireGroups",
+          "hasGroups",
+          "HippoStore"
+        ],
         "no-restricted-properties": [
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
@@ -134,7 +143,9 @@
           { "object": "globalThis", "property": "process", "message": "Name the process global, so the env rule sees it." },
           { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
           { "property": "requireGroup", "message": "Groups are bound at boot; api code uses the store it is given." },
-          { "property": "hasGroup", "message": "Groups are bound at boot; api code uses the store it is given." }
+          { "property": "hasGroup", "message": "Groups are bound at boot; api code uses the store it is given." },
+          { "property": "requireGroups", "message": "Groups are bound at boot; api code uses the store it is given." },
+          { "property": "hasGroups", "message": "Groups are bound at boot; api code uses the store it is given." }
         ],
         "no-restricted-imports": [
           "error",
@@ -142,8 +153,8 @@
             "patterns": [
               {
                 "regex": "^[.]",
-                "importNames": ["requireGroup", "hasGroup"],
-                "message": "Groups are bound at boot; api code uses the store it is given."
+                "importNames": ["requireGroup", "hasGroup", "requireGroups", "hasGroups", "HippoStore"],
+                "message": "Groups are bound at boot; api code uses the store it is given. Name the groups with RequiredStore, StoreWith or ContextWith."
               }
             ]
           }
@@ -154,7 +165,7 @@
     {
       "files": ["src/domain/**/*.ts"],
       "rules": {
-        "id-denylist": ["error", "sqliteStoreOn", "requireGroup", "hasGroup"],
+        "id-denylist": ["error", "sqliteStoreOn", "requireGroup", "hasGroup", "requireGroups", "hasGroups", "HippoStore"],
         "no-restricted-properties": [
           "error",
           { "property": "sqliteStoreOn", "message": "Take the store from a composition root." },
@@ -163,6 +174,8 @@
           { "property": "prepare", "message": "SQL runs in src/db and src/store; reach the database through the port." },
           { "property": "requireGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
           { "property": "hasGroup", "message": "Groups are bound at boot; domain code uses the store it is given." },
+          { "property": "requireGroups", "message": "Groups are bound at boot; domain code uses the store it is given." },
+          { "property": "hasGroups", "message": "Groups are bound at boot; domain code uses the store it is given." },
           { "object": "globalThis", "property": "fetch", "message": "Domain code reaches the network through a port." }
         ],
         "no-restricted-globals": ["error", { "name": "fetch", "message": "Domain code reaches the network through a port." }],
@@ -181,8 +194,8 @@
               },
               {
                 "regex": "^[.]",
-                "importNames": ["requireGroup", "hasGroup"],
-                "message": "Groups are bound at boot; domain code uses the store it is given."
+                "importNames": ["requireGroup", "hasGroup", "requireGroups", "hasGroups", "HippoStore"],
+                "message": "Groups are bound at boot; domain code uses the store it is given. Name the groups with RequiredStore, StoreWith or ContextWith."
               }
             ]
           }

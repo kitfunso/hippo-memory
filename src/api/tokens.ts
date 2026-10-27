@@ -39,7 +39,10 @@ export const DEFAULT_REPORT_WINDOW_DAYS = 30;
 /** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent,
  * skipped as unchanged and re-read, per surface, with session counts and mean tokens per
  * session. */
-export function tokenSummary(ctx: ContextWith<'reports'>, opts: { days?: number } = {}): Promise<TokenSummary> {
+export function tokenSummary(
+  ctx: ContextWith<'reports'>,
+  opts: { days?: number } = {},
+): Promise<TokenSummary> {
   return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 

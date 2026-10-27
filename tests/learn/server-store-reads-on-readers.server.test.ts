@@ -219,17 +219,14 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
   read(
-    'base.entriesWhere',
+    'entriesWhere',
     async (s) => [
       await s.entriesWhere({ tenantId: TENANT }, { limit: 3 }),
       await s.entriesWhere(
         { tenantId: TENANT, kinds: ['raw'], live: true, sessionId: SESSION },
         { limit: 10, newest: true },
       ),
-      await s.entriesWhere(
-        { tenantId: TENANT, kinds: ['raw'], artifactRefPrefix: 'vault:golden:' },
-        { limit: 10 },
-      ),
+      await s.entriesWhere({ tenantId: TENANT, kinds: ['raw'], artifactRefPrefix: 'vault:golden:' }, { limit: 10 }),
       await s.entriesWhere({ tenantId: TENANT, source: 'cli', tag: 'deploy', live: true }, { limit: 10 }),
     ],
     new RegExp(String.raw`id: 'mem_[\s\S]*mem_x_raw[\s\S]*vault:golden:rollout\.md[\s\S]*${PLAIN}`),

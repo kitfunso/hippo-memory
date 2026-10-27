@@ -154,7 +154,10 @@ export function sharedStoreOf(ctx: Pick<Context, 'reach' | 'config'>): boolean {
 
 /** A context whose store sets the optional groups `G`: the surface proved them once, so the api
  * checks nothing. `F` are groups the feature reads where it states its fallback. */
-export type ContextWith<G extends OptionalGroup = never, F extends OptionalGroup = never> = Context & {
+export type ContextWith<
+  G extends OptionalGroup = never,
+  F extends OptionalGroup = never,
+> = Context & {
   readonly store: StoreWith<G, F>;
 };
 

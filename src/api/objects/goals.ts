@@ -8,7 +8,10 @@ import type { Goal } from '../../base/ports/store/types.js';
 export type GoalPushOptions = Omit<PushGoalOptions, 'tenantId'>;
 
 /** Push a goal onto `sessionId`'s stack in the caller's tenant. */
-export function goalPush(ctx: EntryContext<ContextWith<'goals'>>, opts: GoalPushOptions): Promise<Goal> {
+export function goalPush(
+  ctx: EntryContext<ContextWith<'goals'>>,
+  opts: GoalPushOptions,
+): Promise<Goal> {
   return ctx.store.goals.push(ctx.tenantId, opts);
 }
 

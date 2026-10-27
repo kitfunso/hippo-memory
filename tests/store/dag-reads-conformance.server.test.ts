@@ -115,10 +115,7 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
-async function conformsOn<G extends 'dagReads' | 'base', R>(
-  group: G,
-  calls: readonly GroupCall<G, R>[],
-): Promise<R[]> {
+async function conformsOn<G extends 'dagReads' | 'base', R>(group: G, calls: readonly GroupCall<G, R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, group, calls);
   expect(sqlite.audit).toEqual(fixtureAudit);
   return sqlite.outcomes.map((o) => {
@@ -413,6 +410,6 @@ describe('assemble and drill over serve()', () => {
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);
-    expect(await runServed(portOnlyStore)).toEqual(onHippoDb);
+    expect(await runServed((root) => portOnlyStore(root, ['dagReads']))).toEqual(onHippoDb);
   });
 });

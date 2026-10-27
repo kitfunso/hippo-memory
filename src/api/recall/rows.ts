@@ -12,7 +12,7 @@ import type { RerankerFn } from '../../base/ports/reranker.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
+import type { ContinuityBlock, StoreWith } from '../../base/ports/store.js';
 import {
   passesCliRecallScopeFilter,
   passesScopeFilterForRecall,
@@ -61,7 +61,7 @@ export function recallRowOrigin(ctx: Context, setting: RecallStoreSetting): Reca
 export async function scopeHiddenCount(
   ctx: ContextWith<'sharing'>,
   query: string,
-  global: HippoStore | undefined,
+  global: StoreWith<'sharing'> | undefined,
   requested: string | undefined,
 ): Promise<number> {
   const probes = [ctx.store.sharing, global?.sharing].map(

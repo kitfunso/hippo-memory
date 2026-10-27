@@ -12,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,14 +34,14 @@ async function callTool(
 ) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    {
+    mcpContext({
       ...ctx,
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(ctx.hippoRoot),
       config: loadConfig(ctx.hippoRoot),
       infra: testInfra(),
-    },
+    }),
   );
 }
 function extractText(res: McpResponse | null): string {
@@ -63,7 +64,7 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp',
@@ -72,7 +73,7 @@ describe('mcp hippo_assemble', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
     const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;

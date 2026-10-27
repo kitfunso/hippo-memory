@@ -189,9 +189,7 @@ async function physicsQueryVector(
   try {
     const provider = source.provider();
     if (!provider.isAvailable()) return null;
-    if (
-      indexNeedsRebuild(indexedModel(await source.vectors.embeddingIndexState()), provider.id)
-    ) {
+    if (indexNeedsRebuild(indexedModel(await source.vectors.embeddingIndexState()), provider.id)) {
       return null;
     }
     const vec = await embedQueryBy(deadline, provider, query);

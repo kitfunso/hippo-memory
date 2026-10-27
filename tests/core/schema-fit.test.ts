@@ -153,10 +153,7 @@ describe('contextReads.schemaFit', () => {
     } finally {
       closeHippoDb(db);
     }
-    const page = await sqliteStore(root).entriesWhere(
-      { tenantId: 'default' },
-      { limit: windowRows, newest: true },
-    );
+    const page = await sqliteStore(root).entriesWhere({ tenantId: 'default' }, { limit: windowRows, newest: true });
     const window = page.entries.reverse();
     expect(window).toHaveLength(windowRows);
     expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);

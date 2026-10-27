@@ -23,6 +23,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { countSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -177,7 +178,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp',
@@ -186,7 +187,7 @@ describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     // SAFETY: tools/list's MCP result envelope always carries result.tools
     // with each tool's JSON-schema inputSchema.properties; McpResponse.result

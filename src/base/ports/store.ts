@@ -27,12 +27,7 @@ import type { Goals } from './store/goals.js';
 import type { EntryFilter, PageRequest, Reports } from './store/reports.js';
 import type { Dormant } from './store/dormant.js';
 import type { FailureLog } from './store/rejections.js';
-export type {
-  FolderStore,
-  GlobalGroup,
-  GlobalTargetGroup,
-  StoreReach,
-} from './store/reach.js';
+export type { FolderStore, GlobalGroup, GlobalTargetGroup, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,

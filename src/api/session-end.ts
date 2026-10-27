@@ -39,7 +39,10 @@ export interface SessionClose {
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
  * failure and never throws. The handoff goes first, while the snapshot writeSessionEndHandoff
  * reads is still active. */
-export async function closeEndedSession(ctx: ContextWith<'sessions'>, close: SessionClose): Promise<void> {
+export async function closeEndedSession(
+  ctx: ContextWith<'sessions'>,
+  close: SessionClose,
+): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');

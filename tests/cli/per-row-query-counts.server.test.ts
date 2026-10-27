@@ -31,6 +31,7 @@ import {
 import { testInfra } from '../_helpers/infra.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 useQueryCountRoots();
 
@@ -273,7 +274,7 @@ describe('hippo_status', () => {
       const { result, rowsRead } = await recordStatementsAsync(() =>
         handleMcpRequest(
           { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-          {
+          mcpContext({
             hippoRoot: root,
             tenantId: 'default',
             actor: 'tester',
@@ -283,7 +284,7 @@ describe('hippo_status', () => {
             store: sqliteStore(root),
             config: loadConfig(root),
             infra: testInfra(),
-          },
+          }),
         ),
       );
       const reply = JSON.stringify(result);

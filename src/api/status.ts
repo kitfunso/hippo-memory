@@ -97,14 +97,18 @@ async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin
  * only. */
-export async function correctionLatencyReport(ctx: ContextWith<'reports'>): Promise<CorrectionLatencyReport> {
+export async function correctionLatencyReport(
+  ctx: ContextWith<'reports'>,
+): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildCorrectionLatency(await allCorrectionLinks(ctx.store.reports));
 }
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
  * only. */
-export async function provenanceCoverageReport(ctx: ContextWith<'reports'>): Promise<ProvenanceCoverage> {
+export async function provenanceCoverageReport(
+  ctx: ContextWith<'reports'>,
+): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return buildProvenanceCoverage(await allRawProvenance(ctx.store.reports));
 }

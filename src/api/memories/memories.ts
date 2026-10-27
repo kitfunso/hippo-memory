@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { RequiredStore } from '../../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
@@ -40,7 +40,7 @@ const LIST_PAGE_SIZE = 1000;
 
 /** The tenant's memory rows, oldest first, `pageSize` per query, so a pass can hold one page. */
 export async function* memoryPages(
-  store: HippoStore,
+  store: RequiredStore,
   tenant: TenantId,
   pageSize: number = LIST_PAGE_SIZE,
 ): AsyncGenerator<MemoryEntry[]> {

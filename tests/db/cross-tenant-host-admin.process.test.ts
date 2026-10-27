@@ -14,6 +14,7 @@ import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { isJsonObject, tryParseJson } from '../../src/base/util/json.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -147,7 +148,7 @@ describe('hippo_learn needs a host admin', () => {
   it('runs for an in-process stdio caller', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_learn', arguments: { days: 1 } } },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp',
@@ -156,7 +157,7 @@ describe('hippo_learn needs a host admin', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     expect(res?.error).toBeUndefined();
   });

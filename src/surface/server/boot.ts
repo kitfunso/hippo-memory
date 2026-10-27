@@ -40,6 +40,7 @@ import { readyProbeFor } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
+import { bindMcpTools } from '../mcp/request.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../../base/scope/project-identity.js';
 import { parseRequest, rejectEncodedSlash } from './request.js';
 import { loopbackBindHosts } from './loopback.js';
@@ -390,6 +391,7 @@ function servedOptsFor(
     publicJsonBodies,
     v1Routes: bindV1Routes(store, runtime.onHippoDb),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
+    mcpTools: bindMcpTools(store),
     store,
     onHippoDb: runtime.onHippoDb,
     reachOf: (shared) => runtime.reachOf(shared, {}),

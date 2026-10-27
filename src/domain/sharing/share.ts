@@ -427,7 +427,8 @@ async function shareCandidates({
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: {
-    readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> & Pick<RequiredStore, 'entriesWhere'>;
+    readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> &
+      Pick<RequiredStore, 'entriesWhere'>;
   },
   global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
   options: {

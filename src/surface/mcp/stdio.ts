@@ -21,6 +21,7 @@ import {
 } from './protocol.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { handleMcpRequest } from './request.js';
+import type { RequiredStore } from '../../base/ports/store.js';
 import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './json-rpc.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -193,8 +194,8 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
 /** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global
  * store instead of failing every tool call, and say so on stderr (stdout carries the protocol).
  * A later `hippo init` project store wins. */
-async function createGlobalStoreOnFirstRun(
-  contextFor: McpContextFor,
+async function createGlobalStoreOnFirstRun<S extends RequiredStore>(
+  contextFor: McpContextFor<S>,
   tenantId: string,
 ): Promise<string> {
   const root = hippoHomeDir();
@@ -210,9 +211,9 @@ async function createGlobalStoreOnFirstRun(
 
 /** Runs one frame on the host's stores; only a tool call builds a context, so tools/list never
  * creates a store. */
-function handleFrame(
+function handleFrame<S extends RequiredStore>(
   req: McpRequest,
-  host: McpHost,
+  host: McpHost<S>,
   signal: AbortSignal,
 ): Promise<McpResponse | null> {
   return host.runFrame(signal, async (contextFor) => {
@@ -223,7 +224,11 @@ function handleFrame(
   });
 }
 
-function dispatch(body: string, abort: AbortController, host: McpHost): void {
+function dispatch<S extends RequiredStore>(
+  body: string,
+  abort: AbortController,
+  host: McpHost<S>,
+): void {
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(body);
@@ -262,7 +267,11 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   );
 }
 
-function dispatchNotification(req: McpRequest, abort: AbortController, host: McpHost): void {
+function dispatchNotification<S extends RequiredStore>(
+  req: McpRequest,
+  abort: AbortController,
+  host: McpHost<S>,
+): void {
   const stopWatching = watchDeadline(req, false, abort);
   track(
     req.method,
@@ -279,7 +288,7 @@ function dispatchNotification(req: McpRequest, abort: AbortController, host: Mcp
  * this file run directly) should call it, so the HTTP daemon (which imports `handleMcpRequest`)
  * does not steal stdin or exit when its parent closes a pipe. The caller picks the host, so
  * src/surface/mcp names no store adapter and no scope plumbing. */
-export function startStdioLoop(host: McpHost): void {
+export function startStdioLoop<S extends RequiredStore>(host: McpHost<S>): void {
   process.stdin.on(
     'data',
     frameReader((body) => {

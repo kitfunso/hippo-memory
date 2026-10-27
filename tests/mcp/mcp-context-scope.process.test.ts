@@ -13,6 +13,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 function callTool(
   reqId: number,
@@ -27,14 +28,14 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    {
+    mcpContext({
       ...ctx,
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(ctx.hippoRoot),
       config: loadConfig(ctx.hippoRoot),
       infra: testInfra(),
-    },
+    }),
   );
 }
 
