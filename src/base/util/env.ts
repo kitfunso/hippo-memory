@@ -227,6 +227,7 @@ export const envMcpStdio = bool('HIPPO_MCP_STDIO');
 export const envRequireServer = bool('HIPPO_REQUIRE_SERVER');
 const envRequireSessionScopedFreshTail = bool('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
 export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
+export const envBusyWaitMs = posInt('HIPPO_BUSY_WAIT_MS');
 export function envLogLevel(): string {
   return raw('HIPPO_LOG')?.trim().toLowerCase() ?? '';
 }

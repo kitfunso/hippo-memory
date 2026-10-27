@@ -47,8 +47,8 @@ afterEach(async () => {
 });
 
 const VSCODE_SESSION = 'vscode-sess-1';
-// The busy worker waits out 3 statements at the 5 s busy_timeout in src (open.ts DEFAULT_BUSY_WAIT_MS).
-const BUSY_REASON = 'a worker on a locked store waits 3 x 5 s of busy_timeout in src';
+// The worker's lock waits default to 5 s each; the busy case only needs them to run out.
+const SHORT_BUSY_WAIT = { HIPPO_BUSY_WAIT_MS: '300' };
 const TURN_DONE = 'skip snapshot close: turn mode';
 const FIRST_LESSON = 'retry budget at three attempts';
 const SECOND_LESSON = 'every pull request in CI';
@@ -271,7 +271,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
-    const busy = await stop(transcript, { waitMs: WORKER_GONE_MS, reason: BUSY_REASON });
+    const busy = await stop(transcript, { env: { ...s.env, ...SHORT_BUSY_WAIT } });
     expect(busy).toContain('capture failed: database is locked');
     await releaseStoreWriteLock(holder);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);

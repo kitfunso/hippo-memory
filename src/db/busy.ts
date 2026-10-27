@@ -1,3 +1,4 @@
+import { envBusyWaitMs } from '../base/util/env.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
@@ -17,8 +18,9 @@ export function isSqliteBusy(cause: unknown): boolean {
   return code === SQLITE_BUSY || code === SQLITE_LOCKED || code === SQLITE_BUSY_SNAPSHOT;
 }
 
-/** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
-export const DEFAULT_BUSY_WAIT_MS = 5000;
+/** The lock wait of an open that names none: its busy_timeout and every explicit wait below.
+ * HIPPO_BUSY_WAIT_MS, a whole number of ms, replaces the 5000 default for the process. */
+export const DEFAULT_BUSY_WAIT_MS = envBusyWaitMs() ?? 5000;
 
 // The wait blocks its thread, the only one in a CLI or hook run, so a wait past this gets one line
 // naming the file.
