@@ -28,8 +28,8 @@ function dropKeys(inDormant: 0 | 1): string {
   );
 }
 
-// A 2.x binary writes content without the keys, so an edit that leaves the digest as it was clears
-// it and drops the row's keys; the next sleep fill writes both again.
+// A 2.x edit leaves the digest as it was, so these clear it and drop the keys; a 3.0 edit or id move
+// that keeps its digest is cleared too, and the unfilled walk finds the row until the next fill.
 const TRIGGERS = [
   `memories_rejection_digest_stale AFTER UPDATE OF tenant_id, id, content ON memories ` +
     `WHEN ${MOVED} AND NEW.rejection_digest IS OLD.rejection_digest BEGIN ` +

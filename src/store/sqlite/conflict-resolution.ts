@@ -222,7 +222,7 @@ function removeDuplicatesOfRejectedValue(
     }
   }
   const { actor, reason } = r;
-  // Removed after the read ends, since deleting rows under an open cursor can skip or repeat rows.
+  // Removed after the walk ends, so no delete changes the rows a later page of the walk reads.
   for (const dup of dups) {
     if (dup.kind === 'raw') {
       archiveRawMemory(db, dup.id, { reason, who: actor });

@@ -1,5 +1,5 @@
-// A rejection reads the rows that may hold a value by their keys, and removes exactly the rows a walk of both tables
-// would: one cell per way a row comes to hold the text, each checked against that walk. Real store.
+// Each way a row comes to hold a rejected text, on one page: the keys find exactly the rows a walk of both tables
+// would, and the read is bounded by the holders. Paging and concurrent writes are rejection-pages.test.ts's.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { v65 } from '../../src/db/migrations/v65.js';
@@ -350,6 +350,26 @@ describe('the candidate read is bounded by the holders, not the tenant', () => {
 
   it('reads the same rows and runs the same statements beside 100 rows or 600', async () => {
     expect(await work(600)).toEqual(await work(100));
+  });
+
+  it('reads each unfilled row once before the first sleep, and each holder once more under the lock', async () => {
+    const root = makeRoot('rejection-unfilled-reads');
+    const db = openHippoDb(root);
+    const holders = 2;
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      for (let i = 0; i < 300; i++) live(db, `filler row ${i} about the quux client`);
+      for (let i = 0; i < holders; i++) live(db, V);
+      db.exec('COMMIT');
+      db.exec('UPDATE memories SET rejection_digest = NULL; DELETE FROM held_text_digests');
+    } finally {
+      closeHippoDb(db);
+    }
+    const { reads } = await recordStatementsAsync(() => sqliteStore(root).rejections.apply(rejection({})));
+    // The candidate reads: the unfilled pages, the keyed reads and the whole-row reads by id.
+    const candidate = (sql: string) => sql.includes('rejection_digest') || sql.includes('json_each');
+    const rowsRead = reads.filter((read) => candidate(read.sql)).reduce((n, read) => n + read.rows, 0);
+    expect(rowsRead).toBeLessThanOrEqual(300 + holders + holders);
   });
 
   it('seeks both digest indexes and the held keys, and scans none of the three tables', async () => {

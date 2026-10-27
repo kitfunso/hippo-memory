@@ -36,6 +36,7 @@ const WALK_PAGE = 'SELECT id FROM memories WHERE rejection_digest = ?';
 
 // The unfilled rows' first page: a write that lands as it is prepared lands after the keyed read ran.
 const UNFILLED_PAGE = 'SELECT rowid AS k, ';
+const UNFILLED_DORMANT_PAGE = 'SELECT id AS k, ';
 
 /** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares the read `page` starts. */
 function rejectionsWalking(onWalk: () => void, page = WALK_PAGE) {
@@ -206,4 +207,21 @@ describe('rejections.apply across pages', () => {
       expect(readEntry(root, holder.id)).toBeNull();
     });
   }
+
+  it('removes an unfilled dormant holder that a sleep fill keys between the keyed read and the unfilled pages', async () => {
+    const holder = createMemory(VALUE, { tags: [] });
+    withDb((db) => {
+      for (let i = 0; i < 5; i++) {
+        const filler = createMemory(`dormant filler ${i}`, { tags: [] });
+        insertDormantRow(db, { entry: filler, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00.000Z' });
+      }
+      insertDormantRow(db, { entry: holder, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00.000Z' });
+      db.exec('UPDATE dormant_memories SET rejection_digest = NULL; DELETE FROM held_text_digests');
+    });
+    const applied = await rejectionsWalking(() => withDb(fillRejectionDigests), UNFILLED_DORMANT_PAGE).apply(
+      rejection(),
+    );
+    expect(applied.removedIds).toEqual([holder.id]);
+    withDb((db) => expect(readDormantSnapshot(db, 'default', holder.id)).toBeNull());
+  });
 });

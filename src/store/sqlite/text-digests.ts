@@ -95,7 +95,8 @@ function unfilledPageSql(place: Place, columns: string): string {
 
 const FIRST_KEY = { live: Number.MIN_SAFE_INTEGER, dormant: '' } as const;
 
-/** A page of candidates: ids the keys name, for the caller to read, or unfilled rows already read. */
+/** A page of candidates: ids the keys name, for the caller to read, or unfilled rows already
+ * read. */
 export type HolderPage<R> = { readonly keyed: string[] } | { readonly unfilled: R[] };
 
 /** Where to look and what an unfilled row's read selects: `columns` must answer every key of R. */

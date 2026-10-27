@@ -54,7 +54,7 @@ async function arrayReads<T>(fn: () => Promise<T>): Promise<ArrayReads<T>> {
   ) {
     sql.push(this.sourceSQL);
     const answer = all.apply(this, params);
-    if (/FROM memories/.test(this.sourceSQL)) rows += answer.length;
+    if (/FROM memories\b/.test(this.sourceSQL)) rows += answer.length;
     return answer;
   });
   try {

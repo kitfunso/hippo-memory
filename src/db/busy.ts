@@ -128,6 +128,7 @@ export function withWriteScope<T>(
 /** Runs the reads in `fn` against one snapshot, so two statements cannot straddle another
  * process's write. */
 export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
+  // A handle without the isTransaction getter, or inside a transaction, runs fn with no new snapshot.
   if (db.isTransaction !== false) return fn();
   db.exec('BEGIN');
   let result: T;

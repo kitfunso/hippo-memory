@@ -82,8 +82,8 @@ type LiveText = Pick<MemoryEntry, 'id' | 'content' | 'scope' | 'created'> & {
   readonly source: string | null;
 };
 
-/** The ids of the tenant's rows in reach that hold the text, live in store order then dormant by
- * id. One read snapshot, so a fill or an edit cannot move a holder between the keyed and NULL reads. */
+/** The ids of the tenant's rows in reach that hold the text, live in store order, then dormant
+ * by id. One snapshot, so a fill or edit cannot move a holder between the keyed and NULL reads. */
 function listHolderIds(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -263,8 +263,8 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so later writes refuse the text, then removes each holder
- * in reach in one write scope; a failure past that commit keeps the holders until a reject again. */
+/** Commits the rejected-value row first, so later writes refuse the text, then removes each
+ * holder in reach in one write scope; a failure past that commit keeps them until a new reject. */
 function applyRejection(
   db: DatabaseSyncLike,
   files: StoreFiles,
