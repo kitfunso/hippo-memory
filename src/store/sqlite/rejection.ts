@@ -144,10 +144,8 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
   return rows.map(rowToRejectedValue);
 }
 
-/** Write-path guard check: fires when the digest matches a tombstone AND the write introduces
- * that content (a new row, or a same-id UPSERT changing it). Unchanged same-id re-persists
- * (recall boost, decay, star toggle) are exempt. A miss costs ONE indexed point query; only a
- * hit SELECTs the stored row. */
+/** Refuses a write that brings in tombstoned text; a miss reads one indexed digest per form contentDigests gives.
+ * A same-id re-persist with unchanged text (recall boost, decay, star toggle) is exempt. */
 export function checkRejectionGuard(
   db: DatabaseSyncLike,
   { tenantId, entryId, content }: RejectionCheck,
