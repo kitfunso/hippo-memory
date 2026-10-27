@@ -9,6 +9,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
+import { VECTOR_GRAPH_THRESHOLD } from '../../src/db/vector-graph-rows.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -86,7 +87,12 @@ describe('sleep child', () => {
   it('replies to a sleep before it saves the vector graph file, then exits 0', async () => {
     seedVectorRows(
       home,
-      clusteredVectors(1_100, 32, 3).map((vector, i) => ({ id: `v-${i}`, tenantId: 'default', vector })),
+      // The fewest rows that build the graph: the sleep child passes no threshold of its own.
+      clusteredVectors(VECTOR_GRAPH_THRESHOLD, 32, 3).map((vector, i) => ({
+        id: `v-${i}`,
+        tenantId: 'default',
+        vector,
+      })),
     );
     const graphFile = join(home, 'vector-graph-32.bin');
     const fileAtReply: boolean[] = [];

@@ -60,8 +60,8 @@ export { EVAL_TESTS };
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const UNIT_MS = 5_000;
-// Seeded stores in the thousands and a TypeScript program over src; none of them starts a process.
-const SLOW_MS = 180_000;
+// A seed past a page, a model probe or a TypeScript program over src; none of them starts a process.
+const SLOW_MS = 30_000;
 const SETUP = ['tests/_install-freshness.ts', 'tests/_real-store-guard.ts', 'tests/_store-template.ts'];
 // Only tests that run dist (child processes, the server, workers) need a build, so the unit project starts without one.
 const BUILD = ['tests/_build-freshness.ts'];
@@ -71,7 +71,7 @@ export default defineConfig({
   test: {
     // A test that starts a child process, the HTTP server or a worker thread waits on the operating system and keeps 30 s; the rest get UNIT_MS.
     // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
-    // A test that starts nothing but needs minutes of CPU or disk is *.slow.test.ts and gets SLOW_MS, so no test sets a long timeout of its own.
+    // A test that starts nothing but needs seconds of CPU or disk is *.slow.test.ts and gets SLOW_MS, so no test sets a long timeout of its own.
     projects: [
       {
         extends: true,

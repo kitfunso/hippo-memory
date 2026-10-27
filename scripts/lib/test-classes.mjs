@@ -31,7 +31,7 @@ export const EVAL_TESTS = [
 
 export const PROCESS_GLOBS = ['tests/**/*.process.test.ts', 'tests/**/*.process.test.mjs'];
 export const SERVER_GLOBS = ['tests/**/*.server.test.ts', 'tests/**/*.server.test.mjs'];
-/** Tests that start nothing but need minutes of CPU or disk: seeded stores in the thousands, a TypeScript program over src. */
+/** Tests that start nothing but need seconds of CPU or disk: a seed past a page, a TypeScript program over src. */
 export const SLOW_GLOBS = ['tests/**/*.slow.test.ts', 'tests/**/*.slow.test.mjs'];
 /** No test, hook or vitest wait in the default run sets more than this of its own: a test waits on an event, not a timer. */
 export const OWN_TIMEOUT_CEILING_MS = 10_000;

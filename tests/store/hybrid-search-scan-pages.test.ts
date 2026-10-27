@@ -1,4 +1,4 @@
-// One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
+// One hybrid recall over five scan pages of 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -13,15 +13,15 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-const ROWS = 10_000;
+// Five scan pages, the last one partial (a full last page costs one more statement to find its end).
+const ROWS = 5_000;
 const FEWER_ROWS = ROWS / 10;
 const DIM = 384;
 // Ten times the rows may read ten times the rows, and no more.
@@ -30,8 +30,8 @@ const MAX_GROWTH = ROWS / FEWER_ROWS;
 const SCAN = 'FROM memory_vectors v CROSS JOIN memories m';
 const scanPages = (rows: number): number => Math.ceil(rows / SCAN_PAGE_ROWS);
 // The statements a recall runs and the rows it reads are the same on every runner.
-const MAX_ROWS_READ = 13_000;
-const MAX_STATEMENTS = 80;
+const MAX_ROWS_READ = 1.3 * ROWS;
+const MAX_STATEMENTS = scanPages(ROWS) + 70;
 
 function vector(seed: number): number[] {
   let x = (seed * 2654435761) % 4294967296;
@@ -41,11 +41,11 @@ function vector(seed: number): number[] {
   });
 }
 
-describe('hybrid recall at 10k rows', () => {
+describe('hybrid recall over five scan pages', () => {
   const config = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
-  const home = makeRoot('10k', { config });
-  const fewer = makeRoot('1k', { config });
-  const global = makeRoot('10k-global');
+  const home = makeRoot('scan-pages', { config });
+  const fewer = makeRoot('scan-page', { config });
+  const global = makeRoot('scan-pages-global');
   afterAll(() => {
     vi.unstubAllGlobals();
   });
@@ -68,19 +68,11 @@ describe('hybrid recall at 10k rows', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       }),
     );
-    // Rows only: recall reads no markdown mirror, and off a RAM disk writing 11k of them was most of the seed's time.
-    const db = openHippoDb(store);
-    try {
-      db.exec('BEGIN');
-      for (const entry of entries) writeEntryDbOnly(db, entry);
-      db.exec('COMMIT');
-    } finally {
-      closeHippoDb(db);
-    }
+    writeRowsOnly(store, entries);
     saveEmbeddingIndex(store, Object.fromEntries(entries.map((e, i) => [e.id, vector(i + 1)])));
   }
 
-  // Three times the measured seed of 11k rows and their 384-dim vectors.
+  // The rows and their 384-dim vectors for both stores.
   beforeAll(() => {
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
@@ -105,8 +97,8 @@ describe('hybrid recall at 10k rows', () => {
     console.log(
       `hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`,
     );
-    // The 20 rows that name the query plus the 50 nearest vectors, none of them shared, all inside the budget.
-    expect(atFewer.result).toHaveLength(70);
+    // The 10 rows that name the query plus the 50 nearest vectors, less the one row that is both, all inside the budget.
+    expect(atFewer.result).toHaveLength(59);
     // Both recalls ran their vector scan, a page per statement, so the two counts compare like with like.
     expect(countMatching(atFewer.statements, SCAN)).toBe(scanPages(FEWER_ROWS));
     expect(countMatching(atRows.statements, SCAN)).toBe(scanPages(ROWS));
@@ -119,8 +111,8 @@ describe('hybrid recall at 10k rows', () => {
 
   it('one recall holds at most a page of vectors at a time and reads few other rows', async () => {
     const { result, statements, rowsRead, reads } = await recordStatementsAsync(recallOnce);
-    // The 200 rows that name the query plus the 50 nearest vectors, less row 2500, which is both.
-    expect(result).toHaveLength(249);
+    // The 100 rows that name the query plus the 50 nearest vectors, less the one row that is both.
+    expect(result).toHaveLength(149);
     // The scan ran, a page per statement, so the ceilings below measure a recall that scored every vector.
     expect(countMatching(statements, SCAN)).toBe(scanPages(ROWS));
     expect(peakRowsRead(reads, SCAN)).toBeLessThanOrEqual(SCAN_PAGE_ROWS);

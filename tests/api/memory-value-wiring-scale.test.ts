@@ -9,8 +9,7 @@ import { rescueSet } from '../../src/domain/consolidate/memory-value.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadSessionDecayContext, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
   dir,
@@ -25,23 +24,12 @@ import { detailLines } from '../_helpers/sleep-lines.js';
 
 useMemoryValueScratch();
 
-/** The rows on hippo.db alone, in one transaction: no test here reads a markdown mirror, and a mirror file per seeded
- *  row was most of this file's disk writes. */
-function seedRows(root: string, rows: readonly MemoryEntry[]): void {
-  const db = openHippoDb(root);
-  try {
-    withWriteScope(db, 'seed_rows', () => rows.forEach((entry) => writeEntryDbOnly(db, entry)));
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 // ---------------------------------------------------------------------------
-// (h) scale characterization (~2,000 entries, 3 tenants)
+// (h) scale characterization (600 entries, 3 tenants)
 // ---------------------------------------------------------------------------
 describe('(h) scale characterization', () => {
-  // Seeds about 2,000 rows over three tenants and runs a full sleep on them twice.
-  it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
+  // 600 rows: decay reads a page of 500 and one of 100, so a tenant spans the page edge; a full sleep runs twice.
+  it('deterministic, deletes-subset, per-tenant isolation at 600 entries / 3 tenants across a page edge; reports rescue rate', async () => {
     const rand = mulberry32(20260810);
     const wordBank = [
       'alpha',
@@ -86,7 +74,7 @@ describe('(h) scale characterization', () => {
       'anchor',
     ];
     const TENANTS = ['scale-t1', 'scale-t2', 'scale-t3'];
-    const N_PER_TENANT = 700;
+    const N_PER_TENANT = 200;
     const CONDEMNED_FRACTION = 0.15;
 
     function buildEntries(): MemoryEntry[] {
@@ -151,7 +139,7 @@ describe('(h) scale characterization', () => {
 
     initTestStore(dir);
     enableMemoryValue(dir, { replay: { count: 0 }, autoTraceCapture: false });
-    seedRows(dir, entries);
+    writeRowsOnly(dir, entries);
 
     const loaded = loadEveryTenantEntries(dir);
     expect(loaded.length).toBe(entries.length);
@@ -166,8 +154,8 @@ describe('(h) scale characterization', () => {
     const condemnedIds = new Set(
       loaded.filter((e) => !e.pinned && calculateStrength(e, NOW, decayOpts) < 0.05).map((e) => e.id),
     );
-    // The seed's draws condemn 106, 117 and 104 rows: 200+ days old at a one-day half-life, while every other row is under 5 days old.
-    expect(condemnedIds.size).toBe(327);
+    // The seed's draws condemn 28, 33 and 34 rows: 200+ days old at a one-day half-life, while every other row is under 5 days old.
+    expect(condemnedIds.size).toBe(95);
 
     // --- Determinism ---
     const rescued1 = rescueSet(loaded, condemnedIds, NOW);
@@ -191,14 +179,14 @@ describe('(h) scale characterization', () => {
       }
       return true;
     });
-    expect(dropped).toBe(280);
+    expect(dropped).toBe(80);
 
     const rescuedAfterMutation = rescueSet(mutated, condemnedIds, NOW);
     const tenantACondemned = [...condemnedIds].filter((id) => {
       const e = loaded.find((x) => x.id === id);
       return e?.tenantId === tenantAId;
     });
-    expect(tenantACondemned).toHaveLength(106);
+    expect(tenantACondemned).toHaveLength(28);
     for (const id of tenantACondemned) {
       expect(rescuedAfterMutation.has(id)).toBe(rescued1.has(id));
     }
@@ -256,7 +244,7 @@ describe('(h) scale characterization', () => {
     const dirMutated = makeRoot('case');
     enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
 
-    expect(dropCount).toBe(280);
+    expect(dropCount).toBe(80);
     let droppedForMutated = 0;
     const seedForMutated = loaded.filter((e) => {
       if (e.tenantId === tenantBId && droppedForMutated < dropCount) {
@@ -265,7 +253,7 @@ describe('(h) scale characterization', () => {
       }
       return true;
     });
-    seedRows(dirMutated, seedForMutated);
+    writeRowsOnly(dirMutated, seedForMutated);
 
     await consolidate(dirMutated, { now: NOW });
 

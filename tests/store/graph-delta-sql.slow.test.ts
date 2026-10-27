@@ -266,7 +266,7 @@ describe('graphDelta on hippo.db', () => {
       'updateEntity',
     ]);
     expect(kept).toBeGreaterThan(0);
-  }, 300_000);
+  });
 });
 
 /** `n` policies and a decision naming each of the first tenth, so the graph holds entities and references edges. */
@@ -286,30 +286,27 @@ function seedPolicies(root: string, n: number): void {
 }
 
 describe('graphDelta reads', () => {
-  it.each([10, 1200])(
-    'hands back no row for a stored graph of %i policies and one row for a rename',
-    async (n) => {
-      const root = makeStore('graph-delta-rows').root;
-      seedPolicies(root, n);
-      const store = sqliteStore(root);
-      await extractGraph(store, T);
-      const desired = deriveGraph(await loadGraphSources(objectsAt(root), T));
-      expect(desired.relations.length).toBeGreaterThan(0);
+  // graphDelta's SQL has no LIMIT or page, so twelve times the policies is as good a size check as 120 times.
+  it.each([10, 120])('hands back no row for a stored graph of %i policies and one row for a rename', async (n) => {
+    const root = makeStore('graph-delta-rows').root;
+    seedPolicies(root, n);
+    const store = sqliteStore(root);
+    await extractGraph(store, T);
+    const desired = deriveGraph(await loadGraphSources(objectsAt(root), T));
+    expect(desired.relations.length).toBeGreaterThan(0);
 
-      const steady = await recordStatementsAsync(() => store.graphReads.graphDelta(T, desired));
-      expect(steady.result).toEqual([]);
-      expect(countMatching(steady.statements, DELTA_READ)).toBe(2);
-      expect(peakRowsRead(steady.reads, DELTA_READ)).toBe(0);
+    const steady = await recordStatementsAsync(() => store.graphReads.graphDelta(T, desired));
+    expect(steady.result).toEqual([]);
+    expect(countMatching(steady.statements, DELTA_READ)).toBe(2);
+    expect(peakRowsRead(steady.reads, DELTA_READ)).toBe(0);
 
-      withDb(root, (db) =>
-        db.prepare(`UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`).run(),
-      );
-      const renamed = deriveGraph(await loadGraphSources(objectsAt(root), T));
-      const one = await recordStatementsAsync(() => store.graphReads.graphDelta(T, renamed));
-      expect(one.result.map((op) => op.op)).toEqual(['updateEntity']);
-      expect(countMatching(one.statements, DELTA_READ)).toBe(2);
-      expect(peakRowsRead(one.reads, DELTA_READ)).toBe(1);
-    },
-    300_000,
-  );
+    withDb(root, (db) =>
+      db.prepare(`UPDATE policies SET policy_name = 'Renamed' WHERE id = (SELECT max(id) FROM policies)`).run(),
+    );
+    const renamed = deriveGraph(await loadGraphSources(objectsAt(root), T));
+    const one = await recordStatementsAsync(() => store.graphReads.graphDelta(T, renamed));
+    expect(one.result.map((op) => op.op)).toEqual(['updateEntity']);
+    expect(countMatching(one.statements, DELTA_READ)).toBe(2);
+    expect(peakRowsRead(one.reads, DELTA_READ)).toBe(1);
+  });
 });
