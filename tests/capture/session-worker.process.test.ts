@@ -1,24 +1,26 @@
 // One session-end worker per session: a busy session queues the request for the running worker, and turn capture resumes from its cursor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import nodeFs from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import {
   loadTurnPosition,
+  pruneSessionFiles,
   runSessionWorker,
   saveTurnPosition,
   turnPosition,
   turnsAfter,
   type WorkerMode,
 } from '../../src/surface/capture/session-worker.js';
+import type { StatFn } from '../../src/host/file-lock.js';
 import type { SessionTurn } from '../../src/surface/capture/transcript.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;
 let sessions: string;
+/** The sessions folder's files, leaving out the lock file a finished worker keeps for the next take. */
+const left = (): string[] => fs.readdirSync(sessions).filter((n) => !n.endsWith('.lock.db'));
 const file = (suffix: string): string => path.join(sessions, `${ID}${suffix}`);
 
 beforeEach(() => {
@@ -31,14 +33,20 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A pid that named a process a moment ago and names none now. */
-function deadPid(): number {
-  const r = spawnSync(process.execPath, ['-e', '']);
-  // The OS picks the pid, so only its sign is fixed; status 0 says the process ran and has exited.
-  expect(r.status).toBe(0);
-  expect(r.pid).toBeGreaterThan(0);
-  return r.pid!;
+const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
+
+/** A child process that holds the lock file until it is killed. */
+async function holdInChild(lock: string): Promise<ChildProcess> {
+  const child = spawn(process.execPath, [HOLDER, lock], { stdio: ['ignore', 'pipe', 'ignore'] });
+  await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
+  return child;
 }
+
+const kill = (child: ChildProcess): Promise<void> =>
+  new Promise((resolve) => {
+    child.once('close', () => resolve());
+    child.kill('SIGKILL');
+  });
 
 interface Recorder {
   readonly runs: WorkerMode[];
@@ -60,51 +68,78 @@ describe('runSessionWorker', () => {
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('queues the request for a live holder and returns without running it; a full close outranks a queued turn', async () => {
-    const lock = `${process.ppid}:${Date.now()}`;
-    fs.writeFileSync(file('.lock'), lock);
-    const { runs, work } = recorder();
-    await runSessionWorker(ID, 'turn', work);
-    expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
-    await runSessionWorker(ID, 'full', work);
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual([]);
-    expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('full');
-    expect(fs.readFileSync(file('.lock'), 'utf8')).toBe(lock);
+    const holder = await holdInChild(file('.lock.db'));
+    try {
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work);
+      expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
+      await runSessionWorker(ID, 'full', work);
+      await runSessionWorker(ID, 'turn', work);
+      expect(runs).toEqual([]);
+      expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('full');
+      expect(fs.existsSync(file('.lock.db'))).toBe(true);
+    } finally {
+      await kill(holder);
+    }
   });
 
-  it("takes over a dead holder's lock and runs the strongest queued request", async () => {
-    fs.writeFileSync(file('.lock'), `${deadPid()}:${Date.now()}`);
+  it("runs the strongest queued request once a killed holder's lock file is all that is left", async () => {
+    await kill(await holdInChild(file('.lock.db')));
     fs.writeFileSync(file('.queued'), 'full');
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['full']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
-  it('takes over a lock older than 15 minutes even when its pid names a live process, as Windows reuses pids', async () => {
-    fs.writeFileSync(file('.lock'), `${process.ppid}:${Date.now() - 16 * 60 * 1000}`);
+  it('takes an empty lock file, which no live process holds', async () => {
+    fs.writeFileSync(file('.lock.db'), '');
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
-  it('respects an empty lock, which a taker has made but not yet written, until it is 15 minutes old', async () => {
-    fs.writeFileSync(file('.lock'), '');
-    const { runs, work } = recorder();
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual([]);
-    expect(fs.readFileSync(file('.lock'), 'utf8')).toBe('');
+  it('keeps serving after five rounds that ran work: only rounds that took nothing count', async () => {
+    // The first work call leaves a request that cannot be taken (a folder in the rename target's place).
+    const blocked = file(`.queued.${process.pid}`);
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await runSessionWorker(ID, 'turn', async () => {
+        fs.mkdirSync(blocked);
+        fs.writeFileSync(path.join(blocked, 'keep'), '');
+        fs.writeFileSync(file('.queued'), 'turn');
+      });
+      const lines = write.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('cannot take the queued request'));
+      // One failed take in the round that ran work, then five idle rounds.
+      expect(lines).toHaveLength(6);
+    } finally {
+      write.mockRestore();
+    }
+  });
 
-    const old = new Date(Date.now() - 16 * 60 * 1000);
-    fs.utimesSync(file('.lock'), old, old);
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+  it('looks at the queue again after a release even when it ran nothing, and stops after five rounds', async () => {
+    // A folder where takeQueued renames the request to makes every take fail: ran stays false and the request stays queued.
+    fs.mkdirSync(file(`.queued.${process.pid}`));
+    fs.writeFileSync(path.join(file(`.queued.${process.pid}`), 'keep'), '');
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work);
+      expect(runs).toEqual([]);
+      const lines = write.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('cannot take the queued request'));
+      expect(lines).toHaveLength(5);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it('lets only one of two acquirers in one process run at a time: the second queues and its run waits for the first', async () => {
@@ -126,7 +161,7 @@ describe('runSessionWorker', () => {
     release();
     await first;
     expect(events).toEqual(['start 1 turn', 'second returned', 'end 1', 'start 2 turn', 'end 2']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('runs a request that another reply queued while the work ran, before it lets go', async () => {
@@ -137,14 +172,14 @@ describe('runSessionWorker', () => {
       runs.push(mode);
     });
     expect(runs).toEqual(['turn', 'turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it.each([null, '../escape', 'a b'])('runs unlocked, writing nothing, for the session id %s', async (id) => {
     const { runs, work } = recorder();
     await runSessionWorker(id, 'full', work);
     expect(runs).toEqual(['full']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('refuses to run unlocked when the request cannot be queued', async () => {
@@ -155,31 +190,20 @@ describe('runSessionWorker', () => {
     expect(runs).toEqual([]);
   });
 
-  it('runs unlocked and warns once per lock path when the lock cannot be created', async () => {
-    const real = nodeFs.writeFileSync;
-    const denyLock = (
-      p: fs.PathOrFileDescriptor,
-      data: string | NodeJS.ArrayBufferView,
-      options?: fs.WriteFileOptions,
-    ): void => {
-      if (String(p).endsWith('.lock')) throw Object.assign(new Error('denied'), { code: 'EACCES' });
-      real(p, data, options);
-    };
-    const spy = vi.spyOn(nodeFs, 'writeFileSync').mockImplementation(denyLock);
-    syncBuiltinESMExports();
+  it('runs unlocked and warns once per lock path when the lock cannot be made', async () => {
+    // A folder in the lock's place cannot be opened as a lock database.
+    fs.mkdirSync(file('.lock.db'));
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const { runs, work } = recorder();
       await runSessionWorker(ID, 'turn', work);
       await runSessionWorker(ID, 'turn', work);
       expect(runs).toEqual(['turn', 'turn']);
-      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be created or cleared'));
+      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be taken'));
       expect(lines).toHaveLength(1);
-      expect(lines[0]).toContain(`${ID}.lock`);
+      expect(lines[0]).toContain(`${ID}.lock.db`);
     } finally {
       write.mockRestore();
-      spy.mockRestore();
-      syncBuiltinESMExports();
     }
   });
 
@@ -189,7 +213,7 @@ describe('runSessionWorker', () => {
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
-    expect(fs.existsSync(file('.lock'))).toBe(false);
+    expect(left()).toEqual([]);
   });
 });
 
@@ -257,5 +281,90 @@ describe('the progress cursor', () => {
     const log: string[] = [];
     expect(() => saveTurnPosition(ID, transcript, turns, (m) => log.push(m))).not.toThrow();
     expect(log).toEqual([expect.stringMatching(/^cursor not saved: /)]);
+  });
+});
+
+describe('pruning the sessions folder', () => {
+  const DAY = 86_400_000;
+  const age = (name: string, days: number): void => {
+    fs.writeFileSync(path.join(sessions, name), 'x');
+    const then = new Date(Date.now() - days * DAY);
+    fs.utimesSync(path.join(sessions, name), then, then);
+  };
+
+  it('removes an old cursor, an old cursor temp file and a day-old text lock', () => {
+    age('a.cursor.json', 31);
+    age('a.cursor.json.123.tmp', 31);
+    age('a.lock', 2);
+    expect(pruneSessionFiles(Date.now())).toBe(3);
+    expect(left()).toEqual([]);
+  });
+
+  it('keeps fresh files, the lock database of any session and every queued request', () => {
+    const keep = [
+      'b.cursor.json',
+      'b.cursor.json.123.tmp',
+      'b.lock',
+      'c.lock.db',
+      'c.queued',
+      'c.queued.99',
+      'd.lock.db',
+      'd.cursor.json',
+    ];
+    age('b.cursor.json', 29);
+    age('b.cursor.json.123.tmp', 1);
+    age('b.lock', 0);
+    age('c.lock.db', 400);
+    age('d.lock.db', 1);
+    age('d.cursor.json', 1);
+    age('c.queued', 400);
+    age('c.queued.99', 400);
+    expect(pruneSessionFiles(Date.now())).toBe(0);
+    expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
+  });
+
+  it('removes the lock file of an idle session, and keeps a held or queued one; a young file waits', async () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('idle.lock.db'), '');
+    fs.writeFileSync(at('queued.lock.db'), '');
+    fs.writeFileSync(at('queued.queued'), 'turn');
+    const holder = await holdInChild(at('held.lock.db'));
+    try {
+      expect(pruneSessionFiles(Date.now())).toBe(0);
+      expect(fs.existsSync(at('idle.lock.db'))).toBe(true);
+      // ctime cannot be set, so the clock moves past the age instead.
+      expect(pruneSessionFiles(Date.now() + 31 * DAY)).toBe(1);
+      expect(fs.readdirSync(sessions).sort()).toEqual(['held.lock.db', 'queued.lock.db', 'queued.queued']);
+    } finally {
+      await kill(holder);
+    }
+  });
+
+  it('keeps the lock file of a session whose cursor is young', () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('live.lock.db'), '');
+    fs.writeFileSync(at('live.cursor.json'), '{}');
+    const cursorAt = new Date(Date.now() + 30 * DAY);
+    fs.utimesSync(at('live.cursor.json'), cursorAt, cursorAt);
+    expect(pruneSessionFiles(Date.now() + 31 * DAY)).toBe(0);
+    expect(fs.existsSync(at('live.lock.db'))).toBe(true);
+  });
+
+  it('keeps the lock file when a request is queued after the idle check, during the take', () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('late.lock.db'), '');
+    let calls = 0;
+    const stat: StatFn = (p) => {
+      if (++calls === 2) fs.writeFileSync(at('late.queued'), 'turn');
+      const s = fs.statSync(p, { bigint: true });
+      return { dev: s.dev, ino: s.ino, ctimeNs: s.ctimeNs };
+    };
+    expect(pruneSessionFiles(Date.now() + 31 * DAY, stat)).toBe(0);
+    expect(fs.existsSync(at('late.lock.db'))).toBe(true);
+  });
+
+  it('does nothing, and does not throw, when the folder is missing', () => {
+    fs.rmSync(sessions, { recursive: true });
+    expect(pruneSessionFiles(Date.now())).toBe(0);
   });
 });

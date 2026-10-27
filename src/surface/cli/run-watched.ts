@@ -1,5 +1,7 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { killTree } from '../../host/kill-tree.js';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */
@@ -24,8 +26,9 @@ export class RunWatchedTimeoutError extends Error {
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+  kill: (pid: number) => Promise<void> = killTree,
 ): Promise<{ exitCode: number; stderr: string }> {
-  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
+  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs, kill);
 }
 
 const WATCHED_SPAWN_OPTIONS: SpawnOptions = {
@@ -36,6 +39,7 @@ const WATCHED_SPAWN_OPTIONS: SpawnOptions = {
 function watchChild(
   child: ChildProcess,
   deadlineMs: number,
+  kill: (pid: number) => Promise<void>,
 ): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     let tail = Buffer.alloc(0);
@@ -46,11 +50,17 @@ function watchChild(
       process.stderr.write(chunk);
     });
 
-    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one), so on Windows
-    // a grandchild can outlive it; a process-tree kill is the upgrade path.
+    // Rejects first so the caller sees the timeout at once; the tree kill is not awaited.
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
+      // Node reaped an exited child, so its pid may now name another process.
+      if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+      kill(child.pid).catch((err) => {
+        log.warn(
+          `run-watched: could not kill the tree of ${child.pid}: ${errorMessage(err)}`,
+          errorFields(err),
+        );
+      });
     }, deadlineMs);
 
     child.on('close', (code: number | null) => {

@@ -13,7 +13,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { runDoctor, formatDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
-import type { SpoolFs } from '../../src/infra/compaction-spool.js';
+import type { SpoolFs } from '../../src/infra/spool-files.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
@@ -222,7 +222,7 @@ describe('hippo doctor', () => {
       spoolAt(`${stamp(ago(30))}-ccccccc2.a0.json.tmp`, ago(2));
       spoolAt(`${stamp(ago(30))}-ddddddd1.failed.bad`, ago(2));
       spoolAt('s4-1.json.bad', ago(2));
-      spoolAt('replay.lock', ago(20));
+      spoolAt('replay.lock.db', ago(20));
 
       const check = await compactions(cwd);
       expect(check.status).toBe('warn');
