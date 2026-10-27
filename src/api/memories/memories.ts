@@ -3,8 +3,8 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
-import type { HippoStore } from '../../base/ports/store.js';
-import { requireHostAdmin, type Context } from '../types.js';
+import type { RequiredStore } from '../../base/ports/store.js';
+import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 
@@ -40,14 +40,14 @@ const LIST_PAGE_SIZE = 1000;
 
 /** The tenant's memory rows, oldest first, `pageSize` per query, so a pass can hold one page. */
 export async function* memoryPages(
-  store: HippoStore,
+  store: RequiredStore,
   tenant: TenantId,
   pageSize: number = LIST_PAGE_SIZE,
 ): AsyncGenerator<MemoryEntry[]> {
   const limit = Math.max(1, Math.trunc(pageSize));
   let after: EntryCursor | undefined;
   do {
-    const page = await store.reports.entriesWhere({ tenantId: tenant }, { limit, after });
+    const page = await store.entriesWhere({ tenantId: tenant }, { limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);
@@ -68,7 +68,7 @@ export async function memoryList(
 }
 
 /** How many memory rows the whole store holds, counted in SQL. */
-export async function memoryCountAll(ctx: Context): Promise<number> {
+export async function memoryCountAll(ctx: ContextWith<'reports'>): Promise<number> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return ctx.store.reports.countEntries();
 }

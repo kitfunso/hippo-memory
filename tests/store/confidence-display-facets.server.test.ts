@@ -21,6 +21,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -307,7 +308,7 @@ describe('confidence facets', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      {
+      mcpContext({
         hippoRoot,
         tenantId: 'default',
         actor: 'test',
@@ -316,7 +317,7 @@ describe('confidence facets', () => {
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
         infra: testInfra(),
-      },
+      }),
     );
     expect(JSON.stringify(res)).toContain('[stale]');
   });

@@ -25,13 +25,16 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
     // failure under test.
     const badRoot: string = JSON.parse('42');
+    const store = sqliteStore(badRoot);
+    const config = { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } };
+    const ledger = { ledger: store.ledger, folderFiles: store.folderFiles, config };
     const ctx = {
       hippoRoot: badRoot,
-      store: sqliteStore(badRoot),
+      store,
       tenantId: 'default',
       actor: adminActor('cli'),
-      reach: { hasLocal: true, isGlobal: false, shared: false },
-      config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } },
+      reach: { hasLocal: true, isGlobal: false, shared: false, ledger },
+      config,
       infra: testInfra(),
     };
     expect(

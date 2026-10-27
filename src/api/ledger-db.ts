@@ -1,18 +1,9 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share
 // it.
-import type { HippoConfig } from '../base/config/config.js';
-import type { FolderFiles, HippoStore, Ledger, LedgerTurn } from '../base/ports/store.js';
+import type { LedgerTurn } from '../base/ports/store.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
-import type { Context, GlobalInReach } from './types.js';
-
-/** A store a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
-export interface LedgerHome {
-  readonly ledger: Ledger;
-  /** Where the store sits, which its delivery rows name by hash. */
-  readonly folderFiles: FolderFiles;
-  readonly config: HippoConfig;
-}
+import type { Context, GlobalInReach, LedgerHome } from './types.js';
 
 /** Where a call's ledger can sit: its own store, else the operator's global one; a shared store
  * has no `global`. */
@@ -21,20 +12,18 @@ export interface LedgerReach {
   readonly global?: GlobalInReach;
 }
 
-function homeOf(store: HippoStore, config: HippoConfig): LedgerHome | undefined {
-  const { ledger, folderFiles } = store;
-  return ledger === undefined || folderFiles === undefined
-    ? undefined
-    : { ledger, folderFiles, config };
+function homeOf(global: GlobalInReach): LedgerHome {
+  return {
+    ledger: global.store.ledger,
+    folderFiles: global.store.folderFiles,
+    config: global.config,
+  };
 }
 
 /** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller
  * has a store. */
-export function ledgerReachOf(
-  ctx: Pick<Context, 'reach' | 'store' | 'config'>,
-  shared?: boolean,
-): LedgerReach {
-  const local = ctx.reach?.hasLocal === true ? homeOf(ctx.store, ctx.config) : undefined;
+export function ledgerReachOf(ctx: Pick<Context, 'reach'>, shared?: boolean): LedgerReach {
+  const local = ctx.reach?.hasLocal === true ? ctx.reach.ledger : undefined;
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
 
@@ -43,7 +32,7 @@ export function ledgerReachOf(
 export function ledgerHome(reach: LedgerReach): LedgerHome | null {
   if (reach.local !== undefined) return reach.local;
   const { global } = reach;
-  return (global && homeOf(global.store, global.config)) ?? null;
+  return global === undefined ? null : homeOf(global);
 }
 
 /** Books one row in ledgerHome's store, best-effort. */

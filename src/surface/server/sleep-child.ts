@@ -43,12 +43,13 @@ function sleepJob(
 ): Promise<SleepResult> {
   const storeAt = storeIn(session);
   const store = storeAt(hippoRoot);
+  const config = loadConfig(hippoRoot);
   const reach = contextReach(
     defaultReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     resolveEmbeddingProvider,
+    { ledger: store.ledger, folderFiles: store.folderFiles, config },
   );
-  const config = loadConfig(hippoRoot);
   return sleepWholeStore(
     { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() },
     job.opts,

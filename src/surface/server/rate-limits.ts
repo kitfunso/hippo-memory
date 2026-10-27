@@ -1,7 +1,7 @@
 import { envCallerRps, envV1Rps } from '../../base/util/env.js';
 import { log } from '../../base/util/log.js';
 import { MINUTE_MS } from '../../base/util/time.js';
-import { LIMITER_MAX_KEYS } from './auth.js';
+import { LIMITER_MAX_KEYS } from './rate-limit.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { RateLimitSpec, ServeOptions } from './types.js';
 

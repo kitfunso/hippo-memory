@@ -183,10 +183,11 @@ describe('reports group', () => {
     const status = await served.memoryStatus(T, new Date(), 0.1);
     expect(status).toMatchObject({ total: 2, openConflicts: 1 });
     expect((await sync.memoryStatus(T, new Date(), 0.1)).total).toBe(2);
-    const first = await served.entriesWhere({ tenantId: T }, { limit: 1 });
+    const whole = sqliteStore(r);
+    const first = await whole.entriesWhere({ tenantId: T }, { limit: 1 });
     expect(first.entries).toHaveLength(1);
     expect(first.next).not.toBeNull();
-    expect((await served.entriesWhere({ tenantId: ALL_TENANTS }, { limit: 10 })).entries).toHaveLength(2);
+    expect((await whole.entriesWhere({ tenantId: ALL_TENANTS }, { limit: 10 })).entries).toHaveLength(2);
     expect(await served.countEntries()).toBe(2);
     expect((await served.tokenUse(T, '2020-01-01T00:00:00.000Z')).totalTokens).toBe(0);
     expect(await served.failures(T, '2020-01-01T00:00:00.000Z')).toMatchObject({

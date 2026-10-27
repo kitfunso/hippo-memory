@@ -15,6 +15,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext, type McpCallerFields } from '../_helpers/mcp-context.js';
 
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 
@@ -42,11 +43,11 @@ function contextText(res: McpResponse | null): string {
 /** What an untyped transport (a .mjs script, an older add-on) sends: the compiler cannot stop it omitting the role. */
 function roleless(hippoRoot: string): McpContext {
   // SAFETY: deliberately drops the required role to prove the runtime fails closed for callers the type cannot reach.
-  return {
+  return mcpContext({
     ...JSON.parse(JSON.stringify({ hippoRoot, tenantId: 'default', actor: 'http:untyped' })),
     store: sqliteStore(hippoRoot),
     config: loadConfig(hippoRoot),
-  } as McpContext;
+  } as McpCallerFields);
 }
 
 function callTool(name: string, args: Record<string, number>, ctx: McpContext) {
@@ -66,27 +67,31 @@ describe('mcpActor', () => {
 
   it('gives an admin context host admin only when the transport says so', () => {
     expect(
-      mcpActor({
-        hippoRoot: '/unused',
-        tenantId: 't',
-        actor: 'k',
-        role: 'admin',
-        store: sqliteStore('/unused'),
-        config: loadConfig('/unused'),
-        infra: testInfra(),
-      }).hostAdmin,
+      mcpActor(
+        mcpContext({
+          hippoRoot: '/unused',
+          tenantId: 't',
+          actor: 'k',
+          role: 'admin',
+          store: sqliteStore('/unused'),
+          config: loadConfig('/unused'),
+          infra: testInfra(),
+        }),
+      ).hostAdmin,
     ).toBeUndefined();
     expect(
-      mcpActor({
-        hippoRoot: '/unused',
-        tenantId: 't',
-        actor: 'k',
-        role: 'admin',
-        hostAdmin: true,
-        store: sqliteStore('/unused'),
-        config: loadConfig('/unused'),
-        infra: testInfra(),
-      }).hostAdmin,
+      mcpActor(
+        mcpContext({
+          hippoRoot: '/unused',
+          tenantId: 't',
+          actor: 'k',
+          role: 'admin',
+          hostAdmin: true,
+          store: sqliteStore('/unused'),
+          config: loadConfig('/unused'),
+          infra: testInfra(),
+        }),
+      ).hostAdmin,
     ).toBe(true);
   });
 });
@@ -117,7 +122,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
 
   it("refuses a remote member and a tenant admin, whose repo is not the server's", async () => {
     for (const role of ['member', 'admin'] as const) {
-      const ctx: McpContext = {
+      const ctx: McpContext = mcpContext({
         hippoRoot,
         tenantId: 'default',
         actor: `api_key:${role}`,
@@ -125,7 +130,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
         infra: testInfra(),
-      };
+      });
       await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow('hippo_learn requires a host admin');
     }
     expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
@@ -133,7 +138,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
 
   it('learns for stdio, the local operator, as before', async () => {
     const store = sqliteStore(hippoRoot);
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot,
       tenantId: 'default',
       actor: 'mcp',
@@ -143,7 +148,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
       store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
-    };
+    });
     const text = await runLearnTool({
       args: { days: 3650 },
       ctx,
@@ -183,7 +188,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
       await callTool(
         'hippo_context',
         {},
-        {
+        mcpContext({
           hippoRoot,
           tenantId: 'default',
           actor: 'api_key:m',
@@ -191,7 +196,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
           store: sqliteStore(hippoRoot),
           config: loadConfig(hippoRoot),
           infra: testInfra(),
-        },
+        }),
       ),
     );
     expect(text).toContain('quarterly invoices');
@@ -203,7 +208,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
       await callTool(
         'hippo_context',
         {},
-        {
+        mcpContext({
           hippoRoot,
           tenantId: 'default',
           actor: 'localhost:cli',
@@ -212,7 +217,7 @@ describe('hippo_context reads the server git state only for stdio or a host admi
           store: sqliteStore(hippoRoot),
           config: loadConfig(hippoRoot),
           infra: testInfra(),
-        },
+        }),
       ),
     );
     expect(text).toContain('zebra migration');

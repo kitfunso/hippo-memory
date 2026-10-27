@@ -3,6 +3,7 @@
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
+import { SESSION_OPEN } from '../../db/request-stores.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { errorFields, log } from '../../base/util/log.js';
@@ -66,9 +67,9 @@ class WorkerStores extends RequestStores {
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
 
-  // The one path every open of the scope takes: `get` is a wrapper over it.
-  override getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
-    const opened = super.getWithFacts(hippoRoot, opts);
+  // The one path every open of the scope takes.
+  override [SESSION_OPEN](hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
+    const opened = super[SESSION_OPEN](hippoRoot, opts);
     const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
@@ -137,7 +138,7 @@ async function answer(ops: Ops, { stores }: Thread, hippoRoot: string, job: Job)
   try {
     const value = await runWithRequestId(job.requestId, () =>
       job.op === STORE_SETUP_OP
-        ? initStore(hippoRoot, { grant: grantFor({ session: stores }) })
+        ? initStore(hippoRoot, { session: stores })
         : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
     );
     return {
@@ -193,16 +194,16 @@ function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with
  * no handle on the store's files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
-  const graphs = init.pinned
-    ? new VectorGraphs(init.hippoRoot, {
-        threshold: init.vectorGraphThreshold,
-        maxVectors: init.vectorGraphMaxVectors,
-      })
-    : undefined;
   // A thread is its own composition root: its runtime holds its mirror writes and closes its
   // connection at stop.
   const runtime = new StoreRuntime();
   const thread: Thread = { runtime, stores: new WorkerStores(init, runtime) };
+  const graphs = init.pinned
+    ? new VectorGraphs(init.hippoRoot, grantFor({ session: thread.stores }), {
+        threshold: init.vectorGraphThreshold,
+        maxVectors: init.vectorGraphMaxVectors,
+      })
+    : undefined;
   const ops = workerOps(init, graphs, thread.stores);
   // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and
   // it waits for that job's reply.

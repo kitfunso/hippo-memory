@@ -6,6 +6,7 @@ import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
+import type { CliStore } from '../../src/surface/cli/api-context.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
@@ -23,7 +24,7 @@ import { removeDir } from '../_helpers/remove-dir.js';
 type ToolArgs = Record<string, string | number | boolean>;
 
 // One host per store, as one stdio loop serves one client: an outcome lands on what that host's recall showed.
-let host: McpHost;
+let host: McpHost<CliStore>;
 
 let templates: Templates;
 

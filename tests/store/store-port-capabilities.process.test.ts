@@ -28,6 +28,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(undoAll);
 
@@ -179,7 +180,7 @@ describe('MCP hippo_remember', () => {
         method: 'tools/call',
         params: { name: 'hippo_remember', arguments: { text: 'the deploy window opens at nine', tag: 'ops' } },
       },
-      {
+      mcpContext({
         hippoRoot: root,
         tenantId: 'default',
         actor: 'mcp',
@@ -188,7 +189,7 @@ describe('MCP hippo_remember', () => {
         store,
         config: loadConfig(root),
         infra: testInfra(),
-      },
+      }),
     );
     // SAFETY: a tools/call reply carries result.content[0].text.
     const text = (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;

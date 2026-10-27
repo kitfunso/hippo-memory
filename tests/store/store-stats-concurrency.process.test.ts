@@ -24,7 +24,7 @@ function workerScript(hippoRoot: string, field: string, iterations: number): str
     import { onHandle, openStore, storeFilesOf } from ${JSON.stringify(HANDLES_URL)};
     const hippoRoot = ${JSON.stringify(hippoRoot)};
     for (let i = 0; i < ${iterations}; i++) {
-      onHandle(hippoRoot, (db) => updateStats(db, storeFilesOf(hippoRoot), { ${field}: 1 }), openStore);
+      onHandle(hippoRoot, (db) => updateStats(db, storeFilesOf(hippoRoot), { ${field}: 1 }), (root) => openStore(root, storeFilesOf(root).opens));
     }
   `;
 }

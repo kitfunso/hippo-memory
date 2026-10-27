@@ -7,7 +7,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
-import type { HippoStore } from '../../src/base/ports/store.js';
+import type { StoreGroups } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -27,14 +27,14 @@ describe('embedMemoryDetached', () => {
       unhandled.push(reason);
     };
     process.on('unhandledRejection', onUnhandled);
-    // `store` is read after the provider answers, so a target whose store cannot be reached rejects embedMemory itself.
+    // `groups` is read after the provider answers, so a target whose store cannot be reached rejects embedMemory itself.
     const target: EmbedTarget = {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),
       strength: PRODUCTION_STRENGTH,
       clock: evalNow,
-      get store(): HippoStore {
+      get groups(): StoreGroups {
         throw new Error('store is unreachable');
       },
     };

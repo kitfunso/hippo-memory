@@ -4,7 +4,7 @@ import { calculateStrength, type StrengthModel } from '../../base/memory/strengt
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { RequiredStore } from '../../base/ports/store.js';
 import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 import { memoryGet } from '../memories/memories.js';
@@ -24,7 +24,7 @@ interface OpenConflictsOfOptions {
 }
 
 async function openConflictsOf(
-  store: Pick<HippoStore, 'entriesByIds'>,
+  store: Pick<RequiredStore, 'entriesByIds'>,
   { reads, tenantId, entry, at }: OpenConflictsOfOptions,
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
@@ -64,7 +64,7 @@ interface BuildMemoryDetailOptions {
 
 /** Full detail read fresh from the store, so the drawer is current inside the coalescing window. */
 async function buildMemoryDetail(
-  store: Pick<HippoStore, 'entriesByIds'>,
+  store: Pick<RequiredStore, 'entriesByIds'>,
   { reads, tenantId, entry, options }: BuildMemoryDetailOptions,
 ): Promise<MemoryDetail> {
   const { snapshotId, nowMs, strength } = options;

@@ -9,6 +9,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -42,7 +43,7 @@ describe('MCP tool argument validation', () => {
   async function call(name: string, args: Wire): Promise<ToolReply> {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp',
@@ -51,7 +52,7 @@ describe('MCP tool argument validation', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     return reply(res);
   }

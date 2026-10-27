@@ -4,7 +4,8 @@ import type { ConfidenceLevel, Layer, MemoryKind } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
 import type { FailureSummary } from './rejections.js';
 import type { TokenSummary } from './ledger.js';
-import type { EntryCursor, EntryPage } from './types.js';
+import type { EntryCursor } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 /** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {
@@ -119,10 +120,6 @@ export interface Reports {
     now: Date,
     atRiskBelow: number,
   ): Promise<StrengthTallies & { openConflicts: number }>;
-  /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host
-   * admin, the api checks). One read for each walk of a filtered set of rows, so no group keeps
-   * a read per caller. */
-  entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
   /** Every row in the store, no tenant: host admin. */
   countEntries(): Promise<number>;
   /** The store's lifetime counters and its recent sleep runs: host admin. */
@@ -139,3 +136,16 @@ export interface Reports {
    * `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }
+
+/** What each Reports method does to the store; every adapter honours it. */
+export const REPORTS_EFFECTS = {
+  tokenUse: 'read',
+  failures: 'read',
+  memoryStatus: 'read',
+  countEntries: 'read',
+  stats: 'read',
+  statusCounts: 'read',
+  correctionLinks: 'read',
+  rawProvenance: 'read',
+  createdSinceLastSleep: 'read',
+} as const satisfies MethodEffects<Reports>;

@@ -3,6 +3,7 @@
 import type { HeldText } from './types.js';
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
+import type { MethodEffects } from './effects.js';
 import type { LogFields } from '../../util/log.js';
 
 // `hippo capture`'s reads and writes: each row is mirrored beside the folder, and the caller embeds
@@ -24,6 +25,12 @@ export interface Captures {
     opts?: TextsHoldingOptions,
   ): Promise<HeldText[]>;
 }
+
+/** What each Captures method does to the store; every adapter honours it. */
+export const CAPTURES_EFFECTS = {
+  write: 'write',
+  textsHolding: 'read',
+} as const satisfies MethodEffects<Captures>;
 
 /** Which rows a `textsHolding` read keeps beyond the tenant. */
 export interface TextsHoldingOptions {
@@ -84,6 +91,18 @@ export interface CompactionHooks {
     opts: ItemsOptions,
   ): Promise<FillOutcome>;
 }
+
+/** What each CompactionHooks method does to the store; every adapter honours it. */
+export const COMPACTION_HOOKS_EFFECTS = {
+  start: 'write',
+  markSnapshotSaved: 'write',
+  save: 'write',
+  saveStalled: 'write',
+  recordSpooled: 'write',
+  saveRecordItems: 'write',
+  openRecords: 'read',
+  fill: 'write',
+} as const satisfies MethodEffects<CompactionHooks>;
 
 /** One PostCompact summary to save; its items start on `baseHalfLifeDays`, the config default. */
 export interface CompactionSave {
@@ -197,6 +216,13 @@ export interface Compactions {
    * write one text; a request id another session holds rejects with ConflictError. */
   saveCallerItems(tenantId: string, req: CallerItems): Promise<CallerItemsSaved>;
 }
+
+/** What each Compactions method does to the store; every adapter honours it. */
+export const COMPACTIONS_EFFECTS = {
+  start: 'write',
+  markSnapshotSaved: 'write',
+  saveCallerItems: 'write',
+} as const satisfies MethodEffects<Compactions>;
 
 export interface CallerItemsSaved {
   /** Memories written; a retry of a finished request answers with the first count. */

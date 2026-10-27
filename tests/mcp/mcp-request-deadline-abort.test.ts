@@ -6,13 +6,14 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 let root: string;
 let ctx: McpContext;
 
 beforeEach(() => {
   root = makeRoot('mcp-abort');
-  ctx = {
+  ctx = mcpContext({
     hippoRoot: root,
     tenantId: 'default',
     actor: 'test',
@@ -20,7 +21,7 @@ beforeEach(() => {
     store: sqliteStore(root),
     config: loadConfig(root),
     infra: testInfra(),
-  };
+  });
 });
 
 const REMEMBER = {

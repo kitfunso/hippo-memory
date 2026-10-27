@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAuth } from '../../src/surface/cli/auth.js';
 import { handleGoal } from '../../src/surface/cli/goals.js';
 import * as api from '../../src/api/index.js';
-import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 const { sqliteStore, apiCtx } = sessionPerTest();
 
@@ -75,8 +78,8 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     mask(spare.keyId);
 
     // Prove both secrets first, so the revoke and the grant below must show on keys this process already trusts.
-    expect((await verifyApiKeyCached(acme.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
-    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
+    expect((await keys.verify(acme.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
+    expect((await keys.verify(spare.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
@@ -90,12 +93,12 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     await step('grant (unknown)', ['grant', 'hk_aaaaaaaaaaaaaaaaaaaaaaaa', 'unknown:legacy']);
     await step('grant (open scope)', ['grant', spare.keyId, 'team:eng']);
     await step('grant', ['grant', spare.keyId, 'unknown:legacy']);
-    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual(['unknown:legacy']);
+    expect((await keys.verify(spare.plaintext, sqliteStore(root)))?.scopes).toEqual(['unknown:legacy']);
     await step('grant --json (again)', ['grant', spare.keyId, 'unknown:legacy'], { json: true });
     await step('ungrant', ['ungrant', spare.keyId, 'unknown:legacy']);
     await step('ungrant --json (none held)', ['ungrant', spare.keyId, 'unknown:legacy'], { json: true });
     await step('revoke (other tenant)', ['revoke', acme.keyId]);
-    expect(await verifyApiKeyCached(acme.plaintext, sqliteStore(root))).toBeNull();
+    expect(await keys.verify(acme.plaintext, sqliteStore(root))).toBeNull();
     await step('revoke --json (again)', ['revoke', acme.keyId], { json: true });
     await step('grant (revoked)', ['grant', acme.keyId, 'unknown:legacy']);
     await step('revoke (own tenant)', ['revoke', home.keyId], { json: true });

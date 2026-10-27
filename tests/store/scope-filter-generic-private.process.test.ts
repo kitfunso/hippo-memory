@@ -30,6 +30,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
@@ -45,7 +46,7 @@ function callMcpTool(home: string, name: string, args: ScopeToolArgs) {
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    {
+    mcpContext({
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp',
@@ -54,7 +55,7 @@ function callMcpTool(home: string, name: string, args: ScopeToolArgs) {
       store: sqliteStore(home),
       config: loadConfig(home),
       infra: testInfra(),
-    },
+    }),
   );
 }
 

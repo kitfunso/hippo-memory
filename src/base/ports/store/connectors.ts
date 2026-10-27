@@ -1,5 +1,6 @@
 // The connector groups of the store port and the rows they read and write.
 import type { EntryWrite, RawArchive } from './entry-writes.js';
+import type { MethodEffects } from './effects.js';
 
 /** What a connector delivery reads and writes beside connectorWrites, one method family per
  * concept: the event log, delivery holds, tenant routing, dead letters, backfill cursors and the
@@ -49,6 +50,23 @@ export interface ConnectorEvents {
   /** False when the team had no mapping. */
   removeSlackWorkspace(teamId: string): Promise<boolean>;
 }
+
+/** What each ConnectorEvents method does to the store; every adapter honours it. */
+export const CONNECTOR_EVENTS_EFFECTS = {
+  eventRecord: 'read',
+  markEventSeen: 'write',
+  claimDelivery: 'write',
+  releaseDelivery: 'write',
+  route: 'read',
+  parkDeadLetter: 'write',
+  deadLetters: 'read',
+  markDeadLetterRetried: 'write',
+  cursor: 'read',
+  saveCursor: 'write',
+  slackWorkspaces: 'read',
+  registerSlackWorkspace: 'write',
+  removeSlackWorkspace: 'write',
+} as const satisfies MethodEffects<ConnectorEvents>;
 
 /** The source event a connector's write answers, by the source's own key. The store logs each
  * key once per connector, across every tenant. */
@@ -225,6 +243,12 @@ export interface ConnectorWrites {
    * archiveRaw's own. */
   archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
 }
+
+/** What each ConnectorWrites method does to the store; every adapter honours it. */
+export const CONNECTOR_WRITES_EFFECTS = {
+  writeConnectorEntry: 'write',
+  archiveConnectorEntry: 'write',
+} as const satisfies MethodEffects<ConnectorWrites>;
 
 /** An entry a connector brings in. `quarantine` is the review record of flagged content, whose
  * entry already carries its quarantine scope. */

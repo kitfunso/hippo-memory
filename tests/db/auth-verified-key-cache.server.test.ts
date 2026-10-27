@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached, VerifiedKeyCache } from '../../src/surface/server/api-key.js';
+import { KeyVerifier, VerifiedKeyCache } from '../../src/surface/server/api-key.js';
 import type { VerifiedApiKey } from '../../src/base/scope/api-key.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -13,6 +13,9 @@ import type { HippoStore } from '../../src/base/ports/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 let lookups = 0;
 
@@ -48,7 +51,7 @@ function onDb<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
 describe('verified API key cache', () => {
   let home: string;
   const verify = (plaintext: string, root: string = home): Promise<VerifiedApiKey | null> =>
-    verifyApiKeyCached(plaintext, countingLookups(sqliteStore(root)));
+    keys.verify(plaintext, countingLookups(sqliteStore(root)));
 
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
@@ -136,7 +139,7 @@ describe('verified API key cache', () => {
     const key = mint();
     const bounded: string[] = [];
     const check = (): Promise<VerifiedApiKey | null> =>
-      verifyApiKeyCached(key.plaintext, sqliteStore(home), (keyId, derive) => {
+      keys.verify(key.plaintext, sqliteStore(home), (keyId, derive) => {
         bounded.push(keyId);
         return derive();
       });
@@ -152,7 +155,7 @@ describe('verified API key cache', () => {
     const bounded: string[] = [];
     const boundedBy = async (token: string): Promise<string[]> => {
       const before = bounded.length;
-      await verifyApiKeyCached(token, sqliteStore(home), (keyId, derive) => {
+      await keys.verify(token, sqliteStore(home), (keyId, derive) => {
         bounded.push(keyId);
         return derive();
       });
@@ -170,12 +173,12 @@ describe('verified API key cache', () => {
     const key = mint();
     const before = scryptRuns();
     await expect(
-      verifyApiKeyCached(key.plaintext, sqliteStore(home), () => {
+      keys.verify(key.plaintext, sqliteStore(home), () => {
         throw new Error('gate shut');
       }),
     ).rejects.toThrow('gate shut');
     await expect(
-      verifyApiKeyCached(key.plaintext, sqliteStore(home), async () => {
+      keys.verify(key.plaintext, sqliteStore(home), async () => {
         throw new Error('queue full');
       }),
     ).rejects.toThrow('queue full');
@@ -239,7 +242,7 @@ describe('verified API key cache', () => {
         return record;
       },
     };
-    expect(await verifyApiKeyCached(key.plaintext, racing)).not.toBeNull();
+    expect(await keys.verify(key.plaintext, racing)).not.toBeNull();
     expect(await verify(key.plaintext)).toBeNull();
   });
 });

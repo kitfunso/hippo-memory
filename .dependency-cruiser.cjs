@@ -119,6 +119,13 @@ const storeReach = [
     to: { path: layerPaths(dbReach.layer) },
   },
   {
+    name: 'db-grant-mint',
+    comment: 'only the SQLite adapter mints a hippo.db grant; other code imports the DbGrant type',
+    severity: 'error',
+    from: { path: '^src/', pathNot: '^src/store/sqlite/grant\\.ts$' },
+    to: { path: '^src/db/grant\\.ts$', dependencyTypesNot: ['type-only', 'type-import'] },
+  },
+  {
     name: 'api-store-port',
     comment: 'the api reads the store through the port in src/base/ports and takes shared rules from src/base',
     severity: 'error',
@@ -176,10 +183,17 @@ const reachRules = [
   },
   {
     name: 'sqlite-in-data-layer',
-    comment: 'only src/db and src/store hold a hippo.db handle, and src/host/file-lock.ts a data-free lock database; code above them reaches hippo.db through the port',
+    comment: 'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
     severity: 'error',
-    from: { pathNot: ['^src/(db|store)/', '^src/host/file-lock\\.ts$'] },
+    from: { pathNot: ['^src/db/sqlite\\.ts$', '^src/host/file-lock\\.ts$'] },
     to: { path: SQLITE_MODULE },
+  },
+  {
+    name: 'db-dynamic-import',
+    comment: 'src/db is imported statically, so the DbGrant lint ban sees every hippo.db opener a file names',
+    severity: 'error',
+    from: { path: '^src/' },
+    to: { path: '^src/db/', dependencyTypes: ['dynamic-import'] },
   },
   {
     name: 'store-rules-pure',

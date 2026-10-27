@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { readyProbeFor } from '../../src/surface/server/ready.js';
+import { createReadyProbe } from '../../src/surface/server/ready.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { startNode } from '../_helpers/started-child.js';
@@ -163,8 +163,7 @@ describe('GET /ready', () => {
     const WINDOW_MS = 1000;
     let reads = 0;
     let clock = 5_000;
-    const probe = readyProbeFor(
-      store,
+    const probe = createReadyProbe(
       {
         ping: () => {
           reads += 1;

@@ -1,7 +1,7 @@
 // SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for
 // the session closed, both under its tenant and project.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
@@ -50,7 +50,7 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
  * sender retries, and the retry writes no second handoff.
  */
 export async function sessionEndHandoffForCaller(
-  given: EntryContext,
+  given: EntryContext<ContextWith<'sessions'>>,
   req: CallerSessionEndRequest,
 ): Promise<CallerSessionEndResult> {
   const ctx = withEntryInfra(given);

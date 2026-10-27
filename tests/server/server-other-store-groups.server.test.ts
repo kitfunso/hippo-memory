@@ -225,7 +225,7 @@ describe('serve() under a store that has the graphReads group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     graph = await seedGraphRows(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: portOnlySide(fixture.dir).store });
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: portOnlySide(fixture.dir, ['graphReads']).store });
   });
 
   afterAll(async () => {
@@ -312,10 +312,15 @@ describe('serve() under a store without the feature groups', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  const call = async (method: string, path: string, token?: string): Promise<{ status: number; body: unknown }> => {
-    const headers = new Headers({ 'content-type': 'application/json' });
+  const call = async (
+    method: string,
+    path: string,
+    token?: string,
+    body = '{}',
+  ): Promise<{ status: number; body: unknown }> => {
+    const headers = new Headers({ 'content-type': 'application/json', 'x-hippo-project': 'proj' });
     if (token !== undefined) headers.set('authorization', `Bearer ${token}`);
-    const res = await fetch(`${handle.url}${path}`, { method, headers, body: method === 'GET' ? undefined : '{}' });
+    const res = await fetch(`${handle.url}${path}`, { method, headers, body: method === 'GET' ? undefined : body });
     return { status: res.status, body: await res.json() };
   };
   const refused = { status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } };
@@ -325,6 +330,24 @@ describe('serve() under a store without the feature groups', () => {
     expect(await call('GET', '/v1/predictions', adminA)).toEqual(refused);
     expect(await call('GET', '/v1/quarantine', adminA)).toEqual(refused);
     expect((await call('GET', '/v1/predictions', revokedA)).status).toBe(401);
+  });
+
+  it('answers 501 on graph, nearest, drill and assemble after the key check, and serves remember, recall and context', async () => {
+    const { adminA, revokedA } = fixture.tokens;
+    expect(await call('GET', '/v1/graph?entity=Shared', adminA)).toEqual(refused);
+    expect(await call('POST', '/v1/vectors/nearest', adminA, JSON.stringify({ ids: ['mem_x'] }))).toEqual(refused);
+    expect(await call('GET', '/v1/recall/drill/sum_x', adminA)).toEqual(refused);
+    expect(await call('GET', '/v1/sessions/sess-x/assemble', adminA)).toEqual(refused);
+    expect((await call('GET', '/v1/graph?entity=Shared', revokedA)).status).toBe(401);
+
+    const content = 'the four required groups serve the core paths';
+    expect((await call('POST', '/v1/memories', adminA, JSON.stringify({ content }))).status).toBe(200);
+    const recalled = await call('GET', '/v1/memories?q=required%20groups', adminA);
+    expect(recalled.status).toBe(200);
+    expect(JSON.stringify(recalled.body)).toContain(content);
+    const context = await call('GET', '/v1/context?q=required%20groups&project=proj', adminA);
+    expect(context.status).toBe(200);
+    expect(JSON.stringify(context.body)).toContain(content);
   });
 
   it('answers 501 on both connector webhooks before reading the body', async () => {

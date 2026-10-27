@@ -11,6 +11,7 @@ import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const roots: string[] = [];
 
@@ -39,6 +40,7 @@ describe('strengthenRetrieved', () => {
       [e.id, 'no-such-id'],
       { tenantId: 'default', recallBoostAblated: false },
       { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      grantFor({}),
     );
 
     expect([...found]).toEqual([e.id]);
@@ -65,6 +67,7 @@ describe('strengthenRetrieved', () => {
           batch.map((e) => e.id),
           opts,
           { strength: PRODUCTION_STRENGTH, clock: evalNow },
+          grantFor({}),
         ),
       ),
     );
@@ -92,6 +95,7 @@ describe('strengthenRetrieved', () => {
         [e.id],
         { tenantId: 'some-other-tenant', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
@@ -108,6 +112,7 @@ describe('strengthenRetrieved', () => {
         [e.id],
         { tenantId: 'default', recallBoostAblated: true },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
@@ -124,6 +129,7 @@ describe('strengthenRetrieved', () => {
         ['any-id'],
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ).size,
     ).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);

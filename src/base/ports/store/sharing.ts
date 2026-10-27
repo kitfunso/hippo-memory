@@ -4,6 +4,7 @@ import type { MemoryEntry } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
 import type { EntryFilter, PageRequest } from './reports.js';
 import type { EntryCursor, EntryPage, OriginFilter } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 export interface Sharing {
   /** A page of the memories of `tenantId` that may carry any of `signals`, in store order. */
@@ -31,6 +32,17 @@ export interface Sharing {
   /** The lexical candidates for `query` under recall's scope rules. */
   recallEntries(query: string, options: RecallSearchEntriesOptions): Promise<MemoryEntry[]>;
 }
+
+/** What each Sharing method does to the store; every adapter honours it. */
+export const SHARING_EFFECTS = {
+  entriesWithSignals: 'read',
+  textKeysPage: 'read',
+  textKeysHolding: 'read',
+  takenIds: 'read',
+  sourceTallies: 'read',
+  searchEntries: 'read',
+  recallEntries: 'read',
+} as const satisfies MethodEffects<Sharing>;
 
 export interface SourceTally {
   source: string;
@@ -87,3 +99,8 @@ export interface Promotion {
    * embeds it. */
   writeCopy(copy: MemoryEntry, opts: PromotedCopy): Promise<void>;
 }
+
+/** What each Promotion method does to the store; every adapter honours it. */
+export const PROMOTION_EFFECTS = {
+  writeCopy: 'write',
+} as const satisfies MethodEffects<Promotion>;

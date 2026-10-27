@@ -78,6 +78,7 @@ export function sqliteLastRecall({ on, files }: Handles): LastRecall {
             ids.filter((id) => !strengthened.has(id)),
             opts,
             files,
+            files.opens.grant,
           );
         }
         // One write for both keys, so an outcome never pairs these ids with an older trace; a lost

@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../base/error
 import { isRestrictedScope } from '../../base/scope/recall-scope.js';
 import { DEFAULT_KEY_TTL_DAYS, mintApiKey } from '../../base/scope/api-key.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { KeyMint, SelfKeyMint, HippoStore } from '../../base/ports/store.js';
+import type { KeyMint, SelfKeyMint, RequiredStore } from '../../base/ports/store.js';
 import type { ApiKeyOwner, ApiKeyRecord } from '../../base/ports/store/types.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -226,7 +226,7 @@ export async function authListAllTenants(ctx: Context, active: boolean): Promise
 
 async function listRows(
   ctx: Context,
-  store: HippoStore,
+  store: RequiredStore,
   opts: KeyListOptions,
 ): Promise<ApiKeyListRow[]> {
   const keyWrites = store.keyWrites;

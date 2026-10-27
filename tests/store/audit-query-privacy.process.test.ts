@@ -16,6 +16,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -139,7 +140,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = {
+    const mcpCtx: McpContext = mcpContext({
       hippoRoot: localRoot,
       tenantId: 'default',
       actor: 'mcp',
@@ -148,7 +149,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       store: sqliteStore(localRoot),
       config: loadConfig(localRoot),
       infra: testInfra(),
-    };
+    });
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

@@ -16,7 +16,7 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import {
   ROW_READ,
@@ -31,6 +31,8 @@ import {
 import { testInfra } from '../_helpers/infra.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 useQueryCountRoots();
 
@@ -141,7 +143,7 @@ describe('drillDown', () => {
       ...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (SELECT value FROM json_each(?))'))),
     ];
     expect(childReads.length).toBeGreaterThanOrEqual(3);
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       for (const sql of childReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
@@ -168,6 +170,7 @@ describe('strengthenRetrieved', () => {
           entries.map((e) => e.id),
           { tenantId: 'default', recallBoostAblated: false },
           { strength: PRODUCTION_STRENGTH, clock: evalNow },
+          grantFor({}),
         ),
       );
       expect(result.size).toBe(n);
@@ -185,6 +188,7 @@ describe('strengthenRetrieved', () => {
         [entry.id, entry.id],
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
@@ -273,7 +277,7 @@ describe('hippo_status', () => {
       const { result, rowsRead } = await recordStatementsAsync(() =>
         handleMcpRequest(
           { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-          {
+          mcpContext({
             hippoRoot: root,
             tenantId: 'default',
             actor: 'tester',
@@ -283,7 +287,7 @@ describe('hippo_status', () => {
             store: sqliteStore(root),
             config: loadConfig(root),
             infra: testInfra(),
-          },
+          }),
         ),
       );
       const reply = JSON.stringify(result);
@@ -316,7 +320,7 @@ describe('an id-list read of one tenant', () => {
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
     expect(idReads).toHaveLength(1);
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       for (const sql of idReads) {
         // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.

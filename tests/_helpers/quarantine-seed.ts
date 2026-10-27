@@ -8,7 +8,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { writeEntry } from './root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 
 export const HELD = {
   a1: 'mem_qa1',
@@ -49,7 +49,7 @@ const SEEDED: readonly Seeded[] = [
 
 /** Adds the records above, 105 records of one timestamp under `bulk`, and an admin key for tenant B whose bearer token it returns. */
 export function seedQuarantineRecords(dir: string): string {
-  const db = openStore(dir);
+  const db = openStore(dir, storeFilesOf(dir).opens);
   vi.useFakeTimers({ toFake: ['Date'] });
   try {
     for (const r of [

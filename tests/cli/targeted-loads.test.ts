@@ -22,6 +22,7 @@ import {
 import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 let root: string;
 
@@ -137,6 +138,7 @@ describe('strengthenRetrieved', () => {
         ids,
         { tenantId: 'default', recallBoostAblated: false },
         { strength: PRODUCTION_STRENGTH, clock: evalNow },
+        grantFor({}),
       ),
     );
     expect([...result].sort()).toEqual([...ids].sort());

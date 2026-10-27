@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { AUTO_DELETABLE } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
-import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { introducesContent, rejectedValues } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
@@ -94,11 +94,7 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes
  * RawAppendOnlyError. */
-function deleteMemoryRow(
-  db: ReturnType<typeof openHippoDb>,
-  sql: string,
-  params: SqlFragment['params'],
-): number {
+function deleteMemoryRow(db: DatabaseSyncLike, sql: string, params: SqlFragment['params']): number {
   try {
     return Number(cachedStatement(db, sql).run(...params).changes ?? 0);
   } catch (cause) {
@@ -111,7 +107,7 @@ function deleteMemoryRow(
  * audit row). Returns `{tenantId, dagParentId}`, or null if the tenant holds no such row or
  * `automatic` refused it. */
 export function deleteEntryCore(
-  db: ReturnType<typeof openHippoDb>,
+  db: DatabaseSyncLike,
   id: string,
   tenantId: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },

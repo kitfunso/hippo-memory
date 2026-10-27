@@ -228,7 +228,7 @@ async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<strin
     artifactRefPrefix: `vault:${vaultName}:`,
   } as const;
   const rows = await readAll((after?: EntryCursor) =>
-    ctx.store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+    ctx.store.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
   );
   // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
   // later changed or deletion pass must archive them all or older raw vault content stays

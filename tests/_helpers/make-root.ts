@@ -5,6 +5,8 @@ import { afterAll, afterEach } from 'vitest';
 import { initTestStore } from './store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 import { waitFor } from './wait-for.js';
+import type { DatabaseSyncLike } from '../../src/db/index.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 
 export interface MakeRootOptions {
   /** Written to `<root>/config.json`, where the store reads its config. */
@@ -84,4 +86,9 @@ export function makeRoot(label: string, opts: MakeRootOptions = {}): string {
 /** A temp project dir holding the store at `<base>/.hippo`, as `hippo init` lays it out; removed after the file's last test. */
 export function makeStore(label: string, opts: MakeRootOptions = {}): MadeStore {
   return build(label, (base) => join(base, '.hippo'), opts);
+}
+
+/** openStore on a root makeRoot or makeStore made, with the store's own grant: the opener onHandle takes. */
+export function openStoreAt(root: string): DatabaseSyncLike {
+  return openStore(root, storeFilesOf(root).opens);
 }

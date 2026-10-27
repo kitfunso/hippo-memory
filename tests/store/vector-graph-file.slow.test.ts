@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveVectorGraphFile } from '../../src/db/vector-graph-build.js';
+import { saveVectorGraphFile } from '../../src/store/sqlite/vector-graph-file.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
@@ -15,6 +15,7 @@ import { log } from '../../src/base/util/log.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const DIM = 32;
 const ROWS = 1_500;
@@ -140,7 +141,7 @@ describe('a saved graph file', () => {
       const root = makeRoot('vector-graph-file');
       seedVectorRows(root, rows, MODEL);
       const f = onStore(root);
-      const graphs = new VectorGraphs(root);
+      const graphs = new VectorGraphs(root, grantFor({}));
       await nearest(f, rows[0].vector, spec(ALL_TENANTS), graphs);
       await graphs.idle();
 

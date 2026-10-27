@@ -2,6 +2,7 @@
 import type { JsonValue } from '../../util/json.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { TenantId } from '../../util/tenant.js';
+import type { MethodEffects } from './effects.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;
@@ -59,6 +60,12 @@ export interface KeyWrites {
    * revoked rows and an expires_at not above now's toISOString. */
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
 }
+
+/** What each KeyWrites method does to the store; every adapter honours it. */
+export const KEY_WRITES_EFFECTS = {
+  changeApiKey: 'write',
+  listApiKeys: 'read',
+} as const satisfies MethodEffects<KeyWrites>;
 
 /** `changeApiKey`'s overloads as one argument list, so an adapter writes one body. */
 export type KeyChangeArgs =

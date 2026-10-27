@@ -26,6 +26,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const admin: Actor = { subject: 'cli', role: 'admin' };
@@ -202,7 +203,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     const hippoRoot = markedFolder();
     const side = portOnlySide(copyOf());
     const callers = createCallerState();
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot,
       tenantId: TENANT_A,
       actor: 'mcp',
@@ -213,7 +214,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
       config: loadConfig(hippoRoot),
       infra: testInfra(),
       callers,
-    };
+    });
     const call = (name: string, args: Record<string, string | boolean>) =>
       handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>
