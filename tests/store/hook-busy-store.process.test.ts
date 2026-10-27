@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawnSync, type ChildProcess } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createMemory } from '../../src/entry/memory.js';
 import {
   closeHippoDb,
@@ -15,6 +15,7 @@ import {
 } from '../../src/db/index.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
+import type { StartedChild } from '../_helpers/started-child.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -25,7 +26,7 @@ const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 let tmp: string;
 let projectDir: string;
 let localRoot: string;
-let holder: ChildProcess | null = null;
+let holder: StartedChild | null = null;
 
 function runHook(args: string[], input: string) {
   const traceDir = path.join(tmp, 'lock-waits');

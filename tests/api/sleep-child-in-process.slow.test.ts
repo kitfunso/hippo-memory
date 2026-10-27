@@ -6,7 +6,7 @@ import { remember } from '../../src/api/index.js';
 import type { SleepJob, SleepMessage, SleepReply } from '../../src/surface/server/sleep-offload.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import { callMatching, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
 import { VECTOR_GRAPH_THRESHOLD } from '../../src/db/vector-graph-rows.js';
@@ -60,7 +60,7 @@ describe('sleep child', () => {
     };
 
     fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
     expect(sent).toHaveLength(1);
     const reply = sent[0];
     expect(reply.ok).toBe(true);
@@ -75,7 +75,7 @@ describe('sleep child', () => {
     writeFileSync(join(home, 'hippo.db'), 'not a sqlite database');
     const job: SleepJob = { kind: 'consolidate', hippoRoot: home };
     fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
     const reply = sent[0];
     expect(reply.ok).toBe(false);
     if (!reply.ok) {
@@ -117,7 +117,7 @@ describe('sleep child', () => {
     };
 
     fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 60_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
 
     expect(sent.map((reply) => reply.ok)).toEqual([true]);
     expect(fileAtReply).toEqual([false]);

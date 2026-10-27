@@ -20,6 +20,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { writeNpmPs1Shim } from '../_helpers/npm-ps1-shim.js';
+import { removeAfterWorkers, recordingPids } from '../_helpers/worker-pids.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -32,24 +33,25 @@ function setCodexHome(value: string | undefined): void {
   else vi.stubEnv('CODEX_HOME', value);
 }
 
+interface FakeHome {
+  readonly home: string;
+  /** Session-end workers the test's codex-run started; each must be gone before the folder is. */
+  workers: number;
+  cleanup: () => Promise<void>;
+}
+
 // The file's afterEach vi.unstubAllEnvs puts HOME, USERPROFILE and PATH back.
-function withFakeHome() {
+function withFakeHome(): FakeHome {
   const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-codex-wrapper-test-'));
   vi.stubEnv('HOME', fake);
   vi.stubEnv('USERPROFILE', fake);
   vi.stubEnv('PATH', '');
-  return {
+  const handle: FakeHome = {
     home: fake,
-    // A detached session-end worker keeps the folder as its cwd until it exits, after its last log line.
-    cleanup: () =>
-      waitFor(
-        () => {
-          fs.rmSync(fake, { recursive: true, force: true });
-          return true;
-        },
-        { what: 'the fake home to come free of the exited worker', timeoutMs: 15_000, retryOnThrow: true },
-      ),
+    workers: 0,
+    cleanup: () => removeAfterWorkers(fake, handle.workers, 'codex-run'),
   };
+  return handle;
 }
 
 // The wrapper installer's behaviour is Windows-specific (it produces a
@@ -57,7 +59,7 @@ function withFakeHome() {
 // session transcript). Linux/macOS do not need a shim for the same flow,
 // so the assertions diverge by platform. Skip on non-Windows in CI.
 describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
-  let env: { cleanup: () => Promise<void>; home: string };
+  let env: FakeHome;
 
   beforeEach(() => {
     env = withFakeHome();
@@ -245,34 +247,34 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     installCodexWrapper(realCodex);
 
     const forwarded = ['exec', 'fix the bug & ship', 'a "quoted" word', ''];
+    const childEnv = {
+      ...process.env,
+      PATH: prevPathForChild,
+      HOME: env.home,
+      USERPROFILE: env.home,
+      HIPPO_HOME: path.join(env.home, '.hippo-global'),
+      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+      ARGV_OUT: argvOut,
+    };
     execFileSync('node', [path.join(process.cwd(), 'bin', 'hippo.js'), 'codex-run', '--', ...forwarded], {
       cwd: env.home,
-      env: {
-        ...process.env,
-        PATH: prevPathForChild,
-        HOME: env.home,
-        USERPROFILE: env.home,
-        HIPPO_HOME: path.join(env.home, '.hippo-global'),
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-        ARGV_OUT: argvOut,
-      },
+      env: recordingPids(childEnv, env.home),
       stdio: 'pipe',
     });
+    env.workers = 1;
 
     expect(JSON.parse(fs.readFileSync(argvOut, 'utf8'))).toEqual(forwarded);
 
-    // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
     const workerLog = resolveCodexWrapperPaths().logFile;
     await waitFor(() => fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'), {
       what: 'the session-end worker to log its skip',
-      timeoutMs: 15_000,
     });
     expect(fs.readFileSync(workerLog, 'utf8')).toContain('skip: no hippo store');
   });
 });
 
 describe('resolveCodexSessionTranscript', () => {
-  let env: { cleanup: () => Promise<void>; home: string };
+  let env: FakeHome;
 
   beforeEach(() => {
     env = withFakeHome();
@@ -311,7 +313,7 @@ describe('resolveCodexSessionTranscript', () => {
 });
 
 describe('resolveCodexWrapperPaths and CODEX_HOME', () => {
-  let env: { cleanup: () => Promise<void>; home: string };
+  let env: FakeHome;
 
   beforeEach(() => {
     env = withFakeHome();
@@ -348,7 +350,7 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   const SENTINEL = 'zeta-7731';
   const DECOY = 'decoy-4410';
   let root: string;
-  let env: { cleanup: () => Promise<void>; home: string };
+  let env: FakeHome;
 
   beforeEach(() => {
     env = withFakeHome();
@@ -446,21 +448,17 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
 
     const run = spawnSync(process.execPath, [HIPPO_JS, 'codex-run', '--'], {
       cwd: work,
-      env: childEnv,
+      env: recordingPids(childEnv, root),
       encoding: 'utf8',
     });
     expect(run.status, run.stderr).toBe(0);
+    env.workers = 1;
 
     const saved = (): string[] => loadAllEntries(globalRoot, 'default').map((e) => e.content);
     const readLog = (): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
-    // The detached worker writes until its last log line; cleanup racing those writes fails with ENOTEMPTY.
     const workerDone = (log: string): boolean =>
       log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
-    await waitFor(() => workerDone(readLog()), {
-      timeoutMs: 30_000,
-      intervalMs: 200,
-      what: 'the codex worker log line',
-    });
+    await waitFor(() => workerDone(readLog()), { intervalMs: 200, what: 'the codex worker log line' });
 
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);

@@ -8,6 +8,7 @@ import { getHippoRoot } from '../../src/host/project-identity.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { WORKER_GONE_MS, WORKER_REASON, removeAfterWorkers, recordingPids } from '../_helpers/worker-pids.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
@@ -18,12 +19,7 @@ import { loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } fro
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HIPPO_HOME: dir,
-    HOME: dir,
-    USERPROFILE: dir,
-  };
+  const env = recordingPids({ ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir }, dir);
   return { dir, env };
 }
 
@@ -36,19 +32,8 @@ function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
   expect(result.status).toBe(0);
 }
 
-// The detached session-end worker can still hold a brief Windows lock on the
-// SQLite WAL/shm files after our poll condition is satisfied (same class of
-// issue as tests/store/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
-function safeRmSync(p: string): void {
-  try {
-    fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only — a leftover scratch tmpdir is harmless.
-  }
-}
-
-// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
-const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
+// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet".
+const WORKER_WAIT = { timeoutMs: WORKER_GONE_MS, intervalMs: 50, retryOnThrow: true, reason: WORKER_REASON } as const;
 
 /** A read just after the detached worker's window can still race its last DB write on a loaded machine; retry until it lands. */
 async function loadSnapshotRetrying(
@@ -88,8 +73,9 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     initHippo(dir, env);
   });
 
-  afterEach(() => {
-    safeRmSync(dir);
+  // Each case runs one session-end, so one worker, which must be gone before its folder is.
+  afterEach(async () => {
+    await removeAfterWorkers(dir, 1, 'session-end');
   });
 
   it("payload session_id is threaded through to the worker, which closes that session's own active snapshot", async () => {

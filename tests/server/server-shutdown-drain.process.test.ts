@@ -1,13 +1,13 @@
 // stop() stops accepting, lets an in-flight request finish within the drain window, and closes a stuck one when it ends.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
 import type { AuthResolver, ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { log } from '../../src/base/util/log.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot, removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 const homes: string[] = [];
 
@@ -48,9 +48,9 @@ function slowRecall(handle: ServerHandle): Promise<Response> {
   return fetch(`${handle.url}/v1/memories?q=anything`, { headers: { authorization: 'Bearer slow-idp-token' } });
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
+  for (const home of homes.splice(0)) await removeWhenStopped(home);
 });
 
 describe('serve() graceful stop', () => {
@@ -105,12 +105,9 @@ describe('serve() graceful stop', () => {
         "process.emit('SIGTERM');",
       ].join('\n'),
     );
-    const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
-    let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8');
-    });
-    const code = await new Promise<number | null>((done) => child.once('exit', done));
+    const { code, stderr } = await startNode([script], {
+      env: { ...process.env, HIPPO_HOME: join(home, '.global') },
+    }).exited();
     expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
   });
@@ -132,15 +129,8 @@ describe('serve() graceful stop', () => {
         'console.log(handle.url);',
       ].join('\n'),
     );
-    const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
-    let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8');
-    });
-    const closed = new Promise<number | null>((done) => child.once('close', done));
-    const url = await new Promise<string>((done) =>
-      child.stdout.once('data', (chunk: Buffer) => done(chunk.toString('utf8').trim())),
-    );
+    const child = startNode([script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+    const [url] = await child.line(/^http\S+$/, 'the served url');
 
     const answer = await fetch(`${url}/v1/memories?q=anything`, {
       headers: { authorization: 'Bearer slow-idp-token' },
@@ -150,7 +140,8 @@ describe('serve() graceful stop', () => {
     );
 
     expect(answer).toBe(200);
-    expect(await closed).toBe(1);
-    expect(stderr).toMatch(/serve uncaught exception: boom-serve .*errorClass=Error stack=/);
+    const exit = await child.exited();
+    expect(exit.code).toBe(1);
+    expect(exit.stderr).toMatch(/serve uncaught exception: boom-serve .*errorClass=Error stack=/);
   });
 });

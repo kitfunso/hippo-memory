@@ -1,20 +1,14 @@
 // openHippoDb ran journal_mode (lock-taking) before busy_timeout was set,
 // so it could throw "database is locked" instantly under concurrent writes
 // instead of waiting (db.ts:2366-2367 order fix).
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 let root: string;
-let churners: ChildProcess[] = [];
-
-afterEach(() => {
-  for (const c of churners) c.kill();
-  churners = [];
-});
 
 // A churner prints 'wrote' once it has committed this many beside the foreground opens, which then stop.
 const WINDOW_WRITES = 25;
@@ -54,32 +48,14 @@ interface ChurnReport {
 
 /** Starts a churner: `ready` after its first write attempt, `wrote` once it has its window writes, `report` at exit. */
 function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
-  const child = spawn(process.execPath, ['-e', churnScript(dbPath, goFile, stopFile)], {
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  churners.push(child);
-  let out = '';
-  let markReady = (): void => {};
-  const ready = new Promise<void>((resolve) => {
-    markReady = resolve;
-  });
-  child.stdout!.on('data', (chunk: Buffer) => {
-    out += chunk.toString();
-    if (out.includes('ready\n')) markReady();
-  });
-  const wrote = (): boolean => out.includes('wrote\n');
-  const report = new Promise<ChurnReport>((resolve, reject) => {
-    child.on('error', reject);
-    child.on('close', (code) => {
-      const last = out.trim().split('\n').pop() ?? '';
-      if (code !== 0 || !last.startsWith('{')) {
-        reject(new Error(`churner exited ${code} with output: ${out}`));
-        return;
-      }
-      // SAFETY: the churn script's last stdout line is the JSON.stringify of a ChurnReport.
-      const parsed = JSON.parse(last) as ChurnReport;
-      resolve(parsed);
-    });
+  const child = startNode(['-e', churnScript(dbPath, goFile, stopFile)], { input: '' });
+  const ready = child.line(/^ready$/, 'the churner ready line');
+  const wrote = child.line(/^wrote$/, 'the churner wrote line');
+  const report = child.exited().then(({ code, stdout }) => {
+    const last = stdout.trim().split('\n').pop() ?? '';
+    if (code !== 0 || !last.startsWith('{')) throw new Error(`churner exited ${code} with output: ${stdout}`);
+    // SAFETY: the churn script's last stdout line is the JSON.stringify of a ChurnReport.
+    return JSON.parse(last) as ChurnReport;
   });
   return { ready, wrote, report };
 }
@@ -98,6 +74,10 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
     writeFileSync(goFile, '');
     let opens = 0;
     const errors: string[] = [];
+    let settled = false;
+    const allWrote = Promise.all(started.map((c) => c.wrote)).finally(() => {
+      settled = true;
+    });
     // The opens run until every churner has committed its writes beside them, so the overlap is counted, not timed.
     do {
       try {
@@ -108,8 +88,9 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
       }
       // A turn of the event loop between opens, so the churners' 'wrote' lines are read.
       await new Promise((resolve) => setImmediate(resolve));
-    } while (!started.every((c) => c.wrote()));
+    } while (!settled);
     writeFileSync(stopFile, '');
+    await allWrote;
     const reports = await Promise.all(started.map((c) => c.report));
 
     // The open count follows the scheduler, so only the floor of one is fixed.

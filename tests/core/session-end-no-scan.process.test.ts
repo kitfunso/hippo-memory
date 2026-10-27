@@ -8,6 +8,7 @@ import { getHippoRoot } from '../../src/host/project-identity.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { WORKER_GONE_MS, WORKER_REASON, removeAfterWorkers, recordingPids } from '../_helpers/worker-pids.js';
 
 // OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
 // must not read as a manual run: session-end never scans ~/.claude/projects.
@@ -19,8 +20,8 @@ function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: s
   return hippoRun(args, { cwd, env, input });
 }
 
-// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
-const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
+// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet".
+const WORKER_WAIT = { timeoutMs: WORKER_GONE_MS, intervalMs: 50, retryOnThrow: true, reason: WORKER_REASON } as const;
 
 describe('session-end with no payload never scans other projects', () => {
   let dir: string;
@@ -28,16 +29,13 @@ describe('session-end with no payload never scans other projects', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-no-scan-'));
-    env = { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
+    env = recordingPids({ ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir }, dir);
     expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env).status).toBe(0);
   });
 
-  afterEach(() => {
-    try {
-      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    } catch {
-      // the detached worker can still hold a Windows lock; a leftover tmpdir is harmless.
-    }
+  // Each case runs one session-end, so one worker, which must be gone before its folder is.
+  afterEach(async () => {
+    await removeAfterWorkers(dir, 1, 'session-end');
   });
 
   it("skips capture and stores nothing from another project's newest transcript", async () => {

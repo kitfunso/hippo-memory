@@ -1,5 +1,5 @@
 // A second process that wins a write race for real: it takes hippo.db's write lock, runs its statements, and commits after a pause.
-import { spawn } from 'node:child_process';
+import { startNode } from './started-child.js';
 import { getHippoDbPath } from '../../src/db/index.js';
 
 const WINNER_SRC = `
@@ -24,7 +24,7 @@ export function sqlText(value: string): string {
 
 /** Resolves once the child holds the lock with `statements` applied and uncommitted; it commits `settleMs` later.
  * `beforeLock` runs first, for statements such as ATTACH that a transaction forbids. */
-export function stageWinner(
+export async function stageWinner(
   dbPath: string,
   statements: readonly string[],
   beforeLock: readonly string[] = [],
@@ -39,18 +39,14 @@ export function stageWinner(
     JSON.stringify(statements),
     JSON.stringify(beforeLock),
   ];
-  const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
-  const committed = new Promise<void>((resolve, reject) => {
-    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`race winner exited with ${code}`))));
+  const child = startNode(args, { input: '' });
+  const committed = child.exited().then(({ code, stderr }) => {
+    if (code !== 0) throw new Error(`race winner exited with ${code}: ${stderr}`);
   });
   // The test awaits `committed` later; until then an unhandled rejection must not end the run.
   committed.catch(() => undefined);
-  return new Promise((resolve, reject) => {
-    child.stdout?.on('data', (chunk: Buffer) => {
-      if (chunk.toString().includes('locked')) resolve({ committed });
-    });
-    child.on('exit', (code) => reject(new Error(`race winner exited early with ${code}`)));
-  });
+  await child.line(/^locked$/, 'the race winner holding the write lock');
+  return { committed };
 }
 
 /** A winner whose rows another store already holds: the child copies `tables` from the scratch store, then runs `statements`. */

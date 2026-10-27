@@ -1,7 +1,6 @@
 // A deferred write scope reads before it writes, and SQLite skips the busy handler for that upgrade,
 // so a second hippo process failed with `database is locked` instead of waiting for the write lock.
 import { describe, expect, it } from 'vitest';
-import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
@@ -9,6 +8,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { distUrl, withDb } from '../_helpers/agent-memories-world.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 const WORKERS = 2;
 const ROWS = 60;
@@ -38,26 +38,9 @@ interface Worker {
 let root: string;
 
 function startWorker(args: readonly string[]): Worker {
-  const child = spawn(process.execPath, [join(root, 'worker.mjs'), ...args], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-  let stdout = '';
-  let stderr = '';
-  const found = new Promise<string>((resolve) => {
-    child.stdout.on('data', (d: Buffer) => {
-      stdout += d.toString('utf8');
-      if (stdout.includes('\n')) resolve(stdout.split('\n')[0]!);
-    });
-    child.on('close', () => resolve(stdout.split('\n')[0]!));
-  });
-  child.stderr.on('data', (d: Buffer) => {
-    stderr += d.toString('utf8');
-  });
-  const finished = new Promise<{ code: number | null; stderr: string }>((resolve, fail) => {
-    child.on('error', fail);
-    child.on('close', (code) => resolve({ code, stderr }));
-  });
+  const child = startNode([join(root, 'worker.mjs'), ...args], { input: '' });
+  const found = child.line(/^(free|held)$/, 'the worker lock probe').then(([line]) => line);
+  const finished = child.exited().then(({ code, stderr }) => ({ code, stderr }));
   return { found, finished };
 }
 

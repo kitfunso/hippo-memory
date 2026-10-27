@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { handleServe } from '../../src/surface/cli/serve.js';
-import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import { callMatching, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 interface Pidfile {
@@ -14,13 +14,14 @@ let dir: string;
 let listeners: Map<string, Listener[]>;
 let exit: MockInstance;
 let printed: string[];
+let log: MockInstance;
 
 beforeEach(() => {
   dir = makeRoot('serve-cmd');
   listeners = recordListeners(process, 'on', 'once');
   exit = stubExit();
   printed = [];
-  vi.spyOn(console, 'log').mockImplementation((line: string) => {
+  log = vi.spyOn(console, 'log').mockImplementation((line: string) => {
     printed.push(line);
   });
 });
@@ -33,7 +34,7 @@ afterEach(() => {
 describe('hippo serve, in process', () => {
   it('prints its start lines, answers /health, writes the pidfile, and on SIGTERM closes and removes it', async () => {
     void handleServe({ hippoRoot: dir, tenantId: 'default', args: [], flags: { port: '0' } });
-    await vi.waitFor(() => expect(printed).toContain('press Ctrl+C to stop'), { timeout: 15_000 });
+    await callMatching(log, (line) => line === 'press Ctrl+C to stop', { what: 'the last serve start line' });
 
     const started = /listening on (\S+) \(pid (\d+)\)/.exec(printed[0]);
     expect(started?.[2]).toBe(String(process.pid));
@@ -49,7 +50,7 @@ describe('hippo serve, in process', () => {
     expect(body.ok).toBe(true);
 
     fire(listeners, 'SIGTERM');
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after SIGTERM' });
     expect(existsSync(join(dir, 'server.pid'))).toBe(false);
     await expect(fetch(`${url}/health`)).rejects.toThrow();
   });

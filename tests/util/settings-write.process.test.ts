@@ -1,7 +1,5 @@
 // How hippo replaces settings.json when another program holds it, it is read-only, the rename is refused, or the temp file cannot be written;
 // and that the other config files it rewrites go through the same replace.
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
@@ -11,6 +9,7 @@ import { installCopilot } from '../../src/surface/hooks-install/copilot.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { registerWorkspace, workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const WINDOWS = process.platform === 'win32';
@@ -33,10 +32,10 @@ function seed(): string {
 }
 
 /** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
-async function holdOpen(file: string) {
+async function holdOpen(file: string): Promise<StartedChild> {
   const script = `const fs = require('node:fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
-  const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
-  await once(child.stdout, 'data');
+  const child = startNode(['-e', script, file]);
+  await child.line(/^held$/, `${file} held open`);
   return child;
 }
 
@@ -92,8 +91,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
     try {
       expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
     } finally {
-      holder.kill();
-      await once(holder, 'exit');
+      await holder.stop();
     }
 
     expect(pausedMs()).toBe(RETRY_BUDGET_MS);
@@ -117,8 +115,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
     try {
       expect(() => installJsonHooks('claude-code')).toThrow(new RegExp(`${escapeRegex(target)}.*in use`));
     } finally {
-      holder.kill();
-      await once(holder, 'exit');
+      await holder.stop();
     }
 
     expect(pausedMs()).toBe(RETRY_BUDGET_MS);

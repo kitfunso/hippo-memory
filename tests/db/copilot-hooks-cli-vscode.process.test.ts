@@ -1,13 +1,15 @@
 // The Copilot hook commands on a VS Code chat: the Stop hook per turn, and Claude Code settings that fire on a VS Code chat.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
+import type { StartedChild } from '../_helpers/started-child.js';
 import { waitFor } from '../_helpers/wait-for.js';
+import { WORKER_GONE_MS, WORKER_REASON, workerPids } from '../_helpers/worker-pids.js';
+import { pidAlive } from '../../src/host/pid-alive.js';
 import {
   CLAUDE_SESSION,
   claudeCodePayload,
@@ -20,7 +22,6 @@ import { loadActiveTaskSnapshot, loadAllEntries, saveActiveTaskSnapshot } from '
 import {
   runHippo,
   PROJ_PIN,
-  RECORD_SPAWN,
   CURSOR_SAVE_FAULT,
   s,
   hippo,
@@ -28,7 +29,7 @@ import {
   patchConfig,
   rows,
   initStoreIn,
-  WORKER_WAIT_MS,
+  workers,
   readLog,
   waitForLog,
   useCopilotScratch,
@@ -37,15 +38,19 @@ import {
 
 useCopilotScratch();
 
-let holder: ChildProcess | null = null;
+let holder: StartedChild | null = null;
 
 afterEach(async () => {
   await releaseStoreWriteLock(holder);
   holder = null;
-  removeScratch();
+  await removeScratch();
 });
 
 const VSCODE_SESSION = 'vscode-sess-1';
+// The busy worker waits out 3 statements at the 5 s busy_timeout in src (open.ts DEFAULT_BUSY_WAIT_MS); measured 20.7 to 24 s.
+const BUSY_REASON = 'a worker on a locked store waits 3 x 5 s of busy_timeout in src';
+const BUSY_WAIT_MS = 40_000;
+const BUSY_TEST_MS = 45_000;
 const TURN_DONE = 'skip snapshot close: turn mode';
 const FIRST_LESSON = 'retry budget at three attempts';
 const SECOND_LESSON = 'every pull request in CI';
@@ -128,7 +133,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   /** One reply's Stop hook; the log starts afresh each turn, so the old one goes first. */
   async function stop(
     transcript: string,
-    run: { cwd?: string; from?: string; waitMs?: number; env?: NodeJS.ProcessEnv } = {},
+    run: { cwd?: string; from?: string; waitMs?: number; reason?: string; env?: NodeJS.ProcessEnv } = {},
   ): Promise<string> {
     fs.rmSync(logFile(), { force: true });
     const r = await hippo(
@@ -139,7 +144,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
-    return waitForLog(logFile(), TURN_DONE, run.waitMs);
+    workers.expected += 1;
+    return waitForLog(logFile(), TURN_DONE, run.waitMs, run.reason);
   }
 
   /** Env that stops the detached worker at the progress cursor save; `mark` gains the worker's pid line there. */
@@ -160,7 +166,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
         // A poll can see the file created and still empty, which must never parse as pid 0.
         await waitFor(() => marked().includes('\n'), {
           what: 'a worker reaching the progress cursor save',
-          timeoutMs: 40_000,
+          timeoutMs: WORKER_GONE_MS,
+          reason: WORKER_REASON,
         });
         const pid = Number(marked().split('\n')[0]);
         if (!Number.isInteger(pid) || pid <= 0) throw new Error(`bad pid in the cursor save mark: ${marked()}`);
@@ -173,16 +180,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
           .map(Number),
       release: (): void => fs.writeFileSync(releaseFile, ''),
     };
-  }
-
-  function pidAlive(pid: number): boolean {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (err) {
-      // SAFETY: process.kill throws a NodeJS.ErrnoException.
-      return (err as NodeJS.ErrnoException).code === 'EPERM';
-    }
   }
 
   it('captures each reply once, keeps one handoff for the chat, and leaves the snapshot open', async () => {
@@ -250,17 +247,13 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
 
   /** How many session-end workers one Stop hook run started; the preload records each spawn before the hook exits. */
   function workersStartedBy(payload: string): number {
-    const record = path.join(s.dir, 'spawns.jsonl');
-    fs.rmSync(record, { force: true });
-    const env = {
-      ...s.env,
-      RECORD_SPAWN_FILE: record,
-      NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${RECORD_SPAWN}"`,
-    };
-    const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, env, payload);
+    const before = workerPids(s.dir).length;
+    const r = runHippo(stopArgs(logFile()), s.dir, s.env, payload);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
-    return fs.existsSync(record) ? fs.readFileSync(record, 'utf8').split('__session-end-worker').length - 1 : 0;
+    const started = workerPids(s.dir).length - before;
+    workers.expected += started;
+    return started;
   }
 
   it('does nothing for the Copilot CLI agentStop on the same hook line, or for no payload', async () => {
@@ -277,30 +270,39 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   });
 
   // A lock holder process, two bounded lock waits in the hook, then a worker that saves once the lock is gone.
-  it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
-    const transcript = writeVscodeTranscript(copilotEventsJsonl());
-    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot), 120_000);
-    const busy = await stop(transcript, { waitMs: 90_000 });
-    expect(busy).toContain('capture failed: database is locked');
-    await releaseStoreWriteLock(holder);
-    expect(memoriesWith(FIRST_LESSON)).toBe(0);
-    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+  it(
+    'on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again',
+    async () => {
+      const transcript = writeVscodeTranscript(copilotEventsJsonl());
+      holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
+      const busy = await stop(transcript, { waitMs: BUSY_WAIT_MS, reason: BUSY_REASON });
+      expect(busy).toContain('capture failed: database is locked');
+      await releaseStoreWriteLock(holder);
+      expect(memoriesWith(FIRST_LESSON)).toBe(0);
+      expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
 
-    expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
-    expect(memoriesWith(FIRST_LESSON)).toBe(1);
-    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+      expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
+      expect(memoriesWith(FIRST_LESSON)).toBe(1);
+      expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
 
-    expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
-    expect(memoriesWith(FIRST_LESSON)).toBe(1);
-  }, 98_000);
+      expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
+      expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    },
+    BUSY_TEST_MS,
+  );
 
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     const fault = cursorSaveFault('kill');
     const first = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(transcript));
     expect(first.status, first.stderr).toBe(0);
+    workers.expected += 1;
     const pid = await fault.reached();
-    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} dead`, timeoutMs: WORKER_WAIT_MS });
+    await waitFor(() => !pidAlive(pid), {
+      what: `worker ${pid} dead`,
+      timeoutMs: WORKER_GONE_MS,
+      reason: WORKER_REASON,
+    });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
     expect(fs.existsSync(sessionFile('.lock.db'))).toBe(true);
@@ -310,7 +312,11 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-    await waitFor(() => !sessionLockHeld(), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
+    await waitFor(() => !sessionLockHeld(), {
+      what: 'session lock released',
+      timeoutMs: WORKER_GONE_MS,
+      reason: WORKER_REASON,
+    });
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
   });
@@ -321,16 +327,23 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.rmSync(logFile(), { force: true });
     const first = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(transcript));
     expect(first.status, first.stderr).toBe(0);
+    workers.expected += 1;
     const pid = await fault.reached();
     fs.appendFileSync(transcript, SECOND_TURN);
     const second = await hippo(stopArgs(logFile()), s.dir, s.env, stopPayload(transcript));
     expect(second.status, second.stderr).toBe(0);
+    workers.expected += 1;
     await waitFor(() => fs.existsSync(sessionFile('.queued')), {
       what: 'second reply queued',
-      timeoutMs: WORKER_WAIT_MS,
+      timeoutMs: WORKER_GONE_MS,
+      reason: WORKER_REASON,
     });
     fault.release();
-    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} exited`, timeoutMs: 60_000 });
+    await waitFor(() => !pidAlive(pid), {
+      what: `worker ${pid} exited`,
+      timeoutMs: WORKER_GONE_MS,
+      reason: WORKER_REASON,
+    });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
@@ -351,12 +364,14 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       stopPayload(writeVscodeTranscript(copilotEventsJsonl())),
     );
     expect(firstStop.status, firstStop.stderr).toBe(0);
+    workers.expected += 1;
     // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
     const pid = await fault.reached();
     const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second });
     const secondStop = await hippo(stopArgs(secondLog), s.dir, s.env, secondPayload);
     expect(secondStop.status, secondStop.stderr).toBe(0);
-    await waitForLog(secondLog, TURN_DONE, 50_000);
+    workers.expected += 1;
+    await waitForLog(secondLog, TURN_DONE);
     expect(pidAlive(pid)).toBe(true);
     expect(sessionLockHeld()).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
@@ -365,7 +380,11 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
 
     fault.release();
-    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} exited`, timeoutMs: 60_000 });
+    await waitFor(() => !pidAlive(pid), {
+      what: `worker ${pid} exited`,
+      timeoutMs: WORKER_GONE_MS,
+      reason: WORKER_REASON,
+    });
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
@@ -374,7 +393,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('files a reply under the payload cwd project when that folder has no store', async () => {
     const billing = path.join(s.dir, 'billing');
     fs.mkdirSync(path.join(billing, '.git'), { recursive: true });
-    await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing, waitMs: 50_000 });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing });
     const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
     expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: 'billing' }]);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
@@ -383,7 +402,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
 
   it('saves into the payload cwd store when the hook runs from another project with its own store', async () => {
     const otherRoot = initStoreIn(path.join(s.dir, 'other'));
-    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other'), waitMs: 50_000 });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other') });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
@@ -398,7 +417,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     const missing = path.join(path.dirname(beside), `${VSCODE_SESSION}.jsonl`);
     const log = await stop(missing, {
       env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') },
-      waitMs: 50_000,
     });
     expect(log).toContain('skip capture: no readable transcript for this session');
     for (const root of [s.hippoRoot, s.globalRoot]) {
@@ -416,7 +434,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(r.stderr.split('\n').filter((line) => line.includes('is not usable'))).toHaveLength(1);
-    await waitForLog(logFile(), TURN_DONE, 50_000);
+    workers.expected += 1;
+    await waitForLog(logFile(), TURN_DONE);
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(1);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
@@ -536,6 +555,7 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
       claudeCodePayload('SessionEnd', s.proj, writeClaudeTranscript(s.dir)),
     );
     expect(r.status, r.stderr).toBe(0);
+    workers.expected = 1;
     await waitForLog(logFile, `closed 1 active snapshot(s) for session ${CLAUDE_SESSION}`);
     expect(loadActiveTaskSnapshot(otherRoot, 'default')).toBeNull();
     expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toMatchObject({

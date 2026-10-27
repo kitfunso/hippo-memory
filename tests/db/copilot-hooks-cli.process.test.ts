@@ -2,12 +2,12 @@
 // Hooks run through runCli in this process; runHippo spawns the built CLI where a case reads the hook's pid, preload or env.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoDbPath, HOOK_DB_WAIT_MS } from '../../src/db/index.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
+import type { StartedChild } from '../_helpers/started-child.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
 import {
@@ -27,17 +27,18 @@ import {
   rows,
   waitForLog,
   useCopilotScratch,
+  workers,
   removeScratch,
 } from '../_helpers/copilot-hooks-cli.js';
 
 useCopilotScratch();
 
-let holder: ChildProcess | null = null;
+let holder: StartedChild | null = null;
 
 afterEach(async () => {
   await releaseStoreWriteLock(holder);
   holder = null;
-  removeScratch();
+  await removeScratch();
 });
 
 describe('hippo context --format copilot', () => {
@@ -148,6 +149,7 @@ describe('hippo session-end --runtime copilot', () => {
       copilotPayload('sessionEnd', s.proj),
     );
     expect(r.status, r.stderr).toBe(0);
+    workers.expected = 1;
     const log = await waitForLog(logFile, WORKER_DONE);
     expect(log).toContain('consolidating memory...');
     expect(log).toContain('skip capture: no transcript for this session');
@@ -163,6 +165,7 @@ describe('hippo session-end --runtime copilot', () => {
       copilotPayload('sessionEnd', s.proj),
     );
     expect(r.status, r.stderr).toBe(0);
+    workers.expected = 1;
     const log = await waitForLog(logFile, WORKER_DONE);
     expect(log).toContain('capturing session...');
     expect(log).not.toContain('skip capture');
@@ -174,6 +177,7 @@ describe('hippo session-end --runtime copilot', () => {
   it('with no --log-file logs to copilot-sleep.log under the hippo logs folder, the file the hooks table used to name', async () => {
     const r = await hippo(['session-end', '--runtime', 'copilot'], s.dir, s.env, copilotPayload('sessionEnd', s.proj));
     expect(r.status, r.stderr).toBe(0);
+    workers.expected = 1;
     const log = await waitForLog(path.join(s.dir, '.hippo', 'logs', 'copilot-sleep.log'), WORKER_DONE);
     expect(log).toContain('consolidating memory...');
   });

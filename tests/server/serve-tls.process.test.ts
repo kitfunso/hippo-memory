@@ -1,16 +1,16 @@
 // `hippo serve` answers HTTPS when given a certificate and key; half a pair or an unreadable file stops it, never a quiet fall back to cleartext.
-import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest';
-import { spawn, spawnSync } from 'node:child_process';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { waitFor } from '../_helpers/wait-for.js';
-import { makeStore } from '../_helpers/make-root.js';
+import { makeStore, removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 afterEach(() => {
@@ -116,7 +116,6 @@ describe('hippo serve over TLS', () => {
   let certPath: string;
   let keyPath: string;
   let handle: ServerHandle | undefined;
-  const children: Array<() => void> = [];
 
   beforeAll(() => {
     pair = selfSignedPair();
@@ -134,22 +133,7 @@ describe('hippo serve over TLS', () => {
     await handle?.stop();
     handle = undefined;
     vi.restoreAllMocks();
-    for (const kill of children.splice(0)) kill();
-    // A killed child holds the store open for a moment on Windows, so removal is retried until the child lets go.
-    await waitFor(
-      () => {
-        try {
-          rmSync(home, { recursive: true, force: true });
-          return true;
-        } catch (err) {
-          // SAFETY: rmSync throws only errno exceptions.
-          const { code } = err as NodeJS.ErrnoException;
-          if (code === 'EPERM' || code === 'EBUSY') return false;
-          throw err;
-        }
-      },
-      { timeoutMs: 5_000, intervalMs: 50, what: 'the killed server child releasing its store' },
-    );
+    await removeWhenStopped(home);
   });
 
   const childEnv = (extra: Record<string, string>): NodeJS.ProcessEnv => ({
@@ -183,32 +167,10 @@ describe('hippo serve over TLS', () => {
   });
 
   /** Starts the real command and resolves with what it printed once its start lines are complete. */
-  function startServe(args: string[], env: Record<string, string>): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
-        cwd: home,
-        env: childEnv(env),
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      });
-      children.push(() => child.kill('SIGKILL'));
-      let stdout = '';
-      let stderr = '';
-      // A start that never prints its lines fails at the test timeout; this keeps what it did print.
-      onTestFailed(() => {
-        console.error(`stdout=${stdout} stderr=${stderr}`);
-      });
-      child.stderr.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString('utf8');
-      });
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString('utf8');
-        if (stdout.includes('press Ctrl+C to stop')) resolve(stdout);
-      });
-      child.on('exit', (code) => {
-        reject(new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`));
-      });
-    });
+  async function startServe(args: string[], env: Record<string, string>): Promise<string> {
+    const child = startNode([CLI_PATH, 'serve', '--port', '0', ...args], { cwd: home, env: childEnv(env), input: '' });
+    await child.line(/press Ctrl\+C to stop/, 'the serve start lines');
+    return child.output().stdout;
   }
 
   it.each([

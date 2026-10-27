@@ -4,11 +4,11 @@
 import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 let root: string;
 
@@ -34,16 +34,15 @@ function runWorkers(specs: ReadonlyArray<{ field: string; iterations: number }>)
     specs.map((spec, i) => {
       const file = join(root, `worker-${i}.mjs`);
       writeFileSync(file, workerScript(root, spec.field, spec.iterations), 'utf8');
-      return new Promise<void>((resolve, reject) => {
-        const child = spawn(process.execPath, [file], { stdio: ['ignore', 'ignore', 'pipe'] });
-        let stderr = '';
-        child.stderr.on('data', (chunk) => {
-          stderr += String(chunk);
+      return startNode([file], {
+        input: '',
+        deadlineMs: 20_000,
+        reason: 'step 0 measured a worker at 3.6 s, over the 3.3 s a 10 s deadline allows',
+      })
+        .exited()
+        .then(({ code, stderr }) => {
+          if (code !== 0) throw new Error(`worker ${i} exited ${code}: ${stderr}`);
         });
-        child.on('exit', (code) =>
-          code === 0 ? resolve() : reject(new Error(`worker ${i} exited ${code}: ${stderr}`)),
-        );
-      });
     }),
   );
 }

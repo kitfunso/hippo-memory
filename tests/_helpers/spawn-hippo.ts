@@ -1,7 +1,8 @@
 // One place that spawns bin/hippo.js for tests, so a test file states its cwd, env and input and nothing else.
-import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { HIPPO_BIN } from './hippo-bin.js';
-import { HANG_GUARD_MS } from './wait-for.js';
+import { startNode } from './started-child.js';
+import { HANG_GUARD_MS, checkDeadline } from './wait-for.js';
 
 export interface HippoSpawnOptions {
   readonly cwd?: string;
@@ -16,6 +17,7 @@ export interface HippoSpawnOptions {
 
 function spawnArgs(args: readonly string[], opts: HippoSpawnOptions) {
   const { cwd, env, input, timeout = HANG_GUARD_MS } = opts;
+  checkDeadline(timeout, `hippo ${args.join(' ')}`, 'a sync child blocks the test thread');
   return [opts.exe ?? process.execPath, [HIPPO_BIN, ...args], { cwd, env, input, timeout, encoding: 'utf8' }] as const;
 }
 
@@ -32,23 +34,13 @@ export function hippoRun(args: readonly string[], opts: HippoSpawnOptions = {}):
 }
 
 /** `hippoRun` that leaves the caller's thread free, for a child that calls a server the test runs. */
-export function hippoRunAsync(
+export async function hippoRunAsync(
   args: readonly string[],
   opts: HippoSpawnOptions = {},
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
-  const { cwd, env, timeout = HANG_GUARD_MS } = opts;
-  return new Promise((resolve, reject) => {
-    const child = spawn(opts.exe ?? process.execPath, [HIPPO_BIN, ...args], { cwd, env, timeout });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', reject);
-    child.on('close', (status) => resolve({ status, stdout, stderr }));
-    child.stdin.end(opts.input ?? '');
-  });
+  const { cwd, env, input = '', timeout = HANG_GUARD_MS } = opts;
+  if (opts.exe !== undefined) throw new Error('hippoRunAsync runs process.execPath; exe is for the sync runners');
+  const child = startNode([HIPPO_BIN, ...args], { cwd, env, input, deadlineMs: timeout, reason: 'a whole CLI run' });
+  const { code, stdout, stderr } = await child.exited();
+  return { status: code, stdout, stderr };
 }

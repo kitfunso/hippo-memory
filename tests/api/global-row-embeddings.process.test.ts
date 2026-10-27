@@ -241,11 +241,11 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
 
     const promoted = await promote(apiCtx(localRoot), entry.id);
 
-    // Generous timeout: first-run model load can be slow.
     await waitFor(() => loadEmbeddingIndex(globalRoot)[promoted.globalId]?.length === MINILM_DIMENSIONS, {
       what: 'the promoted row in the global embedding index',
       timeoutMs: 30_000,
       intervalMs: 250,
+      reason: 'a first model load from disk, in the micro-eval job only; no backend here to measure it',
     });
   });
 });
@@ -373,21 +373,8 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       expect(globalId).toMatch(/^g_/);
 
       if (isEmbeddingAvailable()) {
-        // Bounded poll (<=60s): promote's embed fire is best-effort
-        // fire-and-forget, but `execFileSync` only returns once the `promote`
-        // subprocess has fully exited, and that process has no explicit
-        // process.exit() call on the success path (cli.ts's main() returns
-        // naturally), so Node's event loop keeps it alive until the floating
-        // embedMemory promise settles — same reasoning as handleImport's batch
-        // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
-        // not a requirement to wait out a race.
-        await vi.waitFor(
-          () => {
-            const index = loadEmbeddingIndex(globalRoot);
-            expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
-          },
-          { timeout: 60_000, interval: 250 },
-        );
+        // execFileSync returns only once `promote` has exited, and that process ends only after its floating embed settles.
+        expect(loadEmbeddingIndex(globalRoot)[globalId]).toHaveLength(MINILM_DIMENSIONS);
       }
     } finally {
       cleanUp(home, cwd);

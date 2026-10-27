@@ -1,11 +1,9 @@
 // Two first imports at once give one row: 4 child processes x 40 notes, sized as store-stats-concurrency.process.test.ts sizes its race.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import {
   agentRows,
-  closeWorld,
   codexSummary,
   distUrl,
   liveRows,
@@ -15,6 +13,8 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 const WORKERS = 4;
 const NOTES = 40;
@@ -34,7 +34,7 @@ writeFileSync(join(barrier, 'ready-' + index), '');
 const pause = new Int32Array(new SharedArrayBuffer(4));
 const everyoneHere = () => Array.from({ length: Number(total) }, (_, i) => existsSync(join(barrier, 'ready-' + i))).every(Boolean);
 while (!everyoneHere()) {
-  if (Date.now() - arrivedAt > 20000) throw new Error('barrier timed out: the other workers never started');
+  if (Date.now() - arrivedAt > 10000) throw new Error('barrier timed out: the other workers never started');
   Atomics.wait(pause, 0, 0, 2);
 }
 const report = await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine: { ...currentMachine(), home, env: {} }, run: { clock: evalNow } });
@@ -59,28 +59,15 @@ let w: World;
 beforeEach(() => {
   w = openWorld();
 });
-afterEach(() => {
-  closeWorld(w);
+afterEach(async () => {
+  await removeWhenStopped(w.dir);
   vi.unstubAllEnvs();
 });
 
-function runWorker(args: readonly string[]): Promise<Finished> {
-  return new Promise((resolve, fail) => {
-    const child = spawn(process.execPath, [join(w.dir, 'worker.mjs'), ...args], {
-      env: { ...process.env, HIPPO_HOME: w.global },
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => {
-      stdout += d.toString('utf8');
-    });
-    child.stderr.on('data', (d: Buffer) => {
-      stderr += d.toString('utf8');
-    });
-    child.on('error', fail);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
+async function runWorker(args: readonly string[]): Promise<Finished> {
+  const env = { ...process.env, HIPPO_HOME: w.global };
+  const { code, stdout, stderr } = await startNode([join(w.dir, 'worker.mjs'), ...args], { env }).exited();
+  return { code, stdout, stderr };
 }
 
 /** Every worker waits at a barrier until all are loaded, then the imports overlap; the timestamps prove it. */

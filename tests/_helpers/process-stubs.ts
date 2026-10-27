@@ -1,7 +1,7 @@
 // Stubs that let an entry point wire its process handlers inside a test worker without ending or muting the worker.
 import type { EventEmitter } from 'node:events';
 import { vi, type MockInstance } from 'vitest';
-import { EVENT_DEADLINE_MS } from './wait-for.js';
+import { EVENT_DEADLINE_MS, checkDeadline } from './wait-for.js';
 
 export type Listener = Parameters<typeof process.on>[1];
 
@@ -46,14 +46,17 @@ interface CallWait {
   /** Named in the rejection, so a failure says which call never came. */
   readonly what: string;
   readonly deadlineMs?: number;
+  /** Required when deadlineMs is over EVENT_DEADLINE_MS. */
+  readonly reason?: string;
 }
 
 /** The first past or future call of `spy` whose arguments pass `test`, so a stubbed exit or write is an awaited event. */
 export function callMatching(
   spy: { readonly mock: { readonly calls: unknown[][] } },
   test: (...args: unknown[]) => boolean,
-  { what, deadlineMs = EVENT_DEADLINE_MS }: CallWait,
+  { what, deadlineMs = EVENT_DEADLINE_MS, reason }: CallWait,
 ): Promise<unknown[]> {
+  checkDeadline(deadlineMs, `callMatching(${what})`, reason);
   const deadline = Date.now() + deadlineMs;
   return new Promise((resolve, reject) => {
     const look = (): void => {

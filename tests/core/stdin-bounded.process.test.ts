@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../../src/host/project-identity.js';
@@ -9,6 +8,8 @@ import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import { startNode } from '../_helpers/started-child.js';
+import { WORKER_GONE_MS, WORKER_REASON, removeAfterWorkers, recordingPids } from '../_helpers/worker-pids.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
 // real store, no mocks, same idiom as tests/core/pre-compact-e2e.process.test.ts.
@@ -16,12 +17,7 @@ const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-stdin-bounded-'));
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HIPPO_HOME: dir,
-    HOME: dir,
-    USERPROFILE: dir,
-  };
+  const env = recordingPids({ ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir }, dir);
   return { dir, env };
 }
 
@@ -33,16 +29,6 @@ function transcriptJsonl(entries: unknown[]): string {
 async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
   const result = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env });
   expect(result.status).toBe(0);
-}
-
-// Detached session-end workers can briefly hold a Windows lock on the
-// SQLite WAL/shm files (mirrors session-end-snapshot-close.process.test.ts).
-function safeRmSync(p: string): void {
-  try {
-    fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only
-  }
 }
 
 // case 1's payload-less run takes the "no session_id" branch, which
@@ -67,73 +53,41 @@ type StdinPlan =
   | { mode: 'dribble'; text: string; everyMs: number }
   | { mode: 'write'; text: string; end: boolean; delayMs?: number };
 
-// Long enough the fix's <=1000ms default wait never reaches it, short
-// enough to fail fast instead of waiting out vitest's 30s global timeout.
+// Long enough the fix's <=1000ms default wait never reaches it; its failure names the stuck command.
 const KILL_GUARD_MS = 15_000;
 
-/** spawnSync can't express "stdin open, never written": its child stdin
- * closes the instant the call returns. Case 1 needs a real spawn. */
-function spawnBounded(
+/** spawnSync can't express "stdin open, never written": its child stdin closes the instant the call returns. */
+async function spawnBounded(
   args: string[],
   cwd: string,
   env: NodeJS.ProcessEnv,
   stdin: StdinPlan,
 ): Promise<BoundedRunResult> {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const child = spawn(process.execPath, [HIPPO_JS, ...args], {
-      cwd,
-      env,
-      stdio: [stdin.mode === 'ignore' ? 'ignore' : 'pipe', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (c: Buffer) => {
-      stdout += c.toString('utf8');
-    });
-    child.stderr?.on('data', (c: Buffer) => {
-      stderr += c.toString('utf8');
-    });
-
-    // This guard (not vitest's) is what ends a red-phase hang: it names
-    // the stuck command instead of a generic "test timed out".
-    const guard = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new Error(`hippo ${args.join(' ')} did not exit within ${KILL_GUARD_MS}ms (killed by test guard)`));
-    }, KILL_GUARD_MS);
-
-    let dribble: NodeJS.Timeout | undefined;
-    child.once('error', (err) => {
-      clearTimeout(guard);
-      clearInterval(dribble);
-      reject(err);
-    });
-    child.once('close', (status, signal) => {
-      clearTimeout(guard);
-      clearInterval(dribble);
-      resolve({ status, signal, stdout, stderr, elapsedMs: Date.now() - start });
-    });
-
-    if (stdin.mode === 'dribble') {
-      // EPIPE once the child exits is expected, not a test failure.
-      child.stdin!.on('error', () => {});
-      dribble = setInterval(() => {
-        child.stdin?.write(stdin.text, () => {});
-      }, stdin.everyMs);
-    }
-
-    if (stdin.mode === 'write') {
-      const write = (): void => {
-        child.stdin!.write(stdin.text, () => {
-          if (stdin.end) child.stdin!.end();
-        });
-      };
-      if (stdin.delayMs) setTimeout(write, stdin.delayMs);
-      else write();
-    }
-    // 'idle': stdin stays open, untouched. 'ignore': child.stdin is null.
+  const start = Date.now();
+  const child = startNode([HIPPO_JS, ...args], {
+    cwd,
+    env,
+    input: stdin.mode === 'ignore' ? '' : undefined,
+    deadlineMs: KILL_GUARD_MS,
+    reason: 'a red-phase hang fails here naming the command; step 0 measured a run at up to 3.4 s',
   });
+  let dribble: NodeJS.Timeout | undefined;
+  if (stdin.mode === 'dribble') dribble = setInterval(() => child.send(stdin.text), stdin.everyMs);
+  if (stdin.mode === 'write') {
+    const write = (): void => {
+      child.send(stdin.text);
+      if (stdin.end) void child.endInput();
+    };
+    if (stdin.delayMs) setTimeout(write, stdin.delayMs);
+    else write();
+  }
+  // 'idle': stdin stays open, untouched. 'ignore': stdin is ended at once.
+  try {
+    const { code, signal, stdout, stderr } = await child.exited();
+    return { status: code, signal, stdout, stderr, elapsedMs: Date.now() - start };
+  } finally {
+    clearInterval(dribble);
+  }
 }
 
 /** Writes a synthetic transcript and matching PreCompact payload for `sessionId`. */
@@ -175,8 +129,12 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     await initHippo(dir, env);
   });
 
-  afterEach(() => {
-    safeRmSync(dir);
+  // Only the session-end case starts a worker; it must be gone before its folder is.
+  let workers = 0;
+  afterEach(async () => {
+    const expected = workers;
+    workers = 0;
+    await removeAfterWorkers(dir, expected, 'the hook runs');
   });
 
   describe('case 1: an idle, never-written, never-closed stdin pipe must not hang any of the five commands', () => {
@@ -205,11 +163,12 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       const result = await spawnBounded(['session-end', '--log-file', logFile], dir, fastEnv(), { mode: 'idle' });
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
-      // Let the detached worker finish before afterEach removes dir.
+      workers = 1;
       await waitFor(() => sessionEndDoneLogged(logFile), {
         what: 'the session-end worker finishing',
-        timeoutMs: 25_000,
+        timeoutMs: WORKER_GONE_MS,
         intervalMs: 50,
+        reason: WORKER_REASON,
       });
     });
 

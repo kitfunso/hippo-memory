@@ -1,7 +1,7 @@
 // Scratch projects and CLI runs for the boundary rows of the delivery ledger: compaction and session end.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -10,6 +10,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
+import { startNode } from './started-child.js';
 import type { InProcessResult } from './run-in-process.js';
 import { writeEntry, saveActiveTaskSnapshot } from './root-forms.js';
 import { initTestStore } from './store-template.js';
@@ -125,25 +126,15 @@ export interface AsyncRun {
 }
 
 /** One CLI run that does not block the test thread; `input: null` leaves stdin open and idle. */
-export function hippoAsync(
+export async function hippoAsync(
   p: Project,
   args: string[],
   opts: Omit<RunOptions, 'input'> & { input: string | null },
 ): Promise<AsyncRun> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [HIPPO_JS, ...args], { cwd: p.cwd, env: { ...p.env, ...opts.env } });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => {
-      stdout += d.toString();
-    });
-    child.stderr.on('data', (d: Buffer) => {
-      stderr += d.toString();
-    });
-    child.on('error', reject);
-    child.on('close', (status) => resolve({ status, stdout, stderr }));
-    if (opts.input !== null) child.stdin.end(opts.input);
-  });
+  const env = { ...p.env, ...opts.env };
+  const child = startNode([HIPPO_JS, ...args], { cwd: p.cwd, env, input: opts.input ?? undefined });
+  const { code, stdout, stderr } = await child.exited();
+  return { status: code, stdout, stderr };
 }
 
 /** The default transcript does not exist, so the hook records the boundary and skips the snapshot. */
