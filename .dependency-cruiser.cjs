@@ -209,7 +209,7 @@ const reachRules = [
     name: 'recall-verbs-book-nothing',
     comment: 'hippo recall and hippo explain book tokens and ledger turns through retrieveWithCliCore(), never by hand',
     severity: 'error',
-    from: { path: '^src/surface/cli/(recall|explain)\\.ts$' },
+    from: { path: '^src/surface/cli/(recall[\\w-]*|explain)\\.ts$' },
     to: { path: '^src/api/(tokens|ledger-db)\\.ts$' },
   },
 ];
