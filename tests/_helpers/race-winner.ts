@@ -1,5 +1,5 @@
 // A second process that wins a write race for real: it takes hippo.db's write lock, runs its statements, and commits after a pause.
-import { startNode } from './started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from './started-child.js';
 import { getHippoDbPath } from '../../src/db/index.js';
 
 const WINNER_SRC = `
@@ -40,7 +40,7 @@ export async function stageWinner(
     JSON.stringify(beforeLock),
   ];
   const child = startNode(args, { input: '' });
-  const committed = child.exited().then(({ code, stderr }) => {
+  const committed = child.exited(STORE_RUN_MS, STORE_RUN_REASON).then(({ code, stderr }) => {
     if (code !== 0) throw new Error(`race winner exited with ${code}: ${stderr}`);
   });
   // The test awaits `committed` later; until then an unhandled rejection must not end the run.

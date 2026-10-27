@@ -7,7 +7,7 @@ import { sessionDigestId, isSessionDigestRow } from '../../src/base/session/sess
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 import { loadLatestHandoff, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -137,7 +137,12 @@ describe('the Claude Code session-end worker', () => {
   it('two workers for the same session at once still leave one row', async () => {
     const transcript = claudeTranscript('s1');
     const run = async (): Promise<number | null> =>
-      (await startNode([HIPPO_JS, ...workerArgs('S1', transcript)], { cwd: repo, env, input: '' }).exited()).code;
+      (
+        await startNode([HIPPO_JS, ...workerArgs('S1', transcript)], { cwd: repo, env, input: '' }).exited(
+          STORE_RUN_MS,
+          STORE_RUN_REASON,
+        )
+      ).code;
     expect(await Promise.all([run(), run()])).toEqual([0, 0]);
     expect(digests()).toHaveLength(1);
   });

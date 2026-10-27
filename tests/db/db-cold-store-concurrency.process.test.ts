@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getCurrentSchemaVersion } from '../../src/db/index.js';
 import { removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode, type StartedChild } from '../_helpers/started-child.js';
+import { startNode, type StartedChild, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 let root: string;
 
@@ -17,8 +17,8 @@ afterEach(() => removeWhenStopped(root));
 // The race only exists across processes, so the workers import the build output.
 const DIST_DB = join(import.meta.dirname, '..', '..', 'dist', 'db/index.js');
 const DB_URL = pathToFileURL(DIST_DB).href;
-// Worker side: how long a worker spins at the barrier; step 0 measured a whole worker at 2.7 s or less.
-const BARRIER_MS = 10_000;
+// Worker side: past the parent's 10 s wait for every ready line, so no worker gives up while the parent still waits.
+const BARRIER_MS = 20_000;
 
 // Spawn latency alone staggers the workers too far apart to collide, so each one
 // prints ready, spins on a barrier file, and the parent releases them all at once.
@@ -61,7 +61,7 @@ describe('openHippoDb on a cold store under concurrent processes', () => {
     } finally {
       rmSync(barrier, { force: true });
     }
-    const results = (await Promise.all(workers.map((w) => w.exited()))).map((r) => ({
+    const results = (await Promise.all(workers.map((w) => w.exited(STORE_RUN_MS, STORE_RUN_REASON)))).map((r) => ({
       ...r,
       stdout: r.stdout.trim().split('\n').pop(),
     }));

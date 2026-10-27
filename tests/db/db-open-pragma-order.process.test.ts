@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 let root: string;
 
@@ -51,7 +51,7 @@ function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
   const child = startNode(['-e', churnScript(dbPath, goFile, stopFile)], { input: '' });
   const ready = child.line(/^ready$/, 'the churner ready line');
   const wrote = child.line(/^wrote$/, 'the churner wrote line');
-  const report = child.exited().then(({ code, stdout }) => {
+  const report = child.exited(STORE_RUN_MS, STORE_RUN_REASON).then(({ code, stdout }) => {
     const last = stdout.trim().split('\n').pop() ?? '';
     if (code !== 0 || !last.startsWith('{')) throw new Error(`churner exited ${code} with output: ${stdout}`);
     // SAFETY: the churn script's last stdout line is the JSON.stringify of a ChurnReport.

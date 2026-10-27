@@ -9,7 +9,7 @@ import { boundPort } from '../_helpers/listen.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -61,7 +61,10 @@ async function startResettingServer(
 
 async function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   const env = { ...process.env, ...ROUTED_CLI_ENV };
-  const { code, stdout, stderr } = await startNode([CLI_PATH, ...args], { cwd, env, input: '' }).exited();
+  const { code, stdout, stderr } = await startNode([CLI_PATH, ...args], { cwd, env, input: '' }).exited(
+    STORE_RUN_MS,
+    STORE_RUN_REASON,
+  );
   return { status: code ?? -1, stdout, stderr };
 }
 

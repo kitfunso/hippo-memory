@@ -8,7 +8,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { distUrl, withDb } from '../_helpers/agent-memories-world.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 const WORKERS = 2;
 const ROWS = 60;
@@ -40,7 +40,7 @@ let root: string;
 function startWorker(args: readonly string[]): Worker {
   const child = startNode([join(root, 'worker.mjs'), ...args], { input: '' });
   const found = child.line(/^(free|held)$/, 'the worker lock probe').then(([line]) => line);
-  const finished = child.exited().then(({ code, stderr }) => ({ code, stderr }));
+  const finished = child.exited(STORE_RUN_MS, STORE_RUN_REASON).then(({ code, stderr }) => ({ code, stderr }));
   return { found, finished };
 }
 

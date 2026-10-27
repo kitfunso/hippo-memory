@@ -11,7 +11,7 @@ import { detectServer } from '../../src/surface/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -100,7 +100,10 @@ function runCli(workspace: string, ...cliArgs: string[]): CliResult {
  */
 async function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult> {
   const env = { ...process.env, ...ROUTED_CLI_ENV };
-  const { stdout, stderr } = await startNode([CLI_PATH, ...cliArgs], { cwd: workspace, env, input: '' }).exited();
+  const { stdout, stderr } = await startNode([CLI_PATH, ...cliArgs], { cwd: workspace, env, input: '' }).exited(
+    STORE_RUN_MS,
+    STORE_RUN_REASON,
+  );
   return { stdout, stderr };
 }
 

@@ -8,7 +8,7 @@ import { hashArm } from '../../src/base/session/pilot-arm.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -247,7 +247,7 @@ describe('the per-prompt hook', () => {
   it('two concurrent processes on a fresh session: one row, both print nothing', async () => {
     const child = async (): Promise<{ code: number | null; out: string }> => {
       const run = startNode([HIPPO_JS, ...HOOK_ARGS], { cwd: proj, env: env(), input: JSON.stringify(prompt('race')) });
-      const { code, stdout } = await run.exited();
+      const { code, stdout } = await run.exited(STORE_RUN_MS, STORE_RUN_REASON);
       return { code, out: stdout };
     };
     const results = await Promise.all([child(), child()]);

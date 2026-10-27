@@ -148,6 +148,7 @@ describe('startNode', () => {
 
   it('a deadline over the event deadline needs a reason', async () => {
     expect(() => startNode(['-e', ''], { deadlineMs: 10_001 })).toThrow(/needs a reason/);
+    expect(() => hippoRun(['--version'], { timeout: 10_001 })).toThrow(/needs a reason/);
     await expect(waitFor(() => true, { timeoutMs: 10_001 })).rejects.toThrow(/needs a reason/);
     await expect(waitFor(() => true, { timeoutMs: 10_001, reason: 'measured 4 s' })).resolves.toBeUndefined();
   });

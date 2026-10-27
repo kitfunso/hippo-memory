@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { finishCodex } from '../../scripts/token-eval/codex-task.mjs';
 import { codexArgs, resolveCodex, runCodexSession, wrapperLog } from '../../scripts/token-eval/codex.mjs';
@@ -13,7 +12,7 @@ import { foldPath } from '../../scripts/token-eval/readcheck.mjs';
 import { cleanup, tmp, isolate, makeRepo } from '../fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from '../fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOptions } from '../fixtures/z0-codex-harness.js';
-import { waitFor } from '../_helpers/wait-for.js';
+import { startCommand } from '../_helpers/started-child.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,20 +33,16 @@ const LOCK_CODE =process.platform === 'win32' ? 'EBUSY' : 'EACCES';
 /** Runs `fn` while `file` cannot be read or deleted (a sharing lock held by a child on Windows, mode 0 in a read-only dir on POSIX); null when root makes that impossible. */
 async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
   if (process.platform === 'win32') {
-    const ready = `${file}.held`;
-    const script = `$h = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); Set-Content '${ready}' x; Start-Sleep 300`;
-    const child = spawn('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
-    // Taken at spawn, so a child that failed to start or already exited cannot leave the wait below hanging.
-    const gone = new Promise((r) => {
-      child.once('exit', r);
-      child.once('error', r);
+    const script = `$h = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); Write-Output held; Start-Sleep 300`;
+    const child = startCommand('powershell', ['-NoProfile', '-Command', script], {
+      deadlineMs: 15_000,
+      reason: 'PowerShell takes seconds to start on a loaded Windows runner',
     });
     try {
-      await waitFor(() => existsSync(ready), { timeoutMs: 15_000, intervalMs: 50, what: 'the ready file' });
+      await child.line(/^held$/, 'the lock holder');
       return fn();
     } finally {
-      child.kill();
-      await gone;
+      await child.stop();
     }
   }
   if (process.getuid?.() === 0) return null;

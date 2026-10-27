@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode, type StartedChild } from '../_helpers/started-child.js';
+import { startNode, type StartedChild, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 
 const serverPath = path.resolve('dist/surface/mcp/server.js');
@@ -40,7 +40,7 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
         .map((line) => line.trim())
         .filter(Boolean),
     stderr: () => child.output().stderr,
-    exited: async () => (await child.exited()).code,
+    exited: async () => (await child.exited(STORE_RUN_MS, STORE_RUN_REASON)).code,
   };
 }
 

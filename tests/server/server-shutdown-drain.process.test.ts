@@ -7,7 +7,7 @@ import type { AuthResolver, ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot, removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 const homes: string[] = [];
 
@@ -107,7 +107,7 @@ describe('serve() graceful stop', () => {
     );
     const { code, stderr } = await startNode([script], {
       env: { ...process.env, HIPPO_HOME: join(home, '.global') },
-    }).exited();
+    }).exited(STORE_RUN_MS, STORE_RUN_REASON);
     expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
   });
@@ -140,7 +140,7 @@ describe('serve() graceful stop', () => {
     );
 
     expect(answer).toBe(200);
-    const exit = await child.exited();
+    const exit = await child.exited(STORE_RUN_MS, STORE_RUN_REASON);
     expect(exit.code).toBe(1);
     expect(exit.stderr).toMatch(/serve uncaught exception: boom-serve .*errorClass=Error stack=/);
   });

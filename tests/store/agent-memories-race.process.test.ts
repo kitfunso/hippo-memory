@@ -14,7 +14,7 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 const WORKERS = 4;
 const NOTES = 40;
@@ -66,7 +66,10 @@ afterEach(async () => {
 
 async function runWorker(args: readonly string[]): Promise<Finished> {
   const env = { ...process.env, HIPPO_HOME: w.global };
-  const { code, stdout, stderr } = await startNode([join(w.dir, 'worker.mjs'), ...args], { env }).exited();
+  const { code, stdout, stderr } = await startNode([join(w.dir, 'worker.mjs'), ...args], { env }).exited(
+    STORE_RUN_MS,
+    STORE_RUN_REASON,
+  );
   return { code, stdout, stderr };
 }
 

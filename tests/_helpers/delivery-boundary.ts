@@ -10,7 +10,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
-import { startNode } from './started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from './started-child.js';
 import type { InProcessResult } from './run-in-process.js';
 import { writeEntry, saveActiveTaskSnapshot } from './root-forms.js';
 import { initTestStore } from './store-template.js';
@@ -133,7 +133,7 @@ export async function hippoAsync(
 ): Promise<AsyncRun> {
   const env = { ...p.env, ...opts.env };
   const child = startNode([HIPPO_JS, ...args], { cwd: p.cwd, env, input: opts.input ?? undefined });
-  const { code, stdout, stderr } = await child.exited();
+  const { code, stdout, stderr } = await child.exited(STORE_RUN_MS, STORE_RUN_REASON);
   return { status: code, stdout, stderr };
 }
 

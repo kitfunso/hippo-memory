@@ -38,10 +38,15 @@ export interface StartedChild {
   running(): boolean;
   /** Kills the child's tree (SIGTERM first when graceful) and resolves once the child has exited. */
   stop(opts?: { graceful?: boolean }): Promise<void>;
-  exited(deadlineMs?: number): Promise<ChildExit>;
+  /** `reason` is required with a deadline over EVENT_DEADLINE_MS that the start options did not give one for. */
+  exited(deadlineMs?: number, reason?: string): Promise<ChildExit>;
 }
 
 const STOP_EXIT_MS = 2_000;
+
+/** A whole run of a process that opens a store: CI's slowest such test took 6.2 s, so the bound is 4 times that. */
+export const STORE_RUN_MS = 25_000;
+export const STORE_RUN_REASON = 'a whole process run that opens a store; the 10 s default is for one event';
 
 /** POSIX: kills what is left of the child's process group; a group id is never reused while a member lives. */
 function killGroup(pid: number): void {
@@ -57,9 +62,14 @@ const TAIL_CHARS = 2_048;
 
 /** Runs `node <args>` with piped stdio and tracks it, so it is stopped before the test's folder is removed. */
 export function startNode(args: readonly string[], opts: StartOptions = {}): StartedChild {
+  return startCommand(process.execPath, args, opts);
+}
+
+/** startNode for a program other than node, such as a shell that holds a Windows file lock. */
+export function startCommand(command: string, args: readonly string[], opts: StartOptions = {}): StartedChild {
   const defaultMs = checkDeadline(opts.deadlineMs ?? EVENT_DEADLINE_MS, 'startNode', opts.reason);
   // POSIX: its own process group, so stop() reaches a grandchild whose parent already exited.
-  const child = spawn(process.execPath, [...args], {
+  const child = spawn(command, [...args], {
     cwd: opts.cwd,
     env: opts.env,
     stdio: 'pipe',
@@ -160,8 +170,8 @@ export function startNode(args: readonly string[], opts: StartOptions = {}): Sta
       child.stdout.destroy();
     },
     running: () => spawnError === null && exit === null && child.exitCode === null && child.signalCode === null,
-    exited(deadlineMs) {
-      const ms = checkDeadline(deadlineMs ?? defaultMs, `exited(${pid})`, opts.reason);
+    exited(deadlineMs, reason) {
+      const ms = checkDeadline(deadlineMs ?? defaultMs, `exited(${pid})`, reason ?? opts.reason);
       return awaitEvent(
         `exit of child ${pid}`,
         ms,

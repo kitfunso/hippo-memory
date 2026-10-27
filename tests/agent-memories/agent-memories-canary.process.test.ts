@@ -21,7 +21,7 @@ import {
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
@@ -174,7 +174,7 @@ function controlRun(name: string): Run {
 async function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
   const args = [join(w.dir, 'worker.mjs'), distUrl('api/agent-memories.js'), mode, run.local, w.home, storeless];
   const env = { ...process.env, ...decoyEnv, HIPPO_HOME: run.global, ...extraEnv };
-  const { code, stdout, stderr } = await startNode(args, { env }).exited();
+  const { code, stdout, stderr } = await startNode(args, { env }).exited(STORE_RUN_MS, STORE_RUN_REASON);
   if (code !== 0) throw new Error(`${mode} worker exited ${code}: ${stderr}`);
   // SAFETY: the worker prints one JSON object with a warnings list.
   return JSON.parse(stdout) as WorkerOut;

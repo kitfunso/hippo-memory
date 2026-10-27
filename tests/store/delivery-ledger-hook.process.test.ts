@@ -14,7 +14,7 @@ import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { HippoConfig } from '../../src/base/config/config.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode } from '../_helpers/started-child.js';
+import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -292,7 +292,7 @@ describe('what one hook call records', () => {
         cwd: proj,
         env: { ...BASE_ENV, HIPPO_HOME: path.join(proj, 'global') },
         input: JSON.stringify(claude(sessionId, prompt)),
-      }).exited();
+      }).exited(STORE_RUN_MS, STORE_RUN_REASON);
       stderrBySession.get(sessionId)?.push(...ledgerLines(stderr));
       if (code !== 0) throw new Error(`hook exited ${code}: ${stderr}`);
     };
