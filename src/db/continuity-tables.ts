@@ -39,6 +39,7 @@ export const HEALED_INDEXES = [
   'idx_card_runs_tenant_card',
   'idx_card_comments_tenant_card',
   'idx_memory_quarantine_status',
+  'idx_session_owners_created_at',
   'idx_compactions_request',
   'idx_failure_log_request',
 ] as const;

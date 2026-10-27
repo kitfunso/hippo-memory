@@ -118,6 +118,27 @@ describe('repairQualityOnce', () => {
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
   });
+
+  it('reports a v64 store, whose dormant rows have no digest column, as a blocker and not an SQL error', async () => {
+    const bad = seed(root, CUT);
+    const db = new DatabaseSync(join(root, 'hippo.db'));
+    try {
+      for (const name of ['dormant_memories_rejection_digest_stale', 'dormant_memories_held_digests_edit']) {
+        db.exec(`DROP TRIGGER ${name}`);
+      }
+      db.exec('DROP INDEX idx_dormant_memories_rejection_digest');
+      db.exec('ALTER TABLE dormant_memories DROP COLUMN rejection_digest');
+    } finally {
+      db.close();
+    }
+    expect(await repairQualityOnce(storeFilesOf(root), 'default')).toMatchObject({
+      supported: false,
+      appliedIds: [],
+      blockers: ['missing column: dormant_memories.rejection_digest'],
+    });
+    expect(flag(root)).toBe('');
+    expect(ids(root)).toEqual([bad.id]);
+  });
 });
 
 // In process each case runs under 0.5 s, so the 30 s process-project timeout is a 60x margin.
