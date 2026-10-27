@@ -241,7 +241,7 @@ describe('resolveConflict rejection wiring', () => {
       const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       // SAFETY: resolveConflict's conflict_resolve audit always writes
-      // metadata.removedIds as string[] (src/store/conflicts.ts's conflictResolveMeta).
+      // metadata.removedIds as string[] (ConflictResolveMeta in src/store/sqlite/conflict-resolution.ts).
       const removedIds = events[0]!.metadata.removedIds as string[];
       expect(removedIds.slice().sort()).toEqual([bId, dup.id].sort());
     } finally {

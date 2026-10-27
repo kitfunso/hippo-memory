@@ -22,15 +22,6 @@ const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
 
-export function canonicalConflictPair(
-  aId: string,
-  bId: string,
-): { memory_a_id: string; memory_b_id: string } {
-  return aId < bId
-    ? { memory_a_id: aId, memory_b_id: bId }
-    : { memory_a_id: bId, memory_b_id: aId };
-}
-
 // Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
 const MEMBER_COLS = ['id', 'scope', 'kind', 'superseded_by', 'origin_project'] as const;
 const memberCols = (alias: string, side: string): string =>

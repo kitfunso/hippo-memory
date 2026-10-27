@@ -10,7 +10,15 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { handleStamp } from './handle-clock.js';
-import { canonicalConflictPair } from './conflicts.js';
+function canonicalConflictPair(
+  aId: string,
+  bId: string,
+): { memory_a_id: string; memory_b_id: string } {
+  return aId < bId
+    ? { memory_a_id: aId, memory_b_id: bId }
+    : { memory_a_id: bId, memory_b_id: aId };
+}
+
 type SameTenant = (a: string, b: string) => boolean;
 
 export function replaceDetectedConflicts(

@@ -263,10 +263,8 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so every later write refuses the text; reads the rows
- * the digest keys a page at a time with no lock held; then removes each holder in reach (live or
- * dormant, whole or merged) in one short write scope. A failure past the first commit leaves the
- * text refused and its holders kept; rejecting again removes them. */
+/** Commits the rejected-value row first, so later writes refuse the text, then removes each holder
+ * in reach in one write scope; a failure past that commit keeps the holders until a reject again. */
 function applyRejection(
   db: DatabaseSyncLike,
   files: StoreFiles,
