@@ -19,6 +19,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import { pushGoal } from '../_helpers/root-forms.js';
+import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 
 const GHP = runtimeJoin('ghp_', 'Rt5', 'k'.repeat(30), 'W2e');
 const T = 'default';
@@ -142,5 +144,18 @@ describe('same-text checks', () => {
     const stored = storedText(text);
     expect(stored).not.toContain(token.slice(0, 12));
     expect(stored.endsWith(' [truncated]')).toBe(true);
+  });
+});
+
+describe('goal names in stored form', () => {
+  it('a goal whose name holds a secret keeps its recall boost and its log row after a reload', async () => {
+    const name = `ship-${GHP}`;
+    const entry = createMemory('the rollout checklist for the ship goal', { tags: [name] });
+    await sqliteStore(root).entryWrites.writeEntry({ entry, actor: 'tester' });
+    const goal = await pushGoal(root, { sessionId: 's-goal', tenantId: T, goalName: name });
+    const opts = { sessionId: 's-goal', tenantId: T, limit: 5, now: new Date(NOW) };
+    const boost = withDb((db) => sessionGoalBoost(root, db, [{ entry, score: 1 }], opts));
+    expect(boost.results[0]!.score).toBeGreaterThan(1);
+    expect(boost.log.map((r) => [r.goalId, r.memoryId])).toEqual([[goal.id, entry.id]]);
   });
 });
