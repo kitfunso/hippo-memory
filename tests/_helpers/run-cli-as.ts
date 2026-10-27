@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { vi } from 'vitest';
 import { runCli } from '../../src/cli.js';
+import { defaultBusyWaitMs, setDefaultBusyWaitMs } from '../../src/db/busy.js';
 import { withHookStdin } from './hook-stdin.js';
 import { runInProcess, type InProcessResult } from './run-in-process.js';
 import { HIPPO_BIN } from './hippo-bin.js';
@@ -43,6 +44,8 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
   const savedArgv = process.argv;
   const savedCwd = process.cwd();
   const savedEnv = { ...process.env };
+  // runCli sets the process lock wait as a root; a spawned hippo would keep it to itself.
+  const savedBusyWait = defaultBusyWaitMs();
   // A verb that starts a worker re-runs process.argv[1], which must be the bin a spawned hippo was started from.
   const argv = [process.execPath, HIPPO_BIN, ...args];
   process.argv = argv;
@@ -56,6 +59,7 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
     process.argv = savedArgv;
     process.chdir(savedCwd);
     if (opts.env) replaceEnv(savedEnv);
+    setDefaultBusyWaitMs(savedBusyWait);
   }
 }
 
