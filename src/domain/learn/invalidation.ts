@@ -227,12 +227,17 @@ function weakenMatches(
   return { result, weakened };
 }
 
+/** The one-line text a preview row shows for an entry. */
+export function previewHeadline(entry: MemoryEntry): string {
+  return entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS);
+}
+
 function countTarget(result: InvalidationResult, entry: MemoryEntry): void {
   result.invalidated++;
   result.targets.push(entry.id);
   result.preview.push({
     id: entry.id,
-    headline: entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS),
+    headline: previewHeadline(entry),
   });
 }
 
@@ -259,7 +264,7 @@ function matchScore(fromTokens: string[], contentTokens: string[]): number {
   return matches / fromTokens.length;
 }
 
-// FE2: staleness from code churn (opt-in, ROADMAP Part XIII).
+// Staleness from code churn (opt-in, ROADMAP Part XIII).
 
 const CHURN_PATH_EXTENSIONS = [
   'ts',
@@ -671,7 +676,7 @@ function recordChurnEvidence(
     const evidence = churnEvidence(git, refs, anchorOf(entry));
     if (!evidence) continue;
 
-    const headline = entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS);
+    const headline = previewHeadline(entry);
     if (entry.tags.includes(CHURN_STALE_TAG)) {
       result.alreadyMarked++;
       result.preview.push({ id: entry.id, headline, evidence, already: true });
