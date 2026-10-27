@@ -14,7 +14,8 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const WORKERS = 4;
 const NOTES = 40;

@@ -9,7 +9,8 @@ import { boundPort } from '../_helpers/listen.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal

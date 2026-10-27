@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getCurrentSchemaVersion } from '../../src/db/index.js';
 import { removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode, type StartedChild, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 let root: string;
 

@@ -10,10 +10,11 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 import { runCliAs } from './run-cli-as.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from './started-child.js';
+import { startNode } from './started-child.js';
 import type { InProcessResult } from './run-in-process.js';
 import { writeEntry, saveActiveTaskSnapshot } from './root-forms.js';
 import { initTestStore } from './store-template.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from './wait-for.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 

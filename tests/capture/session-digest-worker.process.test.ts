@@ -7,9 +7,10 @@ import { sessionDigestId, isSessionDigestRow } from '../../src/base/session/sess
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode } from '../_helpers/started-child.js';
 import { loadLatestHandoff, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';

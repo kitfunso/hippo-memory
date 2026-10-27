@@ -8,7 +8,8 @@ import { createMemory } from '../../src/entry/memory.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { distUrl, withDb } from '../_helpers/agent-memories-world.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const WORKERS = 2;
 const ROWS = 60;

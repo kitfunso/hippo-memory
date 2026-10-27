@@ -7,7 +7,8 @@ import type { AuthResolver, ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot, removeWhenStopped } from '../_helpers/make-root.js';
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/started-child.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const homes: string[] = [];
 

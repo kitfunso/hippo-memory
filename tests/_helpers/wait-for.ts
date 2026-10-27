@@ -2,6 +2,9 @@
 export const EVENT_DEADLINE_MS = 10_000;
 /** The longest any wait or child run may take, so it fails before vitest's 60 s worker RPC timeout does. */
 export const HANG_GUARD_MS = 45_000;
+/** A whole run that opens a store: CI's slowest such test took 6.2 s, so the bound is 4 times that. */
+export const STORE_RUN_MS = 25_000;
+export const STORE_RUN_REASON = 'a whole process run that opens a store; the 10 s default is for one event';
 
 /** Throws RangeError for a deadline past the hang guard, or past EVENT_DEADLINE_MS with no reason, so each long wait says why in one greppable place. */
 export function checkDeadline(ms: number, where: string, reason?: string): number {

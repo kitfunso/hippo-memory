@@ -10,6 +10,7 @@ import { callMatching, fire, recordListeners, stubExit, type Listener } from '..
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
 import { VECTOR_GRAPH_THRESHOLD } from '../../src/db/vector-graph-rows.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -117,7 +118,12 @@ describe('sleep child', () => {
     };
 
     fire(listeners, 'message', job);
-    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
+    // A sleep and a whole graph build before the exit: 7.3 s on CI, past what one event may take.
+    await callMatching(exit, (code) => code === 0, {
+      what: 'process.exit(0) after the graph is saved',
+      deadlineMs: STORE_RUN_MS,
+      reason: STORE_RUN_REASON,
+    });
 
     expect(sent.map((reply) => reply.ok)).toEqual([true]);
     expect(fileAtReply).toEqual([false]);

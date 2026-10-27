@@ -47,10 +47,6 @@ export interface StartedChild {
 
 const STOP_EXIT_MS = 2_000;
 
-/** A whole run of a process that opens a store: CI's slowest such test took 6.2 s, so the bound is 4 times that. */
-export const STORE_RUN_MS = 25_000;
-export const STORE_RUN_REASON = 'a whole process run that opens a store; the 10 s default is for one event';
-
 /** A kill with pid 0 or below signals a whole group or every process the user owns, so each kill checks it first. */
 function realPid(pid: number): number {
   if (!Number.isInteger(pid) || pid <= 0) throw new RangeError(`refusing to signal pid ${pid}`);

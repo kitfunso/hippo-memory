@@ -1,6 +1,7 @@
 // A second process that wins a write race for real: it takes hippo.db's write lock, runs its statements, and commits after a pause.
-import { startNode, STORE_RUN_MS, STORE_RUN_REASON } from './started-child.js';
+import { startNode } from './started-child.js';
 import { getHippoDbPath } from '../../src/db/index.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from './wait-for.js';
 
 const WINNER_SRC = `
 const { DatabaseSync } = require('node:sqlite');
