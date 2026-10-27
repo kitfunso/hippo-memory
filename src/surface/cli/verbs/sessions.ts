@@ -178,7 +178,7 @@ export const SESSION_VERBS = {
     --status               Show embedding coverage`,
     ],
   }),
-  watch: verb(() => import('../transfer.js'), 'handleWatch', {
+  watch: verb(() => import('../learn.js'), 'handleWatch', {
     flags: {},
     removedFlags: {
       shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
@@ -188,7 +188,7 @@ export const SESSION_VERBS = {
   watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)`,
     ],
   }),
-  learn: verb(() => import('../transfer.js'), 'handleLearn', {
+  learn: verb(() => import('../learn.js'), 'handleLearn', {
     needs: ['lessonWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
@@ -238,7 +238,7 @@ export const SESSION_VERBS = {
   sync                     Pull global memories into local project`,
     ],
   }),
-  import: verb(() => import('../transfer.js'), 'handleImport', {
+  import: verb(() => import('../memory-import.js'), 'handleImport', {
     flags: {
       switches: ['agents', 'dry-run', 'global'],
       values: ['chatgpt', 'claude', 'cursor', 'file', 'markdown', 'name', 'scope', 'vault'],
