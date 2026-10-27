@@ -4,6 +4,7 @@
 
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { capText, requireLine, requireText } from './fields.js';
@@ -63,7 +64,8 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
     return {
       fields: { customer, note },
       content: buildNoteContent(customer, note),
-      tags: [`customer:${customer.toLowerCase()}`, ...(opts.extraTags ?? [])],
+      // The tag names the customer as its column stores it.
+      tags: [`customer:${redactSecretsStrict(customer).toLowerCase()}`, ...(opts.extraTags ?? [])],
       supersedesId: opts.supersedesNoteId,
       changeSummary: opts.changeSummary,
       at: now.toISOString(),

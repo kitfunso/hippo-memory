@@ -1,5 +1,6 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
 // and the shared entry write path.
+import { redactSecretsStrict, textForms } from '../../base/util/secret-detect.js';
 import { type MemoryEntry, markRetrieved } from '../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../base/memory/keep-rules.js';
 import {
@@ -420,6 +421,9 @@ interface RenameEntrySourceOptions {
   readonly to: string;
 }
 
+// A stored source may be either form of the caller's text (a legacy row keeps it raw).
+const FORMS = '(SELECT value FROM json_each(?))';
+
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or
  * superseded it first. */
 export function renameEntrySource(
@@ -428,8 +432,8 @@ export function renameEntrySource(
 ): number {
   const moved = cachedStatement(
     db,
-    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
-  ).run(to, id, tenantId, from);
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source IN ${FORMS} AND superseded_by IS NULL`,
+  ).run(redactSecretsStrict(to), id, tenantId, JSON.stringify(textForms(from)));
   return Number(moved.changes ?? 0);
 }
 
@@ -445,8 +449,8 @@ export function renameEntrySourceAndOrigin(
   const done = cachedStatement(
     db,
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
-      `AND source = ?`,
-  ).run(to, origin, id, tenantId, from);
+      `AND source IN ${FORMS}`,
+  ).run(redactSecretsStrict(to), origin, id, tenantId, JSON.stringify(textForms(from)));
   return Number(done.changes ?? 0);
 }
 

@@ -113,7 +113,7 @@ export function insertRejectedValue(
   ).run(
     opts.tenantId,
     opts.digest,
-    opts.reason,
+    redactSecretsStrict(opts.reason),
     opts.rejectedBy,
     opts.rejectedAt,
     opts.sourceMemoryId ?? null,
@@ -161,7 +161,8 @@ export function checkRejectionGuard(
     entryId,
   ) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
-  if (!introducesContent(storedRow, tenantId, rejectionDigest(redactSecretsStrict(content)))) return;
+  if (!introducesContent(storedRow, tenantId, rejectionDigest(redactSecretsStrict(content))))
+    return;
   throw rejectedValueError(tombstone, entryId);
 }
 

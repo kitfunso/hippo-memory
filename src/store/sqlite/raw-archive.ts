@@ -1,4 +1,5 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { memoryNotFoundText, NotFoundError } from '../../base/errors/api-errors.js';
 import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
@@ -63,6 +64,7 @@ function moveRowsToArchive(
   // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row
   // is the compliance trail, so the content is unrecoverable from here on.
   const archivedAt = handleStamp(db);
+  const reason = redactSecretsStrict(opts.reason);
   const payloads = rows.map((row) => [
     row.id,
     JSON.stringify({
@@ -70,14 +72,14 @@ function moveRowsToArchive(
       archived_at: archivedAt,
       tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
       kind: row.kind,
-      reason: opts.reason,
+      reason,
     }),
   ]);
   cachedStatement(
     db,
     `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) ` +
       `SELECT json_extract(value, '$[0]'), ?, ?, ?, json_extract(value, '$[1]') FROM json_each(?) ORDER BY key`,
-  ).run(archivedAt, opts.reason, opts.who, JSON.stringify(payloads));
+  ).run(archivedAt, reason, opts.who, JSON.stringify(payloads));
   const ids = JSON.stringify(rows.map((row) => row.id));
   // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
   cachedStatement(db, `UPDATE memories SET kind = 'archived' WHERE id IN (${IDS})`).run(ids);

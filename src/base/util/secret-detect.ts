@@ -186,6 +186,11 @@ export function redactSecretsStrict(text: string): string {
   return result;
 }
 
+/** The stored form of an optional text column; null when there is no text. */
+export function storedOrNull(text: string | null | undefined): string | null {
+  return text == null ? null : redactSecretsStrict(text);
+}
+
 /** The entry as stored, content and source redacted; the same object when redaction changes
  * nothing. */
 export function redactEntry<T extends { content: string; source?: string | null }>(entry: T): T {

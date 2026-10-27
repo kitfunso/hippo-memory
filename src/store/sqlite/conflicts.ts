@@ -355,7 +355,7 @@ function upsertDetectedConflicts(
     upsert.run(
       conflict.memory_a_id,
       conflict.memory_b_id,
-      conflict.reason,
+      redactSecretsStrict(conflict.reason),
       conflict.score,
       detectedAt,
       detectedAt,
@@ -593,7 +593,10 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (!contentDigests(dup.content).includes(rejectedDigest) || !ownScopeTouches(ownScope, dup.scope)) {
+    if (
+      !contentDigests(dup.content).includes(rejectedDigest) ||
+      !ownScopeTouches(ownScope, dup.scope)
+    ) {
       continue;
     }
     dups.push({ id: dup.id, kind: dup.kind });

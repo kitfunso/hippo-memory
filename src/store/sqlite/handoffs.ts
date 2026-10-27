@@ -9,6 +9,7 @@ import {
 } from '../../base/session/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
 import {
@@ -121,13 +122,13 @@ type HandoffColumn = readonly [column: string, value: string | null];
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
     ['repo_root', handoff.repoRoot ?? null],
-    ['task_id', handoff.taskId ?? null],
-    ['summary', handoff.summary],
-    ['next_action', handoff.nextAction ?? null],
-    ['artifacts_json', JSON.stringify(handoff.artifacts ?? [])],
+    ['task_id', storedOrNull(handoff.taskId)],
+    ['summary', redactSecretsStrict(handoff.summary)],
+    ['next_action', storedOrNull(handoff.nextAction)],
+    ['artifacts_json', redactPayload(JSON.stringify(handoff.artifacts ?? []))],
     ['scope', handoff.scope ?? null],
-    ['constraints_json', JSON.stringify(handoff.constraints ?? [])],
-    ['evidence_json', handoff.evidence ? JSON.stringify(handoff.evidence) : null],
+    ['constraints_json', redactPayload(JSON.stringify(handoff.constraints ?? []))],
+    ['evidence_json', handoff.evidence ? redactPayload(JSON.stringify(handoff.evidence)) : null],
     ['outcome', handoff.outcome ?? null],
     ['target_runtime', handoff.targetRuntime ?? null],
     ['card_id', handoff.cardId ?? null],

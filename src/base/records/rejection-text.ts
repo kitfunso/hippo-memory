@@ -20,10 +20,7 @@ type RejectedRow = {
 
 /** The text to reject: the named row's, which must sit in the tenant and not be personal, else
  * the stated value; either must name something once its secrets are redacted. */
-export function rejectedText(
-  request: RejectedTextRequest,
-  row: RejectedRow | undefined,
-): string {
+export function rejectedText(request: RejectedTextRequest, row: RejectedRow | undefined): string {
   const text = requestedText(request, row);
   // A tombstone digests the stored form, and one of markers alone would refuse every secret.
   if (onlyRedacted(redactSecretsStrict(text))) {
@@ -35,10 +32,7 @@ export function rejectedText(
   return text;
 }
 
-function requestedText(
-  request: RejectedTextRequest,
-  row: RejectedRow | undefined,
-): string {
+function requestedText(request: RejectedTextRequest, row: RejectedRow | undefined): string {
   if (request.memoryId === undefined) {
     if (request.value === undefined) {
       throw new BadRequestError('reject requires either a memory id or a value.');

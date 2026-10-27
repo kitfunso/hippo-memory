@@ -8,6 +8,7 @@ import {
   type DatabaseSyncLike,
 } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
+import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
@@ -121,12 +122,12 @@ function insertSessionEventRow(
     `,
   ).run(
     event.sessionId,
-    event.task ?? null,
+    storedOrNull(event.task),
     event.eventType,
-    event.content,
+    redactSecretsStrict(event.content),
     event.source ?? 'cli',
     event.scope ?? null,
-    JSON.stringify(event.metadata ?? {}),
+    redactPayload(JSON.stringify(event.metadata ?? {})),
     tenantId,
     now,
   );
@@ -397,8 +398,8 @@ function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush)
       item.sessionId ?? null,
       item.taskId ?? null,
       item.importance ?? 0,
-      item.content,
-      JSON.stringify(item.metadata ?? {}),
+      redactSecretsStrict(item.content),
+      redactPayload(JSON.stringify(item.metadata ?? {})),
       now,
       now,
       tenantId,

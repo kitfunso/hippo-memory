@@ -51,7 +51,11 @@ describe('memory row sinks', () => {
   it('upsertEntryRow stores content, source, hash and full-text row in stored form', () => {
     const entry = { ...createMemory(RAW), id: 'mem_s1', source: `import:${GHP}` };
     upsertEntryRow(db, entry);
-    expect(row('mem_s1')).toEqual({ content: STORED, source: 'import:[REDACTED]', duplicate_hash: duplicateHash(STORED) });
+    expect(row('mem_s1')).toEqual({
+      content: STORED,
+      source: 'import:[REDACTED]',
+      duplicate_hash: duplicateHash(STORED),
+    });
     expect(ftsContent('mem_s1')).toEqual([STORED]);
   });
 
@@ -108,7 +112,12 @@ describe('copies of a row', () => {
       id: 'mem_t1',
       tenantId: summary.tenantId,
       actor: 'test',
-      fields: { content: { text: RAW, rebuiltAt: '2026-01-01T00:00:00.000Z' }, descendantCount: 1, earliestAt: null, latestAt: null },
+      fields: {
+        content: { text: RAW, rebuiltAt: '2026-01-01T00:00:00.000Z' },
+        descendantCount: 1,
+        earliestAt: null,
+        latestAt: null,
+      },
       audit: [],
     });
     expect(settled.changed).toBe(true);

@@ -3,6 +3,7 @@
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { keysetAfter, placeholders } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../base/memory/strength.js';
@@ -370,7 +371,7 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
     cols.push('version', 'change_summary');
     values.push(
       row.version,
-      row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null),
+      row.save.supersedesId === undefined ? null : storedOrNull(row.save.changeSummary),
     );
   }
   const result = cachedStatement(
@@ -533,8 +534,8 @@ function openIncidentRow(
   ).run(
     memoryId,
     tenantId,
-    incidentText,
-    context ?? null,
+    redactSecretsStrict(incidentText),
+    storedOrNull(context),
     JSON.stringify(linkedMemoryIds),
     open.at,
   );
@@ -575,7 +576,7 @@ function resolveRow(
       SET status = 'resolved', resolution_text = ?, resolved_at = ?
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
-    ).run(resolve.text, resolve.at, id, tenantId);
+    ).run(redactSecretsStrict(resolve.text), resolve.at, id, tenantId);
     if (updated.changes === 0) {
       const existing = cachedStatement(
         db,

@@ -67,10 +67,13 @@ function plantLegacy(content: string): MemoryEntry {
 
 function rawHolders(): string[] {
   return withDb((db) => {
+    // SAFETY: each SELECT projects the id column only.
     const hits = [
       ...db.prepare('SELECT id FROM memories WHERE instr(content, ?) > 0').all(GHP),
       ...db.prepare('SELECT id FROM memories_fts WHERE instr(content, ?) > 0').all(GHP),
-      ...db.prepare('SELECT id FROM dormant_memories WHERE instr(content, ?) > 0 OR instr(entry_json, ?) > 0').all(GHP, GHP),
+      ...db
+        .prepare('SELECT id FROM dormant_memories WHERE instr(content, ?) > 0 OR instr(entry_json, ?) > 0')
+        .all(GHP, GHP),
     ] as { id: string }[];
     return hits.map((h) => h.id);
   });

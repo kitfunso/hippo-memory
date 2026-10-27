@@ -1,6 +1,7 @@
 // hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { median } from '../../base/util/stats.js';
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { StoreFiles } from './open.js';
@@ -236,9 +237,9 @@ function insertPredictionRow(
     memoryId,
     tenantId,
     opts.classTag,
-    opts.claimText,
+    redactSecretsStrict(opts.claimText),
     opts.estimateValue ?? null,
-    opts.estimateUnit ?? null,
+    storedOrNull(opts.estimateUnit),
     opts.targetDate ?? null,
     null, // actual_value — null until close
     now,
@@ -324,7 +325,14 @@ function closeOpenPredictionRow(
         SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
         WHERE id = ? AND tenant_id = ? AND closure_state = 'open'
       `,
-  ).run(opts.actualValue ?? null, opts.closureState, now, opts.closureNote ?? null, id, tenantId);
+  ).run(
+    opts.actualValue ?? null,
+    opts.closureState,
+    now,
+    storedOrNull(opts.closureNote),
+    id,
+    tenantId,
+  );
 
   if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
 
