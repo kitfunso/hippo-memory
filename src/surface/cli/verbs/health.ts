@@ -141,7 +141,7 @@ export const HEALTH_VERBS = {
     --id <id>              Target a specific memory`,
     ],
   }),
-  conflicts: verb(() => import('../curate.js'), 'handleConflicts', {
+  conflicts: verb(() => import('../conflicts.js'), 'handleConflicts', {
     needs: ['conflicts'],
     flags: { switches: ['json'], values: ['status'] },
     usage: [
@@ -151,7 +151,7 @@ export const HEALTH_VERBS = {
     --json                 Output as JSON`,
     ],
   }),
-  resolve: verb(() => import('../curate.js'), 'handleResolve', {
+  resolve: verb(() => import('../conflicts.js'), 'handleResolve', {
     needs: ['conflicts'],
     destructive: true,
     flags: { switches: ['forget', 'reject-loser'], values: ['keep', 'reason'] },
@@ -164,7 +164,7 @@ export const HEALTH_VERBS = {
     --reason "<why>"       Reason for --reject-loser (default: conflict context)`,
     ],
   }),
-  reject: verb(() => import('../curate.js'), 'handleReject', {
+  reject: verb(() => import('../rejections.js'), 'handleReject', {
     needs: ['rejections'],
     destructive: true,
     flags: { switches: ['global'], values: ['reason', 'value'] },
@@ -177,7 +177,7 @@ export const HEALTH_VERBS = {
     --global               Reject in the global store`,
     ],
   }),
-  rejections: verb(() => import('../curate.js'), 'handleRejections', {
+  rejections: verb(() => import('../rejections.js'), 'handleRejections', {
     needs: ['rejections'],
     flags: { switches: ['global', 'json'] },
     usage: [
@@ -187,7 +187,7 @@ export const HEALTH_VERBS = {
     --global               Operate on the global store`,
     ],
   }),
-  unreject: verb(() => import('../curate.js'), 'handleUnreject', {
+  unreject: verb(() => import('../rejections.js'), 'handleUnreject', {
     needs: ['rejections'],
     flags: { switches: ['global'] },
     usage: [
@@ -196,7 +196,7 @@ export const HEALTH_VERBS = {
     --global               Operate on the global store`,
     ],
   }),
-  dormant: verb(() => import('../curate.js'), 'handleDormant', {
+  dormant: verb(() => import('../curate-held.js'), 'handleDormant', {
     needs: ['dormant'],
     scoped: true,
     flags: { switches: ['global', 'json'], numbers: ['limit'] },
@@ -228,7 +228,7 @@ export const HEALTH_VERBS = {
                            writes a backup and one audit event first)`,
     ],
   }),
-  quarantine: verb(() => import('../curate.js'), 'handleQuarantine', {
+  quarantine: verb(() => import('../curate-held.js'), 'handleQuarantine', {
     needs: ['quarantine'],
     scoped: true,
     flags: { switches: ['all', 'global', 'json'] },
