@@ -11,8 +11,9 @@ import {
 } from '../base/session/capture-contract.js';
 import type { CompactionText, StepFailure } from '../base/ports/store/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';
-import { errorCode, errorMessage } from '../base/util/log.js';
+import { errorCode, errorFields, errorMessage, type LogFields } from '../base/util/log.js';
 import { tryParseJson } from '../base/util/json.js';
+import { takeFileLock } from '../host/file-lock.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
 
 const STAMP_DIGITS = 13;
@@ -22,7 +23,7 @@ export const SPOOL_DIR = 'compactions-spool';
  * Starts the log line of a step that broke with an unexpected error, so the session-start banner
  * counts it; a set-aside file is counted by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
-const LOCK = 'replay.lock';
+const LOCK = 'replay.lock.db';
 /** Long enough that a live replayer has finished with its claim. */
 const STALE_MS = 10 * MINUTE_MS;
 const MAX_ATTEMPTS = 3;
@@ -44,7 +45,7 @@ const NEW_STEM = /^(\d{13})-[0-9a-f]{8}$/;
 const LEGACY_STEM_TIME = /-(\d+)$/;
 
 /** Where a compaction step's lines go: the hook's log file, or a sleep's warnings. */
-export type Log = (message: string) => void;
+export type Log = (message: string, fields?: LogFields) => void;
 
 /** Only the fs calls the spool makes, so a test can stand in for one of them. */
 export interface SpoolFs {
@@ -99,20 +100,7 @@ interface Claim {
   claimedAt: number | null;
 }
 
-interface LockBody {
-  pid: number | null;
-  at: number;
-  token: string | null;
-}
-
-interface HeldLock {
-  token: string;
-  at: number;
-}
-
 const stamp = (ms: number): string => String(Math.trunc(ms)).padStart(STAMP_DIGITS, '0');
-const isTime = <T>(value: T): value is T & number =>
-  typeof value === 'number' && Number.isFinite(value);
 const idle = new Int32Array(new SharedArrayBuffer(4));
 
 /**
@@ -258,106 +246,6 @@ export function parseSpooled(text: string, fallbackTenantId: string): SpooledCom
     text: { summary: raw.summary, items },
     at: new Date(raw.at),
   };
-}
-
-const heldBy = (pid: number | null): string =>
-  `spool left to another replayer (lock held by ${pid === null ? 'another process' : `pid ${pid}`})`;
-
-function parseLock(text: string): LockBody | null {
-  // Torn, or its holder is still writing it; the caller judges it by mtime.
-  const raw: unknown = tryParseJson(text);
-  if (!isObjectLike(raw) || !('at' in raw) || !isTime(raw.at)) return null;
-  const pid = 'pid' in raw && isTime(raw.pid) ? raw.pid : null;
-  const token = 'token' in raw && isStringValue(raw.token) ? raw.token : null;
-  return { pid, at: raw.at, token };
-}
-
-/** The lock's body; its mtime stands in for the time when the body does not parse. */
-function readLock(fsx: SpoolFs, lock: string, log: Log): LockBody | 'gone' | 'busy' {
-  const read = settleCode(() => fsx.readFileSync(lock, 'utf8'), log, 'spool lock not read');
-  if (read.settled !== 'done') return read.settled;
-  const body = parseLock(read.value);
-  if (body !== null) return body;
-  const stat = settleCode(() => fsx.statSync(lock).mtimeMs, log, 'spool lock not read');
-  return stat.settled === 'done' ? { pid: null, at: stat.value, token: null } : stat.settled;
-}
-
-function createLock(
-  fsx: SpoolFs,
-  lock: string,
-  body: string,
-  log: Log,
-): 'taken' | 'exists' | 'skip' {
-  try {
-    fsx.writeFileSync(lock, body, { encoding: 'utf8', flag: 'wx' });
-    return 'taken';
-  } catch (err) {
-    const code = errorCode(err);
-    if (code === 'EEXIST') return 'exists';
-    // Windows refuses a create while a delete of the same name is pending, and the folder may have
-    // just gone.
-    if (code !== 'ENOENT' && !BUSY_CODES.has(code)) {
-      log(`spool lock not taken: ${errorMessage(err)}`);
-    }
-    return 'skip';
-  }
-}
-
-/**
- * This run's token and take time once it holds `replay.lock`, else null: another replayer holds it,
- * or it could not be made.
- */
-function takeLock(fsx: SpoolFs, dir: string, log: Log): HeldLock | null {
-  const lock = path.join(dir, LOCK);
-  const token = randomBytes(8).toString('hex');
-  const at = Date.now();
-  const body = JSON.stringify({ pid: process.pid, at, token });
-  for (let tries = 0; tries < 2; tries++) {
-    const made = createLock(fsx, lock, body, log);
-    if (made === 'taken') return { token, at };
-    if (made === 'skip') break;
-    const held = readLock(fsx, lock, log);
-    if (held === 'gone') continue;
-    if (held === 'busy') break;
-    if (Math.abs(Date.now() - held.at) <= STALE_MS) {
-      log(heldBy(held.pid));
-      return null;
-    }
-    // SHORTCUT: two takers of one stale lock overlap by one file each; a pid-alive check is the
-    // upgrade.
-    if (settle(() => fsx.unlinkSync(lock), log, 'spool lock not taken over') === 'busy') break;
-  }
-  log(heldBy(null));
-  return null;
-}
-
-/** False, after saying so, once `replay.lock` no longer holds this run's token or cannot be
- * read. */
-function ownsLock(fsx: SpoolFs, dir: string, token: string, log: Log): boolean {
-  const held = readLock(fsx, path.join(dir, LOCK), log);
-  if (held !== 'gone' && held !== 'busy' && held.token === token) return true;
-  log(
-    held === 'busy'
-      ? 'spool lock could not be read, stopping'
-      : 'spool left to another replayer (lock taken over)',
-  );
-  return false;
-}
-
-/**
- * Removes `replay.lock` only while it holds this run's token, so a run never deletes a successor's
- * lock. Never throws.
- */
-function releaseLock(fsx: SpoolFs, dir: string, mine: HeldLock, log: Log): void {
-  const lock = path.join(dir, LOCK);
-  const held = readLock(fsx, lock, log);
-  // A takeover needs a lock over STALE_MS old, so a busy read of one this run took more recently is
-  // still this run's.
-  const ours =
-    held === 'busy'
-      ? Date.now() - mine.at < STALE_MS
-      : held !== 'gone' && held.token === mine.token;
-  if (ours) settle(() => fsx.unlinkSync(lock), log, 'spool lock not released');
 }
 
 /**
@@ -747,17 +635,23 @@ export interface ImportSpoolOptions {
 }
 
 /**
- * One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows
- * lets two renames of it both land.
+ * One replayer at a time holds `replay.lock.db`, so only one process claims a file even where
+ * Windows lets two renames of it both land.
  */
 export async function importSpool(options: ImportSpoolOptions): Promise<number> {
   const { hippoRoot, tenantId, log, deadline, importOne, fsx = fs } = options;
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fsx.existsSync(dir)) return 0;
-  const mine = takeLock(fsx, dir, log);
-  if (mine === null) return 0;
+  const take = takeFileLock(path.join(dir, LOCK));
+  if (take.kind === 'held') {
+    log('spool left to another replayer (lock held by another process)');
+    return 0;
+  }
+  if (take.kind === 'unusable') {
+    log(`spool lock not taken: ${errorMessage(take.cause)}`, errorFields(take.cause));
+    return 0;
+  }
   try {
-    if (!ownsLock(fsx, dir, mine.token, log)) return 0;
     const names = fsx.readdirSync(dir);
     const promoted = promoteTmp(fsx, { dir, names, tenantId, log });
     const recovered = recoverStaleClaims(fsx, dir, names, log);
@@ -765,13 +659,13 @@ export async function importSpool(options: ImportSpoolOptions): Promise<number> 
     // Only promotion and recovery add waiting names, so the folder is listed again only after one
     // of them did.
     for (const entry of waitingFiles(promoted || recovered ? fsx.readdirSync(dir) : names)) {
-      if (Date.now() > deadline || !ownsLock(fsx, dir, mine.token, log)) break;
+      if (Date.now() > deadline) break;
       const outcome = await importFile({ fsx, dir, entry, tenantId, log, importOne });
       if (outcome === 'imported') finished++;
       if (outcome === 'stop') break;
     }
     return finished;
   } finally {
-    releaseLock(fsx, dir, mine, log);
+    take.lock.release();
   }
 }

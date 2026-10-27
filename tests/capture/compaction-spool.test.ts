@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../../src/base/session/capture-contract.js';
 import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../../src/infra/compaction-spool.js';
+import { takeFileLock } from '../../src/host/file-lock.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 
 let root: string;
@@ -23,7 +24,7 @@ const log = (message: string): void => {
   logs.push(message);
 };
 const spoolDir = (): string => path.join(root, 'compactions-spool');
-const lockFile = (): string => path.join(spoolDir(), 'replay.lock');
+const lockFile = (): string => path.join(spoolDir(), 'replay.lock.db');
 const stamp = (ms: number): string => String(ms).padStart(13, '0');
 const realFs: SpoolFs = fs;
 const withFs = (over: Partial<SpoolFs>): SpoolFs => ({ ...realFs, ...over });
@@ -112,43 +113,22 @@ describe('one replayer at a time', () => {
   const A = '0000000001000-aaaaaaaa';
   const B = '0000000002000-bbbbbbbb';
 
-  it('skips the spool while another replayer holds a fresh lock', async () => {
+  it('skips the spool while another replayer holds the lock', async () => {
     put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'other' }));
+    const other = takeFileLock(lockFile());
+    expect(other.kind).toBe('taken');
     const { seen, importer } = collector();
     expect(await replay(importer)).toBe(0);
     expect(seen).toEqual([]);
-    expect(JSON.parse(fs.readFileSync(lockFile(), 'utf8')).token).toBe('other');
-    expect(logs).toEqual(['spool left to another replayer (lock held by pid 4242)']);
-  });
-
-  it('takes over a lock older than 10 minutes', async () => {
-    put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() - 11 * MINUTE, token: 'dead' }));
-    const { seen, importer } = collector();
+    expect(logs).toEqual(['spool left to another replayer (lock held by another process)']);
+    if (other.kind === 'taken') other.lock.release();
     expect(await replay(importer)).toBe(1);
-    expect(seen).toEqual(['s1']);
-    expect(fs.readdirSync(spoolDir())).toEqual([]);
   });
 
-  it('a lock dated 20 minutes ahead is taken over', async () => {
+  it('takes a lock file its killed holder left behind', async () => {
     put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now() + 20 * MINUTE, token: 'future' }));
+    fs.writeFileSync(lockFile(), '');
     const { seen, importer } = collector();
-    expect(await replay(importer)).toBe(1);
-    expect(seen).toEqual(['s1']);
-    expect(fs.readdirSync(spoolDir())).toEqual([]);
-  });
-
-  it('judges an unparsable lock by its mtime', async () => {
-    put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(lockFile(), '{"pid": 42');
-    const { seen, importer } = collector();
-    expect(await replay(importer)).toBe(0);
-    expect(leftToAnother()).toHaveLength(1);
-
-    const old = new Date(Date.now() - 11 * MINUTE);
-    fs.utimesSync(lockFile(), old, old);
     expect(await replay(importer)).toBe(1);
     expect(seen).toEqual(['s1']);
     expect(fs.readdirSync(spoolDir())).toEqual([]);
@@ -219,83 +199,15 @@ describe('one replayer at a time', () => {
     expect(outer.seen).toEqual(['s1']);
   });
 
-  it('stops after the current file when the lock is taken over', async () => {
+  it('says why a lock that cannot be made stops the run, and imports nothing', async () => {
     put(`${A}.a0.json`, 's1');
-    put(`${B}.a0.json`, 's2');
-    const seen: string[] = [];
-    await replay(async (spooled, recorded) => {
-      seen.push(spooled.payload.sessionId);
-      recorded();
-      fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'successor' }));
-      return null;
-    });
-    expect(seen).toEqual(['s1']);
-    expect(logs).toContain('spool left to another replayer (lock taken over)');
-    expect(JSON.parse(fs.readFileSync(lockFile(), 'utf8')).token).toBe('successor');
-    expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${B}.a0.json`, 'replay.lock']);
-  });
-
-  it('a lock create that hits EPERM or EBUSY skips quietly', async () => {
-    put(`${A}.a0.json`, 's1');
-    for (const code of ['EPERM', 'EBUSY']) {
-      logs = [];
-      const faulty = withFs({
-        writeFileSync: (file, data, options) => {
-          if (String(file).endsWith('replay.lock')) throw fsError(code);
-          fs.writeFileSync(file, data, options);
-        },
-      });
-      const { seen, importer } = collector();
-      expect(await replay(importer, faulty)).toBe(0);
-      expect(seen).toEqual([]);
-      expect(logs).toHaveLength(1);
-      expect(leftToAnother()).toHaveLength(1);
-    }
-    expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
-  });
-
-  it('a lock released between EEXIST and the read is retaken', async () => {
-    put(`${A}.a0.json`, 's1');
-    fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'leaving' }));
-    let released = false;
-    const faulty = withFs({
-      readFileSync: (file, encoding) => {
-        if (!released && String(file).endsWith('replay.lock')) {
-          released = true;
-          fs.unlinkSync(file);
-        }
-        return fs.readFileSync(file, encoding);
-      },
-    });
+    fs.mkdirSync(lockFile());
     const { seen, importer } = collector();
-    expect(await replay(importer, faulty)).toBe(1);
-    expect(released).toBe(true);
-    expect(seen).toEqual(['s1']);
-    expect(logs).toEqual([]);
-    expect(fs.readdirSync(spoolDir())).toEqual([]);
-  });
-
-  it('a busy lock read stops the run, says so, and leaves no lock behind', async () => {
-    put(`${A}.a0.json`, 's1');
-    put(`${B}.a0.json`, 's2');
-    const seen: string[] = [];
-    const faulty = withFs({
-      readFileSync: (file, encoding) => {
-        if (seen.length > 0 && String(file).endsWith('replay.lock')) throw fsError('EBUSY');
-        return fs.readFileSync(file, encoding);
-      },
-    });
-    expect(
-      await replay(async (spooled, recorded) => {
-        seen.push(spooled.payload.sessionId);
-        recorded();
-        return null;
-      }, faulty),
-    ).toBe(1);
-    expect(seen).toEqual(['s1']);
-    expect(logs).toEqual(['spool lock could not be read, stopping']);
-    expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json`]);
-    expect(await replay(collector().importer)).toBe(1);
+    expect(await replay(importer)).toBe(0);
+    expect(seen).toEqual([]);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatch(/^spool lock not taken: /);
+    expect(fs.readdirSync(spoolDir()).sort()).toEqual([`${A}.a0.json`, 'replay.lock.db']);
   });
 });
 

@@ -222,7 +222,7 @@ describe('hippo doctor', () => {
       spoolAt(`${stamp(ago(30))}-ccccccc2.a0.json.tmp`, ago(2));
       spoolAt(`${stamp(ago(30))}-ddddddd1.failed.bad`, ago(2));
       spoolAt('s4-1.json.bad', ago(2));
-      spoolAt('replay.lock', ago(20));
+      spoolAt('replay.lock.db', ago(20));
 
       const check = await compactions(cwd);
       expect(check.status).toBe('warn');

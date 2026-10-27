@@ -39,8 +39,10 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
-// Two takers starting together can each fail the same EXCLUSIVE upgrade; a short wait lets one win.
-const BUSY_WAIT_MS = 25;
+// Two takers starting together can each fail the same EXCLUSIVE upgrade; a jittered retry lets one win.
+const BUSY_TRIES = 3;
+const BUSY_JITTER_MS = 4;
+const pause = new Int32Array(new SharedArrayBuffer(4));
 const MAX_ATTEMPTS = 4;
 const MAX_MISMATCHES = 2;
 const WIN32 = process.platform === 'win32';
@@ -117,6 +119,18 @@ function holder(db: LockConnection, path: string, held: FileIdentity, stat: Stat
   };
 }
 
+function beginExclusive(db: LockConnection): void {
+  for (let tries = 1; ; tries++) {
+    try {
+      db.exec('BEGIN EXCLUSIVE');
+      return;
+    } catch (err) {
+      if (primaryCode(err) !== SQLITE_BUSY || tries === BUSY_TRIES) throw err;
+      Atomics.wait(pause, 0, 0, 1 + Math.random() * BUSY_JITTER_MS);
+    }
+  }
+}
+
 type Pass = LockTake | { readonly kind: 'again'; readonly mismatch: boolean };
 
 function onePass(path: string, stat: StatFn): Pass {
@@ -124,8 +138,8 @@ function onePass(path: string, stat: StatFn): Pass {
   let before: FileIdentity | undefined;
   try {
     before = stat(path);
-    db = new DatabaseSync(path, { timeout: BUSY_WAIT_MS });
-    db.exec('BEGIN EXCLUSIVE');
+    db = new DatabaseSync(path, { timeout: 0 });
+    beginExclusive(db);
     const after = stat(path);
     if (after !== undefined && sameFile(before, after)) {
       return { kind: 'taken', lock: holder(db, path, after, stat) };
