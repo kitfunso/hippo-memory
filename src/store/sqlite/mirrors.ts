@@ -1,3 +1,6 @@
+// The mirrors derived from the database: the memory markdown files, index.json and stats.json, and
+// the sync that rebuilds them. Active-task and recent-session files live in session-mirrors.ts.
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';

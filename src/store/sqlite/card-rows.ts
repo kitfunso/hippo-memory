@@ -1,4 +1,5 @@
-// Card rows: the columns, the row mappers and the comment insert that card reads and writes share.
+// Card rows: the columns, the row mappers, the comment insert, the blank-text check and the
+// unknown-card error that card reads and writes share.
 
 import { type DatabaseSyncLike } from '../../db/index.js';
 import { Card, CardStatus, CardRun, CardComment } from '../../base/records/card.js';

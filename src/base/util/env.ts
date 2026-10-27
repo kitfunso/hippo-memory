@@ -261,8 +261,8 @@ export const envRequestDeadlineMs = nonNegInt('HIPPO_REQUEST_DEADLINE_MS');
  * executor.ts holds the default.
  */
 export const envStoreQueueMax = posInt('HIPPO_STORE_QUEUE_MAX');
-/** How long the daily runner lets one child `hippo` step run; surface/cli/setup.ts holds the
- * default. */
+/** How long the daily runner lets one child `hippo` step run; surface/cli/daily-runner.ts holds
+ * the default. */
 export const envDailyStepTimeoutMs = posInt('HIPPO_DAILY_STEP_TIMEOUT_MS');
 /** Blank reads as unset, so an emptied variable falls back to the local key. */
 export const envApiKey = trimmedText('HIPPO_API_KEY');

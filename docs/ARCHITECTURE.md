@@ -679,7 +679,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: without this migration a store would mix old-base and new-base memories, a state the decay evaluation never tested (docs/evals/2026-09-24-decay-default-prereg.md, Migration). The rule, declared there before any run:
 - `conflictLosers`: A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count.
 
-### src/surface/hooks-install/rules/json-hooks.ts
+### src/surface/hooks-install/rules/claude-hooks.ts
 - `hasLegacySplitSessionEnd`: Returns true when `hooks.SessionEnd` still contains either of the legacy v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`) without the current consolidated `hippo session-end` entry.
 
 ### src/domain/objects/incidents.ts

@@ -21,8 +21,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { handleStamp } from './handle-clock.js';
 
-// What the store says when a prediction is saved, closed or summed: audit metadata, refusal texts,
-// baserate.
+// What the store says when a prediction is saved or closed: audit metadata and refusal texts.
 
 const present = (value: number | null | undefined): boolean =>
   value !== undefined && value !== null;
@@ -72,6 +71,7 @@ function closeMissError(tenantId: string, id: number, closureState: string | nul
  * `trg_predictions_tenant_match_*` triggers enforce the prediction's tenant matches the
  * referenced memory's. `savePrediction` writes memory and prediction inside `writeEntry`'s
  * SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
+
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
