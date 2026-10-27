@@ -1,6 +1,6 @@
 // A lock the operating system holds for a live process: BEGIN IMMEDIATE on a small lock database
 // takes the RESERVED lock (LockFileEx on win32, fcntl on POSIX), which one connection holds and which dies with it.
-// Only a holder unlinks the file, at release; a take checks the path names the same file before its open and after its lock.
+// Only a holder unlinks the file, at release; a take checks the path names the same file across its open and lock.
 import { createRequire } from 'node:module';
 import { closeSync, openSync, statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
