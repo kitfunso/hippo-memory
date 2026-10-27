@@ -3,6 +3,7 @@
 // memory/entry-filter.ts is the predicate half.
 import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { textForms } from '../../base/util/secret-detect.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -71,7 +72,8 @@ type Terms = { readonly [K in Field]: Term<K> };
 const TERMS: Terms = {
   ids: (ids, column) => inList(column('id'), ids),
   origins: (origins, column) => inList(column('origin_project'), origins),
-  source: (source, column) => ({ sql: `${column('source')} = ?`, params: [source] }),
+  // A row may keep the source raw from before redaction, or as stored.
+  source: (source, column) => inList(column('source'), textForms(source)),
   sourcePrefix: (prefix, column) => startsWith(column('source'), prefix),
   artifactRefPrefix: (prefix, column) => startsWith(column('artifact_ref'), prefix),
   tag: (tag, column) => ({

@@ -3,7 +3,8 @@
  * `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the
  * reverse is a cycle). */
 
-import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { contentDigests, rejectionDigest } from '../../base/records/rejection-digest.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { RejectedValueRow, RejectionCheck } from '../../base/ports/store/rejections.js';
@@ -35,6 +36,20 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
     sourceMemoryId: row.source_memory_id,
     normalizedChars: row.normalized_chars,
   };
+}
+
+/** The tombstone of any form a copy of `text` may hold, stored form first: one point query per
+ * form, two at most. */
+export function tombstoneOf(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  text: string,
+): RejectedValueRow | null {
+  for (const digest of contentDigests(text)) {
+    const tombstone = readRejectedValue(db, tenantId, digest);
+    if (tombstone) return tombstone;
+  }
+  return null;
 }
 
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case
@@ -98,7 +113,7 @@ export function insertRejectedValue(
   ).run(
     opts.tenantId,
     opts.digest,
-    opts.reason,
+    redactSecretsStrict(opts.reason),
     opts.rejectedBy,
     opts.rejectedAt,
     opts.sourceMemoryId ?? null,
@@ -137,8 +152,7 @@ export function checkRejectionGuard(
   db: DatabaseSyncLike,
   { tenantId, entryId, content }: RejectionCheck,
 ): void {
-  const incomingDigest = rejectionDigest(content);
-  const tombstone = readRejectedValue(db, tenantId, incomingDigest);
+  const tombstone = tombstoneOf(db, tenantId, content);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is
@@ -147,7 +161,8 @@ export function checkRejectionGuard(
     entryId,
   ) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
-  if (!introducesContent(storedRow, tenantId, incomingDigest)) return;
+  const digest = rejectionDigest(redactSecretsStrict(content));
+  if (!introducesContent(storedRow, tenantId, digest)) return;
   throw rejectedValueError(tombstone, entryId);
 }
 
@@ -158,9 +173,9 @@ interface StoredContentRow {
   readonly tenant_id: string | null;
 }
 
-/** True when writing content of `digest` under `tenantId` over `stored`, the row the id holds
- * now, introduces it: a new row, a move to the tenant, or changed content. The guard refuses
- * only these. */
+/** True when writing content whose stored form has `digest` under `tenantId` over `stored`, the
+ * row the id holds now, introduces it: a new row, a move to the tenant, or changed stored text. The
+ * guard refuses only these, so a rewrite that only redacts a legacy row passes. */
 export function introducesContent(
   stored: StoredContentRow | undefined,
   tenantId: string,
@@ -169,7 +184,7 @@ export function introducesContent(
   return (
     stored === undefined ||
     stored.tenant_id !== tenantId ||
-    rejectionDigest(stored.content) !== digest
+    rejectionDigest(redactSecretsStrict(stored.content)) !== digest
   );
 }
 

@@ -1,6 +1,7 @@
 // A container's live rows as they will stand once its moves run: the legacy adoptions and the moves
 // from the project's earlier names are planned as steps, and applied to the rows read, as the store
 // will apply them.
+import { sameStoredText } from '../../base/util/secret-detect.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
@@ -119,7 +120,8 @@ async function standingLegacy(
   const from = new Map(rows.map((row) => [row.id, row.source]));
   const out = new Map<string, MemoryEntry>();
   for (const row of await s.store.entriesByIds([...from.keys()], s.tenantId)) {
-    if (!row.supersededBy && row.source === from.get(row.id)) out.set(row.id, row);
+    const standing = !row.supersededBy && sameStoredText(row.source, from.get(row.id) ?? '');
+    if (standing) out.set(row.id, row);
   }
   return out;
 }

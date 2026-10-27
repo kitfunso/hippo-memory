@@ -165,18 +165,54 @@ function redactPemBlocks(text: string): string {
   return out + text.slice(from);
 }
 
+// Global copies built once: replace() resets lastIndex, so calls share them; detectSecret keeps its
+// own non-global patterns, whose test() holds no state.
+const STRICT_GLOBAL: readonly RegExp[] = SECRET_PATTERNS.map(
+  ({ re }) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
+);
+
+const REDACTED = '[REDACTED]';
+
 /**
  * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and
- * Basic auth headers and JWTs.
+ * Basic auth headers and JWTs. It is also the stored form of every text hippo.db keeps.
  */
 export function redactSecretsStrict(text: string): string {
   if (!text) return text;
   // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
   let result = redactPemBlocks(text);
-  for (const { re } of SECRET_PATTERNS) {
-    const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-    result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
-  }
-  for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, '[REDACTED]');
+  for (const re of STRICT_GLOBAL) result = result.replace(re, REDACTED);
+  for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, REDACTED);
   return result;
+}
+
+/** The stored form of an optional text column; null when there is no text. */
+export function storedOrNull(text: string | null | undefined): string | null {
+  return text == null ? null : redactSecretsStrict(text);
+}
+
+/** The entry as stored, content and source redacted; the same object when redaction changes
+ * nothing. */
+export function redactEntry<T extends { content: string; source?: string | null }>(entry: T): T {
+  const content = redactSecretsStrict(entry.content);
+  const source = entry.source && redactSecretsStrict(entry.source);
+  if (content === entry.content && source === entry.source) return entry;
+  return source === entry.source ? { ...entry, content } : { ...entry, content, source };
+}
+
+/** True when `held` is `given` as stored; a raw legacy copy of the same text matches too. */
+export function sameStoredText(held: string | null | undefined, given: string): boolean {
+  return held != null && redactSecretsStrict(held) === redactSecretsStrict(given);
+}
+
+/** Every form a stored copy of `text` may hold: the stored form, then the raw text when a row
+ * written before redaction keeps it. */
+export function textForms(text: string): readonly string[] {
+  const stored = redactSecretsStrict(text);
+  return stored === text ? [text] : [stored, text];
+}
+
+/** True for a stored text that holds redaction markers and nothing else, so it names no value. */
+export function onlyRedacted(stored: string): boolean {
+  return stored.includes(REDACTED) && stored.replaceAll(REDACTED, '').trim() === '';
 }

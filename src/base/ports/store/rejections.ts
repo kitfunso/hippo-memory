@@ -18,6 +18,9 @@ export interface Rejections {
   /** Whether a write guard would refuse each check, in order; writes nothing, so a dry run
    * counts what a run skips. */
   refusedAmong(checks: readonly RejectionCheck[]): Promise<boolean[]>;
+  /** Keys the rows a 2.x write or the v65 upgrade left without rejection keys; answers the rows
+   * keyed. Optional, so an adapter without the keys still binds. */
+  fillDigests?(): Promise<number>;
 }
 
 export interface RejectedValueRow {

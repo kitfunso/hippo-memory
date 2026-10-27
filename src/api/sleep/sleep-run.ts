@@ -106,6 +106,9 @@ async function runSleepPhases(
 
   if (dryRun) return result;
 
+  // Keys the rows a 2.x binary or the v65 upgrade left unkeyed; a store without the method skips.
+  await ctx.store.rejections?.fillDigests?.();
+
   // Phase 4: Auto-share high-transfer-score memories to global.
   if (!opts.noShare) await shareOnSleep(ctx, phases, result);
 

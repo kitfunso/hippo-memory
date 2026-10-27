@@ -6,7 +6,7 @@ import { duplicateKey } from '../../base/util/same-text.js';
 import { maskEmails } from '../../base/util/secret-detect.js';
 import { liveUnder } from './container-view.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
-import { MIN_ITEM_CHARS, storedText } from './source.js';
+import { MIN_ITEM_CHARS, legacyStoredText } from './source.js';
 import type { Container, ImportStore, Listing } from './types.js';
 
 export const LEGACY_SOURCE_PREFIX = 'claude-memory:';
@@ -38,7 +38,7 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
       targets.push({
         ref: String(refs.length),
         file: path.posix.basename(item.key),
-        textKey: duplicateKey(storedText(item.text)),
+        textKey: duplicateKey(legacyStoredText(item.text)),
       });
       refs.push({ dir: container.path, key: item.key });
     }

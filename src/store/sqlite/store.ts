@@ -14,7 +14,8 @@ import {
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { recordTokenUse } from './token-ledger.js';
-import { listAmbientCandidates, listContextCandidates, schemaFit } from './candidates.js';
+import { listAmbientCandidates, listContextCandidates } from './candidates.js';
+import { schemaFit } from './schema-fit.js';
 import { readEntriesInIdOrder, listFreshRawMemories } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
 import { sqliteAgentImport } from './agent-import.js';
@@ -41,7 +42,7 @@ import { sqliteGraphRebuild } from './graph-rebuild.js';
 import { sqliteLedger } from './ledger.js';
 import { sqliteFolderFiles } from './folder-files.js';
 import { sqliteDagReads } from './dag-reads.js';
-import { sqliteEntryWrites } from './entry-writes.js';
+import { sqliteEntryWrites } from './entry-lifecycle.js';
 import { sqliteAuditMaintenance } from './audit-maintenance.js';
 import { sqliteLessonWrites } from './lesson-writes.js';
 import { finishRecall, sqliteLastRecall } from './last-recall.js';

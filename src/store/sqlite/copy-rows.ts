@@ -12,7 +12,8 @@ import { bareText } from '../rules/copies.js';
 import { narrowingAnd } from './entry-filter.js';
 import { bareTextSql } from './rule-sql.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
-import { duplicateKey } from '../../base/util/same-text.js';
+import { spacedText } from '../../base/util/same-text.js';
+import { textForms } from '../../base/util/secret-detect.js';
 
 // Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew,
 // Arabic, Devanagari, Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
@@ -24,7 +25,7 @@ const PHRASE_WORDS = 32;
 /** The first words of `text`, which a row holding the text word for word holds in a row; null
  * when they might name no token, since an empty phrase matches no row. */
 function openingPhrase(text: string): string | null {
-  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
+  const opening = spacedText(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
   return SURE_TOKEN_CHAR.test(opening) ? opening : null;
 }
 
@@ -87,7 +88,10 @@ export function rowsHoldingTexts(
 ): CopyDbRow[] {
   const indexed = isFtsAvailable(db) && isFtsInSync(db);
   const phraseOf = new Map(
-    [...new Set(texts)].map((text) => [text, indexed ? holdingPhrase(text) : null]),
+    [...new Set(texts.flatMap(textForms))].map((text) => [
+      text,
+      indexed ? holdingPhrase(text) : null,
+    ]),
   );
   const named = [...phraseOf].filter((pair): pair is [string, string] => pair[1] !== null);
   const unnamed = [...phraseOf].filter(([, phrase]) => phrase === null).map(([text]) => text);

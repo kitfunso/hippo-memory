@@ -2,7 +2,7 @@
 // sleep-merged row holding it. Every copy heldTextKeys finds passes, so a caller that checks again
 // keeps its answer.
 
-/** The code points JavaScript's \s matches, which duplicateKey folds; the SQL twin removes the
+/** The code points JavaScript's \s matches, which spacedText folds; the SQL twin removes the
  * same list. */
 export const SPACE_CODES: readonly number[] = [
   0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005,
@@ -14,7 +14,7 @@ const SPACES = new RegExp(
   'gu',
 );
 
-/** `text` with every space removed: two texts duplicateKey calls equal are equal here too. */
+/** `text` with every space removed: two texts spacedText calls equal are equal here too. */
 export const bareText = (text: string): string => text.replace(SPACES, '');
 
 /** True when `row` may hold one of the texts whose bare forms are `bares`: its own bare text is

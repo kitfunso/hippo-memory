@@ -1,19 +1,20 @@
 // hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its
 // own. A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be
 // an import cycle.
-import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { heldTexts } from '../../base/util/same-text.js';
 import { audit } from './audit-event.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { deleteEntryCore } from './entry-deletes.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
+  DORMANT_TEXT_COLUMNS,
   dormantTextsByIds,
-  dormantTextsPage,
+  type DormantText,
   replaceDormantEntry,
 } from './dormant-rows.js';
-import { entryRejectRow, readEntriesByIds, listTenantTextsPage } from './entry-reads.js';
+import { entryRejectRow, readEntriesByIds } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -26,9 +27,11 @@ import {
   checkRejectionGuard,
 } from './rejection.js';
 import {
+  contentDigests,
   normalizeValueForRejection,
   rejectionDigest,
 } from '../../base/records/rejection-digest.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type {
   AppliedRejection,
   LiftedRejection,
@@ -41,9 +44,9 @@ import { rejectedText, rejectionReaches } from '../../base/records/rejection-tex
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { handleStamp } from './handle-clock.js';
+import { digestHolderPages, fillRejectionDigests } from './text-digests.js';
+import { byBytes, oldestFirst } from '../rules/order.js';
 
 type HoldsValue = (text: string) => boolean;
 
@@ -73,41 +76,39 @@ function holdOf(
     : null;
 }
 
-/** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a
- * time with no lock held: the rejected-value row is already committed, so no write can add a
- * holder behind the walk. */
+// What the holder check reads of a live row, so an unfilled candidate costs one read.
+const LIVE_TEXT_COLUMNS = 'id, content, source, scope, created';
+type LiveText = Pick<MemoryEntry, 'id' | 'content' | 'scope' | 'created'> & {
+  readonly source: string | null;
+};
+
+/** The ids of the tenant's rows in reach that hold the text, live in store order, then dormant
+ * by id. One snapshot, so a fill or edit cannot move a holder between the keyed and NULL reads. */
 function listHolderIds(
   db: DatabaseSyncLike,
   rejection: Rejection,
-  holdsValue: HoldsValue,
+  { digest, holdsValue }: { readonly digest: string; readonly holdsValue: HoldsValue },
 ): string[] {
   const { tenantId } = rejection;
-  const found: string[] = [];
-  const keep = (row: {
-    id: string;
-    content: string;
-    source: string | null;
-    scope: string | null;
-  }): void => {
-    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) {
-      found.push(row.id);
+  const holds = (row: { content: string; source: string | null; scope: string | null }) =>
+    rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null;
+  return withReadSnapshot(db, () => {
+    const live: LiveText[] = [];
+    const liveQuery = { tenantId, digest, columns: LIVE_TEXT_COLUMNS };
+    for (const page of digestHolderPages<LiveText>(db, 'live', liveQuery)) {
+      const rows =
+        'keyed' in page ? [...readEntriesByIds(db, page.keyed, tenantId).values()] : page.unfilled;
+      live.push(...rows.filter(holds));
     }
-  };
-  let after: EntryCursor | null = null;
-  do {
-    const page = listTenantTextsPage(db, tenantId, {
-      limit: READ_PAGE_ROWS,
-      after: after ?? undefined,
-    });
-    page.texts.forEach(keep);
-    after = page.next;
-  } while (after !== null);
-  for (let afterId = ''; ;) {
-    const page = dormantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, afterId });
-    page.forEach(keep);
-    if (page.length < READ_PAGE_ROWS) return found;
-    afterId = page[page.length - 1].id;
-  }
+    const dormant: string[] = [];
+    const dormantQuery = { tenantId, digest, columns: DORMANT_TEXT_COLUMNS };
+    for (const page of digestHolderPages<DormantText>(db, 'dormant', dormantQuery)) {
+      const rows =
+        'keyed' in page ? [...dormantTextsByIds(db, tenantId, page.keyed).values()] : page.unfilled;
+      dormant.push(...rows.filter(holds).map((row) => row.id));
+    }
+    return [...live.sort(oldestFirst).map((row) => row.id), ...dormant.sort(byBytes)];
+  });
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the
@@ -262,10 +263,8 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so every later write refuses the text; walks the
- * tenant's rows a page at a time with no lock held; then removes each holder in reach (live or
- * dormant, whole or merged) in one short write scope. A failure past the first commit leaves the
- * text refused and its holders kept; rejecting again removes them. */
+/** Commits the rejected-value row first, so later writes refuse the text, then removes each
+ * holder in reach in one write scope; a failure past that commit keeps them until a new reject. */
 function applyRejection(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -277,7 +276,9 @@ function applyRejection(
     rejection,
     memoryId === undefined ? undefined : entryRejectRow(db, memoryId),
   );
-  const digest = rejectionDigest(content);
+  // Every tombstone names the stored form, so values differing only in a secret share one.
+  const stored = redactSecretsStrict(content);
+  const digest = rejectionDigest(stored);
   const rejectedAt = files.clock().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
     insertRejectedValue(db, {
@@ -287,13 +288,11 @@ function applyRejection(
       rejectedBy: actor,
       rejectedAt,
       sourceMemoryId: memoryId ?? null,
-      normalizedChars: normalizeValueForRejection(content).length,
+      normalizedChars: normalizeValueForRejection(stored).length,
     }),
   );
-  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
-  // needs a schema migration, held until approved.
-  const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
-  const found = listHolderIds(db, rejection, holdsValue);
+  const holdsValue: HoldsValue = (text) => contentDigests(text).includes(digest);
+  const found = listHolderIds(db, rejection, { digest, holdsValue });
   const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 
   purgeRemovedMirrors(db, hippoRoot, removal);
@@ -357,5 +356,10 @@ export function sqliteRejections({ on, files }: Handles): Rejections {
       openStore,
     ),
     ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
+    ...bound<Required<Pick<Rejections, 'fillDigests'>>>(
+      on,
+      { fillDigests: fillRejectionDigests },
+      openStore,
+    ),
   };
 }

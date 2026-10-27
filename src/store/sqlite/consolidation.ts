@@ -26,14 +26,15 @@ import type {
   SleepStart,
 } from '../../base/ports/store/consolidation.js';
 import { appendAuditEvents } from './audit.js';
-import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
+import { conflictResolveAudits, resolvedConflicts } from './conflict-resolution.js';
+import { replaceDetectedConflicts } from './conflict-detection.js';
 import {
   iterateEveryTenantEntries,
   iterateRowsWithObjects,
   listDuplicateCandidates,
   listEntryIdsPage,
 } from './entry-reads.js';
-import { setHalfLives } from './entry-writes.js';
+import { setHalfLives } from './entry-stats.js';
 import { type Handles, type StoreFiles, waitingOpener } from './open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../rules/half-life.js';
 import { commitInChunks } from './delete-and-batch.js';

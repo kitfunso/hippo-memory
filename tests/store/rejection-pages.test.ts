@@ -7,6 +7,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { updateMemoryRows } from '../../src/store/sqlite/entry-row.js';
+import { fillRejectionDigests } from '../../src/store/sqlite/text-digests.js';
 import type { Rejection } from '../../src/base/ports/store/rejections.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
@@ -28,18 +30,23 @@ beforeEach(() => {
   root = makeRoot('rejection-pages');
 });
 
-// The walk's page read: a write that lands as it is first prepared lands while the rows are walked with no lock held.
-const WALK_PAGE = 'SELECT id, content, source, scope, created FROM memories ';
+// The holders' first read by key: a write that lands as it is first prepared lands while the rows are read with no
+// lock held.
+const WALK_PAGE = 'SELECT id FROM memories WHERE rejection_digest = ?';
 
-/** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
-function rejectionsWalking(onWalk: () => void) {
+// The unfilled rows' first page: a write that lands as it is prepared lands after the keyed read ran.
+const UNFILLED_PAGE = 'SELECT rowid AS k, ';
+const UNFILLED_DORMANT_PAGE = 'SELECT id AS k, ';
+
+/** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares the read `page` starts. */
+function rejectionsWalking(onWalk: () => void, page = WALK_PAGE) {
   const handles = handlesOf(root);
   const { on } = handles;
   let fired = false;
   const pausing = (db: DatabaseSyncLike): DatabaseSyncLike => ({
     exec: (sql) => db.exec(sql),
     prepare: (sql) => {
-      if (!fired && sql.startsWith(WALK_PAGE)) {
+      if (!fired && sql.startsWith(page)) {
         fired = true;
         onWalk();
       }
@@ -48,6 +55,9 @@ function rejectionsWalking(onWalk: () => void) {
     close: () => db.close(),
     function: (name, options, fn) => db.function(name, options, fn),
     aggregate: (name, options) => db.aggregate(name, options),
+    get isTransaction() {
+      return db.isTransaction;
+    },
   });
   const walking: OnHandle = (fn, open) => on((db, files) => fn(pausing(db), files), open);
   return sqliteRejections({ ...handles, on: walking });
@@ -173,5 +183,45 @@ describe('rejections.apply across pages', () => {
       (e) => rejectionDigest(e.content) === rejectionDigest(VALUE),
     );
     expect(holding.map((e) => e.id)).toEqual([ids[900]]);
+  });
+
+  for (const [name, write] of [
+    ['a sleep fill', (db: DatabaseSyncLike) => fillRejectionDigests(db)],
+    [
+      'an outcome rewrite of the holder',
+      (db: DatabaseSyncLike, holder: MemoryEntry) => updateMemoryRows(db, [{ ...holder, retrievalCount: 7 }]),
+    ],
+  ] as const) {
+    it(`removes an unfilled holder that ${name} keys between the keyed read and the unfilled pages`, async () => {
+      const holder = createMemory(VALUE, { tags: [] });
+      withDb((db) => {
+        for (let i = 0; i < 5; i++) writeEntryDbOnly(db, createMemory(`filler row ${i}`, { tags: [] }));
+        writeEntryDbOnly(db, holder);
+        // A store migrated to v65 and not yet slept: no row has its keys.
+        db.exec('UPDATE memories SET rejection_digest = NULL; DELETE FROM held_text_digests');
+      });
+      const applied = await rejectionsWalking(() => withDb((db) => write(db, holder)), UNFILLED_PAGE).apply(
+        rejection(),
+      );
+      expect(applied.removedIds).toEqual([holder.id]);
+      expect(readEntry(root, holder.id)).toBeNull();
+    });
+  }
+
+  it('removes an unfilled dormant holder that a sleep fill keys between the keyed read and the unfilled pages', async () => {
+    const holder = createMemory(VALUE, { tags: [] });
+    withDb((db) => {
+      for (let i = 0; i < 5; i++) {
+        const filler = createMemory(`dormant filler ${i}`, { tags: [] });
+        insertDormantRow(db, { entry: filler, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00.000Z' });
+      }
+      insertDormantRow(db, { entry: holder, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00.000Z' });
+      db.exec('UPDATE dormant_memories SET rejection_digest = NULL; DELETE FROM held_text_digests');
+    });
+    const applied = await rejectionsWalking(() => withDb(fillRejectionDigests), UNFILLED_DORMANT_PAGE).apply(
+      rejection(),
+    );
+    expect(applied.removedIds).toEqual([holder.id]);
+    withDb((db) => expect(readDormantSnapshot(db, 'default', holder.id)).toBeNull());
   });
 });

@@ -19,6 +19,9 @@ import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from './rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { duplicateHash } from '../../base/util/same-text.js';
+import { redactEntry } from '../../base/util/secret-detect.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { keyedText, withHeldDigests } from './text-digests.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -46,13 +49,16 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   if (holder !== undefined && holder.tenant_id !== (entry.tenantId ?? DEFAULT_TENANT_ID)) {
     throw new CrossTenantIdError(entry.id);
   }
-  db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
+  const stored = redactEntry(entry);
+  withHeldDigests(db, 'live', [keyedText(stored)], () =>
+    db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(stored)),
+  );
   return holder === undefined;
 }
 
-// The duplicate read's key goes with every row write; no read selects it, so it stays out of
-// MEMORY_ROW_COLUMNS.
-const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash'] as const;
+// The duplicate read's key and the rejection key go with every row write; no read selects them,
+// so they stay out of MEMORY_ROW_COLUMNS.
+const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash', 'rejection_digest'] as const;
 const UPDATED_COLUMNS = WRITTEN_COLUMNS.slice(1);
 
 const UPSERT_MEMORY_SQL =
@@ -62,19 +68,27 @@ const UPSERT_MEMORY_SQL =
   `updated_at = datetime('now')`;
 
 /** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of
- * rows. The caller owns the transaction, the rejection guard and the full-text rows. */
-export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
+ * rows. The caller owns the transaction, the rejection guard and the full-text rows. Returns the
+ * ids whose stored text differs from the entry given, so the caller re-indexes them. */
+export function updateMemoryRows(
+  db: DatabaseSyncLike,
+  entries: readonly MemoryEntry[],
+): readonly string[] {
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
-  for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
-    cachedStatement(
-      db,
-      `WITH v(${WRITTEN_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, WRITTEN_COLUMNS.length)}) ` +
-        `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
-    ).run(...chunk.flatMap(memoryRowValues));
-  }
+  const stored = entries.map(redactEntry);
+  withHeldDigests(db, 'live', stored.map(keyedText), () => {
+    for (const chunk of chunked(stored, rowsPerStatement(WRITTEN_COLUMNS.length))) {
+      cachedStatement(
+        db,
+        `WITH v(${WRITTEN_COLUMNS.join(', ')}) AS (VALUES ${valuesRows(chunk.length, WRITTEN_COLUMNS.length)}) ` +
+          `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
+      ).run(...chunk.flatMap(memoryRowValues));
+    }
+  });
+  return entries.filter((entry, i) => stored[i] !== entry).map((entry) => entry.id);
 }
 
-/** Bind values for WRITTEN_COLUMNS, in its order. */
+/** Bind values for WRITTEN_COLUMNS, in its order, from an entry in its stored form. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
   // time in SQL.
@@ -118,6 +132,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.latestAt ?? null,
     entry.dagLevel3BuiltAt ?? null,
     duplicateHash(entry.content),
+    rejectionDigest(entry.content),
   ];
 }
 
@@ -145,7 +160,7 @@ export function syncFtsRow(
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
-      entry.content,
+      redactEntry(entry).content,
       entry.tags.join(' '),
     );
   } catch (err) {
@@ -209,7 +224,7 @@ export function replaceFtsRows(
   const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
   for (const row of toInsert) {
     try {
-      insert.run(row.id, row.content, row.tags.join(' '));
+      insert.run(row.id, redactEntry(row).content, row.tags.join(' '));
     } catch (err) {
       markFtsDrifted(db);
       log.warnThenSample(

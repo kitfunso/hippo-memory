@@ -1,4 +1,5 @@
-// Rejecting a conflict loser's value streams the tenant's rows instead of holding them all, and removes the same duplicates.
+// Rejecting a conflict loser's value reads its duplicates by their rejection keys, not the tenant's rows, and removes the
+// same duplicates.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -20,8 +21,8 @@ const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; all() takes SQL params and returns the row array.
 const { StatementSync } = require('node:sqlite') as { StatementSync: { prototype: StatementProto } };
 
-/** The duplicate scan: every other row of the loser's tenant. */
-const DUP_SCAN = 'SELECT id, kind, content, scope FROM memories WHERE tenant_id = ?';
+/** The duplicates' read by key: the rows whose digest or held keys name the value. */
+const KEY_READ = 'SELECT id FROM memories WHERE rejection_digest = ?';
 const LOSER = 'Use && to chain commands in PowerShell';
 
 let root: string;
@@ -33,6 +34,7 @@ beforeEach(() => {
 interface ArrayReads<T> {
   result: T;
   sql: string[];
+  rows: number;
 }
 
 interface RejectedLoser {
@@ -41,19 +43,22 @@ interface RejectedLoser {
   resolve: () => Promise<ResolveMemoryConflictResult>;
 }
 
-/** SQL of every statement whose rows `fn` took as one array, until `fn` settles. */
+/** SQL of every statement whose rows `fn` took as one array, and the memories rows they held, until `fn` settles. */
 async function arrayReads<T>(fn: () => Promise<T>): Promise<ArrayReads<T>> {
   const sql: string[] = [];
+  let rows = 0;
   const all = StatementSync.prototype.all;
   const spy = vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (
     this: StatementProto,
     ...params: unknown[]
   ) {
     sql.push(this.sourceSQL);
-    return all.apply(this, params);
+    const answer = all.apply(this, params);
+    if (/FROM memories\b/.test(this.sourceSQL)) rows += answer.length;
+    return answer;
   });
   try {
-    return { result: await fn(), sql };
+    return { result: await fn(), sql, rows };
   } finally {
     spy.mockRestore();
   }
@@ -118,11 +123,12 @@ describe('rejecting a conflict loser value', () => {
     expect(readEntry(root, keepId)).not.toBeNull();
   });
 
-  it('never holds every row of the tenant at once', async () => {
+  it("reads the duplicates by key and never the tenant's unrelated rows", async () => {
     const { loserId, resolve } = await rejectLoser();
     for (let i = 0; i < 20; i++) put(`unrelated note number ${i}`);
-    const { result, sql } = await arrayReads(resolve);
+    const { result, sql, rows } = await arrayReads(resolve);
     expect(result.loserId).toBe(loserId);
-    expect(sql.filter((s) => s.includes(DUP_SCAN))).toEqual([]);
+    expect(sql.filter((s) => s.startsWith(KEY_READ))).toHaveLength(1);
+    expect(rows).toBeLessThan(20);
   });
 });

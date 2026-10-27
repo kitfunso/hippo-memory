@@ -2,6 +2,8 @@
 // over two tenants holding the same text.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from '../../src/db/sqlite.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type {
   AppliedRejection,
@@ -28,7 +30,7 @@ const SHARED = 'the launch date is march third';
 const ALICE = 'personal:private:alice';
 
 type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'content' | 'summaryDirty'>;
-type Value = AppliedRejection | LiftedRejection | RejectedValueRow[] | boolean[] | Row[];
+type Value = AppliedRejection | LiftedRejection | RejectedValueRow[] | boolean[] | Row[] | number;
 type Call = GroupCall<'rejections', Value>;
 type Side = SideResult<Value>;
 
@@ -238,6 +240,34 @@ describe('Rejections.list, lift and refusedAmong', () => {
         ]),
     ]);
     expect(value<boolean[]>(side, 1)).toEqual([true, false, false]);
+    expect(added(side).map((r) => r.op)).toEqual(['reject_value']);
+  });
+});
+
+describe('Rejections.fillDigests', () => {
+  it('keys the rows a 2.x write left unkeyed once, and a reject after it reads them by key', async () => {
+    const db = new DatabaseSync(join(fixture.dir, 'hippo.db'));
+    let rows: number;
+    try {
+      // A 2.x binary writes no keys; the fixture keeps them cleared, as every read stays exact without them.
+      db.exec('UPDATE memories SET rejection_digest = NULL; UPDATE dormant_memories SET rejection_digest = NULL');
+      // SAFETY: an aggregate with no GROUP BY answers one row with an INTEGER n.
+      rows = (
+        db.prepare('SELECT (SELECT COUNT(*) FROM memories) + (SELECT COUNT(*) FROM dormant_memories) AS n').get() as {
+          n: number;
+        }
+      ).n;
+    } finally {
+      db.close();
+    }
+    const side = await conforms([
+      (g) => g.fillDigests?.() ?? Promise.resolve(-1),
+      (g) => g.fillDigests?.() ?? Promise.resolve(-1),
+      byText(SHARED),
+    ]);
+    expect(value<number>(side, 0)).toBe(rows);
+    expect(value<number>(side, 1)).toBe(0);
+    expect(value<AppliedRejection>(side, 2).removedIds.sort()).toEqual([seeded.note.id, seeded.copy.id].sort());
     expect(added(side).map((r) => r.op)).toEqual(['reject_value']);
   });
 });

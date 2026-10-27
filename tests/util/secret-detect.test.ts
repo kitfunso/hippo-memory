@@ -23,6 +23,8 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { restoreRawTextAt } from '../_helpers/legacy-rows.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 
 const { writeEntry, apiCtx } = sessionPerTest();
 
@@ -210,6 +212,12 @@ describe('producer + sync vetoes (real stores)', () => {
   const SECRET_ROW = 'service api key sk_vendor_deadbeef123456 for the ingest worker';
   const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
+  /** A secret row as a release before the boundary stored it; writes now redact. */
+  const writeRaw = (root: string, entry: MemoryEntry): void => {
+    writeEntry(root, entry);
+    restoreRawTextAt(root, [entry]);
+  };
+
   beforeEach(() => {
     tmpRoot = makeRoot('secret', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
@@ -221,7 +229,7 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('shareMemory refuses a secret row even with force', async () => {
-    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
+    writeRaw(projA, createMemory(SECRET_ROW, { pinned: true }));
     const [row] = loadAllEntries(projA, 'default');
     await expect(
       shareMemory(...sharingStores(projA), row.id, { embed: TEST_RUN, tenantId: 'default', force: true }),
@@ -231,18 +239,18 @@ describe('producer + sync vetoes (real stores)', () => {
 
   it('autoShare silently skips secret rows and still shares clean ones', async () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
-    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    writeRaw(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const shared = await autoShare(...sharingStores(projA), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
   it('autoShare stats counts only shares actually withheld by the secret veto', async () => {
-    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    writeRaw(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     // Below the transfer bar: secret-flagged but never a share candidate, so
     // it must NOT increment the counter.
-    writeEntry(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
+    writeRaw(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
     const stats = { secretSkipped: 0 };
     const shared = await autoShare(...sharingStores(projA), {
       embed: TEST_RUN,
@@ -255,7 +263,7 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('autoShare fills stats identically under dryRun', async () => {
-    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    writeRaw(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const stats = { secretSkipped: 0 };
     const candidates = await autoShare(...sharingStores(projA), {
       embed: TEST_RUN,
@@ -270,7 +278,7 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('copyToGlobal refuses a secret row and stamps origin on clean promotes', async () => {
-    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
+    writeRaw(projA, createMemory(SECRET_ROW, { pinned: true }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const rows = loadAllEntries(projA, 'default');
     const secretRow = rows.find((e) => e.content === SECRET_ROW)!;
@@ -296,7 +304,7 @@ describe('producer + sync vetoes (real stores)', () => {
   it('syncGlobalToLocal skips secrets and other-project rows, preserves origin on copies', async () => {
     writeEntry(globalStore, { ...createMemory(CLEAN_ROW), originProject: '' });
     writeEntry(globalStore, { ...createMemory('project b routing table quirk'), originProject: 'proj-b' });
-    writeEntry(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
+    writeRaw(globalStore, { ...createMemory(SECRET_ROW), originProject: '' });
 
     const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), { embed: TEST_RUN });
     expect(count).toBe(1);
@@ -313,8 +321,8 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {
-    writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), originProject: 'proj-b' });
-    writeEntry(globalStore, {
+    writeRaw(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), originProject: 'proj-b' });
+    writeRaw(globalStore, {
       ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }),
       originProject: '',
     });

@@ -10,6 +10,7 @@ import { deriveHalfLife, type MemoryEntry } from '../../src/base/memory/entry.js
 import { LEGACY_TYPED_HALF_LIFE } from '../../src/base/memory/strength.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
+import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { duplicateHash } from '../../src/base/util/same-text.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -206,13 +207,15 @@ const OWN = [
   },
 ] as const;
 
-// v64's duplicate_hash postdates that commit; it is listed as the hash of the row's own text, so the writer's value is checked.
+// v64's duplicate_hash and v65's rejection_digest postdate that commit; each is listed as the key of the row's own text,
+// so the writer's value is checked.
 function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
   return OWN.map(({ flat, onDefault, ...own }) => ({
     ...SHARED,
     ...own,
     half_life_days: migrated ? onDefault : flat,
     duplicate_hash: duplicateHash(own.content),
+    rejection_digest: rejectionDigest(own.content),
   }));
 }
 

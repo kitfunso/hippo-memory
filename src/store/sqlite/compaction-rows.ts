@@ -3,8 +3,9 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
-import type { OriginMoveOptions } from './entry-writes.js';
+import type { OriginMoveOptions } from './entry-rewrites.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -177,7 +178,14 @@ export function markCompactionSummarized(
     `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = ` +
       `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
+  ).run(
+    redactSecretsStrict(summary),
+    redactPayload(itemsJson),
+    summarizedAt,
+    ...stamp,
+    tenantId,
+    id,
+  );
   return (result.changes ?? 0) > 0;
 }
 
@@ -206,8 +214,8 @@ export function insertSummarizedCompaction(
     meta.transcriptPath,
     meta.startedAt,
     summarizedAt,
-    summary,
-    itemsJson,
+    redactSecretsStrict(summary),
+    redactPayload(itemsJson),
     ...stamp,
   );
 }

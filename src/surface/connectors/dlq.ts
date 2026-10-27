@@ -2,7 +2,11 @@
 // one set of defaults, one replay result.
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
-import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
+import {
+  DLQ_REDACTED_NOTE,
+  redactPayload,
+  redactSecretsStrict,
+} from '../../base/util/secret-detect.js';
 import type { ConnectorStore } from './ingest.js';
 import type {
   ConnectorDeadLetter,
@@ -55,7 +59,9 @@ export async function parkInDlq<Own, Bucket extends string>(
     ...opts,
     tenantId: opts.tenantId ?? UNROUTABLE_TENANT,
     rawPayload,
-    error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
+    error: redacted
+      ? `${redactSecretsStrict(opts.error)}; ${DLQ_REDACTED_NOTE}`
+      : redactSecretsStrict(opts.error),
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : (opts.signature ?? null),
   });

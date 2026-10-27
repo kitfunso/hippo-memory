@@ -12,6 +12,9 @@ import { escapeLike } from '../../base/util/escape.js';
 import type { EntryFilter } from '../../base/ports/store/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { redactEntry } from '../../base/util/secret-detect.js';
+import { rejectionDigest } from '../../base/records/rejection-digest.js';
+import { keyedText, withHeldDigests } from './text-digests.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import {
   dormantListCap,
@@ -40,26 +43,33 @@ const DORMANT_COLUMNS = 'tenant_id, id, content, entry_json, reason, strength, d
 /** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories`
  * row in the same transaction. */
 export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
-  cachedStatement(
-    db,
-    `
-    INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+  // One stored form binds both columns, so parseSnapshot's content check still holds.
+  const entry = redactEntry(move.entry);
+  withHeldDigests(db, 'dormant', [keyedText(entry)], () =>
+    cachedStatement(
+      db,
+      `
+    INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at,
+      rejection_digest)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tenant_id, id) DO UPDATE SET
       content = excluded.content,
       entry_json = excluded.entry_json,
       reason = excluded.reason,
       strength = excluded.strength,
-      dormant_at = excluded.dormant_at
+      dormant_at = excluded.dormant_at,
+      rejection_digest = excluded.rejection_digest
   `,
-  ).run(
-    move.entry.tenantId,
-    move.entry.id,
-    move.entry.content,
-    JSON.stringify(toWire(move.entry)),
-    move.reason,
-    move.strength,
-    move.dormantAt,
+    ).run(
+      entry.tenantId,
+      entry.id,
+      entry.content,
+      JSON.stringify(toWire(entry)),
+      move.reason,
+      move.strength,
+      move.dormantAt,
+      rejectionDigest(entry.content),
+    ),
   );
 }
 
@@ -212,12 +222,23 @@ export function replaceDormantEntry(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
-  entry: MemoryEntry,
+  given: MemoryEntry,
 ): void {
-  cachedStatement(
-    db,
-    `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`,
-  ).run(entry.id, entry.content, JSON.stringify(toWire(entry)), tenantId, id);
+  const entry = redactEntry(given);
+  withHeldDigests(db, 'dormant', [{ tenantId, id: entry.id, content: entry.content }], () =>
+    cachedStatement(
+      db,
+      `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ?, rejection_digest = ? ` +
+        `WHERE tenant_id = ? AND id = ?`,
+    ).run(
+      entry.id,
+      entry.content,
+      JSON.stringify(toWire(entry)),
+      rejectionDigest(entry.content),
+      tenantId,
+      id,
+    ),
+  );
 }
 
 /** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot
@@ -251,29 +272,14 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
  */
 // SAFETY: every read cast to this row selects DORMANT_TEXT_COLUMNS; scripts/check-row-casts.mjs
 // proves it.
-interface DormantText {
+export interface DormantText {
   readonly id: string;
   readonly content: string;
   readonly source: string | null;
   readonly scope: string | null;
 }
 
-const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
-
-/**
- * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a
- * text match reads.
- */
-export function dormantTextsPage(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  page: { readonly limit: number; readonly afterId: string },
-): DormantText[] {
-  return cachedStatement(
-    db,
-    `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`,
-  ).all(tenantId, page.afterId, page.limit) as DormantText[];
-}
+export const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
 
 /** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
 export function dormantTextsByIds(

@@ -20,7 +20,7 @@ import {
   MEMORY_BACKED_TABLES,
   deleteEntriesInBatches,
   memoriesBackingAmong,
-} from './delete-and-batch.js';
+} from './entry-deletes.js';
 import { readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
 import { ftsRowExists } from './entry-row.js';
@@ -78,7 +78,9 @@ const REQUIRED_COLUMNS = {
     'reason',
     'strength',
     'dormant_at',
+    'rejection_digest',
   ],
+  held_text_digests: ['tenant_id', 'rejection_digest', 'in_dormant', 'memory_id'],
   audit_log: ['ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json'],
   ...Object.fromEntries(MEMORY_BACKED_TABLES.map((table) => [table, ['memory_id']])),
 } satisfies Record<string, readonly string[]>;

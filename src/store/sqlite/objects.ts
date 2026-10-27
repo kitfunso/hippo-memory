@@ -3,13 +3,15 @@
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { keysetAfter, placeholders } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../base/memory/strength.js';
 import { deriveHalfLife, type MemoryEntry } from '../../base/memory/entry.js';
-import { scopeAdmitSql } from './rule-sql.js';
+import { holdsTextSql, scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
-import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from './entry-writes.js';
+import { auditEntryWrite, writeEntryMirrors } from './entry-writes.js';
+import { auditingRefusal } from './entry-lifecycle.js';
 import { markGraphDirty } from './graph-queue.js';
 import { removeGraphEntitiesForObject } from './graph-writes.js';
 import {
@@ -257,8 +259,9 @@ function listRows<K extends ObjectKind>(
     params.push(query.status);
   }
   if (query.filter && spec.filterColumn) {
-    clauses.push(`${spec.filterColumn} = ?`);
-    params.push(query.filter);
+    const filter = holdsTextSql(spec.filterColumn, query.filter);
+    clauses.push(filter.sql);
+    params.push(...filter.params);
   }
   if (query.memoryId !== undefined) {
     clauses.push('memory_id = ?');
@@ -370,7 +373,7 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
     cols.push('version', 'change_summary');
     values.push(
       row.version,
-      row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null),
+      row.save.supersedesId === undefined ? null : storedOrNull(row.save.changeSummary),
     );
   }
   const result = cachedStatement(
@@ -533,8 +536,8 @@ function openIncidentRow(
   ).run(
     memoryId,
     tenantId,
-    incidentText,
-    context ?? null,
+    redactSecretsStrict(incidentText),
+    storedOrNull(context),
     JSON.stringify(linkedMemoryIds),
     open.at,
   );
@@ -575,7 +578,7 @@ function resolveRow(
       SET status = 'resolved', resolution_text = ?, resolved_at = ?
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
-    ).run(resolve.text, resolve.at, id, tenantId);
+    ).run(redactSecretsStrict(resolve.text), resolve.at, id, tenantId);
     if (updated.changes === 0) {
       const existing = cachedStatement(
         db,
@@ -610,9 +613,9 @@ function policiesInForce(
   query: PoliciesInForceQuery,
 ): Policy[] {
   const { asOf, name } = query;
-  const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
-  const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
-  if (name !== undefined) params.push(name);
+  const named = name === undefined ? null : holdsTextSql('p.policy_name', name);
+  const nameClause = named ? `AND ${named.sql}` : '';
+  const params: Array<string | number> = [tenantId, asOf, asOf, asOf, ...(named?.params ?? [])];
   const rows = cachedStatement(
     db,
     `

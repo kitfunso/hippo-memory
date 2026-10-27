@@ -8,6 +8,7 @@ import type {
   GraphOp,
   NaturalKey,
 } from '../../base/ports/store/graph.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 /** The entity columns a rebuild diffs against. */
 export interface StoredEntity {
@@ -118,7 +119,7 @@ function diffEntities(
     const row = kept.get(key);
     if (!row) inserts.push({ op: 'insertEntity', entity });
     else if (
-      row.name !== entity.name ||
+      row.name !== redactSecretsStrict(entity.name) ||
       `${row.memory_id ?? ''}|${row.source_kind}` !== provenanceOf(entity.memoryId, kinds)
     ) {
       updates.push({ op: 'updateEntity', id: row.id, entity });

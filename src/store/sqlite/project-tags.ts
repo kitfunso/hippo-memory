@@ -21,12 +21,9 @@ import { appendAuditEvents } from './audit.js';
 import { compactionOrigins, restampCompactionOrigin } from './compaction-rows.js';
 import { dormantSnapshotsWhere, insertDormantRow, replaceDormantEntry } from './dormant-rows.js';
 import { readEntriesByIds, countByOrigin } from './entry-reads.js';
-import {
-  deleteEntryRowInTx,
-  restampOriginProject,
-  stampOriginProjects,
-  writeEntryMirrors,
-} from './entry-writes.js';
+import { deleteEntryRowInTx } from './entry-stats.js';
+import { restampOriginProject, stampOriginProjects } from './entry-rewrites.js';
+import { writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import type { Handles, HandleOpener, StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';

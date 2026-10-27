@@ -2,7 +2,7 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
-import * as conflictsSql from '../../../src/store/sqlite/conflicts.js';
+import * as conflictsSql from '../../../src/store/sqlite/conflict-detection.js';
 import { openStore } from '../../../src/store/sqlite/handles.js';
 import type { MemoryConflict } from '../../../src/base/ports/store/conflicts.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';

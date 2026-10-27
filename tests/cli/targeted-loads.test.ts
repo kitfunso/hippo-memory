@@ -151,7 +151,7 @@ describe('strengthenRetrieved', () => {
 });
 
 describe('rejections.apply', () => {
-  it('finds holders from text columns and reads whole rows only for the matches', async () => {
+  it('finds holders by their rejection keys and reads whole rows only for the matches', async () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
@@ -169,7 +169,10 @@ describe('rejections.apply', () => {
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(5);
-    expect(countMatching(statements, /^SELECT id, content, source, scope, created FROM memories .*LIMIT \?$/)).toBe(1);
+    expect(
+      countMatching(statements, /^SELECT id FROM memories WHERE rejection_digest = \? AND tenant_id = \? UNION /),
+    ).toBe(1);
+    expect(countMatching(statements, /^SELECT id, content, source, scope, created FROM memories /)).toBe(0);
     expect(
       countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/),
     ).toBe(0);

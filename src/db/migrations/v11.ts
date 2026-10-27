@@ -11,8 +11,7 @@ export const v11: Migration = {
     if (!tableHasColumn(db, 'memories', 'superseded_by')) {
       db.exec(`ALTER TABLE memories ADD COLUMN superseded_by TEXT`);
     }
-    // SHORTCUT: overlaps idx_memories_layer_created (v01); dropping it is held until a schema
-    // migration is approved.
+    // v65 drops it: no read's plan names it, and idx_memories_layer_created (v01) has its keys.
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL`,
     );

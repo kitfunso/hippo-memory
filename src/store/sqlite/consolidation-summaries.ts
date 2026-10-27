@@ -3,8 +3,9 @@
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { tombstoneOf } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { readRejectedValue } from './rejection.js';
+import { withHeldDigests } from './text-digests.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, parseJsonArray, rowToEntry } from './rows.js';
 import { refusalAudit } from '../rules/audit-rows.js';
 import { syncFtsRow } from './entry-row.js';
@@ -13,6 +14,7 @@ import { keysetPage } from '../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type {
   DirtySummaries,
   SummarySettle,
@@ -122,6 +124,7 @@ const STILL_DIRTY = `WHERE id = ?
             RETURNING content, tags_json`;
 const SETTLE_CONTENT_SQL = `UPDATE memories
               SET content = ?,
+                  rejection_digest = ?,
                   descendant_count = ?,
                   earliest_at = ?,
                   latest_at = ?,
@@ -170,18 +173,26 @@ function settleFields(
   const { content, descendantCount, earliestAt, latestAt } = fields;
   // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the same
   // transaction.
-  const tombstone = content ? readRejectedValue(db, tenantId, rejectionDigest(content.text)) : null;
+  const tombstone = content ? tombstoneOf(db, tenantId, content.text) : null;
   const at = [descendantCount, earliestAt, latestAt] as const;
-  const row =
-    content && !tombstone
-      ? (cachedStatement(db, SETTLE_CONTENT_SQL).get(
-          content.text,
-          ...at,
-          content.rebuiltAt,
-          id,
-          tenantId,
-        ) as SettledRow | undefined)
-      : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
+  const settled =
+    content && !tombstone ? { ...content, text: redactSecretsStrict(content.text) } : undefined;
+  const row = settled
+    ? withHeldDigests(
+        db,
+        'live',
+        [{ tenantId, id, content: settled.text }],
+        () =>
+          cachedStatement(db, SETTLE_CONTENT_SQL).get(
+            settled.text,
+            rejectionDigest(settled.text),
+            ...at,
+            settled.rebuiltAt,
+            id,
+            tenantId,
+          ) as SettledRow | undefined,
+      )
+    : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
   if (!row) return { changed: false, refused: false };
   // A bare UPDATE leaves memories_fts behind, so the row's text is indexed again.
   syncFtsRow(db, { id, content: row.content, tags: parseJsonArray(row.tags_json) });

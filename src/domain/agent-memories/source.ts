@@ -1,7 +1,7 @@
 // An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text.
 import type { Machine } from '../../base/util/agent-homes.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
-import { maskEmails } from '../../base/util/secret-detect.js';
+import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
 import { toolSourcePrefix, type Scope, type ToolId } from '../../base/memory/agent-memory-tools.js';
 import { ID_SUFFIX_CHARS } from '../../base/util/token-text.js';
@@ -51,13 +51,22 @@ export function splitSource(
   return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
 }
 
+function capped(text: string): string {
+  return text.length > CONTENT_CAP
+    ? `${truncateCodePointSafe(text, CONTENT_CAP)} [truncated]`
+    : text;
+}
+
 /**
- * The text as stored: emails masked as on every capture path, then the old Claude import's cap; the
- * hash still sees the raw note.
+ * The text as stored: emails masked as on every capture path, secrets redacted before the old
+ * Claude import's cap so a token across it is never kept half raw; the hash still sees the raw note.
  */
 export function storedText(text: string): string {
-  const masked = maskEmails(text);
-  return masked.length > CONTENT_CAP
-    ? `${truncateCodePointSafe(masked, CONTENT_CAP)} [truncated]`
-    : masked;
+  return capped(redactSecretsStrict(maskEmails(text)));
+}
+
+/** The text as the old Claude import stored it, capped before any redaction, so legacy matching
+ * keys the rows it wrote. */
+export function legacyStoredText(text: string): string {
+  return capped(maskEmails(text));
 }
