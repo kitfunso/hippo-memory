@@ -215,6 +215,13 @@ describe('ownTimeouts', () => {
     for (const form of forms) expect(at(form), form).toEqual([20_000]);
   });
 
+  it('reads a quoted timeout key, and gives null for options with a computed key', () => {
+    expect(at(`it('a', ${FN}, { 'timeout': 60_000 });`)).toEqual([60_000]);
+    expect(at(`vi.setConfig({ "testTimeout": 20_000, 'hookTimeout': 21_000 });`)).toEqual([20_000, 21_000]);
+    expect(at(`it('a', ${FN}, { [key]: 60_000 });`)).toEqual([null]);
+    expect(at(`vi.setConfig({ [key]: 20_000 });`)).toEqual([null, null]);
+  });
+
   it('gives null for options in second place it cannot read, and for a test call through a computed key', () => {
     expect(at(`it('a', makeOpts(), ${FN});`)).toEqual([null]);
     expect(at(`it[mode]('a', ${FN}, 20_000);`)).toEqual([20_000]);

@@ -141,13 +141,16 @@ function msOf(arg, key = 'timeout', consts = new Map()) {
   if (ts.isIdentifier(arg) && consts.has(arg.text)) return msOf(consts.get(arg.text), key);
   if (ts.isNumericLiteral(arg)) return Number(arg.text);
   if (!ts.isObjectLiteralExpression(arg)) return null;
-  const prop = arg.properties.find((p) => p.name && ts.isIdentifier(p.name) && p.name.text === key);
+  const named = (p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === key;
+  const prop = arg.properties.find(named);
   if (prop) {
     return ts.isPropertyAssignment(prop) && ts.isNumericLiteral(prop.initializer)
       ? Number(prop.initializer.text)
       : null;
   }
-  return arg.properties.some((p) => ts.isSpreadAssignment(p)) ? null : undefined;
+  // A spread or a computed key may be the timeout, so it fails closed.
+  const unread = (p) => ts.isSpreadAssignment(p) || (p.name && ts.isComputedPropertyName(p.name));
+  return arg.properties.some(unread) ? null : undefined;
 }
 
 /** `vi.waitFor`, `V.vi.waitFor` or `vi['waitFor']`: the object may sit under a vitest namespace. */
