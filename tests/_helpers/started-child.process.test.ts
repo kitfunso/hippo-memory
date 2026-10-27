@@ -63,9 +63,10 @@ describe('startNode', () => {
 
   it('rejects at once when the child exits without the line', async () => {
     const child = startNode(['-e', `process.stdout.write('bye\\n'); process.exit(3)`]);
-    const started = Date.now();
-    await expect(child.line(/^ready/, 'the ready line', 5_000)).rejects.toThrow(/exited with 3.*bye/s);
-    expect(Date.now() - started).toBeLessThan(4_000);
+    // The deadline's message says "within"; this one says the child exited, so the exit ended the wait.
+    await expect(child.line(/^ready/, 'the ready line')).rejects.toThrow(
+      /^the ready line not seen: child \d+ exited with 3.*bye/s,
+    );
   });
 
   it('stop() leaves neither the child nor its grandchild running', async () => {

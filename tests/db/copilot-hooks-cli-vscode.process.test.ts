@@ -47,10 +47,8 @@ afterEach(async () => {
 });
 
 const VSCODE_SESSION = 'vscode-sess-1';
-// The busy worker waits out 3 statements at the 5 s busy_timeout in src (open.ts DEFAULT_BUSY_WAIT_MS); measured 20.7 to 24 s.
+// The busy worker waits out 3 statements at the 5 s busy_timeout in src (open.ts DEFAULT_BUSY_WAIT_MS).
 const BUSY_REASON = 'a worker on a locked store waits 3 x 5 s of busy_timeout in src';
-const BUSY_WAIT_MS = 40_000;
-const BUSY_TEST_MS = 45_000;
 const TURN_DONE = 'skip snapshot close: turn mode';
 const FIRST_LESSON = 'retry budget at three attempts';
 const SECOND_LESSON = 'every pull request in CI';
@@ -270,26 +268,22 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   });
 
   // A lock holder process, two bounded lock waits in the hook, then a worker that saves once the lock is gone.
-  it(
-    'on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again',
-    async () => {
-      const transcript = writeVscodeTranscript(copilotEventsJsonl());
-      holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
-      const busy = await stop(transcript, { waitMs: BUSY_WAIT_MS, reason: BUSY_REASON });
-      expect(busy).toContain('capture failed: database is locked');
-      await releaseStoreWriteLock(holder);
-      expect(memoriesWith(FIRST_LESSON)).toBe(0);
-      expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+  it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
+    const busy = await stop(transcript, { waitMs: WORKER_GONE_MS, reason: BUSY_REASON });
+    expect(busy).toContain('capture failed: database is locked');
+    await releaseStoreWriteLock(holder);
+    expect(memoriesWith(FIRST_LESSON)).toBe(0);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
 
-      expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
-      expect(memoriesWith(FIRST_LESSON)).toBe(1);
-      expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+    expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
 
-      expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
-      expect(memoriesWith(FIRST_LESSON)).toBe(1);
-    },
-    BUSY_TEST_MS,
-  );
+    expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+  });
 
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());

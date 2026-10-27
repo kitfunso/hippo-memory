@@ -10,7 +10,6 @@ import { readyProbeFor } from '../../src/surface/server/ready.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { startNode } from '../_helpers/started-child.js';
-import { EVENT_DEADLINE_MS } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -88,7 +87,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
       expect(statSync(`${db}-wal`).size / 4096).toBeGreaterThan(2 * inlineLimit);
       expect(readFileSync(db).equals(before)).toBe(true);
       for (let n = 16; n < 80; n++) expect(await post(handle, `runbook step ${n}`)).toBe(200);
-      await expect.poll(() => readFileSync(db).equals(before), { timeout: EVENT_DEADLINE_MS }).toBe(false);
+      await expect.poll(() => readFileSync(db).equals(before), { timeout: 10_000 }).toBe(false);
     } finally {
       await handle.stop();
     }
