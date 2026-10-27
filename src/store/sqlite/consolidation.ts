@@ -26,7 +26,8 @@ import type {
   SleepStart,
 } from '../../base/ports/store/consolidation.js';
 import { appendAuditEvents } from './audit.js';
-import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
+import { conflictResolveAudits, resolvedConflicts } from './conflict-resolution.js';
+import { replaceDetectedConflicts } from './conflict-detection.js';
 import {
   iterateEveryTenantEntries,
   iterateRowsWithObjects,
