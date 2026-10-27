@@ -26,7 +26,7 @@ export const SESSION_VERBS = {
       --status <status>    Mark final status (default: cleared)`,
     ],
   }),
-  session: verb(() => import('../continuity.js'), 'handleSession', {
+  session: verb(() => import('../session.js'), 'handleSession', {
     flags: {
       switches: ['json'],
       values: ['content', 'id', 'outcome', 'session', 'source', 'summary', 'task', 'type'],
@@ -53,7 +53,7 @@ export const SESSION_VERBS = {
       --id <session-id>   Filter by session`,
     ],
   }),
-  handoff: verb(() => import('../continuity.js'), 'handleHandoff', {
+  handoff: verb(() => import('../handoff.js'), 'handleHandoff', {
     flags: {
       switches: ['json'],
       values: [

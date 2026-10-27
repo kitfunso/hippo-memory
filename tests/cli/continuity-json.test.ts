@@ -1,7 +1,8 @@
 // The port's session rows are camelCase; these pin the snake_case JSON the CLI's --json prints.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { handleCurrent, handleSession, handleSnapshot } from '../../src/surface/cli/continuity.js';
+import { handleCurrent, handleSnapshot } from '../../src/surface/cli/continuity.js';
+import { handleSession } from '../../src/surface/cli/session.js';
 import type { CliFlags, CommandContext } from '../../src/surface/cli/flag-values.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { makeRoot } from '../_helpers/make-root.js';
