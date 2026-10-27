@@ -81,7 +81,9 @@ describe('runWatched past its deadline', () => {
       killed.push(pid);
     }).catch((e: Error) => e);
     expect(outcome).toBeInstanceOf(RunWatchedTimeoutError);
-    if (outcome instanceof RunWatchedTimeoutError) strays.push(Number(outcome.stderr.replace('gc ', '')));
+    const marker = outcome instanceof RunWatchedTimeoutError ? /gc (\d+)/.exec(outcome.stderr) : null;
+    if (marker === null) throw new Error(`no grandchild marker in stderr: ${String(outcome)}`);
+    strays.push(Number(marker[1]));
     expect(killed).toEqual([]);
   }, 30_000);
 
