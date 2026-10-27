@@ -37,14 +37,17 @@ import type { FailureNotices } from '../../base/util/failure-notices.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { SerialQueues } from '../../base/util/serial-queue.js';
 
-const STORE_PAGE = 64;
+// Ids per entriesByIds read.
+const ENTRIES_BY_ID_PAGE = 64;
+// Rows per entriesWithoutVector read.
+const WITHOUT_VECTOR_PAGE = 64;
 // Ids read per keyset page, so neither a large backlog nor a rebuild lists every id at once.
 const ID_PAGE = 1000;
 
 /** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is
  * skipped. */
 async function* entryPages(rows: IndexRows, ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
-  for (const page of chunked(ids, STORE_PAGE)) {
+  for (const page of chunked(ids, ENTRIES_BY_ID_PAGE)) {
     const byId = new Map((await rows.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
     const entries = page.flatMap((id) => byId.get(id) ?? []);
     if (entries.length > 0) yield entries;
@@ -248,7 +251,7 @@ async function backfillInStore({
     const page = await writes.entriesWithoutVector({
       model,
       afterId,
-      limit: STORE_PAGE,
+      limit: WITHOUT_VECTOR_PAGE,
       tenantId: ALL_TENANTS,
     });
     if (page.length === 0) return count;
@@ -398,6 +401,62 @@ export function folderEmbedTarget(
 /** A store an embed reaches: its own index, else its vector groups; it may keep neither. */
 export type EmbedStore = StoreWith<never, 'embeddingIndex' | 'vectors' | 'vectorWrites'>;
 
+/** What embedding one memory and every memory does on a target: the folder index under its lock, or
+ * a store's vector groups under the same per-index turn. */
+interface EmbedAdapter {
+  one(provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome>;
+  all(provider: EmbeddingProvider): Promise<number>;
+}
+
+function indexAdapter(on: IndexEmbedTarget): EmbedAdapter {
+  return {
+    one: (provider, entry) =>
+      withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch(
+        (err): EmbedOutcome => {
+          log.warn(
+            `skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`,
+            errorFields(err),
+          );
+          return 'failed';
+        },
+      ),
+    all: (provider) =>
+      withEmbedLock(on, async (turn) => {
+        const identity = provider.id;
+        if (await turn.step({ kind: 'reindex', providerId: identity })) {
+          return rebuildIndexForProvider(turn, provider);
+        }
+
+        // Host-wide by design: embedAll backfills all tenants' entries into the per-host index;
+        // per-tenant filtering would produce partial indices and break recall.
+        await turn.step({ kind: 'prune' });
+        const { count, backfillError } = await backfillAllPending(
+          turn,
+          provider,
+          embeddingIndexIdentity(identity),
+        );
+
+        await turn.step({ kind: 'saveModel', providerId: identity });
+
+        // Partial progress is now persisted; surface a hard backfill failure so the explicit embed path
+        // reports it (best-effort callers go via embedMemory).
+        if (backfillError) throw backfillError;
+        return count;
+      }),
+  };
+}
+
+function storeAdapter(on: StoreEmbedTarget): EmbedAdapter {
+  return {
+    one: (provider, entry) => embedMemoryInStore(on, provider, entry),
+    all: (provider) => embedAllInStore(on, provider, on),
+  };
+}
+
+function adapterFor(on: EmbedTarget): EmbedAdapter {
+  return 'groups' in on ? storeAdapter(on) : indexAdapter(on);
+}
+
 /** Embed a single memory entry and cache the result in the embedding index; with a store,
  * through its vectorWrites. Resolves whatever fails, so a caller that fires and forgets stays
  * safe; the outcome says whether the memory reached the index. */
@@ -418,16 +477,7 @@ export async function embedMemoryInto(
     return 'failed';
   }
   if (!available) return 'off';
-  if ('groups' in on) return embedMemoryInStore(on, provider, entry);
-  return withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch(
-    (err): EmbedOutcome => {
-      log.warn(
-        `skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`,
-        errorFields(err),
-      );
-      return 'failed';
-    },
-  );
+  return adapterFor(on).one(provider, entry);
 }
 
 /** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's
@@ -604,27 +654,5 @@ export async function embedAll(
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
-  if ('groups' in on) return embedAllInStore(on, provider, on);
-  return withEmbedLock(on, async (turn) => {
-    const identity = provider.id;
-    if (await turn.step({ kind: 'reindex', providerId: identity })) {
-      return rebuildIndexForProvider(turn, provider);
-    }
-
-    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index;
-    // per-tenant filtering would produce partial indices and break recall.
-    await turn.step({ kind: 'prune' });
-    const { count, backfillError } = await backfillAllPending(
-      turn,
-      provider,
-      embeddingIndexIdentity(identity),
-    );
-
-    await turn.step({ kind: 'saveModel', providerId: identity });
-
-    // Partial progress is now persisted; surface a hard backfill failure so the explicit embed path
-    // reports it (best-effort callers go via embedMemory).
-    if (backfillError) throw backfillError;
-    return count;
-  });
+  return adapterFor(on).all(provider);
 }
