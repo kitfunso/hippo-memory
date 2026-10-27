@@ -183,9 +183,9 @@ const reachRules = [
   },
   {
     name: 'sqlite-in-data-layer',
-    comment: 'only src/db and src/store hold a hippo.db handle; code above them reaches it through the port',
+    comment: 'only src/db and src/store hold a hippo.db handle, and src/host/file-lock.ts a data-free lock database; code above them reaches hippo.db through the port',
     severity: 'error',
-    from: { pathNot: '^src/(db|store)/' },
+    from: { pathNot: ['^src/(db|store)/', '^src/host/file-lock\\.ts$'] },
     to: { path: SQLITE_MODULE },
   },
   {

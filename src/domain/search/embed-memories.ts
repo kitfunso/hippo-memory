@@ -130,8 +130,7 @@ async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   }
 }
 
-// The close releases the lock inside the turn: a lock with this thread's own token reads as leaked
-// to the next turn.
+// The close releases the lock inside the turn, so the next turn on this thread can take it.
 async function withEmbedLock<T>(
   { embeddingIndex: index, rows, failureNotices }: IndexOf,
   fn: (turn: IndexTurn) => Promise<T>,

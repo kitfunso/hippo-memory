@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
-import { holderAlive } from '../../host/pid-alive.js';
+import { takeFileLock, type StatFn } from '../../host/file-lock.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import {
   isObjectLike,
@@ -14,8 +14,8 @@ import {
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
-import { MINUTE_MS } from '../../base/util/time.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
+import { DAY_MS } from '../../base/util/time.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
@@ -27,95 +27,26 @@ interface SessionStateFiles {
   readonly cursor: string;
 }
 
+const sessionsDir = (): string => path.join(homeDir(), HIPPO_DIR, 'sessions');
+
 /** Null for a missing id or one that could climb out of the sessions folder. */
 function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return null;
-  const base = path.join(homeDir(), HIPPO_DIR, 'sessions', sessionId);
-  return { lock: `${base}.lock`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
-}
-
-/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely
- * waits more than minutes on a busy store. */
-const STALE_LOCK_MS = 15 * MINUTE_MS;
-
-const heldHere = new Set<string>();
-
-/** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
-function lockHeld(lock: string): boolean {
-  let text: string;
-  let mtimeMs: number;
-  try {
-    text = fs.readFileSync(lock, 'utf8');
-    mtimeMs = fs.statSync(lock).mtimeMs;
-  } catch (err) {
-    // Gone means released; any other read error is taken as held, so two workers never run on a
-    // guess.
-    return errorCode(err) !== 'ENOENT';
-  }
-  const held = /^(\d+):(\d+)$/.exec(text.trim());
-  if (Date.now() - (held ? Number(held[2]) : mtimeMs) > STALE_LOCK_MS) return false;
-  // Empty or torn: its taker is between the create and the write, so it is held.
-  if (!held) return true;
-  const pid = Number(held[1]);
-  // Our own pid is live only while this process holds the lock; a leftover from a dead run that
-  // reused the pid is not.
-  return holderAlive(pid, () => heldHere.has(lock));
-}
-
-type Take = 'taken' | 'held' | 'unusable';
-
-// The error that made a lock unusable, kept so the one warning can name its errno.
-const unusableCause = new Map<string, unknown>();
-
-// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the
-// lock; an atomic link-based take if that shows up.
-function takeSessionLock(lock: string): Take {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      fs.writeFileSync(lock, `${process.pid}:${Date.now()}`, { flag: 'wx' });
-      heldHere.add(lock);
-      return 'taken';
-    } catch (err) {
-      if (errorCode(err) !== 'EEXIST') {
-        unusableCause.set(lock, err);
-        return 'unusable';
-      }
-      if (lockHeld(lock)) return 'held';
-    }
-    try {
-      fs.rmSync(lock, { force: true });
-    } catch (err) {
-      unusableCause.set(lock, err);
-      return 'unusable';
-    }
-  }
-  return 'held';
+  const base = path.join(sessionsDir(), sessionId);
+  return { lock: `${base}.lock.db`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
 const warnedLocks = new Set<string>();
 
 // The lock is best-effort, so the work still runs; the line says why it ran without one.
-function warnUnusableLockOnce(lock: string): void {
+function warnUnusableLockOnce<E>(lock: string, cause: E): void {
   if (warnedLocks.has(lock)) return;
   warnedLocks.add(lock);
-  const cause = unusableCause.get(lock);
-  const why =
-    cause === undefined ? '' : ` (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)})`;
+  const why = `${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}`;
   logger.warn(
-    `session worker: lock ${lock} cannot be created or cleared${why}, so the work runs without it`,
-    cause === undefined ? undefined : errorFields(cause),
+    `session worker: lock ${lock} cannot be taken (${why}), so the work runs without it`,
+    errorFields(cause),
   );
-}
-
-function releaseSessionLock(lock: string): void {
-  heldHere.delete(lock);
-  try {
-    fs.rmSync(lock, { force: true });
-  } catch (err) {
-    // A lock left behind names this pid, which is dead once the worker exits, so the next taker
-    // clears it.
-    logger.debug(`session lock not removed: ${errorMessage(err)}`, errorFields(err));
-  }
 }
 
 /** False when the request could not be queued; the caller then refuses the run, since an
@@ -171,6 +102,9 @@ function takeQueued(queued: string): WorkerMode | null {
   }
 }
 
+// Rounds in which takeQueued took nothing: such a request stays queued for the next worker instead of spinning here.
+const MAX_ROUNDS = 5;
+
 /** Runs `work` unless a live worker holds this session, which then runs the request after its
  * own so the last reply is never dropped. */
 export async function runSessionWorker(
@@ -181,13 +115,10 @@ export async function runSessionWorker(
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
-  for (
-    let take = takeSessionLock(files.lock);
-    take !== 'held';
-    take = takeSessionLock(files.lock)
-  ) {
-    if (take === 'unusable') {
-      warnUnusableLockOnce(files.lock);
+  let idleRounds = 0;
+  for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
+    if (take.kind === 'unusable') {
+      warnUnusableLockOnce(files.lock, take.cause);
       return work(mode);
     }
     let ran = false;
@@ -197,10 +128,11 @@ export async function runSessionWorker(
         await work(next);
       }
     } finally {
-      releaseSessionLock(files.lock);
+      take.lock.release();
     }
-    // A request queued after the last take found the lock still held and left, so it runs here.
-    if (!ran || !fs.existsSync(files.queued)) return;
+    // A taker that found the lock held left its request queued, so look again after every release.
+    if (!fs.existsSync(files.queued)) return;
+    if (!ran && ++idleRounds >= MAX_ROUNDS) return;
   }
 }
 
@@ -254,8 +186,6 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
   }
 }
 
-// SHORTCUT: one small cursor file per chat is never pruned; prune by age at sleep if the folder
-// grows.
 export function saveTurnPosition(
   sessionId: string,
   transcriptPath: string,
@@ -281,4 +211,84 @@ export function saveTurnPosition(
     // re-reads these turns, which the dedupe keys absorb.
     log(`cursor not saved: ${errorMessage(err)}`);
   }
+}
+
+const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
+const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
+const LOCK_DB = '.lock.db';
+
+/** A text lock from before 3.0 names no process any more, so a day old is long dead. */
+const LEGACY_LOCK_MAX_AGE_MS = DAY_MS;
+
+/** Age limit in ms for a file in the sessions folder that a prune may remove; null for any other. */
+function pruneLimit(name: string): number | null {
+  if (name.endsWith('.cursor.json') || CURSOR_TMP.test(name)) return CURSOR_MAX_AGE_MS;
+  return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
+}
+
+/** A session's lock file goes when the session is idle past the cursor age and the file is as old; a
+ * session with no cursor counts as idle once its lock file is that old. */
+function lockDbIdle(dir: string, id: string, file: string, nowMs: number): boolean {
+  if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
+  const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });
+  if (cursor !== undefined && nowMs - cursor.mtimeMs < CURSOR_MAX_AGE_MS) return false;
+  const lock = fs.statSync(file, { throwIfNoEntry: false });
+  return lock !== undefined && lock.isFile() && nowMs - lock.ctimeMs >= CURSOR_MAX_AGE_MS;
+}
+
+/** Removes an idle session's lock file as its holder; true when removed. A held file is skipped, and
+ * remove() re-checks the age of the generation held. SHORTCUT: a request queued after the check
+ * below waits for the session's next hook; upgrade: queue under a short take of this lock. */
+function pruneLockDb(dir: string, name: string, nowMs: number, stat?: StatFn): boolean {
+  const file = path.join(dir, name);
+  if (!lockDbIdle(dir, name.slice(0, -LOCK_DB.length), file, nowMs)) return false;
+  const take = takeFileLock(file, stat);
+  if (take.kind === 'unusable') {
+    logger.warn(
+      `session worker: cannot take ${file} to prune it: ${errorMessage(take.cause)}`,
+      errorFields(take.cause),
+    );
+    return false;
+  }
+  if (take.kind !== 'taken') return false;
+  if (fs.existsSync(path.join(dir, `${name.slice(0, -LOCK_DB.length)}.queued`))) {
+    take.lock.release();
+    return false;
+  }
+  take.lock.remove(nowMs - CURSOR_MAX_AGE_MS);
+  return !fs.existsSync(file);
+}
+
+/** Removes cursor files and leftovers of the old text locks past their age, and the lock file of a
+ * session idle that long. Never throws; returns the number removed. */
+export function pruneSessionFiles(nowMs: number, takeStat?: StatFn): number {
+  const dir = sessionsDir();
+  let removed = 0;
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch (err) {
+    if (errorCode(err) !== 'ENOENT') {
+      logger.warn(`session worker: cannot prune ${dir}: ${errorMessage(err)}`, errorFields(err));
+    }
+    return 0;
+  }
+  for (const name of names) {
+    const file = path.join(dir, name);
+    try {
+      if (name.endsWith(LOCK_DB)) {
+        if (pruneLockDb(dir, name, nowMs, takeStat)) removed++;
+        continue;
+      }
+      const limit = pruneLimit(name);
+      if (limit === null) continue;
+      const stat = fs.statSync(file, { throwIfNoEntry: false });
+      if (stat === undefined || !stat.isFile() || nowMs - stat.mtimeMs < limit) continue;
+      fs.rmSync(file, { force: true });
+      removed++;
+    } catch (err) {
+      logger.warn(`session worker: cannot prune ${file}: ${errorMessage(err)}`, errorFields(err));
+    }
+  }
+  return removed;
 }

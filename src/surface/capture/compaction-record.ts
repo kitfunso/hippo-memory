@@ -11,12 +11,9 @@ import {
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import {
-  importSpool,
-  spool,
-  type Log,
-  type SpooledCompaction,
-} from '../../infra/compaction-spool.js';
+import { importSpool, spool } from '../../infra/compaction-spool.js';
+import type { Log } from '../../infra/spool-files.js';
+import type { SpooledCompaction } from '../../infra/spool-record.js';
 import type {
   CompactionHooks,
   CompactionSaveResult,
@@ -245,7 +242,7 @@ async function replaySpool(run: Replay): Promise<number> {
       importOne: (spooled, recorded) => importSpooled(run, spooled, recorded),
     });
   } catch (err) {
-    run.log(`spool import failed: ${errorMessage(err)}`);
+    run.log(`spool import failed: ${errorMessage(err)}`, errorFields(err));
     return 0;
   }
 }
@@ -275,7 +272,10 @@ async function replayOpen(run: Replay): Promise<number> {
     try {
       if (await fillFromTranscript(run, record)) saved++;
     } catch (err) {
-      run.log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);
+      run.log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`, {
+        ...errorFields(err),
+        recordId: record.id,
+      });
     }
   }
   return saved;
@@ -300,7 +300,7 @@ export async function replayCompactions(
   try {
     return (await replayStalled(run)) + (await replaySpool(run)) + (await replayOpen(run));
   } catch (err) {
-    log(`replay failed: ${errorMessage(err)}`);
+    log(`replay failed: ${errorMessage(err)}`, errorFields(err));
     return 0;
   }
 }

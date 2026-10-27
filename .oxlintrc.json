@@ -479,7 +479,7 @@
       }
     },
     {
-      "files": ["src/db/busy.ts"],
+      "files": ["src/db/busy.ts", "src/host/file-lock.ts"],
       "rules": { "boundaries/no-hand-transaction": "off" }
     },
     {

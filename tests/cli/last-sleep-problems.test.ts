@@ -48,7 +48,7 @@ describe('sleepProblems', () => {
       '[hippo] compaction replay: replay failed: database is locked',
       '[hippo] compaction replay: spool file c.a0.json failed to import (try 1 of 3): boom',
       '[hippo] compaction replay: spool file d.a0.json waits for the next run: the store is busy',
-      '[hippo] compaction replay: spool left to another replayer (lock held by pid 4)',
+      '[hippo] compaction replay: spool left to another replayer (lock held by another process)',
       '[hippo] compaction replay: spool file e.a0.json saved; writing its memories failed: boom',
     ].join('\r\n');
     expect(sleepProblems(log, 0)).toBe(
