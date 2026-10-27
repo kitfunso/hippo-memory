@@ -1,10 +1,8 @@
 // One session-end worker per session: a busy session queues the request for the running worker, and turn capture resumes from its cursor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import nodeFs from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import {
   loadTurnPosition,
   runSessionWorker,
@@ -31,14 +29,20 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A pid that named a process a moment ago and names none now. */
-function deadPid(): number {
-  const r = spawnSync(process.execPath, ['-e', '']);
-  // The OS picks the pid, so only its sign is fixed; status 0 says the process ran and has exited.
-  expect(r.status).toBe(0);
-  expect(r.pid).toBeGreaterThan(0);
-  return r.pid!;
+const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
+
+/** A child process that holds the lock file until it is killed. */
+async function holdInChild(lock: string): Promise<ChildProcess> {
+  const child = spawn(process.execPath, [HOLDER, lock], { stdio: ['ignore', 'pipe', 'ignore'] });
+  await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
+  return child;
 }
+
+const kill = (child: ChildProcess): Promise<void> =>
+  new Promise((resolve) => {
+    child.once('close', () => resolve());
+    child.kill('SIGKILL');
+  });
 
 interface Recorder {
   readonly runs: WorkerMode[];
@@ -64,20 +68,23 @@ describe('runSessionWorker', () => {
   });
 
   it('queues the request for a live holder and returns without running it; a full close outranks a queued turn', async () => {
-    const lock = `${process.ppid}:${Date.now()}`;
-    fs.writeFileSync(file('.lock'), lock);
-    const { runs, work } = recorder();
-    await runSessionWorker(ID, 'turn', work);
-    expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
-    await runSessionWorker(ID, 'full', work);
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual([]);
-    expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('full');
-    expect(fs.readFileSync(file('.lock'), 'utf8')).toBe(lock);
+    const holder = await holdInChild(file('.lock.db'));
+    try {
+      const { runs, work } = recorder();
+      await runSessionWorker(ID, 'turn', work);
+      expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
+      await runSessionWorker(ID, 'full', work);
+      await runSessionWorker(ID, 'turn', work);
+      expect(runs).toEqual([]);
+      expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('full');
+      expect(fs.existsSync(file('.lock.db'))).toBe(true);
+    } finally {
+      await kill(holder);
+    }
   });
 
-  it("takes over a dead holder's lock and runs the strongest queued request", async () => {
-    fs.writeFileSync(file('.lock'), `${deadPid()}:${Date.now()}`);
+  it("runs the strongest queued request once a killed holder's lock file is all that is left", async () => {
+    await kill(await holdInChild(file('.lock.db')));
     fs.writeFileSync(file('.queued'), 'full');
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
@@ -85,23 +92,9 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
-  it('takes over a lock older than 15 minutes even when its pid names a live process, as Windows reuses pids', async () => {
-    fs.writeFileSync(file('.lock'), `${process.ppid}:${Date.now() - 16 * 60 * 1000}`);
+  it('takes an empty lock file, which no live process holds', async () => {
+    fs.writeFileSync(file('.lock.db'), '');
     const { runs, work } = recorder();
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
-  });
-
-  it('respects an empty lock, which a taker has made but not yet written, until it is 15 minutes old', async () => {
-    fs.writeFileSync(file('.lock'), '');
-    const { runs, work } = recorder();
-    await runSessionWorker(ID, 'turn', work);
-    expect(runs).toEqual([]);
-    expect(fs.readFileSync(file('.lock'), 'utf8')).toBe('');
-
-    const old = new Date(Date.now() - 16 * 60 * 1000);
-    fs.utimesSync(file('.lock'), old, old);
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
     expect(fs.readdirSync(sessions)).toEqual([]);
@@ -155,31 +148,20 @@ describe('runSessionWorker', () => {
     expect(runs).toEqual([]);
   });
 
-  it('runs unlocked and warns once per lock path when the lock cannot be created', async () => {
-    const real = nodeFs.writeFileSync;
-    const denyLock = (
-      p: fs.PathOrFileDescriptor,
-      data: string | NodeJS.ArrayBufferView,
-      options?: fs.WriteFileOptions,
-    ): void => {
-      if (String(p).endsWith('.lock')) throw Object.assign(new Error('denied'), { code: 'EACCES' });
-      real(p, data, options);
-    };
-    const spy = vi.spyOn(nodeFs, 'writeFileSync').mockImplementation(denyLock);
-    syncBuiltinESMExports();
+  it('runs unlocked and warns once per lock path when the lock cannot be made', async () => {
+    // A folder in the lock's place cannot be opened as a lock database.
+    fs.mkdirSync(file('.lock.db'));
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const { runs, work } = recorder();
       await runSessionWorker(ID, 'turn', work);
       await runSessionWorker(ID, 'turn', work);
       expect(runs).toEqual(['turn', 'turn']);
-      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be created or cleared'));
+      const lines = write.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('cannot be taken'));
       expect(lines).toHaveLength(1);
-      expect(lines[0]).toContain(`${ID}.lock`);
+      expect(lines[0]).toContain(`${ID}.lock.db`);
     } finally {
       write.mockRestore();
-      spy.mockRestore();
-      syncBuiltinESMExports();
     }
   });
 
@@ -189,7 +171,7 @@ describe('runSessionWorker', () => {
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
-    expect(fs.existsSync(file('.lock'))).toBe(false);
+    expect(fs.existsSync(file('.lock.db'))).toBe(false);
   });
 });
 

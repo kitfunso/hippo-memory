@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { localIndex } from '../_helpers/cli-stores.js';
+import { takeFileLock } from '../../src/host/file-lock.js';
+import { tryEmbedLock } from '../../src/store/sqlite/embed-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
@@ -35,15 +37,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
+const LOCK_FILE = 'embeddings.lock.db';
+
+/** A child process that holds the lock file until it is killed. */
+async function holdInChild(lockPath: string): Promise<ChildProcess> {
+  const child = spawn(process.execPath, [HOLDER, lockPath], { stdio: ['ignore', 'pipe', 'ignore'] });
+  await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
+  return child;
+}
+
+const kill = (child: ChildProcess): Promise<void> =>
+  new Promise((resolve) => {
+    child.once('close', () => resolve());
+    child.kill('SIGKILL');
+  });
+
 // Fake timers drive the waiter's poll loop, so "it waited" is proven by poll count, not by how long a sleep ran.
-async function expectWaitsUntilReleased(lockPath: string): Promise<void> {
+async function expectWaitsUntilReleased(release: () => Promise<void>): Promise<void> {
   let released = false;
   const fetchedAfterRelease: boolean[] = [];
   fetchMock.mockImplementation(async () => {
     fetchedAfterRelease.push(released);
     return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
   });
-  // Date stays real: the reused-PID check compares lock mtime against the real process.uptime().
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const pending = embedAll(localIndex(root));
   try {
@@ -57,7 +74,7 @@ async function expectWaitsUntilReleased(lockPath: string): Promise<void> {
     expect(fetchMock).not.toHaveBeenCalled();
   } finally {
     released = true;
-    fs.rmSync(lockPath, { force: true });
+    await release();
     // The polls back off to one a second, so the next one comes within a second of the release.
     await vi.advanceTimersByTimeAsync(1_000);
     vi.useRealTimers();
@@ -67,61 +84,40 @@ async function expectWaitsUntilReleased(lockPath: string): Promise<void> {
 }
 
 describe('embeddings.json cross-process lock', () => {
-  it('breaks a lock left by a dead process and removes its own lock after', async () => {
-    const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
-    fs.writeFileSync(path.join(root, 'embeddings.lock'), String(deadPid));
+  it('a SIGKILLed holder frees the lock, and the run removes its own lock file after', async () => {
+    const lockPath = path.join(root, LOCK_FILE);
+    await kill(await holdInChild(lockPath));
     expect(await embedAll(localIndex(root))).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
-    expect(fs.existsSync(path.join(root, 'embeddings.lock'))).toBe(false);
+    expect(fs.existsSync(lockPath)).toBe(false);
   });
 
   it('waits for a live holder, then writes once the lock is released', async () => {
-    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
+    const holder = await holdInChild(path.join(root, LOCK_FILE));
     try {
-      const lockPath = path.join(root, 'embeddings.lock');
-      fs.writeFileSync(lockPath, String(holder.pid));
-      await expectWaitsUntilReleased(lockPath);
+      await expectWaitsUntilReleased(() => kill(holder));
     } finally {
       holder.kill();
     }
   });
 
-  it('breaks a lock with our PID written before this process started, which is a reused PID', async () => {
-    const lockPath = path.join(root, 'embeddings.lock');
-    fs.writeFileSync(lockPath, String(process.pid));
-    const before = new Date(Date.now() - process.uptime() * 1000 - 60_000);
-    fs.utimesSync(lockPath, before, before);
-    expect(await embedAll(localIndex(root))).toBe(1);
+  it('a second take in the same thread while held is null', () => {
+    const first = tryEmbedLock(root);
+    expect(first).not.toBeNull();
+    expect(tryEmbedLock(root)).toBeNull();
+    first?.release();
+    const again = tryEmbedLock(root);
+    expect(again).not.toBeNull();
+    again?.release();
   });
 
-  it('waits for a worker thread that shares our PID', async () => {
-    const lockPath = path.join(root, 'embeddings.lock');
-    fs.writeFileSync(lockPath, `${process.pid}:another-worker`);
-    await expectWaitsUntilReleased(lockPath);
-  });
-
-  it('breaks a lock this module leaked instead of waiting on itself', async () => {
-    const lockPath = path.join(root, 'embeddings.lock');
-    let held = '';
+  it('a throw inside the turn still releases the lock', async () => {
     fetchMock.mockImplementation(async () => {
-      held = fs.readFileSync(lockPath, 'utf8');
-      return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
+      throw new Error('provider down');
     });
-    expect(await embedAll(localIndex(root))).toBe(1);
-    expect(held).toMatch(new RegExp(`^${process.pid}:.+`));
-    fs.writeFileSync(lockPath, held);
-    writeEntry(root, createMemory('a second memory to embed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    expect(await embedAll(localIndex(root))).toBe(1);
-    expect(fs.existsSync(lockPath)).toBe(false);
-  });
-
-  it('leaves the lock alone when another writer has taken it over', async () => {
-    const lockPath = path.join(root, 'embeddings.lock');
-    fetchMock.mockImplementation(async () => {
-      fs.writeFileSync(lockPath, '999999');
-      return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
-    });
-    expect(await embedAll(localIndex(root))).toBe(1);
-    expect(fs.readFileSync(lockPath, 'utf8')).toBe('999999');
+    await embedAll(localIndex(root)).catch(() => undefined);
+    const take = takeFileLock(path.join(root, LOCK_FILE));
+    expect(take.kind).toBe('taken');
+    if (take.kind === 'taken') take.lock.release();
   });
 });

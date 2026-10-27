@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
-import { holderAlive } from '../../host/pid-alive.js';
+import { takeFileLock } from '../../host/file-lock.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import {
   isObjectLike,
@@ -14,7 +14,6 @@ import {
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
-import { MINUTE_MS } from '../../base/util/time.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
@@ -31,91 +30,19 @@ interface SessionStateFiles {
 function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return null;
   const base = path.join(homeDir(), HIPPO_DIR, 'sessions', sessionId);
-  return { lock: `${base}.lock`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
-}
-
-/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely
- * waits more than minutes on a busy store. */
-const STALE_LOCK_MS = 15 * MINUTE_MS;
-
-const heldHere = new Set<string>();
-
-/** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
-function lockHeld(lock: string): boolean {
-  let text: string;
-  let mtimeMs: number;
-  try {
-    text = fs.readFileSync(lock, 'utf8');
-    mtimeMs = fs.statSync(lock).mtimeMs;
-  } catch (err) {
-    // Gone means released; any other read error is taken as held, so two workers never run on a
-    // guess.
-    return errorCode(err) !== 'ENOENT';
-  }
-  const held = /^(\d+):(\d+)$/.exec(text.trim());
-  if (Date.now() - (held ? Number(held[2]) : mtimeMs) > STALE_LOCK_MS) return false;
-  // Empty or torn: its taker is between the create and the write, so it is held.
-  if (!held) return true;
-  const pid = Number(held[1]);
-  // Our own pid is live only while this process holds the lock; a leftover from a dead run that
-  // reused the pid is not.
-  return holderAlive(pid, () => heldHere.has(lock));
-}
-
-type Take = 'taken' | 'held' | 'unusable';
-
-// The error that made a lock unusable, kept so the one warning can name its errno.
-const unusableCause = new Map<string, unknown>();
-
-// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the
-// lock; an atomic link-based take if that shows up.
-function takeSessionLock(lock: string): Take {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      fs.writeFileSync(lock, `${process.pid}:${Date.now()}`, { flag: 'wx' });
-      heldHere.add(lock);
-      return 'taken';
-    } catch (err) {
-      if (errorCode(err) !== 'EEXIST') {
-        unusableCause.set(lock, err);
-        return 'unusable';
-      }
-      if (lockHeld(lock)) return 'held';
-    }
-    try {
-      fs.rmSync(lock, { force: true });
-    } catch (err) {
-      unusableCause.set(lock, err);
-      return 'unusable';
-    }
-  }
-  return 'held';
+  return { lock: `${base}.lock.db`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
 const warnedLocks = new Set<string>();
 
 // The lock is best-effort, so the work still runs; the line says why it ran without one.
-function warnUnusableLockOnce(lock: string): void {
+function warnUnusableLockOnce<E>(lock: string, cause: E): void {
   if (warnedLocks.has(lock)) return;
   warnedLocks.add(lock);
-  const cause = unusableCause.get(lock);
-  const why =
-    cause === undefined ? '' : ` (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)})`;
   logger.warn(
-    `session worker: lock ${lock} cannot be created or cleared${why}, so the work runs without it`,
-    cause === undefined ? undefined : errorFields(cause),
+    `session worker: lock ${lock} cannot be taken (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}), so the work runs without it`,
+    errorFields(cause),
   );
-}
-
-function releaseSessionLock(lock: string): void {
-  heldHere.delete(lock);
-  try {
-    fs.rmSync(lock, { force: true });
-  } catch (err) {
-    // A lock left behind names this pid, which is dead once the worker exits, so the next taker
-    // clears it.
-    logger.debug(`session lock not removed: ${errorMessage(err)}`, errorFields(err));
-  }
 }
 
 /** False when the request could not be queued; the caller then refuses the run, since an
@@ -181,13 +108,9 @@ export async function runSessionWorker(
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
-  for (
-    let take = takeSessionLock(files.lock);
-    take !== 'held';
-    take = takeSessionLock(files.lock)
-  ) {
-    if (take === 'unusable') {
-      warnUnusableLockOnce(files.lock);
+  for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
+    if (take.kind === 'unusable') {
+      warnUnusableLockOnce(files.lock, take.cause);
       return work(mode);
     }
     let ran = false;
@@ -197,7 +120,7 @@ export async function runSessionWorker(
         await work(next);
       }
     } finally {
-      releaseSessionLock(files.lock);
+      take.lock.release();
     }
     // A request queued after the last take found the lock still held and left, so it runs here.
     if (!ran || !fs.existsSync(files.queued)) return;
