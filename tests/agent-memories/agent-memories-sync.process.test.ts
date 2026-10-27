@@ -4,8 +4,9 @@ import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:f
 import { dirname, join } from 'node:path';
 import { dormantRestore } from '../../src/api/index.js';
 import { supersedeNow } from '../_helpers/supersede-now.js';
-import type { ContainerApplied, ContainerApply } from '../../src/base/ports/store/agent-import.js';
-import type { ImportStores } from '../../src/domain/agent-memories/types.js';
+import { gateFirstWrite } from '../_helpers/write-gate.js';
+import type { ContainerApply } from '../../src/base/ports/store/agent-import.js';
+import type { ImportStore, ImportStores } from '../../src/domain/agent-memories/types.js';
 import { consolidate } from '../../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories } from '../../src/api/agent-memories.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
@@ -69,17 +70,15 @@ const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 /** The real stores; `gate` runs once, at the import's first container write, after every read its plan made. */
 function gatedStores(gate: (plan: ContainerApply) => Promise<void>): ImportStores {
   const real = sqliteImportStores({});
-  let passed: Promise<void> | undefined;
+  const apply = gateFirstWrite(
+    (plan: ContainerApply, store: ImportStore) => store.agentImport.applyContainer(plan),
+    gate,
+  );
   return {
     ...real,
     open: (root, opts) => {
       const store = real.open(root, opts);
-      const applyContainer = async (plan: ContainerApply): Promise<ContainerApplied> => {
-        passed ??= gate(plan);
-        await passed;
-        return store.agentImport.applyContainer(plan);
-      };
-      return { ...store, agentImport: { applyContainer } };
+      return { ...store, agentImport: { applyContainer: (plan) => apply(plan, store) } };
     },
   };
 }

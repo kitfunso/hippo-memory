@@ -18,7 +18,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { stageScratchWinner } from '../_helpers/race-winner.js';
+import { gateConnectorWrite } from '../_helpers/write-gate.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -261,27 +261,22 @@ describe('Slack hardening + migration v19', () => {
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root, 'default').length;
-    // The other worker's rows come from a scratch store, and a second process commits them while the loser waits for the lock.
-    const scratch = makeRoot('slack-winner');
-    let settled: IngestResult[];
-    let loser: IngestResult;
-    const winnerCtx = apiCtx(scratch, 'default', {
+    // The other worker's write commits after the loser's pre-check and before the loser's own write.
+    const settled: IngestResult[] = [];
+    const winnerCtx = apiCtx(root, 'default', {
       subject: 'connector:slack',
       role: 'admin',
     });
-    const w = await rememberUntrusted(winnerCtx, {
-      ...racedOpts,
-      event: { connector: 'slack', eventId: racedEventId },
+    const gated = gateConnectorWrite(ctx, async () => {
+      const w = await rememberUntrusted(winnerCtx, {
+        ...racedOpts,
+        event: { connector: 'slack', eventId: racedEventId },
+      });
+      settled.push({ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id });
     });
-    settled = [
-      {
-        status: w.duplicate ? 'skipped_duplicate' : 'ingested',
-        memoryId: w.id,
-      },
-    ];
-    const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
-    loser = await ingestMessage(ctx, raced);
-    await staged.committed;
+    const loser = await ingestMessage(gated.ctx, raced);
+    // A pre-check after the other worker's commit answers 'duplicate' and never reaches the guarded write.
+    expect(gated.preChecks).toEqual([false]);
 
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
     expect(loser).toEqual({
