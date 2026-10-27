@@ -111,8 +111,8 @@ const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-// One turn at a time per index, then the index's own lock, which other processes and threads
-// honour.
+// One turn at a time per index, keyed by the index (embeddingIndex.open or vectorWrites.indexKey),
+// then the index's own lock, which other processes and threads honour.
 const embedTurns = new SerialQueues<string>();
 
 /** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until it
@@ -280,13 +280,15 @@ async function embedAllInStore(
   particles: ParticleScoring,
 ): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = groups;
-  const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
-  return backfillInStore({
-    writes,
-    provider,
-    model: embeddingIndexIdentity(provider.id),
-    rebuild,
-    particles,
+  return embedTurns.run(await writes.indexKey(), async () => {
+    const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
+    return backfillInStore({
+      writes,
+      provider,
+      model: embeddingIndexIdentity(provider.id),
+      rebuild,
+      particles,
+    });
   });
 }
 
@@ -301,17 +303,20 @@ async function embedMemoryInStore(
   const { vectors: reads, vectorWrites: writes } = target.groups;
   try {
     const model = embeddingIndexIdentity(provider.id);
-    const refused =
-      replacesIndex(await reads.embeddingIndexState(), model) ||
-      (
-        await writeVectorPage({
-          writes,
-          write: { model, replaceIndex: false },
-          page: [entry],
-          vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
-          particles: target,
-        })
-      ).modelMismatch;
+    const refused = await embedTurns.run(
+      await writes.indexKey(),
+      async () =>
+        replacesIndex(await reads.embeddingIndexState(), model) ||
+        (
+          await writeVectorPage({
+            writes,
+            write: { model, replaceIndex: false },
+            page: [entry],
+            vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
+            particles: target,
+          })
+        ).modelMismatch,
+    );
     if (refused) warnEmbedFailureOnce(target.failureNotices, 'index', OTHER_MODEL_INDEX);
     return refused ? 'failed' : 'indexed';
   } catch (err) {

@@ -42,7 +42,7 @@ interface Rebindable {
 }
 
 function isRebindable<V>(value: V): value is V & Function & Rebindable {
-  return value instanceof Function && REBIND in value;
+  return value instanceof Function && Object.hasOwn(value, REBIND);
 }
 
 function markOffLoop<S extends HippoStore>(store: S): S {
@@ -52,7 +52,7 @@ function markOffLoop<S extends HippoStore>(store: S): S {
 
 /** Whether `store` answers its methods from worker threads. */
 export function runsOffLoop(store: HippoStore): boolean {
-  return OFF_LOOP in store;
+  return Object.hasOwn(store, OFF_LOOP);
 }
 
 function send<T>(
@@ -207,7 +207,8 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
     // SAFETY: a group keeps its keys, each method rebound to the same signature.
     bound[key] = (group ?? rebound(value, limits)) as S[keyof S];
   }
-  // SAFETY: every own key of `store` was copied above, and its symbols with the spread.
+  // SAFETY: every own string key of `store` was copied above; its marks are non-enumerable, so
+  // markOffLoop sets the off-loop mark again.
   return markOffLoop(bound as S);
 }
 

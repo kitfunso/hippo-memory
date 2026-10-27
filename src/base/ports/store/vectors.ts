@@ -112,12 +112,16 @@ export interface VectorWrites {
    * `tenantId`, finite non-empty vector) under `model` with its particle, sets `model`. No audit
    * row. */
   writeVectors(write: VectorWrite): Promise<VectorWriteResult>;
+  /** The index these writes land in: every group that writes one index answers the same key, so
+   * embed runs on it take turns whatever object a caller holds. */
+  indexKey(): Promise<string>;
 }
 
 /** What each VectorWrites method does to the store; every adapter honours it. */
 export const VECTOR_WRITES_EFFECTS = {
   entriesWithoutVector: 'read',
   writeVectors: 'write',
+  indexKey: 'read',
 } as const satisfies MethodEffects<VectorWrites>;
 
 // A store's own vector index, worked through sessions so the write lock and a rebuild's staged

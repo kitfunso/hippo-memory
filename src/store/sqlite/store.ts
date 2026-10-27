@@ -73,6 +73,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { listRecallEntries } from './search-rows.js';
 import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vector-index.js';
+import { embedLockKey } from './embed-lock.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 
@@ -108,7 +109,7 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     ...sqliteLocalGroups(handles),
     ...sqliteBaseMethods(handles),
     keyWrites: sqliteKeyWrites(on),
-    vectorWrites: sqliteVectorWrites(on),
+    vectorWrites: sqliteVectorWrites(on, files.hippoRoot),
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
     dagReads: sqliteDagReads(on),
@@ -193,11 +194,13 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
   };
 }
 
-function sqliteVectorWrites(on: OnHandle): VectorWrites {
-  return bound<VectorWrites>(on, {
-    entriesWithoutVector: entriesWithoutVector,
-    writeVectors: writeVectors,
-  });
+// The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
+function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
+  const key = embedLockKey(hippoRoot);
+  return {
+    ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
+    indexKey: () => Promise.resolve(key),
+  };
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
@@ -283,7 +286,7 @@ interface Reopenable {
 }
 
 function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
-  return REOPEN in store;
+  return Object.hasOwn(store, REOPEN);
 }
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its

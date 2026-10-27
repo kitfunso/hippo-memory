@@ -210,6 +210,46 @@ describe('embedAll with a store', () => {
     expect(indexOn(root).vectors).toHaveLength(70);
   });
 
+  it('runs two model changes on one index in turn, whatever store object each holds, so the newer index is whole', async () => {
+    const root = join(home, `turns-${++n}`);
+    initTestStore(root);
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 70 }, (_, i) =>
+        createMemory(`turn-taking memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ),
+    );
+    // An index under a third model, so both runs are model changes that replace the index on every page.
+    await embedAll(on(root, sqliteStore(root)), undefined, provider('fake-old'));
+    let reached: () => void = () => undefined;
+    const atSecondPage = new Promise<void>((resolve) => (reached = resolve));
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    // The older run's second page waits until the newer run has been started.
+    const held = provider('fake-a', async (texts) => {
+      calls += 1;
+      if (calls === 2) {
+        reached();
+        await gate;
+      }
+      return vectorsFor('fake-a', texts);
+    });
+    const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
+    await atSecondPage;
+    const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
+    const newer = embedAll(on(markedFolder(), newerStore), undefined, provider('fake-b'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    await Promise.allSettled([older]);
+    expect(await newer).toBe(70);
+    const model = embeddingIndexIdentity('fake-b');
+    expect(await newerStore.vectors.embeddingIndexState()).toEqual({ storedModel: model, hasVectors: true });
+    expect(await newerStore.vectorWrites.entriesWithoutVector({ tenantId: ALL_TENANTS, model, limit: 500 })).toEqual(
+      [],
+    );
+  });
+
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
     const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const [first] = seeded;

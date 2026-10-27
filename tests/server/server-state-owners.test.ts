@@ -2,12 +2,14 @@
 // the scrypt bound is the one process-wide limit, and a store's reopen rides on the store itself.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertApiKey } from '../../src/store/sqlite/auth.js';
-import { KeyVerifier, keyChecks } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { issueLocalKey, readLocalKey } from '../../src/surface/server/local-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { inSqliteSession, sqliteStore } from '../../src/store/sqlite/store.js';
 import { runSqliteRequest } from '../../src/store/sqlite/request-scope.js';
+import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
@@ -75,24 +77,21 @@ describe('KeyVerifier', () => {
 });
 
 describe('the scrypt bound', () => {
-  it('is one for the process: a third derivation waits while two run, whoever started them', async () => {
+  it('is one for the process: a third derivation waits while two run, whichever verifier started them', async () => {
     const release: (() => void)[] = [];
-    const held = (): Promise<string> =>
-      new Promise((resolve) => {
-        release.push(() => resolve('done'));
-      });
     const started: string[] = [];
-    const run = (keyId: string, address: string): Promise<string> => {
-      keyChecks.admit(keyId, address);
-      return keyChecks.run(keyId, address, () => {
+    const held = (keyId: string) => (): Promise<Buffer> =>
+      new Promise((resolve) => {
         started.push(keyId);
-        return held();
+        release.push(() => resolve(Buffer.alloc(0)));
       });
-    };
-    const one = run('hk_state_one', '10.0.0.1');
-    const two = run('hk_state_two', '10.0.0.2');
-    const three = run('hk_state_three', '10.0.0.1');
-    await Promise.resolve();
+    const charged = (): void => undefined;
+    const [first, second] = [new KeyVerifier(), new KeyVerifier()];
+    // Distinct key ids and addresses, so only the process's two-derivation cap can hold the third.
+    const one = first.boundFor('10.0.0.1', charged)('hk_state_one', held('hk_state_one'));
+    const two = second.boundFor('10.0.0.2', charged)('hk_state_two', held('hk_state_two'));
+    const three = first.boundFor('10.0.0.3', charged)('hk_state_three', held('hk_state_three'));
+    await new Promise((resolve) => setImmediate(resolve));
     expect(started).toEqual(['hk_state_one', 'hk_state_two']);
 
     release.shift()?.();
@@ -125,6 +124,32 @@ describe('inSqliteSession', () => {
     await runSqliteRequest(async (session) => {
       expect(inSqliteSession(store, session)).not.toBe(store);
       expect(inSqliteSession(copy, session)).toBe(copy);
+    }, 'cli');
+  });
+});
+
+// A marker is an own property: a store made with Object.create over a marked one is the caller's, not the marked store.
+describe('a store decorated with Object.create', () => {
+  it('keeps its methods and groups through storeForRequest when it decorates a worker store', async () => {
+    const worker = workerSqliteStore(root('decorated-worker'));
+    try {
+      const decorated: HippoStore & StoreGroups = Object.create(worker);
+      const bound = storeForRequest(decorated, {});
+      expect(bound.findApiKey).toBe(worker.findApiKey);
+      expect(bound.entryWrites).toBe(worker.entryWrites);
+    } finally {
+      await worker.close();
+    }
+  });
+
+  it('keeps its own override through the reopen when it decorates sqliteStore', async () => {
+    const decorated: HippoStore & StoreGroups = Object.create(sqliteStore(root('decorated-sqlite')));
+    const override: HippoStore['findApiKey'] = async () => null;
+    decorated.findApiKey = override;
+    await runSqliteRequest(async (session) => {
+      const reopened = inSqliteSession(decorated, session);
+      expect(reopened.findApiKey).toBe(override);
+      expect(reopened).toBe(decorated);
     }, 'cli');
   });
 });

@@ -3,7 +3,6 @@
 import { envTenant } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
-import { keyChecks } from './api-key.js';
 import { LOCAL_KEY_SUBJECT } from './local-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
@@ -280,13 +279,9 @@ async function resolveApiKey(
   const key = await opts.keyVerifier.verify(
     token,
     opts.store,
-    (keyId, derive) => {
-      // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the
-      // address's budget to the callers who share it.
-      opts.keyVerifier.admit(keyId, address);
-      chargeScryptRun(req, opts);
-      return keyChecks.run(keyId, address, derive);
-    },
+    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the
+    // address's budget to the callers who share it.
+    opts.keyVerifier.boundFor(address, () => chargeScryptRun(req, opts)),
     () => chargeScryptRun(req, opts),
   );
   if (!key) throw new HttpError(401, 'invalid api key');

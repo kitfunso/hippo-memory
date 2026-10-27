@@ -83,6 +83,16 @@ export class KeyVerifier {
     this.#tries.spend(keyId, address);
   }
 
+  /** The bound one caller's derivations run under: admit, then `charged`, then the process's
+   * scrypt queue, which every verifier shares. */
+  boundFor(address: string, charged: () => void): DerivationBound {
+    return (keyId, derive) => {
+      this.admit(keyId, address);
+      charged();
+      return keyChecks.run(keyId, address, derive);
+    };
+  }
+
   /** Verify a bearer API key against `store`, null when invalid. The key's row is read on every
    * call, so a revoke, expiry, role or scope change by any process applies on the next one. */
   async verify(
