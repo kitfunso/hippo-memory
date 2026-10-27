@@ -6,7 +6,7 @@ import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js
 import { scopeAdmitSql } from '../../src/store/sqlite/rule-sql.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [
@@ -27,7 +27,7 @@ describe('scopeAdmitSql parity on a real store', () => {
 
   function admittedBySql(col: '' | 'm.', ownScope?: string, and = ''): string[] {
     const { sql, params } = scopeAdmitSql(col, ownScope);
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       // SAFETY: the SELECT names only the id column.
       const rows = db
@@ -44,7 +44,7 @@ describe('scopeAdmitSql parity on a real store', () => {
     SCOPES.forEach((scope, i) =>
       writeEntry(root, createMemory(`parity row number ${i}`, { scope, tenantId: 'default' })),
     );
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       // SAFETY: the SELECT names the id and scope columns.
       stored = db.prepare('SELECT id, scope FROM memories').all() as Array<{ id: string; scope: string | null }>;

@@ -173,7 +173,7 @@ describe('walks of every row a read names', () => {
   it('read nothing past the page the caller asks for', async () => {
     const root = makeRoot('bounded-tag-lazy');
     const rows = seeded(root, 3, () => ({ source: 'agent-memory:claude-code:p/note.md' }));
-    const reports = sqliteStore(root).reports;
+    const reports = sqliteStore(root);
     const under = { tenantId: rows[0].tenantId, sourcePrefix: 'agent-memory:', live: true } as const;
     const log = await recordStatementsAsync(async () => {
       const page = await reports.entriesWhere(under, { limit: 1 });

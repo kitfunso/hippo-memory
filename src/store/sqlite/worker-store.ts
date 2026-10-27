@@ -25,7 +25,6 @@ import {
 } from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
-import { asViewOf } from '../../base/util/store-view.js';
 
 /** The worker a call goes to and the request it answers. */
 interface Sender {
@@ -33,14 +32,27 @@ interface Sender {
   readonly limits: RequestLimits;
 }
 
-const offLoopStores = new WeakSet<HippoStore>();
+// Non-enumerable marks on their owners: a worker store, and each method that answers from a worker
+// with how to make it again for another request's limits.
+const OFF_LOOP = Symbol('answers from workers');
+const REBIND = Symbol('worker call rebind');
 
-// Each method that answers from a worker, with how to make it again for another request's limits.
-const rebinders = new WeakMap<Function, (limits: RequestLimits) => Function>();
+interface Rebindable {
+  readonly [REBIND]: (limits: RequestLimits) => Function;
+}
+
+function isRebindable<V>(value: V): value is V & Function & Rebindable {
+  return value instanceof Function && Object.hasOwn(value, REBIND);
+}
+
+function markOffLoop<S extends HippoStore>(store: S): S {
+  Object.defineProperty(store, OFF_LOOP, { value: true });
+  return store;
+}
 
 /** Whether `store` answers its methods from worker threads. */
 export function runsOffLoop(store: HippoStore): boolean {
-  return offLoopStores.has(store);
+  return Object.hasOwn(store, OFF_LOOP);
 }
 
 function send<T>(
@@ -62,7 +74,8 @@ function send<T>(
 
 function workerCall(sender: Sender, op: string, mode: OpRoute): Function {
   const call = (...args: unknown[]) => send(sender, op, args, mode);
-  rebinders.set(call, (limits) => workerCall({ ...sender, limits }, op, mode));
+  const rebind: Rebindable[typeof REBIND] = (limits) => workerCall({ ...sender, limits }, op, mode);
+  Object.defineProperty(call, REBIND, { value: rebind });
   return call;
 }
 
@@ -91,7 +104,8 @@ function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   };
   const stored: VectorReads['stored'] = async (part, ids) =>
     ids.length === 0 ? new Map() : sent[part](ids);
-  rebinders.set(stored, (limits) => storedOnWorkers({ ...sender, limits }));
+  const rebind: Rebindable[typeof REBIND] = (limits) => storedOnWorkers({ ...sender, limits });
+  Object.defineProperty(stored, REBIND, { value: rebind });
   return stored;
 }
 
@@ -166,15 +180,13 @@ export function workerSqliteStore(
     ),
     close: () => executor.close(),
   };
-  offLoopStores.add(store);
-  return asHippoDb(store);
+  return asHippoDb(markOffLoop(store));
 }
 
 function rebound<V>(value: V, limits: RequestLimits): V {
-  const rebind = value instanceof Function ? rebinders.get(value) : undefined;
-  // SAFETY: a rebinder makes the same worker call again, so the new function has the old one's
+  // SAFETY: a rebind makes the same worker call again, so the new function has the old one's
   // signature.
-  return rebind === undefined ? value : (rebind(limits) as V);
+  return isRebindable(value) ? (value[REBIND](limits) as V) : value;
 }
 
 function isPlainObject<V>(value: V): value is V & object {
@@ -195,10 +207,9 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
     // SAFETY: a group keeps its keys, each method rebound to the same signature.
     bound[key] = (group ?? rebound(value, limits)) as S[keyof S];
   }
-  // SAFETY: every own key of `store` was copied above, and its symbols with the spread.
-  const view = bound as S;
-  offLoopStores.add(view);
-  return asViewOf(view, store);
+  // SAFETY: every own string key of `store` was copied above; its marks are non-enumerable, so
+  // markOffLoop sets the off-loop mark again.
+  return markOffLoop(bound as S);
 }
 
 /** The operator's global stores a server opens beside its own, closed with it. */

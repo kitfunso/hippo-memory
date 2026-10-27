@@ -18,3 +18,15 @@ export function realpathOrResolve(p: string): string {
     return path.resolve(p);
   }
 }
+
+/** realpathOrResolve of the nearest folder of `p` that exists, with the rest of `p` added, so a
+ * path names one place before and after its folders are made. */
+export function realpathOfNearest(p: string): string {
+  const missing: string[] = [];
+  let at = path.resolve(p);
+  while (!fs.existsSync(at) && path.dirname(at) !== at) {
+    missing.unshift(path.basename(at));
+    at = path.dirname(at);
+  }
+  return path.join(realpathOrResolve(at), ...missing);
+}

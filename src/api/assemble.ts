@@ -11,7 +11,7 @@ import {
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { Context } from './types.js';
+import type { Context, ContextWith } from './types.js';
 import type { EntryCursor } from '../base/ports/store/types.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;
@@ -77,7 +77,7 @@ export interface AssembleResult {
  *  tail is never evicted).
  *  Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOptions = {},
 ): Promise<AssembleResult> {
@@ -130,7 +130,7 @@ interface ScopedRaws {
 }
 
 async function loadScopedRaws(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOptions,
   own: string | undefined,
@@ -175,12 +175,12 @@ async function sessionRawRows(
     sessionId,
     origins: origins === undefined ? undefined : ['', ...origins],
   } as const;
-  const reports = ctx.store.reports;
+  const { store } = ctx;
   if (cap > 0) {
-    return (await reports.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
+    return (await store.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
   }
   return readAll((after?: EntryCursor) =>
-    reports.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
+    store.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
   );
 }
 

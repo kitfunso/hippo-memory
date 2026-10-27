@@ -501,7 +501,7 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     ],
     [
       'GET /v1/sessions/:id/assemble',
-      (p) => ({ reports: p.reports }),
+      (p) => ({ entriesWhere: p.entriesWhere }),
       (s, made) => get(s, '/v1/sessions/sess-1/assemble', made.token),
     ],
     [

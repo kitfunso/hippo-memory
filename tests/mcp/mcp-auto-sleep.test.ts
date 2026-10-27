@@ -4,9 +4,11 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { RequestStores } from '../../src/db/index.js';
+import { SESSION_OPEN } from '../../src/db/request-stores.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
+import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];
@@ -18,7 +20,7 @@ afterEach(() => {
 });
 
 /** A remember through `host`, whose callers hold the stores with a sleep in flight. */
-function remember(host: McpHost, hippoRoot: string, text: string) {
+function remember(host: McpHost<CliStore>, hippoRoot: string, text: string) {
   return host.runFrame(new AbortController().signal, (contextFor) =>
     handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
@@ -64,15 +66,15 @@ describe('MCP auto-sleep', () => {
     const root = makeRoot('mcp-autosleep-scope');
     roots.push(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    // Every open on a session goes through getWithFacts, so its `this` names the session that made it.
+    // Every open on a session goes through its SESSION_OPEN method, so its `this` names the session that made it.
     const sessions: RequestStores[] = [];
-    const getWithFacts = RequestStores.prototype.getWithFacts;
-    const opens = vi.spyOn(RequestStores.prototype, 'getWithFacts').mockImplementation(function (
+    const sessionOpen = RequestStores.prototype[SESSION_OPEN];
+    const opens = vi.spyOn(RequestStores.prototype, SESSION_OPEN).mockImplementation(function (
       this: RequestStores,
-      ...args: Parameters<RequestStores['getWithFacts']>
+      ...args: Parameters<RequestStores[typeof SESSION_OPEN]>
     ) {
       sessions.push(this);
-      return getWithFacts.apply(this, args);
+      return sessionOpen.apply(this, args);
     });
     const seen: { session: RequestStores | undefined; open: boolean }[] = [];
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');

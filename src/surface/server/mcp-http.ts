@@ -77,9 +77,13 @@ export function callerProjectFromHeaders(
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(ctx: Context, hippoRoot: string, project?: CallerProject): McpContext {
+function mcpContextFor(
+  ctx: Context,
+  opts: ResolvedServeOptions,
+  project?: CallerProject,
+): McpContext {
   const mcpCtx: McpContext = {
-    hippoRoot,
+    hippoRoot: opts.hippoRoot,
     tenantId: ctx.tenantId,
     // McpContext.actor stays string; extract subject at the boundary.
     actor: ctx.actor.subject,
@@ -91,6 +95,8 @@ function mcpContextFor(ctx: Context, hippoRoot: string, project?: CallerProject)
     owner: ctx.actor.owner,
     clientKey: ctx.clientKey,
     store: ctx.store,
+    storeFor: opts.storeFor,
+    tools: opts.mcpTools,
     config: ctx.config,
     reach: ctx.reach,
     callers: ctx.callers,
@@ -121,7 +127,7 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts.hippoRoot, project));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }

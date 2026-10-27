@@ -95,6 +95,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/v1/graph',
     auth: 'caller',
+    storeReady: 'graphReads',
     handler: handleGetGraph,
   },
   {
@@ -107,12 +108,14 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     pattern: '/v1/sessions/:id/assemble',
     auth: 'caller',
+    storeReady: 'dagReads',
     handler: handleAssembleSession,
   },
   {
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
     auth: 'caller',
+    storeReady: 'dagReads',
     handler: handleDrillRecall,
   },
   {
@@ -158,6 +161,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/vectors/nearest',
     auth: 'caller',
+    storeReady: 'vectors',
     handler: handleNearestVectors,
   },
   {

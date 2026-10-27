@@ -10,6 +10,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const HEALTH_VERBS = {
   status: verb(() => import('../status.js'), 'handleStatus', {
+    needs: ['reports', 'vectors'],
     repairsCodexWrapper: true,
     flags: {},
     usage: [
@@ -78,6 +79,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   provenance: verb(() => import('../status.js'), 'handleProvenance', {
+    needs: ['reports'],
     flags: { switches: ['json', 'strict'] },
     usage: [
       `
@@ -95,6 +97,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   drill: verb(() => import('../dag.js'), 'handleDrill', {
+    needs: ['dagReads'],
     scoped: true,
     flags: { switches: ['json'], values: ['budget', 'depth'], numbers: ['limit'] },
     usage: [
@@ -106,6 +109,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   assemble: verb(() => import('../dag.js'), 'handleAssemble', {
+    needs: ['dagReads'],
     scoped: true,
     flags: {
       switches: ['json', 'no-summarize-older'],
@@ -122,6 +126,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   'correction-latency': verb(() => import('../status.js'), 'handleCorrectionLatency', {
+    needs: ['reports'],
     flags: { switches: ['json'] },
     usage: [
       `
@@ -271,6 +276,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   tokens: verb(() => import('../status.js'), 'handleTokens', {
+    needs: ['reports'],
     scoped: true,
     flags: { switches: ['global', 'json'], numbers: ['days'] },
     usage: [
@@ -286,6 +292,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   failures: verb(() => import('../status.js'), 'handleFailures', {
+    needs: ['reports'],
     scoped: true,
     flags: { switches: ['global', 'json'], numbers: ['days'] },
     usage: [

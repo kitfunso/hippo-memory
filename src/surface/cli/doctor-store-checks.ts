@@ -7,12 +7,8 @@ import {
   REPLAY_AFTER_MS,
   TRANSCRIPT_FILL_WINDOW_MS,
 } from '../../base/session/compaction-timing.js';
-import {
-  SPOOL_DIR,
-  spoolCounts,
-  type SpoolCounts,
-  type SpoolFs,
-} from '../../infra/compaction-spool.js';
+import { SPOOL_DIR, type SpoolFs } from '../../infra/spool-files.js';
+import { spoolCounts, type SpoolCounts } from '../../infra/spool-counts.js';
 import { globalProjectRepairPlan } from '../../api/objects/projects.js';
 import { currentMachine } from '../../infra/machine.js';
 import { errorMessage, log } from '../../base/util/log.js';

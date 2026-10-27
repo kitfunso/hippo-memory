@@ -258,3 +258,176 @@ describe('.oxlintrc.json test env rule', () => {
     expect(writes('tests/_helpers/env.ts')).toBe(0);
   });
 });
+
+describe('.oxlintrc.json store-group and grant rules', () => {
+  it('fails HippoStore and hasGroups in api and domain code, which take the groups they name', () => {
+    const hits = lint({
+      'src/api/whole.ts':
+        "import type { HippoStore } from '../base/ports/store.js';\nexport const f = (s: HippoStore): HippoStore => s;\n",
+      'src/domain/narrow.ts': "import { hasGroups } from '../base/ports/store.js';\nexport const n = hasGroups;\n",
+    });
+    expect(hits.get('src/api/whole.ts')).toContain(IMPORT);
+    expect(hits.get('src/domain/narrow.ts')).toContain(IMPORT);
+  });
+
+  it('fails an unscoped hippo.db open in src, and passes it in the db files that make one', () => {
+    const open = (name: string, from: string): string =>
+      `import { ${name} } from '${from}';\nexport const o = ${name};\n`;
+    const hits = lint({
+      'src/store/sqlite/opens.ts': open('openHippoDb', '../../db/index.js'),
+      'src/db/reads.ts': open('openHippoDbReadOnly', './open.js'),
+      'src/db/deep/reads.ts': open('openHippoDb', '../open.js'),
+      'src/db/grant.ts': open('openHippoDbReadOnly', './open.js'),
+      'src/db/index.ts': "export { openHippoDb } from './open.js';\n",
+    });
+    expect(hits.get('src/store/sqlite/opens.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/reads.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/deep/reads.ts')).toContain(IMPORT);
+    expect(hits.get('src/db/grant.ts')).toBeUndefined();
+    expect(hits.get('src/db/index.ts')).toBeUndefined();
+  });
+
+  it('fails a hippo.db connection, session open or raw SQLite connection in src that skips the grant, and passes each where it is made', () => {
+    const open = (name: string, from: string): string =>
+      `import { ${name} } from '${from}';\nexport const o = ${name};\n`;
+    const hits = lint({
+      'src/store/sqlite/connects.ts': open('connectWithFacts', '../../db/connect.js'),
+      'src/db/connects.ts': open('connectWithFacts', './connect.js'),
+      'src/store/sqlite/session-opens.ts': open('SESSION_OPEN', '../../db/request-stores.js'),
+      'src/db/session-opens.ts': open('SESSION_OPEN', './request-stores.js'),
+      'src/db/grant.ts':
+        open('connectWithFacts', './connect.js') + open('SESSION_OPEN', './request-stores.js').replace(' o ', ' p '),
+      'src/db/request-stores.ts': open('connectWithFacts', './connect.js'),
+      'src/store/sqlite/worker-jobs.ts': open('SESSION_OPEN', '../../db/request-stores.js'),
+      'src/store/sqlite/raw-connects.ts': open('DatabaseSync', '../../db/sqlite.js'),
+      'src/db/raw-connects.ts': open('DatabaseSync', './sqlite.js'),
+      'src/db/connect.ts': open('DatabaseSync', './sqlite.js'),
+      'src/db/continuity-tables.ts': open('DatabaseSync', './sqlite.js'),
+    });
+    for (const file of [
+      'src/store/sqlite/connects.ts',
+      'src/db/connects.ts',
+      'src/store/sqlite/session-opens.ts',
+      'src/db/session-opens.ts',
+      'src/store/sqlite/raw-connects.ts',
+      'src/db/raw-connects.ts',
+    ]) {
+      expect(hits.get(file), file).toContain(IMPORT);
+    }
+    expect(hits.get('src/db/grant.ts')).toBeUndefined();
+    expect(hits.get('src/db/request-stores.ts')).toBeUndefined();
+    expect(hits.get('src/store/sqlite/worker-jobs.ts')).toBeUndefined();
+    expect(hits.get('src/db/connect.ts')).toBeUndefined();
+    expect(hits.get('src/db/continuity-tables.ts')).toBeUndefined();
+  });
+});
+
+const DEPCRUISE = join(REPO, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruiser.mjs');
+
+interface Violation {
+  readonly from: string;
+  readonly rule: { readonly name: string };
+}
+
+/** Runs the repo's depcruise rules over `files` in a fresh folder; the files each `rule` names. */
+function cruise(files: Record<string, string>, rule: string): string[] {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-deps-')));
+  try {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), text);
+    }
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { module: 'nodenext' } }));
+    const config = join(REPO, '.dependency-cruiser.cjs');
+    const args = [DEPCRUISE, 'src', '--config', config, '--output-type', 'json'];
+    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8' });
+    // SAFETY: depcruise's json output carries summary.violations, each with its from path and rule name.
+    const { summary } = JSON.parse(r.stdout) as { summary: { violations: Violation[] } };
+    return summary.violations.filter((v) => v.rule.name === rule).map((v) => v.from);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('.dependency-cruiser.cjs grant rule', () => {
+  it('fails a value import of db/grant.ts outside the adapter grant, and passes a type import', () => {
+    const grant = 'export class DbGrant {}\nexport const mintDbGrant = (): DbGrant => new DbGrant();\n';
+    const minted = cruise(
+      {
+        'src/db/grant.ts': grant,
+        'src/store/sqlite/grant.ts':
+          "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
+        'src/store/sqlite/forged.ts':
+          "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
+        'src/store/sqlite/typed.ts':
+          "import type { DbGrant } from '../../db/grant.js';\nexport const t = (g: DbGrant): DbGrant => g;\n",
+      },
+      'db-grant-mint',
+    );
+    expect(minted).toEqual(['src/store/sqlite/forged.ts']);
+  });
+
+  it('fails node:sqlite loaded anywhere but src/db/sqlite.ts and the file lock', () => {
+    const raw =
+      "import { DatabaseSync } from 'node:sqlite';\nexport const open = (p: string): unknown => new DatabaseSync(p);\n";
+    const loaded = cruise(
+      { 'src/db/sqlite.ts': raw, 'src/host/file-lock.ts': raw, 'src/store/sqlite/raw.ts': raw, 'src/db/raw.ts': raw },
+      'sqlite-in-data-layer',
+    );
+    expect(loaded.sort()).toEqual(['src/db/raw.ts', 'src/store/sqlite/raw.ts']);
+  });
+
+  it('fails a dynamic import of a src/db module, which the grant lint ban cannot see', () => {
+    const imported = cruise(
+      {
+        'src/db/connect.ts': 'export const connectWithFacts = (): number => 1;\n',
+        'src/store/sqlite/late.ts':
+          "export const open = async (): Promise<number> => (await import('../../db/connect.js')).connectWithFacts();\n",
+        'src/store/sqlite/static.ts':
+          "import { connectWithFacts } from '../../db/connect.js';\nexport const n = connectWithFacts();\n",
+      },
+      'db-dynamic-import',
+    );
+    expect(imported).toEqual(['src/store/sqlite/late.ts']);
+  });
+});
+
+/** The files scripts/check-sqlite-loads.mjs names over `files` in a fresh folder. */
+function sqliteLoads(files: Record<string, string>): string[] {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-sqlite-')));
+  try {
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), text);
+    }
+    const script = join(REPO, 'scripts', 'check-sqlite-loads.mjs');
+    const r = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf-8' });
+    return [...r.stderr.matchAll(/^ {2}(src\/\S+):\d+ /gm)].map(([, file]) => file);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('scripts/check-sqlite-loads.mjs', () => {
+  it('fails node:sqlite through a renamed createRequire or getBuiltinModule, and a computed import in the data layer', () => {
+    const loader = "const { DatabaseSync } = require('node:sqlite');\nexport { DatabaseSync };\n";
+    const named = sqliteLoads({
+      'src/db/sqlite.ts': loader,
+      'src/host/file-lock.ts': loader,
+      'src/db/wal-checkpointer.ts': "export const SOURCE = `const { DatabaseSync } = require('node:sqlite');`;\n",
+      'src/store/sqlite/renamed.ts':
+        "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nexport const m = load('node:sqlite');\n",
+      'src/store/sqlite/builtin.ts': "export const m = process.getBuiltinModule('node:sqlite');\n",
+      'src/store/sqlite/worker.ts': "export const SOURCE = `require('node:sqlite')`;\n",
+      'src/db/computed.ts':
+        "const where = '../db/connect.js';\nexport const open = async (): Promise<unknown> => import(where);\n",
+      'src/db/literal.ts': "export const open = async (): Promise<unknown> => import('./connect.js');\n",
+    });
+    expect(named.sort()).toEqual([
+      'src/db/computed.ts',
+      'src/store/sqlite/builtin.ts',
+      'src/store/sqlite/renamed.ts',
+      'src/store/sqlite/worker.ts',
+    ]);
+  });
+});

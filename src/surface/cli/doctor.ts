@@ -10,7 +10,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import { loadConfig } from '../../host/config-file.js';
-import { type SpoolFs } from '../../infra/compaction-spool.js';
+import { type SpoolFs } from '../../infra/spool-files.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';

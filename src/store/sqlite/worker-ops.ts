@@ -1,6 +1,6 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each
 // store method.
-import type { BaseMethods, HippoStore, StoreGroups } from '../../base/ports/store.js';
+import { type HippoStore, STORE_EFFECTS } from '../../base/ports/store.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 import type { StoreRules } from '../../base/ports/infra.js';
@@ -16,266 +16,50 @@ export type OpRoute = OpMode | 'pinned-read';
 
 export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
 
-/** Every store method but hippo.db's local files, so a served store runs no SQLite on the server
- * thread. Tagged by effect: predictionBaserate (audit row), bumpRecallStats and bumpRemembered
- * (stats.json) write; an `openStore` read is a read, as the writer runs that open's setup before
- * any reader serves. */
-export const WORKER_OPS = {
-  base: {
-    findApiKey: 'read',
-    searchRecallEntries: 'read',
-    entriesByIds: 'read',
-    activeGoals: 'read',
-    freshRawEntries: 'read',
-    continuity: 'read',
-    planningFallacyEvidence: 'read',
-    appendAuditEvents: 'write',
-    finishRecall: 'write',
-    bumpRecallStats: 'write',
-    bumpRemembered: 'write',
-    recordTokens: 'write',
-  },
-  vectors: {
-    embeddingIndexState: 'read',
-    stored: 'read',
-    nearestEntries: 'pinned-read',
-  },
-  keyWrites: {
-    changeApiKey: 'write',
-    listApiKeys: 'read',
-  },
-  vectorWrites: {
-    entriesWithoutVector: 'read',
-    writeVectors: 'write',
-  },
-  entryWrites: {
-    writeEntry: 'write',
-    applyOutcome: 'write',
-    setPinned: 'write',
-    supersede: 'write',
-    archiveRaw: 'write',
-    forget: 'write',
-  },
-  contextReads: {
-    ambientCandidates: 'read',
-    contextCandidates: 'read',
-    ambientTallies: 'read',
-    schemaFit: 'read',
-  },
-  dagReads: {
-    sessionRawCount: 'read',
-    summaryWithDescendants: 'read',
-  },
-  auditLog: {
-    listAuditEvents: 'read',
-  },
-  quarantine: {
-    listQuarantined: 'read',
-    decideQuarantined: 'write',
-  },
-  graphReads: {
-    graphRows: 'read',
-    graphDelta: 'read',
-  },
-  objects: {
-    listObjects: 'read',
-    objectById: 'read',
-    closeObject: 'write',
-    saveObject: 'write',
-    briefReceipts: 'read',
-    predictionBaserate: 'write',
-  },
-  readiness: {
-    ping: 'read',
-  },
-  connectorWrites: {
-    writeConnectorEntry: 'write',
-    archiveConnectorEntry: 'write',
-  },
-  connectorEvents: {
-    eventRecord: 'read',
-    markEventSeen: 'write',
-    claimDelivery: 'write',
-    releaseDelivery: 'write',
-    route: 'read',
-    parkDeadLetter: 'write',
-    deadLetters: 'read',
-    markDeadLetterRetried: 'write',
-    cursor: 'read',
-    saveCursor: 'write',
-    slackWorkspaces: 'read',
-    registerSlackWorkspace: 'write',
-    removeSlackWorkspace: 'write',
-  },
-  // finishRecall strengthens the global store's rows too, from the writer thread of this one.
-  lastRecall: {
-    applyOutcomeToLast: 'write',
-    finishRecall: 'write',
-  },
-  auditMaintenance: {
-    objectBackedAmong: 'read',
-    deleteAutomatically: 'write',
-    pruneAuditRows: 'write',
-    repairQuality: 'write',
-    repairQualityOnce: 'write',
-  },
-  lessonWrites: {
-    textsHolding: 'read',
-    contentsWithTag: 'read',
-    writeSkippingRejected: 'write',
-    writeTogether: 'write',
-  },
-  // A snapshot load rewrites the active-task mirror file, so it runs on the one writer.
-  sessions: {
-    save: 'write',
-    read: 'read',
-    clear: 'write',
-    loadSnapshot: 'write',
-    bindSessionOwner: 'write',
-  },
-  cards: {
-    create: 'write',
-    detail: 'read',
-    list: 'read',
-    claim: 'write',
-    heartbeat: 'write',
-    block: 'write',
-    review: 'write',
-    complete: 'write',
-    reclaimExpired: 'write',
-    comment: 'write',
-  },
-  goals: {
-    push: 'write',
-    sessionGoals: 'read',
-    complete: 'write',
-    suspend: 'write',
-    resume: 'write',
-  },
-  conflicts: {
-    list: 'read',
-    get: 'read',
-    resolve: 'write',
-  },
-  dormant: {
-    list: 'read',
-    restore: 'write',
-    forget: 'write',
-  },
-  reports: {
-    tokenUse: 'read',
-    failures: 'read',
-    memoryStatus: 'read',
-    entriesWhere: 'read',
-    countEntries: 'read',
-    stats: 'read',
-    statusCounts: 'read',
-    correctionLinks: 'read',
-    rawProvenance: 'read',
-    createdSinceLastSleep: 'read',
-  },
-  rejections: {
-    apply: 'write',
-    lift: 'write',
-    list: 'read',
-    refusedAmong: 'read',
-  },
-  failureLog: {
-    record: 'write',
-    requestOutcome: 'read',
-    settleOutcome: 'write',
-  },
-  compactions: {
-    start: 'write',
-    markSnapshotSaved: 'write',
-    saveCallerItems: 'write',
-  },
-  ledger: {
-    recordTurn: 'write',
-    lastSent: 'read',
-    pilotArm: 'write',
-    replaceRereads: 'write',
-  },
-  // A session's lock token and staged vectors sit on the thread that opened it, so every index call
-  // goes to the writer.
-  embeddingIndex: {
-    open: 'write',
-    step: 'write',
-  },
-  promotion: {
-    writeCopy: 'write',
-  },
-  folderFiles: {
-    ensure: 'write',
-    home: 'read',
-  },
-  sharing: {
-    entriesWithSignals: 'read',
-    textKeysPage: 'read',
-    textKeysHolding: 'read',
-    takenIds: 'read',
-    sourceTallies: 'read',
-    searchEntries: 'read',
-    recallEntries: 'read',
-  },
-  consolidation: {
-    begin: 'write',
-    entryIdsPage: 'read',
-    rejected: 'read',
-    particleIds: 'read',
-    saveParticles: 'write',
-    dirtySummaries: 'read',
-    unprofiledTopicSummaries: 'read',
-    settleSummary: 'write',
-    commit: 'write',
-    recordSleep: 'write',
-    auditEachRow: 'write',
-    duplicateCandidates: 'read',
-    dirtyGraphTenants: 'read',
-    markGraphDrained: 'write',
-  },
-  learning: {
-    entriesMentioning: 'read',
-    readEntry: 'read',
-    addTagToEntries: 'write',
-    confirmedOutcomeTimes: 'read',
-  },
-  captures: {
-    write: 'write',
-    textsHolding: 'read',
-  },
-  compactionHooks: {
-    start: 'write',
-    markSnapshotSaved: 'write',
-    save: 'write',
-    saveStalled: 'write',
-    recordSpooled: 'write',
-    saveRecordItems: 'write',
-    openRecords: 'read',
-    fill: 'write',
-  },
-  projectTags: {
-    originTallies: 'read',
-    dormantWhere: 'read',
-    compactionOrigins: 'read',
-    merge: 'write',
-    repair: 'write',
-    repairedOnce: 'read',
-    markRepairedOnce: 'write',
-  },
-  diagnostics: {
-    health: 'read',
-    inventory: 'read',
-  },
-  graphRebuild: {
-    applyOps: 'write',
-  },
-  agentImport: {
-    applyContainer: 'write',
-  },
-} as const satisfies { readonly [G in keyof StoreGroups]: OpPlaces<StoreGroups[G]> } & {
-  readonly base: OpPlaces<BaseMethods>;
+/** Reads only the first reader runs, since that thread alone holds the store's vector graph. */
+const PINNED_READS: Placement = { vectors: ['nearestEntries'] };
+
+/** Methods the port calls reads that hippo.db runs on the one writer thread. */
+const ON_WRITER: Placement = {
+  // A snapshot load rewrites the active-task mirror file.
+  sessions: ['loadSnapshot'],
+  // A session's lock token and staged vectors sit on the thread that opened it.
+  embeddingIndex: ['open'],
 };
+
+type Placement = { readonly [G in keyof StoreEffects]?: readonly (keyof StoreEffects[G])[] };
+type StoreEffects = typeof STORE_EFFECTS;
+type WorkerOps = {
+  readonly [G in keyof StoreEffects]: { readonly [M in keyof StoreEffects[G]]: OpRoute };
+};
+
+function routeOf(group: string, method: string, effect: OpMode): OpRoute {
+  const named = (placement: Placement): boolean =>
+    new Map<string, readonly PropertyKey[]>(Object.entries(placement))
+      .get(group)
+      ?.includes(method) ?? false;
+  if (named(PINNED_READS)) return 'pinned-read';
+  return named(ON_WRITER) ? 'write' : effect;
+}
+
+function placedOps(): WorkerOps {
+  // SAFETY: the map keeps every group and method key of STORE_EFFECTS and gives each an OpRoute.
+  return Object.fromEntries(
+    Object.entries(STORE_EFFECTS).map(([group, effects]) => [
+      group,
+      Object.fromEntries(
+        Object.entries<OpMode>(effects).map(([method, effect]) => [
+          method,
+          routeOf(group, method, effect),
+        ]),
+      ),
+    ]),
+  ) as WorkerOps;
+}
+
+/** Each store method but the local files, placed by its port effect, PINNED_READS and ON_WRITER, so
+ * the server thread runs no SQLite; finishRecall writes the global rows from this writer too. */
+export const WORKER_OPS = placedOps();
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time
  * setup once, before any reader is sent a job. */

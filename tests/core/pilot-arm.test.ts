@@ -24,6 +24,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -177,7 +178,7 @@ describe('pilot arm helpers', () => {
       // The reader is the server request's handle, so its write scope waits the session's bound.
       await withSharedStoreHandles(
         async (session) => {
-          const reader = session.get(root);
+          const reader = grantFor({ session }).open(root);
           let arm: Promise<PilotArm> | undefined;
           const waited = waitOnSteppedClock(reader, () => {
             arm = ensurePilotArm(reader, 'default', 'locked', 10000);

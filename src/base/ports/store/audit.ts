@@ -5,6 +5,7 @@ import type { KeysetPosition } from '../../util/keyset.js';
 import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import type { AuditEvent } from './types.js';
 import type { RepairProtection } from '../../memory/memory-audit.js';
+import type { MethodEffects } from './effects.js';
 
 /** The rows an audit list reads for `limit`: one past the cap, since GET /v1/audit reads a row
  * ahead to tell whether another page exists. */
@@ -18,6 +19,11 @@ export interface AuditLog {
    * id) position a page ended on. */
   listAuditEvents(query: QueryAuditOptions): Promise<AuditEvent[]>;
 }
+
+/** What each AuditLog method does to the store; every adapter honours it. */
+export const AUDIT_LOG_EFFECTS = {
+  listAuditEvents: 'read',
+} as const satisfies MethodEffects<AuditLog>;
 
 export interface QueryAuditOptions {
   tenantId: string;
@@ -58,6 +64,15 @@ export interface AuditMaintenance {
     protect: RepairProtection,
   ): Promise<QualityRepairResult | null>;
 }
+
+/** What each AuditMaintenance method does to the store; every adapter honours it. */
+export const AUDIT_MAINTENANCE_EFFECTS = {
+  objectBackedAmong: 'read',
+  deleteAutomatically: 'write',
+  pruneAuditRows: 'write',
+  repairQuality: 'write',
+  repairQualityOnce: 'write',
+} as const satisfies MethodEffects<AuditMaintenance>;
 
 export interface AuditPrune {
   tenantId: string;

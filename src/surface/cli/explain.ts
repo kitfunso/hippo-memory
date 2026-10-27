@@ -11,7 +11,13 @@ import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
-import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';
+import {
+  cliConfig,
+  cliApiContext,
+  cliSecondStore,
+  cliStore,
+  type CliStore,
+} from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context-render.js';
 import { printError } from './output.js';
@@ -29,7 +35,6 @@ import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import type { HippoStore } from '../../base/ports/store.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
@@ -37,7 +42,7 @@ const EXPLAIN_PREVIEW_CHARS = 48;
  * policy hides. */
 async function noteScopeHidden(
   ctx: ReturnType<typeof cliApiContext>,
-  global: HippoStore | undefined,
+  global: CliStore | undefined,
   query: string,
   requested: string | undefined,
 ): Promise<void> {

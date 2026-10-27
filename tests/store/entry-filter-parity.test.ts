@@ -109,14 +109,14 @@ const FILTERS = {
 
 const EMPTY = new Set(['no such origin', 'ref prefix with a wildcard']);
 
-type Walk = GroupCall<'reports', EntryPage | MemoryEntry[]>;
+type Walk = GroupCall<'base', EntryPage | MemoryEntry[]>;
 
 const walk =
   (filter: EntryFilter, newest: boolean): Walk =>
   (g) =>
     readAll((after?: EntryCursor) => g.entriesWhere(filter, { limit: 2, after, newest }));
 
-describe('reports.entriesWhere', () => {
+describe('entriesWhere', () => {
   let fixture: TwoTenantFixture;
   let kept: Map<string, string[]>;
 
@@ -130,7 +130,7 @@ describe('reports.entriesWhere', () => {
     ]);
     const sqlite = await runOnFixture(
       fixture,
-      'reports',
+      'base',
       named.map(([, call]) => call),
     );
     kept = new Map(

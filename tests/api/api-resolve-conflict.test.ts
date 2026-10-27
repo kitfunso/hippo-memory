@@ -12,6 +12,7 @@ import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_he
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -62,7 +63,7 @@ function supersedeB({ b }: Pair): void {
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } },
-    {
+    mcpContext({
       hippoRoot: root,
       tenantId: TENANT,
       actor: 'tester',
@@ -71,7 +72,7 @@ async function mcpResolve(args: Record<string, string | number | boolean>): Prom
       store: sqliteStore(root),
       config: loadConfig(root),
       infra: testInfra(),
-    },
+    }),
   );
 }
 

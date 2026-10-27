@@ -39,6 +39,7 @@ const { contextReach } = await load('api/types.js');
 const { loadConfig } = await load('host/config-file.js');
 const { rootInfra } = await load('infra/ports.js');
 const { handleMcpRequest } = await load('surface/mcp/server.js');
+const { bindMcpTools } = await load('surface/mcp/request.js');
 const { inSqliteSession, runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/index.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
@@ -146,6 +147,8 @@ const mcpCtx = {
   store: localStore,
   config,
   infra,
+  // The host binds its tools once on the store it serves; each call runs on the request's view.
+  tools: bindMcpTools(localStore),
 };
 // A root builds a request's store, and each global store its reach opens, on the request's session.
 const onSession = (session) => {
@@ -160,7 +163,12 @@ const tool =
   async () => {
     const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
     const res = await runSqliteRequest(
-      (session) => handleMcpRequest(call, { ...mcpCtx, ...onSession(session) }),
+      (session) =>
+        handleMcpRequest(call, {
+          ...mcpCtx,
+          ...onSession(session),
+          storeFor: (own) => inSqliteSession(own, session),
+        }),
       'server',
     );
     if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);

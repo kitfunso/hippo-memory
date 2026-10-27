@@ -200,7 +200,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       layer: Layer.Episodic,
     });
     for (const entry of [manual, pin, noise]) writeEntry(root, entry);
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       expect(gatedWrite(db, storeFilesOf(root), imported, { worthCheck: false })).toBe('written');
     } finally {

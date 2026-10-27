@@ -55,6 +55,7 @@ export function portOnlyStore<G extends OptionalGroup = never>(
     findApiKey: inner.findApiKey,
     searchRecallEntries: inner.searchRecallEntries,
     entriesByIds: inner.entriesByIds,
+    entriesWhere: inner.entriesWhere,
     activeGoals: inner.activeGoals,
     freshRawEntries: inner.freshRawEntries,
     continuity: inner.continuity,
@@ -86,22 +87,26 @@ function logged<S extends HippoStore>(store: S, calls: string[]): S {
     ...store,
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
-    // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
-    sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
+    ...(sessions && {
+      // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
+      sessions: { ...sessions, read: log('sessions.read', sessions.read) as StoreGroups['sessions']['read'] },
+    }),
     contextReads: {
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),
       contextCandidates: log('contextCandidates', c.contextCandidates),
       ambientTallies: log('ambientTallies', c.ambientTallies),
       schemaFit: log('schemaFit', c.schemaFit),
     },
-    vectors: {
-      embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
-      stored: (part, ids) => {
-        calls.push(`stored:${part}`);
-        return v.stored(part, ids);
-      },
-      nearestEntries: log('nearestEntries', v.nearestEntries),
-    },
+    ...(v && {
+      vectors: {
+        embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
+        stored: (part, ids) => {
+          calls.push(`stored:${part}`);
+          return v.stored(part, ids);
+        },
+        nearestEntries: log('nearestEntries', v.nearestEntries),
+      } satisfies StoreGroups['vectors'],
+    }),
   };
 }
 

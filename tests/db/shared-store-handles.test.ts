@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 let tmp: string;
 let root: string;
@@ -16,10 +17,10 @@ describe('withSharedStoreHandles', () => {
     const other = path.join(tmp, 'other');
     initTestStore(other);
     const seen = await withSharedStoreHandles((session) => {
-      const a = session.get(root);
+      const a = grantFor({ session }).open(root);
       closeHippoDb(a);
-      const b = session.get(root);
-      const c = session.get(other);
+      const b = grantFor({ session }).open(root);
+      const c = grantFor({ session }).open(other);
       expect(b).toBe(a);
       expect(a.isOpen).toBe(true);
       expect(c).not.toBe(a);
@@ -30,14 +31,14 @@ describe('withSharedStoreHandles', () => {
 
   it('gives an open nested inside a transaction its own connection', async () => {
     await withSharedStoreHandles((session) => {
-      const outer = session.get(root);
+      const outer = grantFor({ session }).open(root);
       outer.exec('BEGIN');
-      const inner = session.get(root);
+      const inner = grantFor({ session }).open(root);
       expect(inner).not.toBe(outer);
       closeHippoDb(inner);
       expect(inner.isOpen).toBe(false);
       outer.exec('ROLLBACK');
-      expect(session.get(root)).toBe(outer);
+      expect(grantFor({ session }).open(root)).toBe(outer);
     });
   });
 
@@ -45,7 +46,7 @@ describe('withSharedStoreHandles', () => {
     let held: DatabaseSyncLike | undefined;
     await expect(
       withSharedStoreHandles((session) => {
-        held = session.get(root);
+        held = grantFor({ session }).open(root);
         throw new Error('hook failed');
       }),
     ).rejects.toThrow('hook failed');

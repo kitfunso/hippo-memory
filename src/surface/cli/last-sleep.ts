@@ -2,7 +2,8 @@
 // the user.
 import * as fs from 'node:fs';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
-import { SPOOL_PROBLEM, spoolCounts } from '../../infra/compaction-spool.js';
+import { SPOOL_PROBLEM } from '../../infra/spool-files.js';
+import { spoolCounts } from '../../infra/spool-counts.js';
 import { defaultSleepLogPath } from '../hooks-install/json-hooks.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';

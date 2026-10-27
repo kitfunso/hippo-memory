@@ -17,6 +17,7 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -165,7 +166,7 @@ describe('request-path output on a fixed store', () => {
 
   const mcpCtx = (): McpContext => {
     const store = sqliteStore(localRoot);
-    return {
+    return mcpContext({
       hippoRoot: localRoot,
       tenantId: 'default',
       actor: 'mcp',
@@ -175,7 +176,7 @@ describe('request-path output on a fixed store', () => {
       reach: testReach(localRoot, store),
       config: loadConfig(localRoot),
       infra: testInfra(),
-    };
+    });
   };
   type ToolArgs = { scope?: string };
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>

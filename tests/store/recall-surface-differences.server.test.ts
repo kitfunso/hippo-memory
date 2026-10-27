@@ -35,6 +35,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 // Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
 let callers: CallerState;
@@ -86,7 +87,7 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    {
+    mcpContext({
       hippoRoot: root,
       tenantId: TENANT,
       actor: 'mcp',
@@ -96,7 +97,7 @@ function callTool(root: string, name: string, args: ToolArgs): Promise<McpRespon
       config: loadConfig(root),
       infra: testInfra(),
       callers,
-    },
+    }),
   );
 }
 
@@ -687,7 +688,7 @@ describe('shared store recall, MCP vs HTTP', () => {
             method: 'tools/call',
             params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } },
           },
-          {
+          mcpContext({
             hippoRoot: root,
             tenantId: TENANT,
             actor: 'mcp',
@@ -697,7 +698,7 @@ describe('shared store recall, MCP vs HTTP', () => {
             store: sqliteStore(root),
             config: loadConfig(root),
             infra: testInfra(),
-          },
+          }),
         ),
       );
       expect(mcp.isError, mcp.text).toBe(false);

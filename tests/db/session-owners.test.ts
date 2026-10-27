@@ -9,7 +9,8 @@ import {
   type RequestStores,
 } from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
-import { bindSessionOwner, type Context } from '../../src/server.js';
+import { bindSessionOwner } from '../../src/server.js';
+import type { ContextWith, EntryContext } from '../../src/api/types.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -38,7 +39,7 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function ctx(owner: string, tenantId = 'default', session?: RequestStores): Context {
+function ctx(owner: string, tenantId = 'default', session?: RequestStores): EntryContext<ContextWith<'sessions'>> {
   return {
     store: sqliteStore(home, { session }),
     config: loadConfig(home),

@@ -2,6 +2,7 @@
 // through entryWrites and lessonWrites.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { EntryCursor, EntryPage } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 /** What auto-learn, extraction and invalidation read and write on hippo.db. */
 export interface Learning {
@@ -21,3 +22,11 @@ export interface Learning {
    * id. */
   confirmedOutcomeTimes(tenantId: string, since: string): Promise<Map<string, string>>;
 }
+
+/** What each Learning method does to the store; every adapter honours it. */
+export const LEARNING_EFFECTS = {
+  entriesMentioning: 'read',
+  readEntry: 'read',
+  addTagToEntries: 'write',
+  confirmedOutcomeTimes: 'read',
+} as const satisfies MethodEffects<Learning>;

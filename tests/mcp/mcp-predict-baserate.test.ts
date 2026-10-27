@@ -17,6 +17,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -78,7 +79,7 @@ describe('mcp hippo_predict_baserate', () => {
       1,
       'hippo_predict_baserate',
       { class_tag: 'mcp-test' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -87,7 +88,7 @@ describe('mcp hippo_predict_baserate', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
 
@@ -106,7 +107,7 @@ describe('mcp hippo_predict_baserate', () => {
       2,
       'hippo_predict_baserate',
       { class_tag: 'never-seen' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -115,7 +116,7 @@ describe('mcp hippo_predict_baserate', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
@@ -128,7 +129,7 @@ describe('mcp hippo_predict_baserate', () => {
       3,
       'hippo_predict_baserate',
       {},
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -137,7 +138,7 @@ describe('mcp hippo_predict_baserate', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     expect(res?.result).toMatchObject({ isError: true });
     expect(extractText(res)).toContain('class_tag is required');
@@ -148,7 +149,7 @@ describe('mcp hippo_predict_baserate', () => {
       4,
       'hippo_predict_baserate',
       { class_tag: '  ' },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp:test',
@@ -157,7 +158,7 @@ describe('mcp hippo_predict_baserate', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     const text = extractText(res);
     expect(text).toContain('No class_tag');

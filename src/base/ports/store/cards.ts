@@ -2,6 +2,7 @@
 import type { Card, CardComment, CardRun, CardStatus } from '../../records/card.js';
 import type { SessionHandoff, HandoffOutcome } from '../../session/handoff.js';
 import type { KeysetPosition } from '../../util/keyset.js';
+import type { MethodEffects } from './effects.js';
 
 /** The ids a card waits on and the ids that wait on it. */
 interface CardDeps {
@@ -64,3 +65,17 @@ export interface Cards {
   reclaimExpired(tenantId: string): Promise<string[]>;
   comment(tenantId: string, cardId: string, author: string, body: string): Promise<CardComment>;
 }
+
+/** What each Cards method does to the store; every adapter honours it. */
+export const CARDS_EFFECTS = {
+  create: 'write',
+  detail: 'read',
+  list: 'read',
+  claim: 'write',
+  heartbeat: 'write',
+  block: 'write',
+  review: 'write',
+  complete: 'write',
+  reclaimExpired: 'write',
+  comment: 'write',
+} as const satisfies MethodEffects<Cards>;

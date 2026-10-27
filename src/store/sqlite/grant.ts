@@ -3,6 +3,7 @@
 // worker-thread fence.
 import type { StoreRules } from '../../base/ports/infra.js';
 import type { DbGrant, RequestStores } from '../../db/index.js';
+import { mintDbGrant } from '../../db/grant.js';
 import type { StoreRuntime } from '../../db/store-runtime.js';
 
 /** How a store opens hippo.db, beside the rules it scores by. */
@@ -25,10 +26,9 @@ export interface HandleOptions extends SqliteStoreOptions {
 }
 
 export function grantFor({ runtime, session, workerOnly }: HandleOptions): DbGrant {
-  // SAFETY: DbGrant's brand is type-only, and this function is the one place that makes a grant.
-  return {
+  return mintDbGrant({
     runtime: session?.runtime ?? runtime,
     session,
     workerOnly: workerOnly === true,
-  } as DbGrant;
+  });
 }

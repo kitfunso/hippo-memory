@@ -2,6 +2,10 @@
  * Per-key token-bucket rate limiter for inbound /v1/* requests, bounding api-key-id enumeration.
  * Dependency-free; the injectable `now` makes it unit-testable. */
 
+/** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than
+ * the buckets do. */
+export const LIMITER_MAX_KEYS = 10_000;
+
 export interface RateLimiter {
   /**
    * Consume one token for `key`: true if allowed, false if the bucket is exhausted; `now` (epoch

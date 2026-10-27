@@ -9,6 +9,7 @@ import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.j
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const DIM = 32;
 const THRESHOLD = 300;
@@ -35,7 +36,7 @@ function fixture(rows: readonly VectorRowSeed[], maxVectors?: number): Fixture {
   seedVectorRows(root, rows, MODEL);
   const db = openHippoDb(root);
   opened.push(db);
-  const graphs = new VectorGraphs(root, { threshold: THRESHOLD, maxVectors });
+  const graphs = new VectorGraphs(root, grantFor({}), { threshold: THRESHOLD, maxVectors });
   const answered: boolean[] = [];
   const index: VectorIndex = {
     matches: (...args) => {

@@ -1,22 +1,18 @@
 // Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the
 // store it is given.
 
-import {
-  closeHippoDb,
-  type DatabaseSyncLike,
-  openHippoDb,
-  type OpenOptions,
-} from '../../db/index.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../../db/index.js';
 import { reproveStoreSchema } from '../../db/connect.js';
-import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ensureMirrorDirectories, syncMirrorFiles } from './mirrors.js';
 import { recoverDueMirrors } from './due-mirrors.js';
 import {
   bootstrapLegacyStore,
+  type GrantedOpens,
   type HandleOpener,
   type Handles,
   holdsMemory,
+  readWrite,
   recordHalfLifeBaseForNewStore,
   type StoreFiles,
 } from './open.js';
@@ -24,25 +20,29 @@ import { PRODUCTION_STRENGTH, withLossAversion } from '../../base/memory/strengt
 import { hostClock } from '../../host/clock.js';
 import { bindHandleClock } from './handle-clock.js';
 import { createHost } from '../../host/host.js';
-import { grantFor, type HandleOptions } from './grant.js';
+import { grantFor, type HandleOptions, type SqliteStoreOptions } from './grant.js';
 
 /** Creates the store, or finishes one partly made; `opts` is what the store that asks opens
  * with. */
-export function initStore(hippoRoot: string, opts?: OpenOptions): void {
-  reproveStoreSchema({ hippoRoot, runtime: opts?.grant?.runtime });
-  closeHippoDb(openStore(hippoRoot, opts));
+export function initStore(hippoRoot: string, opts: SqliteStoreOptions = {}): void {
+  const grant = grantFor(opts);
+  reproveStoreSchema({ hippoRoot, runtime: grant.runtime });
+  closeHippoDb(openStore(hippoRoot, { grant, busyWaitMs: opts.busyWaitMs }));
 }
 
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a
  * second `openHippoDb`. */
-export function openStore(hippoRoot: string, opts?: OpenOptions): DatabaseSyncLike {
+export function openStore(
+  hippoRoot: string,
+  { grant, busyWaitMs }: GrantedOpens,
+): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
-  const { db, facts, reused } = openHippoDbWithFacts(hippoRoot, opts);
-  const session = opts?.grant?.session;
+  const { db, facts, reused } = grant.openWithFacts(hippoRoot, busyWaitMs);
+  const session = grant.session;
   // A store worker's reader: its writer ran the steps below before this thread was sent a job, and
   // this connection cannot write them.
   if (session?.setupDoneFor === hippoRoot) return db;
-  const at = { hippoRoot, runtime: opts?.grant?.runtime };
+  const at = { hippoRoot, runtime: grant.runtime };
   try {
     ensureMirrorDirectories(at);
     if (!reused) recoverDueMirrors(at, db, facts?.mirrorsDue);
@@ -74,7 +74,7 @@ export function openStore(hippoRoot: string, opts?: OpenOptions): DatabaseSyncLi
 export function onHandle<T>(
   hippoRoot: string,
   fn: (db: DatabaseSyncLike) => T,
-  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
+  open: (hippoRoot: string) => DatabaseSyncLike,
 ): T {
   const db = open(hippoRoot);
   try {
@@ -88,7 +88,7 @@ export function onHandle<T>(
 export async function onHandleAsync<T>(
   hippoRoot: string,
   fn: (db: DatabaseSyncLike) => Promise<T>,
-  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
+  open: (hippoRoot: string) => DatabaseSyncLike,
 ): Promise<T> {
   const db = open(hippoRoot);
   try {
@@ -118,11 +118,11 @@ export function handlesOf(hippoRoot: string, opts: HandleOptions = {}): Handles 
   const files = storeFilesOf(hippoRoot, opts);
   const opener = (open: HandleOpener) => (root: string) => open(root, files.opens);
   return {
-    on: (fn, open = openHippoDb) =>
+    on: (fn, open = readWrite) =>
       onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), opener(open)),
-    onAsync: (fn, open = openHippoDb) =>
+    onAsync: (fn, open = readWrite) =>
       onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), opener(open)),
-    open: () => bindHandleClock(openHippoDb(hippoRoot, files.opens), files.clock),
+    open: () => bindHandleClock(readWrite(hippoRoot, files.opens), files.clock),
     files,
   };
 }
