@@ -89,7 +89,7 @@ async function expandGraph(
     asOf: opts.asOf,
     budget: opts.budget,
     cost: opts.cost,
-    minResults: opts.search.minResults,
+    minResults: opts.minResults,
     recallScope: requested ? { requested, additive: true } : {},
   });
   for (const r of state.results) {

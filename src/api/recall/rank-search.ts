@@ -70,10 +70,7 @@ export async function loadRecallPool(
 ): Promise<RecallPool> {
   const { requested, loadSuperseded } = poolScope(opts);
   const load = {
-    limit: Math.max(
-      opts.window.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT,
-      profile.candidateFloor,
-    ),
+    limit: Math.max(opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT, profile.candidateFloor),
     tenantId: ctx.tenantId,
     requestedScope: requested,
     explicitScopeMode: opts.scopeMode ?? 'additive',
@@ -127,7 +124,7 @@ function engineOptions(ctx: RankRecallCtx, opts: SettledOptions): EngineOptions 
   return {
     budget: opts.budget,
     cost: opts.cost,
-    minResults: opts.search.minResults,
+    minResults: opts.minResults,
     includeSuperseded: opts.includeSuperseded,
     asOf: opts.asOf,
     runtime: ctx.config.runtime,
@@ -144,7 +141,7 @@ function graphStreamSearch(
   graphStream: RecallGraphStream,
   { pool, scope }: PoolSearch,
 ): Promise<SearchResult[]> {
-  const { mmr, mmrLambda } = opts.search;
+  const { mmr, mmrLambda } = opts;
   noteGraphStreamLimits(ctx, pool);
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
   // fusion.
@@ -222,7 +219,7 @@ export async function searchPool(
   if (profile.scoreForm === 'engine') return engineSearch(ctx, opts, { pool, scope });
   // Every loaded row stays, in the order of an engine the request names; rows it leaves out keep
   // their load order.
-  const ranked = opts.search.engineNamed ? await engineSearch(ctx, opts, { pool, scope }) : [];
+  const ranked = opts.engineNamed ? await engineSearch(ctx, opts, { pool, scope }) : [];
   const order = withMissing(
     ranked.map((r) => r.entry),
     pool.local,
@@ -248,10 +245,9 @@ async function engineSearch(
   poolSearch: PoolSearch,
 ): Promise<SearchResult[]> {
   const { pool, scope } = poolSearch;
-  const { query, search } = opts;
-  const { mmr, mmrLambda, explain } = search;
-  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
-  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
+  const { query, mmr, mmrLambda, explain } = opts;
+  if (opts.graphStream) return graphStreamSearch(ctx, opts, opts.graphStream, poolSearch);
+  if (opts.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
   const engine = engineOptions(ctx, opts);
   if (ctx.global && pool.global.length > 0) {
@@ -265,10 +261,10 @@ async function engineSearch(
       },
       entries: { local: pool.local, global: pool.global },
       vectorCandidates,
-      options: { ...engine, explain, scope, mmr, mmrLambda, localBump: search.localBump },
+      options: { ...engine, explain, scope, mmr, mmrLambda, localBump: opts.localBump },
     });
   }
-  const physics = search.usePhysics ? search.physicsConfig : null;
+  const physics = opts.usePhysics ? opts.physicsConfig : null;
   const tuned = physics ? physicsOptions(engine, explain) : { ...engine, mmr, mmrLambda };
   return searchByEngine({
     source: vectorSourceOf(ctx),

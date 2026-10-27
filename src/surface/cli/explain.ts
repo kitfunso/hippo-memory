@@ -97,12 +97,14 @@ async function explainQuery({
     rank: {
       budget: entryBudget,
       cost,
-      window: { limit },
+      limit,
       includeSuperseded,
       asOf,
       explicitScope: scope.explicitScope,
       activeScope: scope.activeScope,
-      search: { ...engine, multihop: false, explain: true },
+      ...engine,
+      multihop: false,
+      explain: true,
     },
     sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
   });

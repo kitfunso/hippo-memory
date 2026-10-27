@@ -13,7 +13,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import type { StoreWith } from '../../base/ports/store.js';
-import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
+import type { RecallBoostOptions } from './types.js';
 import type { Context } from '../types.js';
 import type { RecallProfile } from './profiles.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
@@ -51,7 +51,7 @@ export interface RankRecallCtx extends RankSource {
 }
 
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
-export interface RecallSearchOptions {
+export interface RankRecallEngine {
   usePhysics: boolean;
   /** Set when the request names an engine (HTTP `mode=hybrid` or `physics`). Without it, a
    * 'position' profile keeps the load order. */
@@ -122,18 +122,18 @@ export interface RankRecallStages {
 }
 
 /** Everything that shapes one ranking, already parsed and validated. */
-export interface RankRecallOptions extends RankRecallFilters, RankRecallStages {
+export interface RankRecallOptions extends RankRecallFilters, RankRecallEngine, RankRecallStages {
   query: string;
   /** Tokens the engines may spend, priced by `cost`; a 'band' profile spends no budget. */
   budget?: number;
   /** Price of one result, usually the tokens its printed line takes. */
   cost?: ResultCost;
-  /** `limit` stops a 'budget' profile's list; `scorerWindow` sizes the lexical load, 200 rows
-   * when unset. */
-  window: Pick<RecallWindowOptions, 'limit' | 'scorerWindow'>;
+  /** Stops a 'budget' profile's list. */
+  limit?: number;
+  /** Sizes the lexical load, 200 rows when unset. */
+  scorerWindow?: number;
   /** Record a rerank trace step for each score change. */
   why?: boolean;
-  search: RecallSearchOptions;
 }
 
 /** Ranked results and what the caller needs to report and persist them. */
@@ -169,7 +169,7 @@ function settle(request: RankRecallOptions, profile: RecallProfile): SettledOpti
   return {
     ...request,
     budget: request.budget ?? DEFAULT_RECALL_BUDGET,
-    limit: request.window.limit ?? Infinity,
+    limit: request.limit ?? Infinity,
   };
 }
 

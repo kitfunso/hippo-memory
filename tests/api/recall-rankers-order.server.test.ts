@@ -217,7 +217,7 @@ async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
 }
 
 function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'boost'> {
-  const search = {
+  const engine = {
     usePhysics: c.physics === true,
     physicsConfig: loadConfig(s.root).physics,
     multihop: false,
@@ -229,12 +229,12 @@ function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'bo
   return {
     budget: 4000,
     cost: (r) => r.tokens,
-    window: { limit: 10 },
+    limit: 10,
     includeSuperseded: false,
     explicitScope: null,
     activeScope: null,
     ...c.rank,
-    search,
+    ...engine,
   };
 }
 
