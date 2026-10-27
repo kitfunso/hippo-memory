@@ -208,6 +208,7 @@ export function saveTurnPosition(
   }
 }
 
+const WIN32 = process.platform === 'win32';
 const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
 const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
 
@@ -220,25 +221,69 @@ function pruneLimit(name: string): number | null {
   return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
 }
 
-/** Removes cursor files and leftovers of the old text locks past their age; never a `.lock.db` or
- * a `.queued`, so it never holds a lock a worker could queue behind. Never throws; returns the
- * number removed. */
+const LOCK_DB = '.lock.db';
+const BUSY_UNLINK = new Set(['EBUSY', 'EPERM', 'EACCES']);
+
+/** A session's lock database is idle when it has no queued request and its cursor is gone or
+ * past its age. */
+function lockDbIdle(dir: string, id: string, nowMs: number): boolean {
+  if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
+  const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });
+  return cursor === undefined || nowMs - cursor.mtimeMs >= CURSOR_MAX_AGE_MS;
+}
+
+/** Removes an idle session's lock database: taken first, so no worker holds it. POSIX unlinks
+ * while holding; win32 cannot unlink an open file, so it releases first and leaves the file when
+ * another taker opened it. */
+function removeIdleLockDb(file: string): boolean {
+  const take = takeFileLock(file);
+  if (take.kind !== 'taken') return false;
+  try {
+    if (!WIN32) fs.unlinkSync(file);
+  } finally {
+    take.lock.release();
+  }
+  if (WIN32) {
+    try {
+      fs.unlinkSync(file);
+    } catch (err) {
+      if (BUSY_UNLINK.has(errorCode(err))) return false;
+      throw err;
+    }
+  }
+  return true;
+}
+
+/** Removes cursor files and leftovers of the old text locks past their age, and the lock database
+ * of a session that is idle. Never throws; returns the number removed. */
 export function pruneSessionFiles(nowMs: number): number {
   const dir = sessionsDir();
   let removed = 0;
+  let names: string[];
   try {
-    for (const name of fs.readdirSync(dir)) {
+    names = fs.readdirSync(dir);
+  } catch (err) {
+    if (errorCode(err) !== 'ENOENT') {
+      logger.warn(`session worker: cannot prune ${dir}: ${errorMessage(err)}`, errorFields(err));
+    }
+    return 0;
+  }
+  for (const name of names) {
+    const file = path.join(dir, name);
+    try {
+      if (name.endsWith(LOCK_DB)) {
+        const idle = lockDbIdle(dir, name.slice(0, -LOCK_DB.length), nowMs);
+        if (idle && removeIdleLockDb(file)) removed++;
+        continue;
+      }
       const limit = pruneLimit(name);
       if (limit === null) continue;
-      const file = path.join(dir, name);
       const stat = fs.statSync(file, { throwIfNoEntry: false });
       if (stat === undefined || !stat.isFile() || nowMs - stat.mtimeMs < limit) continue;
       fs.rmSync(file, { force: true });
       removed++;
-    }
-  } catch (err) {
-    if (errorCode(err) !== 'ENOENT') {
-      logger.warn(`session worker: cannot prune ${dir}: ${errorMessage(err)}`, errorFields(err));
+    } catch (err) {
+      logger.warn(`session worker: cannot prune ${file}: ${errorMessage(err)}`, errorFields(err));
     }
   }
   return removed;

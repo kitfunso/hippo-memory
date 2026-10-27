@@ -84,12 +84,12 @@ async function expectWaitsUntilReleased(release: () => Promise<void>): Promise<v
 }
 
 describe('embeddings.json cross-process lock', () => {
-  it('a SIGKILLed holder frees the lock, and the run removes its own lock file after', async () => {
+  it('a SIGKILLed holder frees the lock, and the next run takes it', async () => {
     const lockPath = path.join(root, LOCK_FILE);
     await kill(await holdInChild(lockPath));
     expect(await embedAll(localIndex(root))).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
-    expect(fs.existsSync(lockPath)).toBe(false);
+    expect(fs.existsSync(lockPath)).toBe(true);
   });
 
   it('waits for a live holder, then writes once the lock is released', async () => {

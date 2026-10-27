@@ -1,7 +1,7 @@
 // A lock the operating system holds for a live process: BEGIN EXCLUSIVE on a small lock database
 // takes a LockFileEx (win32) or fcntl (POSIX) lock that dies with its holder, so nothing ages or breaks one.
 import { createRequire } from 'node:module';
-import { statSync, unlinkSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 
@@ -29,7 +29,7 @@ export interface FileIdentity {
 export type StatFn = (path: string) => FileIdentity | undefined;
 
 export interface FileLock {
-  /** Frees the lock and removes its file when the path still names it; never throws, idempotent. */
+  /** Frees the lock; the file stays. Never throws, idempotent. */
   release(): void;
 }
 
@@ -40,13 +40,10 @@ export type LockTake =
 
 const SQLITE_BUSY = 5;
 // Two takers starting together can each fail the same EXCLUSIVE upgrade; a jittered retry lets one win.
-const BUSY_TRIES = 3;
+const BUSY_TRIES = 2;
 const BUSY_JITTER_MS = 4;
 const pause = new Int32Array(new SharedArrayBuffer(4));
-const MAX_ATTEMPTS = 4;
-const MAX_MISMATCHES = 2;
-const WIN32 = process.platform === 'win32';
-const WIN32_OPEN_FILE = new Set(['EBUSY', 'EPERM', 'EACCES']);
+const MAX_ATTEMPTS = 3;
 
 // bigint, since a win32 file index can pass 2^53
 const statIdentity: StatFn = (path) => {
@@ -91,30 +88,13 @@ function unusable<E>(path: string, err: E): LockTake {
   }
 }
 
-function unlinkIfHeld(path: string, held: FileIdentity, stat: StatFn): void {
-  try {
-    if (!sameFile(stat(path), held)) return;
-    unlinkSync(path);
-  } catch (err) {
-    const code = errorCode(err);
-    if (code === 'ENOENT' || (WIN32 && WIN32_OPEN_FILE.has(code))) return;
-    log.warn(`lock file ${path} was not removed: ${errorMessage(err)}`, errorFields(err));
-  }
-}
-
-function holder(db: LockConnection, path: string, held: FileIdentity, stat: StatFn): FileLock {
+function holder(db: LockConnection, path: string): FileLock {
   let released = false;
   return {
     release() {
       if (released) return;
       released = true;
-      try {
-        // win32 refuses an unlink of an open file; POSIX lets only this holder unlink, while it holds.
-        if (WIN32) closeLogged(db, path);
-        unlinkIfHeld(path, held, stat);
-      } finally {
-        if (!WIN32) closeLogged(db, path);
-      }
+      closeLogged(db, path);
     },
   };
 }
@@ -131,40 +111,36 @@ function beginExclusive(db: LockConnection): void {
   }
 }
 
-type Pass = LockTake | { readonly kind: 'again'; readonly mismatch: boolean };
+type Pass = LockTake | { readonly kind: 'again' };
 
+/** One open, stat and lock. A changed or missing path, or a busy lock, is another pass: the file
+ * is never unlinked under a taker, so only a prune's unlink can change the path. */
 function onePass(path: string, stat: StatFn): Pass {
   let db: LockConnection | undefined;
-  let before: FileIdentity | undefined;
+  let opened: FileIdentity | undefined;
   try {
-    before = stat(path);
     db = new DatabaseSync(path, { timeout: 0 });
+    opened = stat(path);
     beginExclusive(db);
-    const after = stat(path);
-    if (after !== undefined && sameFile(before, after)) {
-      return { kind: 'taken', lock: holder(db, path, after, stat) };
-    }
+    if (sameFile(opened, stat(path))) return { kind: 'taken', lock: holder(db, path) };
     closeLogged(db, path);
-    // A missing `before` is the first pass (the open made the file); anything else is a releaser's unlink.
-    return { kind: 'again', mismatch: before !== undefined || after === undefined };
+    return { kind: 'again' };
   } catch (err) {
     if (db !== undefined) closeLogged(db, path);
-    if (primaryCode(err) !== SQLITE_BUSY) return unusable(path, err);
-    // Busy on a missing file means another taker's first pass holds it until its next pass.
-    return before === undefined ? { kind: 'again', mismatch: false } : { kind: 'held' };
+    if (primaryCode(err) === SQLITE_BUSY) return { kind: 'again' };
+    // A prune that unlinked the path under this open fails the lock with an I/O error.
+    return opened !== undefined && !sameFile(opened, stat(path))
+      ? { kind: 'again' }
+      : unusable(path, err);
   }
 }
 
 /** Takes the lock database at `path` (its folder must exist): taken, held by a live connection, or
- * unusable. A false `held` is safe: it needs a releaser's unlink between this open and this lock, or
- * a busy result for as many passes as another taker's first pass lasts; a releaser's own re-check
- * and that taker's next pass then run the work. */
+ * unusable. Release only closes; the file stays for the next take. */
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
-  let mismatches = 0;
   for (let pass = 0; pass < MAX_ATTEMPTS; pass++) {
     const result = onePass(path, stat);
     if (result.kind !== 'again') return result;
-    if (result.mismatch && ++mismatches >= MAX_MISMATCHES) break;
   }
   return { kind: 'held' };
 }

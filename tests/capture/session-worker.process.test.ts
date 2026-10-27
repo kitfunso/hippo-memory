@@ -18,6 +18,8 @@ import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;
 let sessions: string;
+/** The sessions folder's files, leaving out the lock database a finished worker keeps. */
+const left = (): string[] => fs.readdirSync(sessions).filter((n) => !n.endsWith('.lock.db'));
 const file = (suffix: string): string => path.join(sessions, `${ID}${suffix}`);
 
 beforeEach(() => {
@@ -65,7 +67,7 @@ describe('runSessionWorker', () => {
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('queues the request for a live holder and returns without running it; a full close outranks a queued turn', async () => {
@@ -90,7 +92,7 @@ describe('runSessionWorker', () => {
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['full']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('takes an empty lock file, which no live process holds', async () => {
@@ -98,7 +100,7 @@ describe('runSessionWorker', () => {
     const { runs, work } = recorder();
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('lets only one of two acquirers in one process run at a time: the second queues and its run waits for the first', async () => {
@@ -120,7 +122,7 @@ describe('runSessionWorker', () => {
     release();
     await first;
     expect(events).toEqual(['start 1 turn', 'second returned', 'end 1', 'start 2 turn', 'end 2']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('runs a request that another reply queued while the work ran, before it lets go', async () => {
@@ -131,14 +133,14 @@ describe('runSessionWorker', () => {
       runs.push(mode);
     });
     expect(runs).toEqual(['turn', 'turn']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it.each([null, '../escape', 'a b'])('runs unlocked, writing nothing, for the session id %s', async (id) => {
     const { runs, work } = recorder();
     await runSessionWorker(id, 'full', work);
     expect(runs).toEqual(['full']);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
   it('refuses to run unlocked when the request cannot be queued', async () => {
@@ -172,7 +174,7 @@ describe('runSessionWorker', () => {
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
-    expect(fs.existsSync(file('.lock.db'))).toBe(false);
+    expect(left()).toEqual([]);
   });
 });
 
@@ -256,19 +258,42 @@ describe('pruning the sessions folder', () => {
     age('a.cursor.json.123.tmp', 31);
     age('a.lock', 2);
     expect(pruneSessionFiles(Date.now())).toBe(3);
-    expect(fs.readdirSync(sessions)).toEqual([]);
+    expect(left()).toEqual([]);
   });
 
-  it('keeps fresh files, every lock database and every queued request', () => {
-    const keep = ['b.cursor.json', 'b.cursor.json.123.tmp', 'b.lock', 'c.lock.db', 'c.queued', 'c.queued.99'];
+  it('keeps fresh files, the lock database of a queued or recent session and every queued request', () => {
+    const keep = [
+      'b.cursor.json',
+      'b.cursor.json.123.tmp',
+      'b.lock',
+      'c.lock.db',
+      'c.queued',
+      'c.queued.99',
+      'd.lock.db',
+      'd.cursor.json',
+    ];
     age('b.cursor.json', 29);
     age('b.cursor.json.123.tmp', 1);
     age('b.lock', 0);
     age('c.lock.db', 400);
+    age('d.lock.db', 1);
+    age('d.cursor.json', 1);
     age('c.queued', 400);
     age('c.queued.99', 400);
     expect(pruneSessionFiles(Date.now())).toBe(0);
     expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
+  });
+
+  it('removes an idle lock database, but not one a live worker holds', async () => {
+    fs.writeFileSync(path.join(sessions, 'e.lock.db'), '');
+    const holder = await holdInChild(file('.lock.db'));
+    try {
+      expect(pruneSessionFiles(Date.now())).toBe(1);
+      expect(fs.existsSync(path.join(sessions, 'e.lock.db'))).toBe(false);
+      expect(fs.existsSync(file('.lock.db'))).toBe(true);
+    } finally {
+      await kill(holder);
+    }
   });
 
   it('does nothing, and does not throw, when the folder is missing', () => {

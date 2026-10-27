@@ -1,19 +1,18 @@
 // The lock is the operating system's: one holder per file, freed the moment its holder dies.
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { takeFileLock, type FileIdentity, type StatFn } from '../../src/host/file-lock.js';
-import { log } from '../../src/base/util/log.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 const CONTENDER = join(import.meta.dirname, '..', '_helpers', 'lock-contender.mjs');
 const HOLDER = join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
+const LOOPER = join(import.meta.dirname, '..', '_helpers', 'lock-looper.mjs');
 const DIST_LOCK = join(import.meta.dirname, '..', '..', 'dist', 'host', 'file-lock.js');
-const WIN32 = process.platform === 'win32';
 const ROUNDS = 20;
 
 const made: string[] = [];
@@ -25,7 +24,6 @@ const scratch = (): string => {
 afterAll(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
-afterEach(() => vi.restoreAllMocks());
 
 const exited = (child: ChildProcess): Promise<void> =>
   new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once('close', () => resolve())));
@@ -92,6 +90,33 @@ describe('two processes taking one file lock', () => {
   }, 30_000);
 });
 
+describe('four processes looping take and release', () => {
+  it('never overlap, never see an unusable lock, and each take it at least once', async () => {
+    const dir = scratch();
+    const log = join(dir, 'log.txt');
+    const kids = Array.from({ length: 4 }, () =>
+      spawn(process.execPath, [LOOPER, join(dir, 'loop.lock.db'), log, '2000'], { stdio: 'ignore' }),
+    );
+    await Promise.all(kids.map(exited));
+    const lines = readFileSync(log, 'utf8').trim().split('\n');
+    let inside: string | null = null;
+    const entered = new Set<string>();
+    for (const line of lines) {
+      const [what, pid] = line.split(' ');
+      expect(what, line).not.toBe('unusable');
+      if (what === 'enter') {
+        expect(inside, `${pid} entered while ${inside} was inside`).toBeNull();
+        inside = pid;
+        entered.add(pid);
+      } else if (what === 'exit') {
+        expect(inside).toBe(pid);
+        inside = null;
+      }
+    }
+    expect(entered.size).toBe(kids.length);
+  }, 60_000);
+});
+
 describe('one process', () => {
   it('refuses a second take of a held path, here and in a worker thread', async () => {
     const path = join(scratch(), 's.lock.db');
@@ -109,14 +134,14 @@ describe('one process', () => {
     if (first.kind === 'taken') first.lock.release();
   });
 
-  it('takes a missing path, keeps the file while held, removes it on release, and takes again', () => {
+  it('takes a missing path, keeps the file after release, and takes again', () => {
     const path = join(scratch(), 's.lock.db');
     const first = takeFileLock(path);
     if (first.kind !== 'taken') throw new Error(`expected taken, got ${first.kind}`);
     expect(existsSync(path)).toBe(true);
     first.lock.release();
     first.lock.release();
-    expect(existsSync(path)).toBe(false);
+    expect(existsSync(path)).toBe(true);
     const again = takeFileLock(path);
     expect(again.kind).toBe('taken');
     if (again.kind === 'taken') again.lock.release();
@@ -144,53 +169,5 @@ describe('one process', () => {
     const real = takeFileLock(path);
     expect(real.kind).toBe('taken');
     if (real.kind === 'taken') real.lock.release();
-  });
-
-  it('leaves the file when release finds another identity at the path', () => {
-    const path = join(scratch(), 's.lock.db');
-    let moving = false;
-    const first = takeFileLock(
-      path,
-      driftingStat(() => moving),
-    );
-    if (first.kind !== 'taken') throw new Error(`expected taken, got ${first.kind}`);
-    moving = true;
-    first.lock.release();
-    expect(existsSync(path)).toBe(true);
-    const again = takeFileLock(path);
-    expect(again.kind).toBe('taken');
-    if (again.kind === 'taken') again.lock.release();
-  });
-
-  it.skipIf(WIN32)('leaves a successor file when a holder whose path was unlinked releases', () => {
-    const path = join(scratch(), 's.lock.db');
-    const a = takeFileLock(path);
-    if (a.kind !== 'taken') throw new Error(`expected taken, got ${a.kind}`);
-    unlinkSync(path);
-    const b = takeFileLock(path);
-    if (b.kind !== 'taken') throw new Error(`expected taken, got ${b.kind}`);
-    a.lock.release();
-    expect(existsSync(path)).toBe(true);
-    expect(takeFileLock(path).kind).toBe('held');
-    b.lock.release();
-  });
-
-  it('logs one warning, with fields, when release cannot stat, and still frees the lock', () => {
-    const path = join(scratch(), 's.lock.db');
-    let failing = false;
-    const stat: StatFn = (p) => {
-      if (failing) throw Object.assign(new Error('disk fault'), { code: 'EIO' });
-      return identity(p);
-    };
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
-    const first = takeFileLock(path, stat);
-    if (first.kind !== 'taken') throw new Error(`expected taken, got ${first.kind}`);
-    failing = true;
-    expect(() => first.lock.release()).not.toThrow();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[1]).toMatchObject({ errorClass: 'Error' });
-    const again = takeFileLock(path);
-    expect(again.kind).toBe('taken');
-    if (again.kind === 'taken') again.lock.release();
   });
 });
