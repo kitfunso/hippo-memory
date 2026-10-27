@@ -80,7 +80,6 @@ import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
-import { asViewOf } from '../../base/util/store-view.js';
 
 /** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
  * and capture's. */
@@ -280,8 +279,17 @@ export function sqliteDiagnosticsStore(
   };
 }
 
-// Each store sqliteStore built, with how to build it again on one session's handles.
-const reopeners = new WeakMap<HippoStore, (session: RequestStores) => HippoStore & StoreGroups>();
+// Non-enumerable, so a caller's spread copy of the store is not reopened as sqliteStore's own.
+const REOPEN = Symbol('sqliteStore reopen');
+
+/** A store sqliteStore built, with how to build it again on one session's handles. */
+interface Reopenable {
+  readonly [REOPEN]: (session: RequestStores) => HippoStore & StoreGroups;
+}
+
+function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
+  return REOPEN in store;
+}
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its
  * runtime and session. */
@@ -290,17 +298,18 @@ export function sqliteStore(
   opts: SqliteStoreOptions = {},
 ): HippoStore & StoreGroups {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
-  reopeners.set(store, (session) => sqliteStore(hippoRoot, { ...opts, session }));
+  const reopen: Reopenable[typeof REOPEN] = (session) =>
+    sqliteStore(hippoRoot, { ...opts, session });
+  Object.defineProperty(store, REOPEN, { value: reopen });
   return store;
 }
 
 /** `store` on `session`'s handles when sqliteStore built it, so a pass of many calls opens
  * hippo.db once; any other store, a caller's copy of one included, as it is. */
 export function inSqliteSession<S extends HippoStore>(store: S, session: RequestStores): S {
-  const reopen = reopeners.get(store);
-  // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on
+  // SAFETY: only sqliteStore's own result carries the reopen, which builds that same store on
   // another session.
-  return reopen === undefined ? store : asViewOf(reopen(session) as S, store);
+  return isReopenable(store) ? (store[REOPEN](session) as S) : store;
 }
 
 const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextCandidates'>> = {

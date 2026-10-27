@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authListRows, type AuthCreateResult } from '../../src/api/index.js';
-import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { authCreate, authCreateSelf, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
@@ -18,6 +18,9 @@ import { portOnlySide } from '../_helpers/port-only-store.js';
 import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;
@@ -100,7 +103,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(await verifyApiKeyCached(minted.plaintext, side.store)).toMatchObject({
+    expect(await keys.verify(minted.plaintext, side.store)).toMatchObject({
       keyId: minted.keyId,
       tenantId: TENANT_A,
       role: 'member',
@@ -134,13 +137,13 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     };
     const first = await authCreateSelf(ctx, { label: 'laptop', ttlDays: 30, perSubject: 3 });
     expect(first).toMatchObject({ tenantId: TENANT_A, role: 'member', expiresAt: expect.any(String) });
-    expect(await verifyApiKeyCached(first.plaintext, side.store)).toMatchObject({
+    expect(await keys.verify(first.plaintext, side.store)).toMatchObject({
       keyId: first.keyId,
       ownerSubject: OWNER,
     });
     const second = await authCreateSelf(ctx, { label: 'desk', ttlDays: 30, perSubject: 1 });
-    expect(await verifyApiKeyCached(first.plaintext, side.store)).toBeNull();
-    expect(await verifyApiKeyCached(second.plaintext, side.store)).toMatchObject({ keyId: second.keyId });
+    expect(await keys.verify(first.plaintext, side.store)).toBeNull();
+    expect(await keys.verify(second.plaintext, side.store)).toMatchObject({ keyId: second.keyId });
     const revokes = side
       .auditRows()
       .filter((e) => e.op === 'auth_revoke')

@@ -9,6 +9,8 @@ import type { BoundAddonRoute } from './route-table.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
 import type { RequiredStore, StoreReach, StoreWith } from '../../base/ports/store.js';
 import type { McpTools } from '../mcp/protocol.js';
+import type { LocalKey } from './local-key.js';
+import type { KeyVerifier } from './api-key.js';
 import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
@@ -140,6 +142,10 @@ export type ResolvedServeOptions = ServeOptions & {
   addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;
   failedAuthLimiter: RateLimiter;
+  /** The local key this server issued at boot, which the CLI and hooks on its machine send. */
+  localKey: LocalKey;
+  /** This server's key checks: the tokens it proved and the derivations it runs. */
+  keyVerifier: KeyVerifier;
   /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
   /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,

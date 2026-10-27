@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { ownerOrSubject, type Actor } from '../../src/api/index.js';
 import {
   ownerOrSubject as exportedOwnerOrSubject,
@@ -16,6 +16,9 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 const WHOAMI = '/v1/x-whoami';
 
@@ -129,9 +132,9 @@ describe('Actor.owner', () => {
   it('cache hit keeps owner', async () => {
     const key = mint('alice@corp.example');
     const store = sqliteStore(home);
-    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    expect((await keys.verify(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
     const before = scryptRuns();
-    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    expect((await keys.verify(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
     expect(scryptRuns()).toBe(before);
   });
 

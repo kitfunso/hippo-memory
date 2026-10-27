@@ -18,10 +18,6 @@ const KEY_FILE_MODE = 0o600;
  * named. */
 export const LOCAL_KEY_SUBJECT = 'localhost:cli';
 
-// One server per store (the pidfile lock), so a store folder names its server's key; only a digest
-// is held.
-const issued = new Map<string, Buffer>();
-
 function digest(token: string): Buffer {
   return createHash('sha256').update(token).digest();
 }
@@ -52,20 +48,22 @@ export function callerKey(hippoRoot: string): string | undefined {
   return envApiKey() ?? readLocalKey(hippoRoot);
 }
 
+/** The local key one server issued; only a digest is held. */
+export interface LocalKey {
+  /** True when `token` is this key; compared in constant time. */
+  matches(token: string): boolean;
+}
+
 /** Writes a fresh local key for the server on `hippoRoot`, so the key of any earlier run stops
  * working. */
-export function issueLocalKey(hippoRoot: string): void {
+export function issueLocalKey(hippoRoot: string): LocalKey {
   const token = `${KEY_PREFIX}${randomBytes(KEY_BYTES).toString('base64url')}`;
   const path = localKeyPath(hippoRoot);
   writeFileAtomic(path, `${token}\n`, { mode: KEY_FILE_MODE });
   // A file left by an older run keeps its own mode through the rename.
   chmodSync(path, KEY_FILE_MODE);
-  issued.set(hippoRoot, digest(token));
-}
-
-/** True when `token` is the local key the server on `hippoRoot` issued; compared in constant
- * time. */
-export function isLocalKey(hippoRoot: string, token: string): boolean {
-  const held = issued.get(hippoRoot);
-  return held !== undefined && token.startsWith(KEY_PREFIX) && timingSafeEqual(held, digest(token));
+  const held = digest(token);
+  return {
+    matches: (given) => given.startsWith(KEY_PREFIX) && timingSafeEqual(held, digest(given)),
+  };
 }

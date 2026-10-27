@@ -11,8 +11,8 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { issueLocalKey } from './local-key.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import { issueLocalKey, type LocalKey } from './local-key.js';
+import { KeyVerifier } from './api-key.js';
 import { hasGroup, hasGroups, type StoreWith } from '../../base/ports/store.js';
 import {
   defaultServerRuntime,
@@ -36,7 +36,7 @@ import {
   setKeepAliveTimeouts,
   shutdownBoundMs,
 } from './lifecycle.js';
-import { readyProbeFor } from './ready.js';
+import { createReadyProbe, type ReadyProbe } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
@@ -83,9 +83,9 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
-  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's
-   * view. */
-  readonly servedStore: HippoStore;
+  /** /ready's one probe for the server's life, on the store as booted; unset when the store has
+   * no readiness group. */
+  readonly ready: ReadyProbe | undefined;
 }
 
 async function handleRequest(
@@ -135,7 +135,7 @@ async function dispatchProbeRoute(
   if (await dispatchHostRoute(r, request, health, async () => sendHealth(r.req, r.res, options))) {
     return true;
   }
-  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.servedStore));
+  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.ready));
 }
 
 /** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes
@@ -184,13 +184,12 @@ function sendHealth(
 
 /** Readiness: one cheap read on the served store under the server's lock wait. /health stays
  * liveness only, so a probe can tell a store that does not answer from a dead process. */
-async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
-  const { readiness } = store;
-  if (readiness === undefined) {
+async function sendReady(res: ServerResponse, ready: ReadyProbe | undefined): Promise<void> {
+  if (ready === undefined) {
     sendJson(res, 200, { ok: true, store: 'unchecked' });
     return;
   }
-  if (!(await readyProbeFor(store, readiness)())) {
+  if (!(await ready())) {
     sendJson(res, 503, { ok: false, error: 'store_unavailable' });
     return;
   }
@@ -305,7 +304,9 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     ...evalStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
-  const served = servedOptsFor(opts, plan, runtime);
+  // Before the listen, so the first request already has the key it is checked against.
+  const localKey = issueLocalKey(opts.hippoRoot);
+  const served = servedOptsFor(opts, plan, runtime, localKey);
 
   const inflight = new Set<ServerResponse>();
   const options = requestOptionsFor(plan, served, runtime);
@@ -315,7 +316,6 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 
   const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
-  issueLocalKey(opts.hippoRoot);
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   runtime.hold();
 
@@ -349,7 +349,7 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    servedStore: served.store,
+    ready: served.store.readiness && createReadyProbe(served.store.readiness),
   };
 }
 
@@ -370,6 +370,7 @@ function servedOptsFor(
   opts: ServeOptions,
   { routes, publicJsonBodies, limiters }: BootPlan,
   runtime: ServerRuntime,
+  localKey: LocalKey,
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
@@ -399,6 +400,8 @@ function servedOptsFor(
     configAt: configReader(envRuntimeSettings),
     callerLimiter,
     failedAuthLimiter,
+    localKey,
+    keyVerifier: new KeyVerifier(),
     callers,
     callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
     ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
