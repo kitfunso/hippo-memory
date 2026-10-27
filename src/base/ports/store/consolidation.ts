@@ -6,6 +6,7 @@ import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
 import type { AppendAuditOptions, EntryCursor, EntryPage } from './types.js';
 import type { RejectedValueRow } from './rejections.js';
 import type { SessionEvent } from './sessions.js';
+import type { MethodEffects } from './effects.js';
 
 export type {
   HalfLifeChange,
@@ -65,6 +66,24 @@ export interface Consolidation {
    * marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
 }
+
+/** What each Consolidation method does to the store; every adapter honours it. */
+export const CONSOLIDATION_EFFECTS = {
+  begin: 'write',
+  entryIdsPage: 'read',
+  rejected: 'read',
+  particleIds: 'read',
+  saveParticles: 'write',
+  dirtySummaries: 'read',
+  unprofiledTopicSummaries: 'read',
+  settleSummary: 'write',
+  commit: 'write',
+  recordSleep: 'write',
+  auditEachRow: 'write',
+  duplicateCandidates: 'read',
+  dirtyGraphTenants: 'read',
+  markGraphDrained: 'write',
+} as const satisfies MethodEffects<Consolidation>;
 
 export interface SleepBegin {
   readonly dryRun: boolean;

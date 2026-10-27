@@ -5,6 +5,7 @@ import type {
   AmbientRefusalReason,
   DescendantAdmission,
 } from '../../scope/read-admission.js';
+import type { MethodEffects } from './effects.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 
@@ -45,6 +46,14 @@ export interface ContextReads {
   /** computeSchemaFit of `content` and `tags` against the tenant's newest 2,000 rows. */
   schemaFit(tenantId: string, content: string, tags: readonly string[]): Promise<number>;
 }
+
+/** What each ContextReads method does to the store; every adapter honours it. */
+export const CONTEXT_READS_EFFECTS = {
+  ambientCandidates: 'read',
+  contextCandidates: 'read',
+  ambientTallies: 'read',
+  schemaFit: 'read',
+} as const satisfies MethodEffects<ContextReads>;
 
 export interface AmbientLoadResult {
   entries: MemoryEntry[];
@@ -159,3 +168,9 @@ export interface DagReads {
     walk: DescendantWalk,
   ): Promise<SummaryDescendants | null>;
 }
+
+/** What each DagReads method does to the store; every adapter honours it. */
+export const DAG_READS_EFFECTS = {
+  sessionRawCount: 'read',
+  summaryWithDescendants: 'read',
+} as const satisfies MethodEffects<DagReads>;

@@ -37,6 +37,41 @@ import type {
   PlanningFallacyEvidence,
   AppendAuditOptions,
 } from './store/types.js';
+import { AGENT_IMPORT_EFFECTS } from './store/agent-import.js';
+import { AUDIT_LOG_EFFECTS, AUDIT_MAINTENANCE_EFFECTS } from './store/audit.js';
+import {
+  CAPTURES_EFFECTS,
+  COMPACTIONS_EFFECTS,
+  COMPACTION_HOOKS_EFFECTS,
+} from './store/capture.js';
+import { CARDS_EFFECTS } from './store/cards.js';
+import { CONFLICTS_EFFECTS } from './store/conflicts.js';
+import { CONNECTOR_EVENTS_EFFECTS, CONNECTOR_WRITES_EFFECTS } from './store/connectors.js';
+import { CONSOLIDATION_EFFECTS } from './store/consolidation.js';
+import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './store/context-reads.js';
+import { DIAGNOSTICS_EFFECTS, READINESS_EFFECTS } from './store/diagnostics.js';
+import { DORMANT_EFFECTS } from './store/dormant.js';
+import { ENTRY_WRITES_EFFECTS, LESSON_WRITES_EFFECTS } from './store/entry-writes.js';
+import { FOLDER_FILES_EFFECTS } from './store/folder-files.js';
+import { GOALS_EFFECTS } from './store/goals.js';
+import { GRAPH_READS_EFFECTS, GRAPH_REBUILD_EFFECTS } from './store/graph.js';
+import { KEY_WRITES_EFFECTS } from './store/keys.js';
+import { LEARNING_EFFECTS } from './store/learning.js';
+import { LEDGER_EFFECTS } from './store/ledger.js';
+import { OBJECTS_EFFECTS } from './store/objects.js';
+import { PROJECT_TAGS_EFFECTS } from './store/project-tags.js';
+import { QUARANTINE_EFFECTS } from './store/quarantine.js';
+import { LAST_RECALL_EFFECTS } from './store/recall-writes.js';
+import { FAILURE_LOG_EFFECTS, REJECTIONS_EFFECTS } from './store/rejections.js';
+import { REPORTS_EFFECTS } from './store/reports.js';
+import { SESSIONS_EFFECTS } from './store/sessions.js';
+import { PROMOTION_EFFECTS, SHARING_EFFECTS } from './store/sharing.js';
+import {
+  EMBEDDING_INDEX_EFFECTS,
+  VECTORS_EFFECTS,
+  VECTOR_WRITES_EFFECTS,
+} from './store/vectors.js';
+import type { MethodEffects } from './store/effects.js';
 
 /** Every group a store has: the required ones, then the optional capabilities, each a set of
  * groups a store sets or leaves unset together. `RequiredStore` is the smallest store, and
@@ -419,3 +454,65 @@ export type {
 export type { EntryFilter, PageRequest } from './store/reports.js';
 export type { TextsHoldingOptions } from './store/capture.js';
 export type { FolderFiles, StoreHome } from './store/folder-files.js';
+
+/** What each base method does to the store; every adapter honours it. */
+export const BASE_EFFECTS = {
+  findApiKey: 'read',
+  searchRecallEntries: 'read',
+  entriesByIds: 'read',
+  entriesWhere: 'read',
+  activeGoals: 'read',
+  freshRawEntries: 'read',
+  continuity: 'read',
+  planningFallacyEvidence: 'read',
+  appendAuditEvents: 'write',
+  finishRecall: 'write',
+  bumpRecallStats: 'write',
+  bumpRemembered: 'write',
+  recordTokens: 'write',
+} as const satisfies MethodEffects<BaseMethods>;
+
+/** Every store method's effect, by group, as the port files state them. */
+export const STORE_EFFECTS = {
+  base: BASE_EFFECTS,
+  vectors: VECTORS_EFFECTS,
+  keyWrites: KEY_WRITES_EFFECTS,
+  vectorWrites: VECTOR_WRITES_EFFECTS,
+  entryWrites: ENTRY_WRITES_EFFECTS,
+  contextReads: CONTEXT_READS_EFFECTS,
+  dagReads: DAG_READS_EFFECTS,
+  auditLog: AUDIT_LOG_EFFECTS,
+  quarantine: QUARANTINE_EFFECTS,
+  graphReads: GRAPH_READS_EFFECTS,
+  objects: OBJECTS_EFFECTS,
+  readiness: READINESS_EFFECTS,
+  connectorWrites: CONNECTOR_WRITES_EFFECTS,
+  connectorEvents: CONNECTOR_EVENTS_EFFECTS,
+  lastRecall: LAST_RECALL_EFFECTS,
+  auditMaintenance: AUDIT_MAINTENANCE_EFFECTS,
+  lessonWrites: LESSON_WRITES_EFFECTS,
+  sessions: SESSIONS_EFFECTS,
+  cards: CARDS_EFFECTS,
+  goals: GOALS_EFFECTS,
+  conflicts: CONFLICTS_EFFECTS,
+  dormant: DORMANT_EFFECTS,
+  reports: REPORTS_EFFECTS,
+  rejections: REJECTIONS_EFFECTS,
+  failureLog: FAILURE_LOG_EFFECTS,
+  compactions: COMPACTIONS_EFFECTS,
+  ledger: LEDGER_EFFECTS,
+  embeddingIndex: EMBEDDING_INDEX_EFFECTS,
+  promotion: PROMOTION_EFFECTS,
+  folderFiles: FOLDER_FILES_EFFECTS,
+  sharing: SHARING_EFFECTS,
+  consolidation: CONSOLIDATION_EFFECTS,
+  learning: LEARNING_EFFECTS,
+  captures: CAPTURES_EFFECTS,
+  compactionHooks: COMPACTION_HOOKS_EFFECTS,
+  projectTags: PROJECT_TAGS_EFFECTS,
+  diagnostics: DIAGNOSTICS_EFFECTS,
+  graphRebuild: GRAPH_REBUILD_EFFECTS,
+  agentImport: AGENT_IMPORT_EFFECTS,
+} as const satisfies { readonly [G in keyof StoreGroups]: MethodEffects<StoreGroups[G]> } & {
+  readonly base: MethodEffects<BaseMethods>;
+};

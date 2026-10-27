@@ -5,6 +5,7 @@ import type { MemoryEntry } from '../../memory/entry.js';
 import type { AuditLog } from './audit.js';
 import type { EntryFilter, PageRequest } from './reports.js';
 import type { DormantSnapshot, EntryPage } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 export interface ProjectTags {
   /** Every project name with live rows, in the order its first row was written. */
@@ -24,6 +25,17 @@ export interface ProjectTags {
   repairedOnce(): Promise<boolean>;
   markRepairedOnce(): Promise<void>;
 }
+
+/** What each ProjectTags method does to the store; every adapter honours it. */
+export const PROJECT_TAGS_EFFECTS = {
+  originTallies: 'read',
+  dormantWhere: 'read',
+  compactionOrigins: 'read',
+  merge: 'write',
+  repair: 'write',
+  repairedOnce: 'read',
+  markRepairedOnce: 'write',
+} as const satisfies MethodEffects<ProjectTags>;
 
 /** What a repair plans from: this group, entry pages and the merge audit rows, which doctor
  * offers on read-only handles. */

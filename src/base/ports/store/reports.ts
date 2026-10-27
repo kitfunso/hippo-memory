@@ -5,6 +5,7 @@ import type { TenantId } from '../../util/tenant.js';
 import type { FailureSummary } from './rejections.js';
 import type { TokenSummary } from './ledger.js';
 import type { EntryCursor } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 /** Named field set for the legacy `stats.json` mirror: the only fields any caller reads. */
 export interface LegacyStats {
@@ -135,3 +136,16 @@ export interface Reports {
    * `now`. */
   createdSinceLastSleep(tenantId: string, now: Date): Promise<number>;
 }
+
+/** What each Reports method does to the store; every adapter honours it. */
+export const REPORTS_EFFECTS = {
+  tokenUse: 'read',
+  failures: 'read',
+  memoryStatus: 'read',
+  countEntries: 'read',
+  stats: 'read',
+  statusCounts: 'read',
+  correctionLinks: 'read',
+  rawProvenance: 'read',
+  createdSinceLastSleep: 'read',
+} as const satisfies MethodEffects<Reports>;
