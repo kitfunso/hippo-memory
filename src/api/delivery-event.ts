@@ -16,7 +16,7 @@ import type {
   DeliveryStage,
 } from '../base/session/delivery.js';
 import type { DeliveryRecorderInit } from './delivery-recorder.js';
-import type { Candidate, Picked, RecorderState } from './delivery-observation.js';
+import type { Candidate, ObservedPick, RecorderState } from './delivery-observation.js';
 
 /** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a
  * prompt. */
@@ -78,7 +78,7 @@ export function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   return { payloadSession, envSession, prompt, hostTurnId, hookEvent, toolUseId, sessionState };
 }
 
-function pickedPool(p: Picked, held: Candidate | undefined): DeliveryPool {
+function pickedPool(p: ObservedPick, held: Candidate | undefined): DeliveryPool {
   if (p.promptRecall) return 'prompt-recall';
   // A ranked call's rows keep the ranking that chose them, a pinned hit included.
   if (held?.pool === 'search' || held?.pool === 'strength') return held.pool;

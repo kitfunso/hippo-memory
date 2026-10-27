@@ -25,7 +25,7 @@ export interface Candidate {
   tokens: number | null;
 }
 
-export interface Picked {
+export interface ObservedPick {
   entry: MemoryEntry;
   rank: number;
   score: number;
@@ -41,7 +41,7 @@ export function storeOf(isGlobal: boolean | undefined): DeliveryWriteStore {
 /** Everything the observer methods write and build reads; one per recorder. */
 export interface RecorderState {
   readonly candidates: Map<string, Candidate>;
-  readonly picked: Map<string, Picked>;
+  readonly picked: Map<string, ObservedPick>;
   readonly filtered: Set<string>;
   facts: DeliveryFacts | null;
   shown: number;
