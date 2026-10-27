@@ -42,14 +42,37 @@ export interface StartedChild {
 }
 
 const STOP_EXIT_MS = 2_000;
+
+/** POSIX: kills what is left of the child's process group; a group id is never reused while a member lives. */
+function killGroup(pid: number): void {
+  if (process.platform === 'win32') return;
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch (err) {
+    // SAFETY: process.kill throws a NodeJS.ErrnoException.
+    if ((err as NodeJS.ErrnoException).code !== 'ESRCH') throw err;
+  }
+}
 const TAIL_CHARS = 2_048;
 
 /** Runs `node <args>` with piped stdio and tracks it, so it is stopped before the test's folder is removed. */
 export function startNode(args: readonly string[], opts: StartOptions = {}): StartedChild {
   const defaultMs = checkDeadline(opts.deadlineMs ?? EVENT_DEADLINE_MS, 'startNode', opts.reason);
-  const child = spawn(process.execPath, [...args], { cwd: opts.cwd, env: opts.env, stdio: 'pipe', windowsHide: true });
-  if (child.pid === undefined) throw new Error(`startNode: node ${args.join(' ')} did not start`);
-  const pid = child.pid;
+  // POSIX: its own process group, so stop() reaches a grandchild whose parent already exited.
+  const child = spawn(process.execPath, [...args], {
+    cwd: opts.cwd,
+    env: opts.env,
+    stdio: 'pipe',
+    windowsHide: true,
+    detached: process.platform !== 'win32',
+  });
+  // Listened for before anything else: a spawn that fails (a missing cwd) emits 'error' with no pid.
+  let spawnError: Error | null = null;
+  child.on('error', (err) => {
+    spawnError = err;
+    wake();
+  });
+  const pid = child.pid ?? -1;
   const out = { stdout: '', stderr: '' };
   const lines: string[] = [];
   let partial = '';
@@ -98,7 +121,8 @@ export function startNode(args: readonly string[], opts: StartOptions = {}): Sta
       }, ms);
       const check = (): boolean => {
         const value = settle();
-        if (value !== undefined) resolve(value);
+        if (spawnError !== null) reject(spawnError);
+        else if (value !== undefined) resolve(value);
         else if (early()) reject(new Error(`${what} not seen: ${state()}`));
         else return false;
         clearTimeout(timer);
@@ -135,7 +159,7 @@ export function startNode(args: readonly string[], opts: StartOptions = {}): Sta
     closeOutput() {
       child.stdout.destroy();
     },
-    running: () => exit === null && child.exitCode === null && child.signalCode === null,
+    running: () => spawnError === null && exit === null && child.exitCode === null && child.signalCode === null,
     exited(deadlineMs) {
       const ms = checkDeadline(deadlineMs ?? defaultMs, `exited(${pid})`, opts.reason);
       return awaitEvent(
@@ -147,14 +171,17 @@ export function startNode(args: readonly string[], opts: StartOptions = {}): Sta
     },
     stop({ graceful = false } = {}) {
       stopping ??= (async () => {
-        if (exit !== null) return;
-        if (graceful) child.kill('SIGTERM');
-        else await killTree(pid);
-        await handle.exited(STOP_EXIT_MS).catch(async () => {
-          if (graceful) await killTree(pid);
-          await handle.exited(STOP_EXIT_MS).catch(() => {
-            throw new Error(`child ${pid} still running ${STOP_EXIT_MS} ms after it was killed`);
-          });
+        if (spawnError !== null) return;
+        // Windows has no SIGTERM to handle (a kill is TerminateProcess), so a graceful stop there is the tree kill.
+        if (graceful && process.platform !== 'win32' && exit === null) {
+          child.kill('SIGTERM');
+          await handle.exited(STOP_EXIT_MS).catch(() => undefined);
+        }
+        // Only while the child lives: after its exit the pid may already belong to another process.
+        if (exit === null) await killTree(pid);
+        killGroup(pid);
+        await handle.exited(STOP_EXIT_MS).catch(() => {
+          throw new Error(`child ${pid} still running ${STOP_EXIT_MS} ms after it was killed`);
         });
       })();
       return stopping;

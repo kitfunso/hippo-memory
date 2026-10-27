@@ -61,10 +61,12 @@ export async function removeWhenStopped(dir: string): Promise<void> {
 // Removed after the file's last test, not each test's: a store made in beforeAll must outlive its first test.
 const made: string[] = [];
 afterEach(() => stopLive(['test']));
-afterAll(async () => {
+/** Stops every tracked child, then removes the folders made for this file; it is the file's afterAll. */
+export async function endOfFile(): Promise<void> {
   await stopLive(['test', 'file']);
   for (const dir of made.splice(0)) rmDir(dir);
-});
+}
+afterAll(endOfFile);
 
 function build(label: string, rootOf: (base: string) => string, { config, init = true }: MakeRootOptions): MadeStore {
   const base = mkdtempSync(join(tmpdir(), `hippo-${label}-`));

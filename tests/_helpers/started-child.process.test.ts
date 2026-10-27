@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { pidAlive } from '../../src/host/pid-alive.js';
-import { removeWhenStopped, trackLive } from './make-root.js';
+import { endOfFile, makeRoot, removeWhenStopped, trackLive } from './make-root.js';
 import { hippoRun } from './spawn-hippo.js';
 import { startNode } from './started-child.js';
 import { waitFor } from './wait-for.js';
@@ -45,16 +45,20 @@ describe('startNode', () => {
   });
 
   it('rejects at its deadline naming what and the output so far', async () => {
-    const child = startNode(['-e', `process.stderr.write('booting\\n'); setInterval(() => {}, 1000);`]);
+    const child = startNode(['-e', `process.stdout.write('booting\\n'); setInterval(() => {}, 1000);`]);
+    // The deadline starts once the child has printed, so a slow start cannot empty the output it names.
+    await child.line(/^booting$/, 'the booting line');
     await expect(child.line(/^ready/, 'the ready line', 300)).rejects.toThrow(
       /the ready line not seen within 300 ms.*still running.*booting/s,
     );
   });
 
   it("each call starts its own deadline, so an idle 'file' child still gets a full wait", async () => {
-    const answerLate = `process.stdin.on('data', () => setTimeout(() => process.stdout.write('late\\n'), 150));`;
-    const child = startNode(['-e', answerLate], { lifetime: 'file', deadlineMs: 300 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    const answerLate = `process.stdin.on('data', () => setTimeout(() => process.stdout.write('late\\n'), 100)); process.stdout.write('listening\\n');`;
+    const child = startNode(['-e', answerLate], { lifetime: 'file', deadlineMs: 1_000 });
+    await child.line(/^listening$/, 'the stdin listener');
+    // Idle past the whole deadline: a deadline counted from the spawn has nothing left for the answer's 100 ms.
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
     const late = child.line(/^late/, 'the late line');
     child.send('go\n');
     await expect(late).resolves.toBeTruthy();
@@ -76,6 +80,48 @@ describe('startNode', () => {
     await child.stop();
     expect(pidAlive(child.pid)).toBe(false);
     await waitFor(() => !pidAlive(grand), { what: `grandchild ${grand} gone`, timeoutMs: 2_000 });
+  });
+
+  it('a graceful stop also leaves no grandchild running', async () => {
+    const child = startNode(['-e', PARENT_OF_GRANDCHILD]);
+    const grand = Number((await child.line(/^grandchild (\d+)/, 'the grandchild pid'))[1]);
+    await child.stop({ graceful: true });
+    await waitFor(() => !pidAlive(grand), { what: `grandchild ${grand} gone`, timeoutMs: 2_000 });
+  });
+
+  it('stop() resolves only once the exit is seen', async () => {
+    const child = startNode(['-e', 'setInterval(() => {}, 1000)']);
+    await child.stop();
+    expect(child.running()).toBe(false);
+    await expect(child.exited(1)).resolves.toMatchObject({ code: expect.anything() });
+  });
+
+  it("the file's end stops 'file' children before it removes the folders made for the file", async () => {
+    const dir = makeRoot('started-child-file');
+    const child = startNode(['-e', `process.stdout.write('up\\n'); setInterval(() => {}, 1000);`], {
+      cwd: dir,
+      lifetime: 'file',
+    });
+    await child.line(/^up$/, 'the file child');
+    await endOfFile();
+    expect(child.running()).toBe(false);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it('gives a spawn error to the caller, with no uncaught error in the worker', async () => {
+    const uncaught: Error[] = [];
+    const onUncaught = (err: Error): void => {
+      uncaught.push(err);
+    };
+    process.on('uncaughtException', onUncaught);
+    try {
+      const child = startNode(['-e', ''], { cwd: join(tmpdir(), 'hippo-started-child-missing', 'cwd') });
+      await expect(child.exited()).rejects.toMatchObject({ code: 'ENOENT' });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off('uncaughtException', onUncaught);
+    }
+    expect(uncaught).toEqual([]);
   });
 
   it('removeWhenStopped stops a tracked child while its folder is still there', async () => {
