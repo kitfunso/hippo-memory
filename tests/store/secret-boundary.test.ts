@@ -11,6 +11,8 @@ import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { insertEntityRow } from '../../src/store/sqlite/graph-writes.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
+import { storeFilesOf } from '../_helpers/test-session.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
@@ -353,5 +355,16 @@ describe('the secret boundary over the whole store', () => {
       );
     expect(hits(control('memories.content'))).toBeGreaterThan(0);
     expect(hits(FILL)).toBe(0);
+  });
+});
+
+describe('writers behind the capture gate', () => {
+  it('store a strict-only secret the gate lets through as redacted text', () => {
+    const jwt = runtimeJoin('eyJhbGciOiJIUzI1NiJ9', '.', 'eyJzdWIiOiI5ODc2In0', '.', 'Z2F0ZWQtc2lnbmF0dXJl');
+    const entry = createMemory(`The release bot calls the deploy hook with ${jwt} every Monday morning.`);
+    expect(withDb((db) => gatedWrite(db, storeFilesOf(root), entry))).toBe('written');
+    const stored = withDb((db) => db.prepare('SELECT content FROM memories WHERE id = ?').get(entry.id));
+    expect(stored).toEqual({ content: 'The release bot calls the deploy hook with [REDACTED] every Monday morning.' });
+    expect(mirrorFiles(root).filter((f) => fs.readFileSync(f, 'utf8').includes(jwt))).toEqual([]);
   });
 });
