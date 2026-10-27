@@ -1,4 +1,5 @@
 // Whole-tenant walks read keyset pages: no statement hands back more than a page of rows, and no row is dropped.
+// Each case seeds two pages and more of rows, so it runs in the slow project.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

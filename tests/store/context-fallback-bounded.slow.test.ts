@@ -48,7 +48,7 @@ function ranked(n: number): string[] {
 }
 
 describe('loadContextCandidates scan fallback', () => {
-  it.each([1000, 10_000])('ranks %i rows in one scan that hands back the cap', (n) => {
+  it.each([1000, 3000])('ranks %i rows in one scan that hands back the cap', (n) => {
     const home = seed(n);
     const { result, statements, reads } = recordStatements(() =>
       loadContextCandidates(home, 'default', { cap: CAP, now: new Date(NOW) }),

@@ -119,8 +119,10 @@ function rowidOf(db: DatabaseSyncLike, id: string): number {
 }
 
 describe('a saved graph file', () => {
-  it(`reaches recall@10 of ${RECALL_FLOOR} against the scan on ${SEEDS.length} seeds, for all rows, a tenant and a scope`, async () => {
-    for (const seed of SEEDS) {
+  // One seed per test: each builds and saves its own store, so three in one test passed half the slow budget on CI.
+  it.each(SEEDS)(
+    `reaches recall@10 of ${RECALL_FLOOR} against the scan on seed %i, for all rows, a tenant and a scope`,
+    async (seed) => {
       const rows = mixedRows(ROWS, seed);
       const f = await savedStore(rows);
       const team = spec('t1', { scope: { mode: 'exact', value: 'team-a' } });
@@ -133,8 +135,8 @@ describe('a saved graph file', () => {
         expect(await recall(f, rows, s), `seed ${seed}, ${label}`).toBeGreaterThanOrEqual(RECALL_FLOOR);
       }
       expect(f.covered.every((rowid) => rowid === ROWS)).toBe(true);
-    }
-  });
+    },
+  );
 
   it('answers as the store worker graph it was saved from does', async () => {
     for (const seed of SEEDS) {
