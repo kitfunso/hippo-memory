@@ -1,6 +1,6 @@
-// A lock the operating system holds for a live process: BEGIN EXCLUSIVE on a small lock database
-// takes a LockFileEx (win32) or fcntl (POSIX) lock that dies with its holder. Only a holder unlinks the
-// file, at release; a take checks that the path names the same file before its open and after its lock.
+// A lock the operating system holds for a live process: BEGIN IMMEDIATE on a small lock database
+// takes the RESERVED lock (LockFileEx on win32, fcntl on POSIX), which one connection holds and which dies with it.
+// Only a holder unlinks the file, at release; a take checks the path names the same file before its open and after its lock.
 import { createRequire } from 'node:module';
 import { closeSync, openSync, statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -16,7 +16,7 @@ interface LockConnection {
 // SAFETY: node:sqlite's DatabaseSync has this constructor shape at runtime (the built-in module
 // ships no bundled types here); this require plus cast is the module's boundary, as in src/db/sqlite.ts.
 const { DatabaseSync } = require('node:sqlite') as {
-  DatabaseSync: new (path: string, options?: { timeout?: number }) => LockConnection;
+  DatabaseSync: new (path: string) => LockConnection;
 };
 
 /** What a path names: a recreated file differs in at least one field. */
@@ -40,8 +40,8 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
-// SQLite's own wait: a lock still busy after it had a real holder, and a pair of starting takers sort themselves out.
-const LOCK_WAIT_MS = 100;
+const SQLITE_IOERR = 10;
+// IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on another taker's SHARED lock.
 const MAX_ATTEMPTS = 3;
 const MAX_CREATES = 10;
 const WIN32 = process.platform === 'win32';
@@ -118,7 +118,9 @@ function holder(db: LockConnection, path: string, held: FileIdentity, stat: Stat
   };
 }
 
-type Pass = LockTake | { readonly kind: 'again'; readonly created: boolean };
+type Pass =
+  | LockTake
+  | { readonly kind: 'again'; readonly created: boolean; readonly ioError?: unknown };
 const AGAIN: Pass = { kind: 'again', created: false };
 const NO_FILE: Pass = { kind: 'again', created: true };
 
@@ -147,8 +149,8 @@ function onePass(path: string, stat: StatFn): Pass {
   try {
     before = statOrCreate(path, stat);
     if (before === undefined) return NO_FILE;
-    db = new DatabaseSync(path, { timeout: LOCK_WAIT_MS });
-    db.exec('BEGIN EXCLUSIVE');
+    db = new DatabaseSync(path);
+    db.exec('BEGIN IMMEDIATE');
     if (sameFile(before, stat(path))) {
       return { kind: 'taken', lock: holder(db, path, before, stat) };
     }
@@ -158,7 +160,12 @@ function onePass(path: string, stat: StatFn): Pass {
     if (db !== undefined) closeLogged(db, path);
     if (primaryCode(err) === SQLITE_BUSY) return { kind: 'held' };
     // Another holder's release, between the stat and the lock, fails this open or lock.
-    return pathMoved(path, before, stat) ? AGAIN : unusable(path, err);
+    if (pathMoved(path, before, stat)) return AGAIN;
+    // An unlink under an open taker fails the lock with an I/O error even when a new file reuses the inode
+    // and ctime; one more pass tells that apart from a file that cannot be read.
+    return primaryCode(err) === SQLITE_IOERR
+      ? { kind: 'again', created: false, ioError: err }
+      : unusable(path, err);
   }
 }
 
@@ -167,11 +174,13 @@ function onePass(path: string, stat: StatFn): Pass {
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
   let passes = 0;
   let creates = 0;
+  let ioError: unknown;
   while (passes < MAX_ATTEMPTS && creates < MAX_CREATES) {
     const result = onePass(path, stat);
     if (result.kind !== 'again') return result;
+    ioError = result.ioError;
     if (result.created) creates++;
     else passes++;
   }
-  return { kind: 'held' };
+  return ioError === undefined ? { kind: 'held' } : unusable(path, ioError);
 }

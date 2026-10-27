@@ -62,7 +62,7 @@ describe('two replayers over one spool', () => {
     expect(fs.readdirSync(path.join(root, 'compactions-spool'))).toEqual([]);
     expect(logs.filter((l) => !l.startsWith('spool left to another replayer'))).toEqual([]);
     expect(logs).toHaveLength(FILES);
-  }, 30_000);
+  });
 
   it('a rival that starts after the first one is done finds nothing left', async () => {
     spool({
