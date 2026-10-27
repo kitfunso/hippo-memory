@@ -5,8 +5,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { listEntriesMentioning } from '../../src/store/sqlite/entry-mentions.js';
 import {
-  listEntriesMentioning,
   listEntriesWithSignals,
   listEveryTenantEntryIds,
   listEntryIdsPage,

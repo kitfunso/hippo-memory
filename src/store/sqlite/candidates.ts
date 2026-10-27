@@ -28,7 +28,7 @@ import { oldestFirst } from '../rules/order.js';
 import { tenantAnd } from './tenant.js';
 import { rowsHoldingTexts } from './copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { ENTRY_PAGE_ORDER, entryPage } from './keyset.js';
+import { ENTRY_PAGE_ORDER, entriesPage } from './keyset.js';
 import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
   AmbientCandidateRequest,
@@ -233,7 +233,7 @@ export interface AmbientLoad extends Omit<AmbientCandidateRequest, 'admit'> {
 // Every pin, a keyset page at a time: a cap would drop pins without notice.
 function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<MemoryEntry> {
   return rowsInPages((after?: EntryCursor) => {
-    const { rows, next } = entryPage(
+    return entriesPage(
       tenantId,
       { limit: READ_PAGE_ROWS, after },
       (within, limit) =>
@@ -242,7 +242,6 @@ function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<Memo
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(AMBIENT_PINNED)} ${ENTRY_PAGE_ORDER}`,
         ).all(...within.params, limit) as MemoryRow[],
     );
-    return { entries: rows.map(rowToEntry), next };
   });
 }
 

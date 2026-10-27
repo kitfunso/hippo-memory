@@ -1,11 +1,11 @@
-// The delivery ledger writer (src/store/recall-trace.ts) and the recorder's row building, on a real SQLite store.
+// The delivery ledger writer (src/store/sqlite/delivery-ledger.ts) and the recorder's row building, on a real SQLite store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   deliveryPruneSchedule,
   writeDeliveryEventOnHandle,
   writeDeliveryEventVia,
-} from '../../src/store/sqlite/recall-trace.js';
+} from '../../src/store/sqlite/delivery-ledger.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
