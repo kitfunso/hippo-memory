@@ -6,6 +6,9 @@ import { HOUR_MS } from '../util/time.js';
  */
 export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
 
+/** The statuses a caller may close the active snapshot with; the column keeps it as given, so it is a closed list. */
+export const SNAPSHOT_CLEAR_STATUSES = ['cleared', 'done', 'completed', 'abandoned'] as const;
+
 /** A usable session id: non-null, non-empty string; named so the owner-match rule in
  * `freshActiveSnapshot` states its contract once. */
 function isNonEmptySessionId(value: string | null | undefined): value is string {

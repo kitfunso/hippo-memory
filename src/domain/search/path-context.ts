@@ -1,9 +1,11 @@
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+
 // Keeps the last meaningful segments, the most specific ones.
 const PATH_SEGMENTS_KEPT = 4;
 
 /**
- * Extracts meaningful path segments from a directory as tags like ['path:src',
- * 'path:my-project']; filters noise (node_modules, .git, Users, home dirs, drive letters). */
+ * Extracts meaningful path segments from a directory as tags like ['path:src', 'path:my-project']; filters noise
+ * (node_modules, .git, Users, home dirs, drive letters) and drops a secret-shaped tag, which hippo derived itself. */
 export function extractPathTags(dirPath: string): string[] {
   const normalized = dirPath.replace(/\\/g, '/');
   const segments = normalized.split('/').filter(Boolean);
@@ -37,7 +39,8 @@ export function extractPathTags(dirPath: string): string[] {
   return segments
     .filter((s) => s.length >= 2 && !noise.has(s.toLowerCase()))
     .slice(-PATH_SEGMENTS_KEPT)
-    .map((s) => `path:${s.toLowerCase()}`);
+    .map((s) => `path:${s.toLowerCase()}`)
+    .filter((tag) => redactSecretsStrict(tag) === tag);
 }
 
 /** The path tags a recall in `cwd` boosts; none when the caller names no folder. */

@@ -1,7 +1,11 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
 // binding.
 import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
-import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
+import {
+  freshActiveSnapshot,
+  SNAPSHOT_CLEAR_STATUSES,
+} from '../../base/session/session-snapshot.js';
+import { BadRequestError } from '../../base/errors/api-errors.js';
 import {
   HOOK_DB_WAIT_MS,
   sessionOf,
@@ -60,6 +64,11 @@ function clearActiveTaskSnapshot(
   clearedStatus: string,
 ): number {
   const { hippoRoot } = files;
+  if (!SNAPSHOT_CLEAR_STATUSES.some((status) => status === clearedStatus)) {
+    throw new BadRequestError(
+      `snapshot status is not one of ${SNAPSHOT_CLEAR_STATUSES.join(', ')}`,
+    );
+  }
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
   const now = handleStamp(db);

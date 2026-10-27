@@ -4,9 +4,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type {
-  ProjectIdentity,
-  ResolveProjectIdentityOptions,
+import {
+  storedProjectName,
+  type ProjectIdentity,
+  type ResolveProjectIdentityOptions,
 } from '../base/scope/project-identity.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../base/util/expected-errors.js';
@@ -31,8 +32,9 @@ function namesAt(
   legacyName: string,
   remoteOn: RemoteRule,
 ): Pick<ProjectIdentity, 'name' | 'aliases'> {
-  const fileId = projectFileId(root);
-  const remoteId = originRemoteId(root);
+  const [fileId, remoteId] = [projectFileId(root), originRemoteId(root)].map((n) =>
+    n === null ? null : storedProjectName(n),
+  );
   const name = fileId ?? (remoteOn() ? remoteId : null) ?? legacyName;
   const aliases = [...new Set([fileId, remoteId, legacyName])].filter(
     (n): n is string => n !== null && n !== name,
@@ -98,9 +100,9 @@ export function walkIdentity(
   const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(real, home, stops);
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    const legacyName =
-      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ??
-      path.basename(root).toLowerCase();
+    const legacyName = storedProjectName(
+      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root),
+    );
     return {
       identity: { root, ...namesAt(root, legacyName, remoteOn), legacyName, isHome: false },
       rooted: true,

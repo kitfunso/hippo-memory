@@ -55,7 +55,9 @@ describe('storedSource', () => {
     const source = itemSource(PREFIX, { key, text: 'Run the schema check before every deploy.' });
     const split = splitSource(source, PREFIX);
     expect(split.key).toBe(storedItemKey(key));
-    expect(splitSource(source.replace(/notes-\[REDACTED~[0-9a-f]{12}\][^/#]*/, `notes-${GH}.md`), PREFIX).key).toBe(split.key);
+    expect(splitSource(source.replace(/notes-\[REDACTED~[0-9a-f]{12}\][^/#]*/, `notes-${GH}.md`), PREFIX).key).toBe(
+      split.key,
+    );
     const plan = planContainer({
       textKeyed: true,
       items: [{ key, hash: split.hash, refused: false }],

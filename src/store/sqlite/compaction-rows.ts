@@ -4,7 +4,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
-import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
 import type { OriginMoveOptions } from './entry-rewrites.js';
 
@@ -142,16 +142,10 @@ export function openTranscriptRows(
   );
 }
 
-/** The hook payload's session, trigger and paths are keys a caller sent; each insert refuses a secret-shaped one. */
-function refuseCompactionKeys(
-  m: Pick<StartedCompactionInput, 'sessionId' | 'trigger' | 'cwd' | 'transcriptPath'>,
-): void {
-  refuseSecretKeys({
-    sessionId: m.sessionId,
-    trigger: m.trigger,
-    cwd: m.cwd,
-    transcriptPath: m.transcriptPath,
-  });
+/** The session and trigger are keys a caller sent, so a secret-shaped one is refused; the cwd and transcript path
+ * come from the folder, so they store redacted instead. */
+function refuseCompactionKeys(m: Pick<StartedCompactionInput, 'sessionId' | 'trigger'>): void {
+  refuseSecretKeys({ sessionId: m.sessionId, trigger: m.trigger });
 }
 
 export function insertStartedCompaction(
@@ -171,8 +165,8 @@ export function insertStartedCompaction(
     start.sessionId,
     start.originProject,
     start.trigger,
-    start.cwd,
-    start.transcriptPath,
+    storedOrNull(start.cwd),
+    storedOrNull(start.transcriptPath),
     start.startedAt,
   );
 }
@@ -225,8 +219,8 @@ export function insertSummarizedCompaction(
     meta.sessionId,
     meta.originProject,
     meta.trigger,
-    meta.cwd,
-    meta.transcriptPath,
+    storedOrNull(meta.cwd),
+    storedOrNull(meta.transcriptPath),
     meta.startedAt,
     summarizedAt,
     redactSecretsStrict(summary),

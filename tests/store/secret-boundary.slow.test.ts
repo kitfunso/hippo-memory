@@ -128,8 +128,8 @@ function driveRows(memoryId: string): void {
       sessionId: 's1',
       originProject: 'p',
       trigger: null,
-      cwd: null,
-      transcriptPath: null,
+      cwd: text('compactions.cwd'),
+      transcriptPath: text('compactions.transcript_path'),
       startedAt: '2026-03-01T00:00:00.000Z',
     };
     insertSummarizedCompaction(db, TENANT, meta, {
@@ -437,8 +437,6 @@ const KEY_WRITES = {
   'cards.assignee_runtime': () => claimed(KEY),
   'compactions.session_id': async () => compaction({ sessionId: KEY }),
   'compactions.compact_trigger': async () => compaction({ trigger: KEY }),
-  'compactions.cwd': async () => compaction({ cwd: KEY }),
-  'compactions.transcript_path': async () => compaction({ transcriptPath: KEY }),
   // SAFETY: an untyped hook payload can send any string as the runtime, and the row keeps it as given.
   'delivery_events.runtime': deliveryRefuses((key) => ({ runtime: key as DeliveryEventInput['runtime'] })),
   'delivery_events.session_id': deliveryRefuses((key) => ({ sessionId: key })),
@@ -489,6 +487,17 @@ const KEY_WRITES = {
     savePrediction(root, TENANT, { classTag: KEY, claimText: 'the release ships on friday', estimateValue: 1 }),
   'task_snapshots.session_id': () => snapshot({ sessionId: KEY }),
   'task_snapshots.scope': () => snapshot({ scope: KEY }),
+};
+
+/** For each enum a caller feeds, the src function that bounds it and a write that sends it a value off its list. */
+const ENUM_ENTRANCES = {
+  'task_snapshots.status': {
+    by: 'clearActiveTaskSnapshot',
+    write: async () => {
+      await snapshot({ sessionId: 's-enum' });
+      await sessions().clear(TENANT, 'snapshot', { status: KEY });
+    },
+  },
 };
 
 let scan: HeldColumn[];
@@ -597,6 +606,23 @@ describe('key columns', () => {
 
   it.each(Object.entries(KEY_WRITES))('%s refuses a secret-shaped key and stores nothing', async (column, write) => {
     await expect(write()).rejects.toThrow(/holds secret-shaped text/);
+    const table = column.slice(0, column.indexOf('.'));
+    const name = column.slice(column.indexOf('.') + 1);
+    // SAFETY: count(*) returns one row shaped { n }.
+    const held = withDb(
+      (db) => db.prepare(`SELECT count(*) AS n FROM ${table} WHERE instr("${name}", ?) > 0`).get(FILL) as { n: number },
+    );
+    expect(held.n).toBe(0);
+  });
+});
+
+describe('caller-fed enums', () => {
+  it.each(Object.entries(ENUM_ENTRANCES))('%s names the src function that bounds it', (column, { by }) => {
+    expect(COLUMN_CLASSES.get(column)).toEqual({ out: 'enum', by });
+  });
+
+  it.each(Object.entries(ENUM_ENTRANCES))('%s refuses a value off its list and stores nothing', async (column, e) => {
+    await expect(e.write()).rejects.toThrow(/not one of/);
     const table = column.slice(0, column.indexOf('.'));
     const name = column.slice(column.indexOf('.') + 1);
     // SAFETY: count(*) returns one row shaped { n }.

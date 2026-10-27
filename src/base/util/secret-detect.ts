@@ -191,8 +191,9 @@ export function secretSpans(text: string): Span[] {
   if (!text) return [];
   const found: Span[] = pemSpans(text);
   for (const re of STRICT_GLOBAL) {
-    for (const m of text.matchAll(re))
+    for (const m of text.matchAll(re)) {
       if (m[0].length > 0) found.push([m.index, m.index + m[0].length]);
+    }
   }
   if (found.length < 2) return found;
   found.sort((a, b) => a[0] - b[0] || b[1] - a[1]);

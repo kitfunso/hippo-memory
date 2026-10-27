@@ -4,6 +4,7 @@
 import { BadRequestError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { refuseSecretKeyList } from '../errors/secret-keys.js';
+import { secretSpans, storedSource } from '../util/secret-detect.js';
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
@@ -49,6 +50,13 @@ export function projectNames(project: ProjectRef): readonly string[] {
   return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter(
     (n) => n !== '',
   );
+}
+
+/** The form a project name hippo derived from a folder, a remote or a project file is kept in: lowercase, with any
+ * secret span stored as storedSource stores it, so a folder named like a key never refuses a write. */
+export function storedProjectName(name: string): string {
+  const lower = name.toLowerCase();
+  return secretSpans(lower).length === 0 ? lower : storedSource(lower).toLowerCase();
 }
 
 // Each project name is matched against every candidate row, so the caller's list stays short.
