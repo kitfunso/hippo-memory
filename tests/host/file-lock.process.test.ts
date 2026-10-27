@@ -178,11 +178,15 @@ describe('one process', () => {
     if (again.kind === 'taken') again.lock.release();
   });
 
-  it('removes the file when its holder calls remove, and only then', () => {
+  it('removes the file only when the generation it holds is older than the cutoff', () => {
     const path = join(scratch(), 's.lock.db');
-    const take = takeFileLock(path);
-    if (take.kind !== 'taken') throw new Error(`expected taken, got ${take.kind}`);
-    take.lock.remove();
+    const young = takeFileLock(path);
+    if (young.kind !== 'taken') throw new Error(`expected taken, got ${young.kind}`);
+    young.lock.remove(Date.now() - 60_000);
+    expect(existsSync(path)).toBe(true);
+    const old = takeFileLock(path);
+    if (old.kind !== 'taken') throw new Error(`expected taken, got ${old.kind}`);
+    old.lock.remove(Date.now() + 60_000);
     expect(existsSync(path)).toBe(false);
   });
 

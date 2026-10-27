@@ -12,6 +12,7 @@ import {
   turnsAfter,
   type WorkerMode,
 } from '../../src/surface/capture/session-worker.js';
+import type { StatFn } from '../../src/host/file-lock.js';
 import type { SessionTurn } from '../../src/surface/capture/transcript.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
@@ -101,6 +102,26 @@ describe('runSessionWorker', () => {
     await runSessionWorker(ID, 'turn', work);
     expect(runs).toEqual(['turn']);
     expect(left()).toEqual([]);
+  });
+
+  it('keeps serving after five rounds that ran work: only rounds that took nothing count', async () => {
+    // The first work call leaves a request that cannot be taken (a folder in the rename target's place).
+    const blocked = file(`.queued.${process.pid}`);
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await runSessionWorker(ID, 'turn', async () => {
+        fs.mkdirSync(blocked);
+        fs.writeFileSync(path.join(blocked, 'keep'), '');
+        fs.writeFileSync(file('.queued'), 'turn');
+      });
+      const lines = write.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('cannot take the queued request'));
+      // One failed take in the round that ran work, then five idle rounds.
+      expect(lines).toHaveLength(6);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it('looks at the queue again after a release even when it ran nothing, and stops after five rounds', async () => {
@@ -302,7 +323,7 @@ describe('pruning the sessions folder', () => {
     expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
   });
 
-  it('removes the lock file of a session idle past the cursor age, and keeps a young, held or queued one', async () => {
+  it('removes the lock file of an idle session, and keeps a held or queued one; a young file waits', async () => {
     const at = (name: string): string => path.join(sessions, name);
     fs.writeFileSync(at('idle.lock.db'), '');
     fs.writeFileSync(at('queued.lock.db'), '');
@@ -317,6 +338,29 @@ describe('pruning the sessions folder', () => {
     } finally {
       await kill(holder);
     }
+  });
+
+  it('keeps the lock file of a session whose cursor is young', () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('live.lock.db'), '');
+    fs.writeFileSync(at('live.cursor.json'), '{}');
+    const cursorAt = new Date(Date.now() + 30 * DAY);
+    fs.utimesSync(at('live.cursor.json'), cursorAt, cursorAt);
+    expect(pruneSessionFiles(Date.now() + 31 * DAY)).toBe(0);
+    expect(fs.existsSync(at('live.lock.db'))).toBe(true);
+  });
+
+  it('keeps the lock file when a request is queued after the idle check, during the take', () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('late.lock.db'), '');
+    let calls = 0;
+    const stat: StatFn = (p) => {
+      if (++calls === 2) fs.writeFileSync(at('late.queued'), 'turn');
+      const s = fs.statSync(p, { bigint: true });
+      return { dev: s.dev, ino: s.ino, ctimeNs: s.ctimeNs };
+    };
+    expect(pruneSessionFiles(Date.now() + 31 * DAY, stat)).toBe(0);
+    expect(fs.existsSync(at('late.lock.db'))).toBe(true);
   });
 
   it('does nothing, and does not throw, when the folder is missing', () => {

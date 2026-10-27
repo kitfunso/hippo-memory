@@ -19,7 +19,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => LockConnection;
 };
 
-/** What a path names: a recreated file differs in at least one field. */
+/** What a path names. Only an old file is removed, so a file created later differs from it in ctime. */
 export interface FileIdentity {
   readonly dev: bigint;
   readonly ino: bigint;
@@ -32,8 +32,9 @@ export type StatFn = (path: string) => FileIdentity | undefined;
 export interface FileLock {
   /** Frees the lock; the file stays for the next take. Never throws, idempotent. */
   release(): void;
-  /** Frees the lock and removes the file; only sleep's prune of an old file calls it. Never throws. */
-  remove(): void;
+  /** Frees the lock and removes the file if the held generation's ctime is at or before `cutoffMs`; only
+   * sleep's prune calls it. Never throws. */
+  remove(cutoffMs: number): void;
 }
 
 export type LockTake =
@@ -42,6 +43,7 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
+const NS_PER_MS = 1_000_000n;
 const MAX_ATTEMPTS = 3;
 const MAX_CREATES = 10;
 const WIN32 = process.platform === 'win32';
@@ -114,7 +116,10 @@ function holder(db: LockConnection, path: string, held: FileIdentity, stat: Stat
       if (!WIN32) closeLogged(db, path);
     }
   };
-  return { release: () => finish(false), remove: () => finish(true) };
+  return {
+    release: () => finish(false),
+    remove: (cutoffMs) => finish(held.ctimeNs <= BigInt(Math.trunc(cutoffMs)) * NS_PER_MS),
+  };
 }
 
 type Pass =
@@ -171,7 +176,7 @@ function onePass(path: string, stat: StatFn): Pass {
 }
 
 /** Takes the lock database at `path` (its folder must exist): taken, held, or unusable. `held` also
- * covers a file that kept changing: each change was a holder's remove, which re-checks the queue. */
+ * covers a file removed under every pass: an old file's prune, which re-checks the queue. */
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
   let passes = 0;
   let creates = 0;
@@ -183,6 +188,6 @@ export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTak
     if (result.created) creates++;
     else passes++;
   }
-  // Every pass lost the file to a release that re-checks the queue, or the stat or create kept failing.
+  // Every pass saw the file removed or replaced, or the stat or create kept failing.
   return failure === undefined ? { kind: 'held' } : unusable(path, failure);
 }

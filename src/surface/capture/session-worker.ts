@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
-import { takeFileLock } from '../../host/file-lock.js';
+import { takeFileLock, type StatFn } from '../../host/file-lock.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import {
   isObjectLike,
@@ -226,7 +226,8 @@ function pruneLimit(name: string): number | null {
   return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
 }
 
-/** A session's lock file goes when the session is idle past the cursor age and the file is as old. */
+/** A session's lock file goes when the session is idle past the cursor age and the file is as old; a
+ * session with no cursor counts as idle once its lock file is that old. */
 function lockDbIdle(dir: string, id: string, file: string, nowMs: number): boolean {
   if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
   const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });
@@ -235,14 +236,18 @@ function lockDbIdle(dir: string, id: string, file: string, nowMs: number): boole
   return lock !== undefined && lock.isFile() && nowMs - lock.ctimeMs >= CURSOR_MAX_AGE_MS;
 }
 
-/** Removes an idle session's lock file as its holder; true when removed. A held file is skipped.
- * SHORTCUT: a request queued during this hold waits for the session's next hook. */
-function pruneLockDb(dir: string, name: string, nowMs: number): boolean {
+/** Removes an idle session's lock file as its holder; true when removed. A held file is skipped, and
+ * remove() re-checks the age of the generation held. SHORTCUT: a request queued after the check
+ * below waits for the session's next hook; upgrade: queue under a short take of this lock. */
+function pruneLockDb(dir: string, name: string, nowMs: number, stat?: StatFn): boolean {
   const file = path.join(dir, name);
   if (!lockDbIdle(dir, name.slice(0, -LOCK_DB.length), file, nowMs)) return false;
-  const take = takeFileLock(file);
+  const take = takeFileLock(file, stat);
   if (take.kind === 'unusable') {
-    warnUnusableLockOnce(file, take.cause);
+    logger.warn(
+      `session worker: cannot take ${file} to prune it: ${errorMessage(take.cause)}`,
+      errorFields(take.cause),
+    );
     return false;
   }
   if (take.kind !== 'taken') return false;
@@ -250,13 +255,13 @@ function pruneLockDb(dir: string, name: string, nowMs: number): boolean {
     take.lock.release();
     return false;
   }
-  take.lock.remove();
+  take.lock.remove(nowMs - CURSOR_MAX_AGE_MS);
   return !fs.existsSync(file);
 }
 
 /** Removes cursor files and leftovers of the old text locks past their age, and the lock file of a
  * session idle that long. Never throws; returns the number removed. */
-export function pruneSessionFiles(nowMs: number): number {
+export function pruneSessionFiles(nowMs: number, takeStat?: StatFn): number {
   const dir = sessionsDir();
   let removed = 0;
   let names: string[];
@@ -272,7 +277,7 @@ export function pruneSessionFiles(nowMs: number): number {
     const file = path.join(dir, name);
     try {
       if (name.endsWith(LOCK_DB)) {
-        if (pruneLockDb(dir, name, nowMs)) removed++;
+        if (pruneLockDb(dir, name, nowMs, takeStat)) removed++;
         continue;
       }
       const limit = pruneLimit(name);
