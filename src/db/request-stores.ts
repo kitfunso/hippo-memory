@@ -20,6 +20,10 @@ export interface RequestStoresOptions {
   readonly setupDoneFor?: string;
 }
 
+/** The session's open, which only a DbGrant (src/db/grant.ts) calls; .oxlintrc.json bans its import
+ * elsewhere, so every hippo.db open on a session goes through a grant. */
+export const SESSION_OPEN = Symbol('request session open');
+
 // The session that owns each handle, so closeHippoDb leaves it open for the rest of the request.
 const owners = new WeakMap<DatabaseSyncLike, RequestStores>();
 
@@ -43,15 +47,9 @@ export class RequestStores {
     return this.#closed;
   }
 
-  /** The session's handle on `hippoRoot`, opened on first use. `opts.busyWaitMs` overrides the
-   * session's lock wait. */
-  get(hippoRoot: string, opts?: { busyWaitMs?: number | undefined }): DatabaseSyncLike {
-    return this.getWithFacts(hippoRoot, opts).db;
-  }
-
-  /** `get`, with the facts of the open's probe when this call made the connection and null for a
-   * cached handle. */
-  getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number | undefined }): OpenedDb {
+  /** The session's handle on `hippoRoot`, opened on first use, with the facts of the open's probe
+   * (null for a cached handle); `opts.busyWaitMs` overrides the session's lock wait. */
+  [SESSION_OPEN](hippoRoot: string, opts?: { busyWaitMs?: number | undefined }): OpenedDb {
     const busyWaitMs = opts?.busyWaitMs ?? this.busyWaitMs;
     const at = { hippoRoot, runtime: this.runtime };
     // A listener or timer that outlives its request still holds this session, so it gets a

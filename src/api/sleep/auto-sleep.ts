@@ -2,7 +2,6 @@
 // session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { HippoStore } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
@@ -24,13 +23,13 @@ export interface AutoSleepDue {
 
 /** Counts only when enabled: the count reads the store. */
 export async function autoSleepDue(
-  store: HippoStore,
+  newSince: (tenantId: string, now: Date) => Promise<number>,
   tenantId: string,
   config: HippoConfig['autoSleep'],
   now: Date,
 ): Promise<AutoSleepDue> {
   const { enabled, threshold } = config;
-  const count = enabled ? await store.reports.createdSinceLastSleep(tenantId, now) : 0;
+  const count = enabled ? await newSince(tenantId, now) : 0;
   return { enabled, count, threshold, due: enabled && count >= threshold };
 }
 
@@ -40,17 +39,17 @@ export async function autoSleepDue(
  * follows has landed.
  */
 export async function autoSleepAfterWrite(
-  ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers' | 'infra'>,
+  ctx: Pick<Context, 'tenantId' | 'config' | 'callers' | 'infra'>,
 ): Promise<void> {
   const host = ctx.callers?.autoSleep;
-  const { tenantId, store, config } = ctx;
+  const { tenantId, config } = ctx;
   if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
   if (host.latch.held) return;
   // Held from the count on, so two writes landing together never both start a sleep.
   host.latch.held = true;
   let due = false;
   try {
-    due = (await autoSleepDue(store, tenantId, config.autoSleep, ctx.infra.clock())).due;
+    due = (await autoSleepDue(host.newSince, tenantId, config.autoSleep, ctx.infra.clock())).due;
   } catch (err) {
     log.warn(
       `auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`,
@@ -79,7 +78,7 @@ export async function autoSleepAfterWrite(
  * that ran it. */
 export async function autoSleepConsolidate(
   ctx: Pick<
-    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,
+    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance' | 'vectors'>,
     'store' | 'config' | 'tenantId' | 'infra'
   >,
 ): Promise<ConsolidationResult> {

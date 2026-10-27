@@ -8,6 +8,7 @@ import { adminActor, contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
+import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
@@ -151,7 +152,8 @@ describe('context reads on a shared store', () => {
     expect(texts).not.toContain(ROWS.global);
   });
 
-  it('ignores contextProjectIsolation: false with one warning per store', async () => {
+  it('ignores contextProjectIsolation: false with one warning per process', async () => {
+    onceKeysPerCase();
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     try {
       const h = await start(true, { contextProjectIsolation: false });
@@ -163,7 +165,24 @@ describe('context reads on a shared store', () => {
       }
       expect(warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation'))).toHaveLength(1);
     } finally {
-      warn.mockRestore();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('warns once per process when two servers serve two store objects', async () => {
+    onceKeysPerCase();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const first = await start(true, { contextProjectIsolation: false });
+    const firstHome = home;
+    try {
+      expect((await contextTexts(first, '?project=acme%2Fapp')).status).toBe(200);
+      const second = await start(true, { contextProjectIsolation: false });
+      expect((await contextTexts(second, '?project=acme%2Fapp')).status).toBe(200);
+      expect(warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation'))).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      await first.stop();
+      rmSync(firstHome, { recursive: true, force: true });
     }
   });
 

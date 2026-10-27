@@ -1,4 +1,5 @@
 import type { KeysetPosition } from '../../util/keyset.js';
+import type { MethodEffects } from './effects.js';
 
 /** How many records a quarantine list reads when its query sets no `limit`. */
 export const QUARANTINE_LIST_LIMIT = 100;
@@ -61,6 +62,12 @@ export interface Quarantine {
     actor: string,
   ): Promise<QuarantineRejection>;
 }
+
+/** What each Quarantine method does to the store; every adapter honours it. */
+export const QUARANTINE_EFFECTS = {
+  listQuarantined: 'read',
+  decideQuarantined: 'write',
+} as const satisfies MethodEffects<Quarantine>;
 
 /** `Quarantine` as an adapter writes it; the port's overloads pair each decision with its
  * answer. */

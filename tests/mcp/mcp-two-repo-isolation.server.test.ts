@@ -271,7 +271,12 @@ beforeAll(async () => {
     { owner: 'alice', project: ['beta'] },
   );
 
-  handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0, keep: ['conflicts'] });
+  handle = await serve({
+    hippoRoot: store,
+    host: '127.0.0.1',
+    port: 0,
+    keep: ['conflicts', 'dagReads', 'vectors', 'graphReads'],
+  });
 });
 
 afterAll(async () => {

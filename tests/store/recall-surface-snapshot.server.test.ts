@@ -28,6 +28,7 @@ import {
   type Store,
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
@@ -139,7 +140,7 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
       method: 'tools/call',
       params: { name: 'hippo_recall', arguments: { query: c.query, ...c.mcp } },
     },
-    {
+    mcpContext({
       hippoRoot: s.root,
       tenantId: TENANT,
       actor: 'mcp',
@@ -149,7 +150,7 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
       config: loadConfig(s.root),
       infra: testInfra(),
       callers,
-    },
+    }),
   );
 }
 

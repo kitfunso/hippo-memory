@@ -15,9 +15,10 @@ import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
+import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
-import type { OptionalGroup } from '../../base/ports/store.js';
+import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
   defaultImportFiles,
@@ -39,7 +40,12 @@ import {
   envTenant,
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
-import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
+import {
+  createCallerState,
+  newRowsOn,
+  type AutoSleepHost,
+  type CallerState,
+} from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
@@ -77,13 +83,16 @@ function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
   };
 }
 
+/** The store kind the CLI opens: hippo.db, with every group. */
+export type CliStore = HippoStore & StoreGroups;
+
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never
  * names the adapter. A `hippo serve` on the same store answers its nearest-row reads from the
  * graph it holds. */
 export function cliStore(
   hippoRoot: string,
   session: StoreSession | undefined = commandSession,
-): HippoStore & StoreGroups {
+): CliStore {
   const opts = cliStoreOptions(session);
   const maxVectors = cliConfig(hippoRoot).vectorGraph.maxVectors;
   return askingNearestFirst(defaultStore(hippoRoot, opts), {
@@ -172,7 +181,12 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config and on the
  * call's session. */
-function cliReach(hippoRoot: string, store: HippoStore, session = commandSession): ContextReach {
+function cliReach(
+  hippoRoot: string,
+  store: HippoStore & StoreGroups,
+  session = commandSession,
+): ContextReach {
+  const { ledger, folderFiles } = store;
   return contextReach(
     defaultReach({
       hippoRoot,
@@ -182,6 +196,7 @@ function cliReach(hippoRoot: string, store: HippoStore, session = commandSession
     }),
     cliConfig,
     resolveEmbeddingProvider,
+    { ledger, folderFiles, config: cliConfig(hippoRoot) },
   );
 }
 
@@ -217,8 +232,7 @@ export function cliSecondStore(root: string): GlobalInReach {
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one,
  * probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
-  const store = cliStore(hippoRoot);
-  return ledgerReachOf({ reach: cliReach(hippoRoot, store), store, config: cliConfig(hippoRoot) });
+  return ledgerReachOf({ reach: cliReach(hippoRoot, cliStore(hippoRoot)) });
 }
 
 /** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
@@ -241,24 +255,24 @@ function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep
  * that runs in process. One host per stdio loop, so its callers live as long as the loop, which
  * runs as one command on that command's runtime. */
-export function cliStdioHost(): McpHost {
+export function cliStdioHost(): McpHost<CliStore> {
   const hostTenantId = envTenant();
   const shared = createCallerState();
-  // The rings span the loop; each folder keeps an auto-sleep bound to it, as a write's context
-  // names no folder.
-  const byRoot = new Map<string, CallerState>();
-  const callersAt = (root: string): CallerState => {
-    let callers = byRoot.get(root);
-    if (callers === undefined) {
-      const run = rootAutoSleep(root, hostTenantId);
-      callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
-      byRoot.set(root, callers);
+  const tools = allMcpTools();
+  // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
+  // names no folder, and each frame counts on its own store.
+  const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
+  const callersOn = (root: string, store: StoreWith<'reports'>): CallerState => {
+    let sleeps = byRoot.get(root);
+    if (sleeps === undefined) {
+      sleeps = { run: rootAutoSleep(root, hostTenantId), latch: { held: false } };
+      byRoot.set(root, sleeps);
     }
-    return callers;
+    return { ...shared, autoSleep: { ...sleeps, hostTenantId, newSince: newRowsOn(store) } };
   };
   const contextIn =
     (session: StoreSession, signal: AbortSignal) =>
-    (hippoRoot: string, tenantId: string): McpContext => {
+    (hippoRoot: string, tenantId: string): McpContext<CliStore> => {
       const store = cliStore(hippoRoot, session);
       return {
         hippoRoot,
@@ -268,9 +282,11 @@ export function cliStdioHost(): McpHost {
         hostAdmin: true,
         stdio: true,
         store,
+        storeFor: (own) => own,
+        tools,
         config: cliConfig(hippoRoot),
         reach: cliReach(hippoRoot, store, session),
-        callers: callersAt(hippoRoot),
+        callers: callersOn(hippoRoot, store),
         infra: cliInfra(),
         signal,
       };

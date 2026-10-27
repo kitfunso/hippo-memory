@@ -18,6 +18,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_h
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 let root: string;
 
@@ -30,16 +31,18 @@ function storeOfKind(kind: string): HippoStore {
   return kind === 'sqlite' ? sqliteStore(root) : { ...withoutFolderGroups(sqliteStore(root)), kind };
 }
 
-const ctxOn = (kind: string): McpContext => ({
-  hippoRoot: root,
-  tenantId: 'default',
-  actor: 'mcp',
-  role: 'admin',
-  hostAdmin: true,
-  store: storeOfKind(kind),
-  config: loadConfig(root),
-  infra: testInfra(),
-});
+const ctxWith = (store: HippoStore): McpContext =>
+  mcpContext({
+    hippoRoot: root,
+    tenantId: 'default',
+    actor: 'mcp',
+    role: 'admin',
+    hostAdmin: true,
+    store,
+    config: loadConfig(root),
+    infra: testInfra(),
+  });
+const ctxOn = (kind: string): McpContext => ctxWith(storeOfKind(kind));
 
 function listedNames(res: McpResponse | null): string[] {
   // SAFETY: src/surface/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
@@ -95,8 +98,16 @@ describe('store-ready MCP tools', () => {
   });
 
   it('the smallest store binds no tool that needs a feature group: a list hides each, a call answers store_not_ported', async () => {
-    const smallest: McpContext = { ...ctxOn('port-only'), store: portOnlyStore(root) };
-    const featured = ['hippo_predict_baserate', 'hippo_learn', 'hippo_conflicts', 'hippo_resolve'];
+    const smallest = ctxWith(portOnlyStore(root));
+    const featured = [
+      'hippo_assemble',
+      'hippo_drill',
+      'hippo_predict_baserate',
+      'hippo_status',
+      'hippo_learn',
+      'hippo_conflicts',
+      'hippo_resolve',
+    ];
     const unbound = [...featured, 'hippo_share', 'hippo_peers'];
     const list = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, smallest);
     expect(listedNames(list)).toEqual(declared.filter((name) => !unbound.includes(name)));
@@ -221,7 +232,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     ]) {
       writeEntry(fixture.dir, entry);
     }
-    const { store } = portOnlySide(fixture.dir);
+    const { store } = portOnlySide(fixture.dir, ['dagReads']);
     const text = await callServed(store, fixture.tokens.memberA, 'hippo_assemble', { session_id: 'sess-mcp' });
     const [heading, ...lines] = text.split('\n');
     expect(heading).toMatch(/^Session sess-mcp \u2014 3 items, \d+ tokens \(raw=3, summarized=0, evicted=0\)$/);
@@ -239,7 +250,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     ]) {
       writeEntry(fixture.dir, entry);
     }
-    const { store } = portOnlySide(fixture.dir);
+    const { store } = portOnlySide(fixture.dir, ['dagReads']);
     expect(await callServed(store, fixture.tokens.memberA, 'hippo_drill', { summary_id: 'sum_1' })).toBe(
       [
         'Summary sum_1 \u2014 2 descendants',

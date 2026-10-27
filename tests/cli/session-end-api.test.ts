@@ -1,9 +1,8 @@
 // sessionEndWork runs from the api with no CLI: real store, host steps passed in, store choice and sleep, capture and
 // cursor policy decided by the api.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliApiContext, type CliContext } from '../../src/surface/cli/api-context.js';
 import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
-import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
@@ -71,7 +70,7 @@ function work(over: Partial<Work> = {}): Work {
 }
 
 /** The folder's Context as if it had no store of its own, reaching `globalRoot` (or no global store when null). */
-function withoutOwnStore(globalRoot: string | null): Context {
+function withoutOwnStore(globalRoot: string | null): CliContext {
   const ctx = cliApiContext(root, TENANT);
   const reach = { ...ctx.reach!, hasLocal: false, global: undefined };
   if (globalRoot === null) return { ...ctx, reach };
@@ -79,7 +78,7 @@ function withoutOwnStore(globalRoot: string | null): Context {
   return { ...ctx, reach: { ...reach, global } };
 }
 
-function withAutoSleep(threshold: number): Context {
+function withAutoSleep(threshold: number): CliContext {
   const ctx = cliApiContext(root, TENANT);
   return { ...ctx, config: { ...ctx.config, autoSleep: { enabled: true, threshold } } };
 }

@@ -5,6 +5,7 @@ import type { PilotArm } from '../../session/pilot-arm.js';
 import type { DeliveryEventInput } from '../../session/delivery.js';
 import type { LastSent } from '../../session/skip-unchanged.js';
 import type { ApiCall } from '../../session/transcript-calls.js';
+import type { MethodEffects } from './effects.js';
 
 export interface Ledger {
   /** The turn's token rows, then its delivery event, on one connection; a turn with no rows
@@ -28,6 +29,14 @@ export interface Ledger {
    * Rejects when the write fails. */
   replaceRereads(tenantId: string, sessionId: string, calls: readonly ApiCall[]): Promise<number>;
 }
+
+/** What each Ledger method does to the store; every adapter honours it. */
+export const LEDGER_EFFECTS = {
+  recordTurn: 'write',
+  lastSent: 'read',
+  pilotArm: 'write',
+  replaceRereads: 'write',
+} as const satisfies MethodEffects<Ledger>;
 
 export interface PilotArmOptions {
   readonly write: boolean;

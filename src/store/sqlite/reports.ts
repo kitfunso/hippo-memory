@@ -15,7 +15,6 @@ import type {
 import { statusCounts, strengthTallies } from './candidates.js';
 import { countOpenConflicts } from './conflicts.js';
 import { countAllEntries } from './entry-reads.js';
-import { listEntriesWhere } from './entry-filter.js';
 import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
 import type { Handles, StoreFiles, StoreModel } from './open.js';
@@ -129,7 +128,6 @@ function scoredReadsBodies(files: StoreFiles): Bodies<Pick<Reports, Scored>> {
 }
 
 const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
-  entriesWhere: listEntriesWhere,
   countEntries: countAllEntries,
   stats: buildStatsFromDb,
   correctionLinks: correctionLinks,

@@ -15,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,7 +80,7 @@ describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
-      {
+      mcpContext({
         hippoRoot: root,
         tenantId: 'default',
         actor: 'mcp',
@@ -88,7 +89,7 @@ describe('MCP hippo_remember', () => {
         store: sqliteStore(root),
         config: loadConfig(root),
         infra: testInfra(),
-      },
+      }),
     );
     const text = JSON.stringify(response);
     expect(text).toContain('Remembered [');

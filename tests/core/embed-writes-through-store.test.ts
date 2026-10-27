@@ -2,7 +2,7 @@
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,13 +15,18 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import { OTHER_STORE_MARKER, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import type { StoreWith } from '../../src/base/ports/store.js';
+
+// The vector groups an add-on store keeps so its embeds go through vectorWrites.
+const VECTOR_GROUPS = ['vectors', 'vectorWrites'] as const;
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -70,9 +75,9 @@ interface HippoDbIndex {
 
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
-function on(hippoRoot: string, store: HippoStore): EmbedTarget {
+function on(hippoRoot: string, store: StoreWith<'vectors' | 'vectorWrites'>): EmbedTarget {
   return {
-    store,
+    groups: { vectors: store.vectors, vectorWrites: store.vectorWrites },
     embeddings: loadConfig(hippoRoot).embeddings,
     embedderFor: resolveEmbeddingProvider,
     failureNotices: new FailureNotices(),
@@ -149,7 +154,7 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const run = (): Promise<number> => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a'));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -206,8 +211,83 @@ describe('embedAll with a store', () => {
     expect(indexOn(root).vectors).toHaveLength(70);
   });
 
+  it('runs two model changes on one index in turn, whatever store object each holds, so the newer index is whole', async () => {
+    const root = join(home, `turns-${++n}`);
+    initTestStore(root);
+    writeEntriesTogether(
+      root,
+      Array.from({ length: 70 }, (_, i) =>
+        createMemory(`turn-taking memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ),
+    );
+    // An index under a third model, so both runs are model changes that replace the index on every page.
+    await embedAll(on(root, sqliteStore(root)), undefined, provider('fake-old'));
+    let reached: () => void = () => undefined;
+    const atSecondPage = new Promise<void>((resolve) => (reached = resolve));
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    // The older run's second page waits until the newer run has been started.
+    const held = provider('fake-a', async (texts) => {
+      calls += 1;
+      if (calls === 2) {
+        reached();
+        await gate;
+      }
+      return vectorsFor('fake-a', texts);
+    });
+    const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
+    await atSecondPage;
+    const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
+    const newer = embedAll(on(markedFolder(), newerStore), undefined, provider('fake-b'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    await Promise.allSettled([older]);
+    expect(await newer).toBe(70);
+    const model = embeddingIndexIdentity('fake-b');
+    expect(await newerStore.vectors.embeddingIndexState()).toEqual({ storedModel: model, hasVectors: true });
+    expect(await newerStore.vectorWrites.entriesWithoutVector({ tenantId: ALL_TENANTS, model, limit: 500 })).toEqual(
+      [],
+    );
+  });
+
+  it('gives a store opened through a link and one opened on the real folder one index key, so they share a turn', async () => {
+    const real = makeRoot('embed-link');
+    // Beside the store, so makeRoot's remove of the store never meets it.
+    const link = `${real}-link`;
+    try {
+      symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+      const viaReal = sqliteStore(real);
+      const viaLink = sqliteStore(link);
+      const key = await viaReal.vectorWrites.indexKey();
+      expect(await viaLink.vectorWrites.indexKey()).toBe(key);
+      if (process.platform === 'win32') {
+        expect(await sqliteStore(real.toUpperCase()).vectorWrites.indexKey()).toBe(key);
+      }
+    } finally {
+      // unlink removes the link alone, never the store it points at.
+      unlinkSync(link);
+    }
+  });
+
+  it('gives a store opened through a link one index key before its folder is made and after', async () => {
+    const parent = makeRoot('embed-unmade');
+    // Beside the folder, so makeRoot's remove of it never meets the link.
+    const link = `${parent}-link`;
+    try {
+      symlinkSync(parent, link, process.platform === 'win32' ? 'junction' : 'dir');
+      const before = await sqliteStore(join(link, 'later')).vectorWrites.indexKey();
+      mkdirSync(join(parent, 'later'));
+      expect(await sqliteStore(join(link, 'later')).vectorWrites.indexKey()).toBe(before);
+      expect(await sqliteStore(join(parent, 'later')).vectorWrites.indexKey()).toBe(before);
+    } finally {
+      // unlink removes the link alone, never the folder it points at.
+      unlinkSync(link);
+    }
+  });
+
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
@@ -235,7 +315,7 @@ describe('embedAll with a store', () => {
 describe('embedMemory with a store', () => {
   it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const side = portOnlySide(copyOf());
+    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
     const entry = seeded[1];
     await embedMemoryInto(on(hippoRoot, side.store), entry);
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
@@ -255,12 +335,12 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const side = portOnlySide(copyOf(oldIndexed));
+      const side = portOnlySide(copyOf(oldIndexed), VECTOR_GROUPS);
       const staleVectors = {
         ...side.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),
       };
-      const store: HippoStore = stale ? { ...side.store, vectors: staleVectors } : side.store;
+      const store = stale ? { ...side.store, vectors: staleVectors } : side.store;
       const ids = seeded.map((e) => e.id);
       const [before, requests] = [await side.store.vectors.stored('vectors', ids), embeddings.requests()];
       await embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]);

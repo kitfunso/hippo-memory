@@ -19,6 +19,7 @@ import { loadLastRecall } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -108,7 +109,7 @@ function retrievalCount(id: string): number {
 async function mcpText(name: string, args: McpArgs): Promise<string> {
   const res: McpResponse | null = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    {
+    mcpContext({
       hippoRoot: hippoDir,
       tenantId: 'default',
       actor: 'mcp',
@@ -117,7 +118,7 @@ async function mcpText(name: string, args: McpArgs): Promise<string> {
       store: sqliteStore(hippoDir),
       config: loadConfig(hippoDir),
       infra: testInfra(),
-    },
+    }),
   );
   // SAFETY: tools/call answers carry one MCP text content block.
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';

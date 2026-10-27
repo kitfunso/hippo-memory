@@ -10,9 +10,10 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createVectorGraph, insertNode, searchGraph } from '../../dist/db/vector-graph.js';
 import { VectorGraphs } from '../../dist/db/vector-graph-index.js';
-import { saveVectorGraphFile } from '../../dist/db/vector-graph-build.js';
+import { saveVectorGraphFile } from '../../dist/store/sqlite/vector-graph-file.js';
 import { graphFilePath } from '../../dist/db/vector-graph-file.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
+import { grantFor } from '../../dist/store/sqlite/grant.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../dist/db/vector-store.js';
 import { createMemory } from '../../dist/entry/memory.js';
@@ -101,7 +102,7 @@ async function timed(fn) {
 const spec = (tenantId) => ({ tenantId, scope: { mode: 'default-deny' }, includeSuperseded: false });
 
 async function builtGraphs(root, db, n, query) {
-  const graphs = new VectorGraphs(root, { threshold: n });
+  const graphs = new VectorGraphs(root, grantFor({}), { threshold: n });
   const build = await timed(async () => {
     await loadVectorCandidateEntriesAt(db, query, spec(ALL_TENANTS), graphs);
     await graphs.idle();

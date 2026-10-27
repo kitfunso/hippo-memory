@@ -41,7 +41,7 @@ function send(
 
 beforeEach(async () => {
   home = makeRoot('request-id');
-  handle = await serveKeyed({ hippoRoot: home, port: 0, host: '127.0.0.1', keep: ['objects'] });
+  handle = await serveKeyed({ hippoRoot: home, port: 0, host: '127.0.0.1', keep: ['objects', 'dagReads'] });
 });
 
 afterEach(async () => {

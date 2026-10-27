@@ -5,7 +5,6 @@ import {
   closeHippoDb,
   type DatabaseSyncLike,
   getHippoDbPath,
-  openHippoDb,
   SERVER_DB_WAIT_MS,
 } from '../../db/index.js';
 import type { HippoStore } from '../../base/ports/store.js';
@@ -35,10 +34,7 @@ function holdSqliteConnection(hippoRoot: string, runtime: StoreRuntime): StoreHo
     try {
       // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and
       // the 30 s journal-mode retry would stall every request.
-      heldDb = openHippoDb(hippoRoot, {
-        busyWaitMs: SERVER_DB_WAIT_MS,
-        grant: grantFor({ runtime }),
-      });
+      heldDb = grantFor({ runtime }).open(hippoRoot, SERVER_DB_WAIT_MS);
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot), runtime);
     } catch (err) {
       stopHolding = true;

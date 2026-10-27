@@ -12,7 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
 const TENANT = 'acme';
@@ -96,7 +96,7 @@ describe('memoryGet answers what readEntry answers', () => {
       ...createMemory('faded row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }),
       id: 'mem_dormant',
     };
-    const db = openStore(r);
+    const db = openStore(r, storeFilesOf(r).opens);
     try {
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: '2026-01-01T00:00:00.000Z' });
     } finally {

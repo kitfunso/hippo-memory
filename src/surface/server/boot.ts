@@ -11,8 +11,9 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { issueLocalKey } from './local-key.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import { issueLocalKey, type LocalKey } from './local-key.js';
+import { KeyVerifier } from './api-key.js';
+import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
   defaultServerRuntime,
   tenantOfApiKey,
@@ -28,17 +29,18 @@ import { JSON_HEADERS, sendJson } from '../http/http-util.js';
 import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
-import { createCallerState } from '../../api/callers.js';
+import { createCallerState, newRowsOn, type CallerState } from '../../api/callers.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   drainAndClose,
   setKeepAliveTimeouts,
   shutdownBoundMs,
 } from './lifecycle.js';
-import { readyProbeFor } from './ready.js';
+import { createReadyProbe, type ReadyProbe } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
+import { bindMcpTools } from '../mcp/request.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../../base/scope/project-identity.js';
 import { parseRequest, rejectEncodedSlash } from './request.js';
 import { loopbackBindHosts } from './loopback.js';
@@ -81,9 +83,9 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
-  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's
-   * view. */
-  readonly servedStore: HippoStore;
+  /** /ready's one probe for the server's life, on the store as booted; unset when the store has
+   * no readiness group. */
+  readonly ready: ReadyProbe | undefined;
 }
 
 async function handleRequest(
@@ -133,7 +135,7 @@ async function dispatchProbeRoute(
   if (await dispatchHostRoute(r, request, health, async () => sendHealth(r.req, r.res, options))) {
     return true;
   }
-  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.servedStore));
+  return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.ready));
 }
 
 /** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes
@@ -182,13 +184,12 @@ function sendHealth(
 
 /** Readiness: one cheap read on the served store under the server's lock wait. /health stays
  * liveness only, so a probe can tell a store that does not answer from a dead process. */
-async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
-  const { readiness } = store;
-  if (readiness === undefined) {
+async function sendReady(res: ServerResponse, ready: ReadyProbe | undefined): Promise<void> {
+  if (ready === undefined) {
     sendJson(res, 200, { ok: true, store: 'unchecked' });
     return;
   }
-  if (!(await readyProbeFor(store, readiness)())) {
+  if (!(await ready())) {
     sendJson(res, 503, { ok: false, error: 'store_unavailable' });
     return;
   }
@@ -303,7 +304,9 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     ...evalStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
-  const served = servedOptsFor(opts, plan, runtime);
+  // Before the listen, so the first request already has the key it is checked against.
+  const localKey = issueLocalKey(opts.hippoRoot);
+  const served = servedOptsFor(opts, plan, runtime, localKey);
 
   const inflight = new Set<ServerResponse>();
   const options = requestOptionsFor(plan, served, runtime);
@@ -313,7 +316,6 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 
   const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
-  issueLocalKey(opts.hippoRoot);
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   runtime.hold();
 
@@ -347,7 +349,7 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    servedStore: served.store,
+    ready: served.store.readiness && createReadyProbe(served.store.readiness),
   };
 }
 
@@ -368,6 +370,7 @@ function servedOptsFor(
   opts: ServeOptions,
   { routes, publicJsonBodies, limiters }: BootPlan,
   runtime: ServerRuntime,
+  localKey: LocalKey,
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
@@ -379,13 +382,17 @@ function servedOptsFor(
   };
   // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
   const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
-  const autoSleep = sleepsHere ? { run, hostTenantId: envTenant() } : undefined;
+  // The count reads the store's reports, so a store without them starts no sleep.
+  const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
+  const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
+  const callers = createCallerState(autoSleep);
   return {
     ...opts,
     routes,
     publicJsonBodies,
     v1Routes: bindV1Routes(store, runtime.onHippoDb),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
+    mcpTools: bindMcpTools(store),
     store,
     onHippoDb: runtime.onHippoDb,
     reachOf: (shared) => runtime.reachOf(shared, {}),
@@ -393,7 +400,11 @@ function servedOptsFor(
     configAt: configReader(envRuntimeSettings),
     callerLimiter,
     failedAuthLimiter,
-    callers: createCallerState(autoSleep),
+    localKey,
+    keyVerifier: new KeyVerifier(),
+    callers,
+    callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
+    ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
     infra: rootInfra(runtime.host),
     sleeps,
     counts,
@@ -429,13 +440,30 @@ function servedFor(
   runtime: ServerRuntime,
   { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
 ): ResolvedServeOptions {
+  // One view per store, so the served, caller and ledger stores share the view of one.
+  const views = new Map<HippoStore, HippoStore>();
+  const storeFor = <S extends HippoStore>(own: S): S => {
+    // SAFETY: each view was made by runtime.storeFor from the same `own`, so it has its type.
+    const view = (views.get(own) as S | undefined) ?? runtime.storeFor(own, limits, session);
+    views.set(own, view);
+    return view;
+  };
   return {
     ...served,
-    store: runtime.storeFor(served.store, limits, session),
+    store: storeFor(served.store),
     reachOf: (shared) => runtime.reachOf(shared, limits, session),
-    storeFor: (own) => runtime.storeFor(own, limits, session),
+    storeFor,
+    callers: served.callersFor(storeFor),
+    ledgerStore: served.ledgerStore && storeFor(served.ledgerStore),
     signal: limits.signal,
   };
+}
+
+/** The server's callers for one request: the shared latch, and the count on the request's store. */
+function callersOnRequest(callers: CallerState, counted?: StoreWith<'reports'>): CallerState {
+  const { autoSleep } = callers;
+  if (autoSleep === undefined || counted === undefined) return callers;
+  return { ...callers, autoSleep: { ...autoSleep, newSince: newRowsOn(counted) } };
 }
 
 async function listenAndDescribe(

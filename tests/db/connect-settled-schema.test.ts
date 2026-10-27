@@ -41,9 +41,9 @@ describe('connection open after the schema is proven', () => {
   it('a store opened twice in one store runtime runs the schema probe once', () => {
     const root = makeRoot('settled-probe', { init: false });
     const runtime = new StoreRuntime();
-    const opts = { grant: grantFor({ runtime }) };
+    const grant = grantFor({ runtime });
     const probes = probesPrepared(() => {
-      for (let i = 0; i < 3; i++) closeHippoDb(openHippoDb(root, opts));
+      for (let i = 0; i < 3; i++) closeHippoDb(grant.open(root));
     });
     runtime.dispose();
     expect(probes).toBe(1);

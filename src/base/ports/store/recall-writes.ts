@@ -1,6 +1,7 @@
 import type { RerankStep } from '../../rank/search-types.js';
 import type { OriginFilter, AppendAuditOptions } from './types.js';
 import type { EntryTarget } from './entry-writes.js';
+import type { MethodEffects } from './effects.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -89,3 +90,9 @@ export interface LastRecall {
    * none was asked or its write failed. */
   finishRecall(writes: LastRecallWrites, globalRoot: string | undefined): Promise<number | null>;
 }
+
+/** What each LastRecall method does to the store; every adapter honours it. */
+export const LAST_RECALL_EFFECTS = {
+  applyOutcomeToLast: 'write',
+  finishRecall: 'write',
+} as const satisfies MethodEffects<LastRecall>;

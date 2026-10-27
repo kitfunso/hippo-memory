@@ -43,6 +43,7 @@ import { testInfra } from '../_helpers/infra.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 pinClock();
 
@@ -107,7 +108,7 @@ type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 async function mcp(root: string, name: string, args: ToolArgs): Promise<string> {
   const res = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    {
+    mcpContext({
       hippoRoot: root,
       tenantId: 'default',
       actor: 'mcp',
@@ -116,7 +117,7 @@ async function mcp(root: string, name: string, args: ToolArgs): Promise<string> 
       store: sqliteStore(root),
       config: loadConfig(root),
       infra: testInfra(),
-    },
+    }),
   );
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.
   const result = res?.result as { content?: { text?: string }[] } | undefined;

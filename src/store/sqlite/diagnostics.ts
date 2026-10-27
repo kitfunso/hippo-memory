@@ -6,7 +6,6 @@ import {
   getMeta,
   getSchemaVersion,
   type DatabaseSyncLike,
-  openHippoDbReadOnly,
 } from '../../db/index.js';
 import { listTableNames } from '../../db/tables.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -22,7 +21,7 @@ import type {
   TokenTally,
   Diagnostics,
 } from '../../base/ports/store/diagnostics.js';
-import type { OnHandle } from './open.js';
+import { type OnHandle, readOnly } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { META_KEY } from '../../db/meta.js';
@@ -109,5 +108,5 @@ const diagnosticsBodies: Bodies<Diagnostics> = {
 };
 
 export function sqliteDiagnostics(on: OnHandle): Diagnostics {
-  return bound(on, diagnosticsBodies, openHippoDbReadOnly);
+  return bound(on, diagnosticsBodies, readOnly);
 }

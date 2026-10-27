@@ -88,7 +88,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 }
 
 export async function captureFailureForCaller(
-  given: EntryContext<ContextWith<'failureLog' | 'lessonWrites'>>,
+  given: EntryContext<ContextWith<'failureLog' | 'lessonWrites' | 'sessions'>>,
   req: CallerFailureRequest,
 ): Promise<CallerFailureResult> {
   const ctx = withEntryInfra(given);

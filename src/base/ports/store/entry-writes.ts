@@ -1,6 +1,7 @@
 import type { ScopeReader } from '../../scope/recall-scope.js';
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { HeldText } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 export interface EntryWrite {
   readonly entry: MemoryEntry;
@@ -72,6 +73,16 @@ export interface EntryWrites {
   forget(removal: EntryRemoval): Promise<void>;
 }
 
+/** What each EntryWrites method does to the store; every adapter honours it. */
+export const ENTRY_WRITES_EFFECTS = {
+  writeEntry: 'write',
+  applyOutcome: 'write',
+  setPinned: 'write',
+  supersede: 'write',
+  archiveRaw: 'write',
+  forget: 'write',
+} as const satisfies MethodEffects<EntryWrites>;
+
 /** The reads and writes behind git auto-learn's batch. */
 export interface LessonWrites {
   /** Content, source and origin of the tenant's rows that may hold one of `texts`, as
@@ -91,3 +102,11 @@ export interface LessonWrites {
   /** Rewrites each entry in one transaction, all or none. */
   writeTogether(entries: readonly MemoryEntry[]): Promise<void>;
 }
+
+/** What each LessonWrites method does to the store; every adapter honours it. */
+export const LESSON_WRITES_EFFECTS = {
+  textsHolding: 'read',
+  contentsWithTag: 'read',
+  writeSkippingRejected: 'write',
+  writeTogether: 'write',
+} as const satisfies MethodEffects<LessonWrites>;

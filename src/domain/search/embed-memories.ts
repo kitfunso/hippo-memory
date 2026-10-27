@@ -19,7 +19,6 @@ import {
 } from '../../base/embeddings/index-identity.js';
 import type {
   EmbeddingIndex,
-  HippoStore,
   IndexStep,
   IndexStepAnswers,
   IndexStepKind,
@@ -27,6 +26,9 @@ import type {
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
+  RequiredStore,
+  StoreGroups,
+  StoreWith,
 } from '../../base/ports/store.js';
 import { chunked } from '../../base/util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -109,9 +111,9 @@ const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-// One turn at a time per hippo.db or store, then the index's own lock, which other processes and
-// threads honour.
-const embedTurns = new SerialQueues<HippoStore | string>();
+// One turn at a time per index, keyed by the index (embeddingIndex.open or vectorWrites.indexKey),
+// then the index's own lock, which other processes and threads honour.
+const embedTurns = new SerialQueues<string>();
 
 /** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until it
  * closes. */
@@ -272,57 +274,54 @@ async function backfillInStore({
 /** embedAll on a store: a model change re-embeds every memory, and the first page written drops
  * the old index. */
 async function embedAllInStore(
-  store: HippoStore,
+  { groups }: StoreEmbedTarget,
   provider: EmbeddingProvider,
   particles: ParticleScoring,
 ): Promise<number> {
-  const { vectors: reads, vectorWrites: writes } = store;
-  const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
-  return backfillInStore({
-    writes,
-    provider,
-    model: embeddingIndexIdentity(provider.id),
-    rebuild,
-    particles,
+  const { vectors: reads, vectorWrites: writes } = groups;
+  return embedTurns.run(await writes.indexKey(), async () => {
+    const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
+    return backfillInStore({
+      writes,
+      provider,
+      model: embeddingIndexIdentity(provider.id),
+      rebuild,
+      particles,
+    });
   });
 }
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it
  * leaves a model change to embedAll, so a stale read here never drops another process's rebuild;
  * the read only saves a paid embed call, as the write refuses another model itself. */
-function embedMemoryInStore(
+async function embedMemoryInStore(
   target: StoreEmbedTarget,
   provider: EmbeddingProvider,
   entry: MemoryEntry,
 ): Promise<EmbedOutcome> {
-  const { store } = target;
-  return embedTurns
-    .run(store, async () => {
-      const { vectors: reads, vectorWrites: writes } = store;
-      const model = embeddingIndexIdentity(provider.id);
-      try {
-        const refused =
-          replacesIndex(await reads.embeddingIndexState(), model) ||
-          (
-            await writeVectorPage({
-              writes,
-              write: { model, replaceIndex: false },
-              page: [entry],
-              vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
-              particles: target,
-            })
-          ).modelMismatch;
-        if (refused) warnEmbedFailureOnce(target.failureNotices, 'index', OTHER_MODEL_INDEX);
-        return refused ? 'failed' : 'indexed';
-      } catch (err) {
-        warnEmbedFailureOnce(target.failureNotices, provider.kind, errorMessage(err), err);
-        return 'failed';
-      }
-    })
-    .catch((err): EmbedOutcome => {
-      log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`, errorFields(err));
-      return 'failed';
-    });
+  const { vectors: reads, vectorWrites: writes } = target.groups;
+  try {
+    const model = embeddingIndexIdentity(provider.id);
+    const refused = await embedTurns.run(
+      await writes.indexKey(),
+      async () =>
+        replacesIndex(await reads.embeddingIndexState(), model) ||
+        (
+          await writeVectorPage({
+            writes,
+            write: { model, replaceIndex: false },
+            page: [entry],
+            vectors: await provider.embed([embeddingInputText(entry)], 'passage'),
+            particles: target,
+          })
+        ).modelMismatch,
+    );
+    if (refused) warnEmbedFailureOnce(target.failureNotices, 'index', OTHER_MODEL_INDEX);
+    return refused ? 'failed' : 'indexed';
+  } catch (err) {
+    warnEmbedFailureOnce(target.failureNotices, provider.kind, errorMessage(err), err);
+    return 'failed';
+  }
 }
 
 const INLINE_REINDEX_MAX_ROWS = 256;
@@ -332,7 +331,8 @@ const INLINE_REINDEX_MAX_ROWS = 256;
 export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
 /** Where vectors go: a store's own index under its lock, or a store's vector groups, with the
- * embeddings config that names the provider and the embedder that builds it. */
+ * embeddings config that names the provider and the embedder that builds it. A store with
+ * neither has no target, and its rows stay out of every vector search. */
 export type EmbedTarget = IndexEmbedTarget | StoreEmbedTarget;
 
 /** The embeddings config, the root's embedder and the failures the root warned about, which
@@ -344,7 +344,7 @@ interface EmbedWith {
 }
 
 /** The rows an index embeds, read by id. */
-type IndexRows = Pick<HippoStore, 'entriesByIds'>;
+type IndexRows = Pick<RequiredStore, 'entriesByIds'>;
 
 /** A store's own index with the rows it embeds. */
 type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows' | 'failureNotices'>;
@@ -370,7 +370,7 @@ interface ParticleScoring {
 
 /** A store's vector groups, with how the particles a vector write seeds are scored. */
 export interface StoreEmbedTarget extends EmbedWith, ParticleScoring {
-  readonly store: HippoStore;
+  readonly groups: Pick<StoreGroups, 'vectors' | 'vectorWrites'>;
 }
 
 /** The root's eval switches and clock, which score the particles a vector write seeds, and its
@@ -378,29 +378,35 @@ export interface StoreEmbedTarget extends EmbedWith, ParticleScoring {
 export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
 /** The store's own index when it keeps one, else its vector groups, whose seeded particles score
- * under `run`. */
+ * under `run`; undefined for a store with neither. */
 export function folderEmbedTarget(
-  { store, config, embedderFor }: ConfiguredFolder<HippoStore>,
+  { store, config, embedderFor }: ConfiguredFolder<EmbedStore>,
   { evalSwitches: switches, clock, failureNotices }: EmbedRun,
-): EmbedTarget {
-  const { embeddingIndex } = store;
+): EmbedTarget | undefined {
+  const { embeddingIndex, vectors, vectorWrites } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor, failureNotices };
   }
+  if (vectors === undefined || vectorWrites === undefined) return undefined;
   const strength = rankStrength({ switches, runtime: config.runtime });
-  return { store, embeddings, embedderFor, failureNotices, strength, clock };
+  const groups = { vectors, vectorWrites };
+  return { groups, embeddings, embedderFor, failureNotices, strength, clock };
 }
+
+/** A store an embed reaches: its own index, else its vector groups; it may keep neither. */
+export type EmbedStore = StoreWith<never, 'embeddingIndex' | 'vectors' | 'vectorWrites'>;
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store,
  * through its vectorWrites. Resolves whatever fails, so a caller that fires and forgets stays
  * safe; the outcome says whether the memory reached the index. */
 export async function embedMemoryInto(
-  on: EmbedTarget,
+  on: EmbedTarget | undefined,
   entry: MemoryEntry,
   model?: string,
 ): Promise<EmbedOutcome> {
+  if (on === undefined) return 'off';
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
@@ -412,7 +418,7 @@ export async function embedMemoryInto(
     return 'failed';
   }
   if (!available) return 'off';
-  if ('store' in on) return embedMemoryInStore(on, provider, entry);
+  if ('groups' in on) return embedMemoryInStore(on, provider, entry);
   return withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch(
     (err): EmbedOutcome => {
       log.warn(
@@ -427,7 +433,7 @@ export async function embedMemoryInto(
 /** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's
  * own handling is logged here, since nothing else holds it and an unhandled one ends the
  * process. */
-export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
+export function embedMemoryDetached(on: EmbedTarget | undefined, entry: MemoryEntry): void {
   embedMemoryInto(on, entry).catch((err) =>
     log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)),
   );
@@ -587,17 +593,18 @@ async function backfillAllPending(
  * many it embedded; `provider` defaults to the one the target's embedder builds. With a store,
  * every tenant's memories with no vector for the provider's model go through its `vectorWrites`. */
 export async function embedAll(
-  on: EmbedTarget,
+  on: EmbedTarget | undefined,
   model?: string,
   givenProvider?: EmbeddingProvider,
 ): Promise<number> {
+  if (on === undefined) return 0;
   const cfg = on.embeddings;
   const provider = givenProvider ?? on.embedderFor(cfg, { model });
   if (!provider.isAvailable()) {
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
-  if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on));
+  if ('groups' in on) return embedAllInStore(on, provider, on);
   return withEmbedLock(on, async (turn) => {
     const identity = provider.id;
     if (await turn.step({ kind: 'reindex', providerId: identity })) {

@@ -110,12 +110,14 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
 export type CallerContext = EntryContext<ContextWith<OptionalGroup>>;
 
 export function owned(owner: string, session?: RequestStores): CallerContext {
+  const store = sqliteStore(root, { session });
+  const config = loadConfig(root);
   return {
-    store: sqliteStore(root, { session }),
-    config: loadConfig(root),
+    store,
+    config,
     tenantId: TENANT,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
-    reach: SHARED_REACH,
+    reach: { ...SHARED_REACH, ledger: { ledger: store.ledger, folderFiles: store.folderFiles, config } },
   };
 }
 
