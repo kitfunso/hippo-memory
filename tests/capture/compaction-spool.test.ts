@@ -3,7 +3,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../../src/base/session/capture-contract.js';
-import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../../src/infra/compaction-spool.js';
+import { importSpool, spool } from '../../src/infra/compaction-spool.js';
+import { spoolCounts } from '../../src/infra/spool-counts.js';
+import type { SpoolFs } from '../../src/infra/spool-files.js';
+import type { SpoolImporter } from '../../src/infra/spool-record.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 

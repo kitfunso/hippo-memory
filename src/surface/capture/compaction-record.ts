@@ -11,12 +11,9 @@ import {
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import {
-  importSpool,
-  spool,
-  type Log,
-  type SpooledCompaction,
-} from '../../infra/compaction-spool.js';
+import { importSpool, spool } from '../../infra/compaction-spool.js';
+import type { Log } from '../../infra/spool-files.js';
+import type { SpooledCompaction } from '../../infra/spool-record.js';
 import type {
   CompactionHooks,
   CompactionSaveResult,

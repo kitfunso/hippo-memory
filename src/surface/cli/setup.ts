@@ -3,7 +3,7 @@
 
 import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
-import type { Log } from '../../infra/compaction-spool.js';
+import type { Log } from '../../infra/spool-files.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';

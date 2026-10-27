@@ -19,7 +19,7 @@ import {
   type HookRuntime,
 } from '../../base/session/capture-contract.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
-import type { Log } from '../../infra/compaction-spool.js';
+import type { Log } from '../../infra/spool-files.js';
 import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';

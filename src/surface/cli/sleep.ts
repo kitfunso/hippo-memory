@@ -7,7 +7,7 @@ import { processGit } from '../../infra/git-runner.js';
 import { importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { replayCompactions } from '../capture/compaction-record.js';
-import type { Log } from '../../infra/compaction-spool.js';
+import type { Log } from '../../infra/spool-files.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
 import * as api from '../../api/index.js';
 import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
