@@ -63,4 +63,13 @@ describe('check-open-core', () => {
     commit('src/x/b.ts', "export const t = 'pilot report';\n", 'feat: spaced');
     expect(run()).toBe(1);
   });
+
+  it('fails acronym-led and camelCase identifiers for commercial terms', () => {
+    commit('src/x/c.ts', 'export const APIPilotReport = 1;\n', 'feat: acronym pilot');
+    expect(run()).toBe(1);
+    commit('src/x/d.ts', 'export const SSOLogin = 1;\n', 'feat: acronym sso');
+    expect(run()).toBe(1);
+    commit('src/x/e.ts', 'export const buildPilotReport = 1;\n', 'feat: camel pilot');
+    expect(run()).toBe(1);
+  });
 });

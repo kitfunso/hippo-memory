@@ -13,8 +13,12 @@ const TERM_RE =
   /saml|scim|siem|oidc[-_ ]?login|(?:^|[^a-z])sso(?:[^a-z]|$)|licen[cs]e[-_ ]?keys?|admin[-_ ]?view|(?:^|[^a-z])pilot[-_ ]?report|v1\/hooks/;
 const MARKER_RE = /\/\/\s*commercial\b/i;
 
-// Splits camelCase so `ssoLogin` and `adminView` match while `processor` does not.
-const normalise = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+// Splits acronym runs and camelCase so `APIPilotReport`, `ssoLogin` and `adminView` match while `processor` does not.
+const normalise = (s) =>
+  s
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase();
 
 export function matchesCommercial(text) {
   return TERM_RE.test(normalise(text)) || MARKER_RE.test(text);
