@@ -11,10 +11,10 @@ import {
   writeEntryDbOnly,
   writePromotedEntry,
 } from '../../src/store/sqlite/entry-writes.js';
-import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { onHandle, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot, openStoreAt } from '../_helpers/make-root.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -45,7 +45,7 @@ function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEnt
         strength: a.strength,
       });
     },
-    (r) => openStore(r, storeFilesOf(r).opens),
+    openStoreAt,
   );
 }
 

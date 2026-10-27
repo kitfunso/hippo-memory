@@ -84,7 +84,9 @@ export class DbGrant {
 
   // Static, so the brand check runs on a look-alike object before any private field is read.
   static #allow(grant: DbGrant, hippoRoot: string): void {
-    if (!(#runtime in grant)) throw new Error('hippo.db opens need a grant from the SQLite adapter');
+    if (!(#runtime in grant)) {
+      throw new Error('hippo.db opens need a grant from the SQLite adapter');
+    }
     if (grant.#workerOnly) throw new SqliteBlockedError('sqlite', WORKER_ONLY_MESSAGE);
     assertStoreFolder(hippoRoot);
   }

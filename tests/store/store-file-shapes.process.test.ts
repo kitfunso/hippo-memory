@@ -5,7 +5,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { packageScriptsAt } from '../../src/domain/learn/churn-git.js';
-import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { onHandle } from '../../src/store/sqlite/handles.js';
+import { makeStore, openStoreAt } from '../_helpers/make-root.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 let dir: string;
@@ -18,17 +19,14 @@ afterEach(() => {
 
 describe('legacy index.json and stats.json shapes', () => {
   it.each(['null', '[]', '"text"', '7'])('opens a store whose index.json holds %s, twice', (body) => {
-    const root = path.join(dir, '.hippo');
+    // A folder that is not a store yet: the open under test builds it from the legacy files.
+    const { root } = makeStore('shapes', { init: false });
     fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');
     fs.writeFileSync(path.join(root, 'stats.json'), body, 'utf8');
     // SAFETY: COUNT(*) always returns one row with the aliased integer column n.
     const memoryCount = (): number =>
-      onHandle(
-        root,
-        (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n,
-        (r) => openStore(r, storeFilesOf(r).opens),
-      );
+      onHandle(root, (db) => (db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number }).n, openStoreAt);
     expect(memoryCount()).toBe(0);
     expect(memoryCount()).toBe(0);
     expect(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).toBe(body);

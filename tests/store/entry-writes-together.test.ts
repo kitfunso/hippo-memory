@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot, openStoreAt } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
-import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { onHandle } from '../../src/store/sqlite/handles.js';
 
 describe('writeEntriesTogether', () => {
   const roots: string[] = [];
@@ -36,7 +36,7 @@ describe('writeEntriesTogether', () => {
         db.exec(`CREATE TRIGGER poison BEFORE INSERT ON memories WHEN NEW.content = 'poison'
         BEGIN SELECT RAISE(ABORT, 'poisoned row'); END`);
       },
-      (r) => openStore(r, storeFilesOf(r).opens),
+      openStoreAt,
     );
     const entries = ['alpha', 'beta', 'poison'].map((text) => createMemory(text));
     expect(() => writeEntriesTogether(root, entries)).toThrow(/poisoned row/);
