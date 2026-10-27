@@ -5,6 +5,7 @@ import { duplicateHash } from '../../base/util/same-text.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { KINDS } from './object-rows.js';
 import { chunked } from '../../base/util/chunked.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type {
@@ -14,15 +15,7 @@ import type {
 } from '../../base/ports/store/consolidation.js';
 
 /** The typed-object tables whose rows name a backing memory in `memory_id`. */
-const OBJECT_TABLES = [
-  'decisions',
-  'incidents',
-  'processes',
-  'policies',
-  'skills',
-  'project_briefs',
-  'customer_notes',
-] as const;
+const OBJECT_TABLES = Object.values(KINDS).map((kind) => kind.table);
 
 const backsObject = (statuses: string): string =>
   OBJECT_TABLES.map(
