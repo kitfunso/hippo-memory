@@ -66,15 +66,30 @@ const CONTEXT_HOOKS = new Set(['onTestFinished', 'onTestFailed']);
 const MODIFIERS = new Set(['only', 'skip', 'concurrent', 'sequential', 'fails', 'todo', 'shuffle']);
 const TABLE_MODIFIERS = new Set(['each', 'for', 'skipIf', 'runIf', 'extend']);
 
+const apiOfName = (name) => (TESTS.has(name) ? 'test' : HOOKS.has(name) ? 'hook' : null);
+
+/** The member name of `a.b` or `a['b']`; '' for a computed key. */
+function memberOf(e) {
+  if (ts.isPropertyAccessExpression(e)) return { object: e.expression, name: e.name.text };
+  if (ts.isElementAccessExpression(e)) {
+    const key = e.argumentExpression;
+    return { object: e.expression, name: ts.isStringLiteralLike(key) ? key.text : '' };
+  }
+  return null;
+}
+
 /** 'test' or 'hook' for a callee that is a test function, a hook or an alias of one, through any modifier. */
 function apiOf(e, aliases) {
   if (ts.isIdentifier(e)) {
     if (aliases.has(e.text)) return aliases.get(e.text);
-    return TESTS.has(e.text) ? 'test' : HOOKS.has(e.text) ? 'hook' : null;
+    return apiOfName(e.text);
   }
-  if (ts.isPropertyAccessExpression(e)) {
-    if (CONTEXT_HOOKS.has(e.name.text)) return 'hook';
-    return MODIFIERS.has(e.name.text) ? apiOf(e.expression, aliases) : null;
+  const member = memberOf(e);
+  if (member) {
+    if (CONTEXT_HOOKS.has(member.name)) return 'hook';
+    if (ts.isIdentifier(member.object) && aliases.namespaces.has(member.object.text)) return apiOfName(member.name);
+    // A computed key fails closed: `it[mode]` is read as a test, so its timeout still counts.
+    return MODIFIERS.has(member.name) || member.name === '' ? apiOf(member.object, aliases) : null;
   }
   if (ts.isConditionalExpression(e)) return apiOf(e.whenTrue, aliases) ?? apiOf(e.whenFalse, aliases);
   if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression)) {
@@ -83,16 +98,36 @@ function apiOf(e, aliases) {
   return null;
 }
 
-/** The names a source binds to a test function or hook: `import { it as x }`, `const x = it`, `const x = test.extend()`. */
+/** The api a destructured name takes: `{ it: x } = vitest` names the api, `{ skip } = it` a modifier of one. */
+function destructuredApi(element, initializer, aliases) {
+  const key = element.propertyName ?? element.name;
+  if (!ts.isIdentifier(key) && !ts.isStringLiteralLike(key)) return null;
+  const from = apiOf(initializer, aliases);
+  if (from) return MODIFIERS.has(key.text) || TABLE_MODIFIERS.has(key.text) ? from : null;
+  return apiOfName(key.text);
+}
+
+/** Names bound to a test function or hook (import, const, destructuring), vitest namespaces, and consts holding options. */
 function aliasesOf(sourceFile) {
-  const aliases = new Map();
+  const aliases = Object.assign(new Map(), { namespaces: new Set(), consts: new Map() });
   const visit = (n) => {
     if (ts.isImportSpecifier(n) && n.propertyName) {
-      const api = TESTS.has(n.propertyName.text) ? 'test' : HOOKS.has(n.propertyName.text) ? 'hook' : null;
+      const api = apiOfName(n.propertyName.text);
       if (api) aliases.set(n.name.text, api);
+    } else if (ts.isImportDeclaration(n) && n.moduleSpecifier.text === 'vitest') {
+      const bindings = n.importClause?.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) aliases.namespaces.add(bindings.name.text);
+    } else if (ts.isVariableDeclaration(n) && n.initializer && ts.isObjectBindingPattern(n.name)) {
+      for (const element of n.name.elements) {
+        const api = ts.isIdentifier(element.name) ? destructuredApi(element, n.initializer, aliases) : null;
+        if (api) aliases.set(element.name.text, api);
+      }
     } else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
       const api = apiOf(n.initializer, aliases);
       if (api) aliases.set(n.name.text, api);
+      else if (ts.isObjectLiteralExpression(n.initializer) || ts.isNumericLiteral(n.initializer)) {
+        aliases.consts.set(n.name.text, n.initializer);
+      }
     }
     ts.forEachChild(n, visit);
   };
@@ -101,8 +136,9 @@ function aliasesOf(sourceFile) {
 }
 
 /** Milliseconds a timeout argument names, null when it is not a literal, undefined when it sets none. */
-function msOf(arg, key = 'timeout') {
+function msOf(arg, key = 'timeout', consts = new Map()) {
   if (!arg) return undefined;
+  if (ts.isIdentifier(arg) && consts.has(arg.text)) return msOf(consts.get(arg.text), key);
   if (ts.isNumericLiteral(arg)) return Number(arg.text);
   if (!ts.isObjectLiteralExpression(arg)) return null;
   const prop = arg.properties.find((p) => p.name && ts.isIdentifier(p.name) && p.name.text === key);
@@ -114,23 +150,35 @@ function msOf(arg, key = 'timeout') {
   return arg.properties.some((p) => ts.isSpreadAssignment(p)) ? null : undefined;
 }
 
-const isMember = (e, object, name) =>
-  ts.isPropertyAccessExpression(e) &&
-  ts.isIdentifier(e.expression) &&
-  e.expression.text === object &&
-  e.name.text === name;
+/** `vi.waitFor`, `V.vi.waitFor` or `vi['waitFor']`: the object may sit under a vitest namespace. */
+function isMember(e, object, name, aliases) {
+  const member = memberOf(e);
+  if (!member || member.name !== name) return false;
+  const inner = memberOf(member.object);
+  if (inner && ts.isIdentifier(inner.object) && aliases.namespaces.has(inner.object.text)) return inner.name === object;
+  return ts.isIdentifier(member.object) && member.object.text === object;
+}
+
+const WAITS = [
+  ['vi', 'waitFor'],
+  ['vi', 'waitUntil'],
+  ['expect', 'poll'],
+];
 
 /** The timeouts one call sets: a test's third argument or options object, a hook's second, a vitest wait's options. */
 function timeoutsOf(call, aliases) {
   const [first, second, third] = call.arguments;
-  if (isMember(call.expression, 'vi', 'setConfig')) return [msOf(first, 'testTimeout'), msOf(first, 'hookTimeout')];
-  if (isMember(call.expression, 'vi', 'waitFor') || isMember(call.expression, 'expect', 'poll')) return [msOf(second)];
+  const ms = (arg, key) => msOf(arg, key, aliases.consts);
+  if (isMember(call.expression, 'vi', 'setConfig', aliases)) {
+    return [ms(first, 'testTimeout'), ms(first, 'hookTimeout')];
+  }
+  if (WAITS.some(([o, n]) => isMember(call.expression, o, n, aliases))) return [ms(second)];
   const api = apiOf(call.expression, aliases);
-  if (api === 'hook') return [msOf(second)];
+  if (api === 'hook') return [ms(second)];
   if (api !== 'test') return [];
-  // Options sit second only as a literal (`describe(name, { timeout }, fn)`); anything third that is not the body counts.
-  const options = second && (ts.isObjectLiteralExpression(second) || ts.isNumericLiteral(second)) ? second : undefined;
-  return [msOf(options), third && !isFunction(third) ? msOf(third) : undefined];
+  // Before a body, the second argument is options in any form (`describe(name, opts, fn)`); one it cannot read is null.
+  const options = second && !isFunction(second) && third ? second : undefined;
+  return [ms(options), third && !isFunction(third) ? ms(third) : undefined];
 }
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);

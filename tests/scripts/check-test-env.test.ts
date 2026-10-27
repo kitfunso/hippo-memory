@@ -201,6 +201,25 @@ describe('ownTimeouts', () => {
     expect(at(`await expect.poll(${FN}, { timeout: 20_000 }).toBe(1);`)).toEqual([20_000]);
   });
 
+  it('reads the forms a name match misses: a const options object, waitUntil, a namespace, element access, destructuring', () => {
+    const forms = [
+      `const opts = { timeout: 20_000 };\nit('a', opts, ${FN});`,
+      `const opts = { timeout: 20_000 };\nit('a', ${FN}, opts);`,
+      `await vi.waitUntil(${FN}, { timeout: 20_000 });`,
+      `import * as V from 'vitest';\nV.it('a', ${FN}, 20_000);`,
+      `import * as V from 'vitest';\nawait V.vi.waitFor(${FN}, 20_000);`,
+      `it['skip']('a', ${FN}, 20_000);`,
+      `const { it: check } = await import('vitest');\ncheck('a', ${FN}, 20_000);`,
+      `const { skip } = it;\nskip('a', ${FN}, 20_000);`,
+    ];
+    for (const form of forms) expect(at(form), form).toEqual([20_000]);
+  });
+
+  it('gives null for options in second place it cannot read, and for a test call through a computed key', () => {
+    expect(at(`it('a', makeOpts(), ${FN});`)).toEqual([null]);
+    expect(at(`it[mode]('a', ${FN}, 20_000);`)).toEqual([20_000]);
+  });
+
   it('gives null for a timeout it cannot read: a name or a spread', () => {
     expect(at(`it('a', ${FN}, LONG);`)).toEqual([null]);
     expect(at(`it('a', ${FN}, { ...o });`)).toEqual([null]);
