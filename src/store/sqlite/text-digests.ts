@@ -5,6 +5,8 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { otherDigests, rejectionDigest } from '../../base/records/rejection-digest.js';
 import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 
 /** The table a row sits in: memories, or dormant_memories. */
 export type Place = 'live' | 'dormant';
@@ -14,6 +16,11 @@ export interface KeyedText {
   readonly tenantId: string;
   readonly id: string;
   readonly content: string;
+}
+
+/** An entry's stored text and key, as its row write binds them. */
+export function keyedText(entry: MemoryEntry): KeyedText {
+  return { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, id: entry.id, content: entry.content };
 }
 
 type HeldKey = [tenantId: string, digest: string, id: string];
@@ -67,12 +74,6 @@ interface IdRow {
   readonly id: string;
 }
 
-// SAFETY: every read cast to this row selects k and id; scripts/check-row-casts.mjs proves it.
-interface KeyedIdRow {
-  readonly k: string | number;
-  readonly id: string;
-}
-
 function matchedSql(place: Place): string {
   return (
     `SELECT id FROM ${TABLE[place]} WHERE rejection_digest = ? AND tenant_id = ? UNION ` +
@@ -84,24 +85,34 @@ function matchedSql(place: Place): string {
 const MATCHED_SQL = { live: matchedSql('live'), dormant: matchedSql('dormant') } as const;
 
 // memories pages by rowid, which its digest index keeps in order; dormant_memories has no rowid.
-const UNFILLED_PAGE_SQL = {
-  live:
-    `SELECT rowid AS k, id FROM memories WHERE rejection_digest IS NULL AND tenant_id = ? ` +
-    `AND rowid > ? ORDER BY rowid LIMIT ?`,
-  dormant:
-    `SELECT id AS k, id FROM dormant_memories WHERE rejection_digest IS NULL AND tenant_id = ? ` +
-    `AND id > ? ORDER BY id LIMIT ?`,
-} as const;
+function unfilledPageSql(place: Place, columns: string): string {
+  const key = place === 'live' ? 'rowid' : 'id';
+  return (
+    `SELECT ${key} AS k, ${columns} FROM ${TABLE[place]} WHERE rejection_digest IS NULL ` +
+    `AND tenant_id = ? AND ${key} > ? ORDER BY ${key} LIMIT ?`
+  );
+}
+
 const FIRST_KEY = { live: Number.MIN_SAFE_INTEGER, dormant: '' } as const;
 
-/** Pages of at most READ_PAGE_ROWS ids of a tenant's rows in `place` that may hold the text
- * `digest` names: the rows keyed by it, then the unfilled rows by keyset. `skip` ids never come. */
-export function* digestHolderIds(
+/** A page of candidates: ids the keys name, for the caller to read, or unfilled rows already read. */
+export type HolderPage<R> = { readonly keyed: string[] } | { readonly unfilled: R[] };
+
+/** Where to look and what an unfilled row's read selects: `columns` must answer every key of R. */
+export interface HolderQuery {
+  readonly tenantId: string;
+  readonly digest: string;
+  readonly columns: string;
+}
+
+/** Pages of at most READ_PAGE_ROWS of a tenant's rows in `place` that may hold the text `digest`
+ * names: the ids keyed by it, then the unfilled rows by keyset. `skip` ids never come. */
+export function* digestHolderPages<R extends { readonly id: string }>(
   db: DatabaseSyncLike,
   place: Place,
-  query: { readonly tenantId: string; readonly digest: string },
+  query: HolderQuery,
   skip: ReadonlySet<string> = new Set(),
-): Generator<string[]> {
+): Generator<HolderPage<R>> {
   const { tenantId, digest } = query;
   // SAFETY: both arms of matchedSql answer one TEXT column named id.
   const matched = (
@@ -109,18 +120,17 @@ export function* digestHolderIds(
   )
     .map((row) => row.id)
     .filter((id) => !skip.has(id));
-  yield* chunked(matched, READ_PAGE_ROWS);
+  for (const keyed of chunked(matched, READ_PAGE_ROWS)) yield { keyed };
   const seen = new Set([...skip, ...matched]);
+  const sql = unfilledPageSql(place, query.columns);
   let after: string | number = FIRST_KEY[place];
   for (;;) {
-    // SAFETY: each UNFILLED_PAGE_SQL selects k and id.
-    const page = cachedStatement(db, UNFILLED_PAGE_SQL[place]).all(
-      tenantId,
-      after,
-      READ_PAGE_ROWS,
-    ) as KeyedIdRow[];
-    const ids = page.map((row) => row.id).filter((id) => !seen.has(id));
-    if (ids.length > 0) yield ids;
+    // SAFETY: the caller's columns answer every key of R, and the page adds k.
+    const page = cachedStatement(db, sql).all(tenantId, after, READ_PAGE_ROWS) as Array<
+      R & { readonly k: string | number }
+    >;
+    const unfilled = page.filter((row) => !seen.has(row.id));
+    if (unfilled.length > 0) yield { unfilled };
     if (page.length < READ_PAGE_ROWS) return;
     after = page[page.length - 1].k;
   }

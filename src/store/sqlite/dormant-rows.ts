@@ -14,8 +14,7 @@ import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.
 import { cachedStatement } from '../../db/statement-cache.js';
 import { redactEntry } from '../../base/util/secret-detect.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { withHeldDigests, type KeyedText } from './text-digests.js';
-import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import { keyedText, withHeldDigests } from './text-digests.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import {
   dormantListCap,
@@ -72,10 +71,6 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
       rejectionDigest(entry.content),
     ),
   );
-}
-
-function keyedText(entry: MemoryEntry): KeyedText {
-  return { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, id: entry.id, content: entry.content };
 }
 
 /** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot,
@@ -277,14 +272,14 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
  */
 // SAFETY: every read cast to this row selects DORMANT_TEXT_COLUMNS; scripts/check-row-casts.mjs
 // proves it.
-interface DormantText {
+export interface DormantText {
   readonly id: string;
   readonly content: string;
   readonly source: string | null;
   readonly scope: string | null;
 }
 
-const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
+export const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
 
 /** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
 export function dormantTextsByIds(

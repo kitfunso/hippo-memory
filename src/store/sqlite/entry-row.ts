@@ -21,7 +21,7 @@ import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 import { redactEntry } from '../../base/util/secret-detect.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { withHeldDigests, type KeyedText } from './text-digests.js';
+import { keyedText, withHeldDigests } from './text-digests.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -54,10 +54,6 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
     db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(stored)),
   );
   return holder === undefined;
-}
-
-function keyedText(entry: MemoryEntry): KeyedText {
-  return { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, id: entry.id, content: entry.content };
 }
 
 // The duplicate read's key and the rejection key go with every row write; no read selects them,

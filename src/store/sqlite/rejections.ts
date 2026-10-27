@@ -1,7 +1,7 @@
 // hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its
 // own. A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be
 // an import cycle.
-import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { heldTexts } from '../../base/util/same-text.js';
 import { audit } from './audit-event.js';
@@ -9,7 +9,9 @@ import { deleteEntryCore } from './entry-deletes.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
+  DORMANT_TEXT_COLUMNS,
   dormantTextsByIds,
+  type DormantText,
   replaceDormantEntry,
 } from './dormant-rows.js';
 import { entryRejectRow, readEntriesByIds } from './entry-reads.js';
@@ -43,7 +45,7 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import { handleStamp } from './handle-clock.js';
-import { digestHolderIds, fillRejectionDigests } from './text-digests.js';
+import { digestHolderPages, fillRejectionDigests } from './text-digests.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
 
 type HoldsValue = (text: string) => boolean;
@@ -74,9 +76,14 @@ function holdOf(
     : null;
 }
 
+// What the holder check reads of a live row, so an unfilled candidate costs one read.
+const LIVE_TEXT_COLUMNS = 'id, content, source, scope, created';
+type LiveText = Pick<MemoryEntry, 'id' | 'content' | 'scope' | 'created'> & {
+  readonly source: string | null;
+};
+
 /** The ids of the tenant's rows in reach that hold the text, live in store order then dormant by
- * id, read by digest a page at a time with no lock held: the rejected-value row is already
- * committed, so no write can add a holder behind the read. */
+ * id. One read snapshot, so a fill or an edit cannot move a holder between the keyed and NULL reads. */
 function listHolderIds(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -85,16 +92,23 @@ function listHolderIds(
   const { tenantId } = rejection;
   const holds = (row: { content: string; source: string | null; scope: string | null }) =>
     rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null;
-  const live: MemoryEntry[] = [];
-  for (const ids of digestHolderIds(db, 'live', { tenantId, digest })) {
-    live.push(...[...readEntriesByIds(db, ids, tenantId).values()].filter(holds));
-  }
-  const dormant: string[] = [];
-  for (const ids of digestHolderIds(db, 'dormant', { tenantId, digest })) {
-    const rows = [...dormantTextsByIds(db, tenantId, ids).values()];
-    dormant.push(...rows.filter(holds).map((row) => row.id));
-  }
-  return [...live.sort(oldestFirst).map((row) => row.id), ...dormant.sort(byBytes)];
+  return withReadSnapshot(db, () => {
+    const live: LiveText[] = [];
+    const liveQuery = { tenantId, digest, columns: LIVE_TEXT_COLUMNS };
+    for (const page of digestHolderPages<LiveText>(db, 'live', liveQuery)) {
+      const rows =
+        'keyed' in page ? [...readEntriesByIds(db, page.keyed, tenantId).values()] : page.unfilled;
+      live.push(...rows.filter(holds));
+    }
+    const dormant: string[] = [];
+    const dormantQuery = { tenantId, digest, columns: DORMANT_TEXT_COLUMNS };
+    for (const page of digestHolderPages<DormantText>(db, 'dormant', dormantQuery)) {
+      const rows =
+        'keyed' in page ? [...dormantTextsByIds(db, tenantId, page.keyed).values()] : page.unfilled;
+      dormant.push(...rows.filter(holds).map((row) => row.id));
+    }
+    return [...live.sort(oldestFirst).map((row) => row.id), ...dormant.sort(byBytes)];
+  });
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the

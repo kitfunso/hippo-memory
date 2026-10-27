@@ -9,7 +9,8 @@ import {
 } from '../../base/records/rejection-digest.js';
 import { onlyRedacted, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { digestHolderIds } from './text-digests.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { digestHolderPages } from './text-digests.js';
 import { parseJsonArray } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
@@ -190,6 +191,10 @@ interface RejectedLoser {
   readonly removal: LoserRemoval;
 }
 
+// What the duplicate check reads of a row, so an unfilled candidate costs one read.
+const DUP_COLUMNS = 'id, kind, content, scope';
+type DupRow = Pick<MemoryEntry, 'id' | 'kind' | 'content' | 'scope'>;
+
 /** Removes the live same-tenant rows `ownScope` may touch whose digest matches the rejected
  * value into `removal`; `keep` is spared. */
 function removeDuplicatesOfRejectedValue(
@@ -200,10 +205,13 @@ function removeDuplicatesOfRejectedValue(
   // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because
   // the human chose it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
-  const query = { tenantId: loserTenantId, digest: rejectedDigest };
+  const query = { tenantId: loserTenantId, digest: rejectedDigest, columns: DUP_COLUMNS };
+  const skip = new Set([r.loser.id, r.keep.id]);
   const dups: Array<{ id: string; kind: string }> = [];
-  for (const ids of digestHolderIds(db, 'live', query, new Set([r.loser.id, r.keep.id]))) {
-    for (const dup of readEntriesByIds(db, ids, loserTenantId).values()) {
+  for (const page of digestHolderPages<DupRow>(db, 'live', query, skip)) {
+    const rows =
+      'keyed' in page ? readEntriesByIds(db, page.keyed, loserTenantId).values() : page.unfilled;
+    for (const dup of rows) {
       if (
         !contentDigests(dup.content).includes(rejectedDigest) ||
         !ownScopeTouches(ownScope, dup.scope)
