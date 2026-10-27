@@ -286,21 +286,6 @@ interface DormantText {
 
 const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
 
-/**
- * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a
- * text match reads.
- */
-export function dormantTextsPage(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  page: { readonly limit: number; readonly afterId: string },
-): DormantText[] {
-  return cachedStatement(
-    db,
-    `SELECT ${DORMANT_TEXT_COLUMNS} FROM dormant_memories WHERE tenant_id = ? AND id > ? ORDER BY id LIMIT ?`,
-  ).all(tenantId, page.afterId, page.limit) as DormantText[];
-}
-
 /** The text columns of a tenant's dormant memories with these ids, one query per chunk. */
 export function dormantTextsByIds(
   db: DatabaseSyncLike,

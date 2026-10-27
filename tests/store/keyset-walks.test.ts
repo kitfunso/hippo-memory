@@ -11,7 +11,6 @@ import {
   listEveryTenantEntryIds,
   listEntryIdsPage,
   listEntryTextKeysPage,
-  listTenantTextsPage,
 } from '../../src/store/sqlite/entry-reads.js';
 import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vector-index.js';
@@ -86,11 +85,6 @@ function walks(db: DatabaseSyncLike, tenantId: TenantId) {
       pagesOf((after?: EntryCursor) => entryIds(listEntriesWithSignals(db, SIGNALS, tenantId, page(after)))),
     mentions: () =>
       pagesOf((after?: EntryCursor) => entryIds(listEntriesMentioning(db, ['quux'], 'quux', tenantId, page(after)))),
-    tenantTexts: () =>
-      pagesOf((after?: EntryCursor) => {
-        const texts = listTenantTextsPage(db, tenant, page(after));
-        return { ids: texts.texts.map((t) => t.id), next: texts.next };
-      }),
     sourcePrefix: () =>
       pagesOf((after?: EntryCursor) =>
         entryIds(listEntriesWhere(db, { tenantId: tenant, sourcePrefix: 'cli', live: true }, page(after))),

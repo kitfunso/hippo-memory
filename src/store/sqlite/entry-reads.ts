@@ -396,40 +396,6 @@ export function iterateEveryTenantEntries(db: DatabaseSyncLike): Generator<Memor
   );
 }
 
-/** The columns a text match needs, for one row of a tenant. */
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-interface TenantText {
-  readonly id: string;
-  readonly content: string;
-  readonly source: string;
-  readonly scope: string | null;
-}
-
-/** One page of TenantText rows, and where the next page starts (null after the last). */
-interface TenantTextPage {
-  readonly texts: TenantText[];
-  readonly next: EntryCursor | null;
-}
-
-/** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs:
- * callers read whole rows only for the ids that match. */
-export function listTenantTextsPage(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  page: EntryPageRequest,
-): TenantTextPage {
-  const { rows, next } = entryPage(
-    tenantId,
-    page,
-    (within, limit) =>
-      cachedStatement(
-        db,
-        `SELECT id, content, source, scope, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
-      ).all(...within.params, limit) as Array<TenantText & { created: string }>,
-  );
-  return { texts: rows, next };
-}
-
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type OriginTallyDbRow = OriginTally;
 

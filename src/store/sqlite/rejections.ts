@@ -10,10 +10,9 @@ import {
   deleteDormantRow,
   dormantSnapshotsByIds,
   dormantTextsByIds,
-  dormantTextsPage,
   replaceDormantEntry,
 } from './dormant-rows.js';
-import { entryRejectRow, readEntriesByIds, listTenantTextsPage } from './entry-reads.js';
+import { entryRejectRow, readEntriesByIds } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -43,10 +42,9 @@ import { rejectedText, rejectionReaches } from '../../base/records/rejection-tex
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
-import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import { handleStamp } from './handle-clock.js';
-import { fillRejectionDigests } from './text-digests.js';
+import { digestHolderIds, fillRejectionDigests } from './text-digests.js';
+import { byBytes, oldestFirst } from '../rules/order.js';
 
 type HoldsValue = (text: string) => boolean;
 
@@ -76,41 +74,27 @@ function holdOf(
     : null;
 }
 
-/** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a
- * time with no lock held: the rejected-value row is already committed, so no write can add a
- * holder behind the walk. */
+/** The ids of the tenant's rows in reach that hold the text, live in store order then dormant by
+ * id, read by digest a page at a time with no lock held: the rejected-value row is already
+ * committed, so no write can add a holder behind the read. */
 function listHolderIds(
   db: DatabaseSyncLike,
   rejection: Rejection,
-  holdsValue: HoldsValue,
+  { digest, holdsValue }: { readonly digest: string; readonly holdsValue: HoldsValue },
 ): string[] {
   const { tenantId } = rejection;
-  const found: string[] = [];
-  const keep = (row: {
-    id: string;
-    content: string;
-    source: string | null;
-    scope: string | null;
-  }): void => {
-    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) {
-      found.push(row.id);
-    }
-  };
-  let after: EntryCursor | null = null;
-  do {
-    const page = listTenantTextsPage(db, tenantId, {
-      limit: READ_PAGE_ROWS,
-      after: after ?? undefined,
-    });
-    page.texts.forEach(keep);
-    after = page.next;
-  } while (after !== null);
-  for (let afterId = ''; ;) {
-    const page = dormantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, afterId });
-    page.forEach(keep);
-    if (page.length < READ_PAGE_ROWS) return found;
-    afterId = page[page.length - 1].id;
+  const holds = (row: { content: string; source: string | null; scope: string | null }) =>
+    rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null;
+  const live: MemoryEntry[] = [];
+  for (const ids of digestHolderIds(db, 'live', { tenantId, digest })) {
+    live.push(...[...readEntriesByIds(db, ids, tenantId).values()].filter(holds));
   }
+  const dormant: string[] = [];
+  for (const ids of digestHolderIds(db, 'dormant', { tenantId, digest })) {
+    const rows = [...dormantTextsByIds(db, tenantId, ids).values()];
+    dormant.push(...rows.filter(holds).map((row) => row.id));
+  }
+  return [...live.sort(oldestFirst).map((row) => row.id), ...dormant.sort(byBytes)];
 }
 
 /** The found rows read again under the write lock, each still in reach and still holding the
@@ -265,8 +249,8 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so every later write refuses the text; walks the
- * tenant's rows a page at a time with no lock held; then removes each holder in reach (live or
+/** Commits the rejected-value row first, so every later write refuses the text; reads the rows
+ * the digest keys a page at a time with no lock held; then removes each holder in reach (live or
  * dormant, whole or merged) in one short write scope. A failure past the first commit leaves the
  * text refused and its holders kept; rejecting again removes them. */
 function applyRejection(
@@ -295,10 +279,8 @@ function applyRejection(
       normalizedChars: normalizeValueForRejection(stored).length,
     }),
   );
-  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
-  // needs a schema migration, held until approved.
   const holdsValue: HoldsValue = (text) => contentDigests(text).includes(digest);
-  const found = listHolderIds(db, rejection, holdsValue);
+  const found = listHolderIds(db, rejection, { digest, holdsValue });
   const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 
   purgeRemovedMirrors(db, hippoRoot, removal);

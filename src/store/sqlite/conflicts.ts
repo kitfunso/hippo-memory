@@ -9,6 +9,7 @@ import {
 } from '../../base/records/rejection-digest.js';
 import { onlyRedacted, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { archiveRawMemory } from './raw-archive.js';
+import { digestHolderIds } from './text-digests.js';
 import {
   MEMORY_CONFLICT_COLUMNS,
   type MemoryConflictRow,
@@ -580,23 +581,15 @@ function removeDuplicatesOfRejectedValue(
   // Every live same-tenant row holding the value goes, as `hippo reject` does; `keep` stays because
   // the human chose it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
-  // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a
-  // (tenant_id, digest) index would read just those.
-  const dupRows = cachedStatement(
-    db,
-    `SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`,
-  ).iterate(loserTenantId, r.loser.id, r.keep.id) as Iterable<{
-    id: string;
-    kind: string;
-    content: string;
-    scope: string | null;
-  }>;
+  const query = { tenantId: loserTenantId, digest: rejectedDigest };
   const dups: Array<{ id: string; kind: string }> = [];
-  for (const dup of dupRows) {
-    if (!contentDigests(dup.content).includes(rejectedDigest) || !ownScopeTouches(ownScope, dup.scope)) {
-      continue;
+  for (const ids of digestHolderIds(db, 'live', query, new Set([r.loser.id, r.keep.id]))) {
+    for (const dup of readEntriesByIds(db, ids, loserTenantId).values()) {
+      if (!contentDigests(dup.content).includes(rejectedDigest) || !ownScopeTouches(ownScope, dup.scope)) {
+        continue;
+      }
+      dups.push({ id: dup.id, kind: dup.kind });
     }
-    dups.push({ id: dup.id, kind: dup.kind });
   }
   const { actor, reason } = r;
   // Removed after the read ends, since deleting rows under an open cursor can skip or repeat rows.
