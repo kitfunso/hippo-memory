@@ -38,4 +38,47 @@ describe('verb groups', () => {
       expect(() => assertVerbPorted(COMMANDS[name], { kind: 'port-only', groups: [] })).not.toThrow();
     }
   });
+
+  it('every row with needs refuses a store without any one of its groups, naming the store kind and that group', () => {
+    const rows = Object.values(COMMANDS).filter((row) => (row.needs ?? []).length > 0);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      for (const group of row.needs ?? []) {
+        const without: ServedGroups = { kind: 'port-only', groups: CLI_STORE.groups.filter((g) => g !== group) };
+        expect(() => assertVerbPorted(row, without)).toThrow(new StoreNotPortedError('port-only', group));
+      }
+    }
+  });
+
+  it('every verb whose code reaches one of the seven groups that left the required store names it', () => {
+    // The groups grep over src/surface/cli (PR census), verb by verb.
+    const reached = {
+      status: ['reports', 'vectors'],
+      provenance: ['reports'],
+      drill: ['dagReads'],
+      assemble: ['dagReads'],
+      'correction-latency': ['reports'],
+      tokens: ['reports'],
+      failures: ['reports'],
+      'daily-runner': ['reports'],
+      dedup: ['reports'],
+      sleep: ['graphReads', 'vectors'],
+      graph: ['graphReads'],
+      wm: ['sessions'],
+      snapshot: ['sessions'],
+      session: ['sessions'],
+      handoff: ['sessions'],
+      current: ['sessions'],
+      'compact-resume': ['sessions'],
+      goal: ['goals'],
+      embed: ['vectors'],
+      learn: ['vectors', 'vectorWrites'],
+      share: ['vectors', 'vectorWrites'],
+      '__session-end-worker': ['sessions', 'reports'],
+    } as const;
+    const rows = new Map(Object.entries(COMMANDS));
+    for (const [verb, groups] of Object.entries(reached)) {
+      expect([verb, groups.filter((g) => !(rows.get(verb)?.needs ?? []).some((n) => n === g))]).toEqual([verb, []]);
+    }
+  });
 });

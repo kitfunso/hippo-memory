@@ -17,6 +17,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { withEntryInfra } from '../../src/surface/entry-infra.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -55,12 +56,12 @@ let server: ServerHandle;
 let spies: Array<{ mockRestore(): void }>;
 
 /** Connections opened while `fn` ran, per store: `local`, `global`, or the file path. */
-async function opensDuring(fn: () => Promise<void>): Promise<Record<string, number>> {
+async function opensDuring(fn: () => Promise<void>, at = root): Promise<Record<string, number>> {
   const start = opened.length;
   await fn();
   const counts: Record<string, number> = {};
   for (const file of opened.slice(start)) {
-    const label = resolve(dirname(file)) === resolve(root) ? 'local' : file;
+    const label = resolve(dirname(file)) === resolve(at) ? 'local' : file;
     counts[label] = (counts[label] ?? 0) + 1;
   }
   return counts;
@@ -155,6 +156,29 @@ describe('store opens per request', () => {
       await call('GET', '/v1/decisions');
     };
     expect(await opensDuring(requests)).toEqual({});
+  });
+});
+
+describe('a remember on an in-process store', () => {
+  it("opens hippo.db once, so auto-sleep's count of new rows ran on the request's own session", async () => {
+    const own = realpathSync.native(makeStore('request-open-count-auto-sleep').root);
+    // Auto-sleep is on by default; a threshold no test reaches keeps the sleep itself from starting.
+    expect(loadConfig(own).autoSleep.enabled).toBe(true);
+    const inProcess = await serveKeyed({ hippoRoot: own, port: 0, store: sqliteStore(own) }, serve);
+    try {
+      const remembered = async () => {
+        const res = await fetch(`${inProcess.url}/v1/memories`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ content: 'the auto-sleep count reads on the request session' }),
+        });
+        await res.text();
+        expect(res.status).toBeLessThan(300);
+      };
+      expect(await opensDuring(remembered, own)).toEqual({ local: 1 });
+    } finally {
+      await inProcess.stop();
+    }
   });
 });
 
