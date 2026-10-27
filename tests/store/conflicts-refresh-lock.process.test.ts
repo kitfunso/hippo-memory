@@ -13,7 +13,10 @@ interface StatementProto {
   get(...params: unknown[]): object | undefined;
   all(...params: unknown[]): object[];
   iterate(...params: unknown[]): Iterable<object>;
+  readonly sourceSQL: string;
 }
+// The refresh's one read of every stored conflicts_with_json, made before it takes the write lock.
+const STORED_REFS_READ = "WHERE conflicts_with_json != '[]'";
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike, and StatementSync is what its prepare returns.
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: { prototype: DatabaseSyncLike };
@@ -164,23 +167,32 @@ describe('conflict refresh', () => {
   it('keeps a value another writer set between the read and the write', () => {
     const root = bulkStore(4);
     let gated = false;
-    let atWrite: string | null = null;
+    const readAs: string[] = [];
     const { exec } = DatabaseSync.prototype;
+    const { all } = StatementSync.prototype;
     // The other writer commits on its own handle when the refresh opens its write scope, which is after the refresh's reads.
     vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       if (sql === 'BEGIN IMMEDIATE' && !gated) {
         gated = true;
-        atWrite = refsOf(root, 'mem_bulk_1');
         setRefs(root, 'mem_bulk_1', '["mem_bulk_3"]');
       }
       exec.call(this, sql);
+    });
+    // The refresh counts a row its stored-refs read did not return as '[]', so this records mem_bulk_1 the same way.
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      const rows = all.apply(this, params);
+      if (this.sourceSQL.includes(STORED_REFS_READ)) {
+        const row = rows.find((r) => 'id' in r && r.id === 'mem_bulk_1');
+        readAs.push(row && 'conflicts_with_json' in row ? String(row.conflicts_with_json) : '[]');
+      }
+      return rows;
     });
 
     replaceDetectedConflicts(root, [pair(1, 2)], NOW);
     vi.restoreAllMocks();
 
     // A refresh that read after the other writer would hold its value as the stored one and overwrite it.
-    expect(atWrite).toBe('[]');
+    expect(readAs).toEqual(['[]']);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_3"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');
   });
