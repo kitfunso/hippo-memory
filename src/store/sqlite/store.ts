@@ -265,7 +265,11 @@ export function sqliteDiagnosticsStore(
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, readOnly),
-    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(on, { entriesWhere: listEntriesWhere }),
+    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
+      on,
+      { entriesWhere: listEntriesWhere },
+      readOnly,
+    ),
     auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, readOnly),
   };
 }

@@ -90,12 +90,16 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", async () => {
+    const store = sqliteStore(root);
+    const config = loadConfig(root);
+    // As a server root sets it: the store keeps a ledger, so session-end re-reads book there.
+    const ledger = { ledger: store.ledger, folderFiles: store.folderFiles, config };
     const ctx: CallerContext = {
-      store: sqliteStore(root),
-      config: loadConfig(root),
+      store,
+      config,
       tenantId: TENANT,
       actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' },
-      reach: { hasLocal: true, isGlobal: false, shared: true },
+      reach: { hasLocal: true, isGlobal: false, shared: true, ledger },
     };
     const base = { sessionId: SESSION, project: PROJECT };
 

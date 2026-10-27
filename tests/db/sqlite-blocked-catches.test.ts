@@ -88,8 +88,11 @@ const ROWS: readonly Row[] = [
 ];
 
 let root: string;
+const STACK_LIMIT = Error.stackTraceLimit;
 
 beforeEach(() => {
+  // The site frame sits under the grant check and the open path, past the default 10 frames.
+  Error.stackTraceLimit = 50;
   root = mkdtempSync(join(tmpdir(), 'hippo-blocked-catch-'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   // An API provider with a stubbed fetch, so the vector arm and physics reach their opens without a local model or the network.
@@ -106,6 +109,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Error.stackTraceLimit = STACK_LIMIT;
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   rmSync(root, { recursive: true, force: true });

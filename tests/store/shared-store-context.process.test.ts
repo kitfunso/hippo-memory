@@ -8,6 +8,7 @@ import { adminActor, contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
+import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
@@ -151,7 +152,8 @@ describe('context reads on a shared store', () => {
     expect(texts).not.toContain(ROWS.global);
   });
 
-  it('ignores contextProjectIsolation: false with one warning per store', async () => {
+  it('ignores contextProjectIsolation: false with one warning per process', async () => {
+    onceKeysPerCase();
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     try {
       const h = await start(true, { contextProjectIsolation: false });
@@ -163,7 +165,7 @@ describe('context reads on a shared store', () => {
       }
       expect(warn.mock.calls.filter(([m]) => String(m).includes('contextProjectIsolation'))).toHaveLength(1);
     } finally {
-      warn.mockRestore();
+      vi.restoreAllMocks();
     }
   });
 
