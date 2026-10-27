@@ -3,7 +3,7 @@ import { type MemoryEntry, markRetrieved } from '../../base/memory/entry.js';
 import {
   closeHippoDb,
   type DatabaseSyncLike,
-  openHippoDb,
+  type DbGrant,
   withWriteScope,
 } from '../../db/index.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
@@ -52,11 +52,12 @@ export function strengthenRetrieved(
   ids: readonly string[],
   opts: StrengthenOptions,
   rules: StoreModel,
+  grant: DbGrant,
 ): Set<string> {
   if (strengthensNothing(ids, opts)) return new Set();
   let db: DatabaseSyncLike;
   try {
-    db = bindHandleClock(openHippoDb(hippoRoot), rules.clock);
+    db = bindHandleClock(grant.open(hippoRoot), rules.clock);
   } catch (error) {
     rethrowIfStoreBlocked(error);
     warnStrengthenFailed(error);

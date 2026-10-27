@@ -129,6 +129,17 @@ Permission for one member API key to read one restricted scope. Admin keys, the 
 stdio MCP need none.
 _Avoid_: ACL entry, share, permission
 
+**Store group**:
+A named set of store methods a store sets whole. Four are required; a surface proves an
+optional one at boot, except a fallback group, which an api feature reads where it states its
+fallback.
+_Avoid_: capability
+
+**Database grant**:
+The value the SQLite adapter makes that lets one hippo.db open use a runtime, a request's
+session or the worker fence (`DbGrant`).
+_Avoid_: grant alone, which reads as a **Scope grant**
+
 **Auth resolver**:
 A function the server asks to vouch for a bearer token that is not an API key. Tokens are routed
 by shape: an `hk_` token goes only to API-key validation, any other token only to the resolver.
@@ -244,6 +255,11 @@ _Avoid_: receipt on its own (a raw receipt is a memory), parse result
 How far capture has read one session's transcript. Capture saves it only after a run that reached
 the end, so a run that failed reads the same turns again.
 _Avoid_: turn cursor, position file, bookmark
+
+**File lock**:
+A lock database whose RESERVED lock (taken with BEGIN IMMEDIATE) names the one process allowed to do a piece of local work;
+the operating system frees it when that process dies.
+_Avoid_: lease (a card's), claim (a spool file's)
 
 **Compaction record**:
 The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it

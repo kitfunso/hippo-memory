@@ -7,6 +7,7 @@ import { log } from '../../src/base/util/log.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext } from '../../src/surface/mcp/server.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
+import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
@@ -16,6 +17,7 @@ import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { testInfra } from '../_helpers/infra.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 let root: string;
 
@@ -32,7 +34,7 @@ afterEach(() => {
 });
 
 function ctx(over: Partial<McpContext> = {}): McpContext {
-  return {
+  return mcpContext({
     hippoRoot: root,
     tenantId: 'default',
     actor: 'mcp',
@@ -42,7 +44,7 @@ function ctx(over: Partial<McpContext> = {}): McpContext {
     config: loadConfig(root),
     infra: testInfra(),
     ...over,
-  };
+  });
 }
 
 async function call(
@@ -186,7 +188,7 @@ describe('replies the stdio loop writes', () => {
       release = resolve;
     });
     let ran = false;
-    const slow: McpHost = {
+    const slow: McpHost<CliStore> = {
       runFrame: async (signal, run) => {
         await held;
         ran = true;

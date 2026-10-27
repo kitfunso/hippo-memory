@@ -6,7 +6,6 @@ import {
   closeHippoDb,
   type DatabaseSyncLike,
   getHippoDbPath,
-  openHippoDbReadOnly,
   type SqlValue,
 } from '../../db/index.js';
 import { withReadSnapshot } from '../../db/busy.js';
@@ -15,7 +14,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { tableExists } from '../../db/tables.js';
 import type { Layer } from '../../base/memory/entry.js';
 import type { StoreRules } from '../../base/ports/infra.js';
-import type { StoreModel } from './open.js';
+import type { HandleOpener, StoreFiles, StoreModel } from './open.js';
 import { layerIndex, LAYER_ORDER } from '../../base/memory/memory-facts.js';
 import {
   SCATTER_POINTS_MAX,
@@ -237,9 +236,9 @@ function hasVector(db: DatabaseSyncLike, id: string): boolean {
 }
 
 /** Opens the store writable with the dashboard's functions scored by `rules`. */
-function dashboardOpener(rules: StoreModel): (root: string) => DatabaseSyncLike {
-  return (root) => {
-    const db = openStore(root);
+function dashboardOpener(rules: StoreModel): HandleOpener {
+  return (root, opens) => {
+    const db = openStore(root, opens);
     useDashboardFunctions(db, rules);
     return db;
   };
@@ -252,13 +251,13 @@ interface HeldReader {
 }
 
 /** One read-only connection, opened once hippo.db exists, and the sorted lists kept on it. */
-function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): HeldReader {
+function heldReader(hippoRoot: string, files: StoreFiles, migrate: () => void): HeldReader {
   let held: DatabaseSyncLike | null = null;
   let lists: MemoryLists | null = null;
   return {
     reader: () => {
       if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) {
-        held = openHippoDbReadOnly(hippoRoot);
+        held = files.opens.grant.openReadOnly(hippoRoot);
       }
       return held;
     },
@@ -267,8 +266,8 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();
-      useDashboardFunctions(db, rules);
-      lists = new MemoryLists(db, rules);
+      useDashboardFunctions(db, files);
+      lists = new MemoryLists(db, files);
       return lists;
     },
     close: () => {

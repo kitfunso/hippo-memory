@@ -100,7 +100,7 @@ interface Reader {
 async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
   const filter = { ...narrowing, tenantId: r.tenantId };
   const read = (after?: EntryCursor) =>
-    r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
+    r.store.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
   for await (const page of readPages(read)) yield* page;
 }
 
@@ -304,7 +304,7 @@ async function ownLegacyFold(
   if (legacyName === '' || legacyName === name) return [];
   const legacy = { tenantId: r.tenantId, origins: [legacyName] };
   const held =
-    (await r.store.reports.entriesWhere(legacy, { limit: 1 })).entries.length > 0 ||
+    (await r.store.entriesWhere(legacy, { limit: 1 })).entries.length > 0 ||
     (await r.store.projectTags.compactionOrigins(r.tenantId)).some(
       (c) => c.origin === legacyName,
     ) ||

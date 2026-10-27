@@ -16,6 +16,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const { sqliteStore, apiCtx } = sessionPerTest();
 
@@ -38,7 +39,7 @@ function ctxFor(actor: Actor): FullContext {
 
 function mcpCtxFor(actor: Actor): McpContext {
   const store = sqliteStore(root);
-  const ctx: McpContext = {
+  const ctx: McpContext = mcpContext({
     hippoRoot: root,
     tenantId: 'default',
     actor: actor.subject,
@@ -47,7 +48,7 @@ function mcpCtxFor(actor: Actor): McpContext {
     reach: testReach(root, store),
     config: loadConfig(root),
     infra: testInfra(),
-  };
+  });
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return ctx;
 }

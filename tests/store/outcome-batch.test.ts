@@ -94,7 +94,7 @@ function fixture(count: number) {
 
 function seeded(label: string, entries: readonly MemoryEntry[]) {
   const root = makeRoot(label);
-  const db = openStore(root);
+  const db = openStore(root, storeFilesOf(root).opens);
   open.push(db);
   writeEntriesTogether(db, storeFilesOf(root), entries);
   // The seed's own child writes marked every parent; clear all but one so the outcome has flips to make.
@@ -195,7 +195,7 @@ describe('outcome that fails mid-batch', () => {
   function failingStore(trigger: (lastId: string) => string) {
     const entries = Array.from({ length: 900 }, (_, i) => memory(i));
     const root = makeRoot('outcome-fail');
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     open.push(db);
     withWriteScope(db, 'seed', () => {
       for (const entry of entries) writeEntryDbOnly(db, entry);

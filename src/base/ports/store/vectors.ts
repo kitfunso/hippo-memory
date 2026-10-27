@@ -6,6 +6,7 @@ import type { RecallScopeFilter } from '../../scope/recall-scope.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
 import type { OriginFilter } from './types.js';
 import type { TenantId } from '../../util/tenant.js';
+import type { MethodEffects } from './effects.js';
 
 export type { EmbeddingIndexState, RecallScopeFilter };
 
@@ -23,6 +24,13 @@ export interface VectorReads {
    * scope per `RecallScopeFilter`, and origin '' or listed (when `spec.origin` is set). */
   nearestEntries(queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]>;
 }
+
+/** What each VectorReads method does to the store; every adapter honours it. */
+export const VECTORS_EFFECTS = {
+  embeddingIndexState: 'read',
+  stored: 'read',
+  nearestEntries: 'read',
+} as const satisfies MethodEffects<VectorReads>;
 
 /** What `VectorReads.stored` reads per memory: its vector, as Float32 views where the store
  * holds Float32 bytes, or its particle. */
@@ -104,7 +112,17 @@ export interface VectorWrites {
    * `tenantId`, finite non-empty vector) under `model` with its particle, sets `model`. No audit
    * row. */
   writeVectors(write: VectorWrite): Promise<VectorWriteResult>;
+  /** The index these writes land in: every group that writes one index answers the same key, so
+   * embed runs on it take turns whatever object a caller holds. */
+  indexKey(): Promise<string>;
 }
+
+/** What each VectorWrites method does to the store; every adapter honours it. */
+export const VECTOR_WRITES_EFFECTS = {
+  entriesWithoutVector: 'read',
+  writeVectors: 'write',
+  indexKey: 'read',
+} as const satisfies MethodEffects<VectorWrites>;
 
 // A store's own vector index, worked through sessions so the write lock and a rebuild's staged
 // vectors stay on the thread that holds one. Vectors and particles carry no tenant, so each step
@@ -115,6 +133,12 @@ export interface EmbeddingIndex {
   /** Runs one step on the open session `session`; `close` ends it. */
   step<K extends IndexStepKind>(session: string, step: IndexStep<K>): Promise<IndexStepAnswers[K]>;
 }
+
+/** What each EmbeddingIndex method does to the store; every adapter honours it. */
+export const EMBEDDING_INDEX_EFFECTS = {
+  open: 'read',
+  step: 'write',
+} as const satisfies MethodEffects<EmbeddingIndex>;
 
 /** `id` names the session to `step`; `key` names the store's hippo.db, so sessions on one file
  * in this process take turns and sessions on another do not. */

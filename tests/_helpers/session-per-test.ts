@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, expect } from 'vitest';
 import type { Objects } from '../../src/base/ports/store.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { openHippoDb, RequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import { RequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { readEntryIn, writeEntryIn, type WriteEntryOptions } from '../../src/store/sqlite/fixtures.js';
 import { grantFor } from '../../src/store/sqlite/grant.js';
 import { storeFilesOf } from '../../src/store/sqlite/handles.js';
@@ -61,6 +61,6 @@ export function sessionPerTest(): TestSession {
     sqliteStore: (hippoRoot, opts) => sqliteStore(hippoRoot, { ...opts, session: opts?.session ?? session() }),
     apiCtx: (...args) => onSession(apiCtx(...args), session()),
     objectsAt: (hippoRoot) => objectsAt(hippoRoot, session()),
-    sessionDb: (hippoRoot) => openHippoDb(hippoRoot, { grant: grantFor({ session: session() }) }),
+    sessionDb: (hippoRoot) => grantFor({ session: session() }).open(hippoRoot),
   };
 }

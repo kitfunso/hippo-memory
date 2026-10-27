@@ -9,6 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 import { heartbeatVerdict } from '../../src/surface/server/auth.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -144,7 +145,14 @@ describe('heartbeatVerdict', () => {
     failedAuth.check('203.0.113.9');
     const store = sqliteStore(root);
     const reachOf = (shared: boolean) => sqliteReach({ hippoRoot: root, store, shared });
-    const opts = { hippoRoot: root, store, reachOf, failedAuthLimiter: failedAuth };
+    const opts = {
+      hippoRoot: root,
+      store,
+      reachOf,
+      failedAuthLimiter: failedAuth,
+      localKey: { matches: () => false },
+      keyVerifier: new KeyVerifier(),
+    };
     expect(await heartbeatVerdict(streamReq(plaintext, '203.0.113.9'), opts)).toBe('unavailable');
     const wrong = `${plaintext.slice(0, plaintext.indexOf('.'))}.${'a'.repeat(32)}`;
     expect(await heartbeatVerdict(streamReq(wrong, '198.51.100.1'), opts)).toBe('revoked');

@@ -7,7 +7,7 @@
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Entity, Relation } from '../../base/ports/store/graph.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { StoreGroups } from '../../base/ports/store.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
 import { DEFAULT_GRAPH_HOPS } from '../../base/rank/recall-defaults.js';
 
@@ -25,7 +25,7 @@ export interface GraphSeed {
   strength: number;
 }
 
-type GraphStore = Pick<HippoStore, 'graphReads'>;
+type GraphStore = Pick<StoreGroups, 'graphReads'>;
 
 export interface GraphRankStreamOptions {
   store: GraphStore;
@@ -311,7 +311,9 @@ export async function graphRankStream(
 
   const graphScore = new Map<number, number>();
   const stores =
-    opts.global && opts.global !== opts.store ? [opts.store, opts.global] : [opts.store];
+    opts.global && opts.global.graphReads !== opts.store.graphReads
+      ? [opts.store, opts.global]
+      : [opts.store];
   for (const store of stores) {
     await accumulateForStore(store, seeds, entries, {
       memIdToIndex,

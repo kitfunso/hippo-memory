@@ -278,7 +278,7 @@ async function salienceVerdict(
     Number.isSafeInteger(window) && window >= 1
       ? Math.min(window, MAX_SALIENCE_ROWS)
       : MAX_SALIENCE_ROWS;
-  const newest = await ctx.store.reports.entriesWhere(
+  const newest = await ctx.store.entriesWhere(
     { tenantId: ctx.tenantId },
     { limit: rows, newest: true },
   );

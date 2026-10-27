@@ -1,6 +1,7 @@
 // The dormant-memory shapes the Dormant group takes and returns.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { DormantRevival } from '../../memory/dormant-revival.js';
+import type { MethodEffects } from './effects.js';
 
 /** A dormant memory as listed to a user. */
 export interface DormantMemory {
@@ -72,3 +73,10 @@ export interface Dormant {
   /** Deletes for good, writes the `forget` audit row and counts it; false when no row in reach. */
   forget(tenantId: string, ownScope: string | null, id: string, actor: string): Promise<boolean>;
 }
+
+/** What each Dormant method does to the store; every adapter honours it. */
+export const DORMANT_EFFECTS = {
+  list: 'read',
+  restore: 'write',
+  forget: 'write',
+} as const satisfies MethodEffects<Dormant>;

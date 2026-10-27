@@ -714,7 +714,7 @@ async function readChurnAnchors(
 }
 
 async function readChurnCandidates(
-  reports: StoreWith<'learning'>['reports'],
+  store: Pick<StoreWith<'learning'>, 'entriesWhere'>,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnCandidates> {
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
@@ -728,7 +728,7 @@ async function readChurnCandidates(
   const skippedPinned: string[] = [];
   // Page by page, so only the candidates stay held, never every row of the project.
   for await (const page of readPages((after?: EntryCursor) =>
-    reports.entriesWhere(current, { limit: READ_PAGE_ROWS, after }),
+    store.entriesWhere(current, { limit: READ_PAGE_ROWS, after }),
   )) {
     const found = collectChurnCandidates(page, opts);
     candidates.push(...found.candidates);
@@ -748,14 +748,15 @@ function churnNeeds(candidates: readonly ChurnCandidate[]): ChurnNeeds {
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
  * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export async function detectChurnStale(
-  { learning, reports }: StoreWith<'learning'>,
+  store: StoreWith<'learning'>,
   repo: ChurnRepo,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnStaleResult> {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
-  const { candidates, skippedPinned } = await readChurnCandidates(reports, opts);
+  const { learning } = store;
+  const { candidates, skippedPinned } = await readChurnCandidates(store, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
   const anchors = await readChurnAnchors(learning, opts.tenantId, candidates);

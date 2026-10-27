@@ -9,6 +9,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const { sqliteStore } = sessionPerTest();
 
@@ -57,7 +58,7 @@ beforeEach(() => {
   // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
   vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
   const store = sqliteStore(root);
-  ctx = {
+  ctx = mcpContext({
     hippoRoot: root,
     tenantId: 'default',
     actor: 'tester',
@@ -70,7 +71,7 @@ beforeEach(() => {
     reach: testReach(root, store),
     config: loadConfig(root),
     infra: testInfra(),
-  };
+  });
 });
 
 afterEach(() => {

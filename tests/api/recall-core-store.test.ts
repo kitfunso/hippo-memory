@@ -14,6 +14,7 @@ import type {
   RecallWrites,
   StoreWith,
 } from '../../src/base/ports/store-index.js';
+import type { GlobalGroup } from '../../src/base/ports/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -140,9 +141,9 @@ describe('retrieve with the CLI ranking core', () => {
       id: 'mem_second_0',
       strength: 1,
     });
-    const inner = portOnlyStore(secondRoot, ['learning']);
+    const inner = portOnlyStore(secondRoot, ['learning', 'ledger', 'folderFiles', 'sessions']);
     const writes: RecallWrites[] = [];
-    const globalStore: StoreWith<'learning'> = {
+    const globalStore: StoreWith<GlobalGroup> = {
       ...inner,
       finishRecall: async (w) => {
         writes.push(w);

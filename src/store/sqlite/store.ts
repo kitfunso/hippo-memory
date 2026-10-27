@@ -5,12 +5,7 @@ import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvents, listAuditEvents } from './audit.js';
-import {
-  getHippoDbPath,
-  openHippoDbReadOnly,
-  type DatabaseSyncLike,
-  type RequestStores,
-} from '../../db/index.js';
+import { getHippoDbPath, type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { recordTokenUse } from './token-ledger.js';
@@ -53,7 +48,7 @@ import { readLatestHandoff } from './handoffs.js';
 import { updateStats } from './index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys.js';
-import type { Handles, OnHandle, StoreFiles } from './open.js';
+import { type Handles, type OnHandle, readOnly, type StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './bound.js';
 import type {
@@ -78,9 +73,9 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { listRecallEntries } from './search-rows.js';
 import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vector-index.js';
+import { embedLockKey } from './embed-lock.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
-import { asViewOf } from '../../base/util/store-view.js';
 
 /** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
  * and capture's. */
@@ -114,7 +109,7 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     ...sqliteLocalGroups(handles),
     ...sqliteBaseMethods(handles),
     keyWrites: sqliteKeyWrites(on),
-    vectorWrites: sqliteVectorWrites(on),
+    vectorWrites: sqliteVectorWrites(on, files.hippoRoot),
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
     dagReads: sqliteDagReads(on),
@@ -142,7 +137,7 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
  * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
-    ledger: sqliteLedger(handles.on, handles.files.opens.grant?.session),
+    ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),
     promotion: sqlitePromotion(handles),
     folderFiles: sqliteFolderFiles(handles),
@@ -159,10 +154,11 @@ const baseReadsBodies: Bodies<
 };
 
 const entryReadsBodies: Bodies<
-  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>
+  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'entriesWhere' | 'freshRawEntries'>
 > = {
   searchRecallEntries: listRecallEntries,
   entriesByIds: readEntriesInIdOrder,
+  entriesWhere: listEntriesWhere,
   freshRawEntries: listFreshRawMemories,
 };
 
@@ -198,11 +194,13 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
   };
 }
 
-function sqliteVectorWrites(on: OnHandle): VectorWrites {
-  return bound<VectorWrites>(on, {
-    entriesWithoutVector: entriesWithoutVector,
-    writeVectors: writeVectors,
-  });
+// The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
+function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
+  return {
+    ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
+    // Resolved at use, as the handle is: building a store reads no path.
+    indexKey: async () => embedLockKey(hippoRoot),
+  };
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
@@ -269,18 +267,27 @@ export function sqliteDiagnosticsStore(
   const { on } = handles;
   return {
     diagnostics: sqliteDiagnostics(on),
-    projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
-    reports: bound<ProjectTagReads['reports']>(
+    projectTags: sqliteProjectTags(handles, readOnly),
+    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
       on,
       { entriesWhere: listEntriesWhere },
-      openHippoDbReadOnly,
+      readOnly,
     ),
-    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, openHippoDbReadOnly),
+    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, readOnly),
   };
 }
 
-// Each store sqliteStore built, with how to build it again on one session's handles.
-const reopeners = new WeakMap<HippoStore, (session: RequestStores) => HippoStore & StoreGroups>();
+// Non-enumerable, so a caller's spread copy of the store is not reopened as sqliteStore's own.
+const REOPEN = Symbol('sqliteStore reopen');
+
+/** A store sqliteStore built, with how to build it again on one session's handles. */
+interface Reopenable {
+  readonly [REOPEN]: (session: RequestStores) => HippoStore & StoreGroups;
+}
+
+function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
+  return Object.hasOwn(store, REOPEN);
+}
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its
  * runtime and session. */
@@ -289,17 +296,18 @@ export function sqliteStore(
   opts: SqliteStoreOptions = {},
 ): HippoStore & StoreGroups {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
-  reopeners.set(store, (session) => sqliteStore(hippoRoot, { ...opts, session }));
+  const reopen: Reopenable[typeof REOPEN] = (session) =>
+    sqliteStore(hippoRoot, { ...opts, session });
+  Object.defineProperty(store, REOPEN, { value: reopen });
   return store;
 }
 
 /** `store` on `session`'s handles when sqliteStore built it, so a pass of many calls opens
  * hippo.db once; any other store, a caller's copy of one included, as it is. */
 export function inSqliteSession<S extends HippoStore>(store: S, session: RequestStores): S {
-  const reopen = reopeners.get(store);
-  // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on
+  // SAFETY: only sqliteStore's own result carries the reopen, which builds that same store on
   // another session.
-  return reopen === undefined ? store : asViewOf(reopen(session) as S, store);
+  return isReopenable(store) ? (store[REOPEN](session) as S) : store;
 }
 
 const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextCandidates'>> = {

@@ -20,6 +20,7 @@ import { closePrediction } from '../_helpers/root-forms.js';
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -80,7 +81,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
     await seedBaserate(home);
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp',
@@ -89,7 +90,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       store: sqliteStore(home),
       config: cliConfig(home),
       infra: testInfra(),
-    };
+    });
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).toContain('## Planning fallacy hint');
@@ -101,7 +102,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
 
   it('does NOT prepend the hint block when query has no forward-claim phrase', async () => {
     await seedBaserate(home);
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp',
@@ -110,7 +111,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       store: sqliteStore(home),
       config: cliConfig(home),
       infra: testInfra(),
-    };
+    });
     const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');
@@ -119,7 +120,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
     await seedBaserate(home);
     vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp',
@@ -128,7 +129,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
       store: sqliteStore(home),
       config: cliConfig(home),
       infra: testInfra(),
-    };
+    });
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');

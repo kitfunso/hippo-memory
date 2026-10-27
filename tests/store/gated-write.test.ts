@@ -51,7 +51,7 @@ describe('the shared gated write', () => {
   let db: DatabaseSyncLike;
   beforeEach(() => {
     initTestStore(s.hippoRoot);
-    db = openStore(s.hippoRoot);
+    db = openStore(s.hippoRoot, storeFilesOf(s.hippoRoot).opens);
   });
   afterEach(() => closeHippoDb(db));
 

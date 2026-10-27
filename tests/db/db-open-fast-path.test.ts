@@ -24,7 +24,7 @@ import { HEALED_INDEXES, HEALED_TABLES } from '../../src/db/continuity-tables.js
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { grantFor } from '../../src/store/sqlite/grant.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
@@ -218,7 +218,7 @@ describe('one open reads the store once', () => {
     const opts = { grant: grantFor({ runtime }) };
     try {
       closeHippoDb(openStore(root, opts));
-      expect(afterPragmas(() => openHippoDb(root, opts))).toHaveLength(1);
+      expect(afterPragmas(() => opts.grant.open(root))).toHaveLength(1);
       expect(afterPragmas(() => openStore(root, opts))).toHaveLength(1);
     } finally {
       runtime.dispose();
@@ -234,10 +234,10 @@ describe('one open reads the store once', () => {
   });
 
   it('a store emptied through another connection is re-read by the next openStore, which imports its markdown mirror again', () => {
-    closeHippoDb(openStore(root));
+    closeHippoDb(openStore(root, storeFilesOf(root).opens));
     withDb((db) => db.exec('DELETE FROM memories'));
 
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     try {
       expect(memoryRows(db)).toBe(1);
     } finally {

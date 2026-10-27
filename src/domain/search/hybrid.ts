@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/config/config.js';
-import type { EmbedderFor } from '../../base/ports/embedder.js';
+import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
@@ -30,7 +30,7 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { StoreWith } from '../../base/ports/store.js';
 
 /** How BM25 and cosine combine, and whether the score breakdown is kept. */
 export interface HybridBlend {
@@ -129,7 +129,7 @@ export interface HybridFolder {
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
   embeddings?: EmbeddingsConfig;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: HippoStore;
+  store?: StoreWith<never, 'vectors' | 'graphReads'>;
 }
 
 /** Every ranking field, flat because the published hybridSearch and the frozen eval scripts pass
@@ -151,7 +151,7 @@ export type HybridSearchOptions = HybridRanking & HybridFolder;
 export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from
    * `graphStream.globalRoot`. */
-  graphGlobal?: HippoStore;
+  graphGlobal?: StoreWith<never, 'graphReads'>;
 };
 
 /**
@@ -236,26 +236,33 @@ async function orderAndFit(
 }
 
 /** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from
- * `config`. */
+ * `config`; a store that keeps no vectors has none, so its search ranks by BM25. */
 export function vectorSourceOf({
   store,
   config,
   onHippoDb,
   embedderFor,
 }: {
-  store: HippoStore;
+  store: StoreWith<never, 'vectors' | 'graphReads'>;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;
   embedderFor: EmbedderFor;
-}): VectorSource {
-  return { store, provider: () => embedderFor(config.embeddings), onHippoDb };
+}): VectorSource | undefined {
+  const { vectors, graphReads } = store;
+  if (vectors === undefined) return undefined;
+  const provider = (): EmbeddingProvider => embedderFor(config.embeddings);
+  return { store, vectors, graphReads, provider, onHippoDb };
 }
 
+/** The graphs the graph list walks: the source store's and the global one's, each when kept. */
 function graphStoresOf(
   source: VectorSource | undefined,
   options: HybridRankOptions,
 ): FusionInput['graph'] {
-  return source && { store: source.store, global: options.graphGlobal };
+  const graphReads = source?.graphReads;
+  if (graphReads === undefined) return undefined;
+  const global = options.graphGlobal?.graphReads;
+  return { store: { graphReads }, global: global && { graphReads: global } };
 }
 
 function hybridBoostContext(

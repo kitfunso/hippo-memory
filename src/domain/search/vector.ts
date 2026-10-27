@@ -5,7 +5,8 @@ import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
+import type { VectorReads } from '../../base/ports/store-index.js';
+import type { GraphReads, RequiredStore } from '../../base/ports/store.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -31,7 +32,10 @@ export interface VectorArm {
 
 /** Where the vector arm reads: the vectors `store` holds, embedded by `provider`. */
 export interface VectorSource {
-  readonly store: HippoStore;
+  readonly store: RequiredStore;
+  readonly vectors: VectorReads;
+  /** The store's graph, which the graph list walks; unset on a store that keeps none. */
+  readonly graphReads?: GraphReads;
   /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than
    * failing the search. */
   readonly provider: () => EmbeddingProvider;
@@ -153,7 +157,7 @@ async function fillVectorArm(
   source: VectorSource,
   options: VectorArmOptions,
 ): Promise<void> {
-  const { store } = source;
+  const { vectors: reads } = source;
   const provider = source.provider();
   if (!provider.isAvailable()) return;
   const spec = options.vectorCandidates;
@@ -170,12 +174,12 @@ async function fillVectorArm(
     return;
   }
   const added = spec
-    ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec)
+    ? await vectorCandidatesOutside(reads, arm.entries, arm.queryVector, spec)
     : [];
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await store.vectors.stored(
+    for (const [id, v] of await reads.stored(
       'vectors',
       added.map((e) => e.id),
     )) {
@@ -194,13 +198,13 @@ async function usableVectors(
   provider: EmbeddingProvider,
   spec: HybridVectorCandidates | undefined,
 ): Promise<Map<string, ArrayLike<number>> | null> {
-  const { store } = source;
-  const index = await store.vectors.embeddingIndexState();
+  const reads = source.vectors;
+  const index = await reads.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {
     warnBm25Fallback('reindex', reindexHint(source));
     return null;
   }
-  const vectors = await store.vectors.stored(
+  const vectors = await reads.stored(
     'vectors',
     arm.entries.map((e) => e.id),
   );

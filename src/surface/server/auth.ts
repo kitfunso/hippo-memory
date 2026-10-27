@@ -3,8 +3,7 @@
 import { envTenant } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
-import { verifyApiKeyCached } from './api-key.js';
-import { isLocalKey, LOCAL_KEY_SUBJECT } from './local-key.js';
+import { LOCAL_KEY_SUBJECT } from './local-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
 import { HttpError } from '../../base/errors/http-errors.js';
@@ -12,7 +11,7 @@ import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
-import { keyCheckBounds } from './key-check-bounds.js';
+import { LIMITER_MAX_KEYS } from './rate-limit.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -94,13 +93,20 @@ function requestClientKey(req: IncomingMessage): string {
 
 type AuthOptions = Pick<
   ResolvedServeOptions,
-  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'reachOf' | 'callerLimiter'
+  | 'hippoRoot'
+  | 'authResolver'
+  | 'authResolverTimeoutMs'
+  | 'store'
+  | 'reachOf'
+  | 'callerLimiter'
+  | 'localKey'
+  | 'keyVerifier'
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
   Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
-  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal'>>;
+  Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
 // `clinton@corp`.
@@ -245,7 +251,7 @@ async function resolveBearer(
   opts: AuthOptions,
 ): Promise<BearerIdentity> {
   // First, so the local secret never reaches resolver plugin code.
-  if (isLocalKey(opts.hippoRoot, token)) {
+  if (opts.localKey.matches(token)) {
     return { tenantId: envTenant(), subject: LOCAL_KEY_SUBJECT, role: 'member', scopes: [] };
   }
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's
@@ -275,16 +281,12 @@ async function resolveApiKey(
   opts: AuthOptions,
 ): Promise<BearerIdentity> {
   const address = clientLimitKey(req);
-  const key = await verifyApiKeyCached(
+  const key = await opts.keyVerifier.verify(
     token,
     opts.store,
-    (keyId, derive) => {
-      // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the
-      // address's budget to the callers who share it.
-      keyChecks.admit(keyId, address);
-      chargeScryptRun(req, opts);
-      return keyChecks.run(keyId, address, derive);
-    },
+    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the
+    // address's budget to the callers who share it.
+    opts.keyVerifier.boundFor(address, () => chargeScryptRun(req, opts)),
     () => chargeScryptRun(req, opts),
   );
   if (!key) throw new HttpError(401, 'invalid api key');
@@ -319,11 +321,6 @@ function bearerActor(id: BearerIdentity): Actor {
   return actor;
 }
 
-/** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than
- * the buckets do. */
-export const LIMITER_MAX_KEYS = 10_000;
-// One for the process, as the thread pool its derivations run on is.
-const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
 const CALLER_WARN_EVERY_MS = MINUTE_MS;
 const callerWarnedAt = new Map<string, number>();
 
@@ -387,11 +384,17 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   // A store other than hippo.db is a team's central server, so its folder's config.json must not
   // decide shared-ness.
   const team = !opts.onHippoDb;
-  // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider);
   // The reader keys on the file's stamp, so each request still sees an edit made while the server
   // runs.
   const config = opts.configAt(opts.hippoRoot);
+  const { ledgerStore } = opts;
+  const ledger = ledgerStore && {
+    ledger: ledgerStore.ledger,
+    folderFiles: ledgerStore.folderFiles,
+    config,
+  };
+  // Per request, never cached at serve: the global store can be created while the server runs.
+  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider, ledger);
   const callers = opts.callers;
   const infra = opts.infra();
   const actor = bearerActor(id);

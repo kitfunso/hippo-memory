@@ -16,6 +16,7 @@ import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js
 import { processGit } from '../../src/infra/git-runner.js';
 import { testInfra } from '../_helpers/infra.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -379,7 +380,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         method: 'tools/call',
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
-      {
+      mcpContext({
         hippoRoot,
         tenantId: 'default',
         actor: 'mcp',
@@ -388,7 +389,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         store: sqliteStore(hippoRoot),
         config: loadConfig(hippoRoot),
         infra: testInfra(),
-      },
+      }),
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/surface/mcp/request.ts:173).

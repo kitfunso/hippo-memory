@@ -184,7 +184,7 @@ async function runPass(
     prepare?.(s.root);
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
-    const port = backing === 'port' ? portOnlySide(s.root) : undefined;
+    const port = backing === 'port' ? portOnlySide(s.root, ['vectors', 'graphReads']) : undefined;
     const store = port?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {

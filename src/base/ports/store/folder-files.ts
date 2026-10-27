@@ -1,6 +1,7 @@
 // A store kept as files in a folder: creating them, and the facts about that folder its rows
 // record, so no caller holds the folder's path.
 import type { ProjectIdentity } from '../../scope/project-identity.js';
+import type { MethodEffects } from './effects.js';
 
 export interface FolderFiles {
   /** Creates the store's files when they are missing, as `hippo init`, a first share or a global
@@ -9,6 +10,12 @@ export interface FolderFiles {
   /** Where the store sits, read without creating it. */
   home(): Promise<StoreHome>;
 }
+
+/** What each FolderFiles method does to the store; every adapter honours it. */
+export const FOLDER_FILES_EFFECTS = {
+  ensure: 'write',
+  home: 'read',
+} as const satisfies MethodEffects<FolderFiles>;
 
 export interface StoreHome {
   /** The folder as a promoted copy's `promoted:<folder>` source names it. */

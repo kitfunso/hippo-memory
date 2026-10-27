@@ -4,7 +4,7 @@
 import { DEFAULT_CONFIG } from '../base/config/config.js';
 import { errorFields, log } from '../base/util/log.js';
 import { requestScopes } from '../base/util/request-scope.js';
-import { openHippoDbReadOnly } from './open.js';
+import type { DbGrant } from './grant.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { nextTurn, saveGraphIfDrifted, type Turn } from './vector-graph-build.js';
 import { GraphFileIndex } from './vector-graph-reader.js';
@@ -92,6 +92,7 @@ export function graphServesStore(db: DatabaseSyncLike, maxVectors: number): bool
 /** A thread's graphs of the store under one hippo root. */
 export class VectorGraphs implements VectorIndex {
   readonly #hippoRoot: string;
+  readonly #grant: DbGrant;
   readonly #threshold: number;
   readonly #maxVectors: number;
   readonly #slots = new Map<number, Slot>();
@@ -106,8 +107,9 @@ export class VectorGraphs implements VectorIndex {
   // Set once the over-cap line is logged, so a store that stays over the cap logs it once.
   #overCap = false;
 
-  constructor(hippoRoot: string, opts: VectorGraphsOptions = {}) {
+  constructor(hippoRoot: string, grant: DbGrant, opts: VectorGraphsOptions = {}) {
     this.#hippoRoot = hippoRoot;
+    this.#grant = grant;
     this.#threshold = opts.threshold ?? VECTOR_GRAPH_THRESHOLD;
     this.#maxVectors = opts.maxVectors ?? DEFAULT_CONFIG.vectorGraph.maxVectors;
     this.#file = new GraphFileIndex(hippoRoot);
@@ -221,7 +223,7 @@ export class VectorGraphs implements VectorIndex {
       };
       this.#slots.set(dim, ready);
       this.#ready(rows, started);
-      await saveGraphIfDrifted(this.#hippoRoot, rows, this.#turn);
+      await saveGraphIfDrifted(this.#grant, this.#hippoRoot, rows, this.#turn);
     });
   }
 
@@ -240,7 +242,7 @@ export class VectorGraphs implements VectorIndex {
       slot.catchingUpFrom = undefined;
       slot.seenOn = undefined;
       this.#ready(rows, started);
-      await saveGraphIfDrifted(this.#hippoRoot, rows, this.#turn);
+      await saveGraphIfDrifted(this.#grant, this.#hippoRoot, rows, this.#turn);
     });
   }
 
@@ -304,7 +306,7 @@ export class VectorGraphs implements VectorIndex {
     dim: number,
     afterRowid: number,
   ): Promise<{ model: string; staged: StagedRows } | undefined> {
-    const db = openHippoDbReadOnly(this.#hippoRoot);
+    const db = this.#grant.openReadOnly(this.#hippoRoot);
     try {
       // Before the rows: a model change between the two reads then shows as a mismatch at the next
       // query.

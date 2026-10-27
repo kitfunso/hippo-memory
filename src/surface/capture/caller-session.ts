@@ -2,7 +2,7 @@
 // from the request, never the server's env or folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
-import { ownerOrSubject, type Context } from '../../api/types.js';
+import { ownerOrSubject, type Context, type ContextWith } from '../../api/types.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { ledgerReachOf } from '../../api/ledger-db.js';
@@ -22,7 +22,7 @@ import type { ContinuityKey } from '../../base/ports/store/types.js';
  * holds it). Returns the key the call's rows go under.
  */
 export async function bindCaller(
-  ctx: Context,
+  ctx: ContextWith<'sessions'>,
   sessionId: string,
   project: CallerProject,
 ): Promise<ContinuityKey> {

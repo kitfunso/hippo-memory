@@ -20,6 +20,7 @@ import { pushGoal } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 type HippoRecallToolArgs = {
   query: string;
@@ -66,7 +67,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   afterEach(() => removeDir(home));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot: home,
       tenantId,
       actor: 'mcp',
@@ -75,7 +76,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       store: sqliteStore(home),
       config: loadConfig(home),
       infra: testInfra(),
-    };
+    });
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
@@ -102,7 +103,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty', async () => {
-    const ctx: McpContext = {
+    const ctx: McpContext = mcpContext({
       hippoRoot: home,
       tenantId,
       actor: 'mcp',
@@ -111,7 +112,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       store: sqliteStore(home),
       config: loadConfig(home),
       infra: testInfra(),
-    };
+    });
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],

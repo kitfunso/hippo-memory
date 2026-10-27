@@ -3,7 +3,7 @@ import { contextReach, type ContextReach, type ContextWith } from '../../src/api
 import { loadConfig } from '../../src/host/config-file.js';
 import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
-import type { HippoStore, OptionalGroup } from '../../src/base/ports/store.js';
+import { hasGroups, type HippoStore, type OptionalGroup } from '../../src/base/ports/store.js';
 import { inSqliteSession, sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import type { RequestStores } from '../../src/db/request-stores.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
@@ -14,9 +14,13 @@ import { evalStoreRules } from '../../src/infra/eval-switches.js';
  * folder rides beside it for the tests that reopen it. */
 export type FullContext = ContextWith<OptionalGroup> & { readonly hippoRoot: string };
 
-/** The reach a root sets for `store` on `hippoRoot`, with the global store's config read as the CLI reads it. */
+/** The reach a root sets for `store` on `hippoRoot`, with the global store's config read as the CLI reads it, and the
+ * store as the ledger home when it keeps a ledger. */
 export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider);
+  const ledger = hasGroups(store, ['ledger', 'folderFiles'])
+    ? { ledger: store.ledger, folderFiles: store.folderFiles, config: loadConfig(hippoRoot) }
+    : undefined;
+  return contextReach(sqliteReach({ hippoRoot, store }), loadConfig, resolveEmbeddingProvider, ledger);
 }
 
 /** A Context on hippo.db under `hippoRoot` with its store built at the eval rules and clock, as the CLI root hands it. */

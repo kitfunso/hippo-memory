@@ -18,6 +18,7 @@ import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 
@@ -43,7 +44,7 @@ const ROWS: readonly Row[] = [
     'store/sqlite/entry-writes.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) =>
-      `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }).size}`,
+      `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, { strength: PRODUCTION_STRENGTH, clock: evalNow }, grantFor({})).size}`,
     'found 0',
   ],
   [
@@ -87,8 +88,11 @@ const ROWS: readonly Row[] = [
 ];
 
 let root: string;
+const STACK_LIMIT = Error.stackTraceLimit;
 
 beforeEach(() => {
+  // The site frame sits under the grant check and the open path, past the default 10 frames.
+  Error.stackTraceLimit = 50;
   root = mkdtempSync(join(tmpdir(), 'hippo-blocked-catch-'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   // An API provider with a stubbed fetch, so the vector arm and physics reach their opens without a local model or the network.
@@ -105,6 +109,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Error.stackTraceLimit = STACK_LIMIT;
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   rmSync(root, { recursive: true, force: true });

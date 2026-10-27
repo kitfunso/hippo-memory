@@ -2,8 +2,8 @@
 // on the 10 s deadline: 15 asks in the budget, not one every 50 ms.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
-import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { takeFileLock } from '../../src/host/file-lock.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
@@ -30,8 +30,8 @@ afterEach(() => {
 describe('embedAll waiting on a held embedding index lock', () => {
   it('backs off from 50 ms to 1 s between asks and stops at the deadline', async () => {
     const root = makeRoot('embed-lock-backoff');
-    // The parent process is alive for the whole test, so the lock reads as another live holder's.
-    writeFileSync(join(root, 'embeddings.lock'), `${process.ppid}:held`);
+    const held = takeFileLock(join(root, 'embeddings.lock.db'));
+    expect(held.kind).toBe('taken');
     const index = cliStore(root).embeddingIndex;
     vi.useFakeTimers({ now: Date.parse('2026-01-15T00:00:00.000Z') });
     const startedAt = Date.now();
@@ -57,5 +57,6 @@ describe('embedAll waiting on a held embedding index lock', () => {
     await refused;
 
     expect(asked).toEqual(ASKED_AT_MS);
+    if (held.kind === 'taken') held.lock.release();
   });
 });

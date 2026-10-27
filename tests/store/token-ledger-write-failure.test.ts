@@ -17,6 +17,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -73,7 +74,7 @@ describe('token ledger write failures', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'deploys' } },
       },
-      {
+      mcpContext({
         hippoRoot: root,
         tenantId: 'default',
         actor: 'mcp',
@@ -82,7 +83,7 @@ describe('token ledger write failures', () => {
         store: sqliteStore(root),
         config: loadConfig(root),
         infra: testInfra(),
-      },
+      }),
     );
     expect(res?.error).toBeUndefined();
     expect(JSON.stringify(res?.result)).toContain('ledger probe note');
