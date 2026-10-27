@@ -13,6 +13,7 @@ import { keysetPage } from '../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type {
   DirtySummaries,
   SummarySettle,
@@ -175,7 +176,7 @@ function settleFields(
   const row =
     content && !tombstone
       ? (cachedStatement(db, SETTLE_CONTENT_SQL).get(
-          content.text,
+          redactSecretsStrict(content.text),
           ...at,
           content.rebuiltAt,
           id,

@@ -12,6 +12,7 @@ import { escapeLike } from '../../base/util/escape.js';
 import type { EntryFilter } from '../../base/ports/store/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { redactEntry } from '../../base/util/secret-detect.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import {
   dormantListCap,
@@ -40,6 +41,8 @@ const DORMANT_COLUMNS = 'tenant_id, id, content, entry_json, reason, strength, d
 /** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories`
  * row in the same transaction. */
 export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
+  // One stored form binds both columns, so parseSnapshot's content check still holds.
+  const entry = redactEntry(move.entry);
   cachedStatement(
     db,
     `
@@ -53,10 +56,10 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
       dormant_at = excluded.dormant_at
   `,
   ).run(
-    move.entry.tenantId,
-    move.entry.id,
-    move.entry.content,
-    JSON.stringify(toWire(move.entry)),
+    entry.tenantId,
+    entry.id,
+    entry.content,
+    JSON.stringify(toWire(entry)),
     move.reason,
     move.strength,
     move.dormantAt,
@@ -212,8 +215,9 @@ export function replaceDormantEntry(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
-  entry: MemoryEntry,
+  given: MemoryEntry,
 ): void {
+  const entry = redactEntry(given);
   cachedStatement(
     db,
     `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`,
