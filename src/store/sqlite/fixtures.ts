@@ -23,7 +23,7 @@ export { upsertEntryRow } from './entry-row.js';
 export { writeEntryDbOnly, type WriteEntryOptions } from './entry-writes.js';
 export { buildIndexFromDb, writeIndexMirror } from './mirrors.js';
 export { listVectorCandidateEntries } from './search-rows.js';
-export { writeDeliveryEventOnHandle } from './recall-trace.js';
+export { writeDeliveryEventOnHandle } from './delivery-ledger.js';
 export { recordTokenUse, tokensBySession } from './token-ledger.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
