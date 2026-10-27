@@ -32,14 +32,14 @@ function dropKeys(inDormant: 0 | 1): string {
 // it and drops the row's keys; the next sleep fill writes both again.
 const TRIGGERS = [
   `memories_rejection_digest_stale AFTER UPDATE OF tenant_id, id, content ON memories ` +
-    `WHEN ${MOVED} AND NEW.rejection_digest IS OLD.rejection_digest ` +
-    `BEGIN UPDATE memories SET rejection_digest = NULL WHERE rowid = NEW.rowid; END`,
-  `memories_held_digests_edit AFTER UPDATE OF tenant_id, id, content ON memories WHEN ${MOVED} ` +
-    `BEGIN ${dropKeys(0)} END`,
+    `WHEN ${MOVED} AND NEW.rejection_digest IS OLD.rejection_digest BEGIN ` +
+    `UPDATE memories SET rejection_digest = NULL WHERE rowid = NEW.rowid; END`,
+  `memories_held_digests_edit AFTER UPDATE OF tenant_id, id, content ON memories ` +
+    `WHEN ${MOVED} BEGIN ${dropKeys(0)} END`,
   `memories_held_digests_gone AFTER DELETE ON memories BEGIN ${dropKeys(0)} END`,
   `dormant_memories_rejection_digest_stale AFTER UPDATE OF tenant_id, id, content ON dormant_memories ` +
-    `WHEN ${MOVED} AND NEW.rejection_digest IS OLD.rejection_digest ` +
-    `BEGIN UPDATE dormant_memories SET rejection_digest = NULL ` +
+    `WHEN ${MOVED} AND NEW.rejection_digest IS OLD.rejection_digest BEGIN ` +
+    `UPDATE dormant_memories SET rejection_digest = NULL ` +
     `WHERE tenant_id = NEW.tenant_id AND id = NEW.id; END`,
   `dormant_memories_held_digests_edit AFTER UPDATE OF tenant_id, id, content ON dormant_memories ` +
     `WHEN ${MOVED} BEGIN ${dropKeys(1)} END`,

@@ -54,24 +54,17 @@ function vaultWalk(root: string): { visits: number; rows: number; sql: string[] 
     let visits = 0;
     db.function('visit', { deterministic: false }, () => ++visits);
     const sql: string[] = [];
-    const counting = new Proxy(db, {
-      get(target, key) {
-        if (key === 'prepare') {
-          return (text: string) => {
-            if (!/artifact_ref >= \?/.test(text)) return target.prepare(text);
-            sql.push(text);
-            return target.prepare(text.replace('WHERE ', 'WHERE visit() AND '));
-          };
-        }
-        const value: unknown = Reflect.get(target, key);
-        return typeof value === 'function' ? value.bind(target) : value;
-      },
-    });
+    const prepare = db.prepare.bind(db);
+    db.prepare = (text: string) => {
+      if (!/artifact_ref >= \?/.test(text)) return prepare(text);
+      sql.push(text);
+      return prepare(text.replace('WHERE ', 'WHERE visit() AND '));
+    };
     const filter = { tenantId: 'default', kinds: ['raw' as const], artifactRefPrefix: 'vault:notes:' };
     let rows = 0;
     let after: EntryCursor | undefined;
     do {
-      const page = listEntriesWhere(counting, filter, { limit: 500, after });
+      const page = listEntriesWhere(db, filter, { limit: 500, after });
       rows += page.entries.length;
       after = page.next ?? undefined;
     } while (after !== undefined);

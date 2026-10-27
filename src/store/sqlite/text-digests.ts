@@ -104,9 +104,9 @@ export function* digestHolderIds(
 ): Generator<string[]> {
   const { tenantId, digest } = query;
   const matched = // SAFETY: both arms of matchedSql answer one TEXT column named id.
-  (cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[])
-    .map((row) => row.id)
-    .filter((id) => !skip.has(id));
+    (cachedStatement(db, MATCHED_SQL[place]).all(digest, tenantId, tenantId, digest) as IdRow[])
+      .map((row) => row.id)
+      .filter((id) => !skip.has(id));
   yield* chunked(matched, READ_PAGE_ROWS);
   const seen = new Set([...skip, ...matched]);
   let after: string | number = FIRST_KEY[place];
@@ -135,7 +135,14 @@ interface UnfilledRow {
 
 const KEY_COLUMN = { live: 'rowid', dormant: 'id' } as const;
 
-function fillSql(place: Place): { read: string; dropKeys: string; setDigests: string } {
+/** The fill's three statements for one place. */
+interface FillSql {
+  readonly read: string;
+  readonly dropKeys: string;
+  readonly setDigests: string;
+}
+
+function fillSql(place: Place): FillSql {
   const table = TABLE[place];
   return {
     read:

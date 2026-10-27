@@ -12,7 +12,7 @@ const RULE_CHANGED =
 
 const GHP = runtimeJoin('ghp_', 'x1Y2z3W4v5'.repeat(3), 'Q6r7S8');
 const JWT = runtimeJoin('eyJ', 'hbGciOiJIUzI1', '.eyJ', 'zdWIiOiIxMjM0', '.sig', 'nature_part');
-const SHAPES = [...ASSIGNED_SECRET_LINES, `token ${GHP}`, `Authorization: Bearer ${JWT}`, JWT];
+const SECRET_LINES = [...ASSIGNED_SECRET_LINES, `token ${GHP}`, `Authorization: Bearer ${JWT}`, JWT];
 
 const short = (digests: readonly string[]): string[] => digests.map((d) => d.slice(0, 12));
 
@@ -43,7 +43,7 @@ describe('the rejection key rule', () => {
   });
 
   it('keys a raw secret row by its stored form and a stored row by itself, for every secret shape', () => {
-    const keys = SHAPES.map((raw) => {
+    const keys = SECRET_LINES.map((raw) => {
       const stored = redactSecretsStrict(raw);
       expect(otherDigests(raw), raw).toEqual([rejectionDigest(stored)]);
       expect(otherDigests(stored), raw).toEqual([]);

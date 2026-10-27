@@ -209,7 +209,7 @@ function allRows(db: DatabaseSyncLike, table: 'memories' | 'dormant_memories', t
       ? 'id, content, source, scope'
       : `id, content, json_extract(entry_json, '$.source') AS source, json_extract(entry_json, '$.scope') AS scope`;
   // SAFETY: both column lists answer id, content, source and scope.
-  return db.prepare(`SELECT ${columns} FROM ${table} WHERE tenant_id = ?`).all(tenantId) as unknown as TextRow[];
+  return db.prepare(`SELECT ${columns} FROM ${table} WHERE tenant_id = ?`).all(tenantId) as TextRow[];
 }
 
 /** Oracle A: both tables in full, the reach and the predicate, as apply's removal judges each row. */
@@ -265,10 +265,21 @@ describe('a rejection reads its holders by key', () => {
 });
 
 /** Seeds a conflict whose loser holds `value`, plus the cell's rows; returns the root and both sides. */
-function conflictStore(cell: Cell, fillers = 3): { root: string; keep: string; loser: string } {
+/** The two sides of a seeded conflict. */
+interface Sides {
+  readonly keep: string;
+  readonly loser: string;
+}
+
+/** A store holding one open conflict, and its sides. */
+interface ConflictStore extends Sides {
+  readonly root: string;
+}
+
+function conflictStore(cell: Cell, fillers = 3): ConflictStore {
   const root = seeded(cell, fillers);
   const db = openHippoDb(root);
-  let sides: { keep: string; loser: string };
+  let sides: Sides;
   try {
     sides = { keep: live(db, 'keep this text').id, loser: live(db, cell.value ?? V).id };
   } finally {
@@ -279,7 +290,7 @@ function conflictStore(cell: Cell, fillers = 3): { root: string; keep: string; l
 }
 
 /** Oracle B: live rows only, whole text, ownScopeTouches, less loser and keep. */
-function resolveOracle(db: DatabaseSyncLike, value: string, sides: { keep: string; loser: string }): string[] {
+function resolveOracle(db: DatabaseSyncLike, value: string, sides: Sides): string[] {
   const digest = rejectionDigest(redactSecretsStrict(value));
   return allRows(db, 'memories', 'default')
     .filter((row) => row.id !== sides.keep && row.id !== sides.loser)
@@ -288,7 +299,7 @@ function resolveOracle(db: DatabaseSyncLike, value: string, sides: { keep: strin
     .sort();
 }
 
-async function resolveReject(root: string, sides: { keep: string; loser: string }): Promise<boolean> {
+async function resolveReject(root: string, sides: Sides): Promise<boolean> {
   const [conflict] = await listMemoryConflicts(root, 'open');
   return sqliteStore(root).conflicts.resolve('default', {
     conflictId: conflict.id,
