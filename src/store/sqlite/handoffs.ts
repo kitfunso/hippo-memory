@@ -1,5 +1,5 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { refuseSecretKeys } from '../../base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -167,16 +167,27 @@ function insertHandoffRow(
   );
 }
 
+/** A caller's handoff, its keys refused when secret-shaped; session end carries stored ones, so
+ * only this entrance checks them. */
+export function saveCallerHandoff(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
+  key?: ContinuityKey | null,
+): SessionHandoff {
+  const { sessionId, cardId, targetRuntime, scope, outcome, repoRoot } = handoff;
+  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome, repoRoot });
+  return saveSessionHandoff(db, tenantId, handoff, key);
+}
+
 /** Save a session handoff record; returns the persisted handoff. */
-export function saveSessionHandoff(
+function saveSessionHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key?: ContinuityKey | null,
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
-  const { sessionId, cardId, targetRuntime, scope, outcome } = handoff;
-  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome });
   const stamp = key ? continuityStamp(key) : null;
   const now = handleStamp(db);
 
@@ -374,6 +385,7 @@ export function writeSessionEndHandoff(
 ): SessionHandoff | null {
   const { sessionId, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
+  refuseSecretKeys({ sessionId });
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = readActiveTaskSnapshot(db, files, tenantId, key);
   const existing = readLatestHandoff(db, { tenantId, sessionId, opts: {}, key });

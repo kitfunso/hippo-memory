@@ -2,6 +2,7 @@
 // touches no store.
 
 import { estimateTokens } from '../../base/util/token-text.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
@@ -124,6 +125,7 @@ export function planRecall(
   ctx: Context,
   { opts, all, personalScope, profile }: PlanRecallOptions,
 ): RecallPlan {
+  refuseSecretKeys({ sessionId: opts.boost?.sessionId });
   const limit = opts.window?.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, personalScope);
   const { sessionId, goalTag } = opts.boost ?? {};

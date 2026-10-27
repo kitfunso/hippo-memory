@@ -1,5 +1,5 @@
 // hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
-import { refuseSecretKeys } from '../../base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { median } from '../../base/util/stats.js';
 import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';

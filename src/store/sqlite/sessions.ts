@@ -1,6 +1,6 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
 // binding.
-import { refuseSecretKeys } from '../../base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import {
   HOOK_DB_WAIT_MS,
@@ -35,7 +35,7 @@ import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
   readHandoff,
   readLatestHandoff,
-  saveSessionHandoff,
+  saveCallerHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
 } from './handoffs.js';
@@ -288,6 +288,7 @@ function insertOwnerRow(
   db: DatabaseSyncLike,
   { tenantId, sessionId, owner, createdAt }: OwnerRowOptions,
 ): number {
+  refuseSecretKeys({ sessionId, owner });
   const result = cachedStatement(
     db,
     `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
@@ -388,7 +389,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
  * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
-  refuseSecretKeys({ scope: item.scope, sessionId: item.sessionId, taskId: item.taskId });
+  refuseSecretKeys({ scope: item.scope, sessionId: item.sessionId });
   const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
     const result = cachedStatement(
@@ -401,7 +402,7 @@ function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush)
     ).run(
       item.scope,
       item.sessionId ?? null,
-      item.taskId ?? null,
+      storedOrNull(item.taskId),
       item.importance ?? 0,
       redactSecretsStrict(item.content),
       redactPayload(JSON.stringify(item.metadata ?? {})),
@@ -502,7 +503,7 @@ function saveAny(
   }
   if (kind === 'event') return appendSessionEvent(db, files, tenantId, row);
   if (kind === 'working_memory') return wmPush(db, tenantId, row);
-  if ('handoff' in row) return saveSessionHandoff(db, tenantId, row.handoff, key);
+  if ('handoff' in row) return saveCallerHandoff(db, tenantId, row.handoff, key);
   if ('sessionEnd' in row) {
     return writeSessionEndHandoff(db, { files, tenantId, request: row.sessionEnd, key });
   }

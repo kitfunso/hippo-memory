@@ -1,5 +1,5 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
-import { refuseSecretKeys } from '../../base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import type {

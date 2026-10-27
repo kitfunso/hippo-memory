@@ -3,6 +3,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
 import type { OriginMoveOptions } from './entry-rewrites.js';
@@ -141,11 +142,24 @@ export function openTranscriptRows(
   );
 }
 
+/** The hook payload's session, trigger and paths are keys a caller sent; each insert refuses a secret-shaped one. */
+function refuseCompactionKeys(
+  m: Pick<StartedCompactionInput, 'sessionId' | 'trigger' | 'cwd' | 'transcriptPath'>,
+): void {
+  refuseSecretKeys({
+    sessionId: m.sessionId,
+    trigger: m.trigger,
+    cwd: m.cwd,
+    transcriptPath: m.transcriptPath,
+  });
+}
+
 export function insertStartedCompaction(
   db: DatabaseSyncLike,
   tenantId: string,
   start: StartedCompactionInput,
 ): void {
+  refuseCompactionKeys(start);
   cachedStatement(
     db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
@@ -196,6 +210,7 @@ export function insertSummarizedCompaction(
   row: SummarizedInsert,
 ): void {
   const { id, summary, itemsJson, summarizedAt, requestId } = row;
+  refuseCompactionKeys(meta);
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];

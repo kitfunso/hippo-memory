@@ -3,6 +3,7 @@
 // `origin`, else the folder name. src/host/project-identity.ts walks the disk to resolve one.
 import { BadRequestError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
+import { refuseSecretKeyList } from '../errors/secret-keys.js';
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
@@ -63,6 +64,7 @@ export function assertCallerProject(project: {
 }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
+  refuseSecretKeyList('project names', [name, ...aliases]);
   if (aliases.length > MAX_PROJECT_ALIASES) {
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   }

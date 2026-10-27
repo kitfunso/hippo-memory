@@ -32,6 +32,7 @@ import {
   ScopeForbiddenError,
 } from '../../base/scope/recall-scope.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
+import { refuseSecretKeyList, refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import type { Context, ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 
@@ -158,6 +159,12 @@ function prepareRemember(
 ): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
   assertOwnerIsCallers(ctx, opts.owner);
+  refuseSecretKeys({
+    owner: opts.owner,
+    artifactRef: opts.artifactRef,
+    sourceSessionId: opts.local?.sourceSessionId,
+  });
+  refuseSecretKeyList('tags', opts.tags);
   const requestedScope = rememberScope(ctx, opts, untrusted);
   const vetted = vetSecrets(opts.content);
   const detection = untrusted

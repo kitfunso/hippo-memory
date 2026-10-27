@@ -5,6 +5,7 @@
  * surrounding call. */
 
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import type { OnHandle } from './open.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import {
@@ -62,6 +63,7 @@ const RESULT_ROWS_PER_INSERT = 100;
  * `finishRecall` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
+    refuseSecretKeys({ sessionId: input.sessionId });
     const queryHash = blockHash(input.query);
     const ts = handleStamp(db);
     return withWriteScope(db, 'write_recall_trace', () => {
@@ -437,6 +439,8 @@ function writeDeliveryEvent(
   prune: DeliveryPruneSchedule,
 ): number | null {
   try {
+    const { sessionId, hostTurnId, toolUseId, runtime } = input;
+    refuseSecretKeys({ sessionId, hostTurnId, toolUseId, runtime });
     const now = Date.now();
     const pruning = prune.due(now);
     const eventId = withWriteScope(db, 'write_delivery_event', () => {

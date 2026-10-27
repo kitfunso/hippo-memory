@@ -1,5 +1,6 @@
 // hippo.db's Cards group: the agent work board.
 import { generateId } from '../../base/memory/entry.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import {
   withWriteScope,
@@ -455,6 +456,7 @@ function claimCard(
 ): (Card & { runId: number }) | null {
   assertTenantId('claimCard', tenantId);
   assertFilled('runtime', runtime);
+  refuseSecretKeys({ runtime, sessionId });
   const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
     const changes = transitionCard(db, tenantId, id, {
       from: ['ready', 'blocked'],

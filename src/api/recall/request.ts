@@ -2,6 +2,7 @@
 // same messages. retrieveWithCliCore ranks with rankRecall under BUDGET_RANKED, then records the
 // list shown once.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
   decidePlanningFallacy,
@@ -235,6 +236,10 @@ export async function retrieveWithCliCore(
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('The CLI ranking core serves the host admin only');
   }
+  refuseSecretKeys({
+    sessionId: opts.boost?.sessionId,
+    hostSessionId: 'hostSessionId' in core ? core.hostSessionId : undefined,
+  });
   const store = ctx.store;
   const ranking = await rankRecall(
     { ...rankCtxOf(ctx), global: rankGlobal(ctx, core.sources), note: core.note },

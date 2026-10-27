@@ -299,7 +299,7 @@ const OBJECT_ROWS: RowSpecs & InsertSpecs = {
     graphType: 'project',
     insert: {
       columns: ['repo', 'summary'],
-      values: (w) => [w.repo, stored(w.summary)],
+      values: (w) => [stored(w.repo), stored(w.summary)],
     },
   },
   customer_note: {

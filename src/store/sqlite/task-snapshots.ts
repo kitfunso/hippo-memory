@@ -1,6 +1,6 @@
 // The active task snapshot rows and the continuity key that scopes them, for the Sessions group and
 // the handoffs.
-import { refuseSecretKeys } from '../../base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { originInSql } from './rule-sql.js';

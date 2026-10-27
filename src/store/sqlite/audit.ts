@@ -1,6 +1,6 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { keysetAfter } from '../../db/sql.js';
-import { redactPayload } from '../../base/util/secret-detect.js';
+import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { JsonValue, JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import type { AppendAuditOptions, AuditEvent } from '../../base/ports/store/types.js';
@@ -56,7 +56,7 @@ function auditRowValues(opts: AppendAuditOptions): [string, string, string, stri
     opts.tenantId,
     opts.actor,
     opts.op,
-    opts.targetId ?? null,
+    opts.targetId === undefined ? null : redactSecretsStrict(opts.targetId),
     redactPayload(JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer)),
   ];
 }

@@ -7,6 +7,7 @@
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
+import { refuseSecretKeys } from '../errors/secret-keys.js';
 
 /**
  * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by
@@ -97,6 +98,7 @@ export function personalScopeOf(actor: { owner?: string } | undefined): string |
 
 /** Refuses a client-sent `personal:` scope: only the server stamps one, from the caller's owner. */
 export function assertClientScope(scope: string | null | undefined): void {
+  refuseSecretKeys({ scope });
   if (isScopeString(scope) && /^personal:/i.test(scope)) {
     throw new BadRequestError(`scope ${scope} is reserved: the server sets personal scopes itself`);
   }

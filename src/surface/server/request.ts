@@ -1,4 +1,5 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../base/ports/store.js';
@@ -13,10 +14,12 @@ import type { RouteParams } from './types.js';
 // back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
-/** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
+/** The caller's `X-Request-Id` when it is a short plain token with no secret shape, else a fresh UUID. */
 function resolveRequestId(header: string | string[] | undefined): string {
   const value = Array.isArray(header) ? undefined : header;
-  return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
+  return value && REQUEST_ID_RE.test(value) && redactSecretsStrict(value) === value
+    ? value
+    : randomUUID();
 }
 
 /**

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { randomInt, randomUUID } from 'node:crypto';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { generateId } from '../../src/base/memory/entry.js';
-import { refuseSecretKeys } from '../../src/base/records/secret-keys.js';
+import { refuseSecretKeys } from '../../src/base/errors/secret-keys.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
