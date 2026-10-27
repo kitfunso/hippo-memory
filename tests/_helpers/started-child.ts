@@ -1,6 +1,6 @@
 // The one way a test runs an async child: each wait is on a printed line or the exit, with its own deadline, and the
 // whole process tree is gone before the test's folder is removed.
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import { killTree } from '../../src/host/kill-tree.js';
 import { trackLive } from './make-root.js';
@@ -51,16 +51,48 @@ const STOP_EXIT_MS = 2_000;
 export const STORE_RUN_MS = 25_000;
 export const STORE_RUN_REASON = 'a whole process run that opens a store; the 10 s default is for one event';
 
-/** POSIX: kills what is left of the child's process group; a group id is never reused while a member lives. */
-function killGroup(pid: number): void {
-  if (process.platform === 'win32') return;
+/** A kill with pid 0 or below signals a whole group or every process the user owns, so each kill checks it first. */
+function realPid(pid: number): number {
+  if (!Number.isInteger(pid) || pid <= 0) throw new RangeError(`refusing to signal pid ${pid}`);
+  return pid;
+}
+
+/** SIGKILL to `target`; gone (ESRCH) or, on macOS, a group of one unreaped zombie (EPERM) counts as ended. */
+function sigkill(target: number): void {
   try {
-    process.kill(-pid, 'SIGKILL');
+    process.kill(target, 'SIGKILL');
   } catch (err) {
     // SAFETY: process.kill throws a NodeJS.ErrnoException.
-    if ((err as NodeJS.ErrnoException).code !== 'ESRCH') throw err;
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ESRCH' && code !== 'EPERM') throw err;
   }
 }
+
+/** POSIX: every descendant of `pid` in one ps snapshot. */
+function descendantsOf(pid: number): number[] {
+  const parents = execFileSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8', timeout: STOP_EXIT_MS })
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/).map(Number))
+    .filter(([p, pp]) => Number.isInteger(p) && Number.isInteger(pp));
+  const found: number[] = [];
+  const queue = [pid];
+  for (let at = queue.shift(); at !== undefined; at = queue.shift()) {
+    const children = parents.filter(([p, pp]) => pp === at && !found.includes(p)).map(([p]) => p);
+    found.push(...children);
+    queue.push(...children);
+  }
+  return found;
+}
+
+/** The kills stop() makes; a test stubs them to see each pid they are given. */
+export const killers = {
+  tree: (pid: number): Promise<void> => killTree(realPid(pid)),
+  /** POSIX: what is left of the child's group; a group id is not reused while a member lives. */
+  group: (pid: number): void => {
+    if (process.platform !== 'win32') sigkill(-realPid(pid));
+  },
+  one: (pid: number): void => sigkill(realPid(pid)),
+};
 const TAIL_CHARS = 2_048;
 
 /** Runs `node <args>` with piped stdio and tracks it, so it is stopped before the test's folder is removed. */
@@ -187,15 +219,22 @@ export function startCommand(command: string, args: readonly string[], opts: Sta
     },
     stop({ graceful = false } = {}) {
       stopping ??= (async () => {
-        if (spawnError !== null) return;
+        // No pid means the spawn failed: nothing to signal, and the wait rejects with the spawn error.
+        if (child.pid === undefined || spawnError !== null) {
+          await handle.exited(STOP_EXIT_MS);
+          return;
+        }
         // Windows has no SIGTERM to handle (a kill is TerminateProcess), so a graceful stop there is the tree kill.
         if (graceful && process.platform !== 'win32' && exit === null) {
+          // Read while the parent lives: once SIGTERM ends it, its orphans leave its tree.
+          const tree = descendantsOf(pid);
           child.kill('SIGTERM');
           await handle.exited(STOP_EXIT_MS).catch(() => undefined);
+          for (const p of tree) killers.one(p);
         }
         // Only while the child lives: after its exit the pid may already belong to another process.
-        if (exit === null) await killTree(pid);
-        killGroup(pid);
+        if (exit === null) await killers.tree(pid);
+        killers.group(pid);
         await handle.exited(STOP_EXIT_MS).catch(() => {
           throw new Error(`child ${pid} still running ${STOP_EXIT_MS} ms after it was killed`);
         });
@@ -203,6 +242,6 @@ export function startCommand(command: string, args: readonly string[], opts: Sta
       return stopping;
     },
   };
-  trackLive({ lifetime: opts.lifetime ?? 'test', stop: () => handle.stop() });
+  if (child.pid !== undefined) trackLive({ lifetime: opts.lifetime ?? 'test', stop: () => handle.stop() });
   return handle;
 }

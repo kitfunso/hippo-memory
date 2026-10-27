@@ -1,11 +1,11 @@
 import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { pidAlive } from '../../src/host/pid-alive.js';
 import { endOfFile, makeRoot, removeWhenStopped, trackLive } from './make-root.js';
 import { hippoRun } from './spawn-hippo.js';
-import { startNode } from './started-child.js';
+import { killers, startNode } from './started-child.js';
 import { waitFor } from './wait-for.js';
 
 const ECHO_LINES = `process.stdin.setEncoding('utf8'); process.stdin.on('data', (t) => process.stdout.write(t));`;
@@ -102,7 +102,9 @@ describe('startNode', () => {
     const child = startNode(['-e', 'setInterval(() => {}, 1000)']);
     await child.stop();
     expect(child.running()).toBe(false);
-    await expect(child.exited(1)).resolves.toMatchObject({ code: expect.anything() });
+    // POSIX reports a killed child as code null with its signal; Windows as an exit code.
+    const { code, signal } = await child.exited(1);
+    expect(code !== null || signal !== null, `code ${code}, signal ${signal}`).toBe(true);
   });
 
   it("the file's end stops 'file' children before it removes the folders made for the file", async () => {
@@ -131,6 +133,19 @@ describe('startNode', () => {
       process.off('uncaughtException', onUncaught);
     }
     expect(uncaught).toEqual([]);
+  });
+
+  it('a stop() right after a failed spawn signals no pid and rejects with the spawn error', async () => {
+    const tree = vi.spyOn(killers, 'tree').mockResolvedValue(undefined);
+    const group = vi.spyOn(killers, 'group').mockReturnValue(undefined);
+    const one = vi.spyOn(killers, 'one').mockReturnValue(undefined);
+    try {
+      const child = startNode(['-e', ''], { cwd: join(tmpdir(), 'hippo-started-child-missing', 'cwd') });
+      await expect(child.stop({ graceful: true })).rejects.toMatchObject({ code: 'ENOENT' });
+      expect([...tree.mock.calls, ...group.mock.calls, ...one.mock.calls]).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('removeWhenStopped stops a tracked child while its folder is still there', async () => {
