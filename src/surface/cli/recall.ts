@@ -17,7 +17,8 @@ import type {
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { hashQueryText, sessionRing, type AnchoringHint } from '../../api/recall/finish.js';
+import { sessionRing } from '../../api/recall/session-rings.js';
+import { hashQueryText, type AnchoringHint } from '../../api/recall/anchoring.js';
 import type { AvailabilityHint } from '../../api/availability.js';
 import {
   handoffText,

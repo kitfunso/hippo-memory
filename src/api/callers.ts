@@ -2,7 +2,7 @@
 // build one and hand it down on the Context, so no module holds caller state and no test resets
 // one.
 import { RecentRecalls } from './recall/last-recalled.js';
-import type { RecallSurface, RingBuffer } from './recall/finish.js';
+import type { RecallSurface, RingBuffer } from './recall/session-rings.js';
 import type { AutoSleepRunner } from './sleep/auto-sleep.js';
 
 /** How a write starts a background sleep of one folder: the server runs it in its sleep queue's

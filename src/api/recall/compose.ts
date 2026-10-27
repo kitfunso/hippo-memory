@@ -28,14 +28,16 @@ import type { RecallProfile } from './profiles.js';
 import {
   anchoringRows,
   availabilityRows,
-  biasHintEnabled,
   callerOf,
-  detectAnchoring,
-  hashQueryText,
   recallAuditMetadata,
   recallAuditRow,
-  type AnchoringHint,
 } from './finish.js';
+import {
+  biasHintEnabled,
+  detectAnchoring,
+  hashQueryText,
+  type AnchoringHint,
+} from './anchoring.js';
 import type { ActiveGoals, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { type RankedBands, rankBands, overflowGroups } from './bands.js';

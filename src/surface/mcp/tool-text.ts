@@ -8,7 +8,7 @@ import type { ContextCost } from '../../api/context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../../api/recall/types.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
 import { printedTokens } from '../../api/context-render.js';
-import { detectAnchoring } from '../../api/recall/finish.js';
+import { detectAnchoring } from '../../api/recall/anchoring.js';
 import { detectAvailabilityBias } from '../../api/availability.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 

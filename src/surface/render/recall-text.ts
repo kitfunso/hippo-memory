@@ -3,14 +3,13 @@
 // neither may import the other.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
+import { snapshotRing, type RingBuffer } from '../../api/recall/session-rings.js';
 import {
   detectAnchoring,
   biasHintEnabled,
-  snapshotRing,
   type AnchoringHint,
   type HintConfig,
-  type RingBuffer,
-} from '../../api/recall/finish.js';
+} from '../../api/recall/anchoring.js';
 import { detectAvailabilityBias, type AvailabilityHint } from '../../api/availability.js';
 import type { RecallSuppressionSummary } from '../../api/recall/types.js';
 
