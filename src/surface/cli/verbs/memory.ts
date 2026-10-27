@@ -221,7 +221,7 @@ export const MEMORY_VERBS = {
     --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`,
     ],
   }),
-  trace: verb(() => import('../remember.js'), 'handleTrace', {
+  trace: verb(() => import('../trace.js'), 'handleTrace', {
     flags: {
       switches: ['json'],
       values: ['outcome', 'session', 'source', 'steps', 'task'],
