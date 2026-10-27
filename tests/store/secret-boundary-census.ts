@@ -130,6 +130,7 @@ const CENSUS = {
     entry_json: vetted('insertDormantRow'),
     reason: enumeration,
     dormant_at: at,
+    rejection_digest: hash,
   },
   entities: {
     tenant_id: id,
@@ -198,6 +199,7 @@ const CENSUS = {
     enqueued_at: at,
     processed_at: at,
   },
+  held_text_digests: { tenant_id: id, rejection_digest: hash, memory_id: id },
   incidents: {
     ...OBJECT_TAIL,
     incident_text: vetted('incident open'),
@@ -235,6 +237,7 @@ const CENSUS = {
     last_rebuilt_at: at,
     dag_level_3_built_at: at,
     origin_project: path,
+    rejection_digest: hash,
   },
   memories_fts: { id: id, content: vetted('writeEntry'), tags: tag },
   memories_fts_config: { k: enumeration, v: num },
