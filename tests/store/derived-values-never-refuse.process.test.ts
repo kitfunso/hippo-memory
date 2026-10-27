@@ -48,6 +48,7 @@ describe('a folder named like a key', () => {
     expect(result.status, result.stderr).toBe(0);
     const db = openHippoDb(path.join(root, '.hippo'));
     try {
+      // SAFETY: the SELECT names exactly the two text columns the record holds.
       const row = db.prepare('SELECT tags_json, origin_project FROM memories').get() as Record<string, string>;
       expect(row.tags_json).toContain('path:src');
       expect(JSON.stringify(row)).not.toContain(BODY);

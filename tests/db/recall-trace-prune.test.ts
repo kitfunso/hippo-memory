@@ -2,11 +2,8 @@
 // last recall's, with their results; it reads the same rows whatever the table's size.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  recordTraceOutcome,
-  writeDeliveryEventOnHandle,
-  writeRecallTrace,
-} from '../../src/store/sqlite/recall-trace.js';
+import { recordTraceOutcome, writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/delivery-ledger.js';
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -7,7 +7,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createApiKey, grantScope } from '../../src/store/sqlite/auth.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertSummarizedCompaction } from '../../src/store/sqlite/compaction-rows.js';
-import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
+import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/delivery-ledger.js';
 import { insertTokenRow } from '../../src/store/sqlite/token-ledger-rows.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';

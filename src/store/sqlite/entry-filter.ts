@@ -9,7 +9,7 @@ import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { EntryFilter, EntryNarrowing } from '../../base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
-import { entryPage, entryPageOrder, entryRange, type EntryPageRequest } from './keyset.js';
+import { entriesPage, entryPageOrder, entryRange, type EntryPageRequest } from './keyset.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
 
@@ -121,7 +121,7 @@ export function listEntriesWhere(
   const seeksSource = narrowing.sourcePrefix !== undefined && narrowing.origins === undefined;
   const index =
     seeksSource && tenantId !== ALL_TENANTS ? ' INDEXED BY idx_memories_source_tenant_created' : '';
-  const { rows, next } = entryPage(
+  return entriesPage(
     tenantId,
     page,
     (within, limit) =>
@@ -130,7 +130,6 @@ export function listEntriesWhere(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${index} WHERE ${within.match(`1${where.sql}`)} ${within.order}`,
       ).all(...where.params, ...within.params, limit) as MemoryRow[],
   );
-  return { entries: rows.map(rowToEntry), next };
 }
 
 // An id list reads off the primary key: the plus keeps SQLite off the tenant index, and no tenant

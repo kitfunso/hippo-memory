@@ -2,7 +2,8 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { adminActor, ForbiddenError, memoryInvalidate, rejectOnHost, remember } from '../../src/api/index.js';
-import { handleInvalidate, handleReject } from '../../src/surface/cli/curate.js';
+import { handleInvalidate } from '../../src/surface/cli/curate.js';
+import { handleReject } from '../../src/surface/cli/rejections.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';

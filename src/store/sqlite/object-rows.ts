@@ -1,6 +1,7 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind
 // the shared save writes, its insert values and audit keys. A status column carries a CHECK
 // constraint, so a row declares it as the kind's status union.
+
 import { isJsonString } from '../../base/util/json.js';
 import {
   redactPayload,
@@ -29,6 +30,9 @@ import type {
   Skill,
   SkillStatus,
 } from '../../base/records/object-types.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import { cachedStatement } from '../../db/statement-cache.js';
+import type { JsonObject } from '../../base/util/json.js';
 
 interface HeadRow {
   id: number;
@@ -325,4 +329,87 @@ export function rowSpec<K extends ObjectKind>(kind: K): RowSpec<K> {
 export function insertSpec<K extends SavableKind>(kind: K): InsertSpec<K> {
   const rows: InsertSpecs = OBJECT_ROWS;
   return rows[kind].insert;
+}
+
+// Each typed-object kind's table and audit rows: the table its ids follow, whether it keeps
+// versions, and the op, target and keys of its open, create, supersede and close rows.
+
+export const KINDS = {
+  decision: { table: 'decisions', idKey: 'decision_id' },
+  incident: { table: 'incidents', idKey: 'incident_id' },
+  process: { table: 'processes', idKey: 'process_id' },
+  policy: { table: 'policies', idKey: 'policy_id' },
+  skill: { table: 'skills', idKey: 'skill_id' },
+  project_brief: { table: 'project_briefs', idKey: 'brief_id' },
+  customer_note: { table: 'customer_notes', idKey: 'note_id' },
+} as const satisfies Record<ObjectKind, { readonly table: string; readonly idKey: string }>;
+
+/** The kind's table, whose AUTOINCREMENT sequence its ids follow. */
+export const objectTable = (kind: ObjectKind): string => KINDS[kind].table;
+
+interface SaveRule<K extends SavableKind> {
+  /** A successor takes its predecessor's version plus one and the caller's change note; a
+   * decision has no version. */
+  readonly versioned: boolean;
+  /** The create row's keys after the id, in stored order: ids, counts and flags, never the
+   * object's text. */
+  readonly createKeys: (fields: ObjectFields[K], version: number) => JsonObject;
+  /** Keys the supersede row stores after its own. */
+  readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
+}
+
+export const hasText = (text: string | null | undefined): boolean =>
+  text !== undefined && text !== null && text !== '';
+
+// Tells an auto-refresh from a manual write in the audit log without a fourth audit op.
+const refreshKeys = (f: ObjectFields['project_brief']): JsonObject =>
+  f.receiptCount === undefined
+    ? { refreshed: false }
+    : { refreshed: true, receipt_count: f.receiptCount };
+
+type SaveRules = { readonly [K in SavableKind]: SaveRule<K> };
+
+export const SAVE_RULES: SaveRules = {
+  decision: { versioned: false, createKeys: (f) => ({ has_context: hasText(f.context) }) },
+  process: {
+    versioned: true,
+    createKeys: (f, version) => ({
+      version,
+      step_count: f.steps.length,
+      has_description: hasText(f.description),
+    }),
+  },
+  policy: {
+    versioned: true,
+    createKeys: (f, version) => ({ version, open_ended: f.validTo === null }),
+  },
+  skill: {
+    versioned: true,
+    createKeys: (f, version) => ({ version, has_trigger: f.trigger !== null }),
+  },
+  project_brief: {
+    versioned: true,
+    createKeys: (f, version) => ({ repo: f.repo, version, ...refreshKeys(f) }),
+    supersedeKeys: refreshKeys,
+  },
+  customer_note: {
+    versioned: true,
+    createKeys: (f, version) => ({ customer: f.customer, version }),
+  },
+};
+
+export const isVersioned = (kind: SavableKind): boolean => SAVE_RULES[kind].versioned;
+
+export function readRow<K extends ObjectKind>(
+  db: DatabaseSyncLike,
+  kind: K,
+  tenantId: string,
+  id: number,
+): RowByKind[K] | undefined {
+  const spec = rowSpec(kind);
+  // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
+  return cachedStatement(
+    db,
+    `SELECT ${spec.cols} FROM ${objectTable(kind)} WHERE id = ? AND tenant_id = ?`,
+  ).get(id, tenantId) as RowByKind[K] | undefined;
 }

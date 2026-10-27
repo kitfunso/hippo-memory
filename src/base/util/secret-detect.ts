@@ -1,4 +1,4 @@
-// Secret detection and the stored form of every text: provider-bounded patterns, so a bare `sk-` in prose does not flag.
+// Secret detection and the stored form of every text: provider-bounded patterns, so a bare `sk-` in prose stays.
 // A flagged row is never shared to the global store or injected outside its project. Leaf module.
 import { createHash } from 'node:crypto';
 import { tryParseJson } from './json.js';
@@ -237,7 +237,7 @@ const digest = (raw: string): string =>
 /** A marker naming its raw part; `[` and `]` end every token class, so no pattern extends it. */
 const taggedMarker = (raw: string): string => `[REDACTED~${digest(raw)}]`;
 const isSeparator = (ch: string): boolean => ch === '/' || ch === '#';
-/** Passes before a source that keeps making spans collapses to one marker; no case in the property test needs a third. */
+/** Passes before a source whose stored form keeps making new spans collapses to one tagged marker. */
 const MAX_SOURCE_PASSES = 4;
 
 /** One pass: split at `/` and `#` outside every span, so each span sits in one part; a part holding a span

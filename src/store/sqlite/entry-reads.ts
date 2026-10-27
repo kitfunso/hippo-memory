@@ -1,19 +1,14 @@
-import { CURRENT_DISTILLED } from '../../db/sql-predicates.js';
-import { duplicateHash } from '../../base/util/same-text.js';
+// Memory reads by id, scope, page and tag: the lookups the API and the surfaces run on a handle.
+
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import {
-  isFtsAvailable,
-  isFtsInSync,
-  withReadSnapshot,
-  type DatabaseSyncLike,
-} from '../../db/index.js';
+import { type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
-import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
+import { byIdOrder, FRESH_RAW_ORDER, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { MAX_FRESH_RAW } from '../../base/util/limits.js';
@@ -21,19 +16,13 @@ import { tenantAnd, TENANT_IS } from './tenant.js';
 import { listEntriesWhere } from './entry-filter.js';
 import {
   afterIdAnd,
+  entriesPage,
   entryPage,
   ENTRY_PAGE_ORDER,
   idPageOf,
   type EntryPageRequest,
-  type EntryRows,
-  type EntryRowsRead,
 } from './keyset.js';
-import type {
-  DuplicateCandidates,
-  EntryIdPage,
-  HalfLifeRow,
-  ObjectLink,
-} from '../../base/ports/store/consolidation.js';
+import type { EntryIdPage } from '../../base/ports/store/consolidation.js';
 import type { IdPage, IdPageRequest } from '../../base/ports/store/vectors.js';
 import type { SessionRawCount, SessionRawQuery } from '../../base/ports/store/context-reads.js';
 import type { OriginTally } from '../../base/ports/store/project-tags.js';
@@ -230,131 +219,6 @@ export function countAllEntries(db: DatabaseSyncLike): number {
   return Number(row?.c ?? 0);
 }
 
-// The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding
-// cannot see.
-const FOLDS_TO_ASCII = ['İ', 'K'];
-
-// Chars or bytes differ only when a non-ASCII char is present; the check never decodes the value.
-const hasNonAscii = (column: string): string =>
-  `length(${column}) != length(CAST(${column} AS BLOB))`;
-
-/** The FTS5 phrase for `text`: its ASCII alphanumeric runs in order, which is how unicode61
- * splits it; null when it holds none (the phrase would be empty) or any non-ASCII char. */
-function ftsPhrase(text: string): string | null {
-  if (!/^[ -~]*$/.test(text)) return null;
-  const pieces = text.match(/[A-Za-z0-9]+/g);
-  return pieces === null ? null : `"${pieces.join(' ')}"`;
-}
-
-/** MATCH expression whose hits include every row the LIKE path would keep, or null when some
- * token or the tag has no FTS form. Rows with non-ASCII text are added by the caller: JS
- * tokenizers drop those chars, unicode61 keeps them. */
-function ftsMentionQuery(tokens: readonly string[], tag: string | null): string | null {
-  const parts: string[] = [];
-  for (const t of new Set(tokens)) {
-    const phrase = ftsPhrase(t);
-    if (phrase === null) return null;
-    parts.push(phrase);
-  }
-  if (tag !== null) {
-    const phrase = ftsPhrase(tag);
-    if (phrase === null) return null;
-    parts.push(`tags : ${phrase}`);
-  }
-  return parts.length === 0 ? null : parts.join(' OR ');
-}
-
-/** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds
- * any of `tokens` or whose lowercased tags hold `tag`; `next` is where the following page
- * starts. The caller re-checks each row exactly; this only spares decoding rows that cannot
- * match. */
-export function listEntriesMentioning(
-  db: DatabaseSyncLike,
-  tokens: readonly string[],
-  tag: string,
-  tenantId: TenantId,
-  page: EntryPageRequest,
-): EntryPage {
-  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json,
-  // so every tagged row stays in.
-  const plainTag = /^[ -~]*$/.test(tag) && !/["\\]/.test(tag);
-  const ftsQuery =
-    plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
-  if (ftsQuery !== null) {
-    return entriesPage(tenantId, page, (within, limit) =>
-      ftsMentionRows(db, ftsQuery, within, limit),
-    );
-  }
-  const like = likeMentionFilter(tokens, tag, plainTag);
-  return entriesPage(
-    tenantId,
-    page,
-    (within, limit) =>
-      cachedStatement(
-        db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(like.sql)} ${ENTRY_PAGE_ORDER}`,
-      ).all(...like.params, ...within.params, limit) as MemoryRow[],
-  );
-}
-
-/** The LIKE and instr terms that keep every row a mention may match, for a store whose FTS
- * cannot answer. */
-function likeMentionFilter(tokens: readonly string[], tag: string, plainTag: boolean): SqlFragment {
-  const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
-  const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
-  const params: string[] = [...likes];
-  if (plainTag) {
-    clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
-    params.push(`%${escapeLike(tag)}%`);
-  } else clauses.push(`COALESCE(tags_json, '[]') != '[]'`);
-  for (const ch of FOLDS_TO_ASCII) {
-    clauses.push('instr(content, ?) > 0', 'instr(tags_json, ?) > 0');
-    params.push(ch, ch);
-  }
-  return { sql: clauses.join(' OR '), params };
-}
-
-// The plus keeps SQLite on the tenant's created index: on the id key it would fetch and sort every
-// hit for each page.
-const FTS_HITS = '+id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
-const NON_ASCII_ROWS = `(${hasNonAscii('content')} OR ${hasNonAscii('tags_json')})`;
-
-// Two reads, not one OR, so only the non-ASCII read decodes each row's text, and with a full page
-// of hits it stops at the last hit, past which no row can make the page.
-function ftsMentionRows(
-  db: DatabaseSyncLike,
-  ftsQuery: string,
-  within: EntryRows,
-  limit: number,
-): MemoryRow[] {
-  const hits = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(FTS_HITS)} ${ENTRY_PAGE_ORDER}`,
-  ).all(ftsQuery, ...within.params, limit) as MemoryRow[];
-  const last = hits.length === limit ? hits[limit - 1] : undefined;
-  const upTo =
-    last === undefined
-      ? { sql: '', params: [] }
-      : { sql: ' AND created <= ?', params: [last.created] };
-  const nonAscii = within.match(NON_ASCII_ROWS + upTo.sql);
-  const others = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${nonAscii} ${ENTRY_PAGE_ORDER}`,
-  ).all(...upTo.params, ...within.params, limit) as MemoryRow[];
-  const ids = new Set(hits.map((row) => row.id));
-  return [...hits, ...others.filter((row) => !ids.has(row.id))].sort(oldestFirst).slice(0, limit);
-}
-
-/** entryPage over whole rows, decoded. */
-function entriesPage(
-  tenantId: TenantId,
-  page: EntryPageRequest,
-  read: EntryRowsRead<MemoryRow>,
-): EntryPage {
-  const { rows, next } = entryPage(tenantId, page, read);
-  return { entries: rows.map(rowToEntry), next };
-}
-
 /** A page of rows in loadAllEntries' order, with only the columns that say whether another store
  * already holds each. */
 export function listEntryTextKeysPage(
@@ -534,118 +398,6 @@ export function entryRejectRow(
   return cachedStatement(db, `SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(
     id,
   ) as { content: string; tenant_id: string; scope: string | null } | undefined;
-}
-
-/** The typed-object tables whose rows name a backing memory in `memory_id`. */
-const OBJECT_TABLES = [
-  'decisions',
-  'incidents',
-  'processes',
-  'policies',
-  'skills',
-  'project_briefs',
-  'customer_notes',
-] as const;
-
-const backsObject = (statuses: string): string =>
-  OBJECT_TABLES.map(
-    (t) => `EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id${statuses})`,
-  ).join(' OR ');
-
-// Each table's partial memory_id index answers the EXISTS, so no object table is read whole.
-const OBJECT_LINK_SQL =
-  `CASE WHEN ${backsObject(" AND status IN ('superseded', 'closed')")} THEN 'retired' ` +
-  `WHEN ${backsObject('')} THEN 'live' END`;
-
-// SAFETY: every read cast to this row selects MEMORY_SELECT_COLUMNS and object_link.
-type ObjectLinkedRow = MemoryRow & { object_link: ObjectLink };
-
-/** Every tenant's rows in loadAllEntries' order through one cursor, each with the typed object
- * it backs. */
-export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLifeRow> {
-  const rows = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS}, ${OBJECT_LINK_SQL} AS object_link FROM memories ORDER BY created ASC, id ASC`,
-  ).iterate() as Iterable<ObjectLinkedRow>;
-  for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
-}
-
-// Hashes per page of the duplicate read; each page reads its hashes' rows by
-// idx_memories_duplicate_hash.
-const DUPLICATE_KEYS_PAGE = 500;
-
-/** The current distilled rows that may be another's duplicate, and the partitions in the order
- * they first appear. */
-export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
-  // One read transaction, so the partition keys describe the rows read.
-  return withReadSnapshot(db, () => {
-    // An older binary's rows carry no hash: hash them here, and read the hashed rows that share
-    // one. The caller regroups by duplicateKey, so a hash two different texts share costs only a
-    // row read. SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
-    const rows = cachedStatement(
-      db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash IS NULL`,
-    ).all() as MemoryRow[];
-    const unread = new Set(rows.map((row) => duplicateHash(row.content)));
-    for (let after = -1; ;) {
-      // SAFETY: the SELECT names one INTEGER column, k.
-      const keys = cachedStatement(
-        db,
-        `SELECT duplicate_hash AS k FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash > ? ` +
-          `GROUP BY duplicate_hash HAVING COUNT(*) > 1 ORDER BY duplicate_hash LIMIT ?`,
-      ).all(after, DUPLICATE_KEYS_PAGE) as Array<{ k: number }>;
-      for (const key of keys) unread.delete(key.k);
-      rows.push(
-        ...rowsWithHashes(
-          db,
-          keys.map((key) => key.k),
-        ),
-      );
-      if (keys.length < DUPLICATE_KEYS_PAGE) break;
-      after = keys[keys.length - 1]!.k;
-    }
-    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE)) {
-      rows.push(...rowsWithHashes(db, hashes));
-    }
-    // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII
-    // stamps and ids.
-    rows.sort(byCreatedThenId);
-    return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
-  });
-}
-
-function rowsWithHashes(db: DatabaseSyncLike, hashes: readonly number[]): MemoryRow[] {
-  if (hashes.length === 0) return [];
-  // SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
-  return cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-      `WHERE ${CURRENT_DISTILLED} AND duplicate_hash IN (SELECT value FROM json_each(?))`,
-  ).all(JSON.stringify(hashes)) as MemoryRow[];
-}
-
-const byCreatedThenId = (a: MemoryRow, b: MemoryRow): number =>
-  a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1;
-
-/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears
- * by created then id. */
-function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSeen'] {
-  // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order
-  // the rows sort in.
-  const firsts = cachedStatement(
-    db,
-    `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
-      `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
-  ).all() as Array<{
-    tenant_id: string | null;
-    scope: string | null;
-    origin_project: string | null;
-  }>;
-  return firsts.map((f) => ({
-    tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
-    scope: f.scope,
-    originProject: f.origin_project,
-  }));
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers

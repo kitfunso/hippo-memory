@@ -4,7 +4,7 @@ import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';
 import * as goalsSql from '../../../src/store/sqlite/goals.js';
-import * as predictionsSql from '../../../src/store/sqlite/predictions.js';
+import * as baserateSql from '../../../src/store/sqlite/prediction-baserate.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
 import type {
@@ -88,9 +88,7 @@ export function computePredictionBaserate(
   actor: string = CLI_ACTOR,
   emitAudit: boolean = true,
 ): PredictionBaserate {
-  return onHandle(hippoRoot, (db) =>
-    predictionsSql.computePredictionBaserate(db, tenantId, classTag, actor, emitAudit),
-  );
+  return onHandle(hippoRoot, (db) => baserateSql.computePredictionBaserate(db, tenantId, classTag, actor, emitAudit));
 }
 
 export async function loadOpenPredictions(

@@ -9,7 +9,7 @@ import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from './rows.js';
 import type { TaskSnapshot, SnapshotInput } from '../../base/ports/store/sessions.js';
-import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
+import { writeActiveTaskMirror, removeActiveTaskMirror } from './session-mirrors.js';
 import type { StoreFiles } from './open.js';
 import {
   continuityStamp,
