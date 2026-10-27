@@ -15,6 +15,7 @@ import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
+import { DAY_MS } from '../../base/util/time.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
@@ -26,10 +27,12 @@ interface SessionStateFiles {
   readonly cursor: string;
 }
 
+const sessionsDir = (): string => path.join(homeDir(), HIPPO_DIR, 'sessions');
+
 /** Null for a missing id or one that could climb out of the sessions folder. */
 function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return null;
-  const base = path.join(homeDir(), HIPPO_DIR, 'sessions', sessionId);
+  const base = path.join(sessionsDir(), sessionId);
   return { lock: `${base}.lock.db`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
@@ -177,8 +180,6 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
   }
 }
 
-// SHORTCUT: one small cursor file per chat is never pruned; prune by age at sleep if the folder
-// grows.
 export function saveTurnPosition(
   sessionId: string,
   transcriptPath: string,
@@ -204,4 +205,40 @@ export function saveTurnPosition(
     // re-reads these turns, which the dedupe keys absorb.
     log(`cursor not saved: ${errorMessage(err)}`);
   }
+}
+
+const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
+const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
+
+/** A text lock from before 3.0 names no process any more, so a day old is long dead. */
+const LEGACY_LOCK_MAX_AGE_MS = DAY_MS;
+
+/** Age limit in ms for a file in the sessions folder that a prune may remove; null for any other. */
+function pruneLimit(name: string): number | null {
+  if (name.endsWith('.cursor.json') || CURSOR_TMP.test(name)) return CURSOR_MAX_AGE_MS;
+  return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
+}
+
+/** Removes cursor files and leftovers of the old text locks past their age; never a `.lock.db` or
+ * a `.queued`, so it never holds a lock a worker could queue behind. Never throws; returns the
+ * number removed. */
+export function pruneSessionFiles(nowMs: number): number {
+  const dir = sessionsDir();
+  let removed = 0;
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      const limit = pruneLimit(name);
+      if (limit === null) continue;
+      const file = path.join(dir, name);
+      const stat = fs.statSync(file, { throwIfNoEntry: false });
+      if (stat === undefined || !stat.isFile() || nowMs - stat.mtimeMs < limit) continue;
+      fs.rmSync(file, { force: true });
+      removed++;
+    }
+  } catch (err) {
+    if (errorCode(err) !== 'ENOENT') {
+      logger.warn(`session worker: cannot prune ${dir}: ${errorMessage(err)}`, errorFields(err));
+    }
+  }
+  return removed;
 }

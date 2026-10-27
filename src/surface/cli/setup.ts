@@ -2,6 +2,7 @@
 // integrations.
 
 import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
+import { pruneSessionFiles } from '../capture/session-worker.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -666,6 +667,7 @@ async function finishGlobalCompactions(globalRoot: string, tenantId: string): Pr
   if (finished > 0) {
     console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
   }
+  pruneSessionFiles(Date.now());
   await repairQualityOnce(globalRoot, tenantId);
 }
 

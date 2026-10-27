@@ -7,6 +7,7 @@ import { processGit } from '../../infra/git-runner.js';
 import { importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { replayCompactions } from '../capture/compaction-record.js';
+import { pruneSessionFiles } from '../capture/session-worker.js';
 import * as api from '../../api/index.js';
 import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
 import { saveVectorGraphFile } from '../open-store.js';
@@ -162,6 +163,7 @@ async function runSleepCommand(
         `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,
       );
     }
+    pruneSessionFiles(Date.now());
     await repairProjectTagsOnce(hippoRoot, tenantId);
     await repairQualityOnce(hippoRoot, tenantId);
   }

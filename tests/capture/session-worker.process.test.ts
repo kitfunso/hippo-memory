@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import {
   loadTurnPosition,
+  pruneSessionFiles,
   runSessionWorker,
   saveTurnPosition,
   turnPosition,
@@ -239,5 +240,39 @@ describe('the progress cursor', () => {
     const log: string[] = [];
     expect(() => saveTurnPosition(ID, transcript, turns, (m) => log.push(m))).not.toThrow();
     expect(log).toEqual([expect.stringMatching(/^cursor not saved: /)]);
+  });
+});
+
+describe('pruning the sessions folder', () => {
+  const DAY = 86_400_000;
+  const age = (name: string, days: number): void => {
+    fs.writeFileSync(path.join(sessions, name), 'x');
+    const then = new Date(Date.now() - days * DAY);
+    fs.utimesSync(path.join(sessions, name), then, then);
+  };
+
+  it('removes an old cursor, an old cursor temp file and a day-old text lock', () => {
+    age('a.cursor.json', 31);
+    age('a.cursor.json.123.tmp', 31);
+    age('a.lock', 2);
+    expect(pruneSessionFiles(Date.now())).toBe(3);
+    expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
+  it('keeps fresh files, every lock database and every queued request', () => {
+    const keep = ['b.cursor.json', 'b.cursor.json.123.tmp', 'b.lock', 'c.lock.db', 'c.queued', 'c.queued.99'];
+    age('b.cursor.json', 29);
+    age('b.cursor.json.123.tmp', 1);
+    age('b.lock', 0);
+    age('c.lock.db', 400);
+    age('c.queued', 400);
+    age('c.queued.99', 400);
+    expect(pruneSessionFiles(Date.now())).toBe(0);
+    expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
+  });
+
+  it('does nothing, and does not throw, when the folder is missing', () => {
+    fs.rmSync(sessions, { recursive: true });
+    expect(pruneSessionFiles(Date.now())).toBe(0);
   });
 });
