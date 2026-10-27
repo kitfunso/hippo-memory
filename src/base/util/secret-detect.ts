@@ -70,8 +70,8 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
 const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
-// redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text
-// leaves the machine.
+// Redacted in every stored text but never flagged by detectSecret, whose flag withholds a whole row;
+// prose can trip them ("bearer responsibilities ..."), and the stored form then hides the words.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
@@ -146,21 +146,23 @@ export function redactPayload(raw: string): string {
   });
 }
 
-const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
-const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
+const PEM_BEGIN = String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----`;
+const PEM_END = String.raw`-----END [A-Z ]*PRIVATE KEY-----`;
 
 /** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward
- * scan, so no ReDoS. */
+ * scan, so no ReDoS. Per-call RegExps, so no call shares lastIndex state. */
 function redactPemBlocks(text: string): string {
+  if (!text.includes('-----BEGIN ')) return text;
+  const begins = new RegExp(PEM_BEGIN, 'g');
+  const ends = new RegExp(PEM_END, 'g');
   let out = '';
   let from = 0;
-  PEM_BEGIN.lastIndex = 0;
-  for (let begin = PEM_BEGIN.exec(text); begin; begin = PEM_BEGIN.exec(text)) {
-    PEM_END.lastIndex = PEM_BEGIN.lastIndex;
-    const end = PEM_END.exec(text);
+  for (let begin = begins.exec(text); begin; begin = begins.exec(text)) {
+    ends.lastIndex = begins.lastIndex;
+    const end = ends.exec(text);
     out += `${text.slice(from, begin.index)}[REDACTED]`;
-    from = end ? PEM_END.lastIndex : text.length;
-    PEM_BEGIN.lastIndex = from;
+    from = end ? ends.lastIndex : text.length;
+    begins.lastIndex = from;
   }
   return out + text.slice(from);
 }
@@ -212,7 +214,7 @@ export function textForms(text: string): readonly string[] {
   return stored === text ? [text] : [stored, text];
 }
 
-/** True for a stored text that holds redaction markers and nothing else, so it names no value. */
+/** True for a stored text whose redaction markers leave no letter or digit, so it names no value. */
 export function onlyRedacted(stored: string): boolean {
-  return stored.includes(REDACTED) && stored.replaceAll(REDACTED, '').trim() === '';
+  return stored.includes(REDACTED) && !/[\p{L}\p{N}]/u.test(stored.replaceAll(REDACTED, ''));
 }

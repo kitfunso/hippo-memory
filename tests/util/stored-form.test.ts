@@ -74,4 +74,11 @@ describe('onlyRedacted', () => {
     expect(onlyRedacted('')).toBe(false);
     expect(onlyRedacted('   ')).toBe(false);
   });
+
+  it('is true when only punctuation or quotes sit beside the markers', () => {
+    expect(onlyRedacted(redactSecretsStrict(`${GHP}.`))).toBe(true);
+    expect(onlyRedacted(redactSecretsStrict(`"${GHP}"`))).toBe(true);
+    expect(onlyRedacted(redactSecretsStrict(`\`${GHP}\`;`))).toBe(true);
+    expect(onlyRedacted(redactSecretsStrict(`${GHP} v2`))).toBe(false);
+  });
 });
