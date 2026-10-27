@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { startDeliveryRecorder, startToolFailureRecorder } from '../../src/api/prompt-hook.js';
+import { startDeliveryRecorder, startToolFailureRecorder } from '../../src/api/ledger-db.js';
 import { adminActor } from '../../src/api/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

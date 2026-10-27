@@ -9,15 +9,14 @@ import {
   type SearchResult,
   type VectorGraph,
 } from './vector-graph.js';
+import { decodeVector, EMBEDDING_MODEL_META_KEY } from './vector-store.js';
 import {
   admittedVectorsSql,
-  decodeVector,
-  EMBEDDING_MODEL_META_KEY,
   rankVectorRows,
   type VectorMatch,
   type VectorMatchQuery,
   type VectorRow,
-} from './vector-store.js';
+} from './vector-match.js';
 import { cachedStatement } from './statement-cache.js';
 import { placeholders } from './sql.js';
 

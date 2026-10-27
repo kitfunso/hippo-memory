@@ -10,7 +10,7 @@ import type {
   PlanningFallacyOutput,
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
-import { type AnchoringHint } from '../../api/recall/finish.js';
+import { type AnchoringHint } from '../../api/recall/anchoring.js';
 import type { AvailabilityHint } from '../../api/availability.js';
 import { printedTokens } from '../../api/context-render.js';
 import { loadScopedContinuity, recallJsonRow } from '../../api/recall/rows.js';
@@ -96,19 +96,17 @@ function rankOptions(
   return {
     budget: entryBudget,
     cost: priced.printCost,
-    window: { limit: parsed.limit },
+    limit: parsed.limit,
     why: parsed.showWhy,
     includeSuperseded: parsed.includeSuperseded,
     asOf: parsed.asOf,
     explicitScope: parsed.explicitScope,
     activeScope: parsed.setting.activeScope,
-    search: {
-      ...parsed.engine,
-      multihop: boolFlag(flags, 'multihop') || parsed.config.multihop.enabled,
-      graphStream: parsed.graphStream,
-      minResults: parsed.minResults,
-      explain: false,
-    },
+    ...parsed.engine,
+    multihop: boolFlag(flags, 'multihop') || parsed.config.multihop.enabled,
+    graphStream: parsed.graphStream,
+    minResults: parsed.minResults,
+    explain: false,
     graphHops: parsed.stages.graphHops,
     evcAdaptive: boolFlag(flags, 'evc-adaptive'),
     filterConflicts: boolFlag(flags, 'filter-conflicts'),

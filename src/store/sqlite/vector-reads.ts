@@ -3,7 +3,7 @@
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { graphServesStore } from '../../db/vector-graph-index.js';
 import { GraphFileIndex } from '../../db/vector-graph-reader.js';
-import type { VectorIndex } from '../../db/vector-store.js';
+import type { VectorIndex } from '../../db/vector-match.js';
 import type { Handles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import type { SqliteStoreOptions } from './grant.js';

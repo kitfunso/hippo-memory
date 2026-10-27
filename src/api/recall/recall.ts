@@ -35,10 +35,10 @@ import {
 import {
   rankCtxOf,
   rankRecall,
-  withMissing,
   type RankRecallOptions,
   type RankRecallResult,
 } from './pipeline.js';
+import { withMissing } from './rank-search.js';
 import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
@@ -176,7 +176,7 @@ function rankRequestOf(
   const { sessionId, goalTag } = opts.boost ?? {};
   return {
     query: opts.query,
-    window: { scorerWindow: windowSize },
+    scorerWindow: windowSize,
     includeSuperseded: false,
     explicitScope: opts.filter?.scope ?? null,
     scopeMode: 'exact',
@@ -185,13 +185,11 @@ function rankRequestOf(
     // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag
     // instead.
     boost: goalTag ? {} : { sessionId },
-    search: {
-      usePhysics: opts.mode === 'physics',
-      engineNamed: opts.mode === 'hybrid' || opts.mode === 'physics',
-      physicsConfig: ctx.config.physics,
-      multihop: false,
-      explain: false,
-    },
+    usePhysics: opts.mode === 'physics',
+    engineNamed: opts.mode === 'hybrid' || opts.mode === 'physics',
+    physicsConfig: ctx.config.physics,
+    multihop: false,
+    explain: false,
   };
 }
 

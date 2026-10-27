@@ -69,19 +69,17 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
     rank: {
       budget: 4000,
       cost: (r) => r.tokens,
-      window: { limit: 3 },
+      limit: 3,
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
-      search: {
-        usePhysics: false,
-        physicsConfig: config.physics,
-        multihop: false,
-        mmr: false,
-        mmrLambda: 0.7,
-        localBump: 1.2,
-        explain: false,
-      },
+      usePhysics: false,
+      physicsConfig: config.physics,
+      multihop: false,
+      mmr: false,
+      mmrLambda: 0.7,
+      localBump: 1.2,
+      explain: false,
     },
   };
 }

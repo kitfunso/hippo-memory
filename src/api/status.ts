@@ -15,7 +15,7 @@ import { buildCorrectionLatency, type CorrectionLatencyReport } from './correcti
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type ContextWith } from './types.js';
 import type { ParticleStats, StoredVectorSummary } from '../base/ports/store.js';
-import { indexStep } from '../domain/search/embed-memories.js';
+import { indexStep } from '../domain/search/embed-index-target.js';
 
 export interface StoreStatus {
   stats: LegacyStats;

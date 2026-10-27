@@ -12,7 +12,7 @@ import { bookLedgerTurn, ledgerReachOf } from '../../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import * as api from '../../api/index.js';
-import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../../api/context.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../../api/context.js';
 import { cliApiContext, cliHookRequest } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { strengthOf } from '../../api/types.js';
@@ -26,13 +26,11 @@ import {
   additionalContextOutput,
   type ContextView,
   type HookEnvelope,
-  flushDeliveryRecorder,
   hasContextData,
-  startDeliveryRecorder,
-  takeDelivery,
   sessionStartEnvelope,
   toRenderItems,
 } from '../../api/prompt-hook.js';
+import { flushDeliveryRecorder, startDeliveryRecorder, takeDelivery } from '../../api/ledger-db.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -314,7 +312,7 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
     category: r.category ?? null,
   }));
   const jsonText = JSON.stringify({
-    query: query || NO_QUERY,
+    query: query || api.NO_QUERY,
     activeSnapshot: result.activeSnapshot ? snapshotJson(result.activeSnapshot) : null,
     sessionHandoff: result.sessionHandoff ?? null,
     recentSessionEvents: (result.recentEvents ?? []).map(sessionEventJson),

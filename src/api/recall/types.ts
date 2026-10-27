@@ -8,12 +8,8 @@ import type {
   PlanningFallacyOutput,
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
-import type {
-  AnchoringHint,
-  RecallHistorySnapshot,
-  RecallRecording,
-  ShownHints,
-} from './finish.js';
+import type { RecallRecording, ShownHints } from './finish.js';
+import type { AnchoringHint, RecallHistorySnapshot } from './anchoring.js';
 import type { AvailabilityHint } from '../availability.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { GlobalInReach } from '../types.js';
@@ -268,7 +264,7 @@ export interface RecallSuppressionSummary {
    * `freshTailCount > 0`; CLI recall: 0; MCP: rows from apiResult.tailOrSummary). */
   freshTailAdded: number;
   /** Memories suppressed by interference: incremented by 1 PER PIPELINE when its own
-   * memory_dominance verdict fires (see `detectAnchoring()` in src/api/recall/finish.ts). Each
+   * memory_dominance verdict fires (see `detectAnchoring()` in src/api/recall/anchoring.ts). Each
    * pipeline bumps its OWN summary from its own detector and ring buffer, so this is not a
    * cross-pipeline aggregate. */
   suppressedByInterference: number;

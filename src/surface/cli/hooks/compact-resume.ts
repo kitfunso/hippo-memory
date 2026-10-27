@@ -9,7 +9,7 @@ import {
   flushDeliveryRecorder,
   startDeliveryRecorder,
   takeDelivery,
-} from '../../../api/prompt-hook.js';
+} from '../../../api/ledger-db.js';
 import type { DeliveryRecorder } from '../../../api/delivery-recorder.js';
 import { readHookStdin } from '../stdin.js';
 import { readCompactResumePayload } from '../compact-resume-payload.js';

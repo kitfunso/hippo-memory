@@ -64,6 +64,11 @@ like. It follows its source item: kept while the item exists, superseded when th
 (restorable) when the item is deleted.
 _Avoid_: synced memory, external memory, auto memory (Claude Code's own feature)
 
+**Session ring**:
+The in-memory list of one caller's last recalls in one session on one surface; the anchoring hint reads it, and each
+surface keeps its own.
+_Avoid_: session cache, recall log
+
 **Token ledger**:
 The record of every block of memory text hippo handed an agent: surface, session, estimated
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.
