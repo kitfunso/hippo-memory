@@ -1,7 +1,7 @@
 // An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text.
 import type { Machine } from '../../base/util/agent-homes.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
-import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { maskEmails, redactSecretsStrict, storedSource } from '../../base/util/secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
 import { toolSourcePrefix, type Scope, type ToolId } from '../../base/memory/agent-memory-tools.js';
 import { ID_SUFFIX_CHARS } from '../../base/util/token-text.js';
@@ -33,31 +33,27 @@ export function containerPrefix(tool: ToolId, container: string): string {
   return `${toolSourcePrefix(tool)}${container}/`;
 }
 
-/** A note's key as a row's source holds it: the stored form, plus `~` and 12 hex of the raw key when
- * redaction changed it, so two keys that differ only in a secret stay two. */
+/** A note's key as a row's source holds it: the key part of its stored source. */
 export function storedItemKey(key: string): string {
-  const stored = redactSecretsStrict(key);
-  return stored === key ? key : `${stored}~${sha256Hex(key).slice(0, ID_SUFFIX_CHARS)}`;
+  return storedSource(`${key}#`).slice(0, -1);
 }
 
 export function itemSource(
   prefix: string,
   { key, text }: { readonly key: string; readonly text: string },
 ): string {
-  return `${prefix}${storedItemKey(key)}#${itemHash(text)}`;
+  return storedSource(`${prefix}${key}#${itemHash(text)}`);
 }
 
 /** The stored key and hash of a source under `prefix`; the hash follows the last `#`, since a file
- * name may hold one too. A raw older key comes back stored, so it matches its note once. */
+ * name may hold one too. A raw older source is read in its stored form, so it matches its note. */
 export function splitSource(
   source: string,
   prefix: string,
 ): { readonly key: string; readonly hash: string } {
-  const rest = source.slice(prefix.length);
+  const rest = storedSource(source).slice(prefix.length);
   const cut = rest.lastIndexOf('#');
-  return cut < 0
-    ? { key: storedItemKey(rest), hash: '' }
-    : { key: storedItemKey(rest.slice(0, cut)), hash: rest.slice(cut + 1) };
+  return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
 }
 
 function capped(text: string): string {

@@ -20,7 +20,7 @@ import {
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import { rewardFactorAt } from '../../db/decay-key.js';
 import { SPACE_CODES } from '../rules/copies.js';
-import { textForms } from '../../base/util/secret-detect.js';
+import { sourceForms, textForms } from '../../base/util/secret-detect.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
@@ -128,10 +128,20 @@ export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): Sql
  * machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
+/** `column` equals one of `forms`: `= ?` for one, so its index serves it as before, else `IN (?, ?)`. */
+// SHORTCUT: two forms walk the tenant index or sort in a temp B-tree; a UNION of two lookups if it shows up.
+function formsSql(column: string, forms: readonly string[]): SqlFragment {
+  return forms.length === 1
+    ? { sql: `${column} = ?`, params: [forms[0]] }
+    : { sql: `${column} IN (${forms.map(() => '?').join(', ')})`, params: [...forms] };
+}
+
 /** `column` holds `text` in a form a row may keep it: the stored form, or raw from before redaction. */
 export function holdsTextSql(column: string, text: string): SqlFragment {
-  return {
-    sql: `${column} IN (SELECT value FROM json_each(?))`,
-    params: [JSON.stringify(textForms(text))],
-  };
+  return formsSql(column, textForms(text));
+}
+
+/** A `source` column holds `source` in its stored form or raw from before redaction. */
+export function holdsSourceSql(column: string, source: string): SqlFragment {
+  return formsSql(column, sourceForms(source));
 }

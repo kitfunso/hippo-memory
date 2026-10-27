@@ -2,7 +2,7 @@
 // plan in one transaction; a plan whose rows changed before it landed is read and planned once
 // more.
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { redactSecretsStrict, storedSource } from '../../base/util/secret-detect.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
 import type { ContainerApply, MirrorFailure } from '../../base/ports/store/agent-import.js';
@@ -167,7 +167,7 @@ async function dormantSnapshots(
   if (!needed) return [];
   const under = await s.store.projectTags.dormantWhere({
     tenantId: s.tenantId,
-    sourcePrefix: w.prefix,
+    sourcePrefix: storedSource(w.prefix),
   });
   return [...under, ...view.movedDormant].filter((snap) => !snap.entry.supersededBy);
 }

@@ -1,6 +1,6 @@
 // hippo.db's origin and source rewrites: rows moved between projects and renamed sources.
-import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { holdsTextSql } from './rule-sql.js';
+import { storedSource } from '../../base/util/secret-detect.js';
+import { holdsSourceSql } from './rule-sql.js';
 import { type DatabaseSyncLike } from '../../db/index.js';
 import type { RenameSourceOptions } from '../../base/ports/store/agent-import.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -53,11 +53,11 @@ export function renameEntrySource(
   db: DatabaseSyncLike,
   { tenantId, id, from, to }: RenameEntrySourceOptions,
 ): number {
-  const held = holdsTextSql('source', from);
+  const held = holdsSourceSql('source', from);
   const moved = cachedStatement(
     db,
     `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND ${held.sql} AND superseded_by IS NULL`,
-  ).run(redactSecretsStrict(to), id, tenantId, ...held.params);
+  ).run(storedSource(to), id, tenantId, ...held.params);
   return Number(moved.changes ?? 0);
 }
 
@@ -70,11 +70,11 @@ export function renameEntrySourceAndOrigin(
   options: RenameSourceOptions,
 ): number {
   const { from, to, origin } = options;
-  const held = holdsTextSql('source', from);
+  const held = holdsSourceSql('source', from);
   const done = cachedStatement(
     db,
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
       `AND ${held.sql}`,
-  ).run(redactSecretsStrict(to), origin, id, tenantId, ...held.params);
+  ).run(storedSource(to), origin, id, tenantId, ...held.params);
   return Number(done.changes ?? 0);
 }

@@ -45,7 +45,11 @@ describe('redactEntry', () => {
     const entry = { id: 'a', content: `ci token ${GHP}`, source: `import:${GHP}` };
     const stored = redactEntry(entry);
     expect(stored).not.toBe(entry);
-    expect(stored).toEqual({ id: 'a', content: 'ci token [REDACTED]', source: 'import:[REDACTED]' });
+    expect(stored).toEqual({
+      id: 'a',
+      content: 'ci token [REDACTED]',
+      source: expect.stringMatching(/^import:\[REDACTED\]~[0-9a-f]{12}$/),
+    });
     expect(entry.content).toContain(GHP);
   });
 

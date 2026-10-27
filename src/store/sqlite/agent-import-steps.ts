@@ -3,7 +3,7 @@
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
-import { sameStoredText } from '../../base/util/secret-detect.js';
+import { sameStoredSource } from '../../base/util/secret-detect.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
@@ -87,7 +87,7 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   const adoptable = plan.steps.every(
     (step) =>
       step.kind !== 'adopt' ||
-      (sameStoredText(rows.get(step.id)?.source, step.from) && !rows.get(step.id)?.supersededBy),
+      (sameStoredSource(rows.get(step.id)?.source, step.from) && !rows.get(step.id)?.supersededBy),
   );
   return adoptable ? rows : null;
 }

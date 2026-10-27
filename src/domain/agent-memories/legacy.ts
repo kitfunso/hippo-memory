@@ -3,7 +3,7 @@
 import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { maskEmails } from '../../base/util/secret-detect.js';
+import { maskEmails, storedSource } from '../../base/util/secret-detect.js';
 import { liveUnder } from './container-view.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, legacyStoredText } from './source.js';
@@ -29,6 +29,10 @@ interface LegacyTargets {
   readonly targets: readonly LegacyTarget[];
 }
 
+/** The file name of an old import's source, in stored form on both sides of the match. */
+const legacyFile = (source: string): string =>
+  storedSource(source).slice(LEGACY_SOURCE_PREFIX.length);
+
 function legacyTargets(containers: readonly Container[]): LegacyTargets {
   const refs: { readonly dir: string; readonly key: string }[] = [];
   const targets: LegacyTarget[] = [];
@@ -37,7 +41,7 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
       if (item.text.trim().length < MIN_ITEM_CHARS) continue;
       targets.push({
         ref: String(refs.length),
-        file: path.posix.basename(item.key),
+        file: legacyFile(`${LEGACY_SOURCE_PREFIX}${path.posix.basename(item.key)}`),
         textKey: duplicateKey(legacyStoredText(item.text)),
       });
       refs.push({ dir: container.path, key: item.key });
@@ -74,7 +78,7 @@ export async function legacyWork(
     // never matched and imported twice.
     rows.map((r) => ({
       id: r.id,
-      file: r.source.slice(LEGACY_SOURCE_PREFIX.length),
+      file: legacyFile(r.source),
       textKey: duplicateKey(maskEmails(r.content)),
     })),
     targets,

@@ -53,7 +53,7 @@ describe('memory row sinks', () => {
     upsertEntryRow(db, entry);
     expect(row('mem_s1')).toEqual({
       content: STORED,
-      source: 'import:[REDACTED]',
+      source: expect.stringMatching(/^import:\[REDACTED\]~[0-9a-f]{12}$/),
       duplicate_hash: duplicateHash(STORED),
     });
     expect(ftsContent('mem_s1')).toEqual([STORED]);

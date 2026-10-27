@@ -4,7 +4,9 @@
  * context outside their project; explicit recall is unaffected. Leaf module: no imports from
  * store/api/shared.
  */
+import { createHash } from 'node:crypto';
 import { tryParseJson } from './json.js';
+import { ID_SUFFIX_CHARS } from './token-text.js';
 
 /** Result of scanning one memory. `reason` names the tag or pattern that fired. */
 export interface SecretDetection {
@@ -25,32 +27,40 @@ export const SECRET_TAGS: ReadonlySet<string> = new Set([
   'private-key',
 ]);
 
+// A provider token opens and closes where no letter or digit touches it, so `_`, `-`, `.` and `/` all
+// bound one (`note_ghp_...` too); `\b` would count `_` as part of the word.
+const OPEN = '(?<![A-Za-z0-9])';
+const CLOSE = '(?![A-Za-z0-9])';
+const bounded = (source: string, close = CLOSE): RegExp => new RegExp(`${OPEN}${source}${close}`);
+
 const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
-  { name: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/ },
-  { name: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b/ },
-  { name: 'github-fine-grained-pat', re: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/ },
-  // A token may end in a hyphen, where `\b` holds only before a word character: a class that holds
-  // `-` runs to its end, and a fixed length may also close on a hyphen.
-  { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
-  { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
-  { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}(?:\b|(?<=-))/ },
+  { name: 'aws-access-key', re: bounded(String.raw`AKIA[0-9A-Z]{16}`) },
+  { name: 'github-token', re: bounded(String.raw`(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}`) },
+  { name: 'github-fine-grained-pat', re: bounded(String.raw`github_pat_[A-Za-z0-9_]{22,}`) },
+  // A class that holds `-` runs to its end, so a token that ends in a hyphen needs no close.
+  { name: 'slack-token', re: bounded(String.raw`xox[baprs]-[A-Za-z0-9-]{10,}`, '') },
+  { name: 'stripe-key', re: bounded(String.raw`[sr]k_(?:live|test)_[A-Za-z0-9]{16,}`) },
+  { name: 'google-api-key', re: bounded(String.raw`AIza[0-9A-Za-z_-]{35}`, `(?:${CLOSE}|(?<=-))`) },
   // hk_ is hippo's own API key (sqlite/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes
   // follow gitleaks' rules.
-  { name: 'hippo-api-key', re: /\bhk_[a-z2-7]{24}\.[a-z2-7]{32}\b/ },
-  { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
-  { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },
-  { name: 'gitlab-token', re: /\bglpat-[\w-]{20,}/ },
-  { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
+  { name: 'hippo-api-key', re: bounded(String.raw`hk_[a-z2-7]{24}\.[a-z2-7]{32}`) },
+  { name: 'npm-token', re: bounded(String.raw`npm_[A-Za-z0-9]{36}`) },
+  { name: 'huggingface-token', re: bounded(String.raw`hf_[A-Za-z]{34}`) },
+  { name: 'gitlab-token', re: bounded(String.raw`glpat-[\w-]{20,}`, '') },
+  { name: 'google-oauth-token', re: bounded(String.raw`ya29\.[\w-]{20,}`, '') },
   {
     name: 'slack-webhook',
-    re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/,
+    re: bounded(
+      String.raw`hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}`,
+      '',
+    ),
   },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence
   // guard), so prose like "the sk- prefix identifies API keys" does not flag but "prod API key
   // sk_live_..." does.
-  { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
-  { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
+  { name: 'sk-style-key', re: bounded(String.raw`sk-[A-Za-z0-9_-]{20,}`, '') },
+  { name: 'sk-underscore-key', re: bounded(String.raw`sk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}`) },
   // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and
   // user:password@ templates would hide code lessons from ambient context. Secret names end in the
   // keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD,
@@ -193,13 +203,61 @@ export function storedOrNull(text: string | null | undefined): string | null {
   return text == null ? null : redactSecretsStrict(text);
 }
 
-/** The entry as stored, content and source redacted; the same object when redaction changes
- * nothing. */
+// SHORTCUT: an unkeyed digest lets a row holder confirm a guessed low-entropy secret; a per-store key fixes it.
+const rawTag = (raw: string): string =>
+  `~${createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, ID_SUFFIX_CHARS)}`;
+const SOURCE_SEPARATORS = /([/#])/;
+
+/** A source part as stored: redacted, plus a digest of the raw part when redaction changed it. */
+function storedPart(part: string): string {
+  const stored = redactSecretsStrict(part);
+  return stored === part ? part : `${stored}${rawTag(part)}`;
+}
+
+/** The one stored form of `source`: a `/` or `#` part redaction changes keeps a raw digest, so parts
+ * stay distinct exactly when they were; a secret across a separator tags the last part it touched. */
+export function storedSource(source: string): string {
+  if (!source) return source;
+  const raw = source.split(SOURCE_SEPARATORS);
+  const parts = raw.map((part, i) => (i % 2 === 1 ? part : storedPart(part)));
+  const joined = parts.join('');
+  const net = redactSecretsStrict(joined);
+  if (net === joined) return joined;
+  let head = 0;
+  while (head < net.length && net[head] === joined[head]) head++;
+  let tail = 0;
+  while (
+    tail < net.length - head &&
+    net[net.length - 1 - tail] === joined[joined.length - 1 - tail]
+  ) {
+    tail++;
+  }
+  const ends: number[] = [];
+  for (const part of parts) ends.push((ends.at(-1) ?? 0) + part.length);
+  const first = ends.findIndex((end) => end > head);
+  const last = ends.findIndex((end) => end >= joined.length - tail);
+  const at = ends[last] - (joined.length - net.length);
+  return `${net.slice(0, at)}${rawTag(raw.slice(first, last + 1).join(''))}${net.slice(at)}`;
+}
+
+/** Every form a row's `source` may hold for `source`: the stored form, then a raw older one. */
+export function sourceForms(source: string): readonly string[] {
+  const stored = storedSource(source);
+  return stored === source ? [source] : [stored, source];
+}
+
+/** The entry as stored, content redacted and source in its stored form; the same object when that
+ * changes nothing. */
 export function redactEntry<T extends { content: string; source?: string | null }>(entry: T): T {
   const content = redactSecretsStrict(entry.content);
-  const source = entry.source && redactSecretsStrict(entry.source);
+  const source = entry.source && storedSource(entry.source);
   if (content === entry.content && source === entry.source) return entry;
   return source === entry.source ? { ...entry, content } : { ...entry, content, source };
+}
+
+/** True when a row's `held` source is `given` in stored form; a raw older source matches too. */
+export function sameStoredSource(held: string | null | undefined, given: string): boolean {
+  return held != null && storedSource(held) === storedSource(given);
 }
 
 /** True when `held` is `given` as stored; a raw legacy copy of the same text matches too. */
