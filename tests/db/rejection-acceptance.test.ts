@@ -24,7 +24,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
-import { insertRejectedValue, readRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { insertRejectedValue, tombstoneOf } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { runCapture } from '../../src/surface/capture/command.js';
@@ -258,7 +258,7 @@ describe('case 5: migration v41 idempotence', () => {
     const db2 = openHippoDb(home);
     try {
       expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
-      const row = readRejectedValue(db2, 'default', digest);
+      const row = tombstoneOf(db2, 'default', 'idempotence-check value');
       expect(row).not.toBeNull();
       expect(row!.reason).toBe('idempotence check');
     } finally {
