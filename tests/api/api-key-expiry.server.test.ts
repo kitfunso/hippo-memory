@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { raiseMinBinary } from '../../src/db/meta.js';
 import { createApiKey, insertApiKey, readApiKeyRecord, validateApiKey } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import {
   adminActor,
@@ -24,6 +24,9 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -174,8 +177,8 @@ describe('API key expiry', () => {
       expect(validateApiKey(db, expired.plaintext)).toEqual({ valid: false });
       expect(validateApiKey(db, live.plaintext).valid).toBe(true);
     });
-    expect(await verifyApiKeyCached(expired.plaintext, sqliteStore(home))).toBeNull();
-    expect(await verifyApiKeyCached(live.plaintext, sqliteStore(home))).not.toBeNull();
+    expect(await keys.verify(expired.plaintext, sqliteStore(home))).toBeNull();
+    expect(await keys.verify(live.plaintext, sqliteStore(home))).not.toBeNull();
   });
 
   it('treats an unparseable expiry as expired', () => {
@@ -192,7 +195,7 @@ describe('API key expiry', () => {
     // SAFETY: a store written against the port before expiresAt existed returns exactly this shape.
     const record = rest as ApiKeyRecord;
     const store: HippoStore = { ...sqliteStore(home), kind: 'test', findApiKey: async () => record };
-    expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
+    expect(await keys.verify(key.plaintext, store)).toBeNull();
   });
 
   it('a proved key skips scrypt up to its expiry and stops at it', async () => {
@@ -200,13 +203,13 @@ describe('API key expiry', () => {
     vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
     const store = sqliteStore(home);
     const key = mint(new Date(Date.now() + 10_000).toISOString());
-    expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
+    expect(await keys.verify(key.plaintext, store)).not.toBeNull();
     vi.setSystemTime(Date.now() + 9_999);
     const before = scryptRuns();
-    expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
+    expect(await keys.verify(key.plaintext, store)).not.toBeNull();
     expect(scryptRuns()).toBe(before);
     vi.setSystemTime(Date.now() + 1);
-    expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
+    expect(await keys.verify(key.plaintext, store)).toBeNull();
   });
 });
 

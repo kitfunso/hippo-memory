@@ -18,6 +18,7 @@ import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-wri
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -103,7 +104,7 @@ describe('lock wait per command kind', () => {
     Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
   it('a hook session opens with the short hook wait', async () => {
-    const wait = await withSharedStoreHandles((session) => busyTimeout(session.get(localRoot)), {
+    const wait = await withSharedStoreHandles((session) => busyTimeout(grantFor({ session }).open(localRoot)), {
       busyWaitMs: HOOK_DB_WAIT_MS,
     });
     expect(wait).toBe(HOOK_DB_WAIT_MS);

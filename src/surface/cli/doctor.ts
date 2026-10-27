@@ -15,12 +15,8 @@ import {
   REPLAY_AFTER_MS,
   TRANSCRIPT_FILL_WINDOW_MS,
 } from '../../base/session/compaction-timing.js';
-import {
-  SPOOL_DIR,
-  spoolCounts,
-  type SpoolCounts,
-  type SpoolFs,
-} from '../../infra/compaction-spool.js';
+import { SPOOL_DIR, type SpoolFs } from '../../infra/spool-files.js';
+import { spoolCounts, type SpoolCounts } from '../../infra/spool-counts.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';

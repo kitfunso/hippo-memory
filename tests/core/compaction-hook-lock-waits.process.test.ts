@@ -20,6 +20,9 @@ import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
+// The lock file stays between replays and is reused, so a listing of spooled records leaves it out.
+const spoolFiles = (dir: string): string[] => fs.readdirSync(dir).filter((n) => n !== 'replay.lock.db');
+
 const INSTRUCTION =
   "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
 const ITEMS = [
@@ -106,7 +109,7 @@ describe('post-compact on a locked store', () => {
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
 
     expect((await runHippoIn(['sleep', '--no-learn', '--no-share'], s.proj, s.env)).status).toBe(0);
-    expect(fs.readdirSync(spool)).toEqual([]);
+    expect(spoolFiles(spool)).toEqual([]);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
   });

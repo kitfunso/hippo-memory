@@ -12,14 +12,14 @@ import {
   indexStep,
   type EmbedRun,
 } from '../domain/search/embed-memories.js';
-import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
+import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
  * failure is a warning. A capture runs outside any Context, so its root hands the eval switches
  * and clock as `run`. */
 export function detachedEmbedder(
-  folder: ConfiguredFolder<HippoStore>,
+  folder: ConfiguredFolder<RequiredStore>,
   run: EmbedRun,
 ): (entry: MemoryEntry) => void {
   const target = folderEmbedTarget(folder, run);

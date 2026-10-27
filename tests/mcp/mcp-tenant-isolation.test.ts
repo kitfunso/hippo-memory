@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember as apiRemember } from '../../src/api/index.js';
-import { handleMcpRequest, type McpResponse, type McpContext } from '../../src/surface/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
+import { mcpContext, type McpCallerFields } from '../_helpers/mcp-context.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
@@ -16,7 +17,7 @@ const { sqliteStore, apiCtx } = sessionPerTest();
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
-function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpContext) {
+function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpCallerFields) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',
@@ -24,7 +25,7 @@ function callTool(reqId: number, name: string, args: Record<string, string | num
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx,
+    mcpContext(ctx),
   );
 }
 
@@ -335,8 +336,8 @@ describe('mcp tenant + client-key isolation', () => {
       infra: testInfra(),
       callers,
     };
-    const acme: McpContext = { ...base, project: { name: 'acme', legacyName: 'acme' } };
-    const beta: McpContext = { ...base, project: { name: 'beta', legacyName: 'beta' } };
+    const acme: McpCallerFields = { ...base, project: { name: 'acme', legacyName: 'acme' } };
+    const beta: McpCallerFields = { ...base, project: { name: 'beta', legacyName: 'beta' } };
 
     await callTool(1, 'hippo_recall', { query: 'per-project outcome', budget: 1500 }, acme);
     expect(extractText(await callTool(2, 'hippo_outcome', { good: true }, beta))).toMatch(/No recent recalls/i);
@@ -354,7 +355,7 @@ describe('mcp tenant + client-key isolation', () => {
     {
       for (let i = 0; i < MAX_RECALL_CLIENTS; i++) callers.lastShown.set(`flood:${i}`, []);
       callers.lastShown.set('flood:0', []);
-      const acme: McpContext = {
+      const acme: McpCallerFields = {
         hippoRoot: home,
         tenantId: 'alpha',
         actor: 'mcp',
@@ -508,7 +509,7 @@ describe('mcp tenant + client-key isolation', () => {
       // 'mcp'` fallback under test; handleMcpRequest only ever reads
       // ctx?.actor optionally, so the missing required field is safe at
       // runtime and is exactly the shape this test needs.
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'alpha',
         clientKey: 'http:no-actor:addr',
@@ -516,7 +517,7 @@ describe('mcp tenant + client-key isolation', () => {
         config: loadConfig(home),
         callers,
         infra: testInfra(),
-      } as McpContext,
+      } as McpCallerFields),
     );
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
 

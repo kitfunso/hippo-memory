@@ -1,7 +1,7 @@
 // What a recall records: its audit rows, then the write around one recall (history, ring, recalled
 // counter, token ledger row and the client's shown list).
 import { auditQueryFields } from '../../base/records/audit-report.js';
-import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
+import type { RequiredStore, RecallWrites } from '../../base/ports/store.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
@@ -19,7 +19,7 @@ import { type RecallSurface, sessionRing, peekSessionRing, noteRecall } from './
 
 /** The ids among `ids` that a tenant's rows in `store` hold. */
 export async function heldIds(
-  store: HippoStore,
+  store: RequiredStore,
   ids: readonly string[],
   tenantId: string,
 ): Promise<Set<string>> {
@@ -212,7 +212,7 @@ export interface ShownList {
  * client's shown list. */
 export async function recordShownRecall(
   ctx: Context,
-  store: HippoStore,
+  store: RequiredStore,
   how: RecallRecording,
   shown: ShownList,
 ): Promise<void> {

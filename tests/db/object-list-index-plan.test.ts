@@ -158,7 +158,7 @@ describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
     const root = newRoot();
     const sql = await preparedSql(async () => {
-      await sqliteStore(root).reports.entriesWhere(DIGESTS, { limit: 500 });
+      await sqliteStore(root).entriesWhere(DIGESTS, { limit: 500 });
     }, 'json_valid(tags_json)');
     withDb(root, (db) => {
       const detail = plan(db, sql, 'session-digest', 'session-digest', 'default', 501);
@@ -197,7 +197,7 @@ describe('session digest read plan', () => {
       'digest from this session',
       'digest with no session',
     ]);
-    const page = await sqliteStore(root).reports.entriesWhere(DIGESTS, { limit: 500 });
+    const page = await sqliteStore(root).entriesWhere(DIGESTS, { limit: 500 });
     expect(page.entries.map((e) => e.content)).toEqual(expected);
   });
 });

@@ -24,6 +24,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -312,7 +313,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } },
       },
-      {
+      mcpContext({
         hippoRoot: home,
         tenantId: 'default',
         actor: 'mcp-test',
@@ -321,7 +322,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
         store: sqliteStore(home),
         config: loadConfig(home),
         infra: testInfra(),
-      },
+      }),
     );
     // The tool's text holds the note itself inside headings whose wording the formatter owns.
     expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));

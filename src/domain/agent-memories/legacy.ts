@@ -51,7 +51,7 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
  * adoption re-checks its row inside one.
  */
 export async function legacyWork(
-  store: Pick<ImportStore, 'reports'>,
+  store: Pick<ImportStore, 'entriesWhere'>,
   tenantId: string,
   listings: readonly Listing[],
 ): Promise<LegacyWork> {

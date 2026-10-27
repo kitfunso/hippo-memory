@@ -11,6 +11,7 @@ import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_he
 import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 const { sqliteStore, apiCtx } = sessionPerTest();
 
@@ -32,7 +33,7 @@ async function callTool(
   name: string,
   args: Record<string, string | number | boolean>,
 ): Promise<McpResponse | null> {
-  const ctx: McpContext = {
+  const ctx: McpContext = mcpContext({
     hippoRoot: root,
     tenantId: 'default',
     actor: actor.subject,
@@ -40,7 +41,7 @@ async function callTool(
     store: sqliteStore(root),
     config: loadConfig(root),
     infra: testInfra(),
-  };
+  });
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }

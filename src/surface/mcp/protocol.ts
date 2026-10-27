@@ -17,7 +17,12 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type { GlobalTargetGroup, OptionalGroup, StoreWith } from '../../base/ports/store.js';
+import type {
+  GlobalTargetGroup,
+  OptionalGroup,
+  RequiredStore,
+  StoreWith,
+} from '../../base/ports/store.js';
 import type { ContextWith } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
@@ -75,10 +80,9 @@ export function mcpErrorResponse<E>(
 
 export type { McpRequest, McpResponse };
 
-/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and
- * auth-resolved tenantId/actor), so executeTool skips the findHippoRoot() walk and the env-based
- * tenant fallback, which would pick the wrong store. */
-export interface McpContext {
+/** One tool call's caller, as the transport bound it: the HTTP server's hippoRoot and
+ * auth-resolved tenantId/actor, or the stdio host's folder walk and HIPPO_TENANT. */
+export interface McpCaller<S extends RequiredStore = RequiredStore> {
   hippoRoot: string;
   tenantId: string;
   actor: string;
@@ -93,7 +97,9 @@ export interface McpContext {
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   /** The store this transport's calls run on. */
-  store: HippoStore;
+  store: S;
+  /** A store the host proved at boot, as this call reaches it (a request's view on HTTP). */
+  storeFor: <T extends HippoStore>(own: T) => T;
   /** The store's config, loaded by the transport's root for this call. */
   config: HippoConfig;
   /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
@@ -112,10 +118,25 @@ export interface McpContext {
   signal?: AbortSignal;
 }
 
+/** A tool's run for one call's arguments. */
+export type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;
+
+/** A tool bound to one host: its run for a call, or undefined when the call's reach has no
+ * global store for it. */
+export type StoreTool<S extends RequiredStore> = (ctx: McpCaller<S>) => ToolRun | undefined;
+
+/** The tools a host serves, by name; a tool its store lacks a group for is absent. */
+export type McpTools<S extends RequiredStore> = ReadonlyMap<string, StoreTool<S>>;
+
+/** A tool call's caller and the tools its host bound once, at boot. */
+export interface McpContext<S extends RequiredStore = RequiredStore> extends McpCaller<S> {
+  tools: McpTools<S>;
+}
+
 /** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator,
  * host admin. Any context runs as its own role, and an untyped caller that sends none runs as a
  * member, so a missing role fails closed. */
-export function mcpActor(ctx: McpContext | undefined): ApiActor {
+export function mcpActor(ctx: McpCaller | undefined): ApiActor {
   if (ctx === undefined) return { subject: 'mcp', role: 'admin', hostAdmin: true };
   const actor: ApiActor = {
     subject: ctx.actor ?? 'mcp',
@@ -130,7 +151,7 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
 
 /** The api Context a tool call runs as: the transport's store, reach and config under the
  * caller's actor. */
-export function mcpApiContext(ctx: McpContext): ApiContext {
+export function mcpApiContext(ctx: McpCaller): ApiContext {
   return {
     tenantId: ctx.tenantId,
     actor: mcpActor(ctx),
@@ -146,36 +167,39 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
 
 /** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
  * so two repos on one shared store keep apart lists. */
-function mcpClientKey(ctx: McpContext): string {
+function mcpClientKey(ctx: McpCaller): string {
   const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
   return ctx.project ? `${base}:${ctx.project.name}` : base;
 }
 
 /** Stdio or a host admin: the only callers whose server cwd and git history are their own to
  * read. */
-export function ownsServerCwd(ctx: McpContext | undefined): boolean {
+export function ownsServerCwd(ctx: McpCaller | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
 }
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
 /** The context of a tool call on a folder, built by the frame's composition root. */
-export type McpContextFor = (hippoRoot: string, tenantId: string) => McpContext;
+export type McpContextFor<S extends RequiredStore = RequiredStore> = (
+  hippoRoot: string,
+  tenantId: string,
+) => McpContext<S>;
 
 /** What the stdio transport takes from its composition root: one frame's run, whose contexts
  * share the frame's store handles and carry `signal`. The root names the store adapter, so
  * src/surface/mcp does not. */
-export interface McpHost {
-  runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor) => Promise<T>): Promise<T>;
+export interface McpHost<S extends RequiredStore = RequiredStore> {
+  runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor<S>) => Promise<T>): Promise<T>;
 }
 
 /** One tool call after the store, config and tenant are resolved; every handler reads the same
  * five. */
 export interface ToolCall {
   args: Record<string, JsonValue>;
-  ctx: McpContext;
+  ctx: McpCaller;
   hippoRoot: string;
-  store: HippoStore;
+  store: RequiredStore;
   config: HippoConfig;
   tenantId: string;
 }

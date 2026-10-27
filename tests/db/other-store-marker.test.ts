@@ -95,10 +95,10 @@ describe('the other-store marker', () => {
 
   it('is checked on every open, so a marker written while a scope holds a handle refuses the next open', async () => {
     await withSharedStoreHandles((session) => {
-      const opts = { grant: grantFor({ session }) };
-      closeHippoDb(openHippoDb(root, opts));
+      const grant = grantFor({ session });
+      closeHippoDb(grant.open(root));
       writeFileSync(marker, 'postgres');
-      expect(refusal(() => openHippoDb(root, opts)).storeKind).toBe('postgres');
+      expect(refusal(() => grant.open(root)).storeKind).toBe('postgres');
     });
   });
 

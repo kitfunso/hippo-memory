@@ -25,6 +25,7 @@ import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -100,7 +101,7 @@ function call(
 ): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    {
+    mcpContext({
       hippoRoot: home,
       tenantId: TENANT,
       actor: 'mcp',
@@ -110,7 +111,7 @@ function call(
       store: sqliteStore(home),
       config: loadConfig(home),
       infra: testInfra(),
-    },
+    }),
   );
 }
 

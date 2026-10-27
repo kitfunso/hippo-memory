@@ -1,13 +1,16 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { insertApiKey } from '../../src/store/sqlite/auth.js';
-import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
+import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+
+// One server's key checks, as boot makes them.
+const keys = new KeyVerifier();
 
 describe('api key scrypt parameters', () => {
   let root: string;
@@ -40,8 +43,8 @@ describe('api key scrypt parameters', () => {
     const minted = mintApiKey();
     expect(minted.keyHash).toMatch(/^scrypt2\$16384\$8\$1\$[0-9a-f]+\$[0-9a-f]+$/);
     seed(minted.keyHash, minted.keyId);
-    expect(await verifyApiKeyCached(minted.plaintext, store)).not.toBeNull();
-    expect(await verifyApiKeyCached(`${minted.plaintext}x`, store)).toBeNull();
+    expect(await keys.verify(minted.plaintext, store)).not.toBeNull();
+    expect(await keys.verify(`${minted.plaintext}x`, store)).toBeNull();
   });
 
   it('still verifies an old three-part hash', async () => {
@@ -49,14 +52,14 @@ describe('api key scrypt parameters', () => {
     const salt = randomBytes(16);
     const old = `scrypt$${salt.toString('hex')}$${scryptSync(plaintext, salt, 32).toString('hex')}`;
     seed(old, keyId);
-    expect(await verifyApiKeyCached(plaintext, store)).not.toBeNull();
+    expect(await keys.verify(plaintext, store)).not.toBeNull();
   });
 
   it('rejects an oversized cost without running scrypt', async () => {
     const { keyId, plaintext } = mintApiKey();
     seed(`scrypt2$${2 ** 30}$8$1$${'ab'.repeat(16)}$${'cd'.repeat(32)}`, keyId);
     const before = scryptRuns();
-    expect(await verifyApiKeyCached(plaintext, store)).toBeNull();
+    expect(await keys.verify(plaintext, store)).toBeNull();
     expect(scryptRuns()).toBe(before);
   });
 
@@ -65,7 +68,7 @@ describe('api key scrypt parameters', () => {
       const { keyId, plaintext } = mintApiKey();
       seed(`scrypt2$${bad}$${'ab'.repeat(16)}$${'cd'.repeat(32)}`, keyId);
       const before = scryptRuns();
-      expect(await verifyApiKeyCached(plaintext, store)).toBeNull();
+      expect(await keys.verify(plaintext, store)).toBeNull();
       expect(scryptRuns()).toBe(before);
     }
   });

@@ -7,6 +7,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
+import { mcpContext } from '../_helpers/mcp-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -31,14 +32,14 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    {
+    mcpContext({
       ...ctx,
       role: 'admin',
       hostAdmin: true,
       store: sqliteStore(ctx.hippoRoot),
       config: loadConfig(ctx.hippoRoot),
       infra: testInfra(),
-    },
+    }),
   );
 }
 

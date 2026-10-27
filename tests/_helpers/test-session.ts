@@ -1,9 +1,9 @@
 // The handle forms the root-keyed helpers open with: on the running test's session when its file holds one per test
 // (sessionPerTest), else on a handle of their own, so a helper call costs what one call in a CLI command costs.
-import { openHippoDb, type DatabaseSyncLike, type OpenOptions, type RequestStores } from '../../src/db/index.js';
+import type { DatabaseSyncLike, RequestStores } from '../../src/db/index.js';
 import { grantFor, type HandleOptions, type SqliteStoreOptions } from '../../src/store/sqlite/grant.js';
 import * as handles from '../../src/store/sqlite/handles.js';
-import type { Handles, StoreFiles } from '../../src/store/sqlite/open.js';
+import { type HandleOpener, type Handles, readWrite, type StoreFiles } from '../../src/store/sqlite/open.js';
 import { sqliteStore as storeAt } from '../../src/store/sqlite/store.js';
 
 const held: (() => RequestStores)[] = [];
@@ -29,18 +29,12 @@ export function handlesOf(hippoRoot: string, opts?: HandleOptions): Handles {
 }
 
 /** `onHandle` of the adapter; the held session's handle stays open after the call. */
-export function onHandle<T>(
-  hippoRoot: string,
-  fn: (db: DatabaseSyncLike) => T,
-  open: (hippoRoot: string, opts?: OpenOptions) => DatabaseSyncLike = openHippoDb,
-): T {
-  const session = heldSession();
-  if (session === undefined) return handles.onHandle(hippoRoot, fn, open);
-  return handles.onHandle(hippoRoot, fn, (root) => open(root, { grant: grantFor({ session }) }));
+export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, open: HandleOpener = readWrite): T {
+  const opens = { grant: grantFor({ session: heldSession() }) };
+  return handles.onHandle(hippoRoot, fn, (root) => open(root, opens));
 }
 
 /** `initStore` of the adapter, leaving the store's handle in the held session for the test's next call. */
 export function initStore(hippoRoot: string): void {
-  const session = heldSession();
-  handles.initStore(hippoRoot, session === undefined ? undefined : { grant: grantFor({ session }) });
+  handles.initStore(hippoRoot, { session: heldSession() });
 }

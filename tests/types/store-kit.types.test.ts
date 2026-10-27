@@ -72,6 +72,13 @@ describe('hippo-memory/store-kit entry types', () => {
       | 'cards'
       | 'conflicts'
       | 'rejections'
+      | 'vectors'
+      | 'vectorWrites'
+      | 'dagReads'
+      | 'graphReads'
+      | 'sessions'
+      | 'goals'
+      | 'reports'
     >();
     expectTypeOf<(typeof OPTIONAL_GROUPS)[number]>().toEqualTypeOf<OptionalGroup>();
     expect(new Set(OPTIONAL_GROUPS).size).toBe(OPTIONAL_GROUPS.length);

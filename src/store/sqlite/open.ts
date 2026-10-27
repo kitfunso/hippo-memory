@@ -9,12 +9,11 @@ import type { Clock } from '../../base/ports/infra.js';
 import { type MemoryEntry, Layer } from '../../base/memory/entry.js';
 import {
   type DatabaseSyncLike,
-  openHippoDb,
   getMeta,
   setMeta,
   withWriteScope,
   pruneConsolidationRuns,
-  type OpenOptions,
+  type DbGrant,
 } from '../../db/index.js';
 import type { StoreAt } from '../../db/connect.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -44,10 +43,23 @@ export interface StoreModel {
 export interface StoreFiles extends StoreModel, StoreAt {
   readonly host: Host;
   /** What each open of the store passes: its grant and its lock wait. */
-  readonly opens: OpenOptions;
+  readonly opens: GrantedOpens;
 }
 
-export type HandleOpener = (hippoRoot: string, opts: OpenOptions) => DatabaseSyncLike;
+/** A store's grant, with the lock wait of each open that names none. */
+export interface GrantedOpens {
+  readonly grant: DbGrant;
+  readonly busyWaitMs?: number | undefined;
+}
+
+export type HandleOpener = (hippoRoot: string, opts: GrantedOpens) => DatabaseSyncLike;
+
+/** A read-write handle on the store's grant. */
+export const readWrite: HandleOpener = (hippoRoot, { grant, busyWaitMs }) =>
+  grant.open(hippoRoot, busyWaitMs);
+
+/** A read-only handle on the store's grant, which leaves the store as it is. */
+export const readOnly: HandleOpener = (hippoRoot, { grant }) => grant.openReadOnly(hippoRoot);
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle,
  * `openStore` also sets up the mirror folders. */
@@ -64,7 +76,7 @@ export type OnHandleAsync = <T>(
 /** An opener that waits on a locked store for `busyWaitMs` in place of the store's own wait. */
 export function waitingOpener(
   busyWaitMs: number | undefined,
-  open: HandleOpener = openHippoDb,
+  open: HandleOpener = readWrite,
 ): HandleOpener {
   return (hippoRoot, opts) => open(hippoRoot, { ...opts, busyWaitMs });
 }

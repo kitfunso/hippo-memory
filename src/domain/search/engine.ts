@@ -9,7 +9,8 @@ import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
 
 export interface SearchByEngineOptions {
-  readonly source: VectorSource;
+  /** Unset where the store keeps no vectors: the search ranks by BM25. */
+  readonly source: VectorSource | undefined;
   readonly query: string;
   readonly pool: MemoryEntry[];
   readonly physics: PhysicsConfig | null;

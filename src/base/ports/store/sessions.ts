@@ -2,6 +2,7 @@
 import type { JsonValue, JsonObject } from '../../util/json.js';
 import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../../session/handoff.js';
 import type { ContinuityKey } from './types.js';
+import type { MethodEffects } from './effects.js';
 
 export interface TaskSnapshot {
   id: number;
@@ -196,6 +197,15 @@ export interface Sessions {
     retentionMs: number,
   ): Promise<string | null>;
 }
+
+/** What each Sessions method does to the store; every adapter honours it. */
+export const SESSIONS_EFFECTS = {
+  save: 'write',
+  read: 'read',
+  clear: 'write',
+  loadSnapshot: 'read',
+  bindSessionOwner: 'write',
+} as const satisfies MethodEffects<Sessions>;
 
 /** Each method's overloads as one argument list, so an adapter writes one body per method. */
 export type SessionSaveArgs =

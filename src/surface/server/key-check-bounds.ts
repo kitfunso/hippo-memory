@@ -27,7 +27,7 @@ const KEY_ADDRESS_TRIES_PER_SEC = 5 / 60;
 export interface KeyCheckBounds {
   /** Throws the 429 a refused key check answers, before any derivation: no room left to wait, or
    * `keyId` already holds its share of the queue, or `address` already holds two slots
-   * (Retry-After 1), or `address` has spent its tries on `keyId` (Retry-After 12). */
+   * (Retry-After 1). */
   admit(keyId: string, address: string): void;
   /** Runs `derive` for `keyId` now or once a slot frees that the key may take, counting the slot
    * to `address`; `admit` in the same tick keeps the queue within its caps. */
@@ -101,27 +101,41 @@ function addressHolds() {
   };
 }
 
-export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
+/** The tries one address has on one key id, which a server keeps beside the keys it proved: a
+ * proved key's re-check spends none. */
+export interface KeyAddressTries {
+  /** Throws the 429 (Retry-After 12) once `address` has spent its tries on `keyId`. */
+  spend(keyId: string, address: string): void;
+}
+
+export function keyAddressTries(maxKeys: number): KeyAddressTries {
   const perKeyAddress = keyAddressLimiter(maxKeys);
-  const queue = fairQueue();
-  const addresses = addressHolds();
   return {
-    admit(keyId, address) {
-      // Each answers in the words an existing limit uses: the request limit's for a full queue or a
-      // key or address past its share, the address's scrypt bucket's for spent tries.
-      if (
-        queue.full() ||
-        queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING ||
-        addresses.held(address) >= ADDRESS_MAX_HELD
-      ) {
-        throw new HttpError(429, 'rate limit exceeded', 1);
-      }
+    spend(keyId, address) {
+      // In the words of the address's scrypt bucket, as a spent try is one more derivation.
       if (!perKeyAddress.check(`${keyId}\u0000${address}`)) {
         throw new HttpError(
           429,
           'too many key checks from this address',
           perKeyAddress.retryAfterSec,
         );
+      }
+    },
+  };
+}
+
+export function keyCheckBounds(): KeyCheckBounds {
+  const queue = fairQueue();
+  const addresses = addressHolds();
+  return {
+    admit(keyId, address) {
+      // In the request limit's words, as a full queue or a key or address past its share is load.
+      if (
+        queue.full() ||
+        queue.held(keyId) >= KEY_MAX_IN_FLIGHT + KEY_MAX_WAITING ||
+        addresses.held(address) >= ADDRESS_MAX_HELD
+      ) {
+        throw new HttpError(429, 'rate limit exceeded', 1);
       }
     },
     async run(keyId, address, derive) {

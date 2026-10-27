@@ -22,7 +22,7 @@ export { StoreRuntime } from '../../db/store-runtime.js';
 export type { RequestStores } from '../../db/index.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
 export { askingNearestFirst } from './vector-reads.js';
-export { saveVectorGraphFile } from '../../db/vector-graph-build.js';
+export { saveVectorGraphFile } from './vector-graph-file.js';
 export { OTHER_STORE_MARKER, withSharedStoreHandles } from '../../db/index.js';
 // The ./store-kit entry's vector rules, so an add-on store keeps hippo.db's bytes and ranking.
 export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector } from '../../db/vector-store.js';

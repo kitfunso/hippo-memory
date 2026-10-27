@@ -10,7 +10,7 @@ import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
-import { grantFor, type SqliteStoreOptions } from './grant.js';
+import type { SqliteStoreOptions } from './grant.js';
 
 type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'>;
 
@@ -31,7 +31,7 @@ export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores
       agentImport: sqliteAgentImport(handlesOf(root, opts), busyWaitMs),
     }),
     exists: isInitialized,
-    create: async (root) => inPortTerms(() => initStore(root, { grant: grantFor(opts) })),
+    create: async (root) => inPortTerms(() => initStore(root, opts)),
     // Its folder is deleted at close, so no session of the caller's may keep one of its handles
     // open past that.
     standIn: () => standIn({ ...opts, session: undefined }),
@@ -41,7 +41,7 @@ export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores
 
 function standIn(opts: SqliteStoreOptions): SqliteImportStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  initStore(root, { grant: grantFor(opts) });
+  initStore(root, opts);
   const store = sqliteStore(root, opts);
   return {
     ...store,

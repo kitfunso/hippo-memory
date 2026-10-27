@@ -19,7 +19,7 @@ import {
   resolveConflictKeeping,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import {
   ROW_READ,
   SIZES,
@@ -318,7 +318,7 @@ describe('buildDag', () => {
       const parentId = stored.find((e) => e.dagLevel === 2)?.id;
       expect(stored.filter((e) => e.dagParentId === parentId)).toHaveLength(n);
       expect(mirrorsRewritten()).toBe(n);
-      const db = openStore(root);
+      const db = openStore(root, storeFilesOf(root).opens);
       try {
         // SAFETY: one row with the single aliased count column.
         const audited = db

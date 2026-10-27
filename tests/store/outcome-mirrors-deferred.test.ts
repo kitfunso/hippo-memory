@@ -54,7 +54,7 @@ function dueKeys(db: DatabaseSyncLike): string[] {
 describe('outcome mirrors', () => {
   it('are left to a pass after the job, which brings each in step with its row and clears its mark', () => {
     const root = makeRoot('due-mirror-outcome');
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     open.push(db);
     const entries = [memory(1, Layer.Episodic), memory(2, Layer.Semantic)];
     writeEntriesTogether(db, storeFilesOf(root), entries);
@@ -93,7 +93,7 @@ describe('outcome mirrors', () => {
     }
     expect(mirrorText(root, entry)).toBeNull();
 
-    const db = openStore(root);
+    const db = openStore(root, storeFilesOf(root).opens);
     open.push(db);
     expect(mirrorText(root, entry)).toBe(rowTexts(db, [entry])[0]);
     expect(dueKeys(db)).toEqual([]);

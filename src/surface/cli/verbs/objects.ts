@@ -167,6 +167,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   graph: verb(() => import('../graph.js'), 'handleGraph', {
+    needs: ['graphReads'],
     flags: { switches: ['json', 'open'], values: ['entity', 'format', 'out'] },
     usage: [
       `
@@ -196,6 +197,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   wm: verb(() => import('../continuity.js'), 'handleWm', {
+    needs: ['sessions'],
     flags: {
       switches: ['json'],
       values: ['content', 'importance', 'scope', 'session', 'task'],
@@ -260,6 +262,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   goal: verb(() => import('../goals.js'), 'handleGoal', {
+    needs: ['goals'],
     scoped: true,
     flags: {
       switches: ['all', 'no-propagate'],

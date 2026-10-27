@@ -30,7 +30,8 @@ export {
   openHippoDbReadOnly,
   closeHippoDb,
 } from './open.js';
-export type { DbGrant, OpenOptions } from './grant.js';
+export type { DbGrant } from './grant.js';
+export type { OpenOptions } from './open.js';
 export {
   RequestStores,
   sessionOf,
