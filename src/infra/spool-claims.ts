@@ -2,7 +2,17 @@
 import { MINUTE_MS } from '../base/util/time.js';
 import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
-import { type Log, STALE_MS, type SpoolFs, done, settle, settleCode } from './spool-files.js';
+import {
+  BUSY_CODES,
+  type Log,
+  STALE_MS,
+  type SpoolFs,
+  type Waiting,
+  done,
+  settle,
+  settleCode,
+  stamp,
+} from './spool-files.js';
 
 export type BadCause = 'unreadable' | 'failed' | 'interrupted';
 
@@ -15,22 +25,37 @@ interface PutBackOptions {
   log: Log;
 }
 
-/** Returns a claim to the waiting files as `<stem>.a<attempt>.json`; one that stays busy is left
- * for stale recovery. */
-export function putBack(options: PutBackOptions): void {
+/** Renames the waiting file to a claim stamped now; null when it could not be taken. */
+export function claimWaiting(fsx: SpoolFs, dir: string, entry: Waiting, log: Log): string | null {
+  const { name } = entry;
+  const claim = path.join(dir, `${entry.stem}.a${entry.attempt}.claim-${stamp(Date.now())}`);
+  const taken = settleCode(
+    () => fsx.renameSync(path.join(dir, name), claim),
+    log,
+    `spool file ${name} not claimed`,
+  );
+  if (BUSY_CODES.has(taken.code)) {
+    log(`spool file ${name} is locked by another program, left for the next run`);
+  }
+  return taken.settled === 'done' ? claim : null;
+}
+
+/** Returns a claim to the waiting files as `<stem>.a<attempt>.json`, true when it moved; one that
+ * stays busy is left for stale recovery. */
+export function putBack(options: PutBackOptions): boolean {
   const { fsx, dir, claim, stem, attempt, log } = options;
   const name = path.basename(claim);
-  if (
-    settle(
-      () => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)),
-      log,
-      `spool file ${name} not put back`,
-    ) === 'busy'
-  ) {
+  const moved = settle(
+    () => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)),
+    log,
+    `spool file ${name} not put back`,
+  );
+  if (moved === 'busy') {
     log(
       `spool file ${name} could not be put back; it returns ${STALE_MS / MINUTE_MS} minutes after its claim`,
     );
   }
+  return moved === 'done';
 }
 
 interface WriteBadOptions {

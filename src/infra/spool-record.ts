@@ -1,4 +1,4 @@
-// A spooled compaction on disk: its shape, and reading one back from text.
+// A spooled compaction on disk, both directions: writing a record (spoolBody) and reading one back (parseSpooled).
 import {
   isObjectLike,
   isStringValue,

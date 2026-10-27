@@ -1,19 +1,10 @@
 // Importing one waiting spool file: claim it, read it, hand it to the importer, settle the outcome.
-import * as path from 'node:path';
 import type { StepFailure } from '../base/ports/store/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';
 import { errorFields, errorMessage } from '../base/util/log.js';
-import {
-  BUSY_CODES,
-  type Log,
-  MAX_ATTEMPTS,
-  type SpoolFs,
-  type Waiting,
-  settleCode,
-  stamp,
-} from './spool-files.js';
+import { type Log, MAX_ATTEMPTS, type SpoolFs, type Waiting, settleCode } from './spool-files.js';
 import { type SpoolImporter, parseSpooled } from './spool-record.js';
-import { moveBad, putBack, removeClaim } from './spool-claims.js';
+import { claimWaiting, moveBad, putBack, removeClaim } from './spool-claims.js';
 
 type FileOutcome = 'imported' | 'skipped' | 'stop';
 
@@ -81,7 +72,7 @@ interface ImportFileOptions {
 export async function importFile(options: ImportFileOptions): Promise<FileOutcome> {
   const { fsx, dir, entry, tenantId, log, importOne } = options;
   const { name } = entry;
-  const claim = claimWaiting(options);
+  const claim = claimWaiting(options.fsx, options.dir, options.entry, options.log);
   if (claim === null) return 'skipped';
   const text = readClaim(options, claim);
   if (text === null) return 'skipped';
@@ -107,21 +98,6 @@ export async function importFile(options: ImportFileOptions): Promise<FileOutcom
   }
   markRecorded();
   return 'imported';
-}
-
-/** Renames the waiting file to a claim stamped now; null when it could not be taken. */
-function claimWaiting({ fsx, dir, entry, log }: ImportFileOptions): string | null {
-  const { name } = entry;
-  const claim = path.join(dir, `${entry.stem}.a${entry.attempt}.claim-${stamp(Date.now())}`);
-  const taken = settleCode(
-    () => fsx.renameSync(path.join(dir, name), claim),
-    log,
-    `spool file ${name} not claimed`,
-  );
-  if (BUSY_CODES.has(taken.code)) {
-    log(`spool file ${name} is locked by another program, left for the next run`);
-  }
-  return taken.settled === 'done' ? claim : null;
 }
 
 /** The claim's text; null when it vanished or stayed busy, and a busy one goes back. */

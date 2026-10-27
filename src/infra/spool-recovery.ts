@@ -14,7 +14,7 @@ import {
   settle,
   settleCode,
 } from './spool-files.js';
-import { moveBad, writeBad } from './spool-claims.js';
+import { moveBad, putBack, writeBad } from './spool-claims.js';
 import { parseSpooled } from './spool-record.js';
 
 /**
@@ -51,15 +51,9 @@ export function recoverStaleClaims(
 /** Puts a stale claim back for another try, or sets it aside after its last; true when put back. */
 function putBackStale(fsx: SpoolFs, dir: string, claim: Claim, log: Log): boolean {
   const file = path.join(dir, claim.name);
-  const what = `spool file ${claim.name} not recovered`;
   const next = claim.attempt + 1;
   if (next < MAX_ATTEMPTS) {
-    const moved = settle(
-      () => fsx.renameSync(file, path.join(dir, `${claim.stem}.a${next}.json`)),
-      log,
-      what,
-    );
-    if (moved !== 'done') return false;
+    if (!putBack({ fsx, dir, claim: file, stem: claim.stem, attempt: next, log })) return false;
     log(
       `spool file ${claim.name} was claimed by a replayer that never finished, put back (try ${next} of ` +
         `${MAX_ATTEMPTS})`,
