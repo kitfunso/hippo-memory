@@ -26,6 +26,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_h
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -251,13 +252,10 @@ describe('embedAll with a store', () => {
   });
 
   it('gives a store opened through a link and one opened on the real folder one index key, so they share a turn', async () => {
-    // Under home, which afterAll removes once the session has closed both stores.
-    const parent = mkdtempSync(join(home, 'link-'));
-    const real = join(parent, 'real');
-    const link = join(parent, 'link');
+    const real = makeRoot('embed-link');
+    // Beside the store, so makeRoot's remove of the store never meets it.
+    const link = `${real}-link`;
     try {
-      mkdirSync(real);
-      initTestStore(real);
       symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
       const viaReal = sqliteStore(real);
       const viaLink = sqliteStore(link);
@@ -267,7 +265,7 @@ describe('embedAll with a store', () => {
         expect(await sqliteStore(real.toUpperCase()).vectorWrites.indexKey()).toBe(key);
       }
     } finally {
-      // unlink removes the link alone, so afterAll's recursive remove never walks through it.
+      // unlink removes the link alone, never the store it points at.
       unlinkSync(link);
     }
   });
