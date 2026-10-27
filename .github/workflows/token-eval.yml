@@ -52,10 +52,11 @@ jobs:
           - { name: harness 1/3, args: --project harness --shard=1/3 }
           - { name: harness 2/3, args: --project harness --shard=2/3 }
           - { name: harness 3/3, args: --project harness --shard=3/3 }
-          - { name: codex 1/4, args: --project codex --shard=1/4 }
-          - { name: codex 2/4, args: --project codex --shard=2/4 }
-          - { name: codex 3/4, args: --project codex --shard=3/4 }
-          - { name: codex 4/4, args: --project codex --shard=4/4 }
+          - { name: codex 1/5, args: --project codex --shard=1/5 }
+          - { name: codex 2/5, args: --project codex --shard=2/5 }
+          - { name: codex 3/5, args: --project codex --shard=3/5 }
+          - { name: codex 4/5, args: --project codex --shard=4/5 }
+          - { name: codex 5/5, args: --project codex --shard=5/5 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:

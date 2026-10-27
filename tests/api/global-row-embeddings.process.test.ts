@@ -23,6 +23,7 @@ import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -190,7 +191,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(localRoot);
     expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
-  }, 60_000);
+  });
 
   it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
@@ -210,7 +211,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[shared[0].id]).toHaveLength(MINILM_DIMENSIONS);
-  }, 60_000);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -241,14 +242,12 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
     const promoted = await promote(apiCtx(localRoot), entry.id);
 
     // Generous timeout: first-run model load can be slow.
-    await vi.waitFor(
-      () => {
-        const index = loadEmbeddingIndex(globalRoot);
-        expect(index[promoted.globalId]).toHaveLength(MINILM_DIMENSIONS);
-      },
-      { timeout: 30_000, interval: 250 },
-    );
-  }, 35_000);
+    await waitFor(() => loadEmbeddingIndex(globalRoot)[promoted.globalId]?.length === MINILM_DIMENSIONS, {
+      what: 'the promoted row in the global embedding index',
+      timeoutMs: 30_000,
+      intervalMs: 250,
+    });
+  });
 });
 
 describe('global-row-embeddings: the first promote, before any global store exists', () => {
@@ -323,7 +322,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
     } finally {
       cleanUp(home, cwd);
     }
-  }, 60_000);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -393,5 +392,5 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
     } finally {
       cleanUp(home, cwd);
     }
-  }, 90_000);
+  });
 });

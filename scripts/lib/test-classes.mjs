@@ -24,6 +24,9 @@ export const EVAL_TESTS = [
   'z0-codex-guards',
   'z0-codex-faults',
   'z0-codex-install',
+  'z0-codex-session.process',
+  'z0-snapfail',
+  'replay',
 ].map((name) => `tests/eval/token-eval-${name}.test.ts`);
 
 export const PROCESS_GLOBS = ['tests/**/*.process.test.ts', 'tests/**/*.process.test.mjs'];
