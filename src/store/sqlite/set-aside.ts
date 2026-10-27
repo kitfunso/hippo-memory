@@ -7,7 +7,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { insertDormantRow } from './dormant-rows.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
+import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-stats.js';
 import type { SetAsideResult, SetAsideWhy } from '../../base/ports/store/project-tags.js';
 import { handleNow } from './handle-clock.js';
 

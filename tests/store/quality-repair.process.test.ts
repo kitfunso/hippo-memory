@@ -7,8 +7,7 @@ import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { STORE_BUSY_MESSAGE } from '../../src/base/ports/store.js';
 import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
-import { readRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
+import { tombstoneOf } from '../../src/store/sqlite/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -94,7 +93,7 @@ describe('recoverable automatic memory quality repair', () => {
     ).toEqual([
       { target_id: bad.id, metadata_json: JSON.stringify({ reason: 'sentence-fragment', backup: applied.backup }) },
     ]);
-    expect(withDb((db) => readRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
+    expect(withDb((db) => tombstoneOf(db, 'default', bad.content))).toBeNull();
     expect(await run(true)).toMatchObject({ appliedIds: [], backup: null });
 
     expect(await dormantRestore(ctx(), bad.id)).toMatchObject({

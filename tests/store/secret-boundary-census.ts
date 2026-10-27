@@ -1,5 +1,5 @@
 // Every text column hippo.db holds, classed: vetted at the sink that binds it (the writer a scan drives), or out with a reason from a closed list.
-// Free text and JSON text are never out; secret-boundary.test.ts fails a column it finds holding text that this table does not class.
+// Free text and JSON text are never out; secret-boundary.slow.test.ts fails a column it finds holding text that this table does not class.
 
 /** The closed list of reasons a text column may hold caller input unredacted. */
 export type OutReason = 'id' | 'hash' | 'enum' | 'number' | 'timestamp' | 'tag label' | 'path';

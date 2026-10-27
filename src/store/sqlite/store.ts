@@ -42,7 +42,7 @@ import { sqliteGraphRebuild } from './graph-rebuild.js';
 import { sqliteLedger } from './ledger.js';
 import { sqliteFolderFiles } from './folder-files.js';
 import { sqliteDagReads } from './dag-reads.js';
-import { sqliteEntryWrites } from './entry-writes.js';
+import { sqliteEntryWrites } from './entry-lifecycle.js';
 import { sqliteAuditMaintenance } from './audit-maintenance.js';
 import { sqliteLessonWrites } from './lesson-writes.js';
 import { finishRecall, sqliteLastRecall } from './last-recall.js';

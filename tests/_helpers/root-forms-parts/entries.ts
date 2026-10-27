@@ -5,7 +5,10 @@ import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
 import * as statusTallies from '../../../src/store/sqlite/status-tallies.js';
 import { evalSwitches } from '../../../src/infra/eval-switches.js';
-import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
+import {
+  deleteEntriesInBatches,
+  memoriesBackingAmong as backingAmongOn,
+} from '../../../src/store/sqlite/entry-deletes.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOptions } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
@@ -37,7 +40,7 @@ export {
   loadEmbeddingIndex,
   writeEntry,
 } from '../../../src/store/sqlite/fixtures.js';
-export { strengthenRetrieved } from '../../../src/store/sqlite/entry-writes.js';
+export { strengthenRetrieved } from '../../../src/store/sqlite/entry-stats.js';
 
 /** One tenant's entries, oldest first. */
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
@@ -93,7 +96,7 @@ export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS
 }
 
 export function memoriesBackingAmong(hippoRoot: string, ids: readonly string[]): Set<string> {
-  return onHandle(hippoRoot, (db) => deleteAndBatchSql.memoriesBackingAmong(db, ids));
+  return onHandle(hippoRoot, (db) => backingAmongOn(db, ids));
 }
 
 export function deleteEntry(

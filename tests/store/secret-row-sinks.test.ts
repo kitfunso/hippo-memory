@@ -96,7 +96,8 @@ describe('copies of a row', () => {
   it('a dormant row and its replacement hold the stored form and still restore', () => {
     const entry = { ...createMemory(RAW), id: 'mem_d1' };
     insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: '2026-01-01T00:00:00.000Z' });
-    const stored = () => db.prepare('SELECT content, entry_json FROM dormant_memories').get() as Record<string, string>;
+    const stored = () =>
+      db.prepare('SELECT content, entry_json FROM dormant_memories').get() as { content: string; entry_json: string };
     expect(JSON.stringify(stored())).not.toContain(GHP);
     expect(dormantSnapshotsByIds(db, entry.tenantId, ['mem_d1']).get('mem_d1')?.entry.content).toBe(STORED);
     replaceDormantEntry(db, entry.tenantId, 'mem_d1', { ...entry, id: 'mem_d2', content: `${RAW} again` });

@@ -2,7 +2,8 @@
 // write leaves, a repeated id taking its last value.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { setHalfLives, stampOriginProjects } from '../../src/store/sqlite/entry-writes.js';
+import { setHalfLives } from '../../src/store/sqlite/entry-stats.js';
+import { stampOriginProjects } from '../../src/store/sqlite/entry-rewrites.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';

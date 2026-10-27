@@ -34,7 +34,7 @@ import {
   listDuplicateCandidates,
   listEntryIdsPage,
 } from './entry-reads.js';
-import { setHalfLives } from './entry-writes.js';
+import { setHalfLives } from './entry-stats.js';
 import { type Handles, type StoreFiles, waitingOpener } from './open.js';
 import { halfLifeAuditRows, recordedHalfLifeBase } from '../rules/half-life.js';
 import { commitInChunks } from './delete-and-batch.js';

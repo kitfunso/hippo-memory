@@ -16,7 +16,7 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { readEntriesByIds } from './entry-reads.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { StoreFiles } from './open.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { deleteEntryCore } from './entry-deletes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { ConflictResolution, LoserFate } from '../../base/ports/store/conflicts.js';
 import { handleStamp } from './handle-clock.js';

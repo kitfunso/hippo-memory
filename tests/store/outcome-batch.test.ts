@@ -11,13 +11,8 @@ import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memo
 import { createMemory } from '../../src/entry/memory.js';
 import { entryAfterOutcome } from '../../src/base/memory/keep-rules.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
-import {
-  writeEntriesTogether,
-  writeEntryDbOnly,
-  writeEntryMirrors,
-  writeOutcome,
-  auditingRefusal,
-} from '../../src/store/sqlite/entry-writes.js';
+import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrors } from '../../src/store/sqlite/entry-writes.js';
+import { writeOutcome, auditingRefusal } from '../../src/store/sqlite/entry-lifecycle.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';

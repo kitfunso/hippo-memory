@@ -319,7 +319,7 @@ beforeAll(async () => {
   await driveSessions();
   await driveObjects();
   scan = scanStore();
-}, 120_000);
+});
 
 describe('the secret boundary over the whole store', () => {
   it.each(VETTED)('%s holds its control token and no secret', (column) => {
