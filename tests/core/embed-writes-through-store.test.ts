@@ -2,7 +2,7 @@
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -248,6 +248,28 @@ describe('embedAll with a store', () => {
     expect(await newerStore.vectorWrites.entriesWithoutVector({ tenantId: ALL_TENANTS, model, limit: 500 })).toEqual(
       [],
     );
+  });
+
+  it('gives a store opened through a link and one opened on the real folder one index key, so they share a turn', async () => {
+    // Under home, which afterAll removes once the session has closed both stores.
+    const parent = mkdtempSync(join(home, 'link-'));
+    const real = join(parent, 'real');
+    const link = join(parent, 'link');
+    try {
+      mkdirSync(real);
+      initTestStore(real);
+      symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+      const viaReal = sqliteStore(real);
+      const viaLink = sqliteStore(link);
+      const key = await viaReal.vectorWrites.indexKey();
+      expect(await viaLink.vectorWrites.indexKey()).toBe(key);
+      if (process.platform === 'win32') {
+        expect(await sqliteStore(real.toUpperCase()).vectorWrites.indexKey()).toBe(key);
+      }
+    } finally {
+      // unlink removes the link alone, so afterAll's recursive remove never walks through it.
+      unlinkSync(link);
+    }
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {

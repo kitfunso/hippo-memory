@@ -10,30 +10,29 @@ import { bindMcpTools } from '../../src/surface/mcp/request.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
-// The groups the three called tools need, and so the ones a per-call need check would read.
+// The groups the three called tools need.
 const NEEDED = ['dagReads', 'reports'] as const;
 
-/** A store that counts each read of a NEEDED group made by a need check (hasGroup), apart from the
- * tools' own reads of the group they run on. */
+/** A store that counts every read of a NEEDED group property, whatever function makes it. */
 interface CountingStore {
   readonly store: HippoStore;
-  readonly checks: () => number;
+  readonly reads: () => number;
 }
 
 function counting(store: HippoStore): CountingStore {
-  let checks = 0;
+  let reads = 0;
   const counted = { ...store };
   for (const group of NEEDED) {
     const value = store[group];
     Object.defineProperty(counted, group, {
       enumerable: true,
       get: () => {
-        if (new Error().stack?.includes('hasGroup') === true) checks += 1;
+        reads += 1;
         return value;
       },
     });
   }
-  return { store: counted, checks: () => checks };
+  return { store: counted, reads: () => reads };
 }
 
 describe('MCP tools on a served store', () => {
@@ -55,16 +54,16 @@ describe('MCP tools on a served store', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it('binds each tool on one host store once, so three tool calls make no need check of their own groups', async () => {
-    const { store, checks } = counting(portOnlyStore(fixture.dir, [...NEEDED]));
+  it('binds each tool on one host store once, so three tool calls read none of their own groups again', async () => {
+    const { store, reads } = counting(portOnlyStore(fixture.dir, [...NEEDED]));
     const alone = counting(portOnlyStore(fixture.dir, [...NEEDED]));
     bindMcpTools(alone.store);
-    // One bind checks each group a tool needs, so the count is live.
-    expect(alone.checks()).toBeGreaterThan(0);
+    // One bind reads each group a tool needs, so the count is live.
+    expect(alone.reads()).toBeGreaterThan(0);
 
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store });
-    const atBoot = checks();
-    expect(atBoot).toBeGreaterThanOrEqual(alone.checks());
+    const atBoot = reads();
+    expect(atBoot).toBeGreaterThanOrEqual(alone.reads());
 
     const calls = [
       ['hippo_drill', { summary_id: 'sum_none' }],
@@ -81,6 +80,6 @@ describe('MCP tools on a served store', () => {
       expect(reply.error?.message).not.toBe(STORE_NOT_PORTED_MESSAGE);
     }
 
-    expect(checks()).toBe(atBoot);
+    expect(reads()).toBe(atBoot);
   });
 });
