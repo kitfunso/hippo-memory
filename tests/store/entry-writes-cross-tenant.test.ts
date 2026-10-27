@@ -4,13 +4,7 @@ import * as fs from 'node:fs';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  writeEntriesSkippingRejected,
-  writeEntriesTogether,
-  writeEntryOn,
-  writeEntryDbOnly,
-  writePromotedEntry,
-} from '../../src/store/sqlite/entry-writes.js';
+import { writeEntriesSkippingRejected, writeEntriesTogether, writeEntryOn, writeEntryDbOnly, writePromotedEntry } from '../../src/store/sqlite/entry-writes.js';
 import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

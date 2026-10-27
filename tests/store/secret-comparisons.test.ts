@@ -4,8 +4,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { adminActor } from '../../src/api/index.js';
 import { CLI_LEARN, learn, MCP_LEARN, type LearnProfile } from '../../src/api/sleep/learn.js';
 import type { GitRunner } from '../../src/base/ports/git.js';
-import { CONTENT_CAP, storedText } from '../../src/domain/agent-memories/source.js';
-import { renameEntrySource } from '../../src/store/sqlite/entry-writes.js';
+import { storedText } from '../../src/domain/agent-memories/source.js';
+import { renameEntrySource } from '../../src/store/sqlite/entry-rewrites.js';
 import { listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
 import { graphDeltaOn } from '../../src/store/sqlite/graph-delta.js';
 import { insertEntityRow, updateEntityRow } from '../../src/store/sqlite/graph-writes.js';
@@ -137,7 +137,8 @@ describe('same-text checks', () => {
 
   it('an agent note with a token across the cap is stored with no half of the token', () => {
     const token = GHP;
-    const text = `${'a'.repeat(CONTENT_CAP - 20)} ${token} ${'b'.repeat(40)}`;
+    const cap = storedText('a'.repeat(10_000)).length - ' [truncated]'.length;
+    const text = `${'a'.repeat(cap - 20)} ${token} ${'b'.repeat(40)}`;
     const stored = storedText(text);
     expect(stored).not.toContain(token.slice(0, 12));
     expect(stored.endsWith(' [truncated]')).toBe(true);

@@ -21,7 +21,7 @@ import { readEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { Handles, StoreFiles } from './open.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { deleteEntryCore } from './entry-deletes.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';

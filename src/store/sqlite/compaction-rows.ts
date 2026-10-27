@@ -5,7 +5,7 @@ import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { redactPayload, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
-import type { OriginMoveOptions } from './entry-writes.js';
+import type { OriginMoveOptions } from './entry-rewrites.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 

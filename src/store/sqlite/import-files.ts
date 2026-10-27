@@ -5,7 +5,7 @@ import type { EntryFilter } from '../../base/ports/store/reports.js';
 import type { RejectionCheck } from '../../base/ports/store/rejections.js';
 import type { EntryTextKey } from '../../base/ports/store/sharing.js';
 import { listTextKeysHolding } from './copy-rows.js';
-import { writeEntryRow } from './entry-writes.js';
+import { writeEntryRow } from './entry-lifecycle.js';
 import type { SqliteStoreOptions } from './grant.js';
 import { handlesOf, openStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';

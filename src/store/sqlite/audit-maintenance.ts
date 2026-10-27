@@ -20,7 +20,7 @@ import {
   MEMORY_BACKED_TABLES,
   deleteEntriesInBatches,
   memoriesBackingAmong,
-} from './delete-and-batch.js';
+} from './entry-deletes.js';
 import { readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
 import { ftsRowExists } from './entry-row.js';

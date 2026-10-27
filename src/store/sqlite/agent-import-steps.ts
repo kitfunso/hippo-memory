@@ -16,12 +16,9 @@ import {
 import { stampOriginProject } from './entry-row.js';
 import { entryIdTaken, readEntriesInIdOrder } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
-import {
-  renameEntrySourceAndOrigin,
-  renameEntrySource,
-  setEntryTagsInTx,
-  supersedeEntry,
-} from './entry-writes.js';
+import { renameEntrySourceAndOrigin, renameEntrySource } from './entry-rewrites.js';
+import { setEntryTagsInTx } from './entry-stats.js';
+import { supersedeEntry } from './entry-lifecycle.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';

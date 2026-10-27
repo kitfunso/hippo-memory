@@ -31,7 +31,8 @@ import {
   type CompactionRow,
   type CompactionStatus,
 } from './compaction-rows.js';
-import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
+import { strengthenRetrievedOn } from './entry-stats.js';
+import { writeEntryMirrors } from './entry-writes.js';
 import { updateStats } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
