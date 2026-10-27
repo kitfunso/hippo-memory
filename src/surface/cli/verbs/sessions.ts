@@ -394,7 +394,7 @@ export const SESSION_VERBS = {
       flags: { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
     },
   ),
-  hook: verb(() => import('../setup.js'), 'handleHook', {
+  hook: verb(() => import('../hook.js'), 'handleHook', {
     flags: {},
     usage: [
       `

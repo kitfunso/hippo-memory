@@ -315,7 +315,7 @@ export const MEMORY_VERBS = {
     --global               Sleep the global store (the daily job does this once a day)`,
     ],
   }),
-  'daily-runner': verb(() => import('../setup.js'), 'handleDailyRunner', {
+  'daily-runner': verb(() => import('../daily-runner.js'), 'handleDailyRunner', {
     flags: {},
     usage: [
       `
