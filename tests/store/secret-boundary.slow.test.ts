@@ -35,6 +35,8 @@ import { replaceDetectedConflicts } from '../_helpers/root-forms-parts/conflicts
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import type { SessionEventInput, SnapshotInput, WorkingMemoryPush } from '../../src/base/ports/store/sessions.js';
+import type { HandoffOutcome, SessionHandoff } from '../../src/base/session/handoff.js';
 import { COLUMN_CLASSES } from './secret-boundary-census.js';
 
 const FILL = runtimeJoin('Zq7', 'x'.repeat(30), 'Lm9');
@@ -335,36 +337,38 @@ const SCHEMA_EXCEPTIONS: ReadonlySet<string> = new Set([
   'sqlite_sequence.seq',
 ]);
 
+const sessions = () => sqliteStore(root).sessions;
+const event = (over: Partial<SessionEventInput>) =>
+  sessions().save(TENANT, 'event', { sessionId: 's1', eventType: 'note', content: 'x', ...over });
+const wm = (over: Partial<WorkingMemoryPush>) =>
+  sessions().save(TENANT, 'working_memory', { scope: 'repo', content: 'x', ...over });
+const handoff = (over: Partial<SessionHandoff>) =>
+  sessions().save(TENANT, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'x', ...over } }, null);
+const snapshot = (over: Partial<SnapshotInput>) =>
+  sessions().save(TENANT, 'snapshot', { task: 't', summary: 's', nextStep: 'n', ...over }, null);
+const goals = () => sqliteStore(root).goals;
+
 /** For each key column, the API write that sends it a secret-shaped key. */
-function keyWrites(): Record<string, () => Promise<unknown>> {
-  const { sessions, goals } = sqliteStore(root);
-  const event = (over: object) =>
-    sessions.save(TENANT, 'event', { sessionId: 's1', eventType: 'note', content: 'x', ...over });
-  const wm = (over: object) => sessions.save(TENANT, 'working_memory', { scope: 'repo', content: 'x', ...over });
-  const handoff = (over: object) =>
-    sessions.save(TENANT, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'x', ...over } }, null);
-  const snapshot = (over: object) =>
-    sessions.save(TENANT, 'snapshot', { task: 't', summary: 's', nextStep: 'n', ...over }, null);
-  return {
-    'session_events.session_id': () => event({ sessionId: KEY }),
-    'session_events.event_type': () => event({ eventType: KEY }),
-    'session_events.scope': () => event({ scope: KEY }),
-    'working_memory.scope': () => wm({ scope: KEY }),
-    'working_memory.session_id': () => wm({ sessionId: KEY }),
-    'working_memory.task_id': () => wm({ taskId: KEY }),
-    'session_handoffs.session_id': () => handoff({ sessionId: KEY }),
-    'session_handoffs.scope': () => handoff({ scope: KEY }),
-    'session_handoffs.outcome': () => handoff({ outcome: KEY }),
-    'session_handoffs.target_runtime': () => handoff({ targetRuntime: KEY }),
-    'session_handoffs.card_id': () => handoff({ cardId: KEY }),
-    'goal_stack.session_id': () => goals.push(TENANT, { sessionId: KEY, goalName: 'g' }),
-    'goal_stack.parent_goal_id': () => goals.push(TENANT, { sessionId: 's1', goalName: 'g', parentGoalId: KEY }),
-    'predictions.class_tag': () =>
-      savePrediction(root, TENANT, { classTag: KEY, claimText: 'the release ships on friday', estimateValue: 1 }),
-    'task_snapshots.session_id': () => snapshot({ sessionId: KEY }),
-    'task_snapshots.scope': () => snapshot({ scope: KEY }),
-  };
-}
+const KEY_WRITES = {
+  'session_events.session_id': () => event({ sessionId: KEY }),
+  'session_events.event_type': () => event({ eventType: KEY }),
+  'session_events.scope': () => event({ scope: KEY }),
+  'working_memory.scope': () => wm({ scope: KEY }),
+  'working_memory.session_id': () => wm({ sessionId: KEY }),
+  'working_memory.task_id': () => wm({ taskId: KEY }),
+  'session_handoffs.session_id': () => handoff({ sessionId: KEY }),
+  'session_handoffs.scope': () => handoff({ scope: KEY }),
+  // SAFETY: an untyped caller can send any string here, and the row keeps it as given.
+  'session_handoffs.outcome': () => handoff({ outcome: KEY as HandoffOutcome }),
+  'session_handoffs.target_runtime': () => handoff({ targetRuntime: KEY }),
+  'session_handoffs.card_id': () => handoff({ cardId: KEY }),
+  'goal_stack.session_id': () => goals().push(TENANT, { sessionId: KEY, goalName: 'g' }),
+  'goal_stack.parent_goal_id': () => goals().push(TENANT, { sessionId: 's1', goalName: 'g', parentGoalId: KEY }),
+  'predictions.class_tag': () =>
+    savePrediction(root, TENANT, { classTag: KEY, claimText: 'the release ships on friday', estimateValue: 1 }),
+  'task_snapshots.session_id': () => snapshot({ sessionId: KEY }),
+  'task_snapshots.scope': () => snapshot({ scope: KEY }),
+};
 
 let scan: HeldColumn[];
 
@@ -438,11 +442,11 @@ describe('the secret boundary over the whole store', () => {
 
 describe('key columns', () => {
   it('every key column the census refuses has a write that sends it a secret', () => {
-    expect(Object.keys(keyWrites()).sort()).toEqual([...REFUSED].sort());
+    expect(Object.keys(KEY_WRITES).sort()).toEqual([...REFUSED].sort());
   });
 
-  it.each(REFUSED)('%s refuses a secret-shaped key and stores nothing', async (column) => {
-    await expect(keyWrites()[column]!()).rejects.toThrow(/holds secret-shaped text/);
+  it.each(Object.entries(KEY_WRITES))('%s refuses a secret-shaped key and stores nothing', async (column, write) => {
+    await expect(write()).rejects.toThrow(/holds secret-shaped text/);
     const table = column.slice(0, column.indexOf('.'));
     const name = column.slice(column.indexOf('.') + 1);
     // SAFETY: count(*) returns one row shaped { n }.

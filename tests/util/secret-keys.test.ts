@@ -24,8 +24,9 @@ describe('refuseSecretKeys', () => {
     ];
     for (let i = 0; i < 500; i++) {
       keys.push(randomUUID(), ulid(), randomUUID().toUpperCase());
-      for (const prefix of ['mem', 'card', 'g', 'sem', 'cmp', 'rp'])
+      for (const prefix of ['mem', 'card', 'g', 'sem', 'cmp', 'rp']) {
         keys.push(generateId(prefix), generateId(prefix, 32));
+      }
     }
     for (const key of keys) expect(() => refuseSecretKeys({ sessionId: key }), key).not.toThrow();
   });
