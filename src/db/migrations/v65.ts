@@ -12,7 +12,9 @@ const INDEXES = [
   'idx_memories_rejection_digest ON memories(rejection_digest, tenant_id)',
   'idx_dormant_memories_rejection_digest ON dormant_memories(rejection_digest, tenant_id)',
   'idx_held_text_digests_memory ON held_text_digests(tenant_id, memory_id, in_dormant)',
-  'idx_memories_artifact_ref ON memories(tenant_id, artifact_ref) WHERE artifact_ref IS NOT NULL',
+  // Raw rows only: a vault page would range this index and sort each page, so it reads the next one.
+  `idx_memories_artifact_ref ON memories(tenant_id, artifact_ref) WHERE artifact_ref IS NOT NULL AND kind = 'raw'`,
+  'idx_memories_artifact_created ON memories(tenant_id, created, id) WHERE artifact_ref IS NOT NULL',
   'idx_session_owners_created_at ON session_owners(created_at)',
 ];
 
@@ -54,6 +56,8 @@ export const v65: Migration = {
     }
     db.exec(HELD_TEXT_DIGESTS);
     for (const index of INDEXES) db.exec(`CREATE INDEX IF NOT EXISTS ${index}`);
+    // idx_memories_layer_created (v01) holds the same keys, and no read's plan names this one.
+    db.exec('DROP INDEX IF EXISTS idx_memories_current');
     for (const trigger of TRIGGERS) db.exec(`CREATE TRIGGER IF NOT EXISTS ${trigger}`);
   },
 };

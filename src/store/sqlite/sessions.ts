@@ -290,9 +290,7 @@ function insertOwnerRow(
   return Number(result.changes ?? 0);
 }
 
-// SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred
-// thousand rows.
-/** Drops bindings created before `cutoffIso`. */
+/** Drops bindings created before `cutoffIso`, by idx_session_owners_created_at. */
 function deleteSessionOwnersBefore(db: DatabaseSyncLike, cutoffIso: string): void {
   cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
 }

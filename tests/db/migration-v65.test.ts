@@ -30,6 +30,7 @@ const V65_OBJECTS = {
     'idx_memories_rejection_digest',
     'idx_dormant_memories_rejection_digest',
     'idx_memories_artifact_ref',
+    'idx_memories_artifact_created',
     'idx_session_owners_created_at',
   ],
 };
@@ -52,6 +53,7 @@ function toV64(db: DatabaseSyncLike): void {
   db.exec('DROP TABLE held_text_digests');
   db.exec('ALTER TABLE memories DROP COLUMN rejection_digest');
   db.exec('ALTER TABLE dormant_memories DROP COLUMN rejection_digest');
+  db.exec('CREATE INDEX idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL');
 }
 
 /** A row's digest column and held keys; `inDormant` 1 reads dormant_memories. */
@@ -108,6 +110,9 @@ describe('migration v65', () => {
       v65.up(db);
       v65.up(db);
       expect(changes()).toBe(before);
+      // SAFETY: the SELECT names one TEXT column, name.
+      const indexes = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>;
+      expect(indexes.map((i) => i.name)).not.toContain('idx_memories_current');
       expect(keysOf(db, merged.id)).toEqual(noKeys);
       expect(fillRejectionDigests(db)).toBe(3);
       expect(keysOf(db, merged.id)).toEqual(exact(MERGED));
