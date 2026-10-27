@@ -41,13 +41,13 @@ describe('storedSource', () => {
     const two = storedSource(`${PREFIX}MEMORY.md/${GL}-staging-authentication/aaaaaaaaaaaa#11`);
     expect(one).not.toBe(two);
     expect(one.split('/')).toHaveLength(4);
-    expect(one.startsWith(`${PREFIX}MEMORY.md/[REDACTED]~`)).toBe(true);
+    expect(one.startsWith(`${PREFIX}MEMORY.md/[REDACTED~`)).toBe(true);
     expect(one.endsWith('/aaaaaaaaaaaa#11')).toBe(true);
   });
 
-  it('redacts a secret that spans a separator and tags the part it ends in', () => {
+  it('keeps a secret that spans a separator in one part, with the separator', () => {
     const stored = storedSource(`x/${B64}/y.md#cc`);
-    expect(stored).toMatch(/^x\/\[REDACTED\]\.md~[0-9a-f]{12}#cc$/);
+    expect(stored).toMatch(/^x\/\[REDACTED~[0-9a-f]{12}\]\.md#cc$/);
   });
 
   it('round-trips a key whose file name and heading both hold a token, so a second sync finds it unchanged', () => {
@@ -55,7 +55,7 @@ describe('storedSource', () => {
     const source = itemSource(PREFIX, { key, text: 'Run the schema check before every deploy.' });
     const split = splitSource(source, PREFIX);
     expect(split.key).toBe(storedItemKey(key));
-    expect(splitSource(source.replace(/notes-\[REDACTED\][^/#]*/, `notes-${GH}.md`), PREFIX).key).toBe(split.key);
+    expect(splitSource(source.replace(/notes-\[REDACTED~[0-9a-f]{12}\][^/#]*/, `notes-${GH}.md`), PREFIX).key).toBe(split.key);
     const plan = planContainer({
       textKeyed: true,
       items: [{ key, hash: split.hash, refused: false }],
@@ -88,5 +88,56 @@ describe('a token glued on by an underscore', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+});
+
+const PEM_SOURCE = runtimeJoin(
+  'import:-----BEGIN ',
+  'PRIVATE KEY-----\nfirstBODY1/secondBODY2/lastBODY3\n-----END ',
+  'PRIVATE KEY-----',
+);
+const SLASHED = runtimeJoin('import:token=', 'abc123XYZ'.repeat(3), '/', 'def456LMN'.repeat(3));
+
+describe('storedSource from whole-source spans', () => {
+  it.each([
+    ['a PEM block with a slash in its body', PEM_SOURCE, ['secondBODY2', 'lastBODY3', 'firstBODY1']],
+    ['a slash-bearing credential whose first segment matches', SLASHED, ['def456LMN', 'abc123XYZ']],
+  ])('%s leaves no raw byte of the span', (_name, source, raws) => {
+    const stored = storedSource(source);
+    for (const raw of raws) expect(stored).not.toContain(raw);
+    expect(stored.startsWith('import:')).toBe(true);
+  });
+
+  it.each(['x/token=abc/def123456789 bearer xyz#h', 'https://u:pw12345@host bearer ab/p#1'])(
+    '%s reaches a fixed point',
+    (source) => {
+      const stored = storedSource(source);
+      expect(storedSource(stored)).toBe(stored);
+      expect(redactSecretsStrict(stored)).toBe(stored);
+    },
+  );
+
+  it.each(['convert_sk_model_to_onnx', 'use_sk_learn_pipeline', 'my_sk-learn-tutorial-notebooks'])(
+    'keeps the snake-case name %s as it is',
+    (text) => {
+      expect(redactSecretsStrict(text)).toBe(text);
+      expect(storedSource(`notes/${text}.md`)).toBe(`notes/${text}.md`);
+    },
+  );
+
+  it('never pairs two keys on a heading a secret span emptied', () => {
+    const gone = runtimeJoin('token=abc/def', '123456789xyz/aaaa');
+    const fresh = runtimeJoin('password=qqq/rrr', '987654321abc/bbbb');
+    const plan = planContainer({
+      textKeyed: true,
+      items: [{ key: fresh, hash: 'h2', refused: false }],
+      skipped: [],
+      live: [{ id: 'r1', key: storedItemKey(gone), hash: 'h1', tagged: true, created: '2026-09-01T00:00:00.000Z' }],
+      dormant: [],
+      legacy: undefined,
+      isDuplicate: () => false,
+    });
+    expect(plan.setAside).toEqual(['r1']);
+    expect(plan.writes.flatMap((w) => w.supersedes)).toEqual([]);
   });
 });

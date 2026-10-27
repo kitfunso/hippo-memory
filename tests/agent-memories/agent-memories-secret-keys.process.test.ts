@@ -70,7 +70,7 @@ describe('storedItemKey', () => {
     const key = `deploy-${TOKEN_A}.md`;
     const stored = storedItemKey(key);
     expect(stored).not.toContain(TOKEN_A);
-    expect(stored).toMatch(/^deploy-\[REDACTED\]\.md~[0-9a-f]{12}$/);
+    expect(stored).toMatch(/^deploy-\[REDACTED~[0-9a-f]{12}\]\.md$/);
     expect(redactSecretsStrict(stored)).toBe(stored);
     expect(storedItemKey(stored)).toBe(stored);
     expect(storedItemKey('deploy.md')).toBe('deploy.md');

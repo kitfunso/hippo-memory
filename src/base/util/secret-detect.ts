@@ -1,9 +1,5 @@
-/**
- * Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in
- * prose must not flag). Flagged rows are never shared to the global store or injected as ambient
- * context outside their project; explicit recall is unaffected. Leaf module: no imports from
- * store/api/shared.
- */
+// Secret detection and the stored form of every text: provider-bounded patterns, so a bare `sk-` in prose does not flag.
+// A flagged row is never shared to the global store or injected outside its project. Leaf module.
 import { createHash } from 'node:crypto';
 import { tryParseJson } from './json.js';
 import { ID_SUFFIX_CHARS } from './token-text.js';
@@ -32,6 +28,9 @@ export const SECRET_TAGS: ReadonlySet<string> = new Set([
 const OPEN = '(?<![A-Za-z0-9])';
 const CLOSE = '(?![A-Za-z0-9])';
 const bounded = (source: string, close = CLOSE): RegExp => new RegExp(`${OPEN}${source}${close}`);
+/** An sk key opens after no word character, or after `_` when its body holds a digit. */
+const skOpen = (prefix: string): string =>
+  String.raw`(?:(?<=_)(?=${prefix}[A-Za-z0-9_-]*\d)|(?<![A-Za-z0-9_]))`;
 
 const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'aws-access-key', re: bounded(String.raw`AKIA[0-9A-Z]{16}`) },
@@ -56,15 +55,15 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
     ),
   },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence
-  // guard), so prose like "the sk- prefix identifies API keys" does not flag but "prod API key
-  // sk_live_..." does.
-  { name: 'sk-style-key', re: bounded(String.raw`sk-[A-Za-z0-9_-]{20,}`, '') },
-  { name: 'sk-underscore-key', re: bounded(String.raw`sk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}`) },
-  // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and
-  // user:password@ templates would hide code lessons from ambient context. Secret names end in the
-  // keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD,
-  // bypass are not secrets).
+  // detectSecret flags sk- and sk_<vendor>_ only beside a key-ish noun; after `_` the body needs a digit,
+  // so snake_case names such as convert_sk_model_to_onnx stay.
+  { name: 'sk-style-key', re: new RegExp(String.raw`${skOpen('sk-')}sk-[A-Za-z0-9_-]{20,}`) },
+  {
+    name: 'sk-underscore-key',
+    re: new RegExp(String.raw`${skOpen('sk_')}sk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}${CLOSE}`),
+  },
+  // A value needs 12+ token-safe chars and a digit, so `token = estimateTokens(...)` stays; the match opens at
+  // the keyword a secret name ends in (dbPassword), and pwd and pass need a `_` (OLDPWD, bypass).
   {
     name: 'secret-assignment',
     re: new RegExp(
@@ -159,43 +158,71 @@ export function redactPayload(raw: string): string {
 const PEM_BEGIN = String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----`;
 const PEM_END = String.raw`-----END [A-Z ]*PRIVATE KEY-----`;
 
+/** A [start, end) range of a text that a strict pattern or a PEM block covers. */
+type Span = readonly [number, number];
+
 /** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward
  * scan, so no ReDoS. Per-call RegExps, so no call shares lastIndex state. */
-function redactPemBlocks(text: string): string {
-  if (!text.includes('-----BEGIN ')) return text;
+function pemSpans(text: string): Span[] {
+  if (!text.includes('-----BEGIN ')) return [];
   const begins = new RegExp(PEM_BEGIN, 'g');
   const ends = new RegExp(PEM_END, 'g');
-  let out = '';
-  let from = 0;
+  const spans: Span[] = [];
   for (let begin = begins.exec(text); begin; begin = begins.exec(text)) {
     ends.lastIndex = begins.lastIndex;
     const end = ends.exec(text);
-    out += `${text.slice(from, begin.index)}[REDACTED]`;
-    from = end ? ends.lastIndex : text.length;
-    begins.lastIndex = from;
+    const to = end ? ends.lastIndex : text.length;
+    spans.push([begin.index, to]);
+    begins.lastIndex = to;
   }
-  return out + text.slice(from);
+  return spans;
 }
 
-// Global copies built once: replace() resets lastIndex, so calls share them; detectSecret keeps its
-// own non-global patterns, whose test() holds no state.
-const STRICT_GLOBAL: readonly RegExp[] = SECRET_PATTERNS.map(
-  ({ re }) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
-);
+// Global copies built once; matchAll clones a RegExp, so calls share no lastIndex. detectSecret keeps its own.
+const STRICT_GLOBAL: readonly RegExp[] = [
+  ...SECRET_PATTERNS.map(
+    ({ re }) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
+  ),
+  ...STRICT_ONLY_PATTERNS,
+];
+
+/** Every secret span of `text`, matched on the whole text, sorted, overlapping spans merged. */
+export function secretSpans(text: string): Span[] {
+  if (!text) return [];
+  const found: Span[] = pemSpans(text);
+  for (const re of STRICT_GLOBAL) {
+    for (const m of text.matchAll(re))
+      if (m[0].length > 0) found.push([m.index, m.index + m[0].length]);
+  }
+  if (found.length < 2) return found;
+  found.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged: [number, number][] = [];
+  for (const [start, end] of found) {
+    const last = merged.at(-1);
+    if (last && start < last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
+  return merged;
+}
 
 const REDACTED = '[REDACTED]';
 
-/**
- * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and
- * Basic auth headers and JWTs. It is also the stored form of every text hippo.db keeps.
- */
+/** `text` with the i-th span replaced by `marker(i)`. */
+function replaceSpans(text: string, spans: readonly Span[], marker: (i: number) => string): string {
+  let out = '';
+  let from = 0;
+  spans.forEach(([start, end], i) => {
+    out += `${text.slice(from, start)}${marker(i)}`;
+    from = end;
+  });
+  return out + text.slice(from);
+}
+
+/** The stored form of every text hippo.db keeps, and of text that leaves the machine: each secret span
+ * becomes the marker, with no co-occurrence guard, so Bearer and Basic headers, JWTs and URL passwords count. */
 export function redactSecretsStrict(text: string): string {
-  if (!text) return text;
-  // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
-  let result = redactPemBlocks(text);
-  for (const re of STRICT_GLOBAL) result = result.replace(re, REDACTED);
-  for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, REDACTED);
-  return result;
+  const spans = secretSpans(text);
+  return spans.length === 0 ? text : replaceSpans(text, spans, () => REDACTED);
 }
 
 /** The stored form of an optional text column; null when there is no text. */
@@ -204,40 +231,49 @@ export function storedOrNull(text: string | null | undefined): string | null {
 }
 
 // SHORTCUT: an unkeyed digest lets a row holder confirm a guessed low-entropy secret; a per-store key fixes it.
-const rawTag = (raw: string): string =>
-  `~${createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, ID_SUFFIX_CHARS)}`;
-const SOURCE_SEPARATORS = /([/#])/;
+const digest = (raw: string): string =>
+  createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, ID_SUFFIX_CHARS);
+/** A marker naming its raw part; `[` and `]` end every token class, so no pattern extends it. */
+const taggedMarker = (raw: string): string => `[REDACTED~${digest(raw)}]`;
+const isSeparator = (ch: string): boolean => ch === '/' || ch === '#';
+/** Passes before a source that keeps making spans collapses to one marker; no case in the property test needs a third. */
+const MAX_SOURCE_PASSES = 4;
 
-/** A source part as stored: redacted, plus a digest of the raw part when redaction changed it. */
-function storedPart(part: string): string {
-  const stored = redactSecretsStrict(part);
-  return stored === part ? part : `${stored}${rawTag(part)}`;
+/** One pass: split at `/` and `#` outside every span, so each span sits in one part; a part holding a span
+ * gets its spans as markers, the last naming the raw part. */
+function storeSpannedParts(text: string, spans: readonly Span[]): string {
+  let out = '';
+  let start = 0;
+  let k = 0;
+  for (let i = 0; i <= text.length; i++) {
+    while (k < spans.length && spans[k][1] <= i) k++;
+    const inSpan = k < spans.length && spans[k][0] <= i;
+    if (i < text.length && (inSpan || !isSeparator(text[i]))) continue;
+    const part = text.slice(start, i);
+    const own = spans
+      .filter(([from, to]) => from >= start && to <= i)
+      .map(([from, to]): Span => [from - start, to - start]);
+    const last = own.length - 1;
+    out +=
+      last < 0
+        ? part
+        : replaceSpans(part, own, (j) => (j === last ? taggedMarker(part) : REDACTED));
+    if (i < text.length) out += text[i];
+    start = i + 1;
+  }
+  return out;
 }
 
-/** The one stored form of `source`: a `/` or `#` part redaction changes keeps a raw digest, so parts
- * stay distinct exactly when they were; a secret across a separator tags the last part it touched. */
+/** The one stored form of `source`: spans found on the whole source, split only outside them, so a part
+ * is distinct stored exactly when it is raw. A source with no span comes back unchanged. */
 export function storedSource(source: string): string {
-  if (!source) return source;
-  const raw = source.split(SOURCE_SEPARATORS);
-  const parts = raw.map((part, i) => (i % 2 === 1 ? part : storedPart(part)));
-  const joined = parts.join('');
-  const net = redactSecretsStrict(joined);
-  if (net === joined) return joined;
-  let head = 0;
-  while (head < net.length && net[head] === joined[head]) head++;
-  let tail = 0;
-  while (
-    tail < net.length - head &&
-    net[net.length - 1 - tail] === joined[joined.length - 1 - tail]
-  ) {
-    tail++;
+  let out = source;
+  for (let pass = 0; pass < MAX_SOURCE_PASSES; pass++) {
+    const spans = secretSpans(out);
+    if (spans.length === 0) return out;
+    out = storeSpannedParts(out, spans);
   }
-  const ends: number[] = [];
-  for (const part of parts) ends.push((ends.at(-1) ?? 0) + part.length);
-  const first = ends.findIndex((end) => end > head);
-  const last = ends.findIndex((end) => end >= joined.length - tail);
-  const at = ends[last] - (joined.length - net.length);
-  return `${net.slice(0, at)}${rawTag(raw.slice(first, last + 1).join(''))}${net.slice(at)}`;
+  return secretSpans(out).length === 0 ? out : taggedMarker(source);
 }
 
 /** Every form a row's `source` may hold for `source`: the stored form, then a raw older one. */

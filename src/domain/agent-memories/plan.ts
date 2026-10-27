@@ -159,6 +159,7 @@ function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
     (f) => headingOf(storedItemKey(f.w.key)),
   );
   for (const [heading, keys] of goneBy) {
+    if (heading === '') continue;
     const news = freshBy.get(heading) ?? [];
     if (keys.length !== 1 || news.length !== 1) continue;
     const { w, i } = news[0];
@@ -167,8 +168,10 @@ function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   }
 }
 
+/** A stored key's heading; none when it holds a redaction marker, as a secret span can empty two headings alike. */
 function headingOf(key: string): string {
-  return key.slice(0, Math.max(0, key.lastIndexOf('/')));
+  const heading = key.slice(0, Math.max(0, key.lastIndexOf('/')));
+  return heading.includes('[REDACTED') ? '' : heading;
 }
 
 // Byte order, as memory.ts's timestamp note asks: localeCompare may skip the ISO punctuation.

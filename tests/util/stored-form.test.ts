@@ -48,7 +48,7 @@ describe('redactEntry', () => {
     expect(stored).toEqual({
       id: 'a',
       content: 'ci token [REDACTED]',
-      source: expect.stringMatching(/^import:\[REDACTED\]~[0-9a-f]{12}$/),
+      source: expect.stringMatching(/^import:\[REDACTED~[0-9a-f]{12}\]$/),
     });
     expect(entry.content).toContain(GHP);
   });
