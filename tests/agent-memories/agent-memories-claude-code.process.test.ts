@@ -140,7 +140,9 @@ describe('claudeCodeAdapter project layouts', () => {
   it('lists the submodule root folder for a submodule subfolder', () => {
     const home = tmp();
     const lib = seedRepo();
-    const sup = seedRepo();
+    // The superproject needs no commit of its own, so it skips seedRepo's second git call.
+    const sup = tmp();
+    git(sup, 'init', '-q');
     git(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
     fs.mkdirSync(path.join(sup, 'lib', 'pkg'));
     writeLesson(home, path.join(sup, 'lib'), 'lib.md', 'The submodule build needs the vendored headers.');

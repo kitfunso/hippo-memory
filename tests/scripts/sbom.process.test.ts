@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 import { join, resolve } from 'node:path';
 // Imported from the .mjs script; the CLI main is guarded so this import does NOT run it.
 import { runtimeComponents, mergeRuntimeBoms } from '../../scripts/sbom.mjs';
@@ -109,7 +110,11 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sbom-cli-'));
     try {
       const out = join(dir, 'out.cdx.json');
-      execFileSync(process.execPath, [SBOM_JS, '--dir', REPO_ROOT, '--out', out], { encoding: 'utf8' });
+      // One npm ls over the real tree: 2.7 s on CI, up to 6.5 s on a loaded box, inside the 30 s process budget.
+      execFileSync(process.execPath, [SBOM_JS, '--dir', REPO_ROOT, '--out', out], {
+        encoding: 'utf8',
+        timeout: HANG_GUARD_MS,
+      });
       // SAFETY: sbom.mjs's own output; shape matches CdxBom.
       const bom = JSON.parse(readFileSync(out, 'utf8')) as CdxBom;
       const names = bom.components.map((c) => c.name);

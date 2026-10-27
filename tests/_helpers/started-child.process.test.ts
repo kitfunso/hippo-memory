@@ -48,17 +48,17 @@ describe('startNode', () => {
     const child = startNode(['-e', `process.stdout.write('booting\\n'); setInterval(() => {}, 1000);`]);
     // The deadline starts once the child has printed, so a slow start cannot empty the output it names.
     await child.line(/^booting$/, 'the booting line');
-    await expect(child.line(/^ready/, 'the ready line', 300)).rejects.toThrow(
-      /the ready line not seen within 300 ms.*still running.*booting/s,
+    await expect(child.line(/^ready/, 'the ready line', 3_000)).rejects.toThrow(
+      /the ready line not seen within 3000 ms.*still running.*booting/s,
     );
   });
 
   it("each call starts its own deadline, so an idle 'file' child still gets a full wait", async () => {
     const answerLate = `process.stdin.on('data', () => setTimeout(() => process.stdout.write('late\\n'), 100)); process.stdout.write('listening\\n');`;
-    const child = startNode(['-e', answerLate], { lifetime: 'file', deadlineMs: 1_000 });
+    const child = startNode(['-e', answerLate], { lifetime: 'file', deadlineMs: 3_000 });
     await child.line(/^listening$/, 'the stdin listener');
     // Idle past the whole deadline: a deadline counted from the spawn has nothing left for the answer's 100 ms.
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await new Promise((resolve) => setTimeout(resolve, 3_200));
     const late = child.line(/^late/, 'the late line');
     child.send('go\n');
     await expect(late).resolves.toBeTruthy();
