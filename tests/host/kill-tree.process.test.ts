@@ -75,12 +75,13 @@ describe('killTree', () => {
 describe('runWatched past its deadline', () => {
   it('does not kill a pid after its child exited, and still settles', async () => {
     // The child exits at once; a detached grandchild keeps stderr open past the deadline.
-    const script = `require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 8000)'], { detached: true, stdio: ['ignore', 'ignore', 'inherit'] }).unref();`;
+    const script = `const gc = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 8000)'], { detached: true, stdio: ['ignore', 'ignore', 'inherit'] }); process.stderr.write('gc ' + gc.pid); gc.unref();`;
     const killed: number[] = [];
     const outcome = await runWatched([process.execPath, '-e', script], 3000, async (pid) => {
       killed.push(pid);
     }).catch((e: Error) => e);
     expect(outcome).toBeInstanceOf(RunWatchedTimeoutError);
+    if (outcome instanceof RunWatchedTimeoutError) strays.push(Number(outcome.stderr.replace('gc ', '')));
     expect(killed).toEqual([]);
   }, 30_000);
 

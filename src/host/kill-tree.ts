@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { spawnArgv } from './spawn-argv.js';
 
-/** Starts taskkill; a test passes a stand-in. */
+/** Starts taskkill; a test passes a stand-in, as it does for the ps snapshot. */
 type SpawnKiller = typeof spawnArgv;
 
 const TASKKILL_MS = 10_000;
@@ -23,6 +23,8 @@ function send(pid: number, signal: NodeJS.Signals): void {
     }
   }
 }
+
+type Snapshot = typeof parentsByPid;
 
 /** Parent of each process, from one `ps` snapshot. Rejects when ps cannot run. */
 function parentsByPid(): Promise<Map<number, number>> {
@@ -64,13 +66,13 @@ function descendants(root: number, parents: ReadonlyMap<number, number>): number
 
 /** Stops the child and each new descendant until a snapshot shows no new one, so none can start
  * another while the tree is walked; then kills them, deepest first. */
-async function killPosixTree(pid: number): Promise<void> {
+async function killPosixTree(pid: number, snapshot: Snapshot): Promise<void> {
   send(pid, 'SIGSTOP');
   const stopped: number[] = [];
   try {
     let settled = false;
     for (let round = 0; round < MAX_ROUNDS && !settled; round++) {
-      const fresh = descendants(pid, await parentsByPid()).filter((p) => !stopped.includes(p));
+      const fresh = descendants(pid, await snapshot()).filter((p) => !stopped.includes(p));
       settled = fresh.length === 0;
       for (const p of fresh) send(p, 'SIGSTOP');
       stopped.push(...fresh);
@@ -94,6 +96,7 @@ async function killPosixTree(pid: number): Promise<void> {
 /** taskkill /T walks the tree itself. */
 function killWindowsTree(pid: number, spawnKiller: SpawnKiller): Promise<void> {
   return new Promise((resolve) => {
+    let timedOut = false;
     const finish = (): void => {
       clearTimeout(timer);
       resolve();
@@ -111,6 +114,7 @@ function killWindowsTree(pid: number, spawnKiller: SpawnKiller): Promise<void> {
       return;
     }
     const timer = setTimeout(() => {
+      timedOut = true;
       log.warn(`kill-tree: taskkill for ${pid} did not finish in ${TASKKILL_MS} ms, stopped it`);
       killer.kill();
       finish();
@@ -122,7 +126,7 @@ function killWindowsTree(pid: number, spawnKiller: SpawnKiller): Promise<void> {
     });
     killer.on('close', (code: number | null) => {
       // 128 is "no such process": the tree was already gone.
-      if (code !== 0 && code !== 128) {
+      if (!timedOut && code !== 0 && code !== 128) {
         log.warn(`kill-tree: taskkill for ${pid} exited with ${code ?? 'a signal'}`);
       }
       finish();
@@ -132,9 +136,15 @@ function killWindowsTree(pid: number, spawnKiller: SpawnKiller): Promise<void> {
 
 /** Kills `pid` and its descendants. Never rejects: a failure is logged. A grandchild whose parent
  * already exited is not in the tree and is left running. */
-export async function killTree(pid: number, spawnKiller: SpawnKiller = spawnArgv): Promise<void> {
+export async function killTree(
+  pid: number,
+  spawnKiller: SpawnKiller = spawnArgv,
+  snapshot: Snapshot = parentsByPid,
+): Promise<void> {
   try {
-    await (process.platform === 'win32' ? killWindowsTree(pid, spawnKiller) : killPosixTree(pid));
+    await (process.platform === 'win32'
+      ? killWindowsTree(pid, spawnKiller)
+      : killPosixTree(pid, snapshot));
   } catch (err) {
     log.warn(`kill-tree: ${pid} not fully killed: ${errorMessage(err)}`, errorFields(err));
   }

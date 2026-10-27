@@ -1,5 +1,6 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { killTree } from '../../host/kill-tree.js';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
@@ -54,7 +55,12 @@ function watchChild(
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
       // Node reaped an exited child, so its pid may now name another process.
       if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
-      void kill(child.pid);
+      kill(child.pid).catch((err) => {
+        log.warn(
+          `run-watched: could not kill the tree of ${child.pid}: ${errorMessage(err)}`,
+          errorFields(err),
+        );
+      });
     }, deadlineMs);
 
     child.on('close', (code: number | null) => {
