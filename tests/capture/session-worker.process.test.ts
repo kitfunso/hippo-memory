@@ -18,7 +18,8 @@ import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;
 let sessions: string;
-const left = (): string[] => fs.readdirSync(sessions);
+/** The sessions folder's files, leaving out the lock file a finished worker keeps for the next take. */
+const left = (): string[] => fs.readdirSync(sessions).filter((n) => !n.endsWith('.lock.db'));
 const file = (suffix: string): string => path.join(sessions, `${ID}${suffix}`);
 
 beforeEach(() => {
@@ -299,6 +300,23 @@ describe('pruning the sessions folder', () => {
     age('c.queued.99', 400);
     expect(pruneSessionFiles(Date.now())).toBe(0);
     expect(fs.readdirSync(sessions).sort()).toEqual(keep.sort());
+  });
+
+  it('removes the lock file of a session idle past the cursor age, and keeps a young, held or queued one', async () => {
+    const at = (name: string): string => path.join(sessions, name);
+    fs.writeFileSync(at('idle.lock.db'), '');
+    fs.writeFileSync(at('queued.lock.db'), '');
+    fs.writeFileSync(at('queued.queued'), 'turn');
+    const holder = await holdInChild(at('held.lock.db'));
+    try {
+      expect(pruneSessionFiles(Date.now())).toBe(0);
+      expect(fs.existsSync(at('idle.lock.db'))).toBe(true);
+      // ctime cannot be set, so the clock moves past the age instead.
+      expect(pruneSessionFiles(Date.now() + 31 * DAY)).toBe(1);
+      expect(fs.readdirSync(sessions).sort()).toEqual(['held.lock.db', 'queued.lock.db', 'queued.queued']);
+    } finally {
+      await kill(holder);
+    }
   });
 
   it('does nothing, and does not throw, when the folder is missing', () => {

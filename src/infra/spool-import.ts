@@ -18,10 +18,8 @@ interface ImportFailedOptions {
   readonly log: Log;
 }
 
-/**
- * After an importer failure: a busy store stops the run with the count unchanged, any other error
- * counts one try toward .bad.
- */
+/** After an importer failure: a busy store stops the run with the count unchanged; any other error
+ * counts one try toward .bad. */
 function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
   const { dir, claim, entry, text, recorded, failure, log } = options;
   const { name } = entry;

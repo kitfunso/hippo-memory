@@ -1,6 +1,6 @@
 // The lock is the operating system's: one holder per file, freed the moment its holder dies.
 import { afterAll, describe, expect, it } from 'vitest';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 
 const CONTENDER = join(import.meta.dirname, '..', '_helpers', 'lock-contender.mjs');
 const HOLDER = join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
+const FD_PROBE = join(import.meta.dirname, '..', '_helpers', 'lock-fd-probe.mjs');
 const LOOPER = join(import.meta.dirname, '..', '_helpers', 'lock-looper.mjs');
 const DIST_LOCK = join(import.meta.dirname, '..', '..', 'dist', 'host', 'file-lock.js');
 const ROUNDS = 20;
@@ -96,32 +97,54 @@ describe('two processes taking one file lock', () => {
   }, 30_000);
 });
 
-describe('four processes looping take and release', () => {
-  it('never overlap, never see an unusable lock, and each take it at least once', async () => {
-    const dir = scratch();
-    const log = join(dir, 'log.txt');
-    const kids = Array.from({ length: 4 }, () =>
-      spawn(process.execPath, [LOOPER, join(dir, 'loop.lock.db'), log, '2000'], { stdio: 'ignore' }),
-    );
-    await Promise.all(kids.map(exited));
-    expect(kids.map((kid) => kid.exitCode)).toEqual([0, 0, 0, 0]);
-    const lines = readFileSync(log, 'utf8').trim().split('\n');
-    let inside: string | null = null;
-    const entered = new Set<string>();
-    for (const line of lines) {
-      const [what, pid] = line.split(' ');
-      expect(what, line).not.toBe('unusable');
-      if (what === 'enter') {
-        expect(inside, `${pid} entered while ${inside} was inside`).toBeNull();
-        inside = pid;
-        entered.add(pid);
-      } else if (what === 'exit') {
-        expect(inside).toBe(pid);
-        inside = null;
-      }
+/** Runs `count` looper processes on one path and checks the log: no overlapping enter, no unusable, all exit 0. */
+async function loopTakers(count: number, durationMs: number, holdMs: number): Promise<Set<string>> {
+  const dir = scratch();
+  const log = join(dir, 'log.txt');
+  const kids = Array.from({ length: count }, () =>
+    spawn(process.execPath, [LOOPER, join(dir, 'loop.lock.db'), log, String(durationMs), String(holdMs)], {
+      stdio: 'ignore',
+    }),
+  );
+  await Promise.all(kids.map(exited));
+  expect(kids.map((kid) => kid.exitCode)).toEqual(kids.map(() => 0));
+  let inside: string | null = null;
+  const entered = new Set<string>();
+  for (const line of readFileSync(log, 'utf8').trim().split(/\r?\n/)) {
+    const [what, pid] = line.split(' ');
+    expect(what, line).not.toBe('unusable');
+    if (what === 'enter') {
+      expect(inside, `${pid} entered while ${inside} was inside`).toBeNull();
+      inside = pid;
+      entered.add(pid);
+    } else if (what === 'exit') {
+      expect(inside).toBe(pid);
+      inside = null;
     }
-    expect(entered.size).toBe(kids.length);
+  }
+  return entered;
+}
+
+describe('processes looping take and release', () => {
+  it('four processes never overlap, never see an unusable lock, and each take it at least once', async () => {
+    expect((await loopTakers(4, 2000, 2)).size).toBe(4);
   }, 60_000);
+
+  it.each([2, 8])(
+    '%i processes taking with no hold never overlap',
+    async (count) => {
+      await loopTakers(count, 3000, 0);
+    },
+    60_000,
+  );
+});
+
+describe.skipIf(process.platform === 'win32')('a take through the create path', () => {
+  // POSIX drops every fcntl lock a process holds on a file when any descriptor on it closes.
+  it('does not drop a lock another thread of this process holds', () => {
+    const out = spawnSync(process.execPath, [FD_PROBE, join(scratch(), 'p.lock.db')], { encoding: 'utf8' });
+    expect(JSON.parse(out.stdout)).toEqual({ worker: 'taken', main: 'held', other: 'held' });
+  });
 });
 
 describe('one process', () => {
@@ -141,17 +164,38 @@ describe('one process', () => {
     if (first.kind === 'taken') first.lock.release();
   });
 
-  it('takes a missing path, removes the file at release, and takes again', () => {
+  it('takes a missing path, keeps the file at release, and the next take reuses it', () => {
     const path = join(scratch(), 's.lock.db');
     const first = takeFileLock(path);
     if (first.kind !== 'taken') throw new Error(`expected taken, got ${first.kind}`);
-    expect(existsSync(path)).toBe(true);
+    const made = identity(path);
     first.lock.release();
     first.lock.release();
-    expect(existsSync(path)).toBe(false);
+    expect(identity(path)).toEqual(made);
     const again = takeFileLock(path);
     expect(again.kind).toBe('taken');
+    expect(identity(path)).toEqual(made);
     if (again.kind === 'taken') again.lock.release();
+  });
+
+  it('removes the file when its holder calls remove, and only then', () => {
+    const path = join(scratch(), 's.lock.db');
+    const take = takeFileLock(path);
+    if (take.kind !== 'taken') throw new Error(`expected taken, got ${take.kind}`);
+    take.lock.remove();
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it('takes on a later pass when the stat throws before the open', () => {
+    const path = join(scratch(), 's.lock.db');
+    let calls = 0;
+    const stat: StatFn = (p) => {
+      if (calls++ === 0) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      return identity(p);
+    };
+    const take = takeFileLock(path, stat);
+    expect(take.kind).toBe('taken');
+    if (take.kind === 'taken') take.lock.release();
   });
 
   it('writes no journal file while the lock is held', () => {

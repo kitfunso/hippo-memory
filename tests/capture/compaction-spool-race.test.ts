@@ -59,7 +59,7 @@ describe('two replayers over one spool', () => {
     expect(first).toBe(FILES);
     expect(await Promise.all(nested)).toEqual(Array(FILES).fill(0));
     expect([...imported].sort()).toEqual(ids);
-    expect(fs.readdirSync(path.join(root, 'compactions-spool'))).toEqual([]);
+    expect(fs.readdirSync(path.join(root, 'compactions-spool'))).toEqual(['replay.lock.db']);
     expect(logs.filter((l) => !l.startsWith('spool left to another replayer'))).toEqual([]);
     expect(logs).toHaveLength(FILES);
   });

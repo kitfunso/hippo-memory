@@ -246,7 +246,7 @@ the end, so a run that failed reads the same turns again.
 _Avoid_: turn cursor, position file, bookmark
 
 **File lock**:
-A lock database whose EXCLUSIVE lock names the one process allowed to do a piece of local work;
+A lock database whose RESERVED lock (taken with BEGIN IMMEDIATE) names the one process allowed to do a piece of local work;
 the operating system frees it when that process dies.
 _Avoid_: lease (a card's), claim (a spool file's)
 

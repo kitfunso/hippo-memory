@@ -102,7 +102,7 @@ function takeQueued(queued: string): WorkerMode | null {
   }
 }
 
-// A request takeQueued cannot take stays queued for the next worker instead of spinning here.
+// Rounds in which takeQueued took nothing: such a request stays queued for the next worker instead of spinning here.
 const MAX_ROUNDS = 5;
 
 /** Runs `work` unless a live worker holds this session, which then runs the request after its
@@ -115,21 +115,24 @@ export async function runSessionWorker(
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
-  let rounds = 0;
+  let idleRounds = 0;
   for (let take = takeFileLock(files.lock); take.kind !== 'held'; take = takeFileLock(files.lock)) {
     if (take.kind === 'unusable') {
       warnUnusableLockOnce(files.lock, take.cause);
       return work(mode);
     }
+    let ran = false;
     try {
       for (let next = takeQueued(files.queued); next !== null; next = takeQueued(files.queued)) {
+        ran = true;
         await work(next);
       }
     } finally {
       take.lock.release();
     }
     // A taker that found the lock held left its request queued, so look again after every release.
-    if (!fs.existsSync(files.queued) || ++rounds >= MAX_ROUNDS) return;
+    if (!fs.existsSync(files.queued)) return;
+    if (!ran && ++idleRounds >= MAX_ROUNDS) return;
   }
 }
 
@@ -212,6 +215,7 @@ export function saveTurnPosition(
 
 const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
 const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
+const LOCK_DB = '.lock.db';
 
 /** A text lock from before 3.0 names no process any more, so a day old is long dead. */
 const LEGACY_LOCK_MAX_AGE_MS = DAY_MS;
@@ -222,8 +226,36 @@ function pruneLimit(name: string): number | null {
   return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
 }
 
-/** Removes cursor files and leftovers of the old text locks past their age. Never throws; returns
- * the number removed. */
+/** A session's lock file goes when the session is idle past the cursor age and the file is as old. */
+function lockDbIdle(dir: string, id: string, file: string, nowMs: number): boolean {
+  if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
+  const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });
+  if (cursor !== undefined && nowMs - cursor.mtimeMs < CURSOR_MAX_AGE_MS) return false;
+  const lock = fs.statSync(file, { throwIfNoEntry: false });
+  return lock !== undefined && lock.isFile() && nowMs - lock.ctimeMs >= CURSOR_MAX_AGE_MS;
+}
+
+/** Removes an idle session's lock file as its holder; true when removed. A held file is skipped.
+ * SHORTCUT: a request queued during this hold waits for the session's next hook. */
+function pruneLockDb(dir: string, name: string, nowMs: number): boolean {
+  const file = path.join(dir, name);
+  if (!lockDbIdle(dir, name.slice(0, -LOCK_DB.length), file, nowMs)) return false;
+  const take = takeFileLock(file);
+  if (take.kind === 'unusable') {
+    warnUnusableLockOnce(file, take.cause);
+    return false;
+  }
+  if (take.kind !== 'taken') return false;
+  if (fs.existsSync(path.join(dir, `${name.slice(0, -LOCK_DB.length)}.queued`))) {
+    take.lock.release();
+    return false;
+  }
+  take.lock.remove();
+  return !fs.existsSync(file);
+}
+
+/** Removes cursor files and leftovers of the old text locks past their age, and the lock file of a
+ * session idle that long. Never throws; returns the number removed. */
 export function pruneSessionFiles(nowMs: number): number {
   const dir = sessionsDir();
   let removed = 0;
@@ -239,6 +271,10 @@ export function pruneSessionFiles(nowMs: number): number {
   for (const name of names) {
     const file = path.join(dir, name);
     try {
+      if (name.endsWith(LOCK_DB)) {
+        if (pruneLockDb(dir, name, nowMs)) removed++;
+        continue;
+      }
       const limit = pruneLimit(name);
       if (limit === null) continue;
       const stat = fs.statSync(file, { throwIfNoEntry: false });

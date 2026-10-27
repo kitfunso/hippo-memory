@@ -1,8 +1,8 @@
 // A lock the operating system holds for a live process: BEGIN IMMEDIATE on a small lock database
 // takes the RESERVED lock (LockFileEx on win32, fcntl on POSIX), which one connection holds and which dies with it.
-// Only a holder unlinks the file, at release; a take checks the path names the same file across its open and lock.
+// Only an old file is removed, so a file created later differs in ctime and (dev, ino, ctimeNs) names a generation.
 import { createRequire } from 'node:module';
-import { closeSync, openSync, statSync, unlinkSync } from 'node:fs';
+import { statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 
@@ -30,8 +30,10 @@ export interface FileIdentity {
 export type StatFn = (path: string) => FileIdentity | undefined;
 
 export interface FileLock {
-  /** Frees the lock and removes the file when no other taker has it open. Never throws, idempotent. */
+  /** Frees the lock; the file stays for the next take. Never throws, idempotent. */
   release(): void;
+  /** Frees the lock and removes the file; only sleep's prune of an old file calls it. Never throws. */
+  remove(): void;
 }
 
 export type LockTake =
@@ -40,11 +42,10 @@ export type LockTake =
   | { readonly kind: 'unusable'; readonly cause: unknown };
 
 const SQLITE_BUSY = 5;
-// IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on a SHARED lock.
 const MAX_ATTEMPTS = 3;
 const MAX_CREATES = 10;
 const WIN32 = process.platform === 'win32';
-// win32 refuses an unlink while another taker has the file open; that taker unlinks at its own release.
+// win32 refuses an unlink while another taker has the file open; the next prune retries.
 const OPEN_FILE_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 
 // bigint, since a win32 file index can pass 2^53
@@ -102,33 +103,29 @@ function unlinkIfHeld(path: string, held: FileIdentity, stat: StatFn): void {
 }
 
 function holder(db: LockConnection, path: string, held: FileIdentity, stat: StatFn): FileLock {
-  let released = false;
-  return {
-    release() {
-      if (released) return;
-      released = true;
-      try {
-        if (WIN32) closeLogged(db, path);
-        unlinkIfHeld(path, held, stat);
-      } finally {
-        if (!WIN32) closeLogged(db, path);
-      }
-    },
+  let done = false;
+  const finish = (unlink: boolean): void => {
+    if (done) return;
+    done = true;
+    try {
+      if (WIN32) closeLogged(db, path);
+      if (unlink) unlinkIfHeld(path, held, stat);
+    } finally {
+      if (!WIN32) closeLogged(db, path);
+    }
   };
+  return { release: () => finish(false), remove: () => finish(true) };
 }
 
 type Pass =
   | LockTake
-  | { readonly kind: 'again'; readonly created: boolean; readonly ioError?: unknown };
+  | { readonly kind: 'again'; readonly created: boolean; readonly failure?: unknown };
 const AGAIN: Pass = { kind: 'again', created: false };
 const NO_FILE: Pass = { kind: 'again', created: true };
 
-/** Creates the lock file when it is missing, so the stat before the open has a file to name. */
-function statOrCreate(path: string, stat: StatFn): FileIdentity | undefined {
-  const found = stat(path);
-  if (found !== undefined) return found;
-  closeSync(openSync(path, 'a'));
-  return stat(path);
+/** Creates the missing lock file through SQLite: a raw descriptor closed here would drop this process's other locks. */
+function createViaSqlite(path: string): void {
+  new DatabaseSync(path).close();
 }
 
 /** True when the path no longer names `before`; a stat that fails counts as unchanged. */
@@ -145,12 +142,18 @@ function pathMoved(path: string, before: FileIdentity | undefined, stat: StatFn)
 function onePass(path: string, stat: StatFn): Pass {
   let before: FileIdentity | undefined;
   let db: LockConnection | undefined;
+  let opening = false;
   try {
-    before = statOrCreate(path, stat);
-    if (before === undefined) return NO_FILE;
+    before = stat(path);
+    if (before === undefined) {
+      createViaSqlite(path);
+      return NO_FILE;
+    }
+    opening = true;
     db = new DatabaseSync(path);
     // A take writes no file but the lock database, so no two generations of the file share a journal.
     db.exec('PRAGMA journal_mode=MEMORY');
+    // IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on a SHARED lock.
     db.exec('BEGIN IMMEDIATE');
     if (sameFile(before, stat(path))) {
       return { kind: 'taken', lock: holder(db, path, before, stat) };
@@ -160,21 +163,26 @@ function onePass(path: string, stat: StatFn): Pass {
   } catch (err) {
     if (db !== undefined) closeLogged(db, path);
     if (primaryCode(err) === SQLITE_BUSY) return { kind: 'held' };
-    // Another holder's release, between the stat and the lock, fails this open or lock.
+    // Before the open there is no file to blame: the stat or the create failed, so try another pass.
+    if (!opening) return { kind: 'again', created: true, failure: err };
+    // After it, a path that moved failed this open or lock.
     return pathMoved(path, before, stat) ? AGAIN : unusable(path, err);
   }
 }
 
-/** Takes the lock database at `path` (its folder must exist): taken, held by a live connection, or
- * unusable. Only a holder unlinks, at release; a take checks the file across its open. */
+/** Takes the lock database at `path` (its folder must exist): taken, held, or unusable. `held` also
+ * covers a file that kept changing: each change was a holder's remove, which re-checks the queue. */
 export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTake {
   let passes = 0;
   let creates = 0;
+  let failure: unknown;
   while (passes < MAX_ATTEMPTS && creates < MAX_CREATES) {
     const result = onePass(path, stat);
     if (result.kind !== 'again') return result;
+    failure = result.failure;
     if (result.created) creates++;
     else passes++;
   }
-  return { kind: 'held' };
+  // Every pass lost the file to a release that re-checks the queue, or the stat or create kept failing.
+  return failure === undefined ? { kind: 'held' } : unusable(path, failure);
 }
