@@ -119,7 +119,7 @@ function rowidOf(db: DatabaseSyncLike, id: string): number {
 }
 
 describe('a saved graph file', () => {
-  // One seed per test: each builds and saves its own store, so three in one test passed half the slow budget on CI.
+  // One seed per test: each builds and saves its own store, so three in one test passed the 10 s ceiling on CI.
   it.each(SEEDS)(
     `reaches recall@10 of ${RECALL_FLOOR} against the scan on seed %i, for all rows, a tenant and a scope`,
     async (seed) => {
@@ -138,26 +138,25 @@ describe('a saved graph file', () => {
     },
   );
 
-  it('answers as the store worker graph it was saved from does', async () => {
-    for (const seed of SEEDS) {
-      const rows = mixedRows(ROWS, seed);
-      const root = makeRoot('vector-graph-file');
-      seedVectorRows(root, rows, MODEL);
-      const f = onStore(root);
-      const graphs = new VectorGraphs(root, grantFor({}));
-      await nearest(f, rows[0].vector, spec(ALL_TENANTS), graphs);
-      await graphs.idle();
+  it.each(SEEDS)('answers as the store worker graph it was saved from does, on seed %i', async (seed) => {
+    const rows = mixedRows(ROWS, seed);
+    const root = makeRoot('vector-graph-file');
+    seedVectorRows(root, rows, MODEL);
+    const f = onStore(root);
+    const graphs = new VectorGraphs(root, grantFor({}));
+    await nearest(f, rows[0].vector, spec(ALL_TENANTS), graphs);
+    await graphs.idle();
 
-      expect(fs.existsSync(graphFile(root))).toBe(true);
-      const fromGraph = await recall(f, rows, spec('t2'), graphs);
-      const fromFile = await recall(f, rows, spec('t2'));
-      expect(fromFile, `seed ${seed}`).toBeGreaterThanOrEqual(Math.min(fromGraph, RECALL_FLOOR));
-      graphs.close();
-    }
+    expect(fs.existsSync(graphFile(root))).toBe(true);
+    const fromGraph = await recall(f, rows, spec('t2'), graphs);
+    const fromFile = await recall(f, rows, spec('t2'));
+    expect(fromFile, `seed ${seed}`).toBeGreaterThanOrEqual(Math.min(fromGraph, RECALL_FLOOR));
+    graphs.close();
   });
 
-  it('after added, forgotten, re-embedded and reused rows answers for what it covers and scores the rest', async () => {
-    for (const seed of SEEDS) {
+  it.each(SEEDS)(
+    'after added, forgotten, re-embedded and reused rows answers for what it covers and scores the rest, on seed %i',
+    async (seed) => {
       const rows = mixedRows(ROWS, seed);
       const f = await savedStore(rows);
       const q = near(rows[11].vector, seed);
@@ -191,8 +190,8 @@ describe('a saved graph file', () => {
       expect(await nearest(f, q, spec(ALL_TENANTS))).toEqual(expect.arrayContaining([moved[0][0]]));
       expect(await recall(f, rows, spec('t2')), `seed ${seed}`).toBeGreaterThanOrEqual(RECALL_FLOOR);
       expect(f.covered.every((rowid) => rowid === ROWS)).toBe(true);
-    }
-  });
+    },
+  );
 });
 
 describe('a read the saved file cannot answer goes to the scan', () => {
