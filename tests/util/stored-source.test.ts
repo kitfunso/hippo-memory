@@ -142,4 +142,35 @@ describe('storedSource from whole-source spans', () => {
     expect(plan.setAside).toEqual(['r1']);
     expect(plan.writes.flatMap((w) => w.supersedes)).toEqual([]);
   });
+
+  it('keeps the prefix and the hash when a second pass finds a new span', () => {
+    const source = `${PREFIX}${runtimeJoin('https://Bearer AAAAAAAAAAAAAAAA1', ':hunter2xx@host.md')}#ab12`;
+    const stored = storedSource(source);
+    expect(stored.startsWith(PREFIX)).toBe(true);
+    expect(stored.endsWith('#ab12')).toBe(true);
+    expect(stored).not.toContain('hunter2xx');
+    expect(storedSource(stored)).toBe(stored);
+  });
+
+  it('still pairs an edit under one raw heading that holds a secret span', () => {
+    const plan = planContainer({
+      textKeyed: true,
+      items: [{ key: `${GH} notes/run the schema check first`, hash: 'h2', refused: false }],
+      skipped: [],
+      live: [
+        {
+          id: 'r1',
+          key: storedItemKey(`${GH} notes/run the schema check`),
+          hash: 'h1',
+          tagged: true,
+          created: '2026-09-01T00:00:00.000Z',
+        },
+      ],
+      dormant: [],
+      legacy: undefined,
+      isDuplicate: () => false,
+    });
+    expect(plan.setAside).toEqual([]);
+    expect(plan.writes.flatMap((w) => w.supersedes)).toEqual(['r1']);
+  });
 });

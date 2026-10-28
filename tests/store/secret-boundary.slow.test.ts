@@ -450,6 +450,7 @@ const KEY_WRITES = {
     sqliteStore(root).failureLog.record({ tenantId: TENANT, outcome: 'stored', ownerSubject: KEY }),
   'goal_recall_log.session_id': () => retrieve(admin(), { query: 'deploy', boost: { sessionId: KEY } }),
   'memories.scope': () => remembered({ scope: KEY }),
+  'memory_quarantine.original_scope': () => remembered({ scope: KEY }),
   'memories.owner': () => remembered({ owner: KEY }),
   'memories.artifact_ref': () => remembered({ artifactRef: KEY }),
   'memories.source_session_id': () => remembered({ local: { sourceSessionId: KEY } }),
@@ -492,7 +493,7 @@ const KEY_WRITES = {
 /** For each enum a caller feeds, the src function that bounds it and a write that sends it a value off its list. */
 const ENUM_ENTRANCES = {
   'task_snapshots.status': {
-    by: 'clearActiveTaskSnapshot',
+    by: 'clearAny',
     write: async () => {
       await snapshot({ sessionId: 's-enum' });
       await sessions().clear(TENANT, 'snapshot', { status: KEY });
@@ -619,6 +620,19 @@ describe('key columns', () => {
 describe('caller-fed enums', () => {
   it.each(Object.entries(ENUM_ENTRANCES))('%s names the src function that bounds it', (column, { by }) => {
     expect(COLUMN_CLASSES.get(column)).toEqual({ out: 'enum', by });
+  });
+
+  it('task_snapshots.status refuses a value off its list when a session closes its snapshots too', async () => {
+    await snapshot({ sessionId: 's-close' });
+    await expect(sessions().clear(TENANT, 'snapshot', { status: KEY, sessionId: 's-close' }, null)).rejects.toThrow(
+      /not one of/,
+    );
+    // SAFETY: count(*) returns one row shaped { n }.
+    const held = withDb(
+      (db) =>
+        db.prepare('SELECT count(*) AS n FROM task_snapshots WHERE instr(status, ?) > 0').get(FILL) as { n: number },
+    );
+    expect(held.n).toBe(0);
   });
 
   it.each(Object.entries(ENUM_ENTRANCES))('%s refuses a value off its list and stores nothing', async (column, e) => {

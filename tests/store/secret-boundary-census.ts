@@ -293,7 +293,7 @@ const CENSUS = {
   memory_quarantine: {
     tenant_id: tenant,
     memory_id: idBy('hippo'),
-    original_scope: enumBy('hippo'),
+    original_scope: refused('assertClientScope'),
     reason: vetted('recordQuarantine'),
     status: enumBy('hippo'),
     quarantined_at: at,
@@ -423,7 +423,7 @@ const CENSUS = {
     task: vetted('saveActiveTaskSnapshot'),
     summary: vetted('saveActiveTaskSnapshot'),
     next_step: vetted('saveActiveTaskSnapshot'),
-    status: enumBy('clearActiveTaskSnapshot'),
+    status: enumBy('clearAny'),
     source: vetted('saveActiveTaskSnapshot'),
     created_at: at,
     updated_at: at,

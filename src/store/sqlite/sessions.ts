@@ -64,11 +64,6 @@ function clearActiveTaskSnapshot(
   clearedStatus: string,
 ): number {
   const { hippoRoot } = files;
-  if (!SNAPSHOT_CLEAR_STATUSES.some((status) => status === clearedStatus)) {
-    throw new BadRequestError(
-      `snapshot status is not one of ${SNAPSHOT_CLEAR_STATUSES.join(', ')}`,
-    );
-  }
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
   const now = handleStamp(db);
@@ -539,6 +534,12 @@ function clearAny(
   ...[tenantId, kind, close, key]: SessionClearArgs
 ) {
   if (kind === 'working_memory') return wmClear(db, tenantId, close);
+  // Both snapshot paths bind the status as given, so the one check sits here.
+  if (!SNAPSHOT_CLEAR_STATUSES.some((status) => status === close.status)) {
+    throw new BadRequestError(
+      `snapshot status is not one of ${SNAPSHOT_CLEAR_STATUSES.join(', ')}`,
+    );
+  }
   if (close.sessionId === undefined) {
     return clearActiveTaskSnapshot(db, files, tenantId, close.status);
   }

@@ -168,10 +168,10 @@ function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   }
 }
 
-/** A stored key's heading; none when it holds a redaction marker, as a secret span can empty two headings alike. */
+/** A stored key's heading; a part with a secret span carries a digest of its raw text, so two raw headings never
+ * share one. */
 function headingOf(key: string): string {
-  const heading = key.slice(0, Math.max(0, key.lastIndexOf('/')));
-  return heading.includes('[REDACTED') ? '' : heading;
+  return key.slice(0, Math.max(0, key.lastIndexOf('/')));
 }
 
 // Byte order, as memory.ts's timestamp note asks: localeCompare may skip the ISO punctuation.
