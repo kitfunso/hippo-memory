@@ -2,7 +2,13 @@
 // summary's descendants a page at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
+import {
+  readEntriesByIds,
+  countSessionRawMemories,
+  listSessionRawKeys,
+  readSessionRawRows,
+  readChildrenByParent,
+} from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';
 import type {
@@ -201,6 +207,8 @@ export function sqliteDagReads(on: OnHandle): DagReads {
     on,
     {
       sessionRawCount: countSessionRawMemories,
+      sessionRawKeys: listSessionRawKeys,
+      sessionRawRows: readSessionRawRows,
       summaryWithDescendants: summaryWithDescendants,
     },
     openStore,

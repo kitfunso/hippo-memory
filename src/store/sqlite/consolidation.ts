@@ -41,7 +41,7 @@ import {
   readSleepHistory,
 } from './index-and-stats.js';
 import { listUntracedSessions } from './sessions.js';
-import { saveStoredParticles, storedParticleIds } from './vector-index.js';
+import { saveStoredParticles, storedParticleIds, storedParticlesByRecall } from './vector-index.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
@@ -177,6 +177,7 @@ function recordSleepBody(files: StoreFiles): Bodies<Pick<Consolidation, 'recordS
 type BareBodies =
   | 'rejected'
   | 'particleIds'
+  | 'particlesByRecall'
   | 'saveParticles'
   | 'auditEachRow'
   | 'dirtyGraphTenants';
@@ -187,6 +188,7 @@ const bareBodies: Bodies<Pick<Consolidation, BareBodies | 'markGraphDrained'>> =
     return [...new Set(digests)].flatMap((digest) => found.get(digest) ?? []);
   },
   particleIds: storedParticleIds,
+  particlesByRecall: storedParticlesByRecall,
   saveParticles: saveStoredParticles,
   auditEachRow: auditRows,
   dirtyGraphTenants: listPendingExtractionTenants,

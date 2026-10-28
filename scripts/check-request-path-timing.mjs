@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Request-path work at 10,000 memories per store: contextGet, the MCP tools that read whole stores, the HTTP recall and the dashboard.
+// Request-path work at 10,000 memories per store: contextGet, session assemble, the MCP tools that read whole stores, the HTTP recall and the dashboard.
 // Fails when a request runs more statements, reads more rows or opens more stores than its ceiling; the time is printed and fails nothing. Run after `npm run build`:
 //   node scripts/check-request-path-timing.mjs [--memories 10000]
 import * as fs from 'node:fs';
@@ -34,7 +34,7 @@ const { writeEntryDbOnly } = await load('store/sqlite/entry-writes.js');
 const { countAmbientInFolder: loadAmbientTallies } = await load('store/sqlite/fixtures.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/sqlite/auth.js');
-const { contextGet, adminActor } = await load('api/index.js');
+const { contextGet, assemble, adminActor } = await load('api/index.js');
 const { contextReach } = await load('api/types.js');
 const { loadConfig } = await load('host/config-file.js');
 const { rootInfra } = await load('infra/ports.js');
@@ -120,9 +120,41 @@ function seed(root, sourceOf) {
   }
 }
 
+// One long session of raw rows, a tenth of them private: assemble reads its keys, then only the rows the budget keeps.
+const SESSION_ROWS = 3000;
+function seedSession(root) {
+  initStore(root);
+  const db = openHippoDb(root);
+  const started = Date.now();
+  db.exec('BEGIN');
+  try {
+    for (let i = 0; i < SESSION_ROWS; i++) {
+      const entry = createMemory(
+        `turn ${i}: the ${WORDS[i % WORDS.length]} step needs ${WORDS[(i * 7) % WORDS.length]} first`,
+        {
+          kind: 'raw',
+          sourceSessionId: 'timing-session',
+          scope: i % 10 === 0 ? 'slack:private:CTIMING' : null,
+          tenantId: 'default',
+          baseHalfLifeDays: 30,
+        },
+      );
+      writeEntryDbOnly(db, { ...entry, created: new Date(started - (SESSION_ROWS - i) * 1000).toISOString() });
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 seed(localRoot, () => 'cli');
 seed(globalRoot, (i) => `shared:proj${i % 12}:seed`);
 // serve() refuses a second server on one root, and the copy is taken while no connection holds the store.
+const sessionRoot = path.join(tmp, 'session', '.hippo');
+seedSession(sessionRoot);
 const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
@@ -176,6 +208,14 @@ const tool =
 
 // As the CLI and the prompt hook run it: one session, so each store opens and is set up once.
 const inHook = (run) => () => runSqliteRequest((session) => run({ ...ctx, ...onSession(session) }), 'hook');
+
+const sessionStore = sqliteStore(sessionRoot);
+const assembleSession = () =>
+  runSqliteRequest(
+    (session) =>
+      assemble({ ...ctx, hippoRoot: sessionRoot, store: inSqliteSession(sessionStore, session) }, 'timing-session'),
+    'hook',
+  );
 
 // With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
@@ -278,6 +318,7 @@ const cases = [
     },
     [19, 6, 2],
   ],
+  ['assemble, 3000-row session', assembleSession, [12, 4000, 1]],
   ['mcp hippo_context', tool('hippo_context'), [63, 1726, 2]],
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [32, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 4, 1]],

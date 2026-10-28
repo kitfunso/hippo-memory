@@ -13,7 +13,7 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/t
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { MAX_FRESH_RAW } from '../../base/util/limits.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
-import { listEntriesWhere } from './entry-filter.js';
+import { listEntriesWhere, narrowingAnd } from './entry-filter.js';
 import {
   afterIdAnd,
   entriesPage,
@@ -24,7 +24,13 @@ import {
 } from './keyset.js';
 import type { EntryIdPage } from '../../base/ports/store/consolidation.js';
 import type { IdPage, IdPageRequest } from '../../base/ports/store/vectors.js';
-import type { SessionRawCount, SessionRawQuery } from '../../base/ports/store/context-reads.js';
+import type {
+  SessionRawCount,
+  SessionRawKey,
+  SessionRawKeys,
+  SessionRawQuery,
+  SessionRawRows,
+} from '../../base/ports/store/context-reads.js';
 import type { OriginTally } from '../../base/ports/store/project-tags.js';
 import type { EntrySignals, EntryTextKeyPage } from '../../base/ports/store/sharing.js';
 import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
@@ -112,40 +118,102 @@ export function originAnd(origins: readonly string[] | null | undefined): SqlFra
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
 type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
 
-/** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant
- * and origins. */
-function sessionRawWhere({
-  sessionId,
-  tenantId,
-  origins,
-}: SessionRows<SessionRawQuery>): SqlFragment {
-  const tenant = tenantAnd(tenantId);
+/** The WHERE every session raw-row read shares: the session's live raw rows in the tenant and
+ * origins, live as entriesWhere({ live: true }) reads it. */
+// The tenant term never picks the index: idx_memories_tenant_created would walk the whole tenant.
+// `seek` names what does: the session index, or the primary key of an id list.
+function sessionRawWhere(
+  { sessionId, tenantId, origins }: SessionRows<SessionRawQuery>,
+  seek: 'session' | 'ids' = 'session',
+): SqlFragment {
+  const column = (name: string): string =>
+    seek === 'ids' && name === 'source_session_id' ? `+${name}` : name;
+  const session = narrowingAnd({ sessionId, live: true }, column);
+  const tenant = tenantAnd(tenantId, TENANT_IS);
   const origin = originAnd(origins);
   return {
-    sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${origin.sql}`,
-    params: [sessionId, ...tenant.params, ...origin.params],
+    sql: `kind = 'raw'${session.sql}${tenant.sql}${origin.sql}`,
+    params: [...session.params, ...tenant.params, ...origin.params],
   };
 }
 
+/** The scope rule `passesScopeFilterForRecall` applies, as SQL: an explicit scope matches
+ * exactly, none admits what the default deny lets through and `ownScope`. */
+function sessionScopeAdmit({
+  scope,
+  ownScope,
+}: Pick<SessionRawCount, 'scope' | 'ownScope'>): SqlFragment {
+  return scope !== undefined && scope !== ''
+    ? { sql: 'scope = ?', params: [scope] }
+    : scopeAdmitSql('', ownScope);
+}
+
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without
- * leaking rows the caller could not load. Mirrors `passesScopeFilterForRecall`'s default-deny:
- * explicit scope matches exactly, none admits only `ownScope`. */
+ * leaking rows the caller could not load. */
 export function countSessionRawMemories(
   db: DatabaseSyncLike,
   query: SessionRows<SessionRawCount>,
 ): number {
   if (!query.sessionId) return 0;
   const where = sessionRawWhere(query);
-  const { scope, ownScope } = query;
-  const admit =
-    scope !== undefined && scope !== ''
-      ? { sql: 'scope = ?', params: [scope] }
-      : scopeAdmitSql('', ownScope);
+  const admit = sessionScopeAdmit(query);
   const row = cachedStatement(
     db,
     `SELECT COUNT(*) AS c FROM memories WHERE ${where.sql} AND ${admit.sql}`,
   ).get(...where.params, ...admit.params) as { c?: number } | undefined;
   return Number(row?.c ?? 0);
+}
+
+// SAFETY: the read below selects every key of this row.
+interface SessionRawKeyRow {
+  readonly id: string;
+  readonly created: string;
+  readonly strength: number;
+  readonly dag_parent_id: string | null;
+  readonly chars: number;
+}
+
+/** The newest `limit` rows `countSessionRawMemories` counts, oldest first, without their
+ * content: the scope rule runs before the LIMIT, so rows the caller cannot see take no place. */
+export function listSessionRawKeys(
+  db: DatabaseSyncLike,
+  query: SessionRows<SessionRawKeys>,
+): SessionRawKey[] {
+  if (!query.sessionId) return [];
+  const where = sessionRawWhere(query);
+  const admit = sessionScopeAdmit(query);
+  const rows = cachedStatement(
+    db,
+    `SELECT id, created, strength, dag_parent_id, length(content) AS chars FROM memories ` +
+      `WHERE ${where.sql} AND ${admit.sql} ORDER BY created DESC, id DESC LIMIT ?`,
+  ).all(...where.params, ...admit.params, query.limit > 0 ? query.limit : -1) as SessionRawKeyRow[];
+  return rows.reverse().map((r) => ({
+    id: r.id,
+    created: r.created,
+    strength: Number(r.strength),
+    dagParentId: r.dag_parent_id,
+    contentLength: Number(r.chars),
+  }));
+}
+
+/** The rows of `query.ids` that `countSessionRawMemories` still counts, read whole: a row made
+ * private, superseded or moved since its key was read is left out. */
+export function readSessionRawRows(
+  db: DatabaseSyncLike,
+  query: SessionRows<SessionRawRows>,
+): MemoryEntry[] {
+  if (!query.sessionId) return [];
+  const where = sessionRawWhere(query, 'ids');
+  const admit = sessionScopeAdmit(query);
+  return chunked([...new Set(query.ids)]).flatMap((chunk) =>
+    (
+      cachedStatement(
+        db,
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+          `WHERE id IN (SELECT value FROM json_each(?)) AND ${where.sql} AND ${admit.sql}`,
+      ).all(JSON.stringify(chunk), ...where.params, ...admit.params) as MemoryRow[]
+    ).map(rowToEntry),
+  );
 }
 
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass
@@ -162,10 +230,11 @@ export function listFreshRawMemories(
   if (count <= 0) return [];
   const capped = Math.min(count, MAX_FRESH_RAW);
   const params: Array<string | number> = [];
-  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
+  const live = narrowingAnd({ live: true });
+  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw'${live.sql}`;
   const tenant = tenantAnd(tenantId);
   sql += tenant.sql;
-  params.push(...tenant.params);
+  params.push(...live.params, ...tenant.params);
   if (sessionId !== undefined && sessionId !== '') {
     sql += ' AND source_session_id = ?';
     params.push(sessionId);

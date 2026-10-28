@@ -124,6 +124,16 @@ export class Survivors {
     this.held.set(row.id, row);
   }
 
+  /** The rows a pass of this run changed or added, as the run holds them now. */
+  changed(): MemoryEntry[] {
+    return [...this.held.values()];
+  }
+
+  /** Whether the run kept `id`. */
+  has(id: string): boolean {
+    return this.held.has(id) || this.strength.has(id);
+  }
+
   /** The survivors among `ids`, in that order. */
   async get(ids: readonly string[]): Promise<MemoryEntry[]> {
     const unchanged = ids.filter((id) => !this.held.has(id) && this.strength.has(id));

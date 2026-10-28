@@ -33,6 +33,12 @@ export interface Consolidation {
   rejected(tenantId: string, digests: readonly string[]): Promise<RejectedValueRow[]>;
   /** The memory id of every stored physics particle, in load order. */
   particleIds(): Promise<string[]>;
+  /** Up to `page.limit` memories that have a stored particle, in recall order, after
+   * `page.after`. */
+  particlesByRecall(page: {
+    readonly limit: number;
+    readonly after?: RecallCursor;
+  }): Promise<RecallPage>;
   /** Writes the particles over their stored state, as one batch. */
   saveParticles(particles: PhysicsParticle[]): Promise<void>;
   /** The `limit` dirty summaries changed last, each with its live children by created then id,
@@ -73,6 +79,7 @@ export const CONSOLIDATION_EFFECTS = {
   entryIdsPage: 'read',
   rejected: 'read',
   particleIds: 'read',
+  particlesByRecall: 'read',
   saveParticles: 'write',
   dirtySummaries: 'read',
   unprofiledTopicSummaries: 'read',
@@ -113,6 +120,23 @@ export interface SleepStart {
 export interface UntracedSession {
   readonly sessionId: string;
   readonly events: readonly SessionEvent[];
+}
+
+/** Where a page in recall order starts: after this row. Recall order is last recalled first,
+ * then the row stored last first, so `rowid` breaks ties. */
+export interface RecallCursor {
+  readonly lastRetrieved: string;
+  readonly rowid: number;
+}
+
+export interface RecalledMemory {
+  readonly id: string;
+  readonly lastRetrieved: string;
+}
+
+export interface RecallPage {
+  readonly memories: RecalledMemory[];
+  readonly next: RecallCursor | null;
 }
 
 /** EntryPage with only each row's id. */

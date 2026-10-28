@@ -27,6 +27,7 @@ import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
+import type { RecallCursor, RecallPage } from '../../base/ports/store/consolidation.js';
 import { tenantAnd } from './tenant.js';
 import type {
   VectorBackfillQuery,
@@ -274,6 +275,34 @@ export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleS
     const particles = count > 0 && count <= fullUpTo ? listStoredParticles(db) : null;
     return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
   });
+}
+
+/** Up to `page.limit` memories that have a stored particle, in recall order. The index holds
+ * rowid after last_retrieved, so it supplies the whole order and a page seeks past ties. */
+export function storedParticlesByRecall(
+  db: DatabaseSyncLike,
+  page: { readonly limit: number; readonly after?: RecallCursor },
+): RecallPage {
+  const { after } = page;
+  const seek = after ? ' AND last_retrieved <= ? AND (last_retrieved < ? OR rowid < ?)' : '';
+  const rows = cachedStatement(
+    db,
+    `SELECT rowid AS seq, id, last_retrieved FROM memories INDEXED BY idx_memories_last_retrieved ` +
+      `WHERE id IN (SELECT memory_id FROM memory_physics)${seek} ` +
+      `ORDER BY last_retrieved DESC, rowid DESC LIMIT ?`,
+  ).all(
+    ...(after ? [after.lastRetrieved, after.lastRetrieved, after.rowid] : []),
+    page.limit + 1,
+  ) as Array<{ seq: number; id: string; last_retrieved: string }>;
+  const kept = rows.slice(0, page.limit);
+  const last = kept.at(-1);
+  return {
+    memories: kept.map((row) => ({ id: row.id, lastRetrieved: row.last_retrieved })),
+    next:
+      rows.length > page.limit && last
+        ? { lastRetrieved: last.last_retrieved, rowid: Number(last.seq) }
+        : null,
+  };
 }
 
 /** The memory id of every stored particle in listStoredParticles's order, so a caller reads only
