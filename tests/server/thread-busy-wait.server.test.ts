@@ -3,7 +3,7 @@ import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultBusyWaitMs, setDefaultBusyWaitMs } from '../../src/db/busy.js';
 import type { ReaderCall, ReaderReply } from '../../src/surface/server/dashboard-reader.js';
-import { serveReads } from '../../src/surface/server/dashboard-reader-thread.js';
+import { serveReads } from '../../src/surface/server/dashboard-reader-serve.js';
 import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
 import { recordBusyWaitsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
