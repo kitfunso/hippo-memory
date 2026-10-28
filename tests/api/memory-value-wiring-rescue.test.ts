@@ -230,13 +230,13 @@ describe('(f) pinned exemption unchanged', () => {
 // ---------------------------------------------------------------------------
 describe('(g) fail-loud on a malformed weights constant', () => {
   it('validateWeights throws on a non-finite weight value', () => {
-    const bad = { ...MEMORY_VALUE_WEIGHTS, age_days: Number.NaN };
+    const bad = { ...MEMORY_VALUE_WEIGHTS, ageDays: Number.NaN };
     expect(() => validateWeights(bad, SOURCE_ARTIFACT_SHA256)).toThrow(/not a finite number/);
   });
 
   it('validateWeights throws on a missing dim', () => {
     const missingDim = { ...MEMORY_VALUE_WEIGHTS };
-    delete missingDim.content_length;
+    delete missingDim.contentLength;
     expect(() => validateWeights(missingDim, SOURCE_ARTIFACT_SHA256)).toThrow(/not a finite number/);
   });
 

@@ -42,7 +42,7 @@ export interface RejectedValueRow {
 /** The text, tenant and scope of the memory a rejection names. */
 export interface RejectionSource {
   content: string;
-  tenant_id: string;
+  tenantId: string;
   scope: string | null;
 }
 

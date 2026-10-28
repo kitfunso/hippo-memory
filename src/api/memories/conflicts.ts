@@ -59,7 +59,7 @@ export interface ResolveMemoryConflictResult {
 function isLive(member: ConflictMember | null): boolean {
   return (
     member !== null &&
-    !member.superseded_by &&
+    !member.supersededBy &&
     (member.kind === 'raw' || member.kind === 'distilled') &&
     !isQuarantineScope(member.scope)
   );
@@ -171,7 +171,7 @@ export async function conflictListOpen(
   const recallable = (member: ConflictMember | null): boolean =>
     !project ||
     (member !== null &&
-      classifyOriginProject(member.origin_project, project) !== 'cross-project' &&
+      classifyOriginProject(member.originProject, project) !== 'cross-project' &&
       passesScopeFilterForRecall(member.scope, undefined, own));
   const shown = (row: ConflictRow): boolean =>
     touchable(ctx.actor, row) && recallable(row.a) && recallable(row.b);

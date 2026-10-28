@@ -19,6 +19,8 @@ import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/domain/consolidate/memory-value.js';
+import { fromArtifact } from '../../src/domain/consolidate/memory-value-artifact.js';
+import { toArtifact } from '../_helpers/memory-value-artifact.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
 import {
@@ -90,7 +92,7 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
       // SAFETY: computeFeatures (extract.mjs) computes the same 8-dim
       // feature vector as the scorer; proving that parity is this
       // test's whole point (the loop below checks every FEATURE_NAMES dim).
-      const bench = computeFeatures(toWire(entry), NOW) as MvFeatureVector;
+      const bench = fromArtifact(computeFeatures(toWire(entry), NOW));
       for (const f of FEATURE_NAMES) {
         expect(mv[f]).toBeCloseTo(bench[f], 10);
       }
@@ -188,14 +190,21 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
     // (weights-learned.meta.json), whose shape matches this type.
     const meta = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')) as { weightsFileSha256: string };
 
-    expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(Object.keys(artifactWeights).sort());
+    expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(Object.keys(fromArtifact(artifactWeights)).sort());
     expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(
       Object.keys(featuresOf(createMemory7('weights sync probe'))).sort(),
     );
-    for (const key of Object.keys(artifactWeights)) {
-      expect(MEMORY_VALUE_WEIGHTS[key]).toBe(artifactWeights[key]);
-    }
+    expect(MEMORY_VALUE_WEIGHTS).toEqual(fromArtifact(artifactWeights));
     expect(SOURCE_ARTIFACT_SHA256).toBe(meta.weightsFileSha256);
+  });
+
+  it('the artifact read into the domain and written back is byte-identical', () => {
+    const weightsJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.json');
+    const bytes = fs.readFileSync(weightsJsonPath, 'utf8');
+    // SAFETY: this repo's own committed benchmark artifact, whose shape matches this type.
+    const parsed = JSON.parse(bytes) as Record<string, number>;
+    expect(JSON.stringify(toArtifact(fromArtifact(parsed)), null, 2)).toBe(bytes);
+    expect(JSON.stringify(toArtifact(MEMORY_VALUE_WEIGHTS), null, 2)).toBe(bytes);
   });
 });
 

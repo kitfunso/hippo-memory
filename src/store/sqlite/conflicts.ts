@@ -91,7 +91,7 @@ function memberOf({
   originProject,
 }: MemberOfOptions): ConflictMember | null {
   if (id === null || kind === null) return null;
-  return { scope, kind, superseded_by: supersededBy, origin_project: originProject };
+  return { scope, kind, supersededBy, originProject };
 }
 
 function toConflictRow(r: ConflictJoinRow): ConflictRow {

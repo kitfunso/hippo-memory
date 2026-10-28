@@ -11,8 +11,8 @@ export type { MemoryConflict };
 export interface ConflictMember {
   readonly scope: string | null;
   readonly kind: string;
-  readonly superseded_by: string | null;
-  readonly origin_project: string | null;
+  readonly supersededBy: string | null;
+  readonly originProject: string | null;
 }
 
 /** A conflict and its two members from one read; a member is null only on an every-tenant read
