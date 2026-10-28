@@ -1,4 +1,4 @@
-// A hook's own log file gets the error class and stack of a failure, as the structured log does, and the lock warning set stays bounded.
+// A hook's own log file gets the error class and stack of a failure, as the structured log does, and the lock warning adds one key per error class.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -124,7 +124,7 @@ describe('a transcript the session-end steps cannot read', () => {
 });
 
 describe('the unusable-lock warning', () => {
-  it('is bounded: after 1000 other locks warned, the first lock warns again', async () => {
+  it('warns once per error class, so other sessions with the same failure add no key', async () => {
     const sessions = path.join(fake.home, '.hippo', 'sessions');
     fs.mkdirSync(sessions, { recursive: true });
     const warned = (): number =>
@@ -134,12 +134,9 @@ describe('the unusable-lock warning', () => {
       fs.mkdirSync(path.join(sessions, `${id}.lock.db`), { recursive: true });
       await runSessionWorker(id, 'turn', async () => {});
     };
-    await run('cap-0');
-    await run('cap-0');
+    await run('class-0');
+    await run('class-0');
+    await run('class-1');
     expect(warned()).toBe(1);
-    for (let i = 1; i <= 1000; i++) await run(`cap-${i}`);
-    expect(warned()).toBe(1001);
-    await run('cap-0');
-    expect(warned()).toBe(1002);
   });
 });

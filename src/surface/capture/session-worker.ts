@@ -44,11 +44,11 @@ function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
 
 // The lock is best-effort, so the work still runs; the line says why it ran without one.
 function warnUnusableLockOnce<E>(lock: string, cause: E): void {
-  const why = `${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}`;
-  logger.once(
-    `session-worker-lock:${lock}`,
-    'warn',
-    `session worker: lock ${lock} cannot be taken (${why}), so the work runs without it`,
+  const code = errorCode(cause) || 'no errno';
+  // Keyed by error class, not lock path: a key per session would crowd the capped once-only key set.
+  logger.warnThenDebug(
+    `session-worker-lock:${code}`,
+    `session worker: lock ${lock} cannot be taken (${code}: ${errorMessage(cause)}), so the work runs without it`,
     errorFields(cause),
   );
 }
