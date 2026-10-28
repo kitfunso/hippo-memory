@@ -10,6 +10,7 @@ import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { embedTurns } from '../../src/domain/search/embed-turns.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -239,8 +240,16 @@ describe('embedAll with a store', () => {
     const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
     await atSecondPage;
     const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
+    // The newer run is behind the older one once it asks the turn queue for its turn; that, not a pause, orders them.
+    const queued = new Promise<void>((resolve) => {
+      const run = embedTurns.run.bind(embedTurns);
+      vi.spyOn(embedTurns, 'run').mockImplementation((key, job) => {
+        resolve();
+        return run(key, job);
+      });
+    });
     const newer = embedAll(on(markedFolder(), newerStore), undefined, provider('fake-b'));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await queued;
     release();
     await Promise.allSettled([older]);
     expect(await newer).toBe(70);

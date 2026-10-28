@@ -25,6 +25,7 @@ import {
 } from '../_helpers/delivery-boundary.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { hookStore } from '../_helpers/cli-stores.js';
+import { stubExit } from '../_helpers/process-stubs.js';
 
 const T0 = '2099-01-01T00:00:00.000Z';
 const T0_PLUS_3S = '2099-01-01T00:00:03.000Z';
@@ -188,8 +189,7 @@ describe('boundary row contents and a boundary callback that throws', () => {
   });
 
   it('a boundary callback that throws leaves the snapshot saved and is logged', async () => {
-    // SAFETY: the stub returns instead of exiting, so the hook's tail runs; `never` only satisfies the exit signature.
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const exit = stubExit();
     try {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
