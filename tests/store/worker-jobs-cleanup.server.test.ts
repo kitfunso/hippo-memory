@@ -6,6 +6,7 @@ import { RequestStores } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
+import { defaultBusyWaitMs } from '../../src/db/busy.js';
 import type { Job } from '../../src/store/sqlite/worker-ops.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -33,7 +34,13 @@ describe('store worker stop after a failed reply', () => {
       throw new Error('port is gone');
     });
     try {
-      serveJobs(port1, { rules: {}, hippoRoot: root, mode: 'write', busyWaitMs: 50 });
+      serveJobs(port1, {
+        rules: {},
+        hippoRoot: root,
+        mode: 'write',
+        busyWaitMs: 50,
+        processBusyWaitMs: defaultBusyWaitMs(),
+      });
       const job: Job = {
         id: 7,
         op: 'entryWrites.writeEntry',

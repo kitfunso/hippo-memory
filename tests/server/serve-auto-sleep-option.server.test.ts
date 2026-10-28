@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  for (const h of handles.splice(0)) await h.stop();
+  await stopServers();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   vi.unstubAllEnvs();
 });
@@ -38,6 +38,11 @@ async function startServer(autoSleep: ServeOptions['autoSleep']): Promise<{ root
   const handle = await serve({ hippoRoot: root, port: 0, autoSleep });
   handles.push(handle);
   return { root, url: handle.url, key };
+}
+
+/** Stops every server; stop() returns once an auto-sleep a write started has ended, so its run is counted by then. */
+async function stopServers(): Promise<void> {
+  for (const h of handles.splice(0)) await h.stop();
 }
 
 async function remember(url: string, key: string, text: string): Promise<void> {
@@ -78,7 +83,8 @@ describe('serve autoSleep option', () => {
   it.skipIf(needsHippoDb('sleep'))('the option unset adds one consolidation run past the threshold', async () => {
     const { root, url, key } = await startServer(undefined);
     for (const note of NOTES) await remember(url, key, note);
-    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+    await stopServers();
+    expect(sleepRuns(root)).toBe(1);
   });
 
   it.skipIf(needsHippoDb('sleep'))(
@@ -86,7 +92,8 @@ describe('serve autoSleep option', () => {
     async () => {
       const { root, url, key } = await startServer(undefined);
       for (const note of NOTES) await rememberRest(url, key, note);
-      await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+      await stopServers();
+      expect(sleepRuns(root)).toBe(1);
     },
   );
 
@@ -95,7 +102,7 @@ describe('serve autoSleep option', () => {
     async () => {
       const { root, url, key } = await startServer(undefined);
       for (const note of NOTES) await rememberRest(url, key, note);
-      for (const h of handles.splice(0)) await h.stop();
+      await stopServers();
       expect(sleepRuns(root)).toBe(1);
     },
   );
@@ -115,17 +122,11 @@ describe('serve autoSleep option', () => {
       try {
         const { root, url, key } = await startServer(undefined);
         for (const note of NOTES) await remember(url, key, note);
-        await vi.waitFor(
-          () => {
-            const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
-            expect(
-              lines.some(
-                (l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms'),
-              ),
-            ).toBe(true);
-          },
-          { timeout: 20_000 },
-        );
+        await stopServers();
+        const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
+        expect(
+          lines.some((l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms')),
+        ).toBe(true);
         expect(sleepRuns(root)).toBe(0);
       } finally {
         stderr.mockRestore();

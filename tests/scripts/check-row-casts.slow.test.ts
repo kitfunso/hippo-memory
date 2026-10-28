@@ -23,7 +23,7 @@ const SQLITE = [
   'declare const db: DatabaseSyncLike;',
 ].join('\n');
 
-describe('check-row-casts', { timeout: 30_000 }, () => {
+describe('check-row-casts', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'row-casts-'));

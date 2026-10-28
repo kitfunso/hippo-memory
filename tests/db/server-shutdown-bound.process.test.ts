@@ -1,12 +1,12 @@
 // A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
-import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { makeRoot } from '../_helpers/make-root.js';
-import { waitFor } from '../_helpers/wait-for.js';
+import { makeRoot, removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
+import { EVENT_DEADLINE_MS, waitFor } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -15,23 +15,18 @@ afterEach(() => {
 // The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;
 const BOUND_MS = DRAIN_MS + 10_000;
-// How long the child gets to reach a state the test waits for.
-const REACH_MS = 20_000;
+// The child exits BOUND_MS after the trigger; step 0 measured the whole run at 12.3 s.
+const EXIT_MS = BOUND_MS + 5_000;
 
 const homes: string[] = [];
-const children: ChildProcessWithoutNullStreams[] = [];
+const children: StartedChild[] = [];
 const watchers: DatabaseSyncLike[] = [];
 
 afterEach(async () => {
-  for (const child of children.splice(0)) {
-    if (child.exitCode !== null || child.signalCode !== null) continue;
-    const gone = new Promise((done) => child.once('exit', done));
-    child.kill('SIGKILL');
-    await gone;
-  }
+  for (const child of children.splice(0)) await child.stop();
   // After the children: a stuck one still holds the write lock.
   for (const db of watchers.splice(0)) closeHippoDb(db);
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const home of homes.splice(0)) await removeWhenStopped(home);
 });
 
 /** A trigger that makes the next saved prediction run a statement for hours, so the store's writer thread cannot be stopped or closed. Returns a connection that watches the write lock. */
@@ -49,18 +44,8 @@ function stickNextPredictionWrite(root: string): DatabaseSyncLike {
   return db;
 }
 
-interface Served {
-  readonly child: ChildProcessWithoutNullStreams;
-  readonly stderr: () => string;
-  /** What the child has written, for the message of a wait that gave up. */
-  readonly output: () => string;
-  /** Settles when the script prints `line`; fails with what the child wrote when it ends first. */
-  readonly printed: (line: string) => Promise<void>;
-  readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
-}
-
 /** `hippo serve` as its CLI boots it, in a child that then runs `after`. */
-function serveThen(home: string, after: readonly string[]): Served {
+function serveThen(home: string, after: readonly string[]): StartedChild {
   const script = join(home, 'serve-then.mjs');
   writeFileSync(
     script,
@@ -72,39 +57,13 @@ function serveThen(home: string, after: readonly string[]): Served {
       ...after,
     ].join('\n'),
   );
-  const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+  const child = startNode([script], {
+    env: { ...process.env, HIPPO_HOME: join(home, '.global') },
+    deadlineMs: EXIT_MS,
+    reason: 'the store-close bound in src is 10 s',
+  });
   children.push(child);
-  let stdout = '';
-  let stderr = '';
-  const waiting: Array<() => void> = [];
-  child.stdout.on('data', (chunk: Buffer) => {
-    stdout += chunk.toString('utf8');
-    for (const check of waiting) check();
-  });
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString('utf8');
-  });
-  const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
-  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
-  onTestFailed(() => {
-    console.error(output());
-  });
-  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
-  const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) =>
-    child.once('close', (code, signal) => done({ code, signal })),
-  );
-  const printed = (line: string): Promise<void> =>
-    new Promise((done, fail) => {
-      void exited.then(({ code, signal }) =>
-        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the script printed "${line}"`)),
-      );
-      const check = (): void => {
-        if (stdout.split('\n').includes(line)) done();
-      };
-      waiting.push(check);
-      check();
-    });
-  return { child, stderr: () => stderr, output, printed, exited };
+  return child;
 }
 
 function trackedRoot(): string {
@@ -125,7 +84,7 @@ const STUCK_WRITE = [
 ];
 
 /** Settles once another connection holds the store's write lock. The served store is idle but for the stuck write, so from then on its writer thread is inside that write. */
-async function writeLockTaken(watcher: DatabaseSyncLike, served: Served): Promise<void> {
+async function writeLockTaken(watcher: DatabaseSyncLike, served: StartedChild): Promise<void> {
   await waitFor(
     () => {
       try {
@@ -137,10 +96,10 @@ async function writeLockTaken(watcher: DatabaseSyncLike, served: Served): Promis
         throw err;
       }
     },
-    { timeoutMs: REACH_MS, intervalMs: 25, what: 'the stuck write taking the write lock' },
+    { intervalMs: 25, what: 'the stuck write taking the write lock' },
   ).catch((err: Error) => {
     throw new Error(`${String(err)}
-${served.output()}`);
+${served.output().stdout}${served.output().stderr}`);
   });
 }
 
@@ -158,18 +117,15 @@ describe('serve() shutdown bound', () => {
       const home = trackedRoot();
       const watcher = stickNextPredictionWrite(home);
       const served = serveThen(home, [...STUCK_WRITE, trigger]);
-      await served.printed('write sent');
+      await served.line(/^write sent$/, 'the stuck write sent', EVENT_DEADLINE_MS);
       await writeLockTaken(watcher, served);
-      served.child.stdin.write('go\n');
+      served.send('go\n');
       const triggeredAt = Date.now();
 
-      // A child that never ends fails at the test timeout, with its output printed.
-      expect(await served.exited, served.output()).toEqual(KILLED);
+      const exit = await served.exited();
+      expect({ code: exit.code, signal: exit.signal }, exit.stdout + exit.stderr).toEqual(KILLED);
       expect(Date.now() - triggeredAt).toBeGreaterThanOrEqual(BOUND_MS - 1000);
-      const boundLines = served
-        .stderr()
-        .split('\n')
-        .filter((line) => line.includes('did not finish within'));
+      const boundLines = exit.stderr.split('\n').filter((line) => line.includes('did not finish within'));
       expect(boundLines).toHaveLength(1);
       expect(boundLines[0]).toMatch(
         new RegExp(
@@ -177,14 +133,14 @@ describe('serve() shutdown bound', () => {
         ),
       );
     },
-    35_000,
   );
 
   it('exits 0 on SIGTERM when stop() finishes, with no bound line', async () => {
     const served = serveThen(trackedRoot(), ["process.emit('SIGTERM');"]);
 
-    expect(await served.exited).toEqual({ code: 0, signal: null });
-    expect(served.stderr()).toContain('received SIGTERM, shutting down');
-    expect(served.stderr()).not.toContain('did not finish within');
+    const exit = await served.exited(EVENT_DEADLINE_MS);
+    expect({ code: exit.code, signal: exit.signal }, exit.stdout + exit.stderr).toEqual({ code: 0, signal: null });
+    expect(exit.stderr).toContain('received SIGTERM, shutting down');
+    expect(exit.stderr).not.toContain('did not finish within');
   });
 });

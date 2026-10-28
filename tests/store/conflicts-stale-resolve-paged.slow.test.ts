@@ -5,9 +5,12 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
+import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 
-const PAIRS = 700;
+// One pair past a page, so the resolve takes exactly two pages.
+const PAIRS = READ_PAGE_ROWS + 1;
 const roots: string[] = [];
 
 afterEach(() => {
@@ -22,7 +25,7 @@ describe('resolving stale open conflicts', () => {
       ...createMemory(`conflict member ${i}`),
       id: `mem_c${String(i).padStart(5, '0')}`,
     }));
-    writeEntriesTogether(root, entries);
+    writeRowsOnly(root, entries);
     const pairs = Array.from({ length: PAIRS }, (_, i) => ({
       memory_a_id: entries[2 * i].id,
       memory_b_id: entries[2 * i + 1].id,

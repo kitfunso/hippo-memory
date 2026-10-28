@@ -12,13 +12,12 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { waitFor } from '../_helpers/wait-for.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -33,75 +32,23 @@ interface SearchRow {
   created_at?: string;
 }
 
-async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise<void> {
-  await waitFor(
-    async () => {
-      try {
-        const res = await fetch(`${baseUrl}/health`);
-        return res.status === 200 || res.status === 503;
-      } catch {
-        return false; // not listening yet
-      }
-    },
-    { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` },
-  );
-}
-
 interface AdapterHandle {
-  child: ChildProcess;
+  child: StartedChild;
   baseUrl: string;
-  stderrChunks: Buffer[];
 }
 
 // Shared by both describe blocks below so a second real server pair costs
 // one call, not a second copy of the spawn wiring.
-function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
-  const stderrChunks: Buffer[] = [];
-  return new Promise((resolve, reject) => {
-    let stdoutBuf = '';
-    // stdout keeps growing with access-log lines, so the regex matches again on every chunk.
-    let readyStarted = false;
-    const child = spawn(process.execPath, [ADAPTER_PATH], {
-      env: {
-        ...process.env,
-        ADAPTER_PORT: '0',
-        HIPPO_URL: `http://127.0.0.1:${hippoPort}`,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    // No handle reaches the caller on a failed start, so the helper must reap its own child.
-    const fail = (err: Error): void => {
-      clearTimeout(startupTimer);
-      child.kill();
-      reject(err);
-    };
-    const startupTimer = setTimeout(() => fail(new Error('adapter never printed its listening line')), 20_000);
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdoutBuf += chunk.toString('utf8');
-      const match = /listening on :(\d+)/.exec(stdoutBuf);
-      if (match && !readyStarted) {
-        readyStarted = true;
-        const baseUrl = `http://127.0.0.1:${Number(match[1])}`;
-        waitForAdapterReady(baseUrl)
-          .then(() => {
-            clearTimeout(startupTimer);
-            resolve({ child, baseUrl, stderrChunks });
-          })
-          .catch(fail);
-      }
-    });
-    child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-    child.once('error', fail);
-    child.once('exit', (code) => {
-      if (code !== null && code !== 0) {
-        fail(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
-      }
-    });
-  });
+async function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
+  const env = { ...process.env, ADAPTER_PORT: '0', HIPPO_URL: `http://127.0.0.1:${hippoPort}` };
+  const child = startNode([ADAPTER_PATH], { env, input: '', lifetime: 'file' });
+  // The adapter prints this line from its listen callback, so the port answers once it is seen.
+  const [, port] = await child.line(/listening on :(\d+)/, 'the adapter listening line');
+  return { child, baseUrl: `http://127.0.0.1:${Number(port)}` };
 }
 
-function stopAdapter(handle: AdapterHandle | undefined): void {
-  handle?.child.kill();
+async function stopAdapter(handle: AdapterHandle | undefined): Promise<void> {
+  await handle?.child.stop();
 }
 
 describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
@@ -131,7 +78,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   });
 
   afterAll(async () => {
-    stopAdapter(adapterHandle);
+    await stopAdapter(adapterHandle);
     await hippoHandle?.stop();
   });
 
@@ -422,7 +369,7 @@ describe('rate-limit key forwarding and status pass-through', () => {
   });
 
   afterAll(async () => {
-    stopAdapter(rlAdapterHandle);
+    await stopAdapter(rlAdapterHandle);
     await rlHippoHandle?.stop();
   });
 

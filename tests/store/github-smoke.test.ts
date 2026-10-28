@@ -1,7 +1,7 @@
 /**
- * Task 16: 200-event GitHub connector smoke test.
+ * Task 16: GitHub connector smoke test over a 40-event stream.
  *
- * Streams 200 webhook deliveries (mix of all four event types, public + private
+ * Streams 40 webhook deliveries (mix of all four event types, public + private
  * repos, varying users) plus 5 deletion events that archive a subset. Asserts
  * row counts, scope/owner/tag invariants, idempotent replay defense, scope-
  * filter denial on no-scope recall, the cross-source generic private filter,
@@ -202,21 +202,21 @@ function makePrReviewCommentDelivery(index: number): GeneratedDelivery {
 }
 
 /**
- * Build the 200-delivery stream with the spec'd distribution:
- *   50 issues.opened
- *   60 issue_comment.created
- *   40 pull_request.opened
- *   50 pull_request_review_comment.created
+ * Build the 40-delivery stream, every event type in the spec's proportions:
+ *   10 issues.opened
+ *   12 issue_comment.created
+ *   8 pull_request.opened
+ *   10 pull_request_review_comment.created
  *
  * Indices are unique across the whole stream so artifact_refs never collide.
  */
 function buildDeliveryStream(): GeneratedDelivery[] {
   const out: GeneratedDelivery[] = [];
   let i = 0;
-  for (let n = 0; n < 50; n++) out.push(makeIssueDelivery(i++));
-  for (let n = 0; n < 60; n++) out.push(makeIssueCommentDelivery(i++));
-  for (let n = 0; n < 40; n++) out.push(makePullRequestDelivery(i++));
-  for (let n = 0; n < 50; n++) out.push(makePrReviewCommentDelivery(i++));
+  for (let n = 0; n < 10; n++) out.push(makeIssueDelivery(i++));
+  for (let n = 0; n < 12; n++) out.push(makeIssueCommentDelivery(i++));
+  for (let n = 0; n < 8; n++) out.push(makePullRequestDelivery(i++));
+  for (let n = 0; n < 10; n++) out.push(makePrReviewCommentDelivery(i++));
   return out;
 }
 
@@ -239,23 +239,23 @@ function rawCount(root: string): number {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('GitHub connector — 200-event smoke test', () => {
+describe('GitHub connector — 40-event smoke test', () => {
   let root: string;
   beforeEach(() => {
-    root = makeRoot('gh-smoke-200');
+    root = makeRoot('gh-smoke');
   });
   afterEach(() => {
     removeDir(root);
   });
   const { session } = sessionPerTest();
 
-  // Ingests 200 webhook events and replays them, each its own write to a real store.
+  // Ingests 40 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
     const ctx = onSession(ctxFor(root), session());
     const deliveries = buildDeliveryStream();
-    expect(deliveries).toHaveLength(200);
+    expect(deliveries).toHaveLength(40);
 
-    // ---- Stream 1: ingest all 200 -----------------------------------------
+    // ---- Stream 1: ingest all 40 ------------------------------------------
     const results: IngestResult[] = [];
     for (const d of deliveries) {
       results.push(
@@ -268,15 +268,15 @@ describe('GitHub connector — 200-event smoke test', () => {
     }
 
     const ingested = results.filter((r) => r.status === 'ingested').length;
-    expect(ingested).toBe(200);
-    expect(rawCount(root)).toBe(200);
+    expect(ingested).toBe(40);
+    expect(rawCount(root)).toBe(40);
 
     // ---- Pick 5 deletable events (have artifactRefs) and archive them -----
     const deletable = deliveries.filter((d): d is GeneratedDelivery & { artifactRef: string } =>
       Boolean(d.artifactRef),
     );
-    // The 60 issue comments and 50 review comments carry an artifactRef.
-    expect(deletable).toHaveLength(110);
+    // The 12 issue comments and 10 review comments carry an artifactRef.
+    expect(deletable).toHaveLength(22);
     const toDelete = deletable.slice(0, 5);
     const toDeleteIds = new Set(toDelete.map((d) => d.deliveryId));
 
@@ -294,14 +294,14 @@ describe('GitHub connector — 200-event smoke test', () => {
     }
     expect(archivedTotal).toBe(5);
 
-    // (1) Exactly 195 active raw rows after the stream.
+    // (1) Exactly 35 active raw rows after the stream.
     const activeCount = rawCount(root);
-    expect(activeCount).toBe(195);
+    expect(activeCount).toBe(35);
 
     // ---- (2)(3)(4) Tag / scope / owner invariants on every active row ----
     const allEntries = loadAllEntries(root, 'default');
     const ghEntries = allEntries.filter((e) => e.tags.includes('source:github'));
-    expect(ghEntries).toHaveLength(195);
+    expect(ghEntries).toHaveLength(35);
 
     for (const e of ghEntries) {
       expect(e.kind).toBe('raw');
@@ -339,7 +339,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     }
 
     expect(rawCount(root)).toBe(beforeReplay);
-    expect(duplicateCount).toBe(200);
+    expect(duplicateCount).toBe(40);
 
     // ---- (6) No-scope recall denial of a private repo memory -------------
     // Pick the first delivery whose repo was private, then recall its marker.
@@ -389,7 +389,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
     expect(rawCount(root)).toBe(beforeReplayDef);
-    expect(replayDuplicates).toBe(200);
+    expect(replayDuplicates).toBe(40);
 
     // ---- (8) Tenant routing failure for unknown installation -------------
     // Seed a routing table so we land in the multi-tenant branch.

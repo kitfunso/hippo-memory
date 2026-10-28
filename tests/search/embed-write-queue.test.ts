@@ -62,7 +62,7 @@ describe('embedding writes', () => {
     await Promise.all([embedAll(targetOn(rootA, provider)), embedAll(targetOn(rootB, provider))]);
 
     expect(seen.peak).toBe(2);
-  }, 20_000);
+  });
 
   it('take turns across two handles on one folder', async () => {
     const root = makeRoot('embed-queue-shared');
@@ -97,5 +97,5 @@ describe('embedding writes', () => {
     await runs;
 
     expect(seen.peak).toBe(1);
-  }, 20_000);
+  });
 });

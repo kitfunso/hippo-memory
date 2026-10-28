@@ -6,9 +6,12 @@ import { remember } from '../../src/api/index.js';
 import type { SleepJob, SleepMessage, SleepReply } from '../../src/surface/server/sleep-offload.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import { callMatching, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
+import { VECTOR_GRAPH_THRESHOLD } from '../../src/db/vector-graph-rows.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
+import { recordBusyWaitsAsync } from '../_helpers/count-statements.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -59,7 +62,7 @@ describe('sleep child', () => {
     };
 
     fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
     expect(sent).toHaveLength(1);
     const reply = sent[0];
     expect(reply.ok).toBe(true);
@@ -74,7 +77,7 @@ describe('sleep child', () => {
     writeFileSync(join(home, 'hippo.db'), 'not a sqlite database');
     const job: SleepJob = { kind: 'consolidate', hippoRoot: home };
     fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0) after the reply' });
     const reply = sent[0];
     expect(reply.ok).toBe(false);
     if (!reply.ok) {
@@ -83,10 +86,20 @@ describe('sleep child', () => {
     }
   });
 
-  it('replies to a sleep before it saves the vector graph file, then exits 0', async () => {
+  it('replies to a sleep before it saves the vector graph file, opens with HIPPO_BUSY_WAIT_MS, then exits 0', async () => {
+    // A child started with the knob: its root reads it on import.
+    vi.stubEnv('HIPPO_BUSY_WAIT_MS', '4000');
+    vi.resetModules();
+    listeners = recordListeners(process, 'once');
+    await import('../../src/surface/server/sleep-child.js');
     seedVectorRows(
       home,
-      clusteredVectors(1_100, 32, 3).map((vector, i) => ({ id: `v-${i}`, tenantId: 'default', vector })),
+      // The fewest rows that build the graph: the sleep child passes no threshold of its own.
+      clusteredVectors(VECTOR_GRAPH_THRESHOLD, 32, 3).map((vector, i) => ({
+        id: `v-${i}`,
+        tenantId: 'default',
+        vector,
+      })),
     );
     const graphFile = join(home, 'vector-graph-32.bin');
     const fileAtReply: boolean[] = [];
@@ -110,11 +123,24 @@ describe('sleep child', () => {
       deadline: Date.now() + 120_000,
     };
 
-    fire(listeners, 'message', job);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 60_000 });
+    const { waits } = await recordBusyWaitsAsync(async () => {
+      fire(listeners, 'message', job);
+      // A sleep and a whole graph build before the exit: 7.3 s on CI, past what one event may take.
+      await callMatching(exit, (code) => code === 0, {
+        what: 'process.exit(0) after the graph is saved',
+        deadlineMs: STORE_RUN_MS,
+        reason: STORE_RUN_REASON,
+      });
+    });
 
     expect(sent.map((reply) => reply.ok)).toEqual([true]);
     expect(fileAtReply).toEqual([false]);
     expect(existsSync(graphFile)).toBe(true);
+    // The job's session opens at the server's 250 ms and its commit at sleep's own 5000; the graph save names no
+    // wait, so its read-only opens take the knob.
+    expect(waits).toContain('PRAGMA busy_timeout = 4000');
+    expect(new Set(waits.filter((sql) => !sql.endsWith(' 4000')))).toEqual(
+      new Set(['PRAGMA busy_timeout = 250', 'PRAGMA busy_timeout = 5000']),
+    );
   });
 });

@@ -205,7 +205,7 @@ describe('rememberLocally starts the embedding', () => {
     });
     const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [] }));
     await vi.waitFor(() => expect(Object.keys(loadEmbeddingIndex(ctx.hippoRoot))).toEqual([entry.id]), {
-      timeout: 20_000,
+      timeout: 10_000,
       interval: 50,
     });
     const asked = embeddings.requests();

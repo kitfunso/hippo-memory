@@ -1,6 +1,7 @@
 // Stubs that let an entry point wire its process handlers inside a test worker without ending or muting the worker.
 import type { EventEmitter } from 'node:events';
 import { vi, type MockInstance } from 'vitest';
+import { EVENT_DEADLINE_MS, checkDeadline } from './wait-for.js';
 
 export type Listener = Parameters<typeof process.on>[1];
 
@@ -39,4 +40,38 @@ export function captureWrites(stream: NodeJS.WriteStream): string[] {
     },
   );
   return written;
+}
+
+interface CallWait {
+  /** Named in the rejection, so a failure says which call never came. */
+  readonly what: string;
+  readonly deadlineMs?: number;
+  /** Required when deadlineMs is over EVENT_DEADLINE_MS. */
+  readonly reason?: string;
+}
+
+/** The first past or future call of `spy` whose arguments pass `test`, so a stubbed exit or write is an awaited event. */
+export function callMatching(
+  spy: { readonly mock: { readonly calls: unknown[][] } },
+  test: (...args: unknown[]) => boolean,
+  { what, deadlineMs = EVENT_DEADLINE_MS, reason }: CallWait,
+): Promise<unknown[]> {
+  checkDeadline(deadlineMs, `callMatching(${what})`, reason);
+  const deadline = Date.now() + deadlineMs;
+  return new Promise((resolve, reject) => {
+    const look = (): void => {
+      let hit: unknown[] | undefined;
+      try {
+        hit = spy.mock.calls.find((args) => test(...args));
+      } catch (err) {
+        // From a timer, a throw would be uncaught in the worker; the wait is where the test can see it.
+        reject(err);
+        return;
+      }
+      if (hit) resolve(hit);
+      else if (Date.now() >= deadline) reject(new Error(`${what} not called within ${deadlineMs} ms`));
+      else setTimeout(look, 5);
+    };
+    look();
+  });
 }

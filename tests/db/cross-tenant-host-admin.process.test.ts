@@ -189,6 +189,8 @@ describe('MCP auto-sleep stays with the host tenant', () => {
       key('default', 'member'),
     );
     expect(await autoSleeps()).toBe(1);
-    await vi.waitFor(() => expect(sleepRuns()).toBe(1), { timeout: 20_000 });
+    // stop() returns once the auto-sleep the write started has ended; the afterEach stop is then a no-op.
+    await handle.stop();
+    expect(sleepRuns()).toBe(1);
   });
 });

@@ -49,7 +49,6 @@ describe('a nearest-row read on a store over the threshold', () => {
     await store.vectors.nearestEntries(vectors[0], spec('even'));
     await waitFor(() => logged().includes(`the vector graph of ${ROWS} vectors of length ${DIM} is ready`), {
       what: 'the first reader to log its vector graph ready',
-      timeoutMs: 20_000,
     });
 
     for (const [n, tenant] of ['even', 'odd', 'even', 'odd'].entries()) {

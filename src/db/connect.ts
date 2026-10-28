@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
-import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
+import { defaultBusyWaitMs, execWithBusyRetry } from './busy.js';
 import {
   type OpenFacts,
   importLegacyVectors,
@@ -125,7 +125,7 @@ export interface OpenedDb {
  * it is due; the caller owns and closes it. `busyWaitMs` is the default lock wait when unset. An
  * open with no session takes this path; a session's first open on a store does too.
  */
-export function connectWithFacts(at: StoreAt, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
+export function connectWithFacts(at: StoreAt, busyWaitMs: number = defaultBusyWaitMs()): OpenedDb {
   const { hippoRoot } = at;
   createStoreFilesOwnerOnly(at);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));

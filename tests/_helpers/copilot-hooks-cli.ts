@@ -12,6 +12,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { copilotScratch, type CopilotScratch } from '../_helpers/copilot-hooks.js';
 import { initTestStore } from './store-template.js';
+import { WORKER_GONE_MS, WORKER_REASON, removeAfterWorkers, recordingPids } from './worker-pids.js';
 
 export const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
   hippoRun(args, { cwd, env, input });
@@ -20,8 +21,6 @@ export const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth
 export const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';
 export const SESSION = 'copilot-sess-1';
 export const WORKER_DONE = `active snapshot(s) for session ${SESSION}`;
-// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
-export const RECORD_SPAWN = path.resolve(__dirname, '..', '_helpers', 'record-spawn.cjs').split(path.sep).join('/');
 export const CURSOR_SAVE_FAULT = path
   .resolve(__dirname, '..', '_helpers', 'cursor-save-fault.cjs')
   .split(path.sep)
@@ -99,28 +98,33 @@ export function initStoreIn(dir: string): string {
   return path.join(dir, '.hippo');
 }
 
-// The detached workers are real processes, so a wait gets a generous bound under load.
-export const WORKER_WAIT_MS = 25_000;
-
 export const readLog = (logFile: string): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
-export async function waitForLog(logFile: string, marker: string, timeoutMs = WORKER_WAIT_MS): Promise<string> {
-  await waitFor(() => readLog(logFile).includes(marker), { what: `log line ${marker}`, timeoutMs });
+/** Waits for a detached worker's log line; a longer bound than the worker's needs its own reason. */
+export async function waitForLog(
+  logFile: string,
+  marker: string,
+  timeoutMs = WORKER_GONE_MS,
+  reason = WORKER_REASON,
+): Promise<string> {
+  await waitFor(() => readLog(logFile).includes(marker), { what: `log line ${marker}`, timeoutMs, reason });
   return readLog(logFile);
 }
 
+/** Session-end workers the running test expects its hook runs to start; a case that starts one adds to it. */
+export const workers = { expected: 0 };
+
 export function useCopilotScratch() {
   beforeEach(() => {
-    s = copilotScratch();
+    const made = copilotScratch();
+    s = { ...made, env: recordingPids(made.env, made.dir) };
+    workers.expected = 0;
     initTestStore(s.hippoRoot);
     initTestStore(s.globalRoot);
   });
 }
 
-export function removeScratch() {
-  try {
-    fs.rmSync(s.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // The detached session-end worker can still hold a Windows lock; a leftover scratch dir is harmless.
-  }
+/** Waits for the test's workers to exit, then removes the scratch folder they worked in. */
+export async function removeScratch(): Promise<void> {
+  await removeAfterWorkers(s.dir, workers.expected, 'the copilot hook runs');
 }

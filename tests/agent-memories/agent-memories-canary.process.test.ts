@@ -1,6 +1,5 @@
 // Real homes are never read: the process's homes and tool variables point at canaries, the injected machine at a clean tree.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,7 +8,6 @@ import { sanitizeCwd } from '../../src/domain/agent-memories/qwen-code.js';
 import { AGENT_MEMORY_TOOLS } from '../../src/base/memory/agent-memory-tools.js';
 import { isInitialized } from '../../src/host/project-identity.js';
 import {
-  closeWorld,
   codexSummary,
   distUrl,
   dormantRows,
@@ -22,6 +20,9 @@ import {
 } from '../_helpers/agent-memories-world.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
@@ -171,29 +172,13 @@ function controlRun(name: string): Run {
   return { local, global: join(w.dir, `${name}-global`) };
 }
 
-function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
+async function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
   const args = [join(w.dir, 'worker.mjs'), distUrl('api/agent-memories.js'), mode, run.local, w.home, storeless];
   const env = { ...process.env, ...decoyEnv, HIPPO_HOME: run.global, ...extraEnv };
-  return new Promise((resolve, fail) => {
-    const child = spawn(process.execPath, args, { env, windowsHide: true });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => {
-      stdout += d.toString('utf8');
-    });
-    child.stderr.on('data', (d: Buffer) => {
-      stderr += d.toString('utf8');
-    });
-    child.on('error', fail);
-    child.on('close', (code) => {
-      if (code !== 0) {
-        fail(new Error(`${mode} worker exited ${code}: ${stderr}`));
-        return;
-      }
-      // SAFETY: the worker prints one JSON object with a warnings list.
-      resolve(JSON.parse(stdout) as WorkerOut);
-    });
-  });
+  const { code, stdout, stderr } = await startNode(args, { env }).exited(STORE_RUN_MS, STORE_RUN_REASON);
+  if (code !== 0) throw new Error(`${mode} worker exited ${code}: ${stderr}`);
+  // SAFETY: the worker prints one JSON object with a warnings list.
+  return JSON.parse(stdout) as WorkerOut;
 }
 
 const everyText = (root: string): string[] =>
@@ -214,8 +199,8 @@ beforeEach(() => {
   note(projectNotes(w, storeless), 'clean.md', CLEAN_STORELESS);
   codexSummary(w, `- ${CLEAN_BULLET}`);
 });
-afterEach(() => {
-  closeWorld(w);
+afterEach(async () => {
+  await removeWhenStopped(w.dir);
   vi.unstubAllEnvs();
 });
 

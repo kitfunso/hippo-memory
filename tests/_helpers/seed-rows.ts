@@ -1,4 +1,6 @@
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { createMemory } from './default-half-life-memory.js';
 import { writeEntriesTogether } from './root-forms.js';
 
@@ -21,4 +23,16 @@ export function seedRows(
   const rows = memoryRows(count, content, extra);
   writeEntriesTogether(root, rows);
   return rows;
+}
+
+/** `entries` on hippo.db alone, in one transaction, for a test that reads no markdown mirror: a mirror costs a file per row. */
+export function writeRowsOnly(root: string, entries: readonly MemoryEntry[]): void {
+  const db = openHippoDb(root);
+  try {
+    withWriteScope(db, 'seed_rows', () => {
+      for (const entry of entries) writeEntryDbOnly(db, entry);
+    });
+  } finally {
+    closeHippoDb(db);
+  }
 }

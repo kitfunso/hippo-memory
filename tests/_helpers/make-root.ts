@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll } from 'vitest';
+import { afterAll, afterEach } from 'vitest';
 import { initTestStore } from './store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
+import { waitFor } from './wait-for.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 
@@ -21,11 +22,51 @@ export interface MadeStore {
   root: string;
 }
 
+/** A process a test started; it must be gone before the folder it works in is removed. */
+export interface LiveChild {
+  readonly lifetime: 'test' | 'file';
+  stop(): Promise<void>;
+}
+
+const live = new Set<LiveChild>();
+
+/** Registers `child` so removeWhenStopped and this file's hooks stop it before any rm; it leaves the set once stopped. */
+export function trackLive(child: LiveChild): void {
+  live.add(child);
+}
+
+async function stopLive(lifetimes: readonly LiveChild['lifetime'][]): Promise<void> {
+  const due = [...live].filter((child) => lifetimes.includes(child.lifetime));
+  for (const child of due) live.delete(child);
+  await Promise.all(due.map((child) => child.stop()));
+}
+
+function rmDir(dir: string): void {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/** Stops this test's live children, then removes `dir`; afterEach runs before onTestFinished, so an rm in afterEach calls this. */
+export async function removeWhenStopped(dir: string): Promise<void> {
+  await stopLive(['test']);
+  // Windows can refuse the rm for a moment after the last process in the folder exits.
+  await waitFor(
+    () => {
+      rmDir(dir);
+      return true;
+    },
+    { what: `${dir} removed`, retryOnThrow: true },
+  );
+}
+
 // Removed after the file's last test, not each test's: a store made in beforeAll must outlive its first test.
 const made: string[] = [];
-afterAll(() => {
-  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-});
+afterEach(() => stopLive(['test']));
+/** Stops every tracked child, then removes the folders made for this file; it is the file's afterAll. */
+export async function endOfFile(): Promise<void> {
+  await stopLive(['test', 'file']);
+  for (const dir of made.splice(0)) rmDir(dir);
+}
+afterAll(endOfFile);
 
 function build(label: string, rootOf: (base: string) => string, { config, init = true }: MakeRootOptions): MadeStore {
   const base = mkdtempSync(join(tmpdir(), `hippo-${label}-`));

@@ -1,5 +1,4 @@
 // End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
-import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,8 +7,10 @@ import { sessionDigestId, isSessionDigestRow } from '../../src/base/session/sess
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 import { loadLatestHandoff, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
@@ -136,13 +137,13 @@ describe('the Claude Code session-end worker', () => {
 
   it('two workers for the same session at once still leave one row', async () => {
     const transcript = claudeTranscript('s1');
-    const run = () =>
-      new Promise<number | null>((resolve) => {
-        spawn(process.execPath, [HIPPO_JS, ...workerArgs('S1', transcript)], { cwd: repo, env, stdio: 'ignore' }).on(
-          'exit',
-          resolve,
-        );
-      });
+    const run = async (): Promise<number | null> =>
+      (
+        await startNode([HIPPO_JS, ...workerArgs('S1', transcript)], { cwd: repo, env, input: '' }).exited(
+          STORE_RUN_MS,
+          STORE_RUN_REASON,
+        )
+      ).code;
     expect(await Promise.all([run(), run()])).toEqual([0, 0]);
     expect(digests()).toHaveLength(1);
   });

@@ -23,6 +23,7 @@ import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -190,7 +191,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(localRoot);
     expect(index[entry.id]).toHaveLength(MINILM_DIMENSIONS);
-  }, 60_000);
+  });
 
   it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
@@ -210,7 +211,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[shared[0].id]).toHaveLength(MINILM_DIMENSIONS);
-  }, 60_000);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -240,15 +241,13 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
 
     const promoted = await promote(apiCtx(localRoot), entry.id);
 
-    // Generous timeout: first-run model load can be slow.
-    await vi.waitFor(
-      () => {
-        const index = loadEmbeddingIndex(globalRoot);
-        expect(index[promoted.globalId]).toHaveLength(MINILM_DIMENSIONS);
-      },
-      { timeout: 30_000, interval: 250 },
-    );
-  }, 35_000);
+    await waitFor(() => loadEmbeddingIndex(globalRoot)[promoted.globalId]?.length === MINILM_DIMENSIONS, {
+      what: 'the promoted row in the global embedding index',
+      timeoutMs: 30_000,
+      intervalMs: 250,
+      reason: 'a first model load from disk, in the micro-eval job only; no backend here to measure it',
+    });
+  });
 });
 
 describe('global-row-embeddings: the first promote, before any global store exists', () => {
@@ -323,7 +322,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
     } finally {
       cleanUp(home, cwd);
     }
-  }, 60_000);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -374,24 +373,11 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       expect(globalId).toMatch(/^g_/);
 
       if (isEmbeddingAvailable()) {
-        // Bounded poll (<=60s): promote's embed fire is best-effort
-        // fire-and-forget, but `execFileSync` only returns once the `promote`
-        // subprocess has fully exited, and that process has no explicit
-        // process.exit() call on the success path (cli.ts's main() returns
-        // naturally), so Node's event loop keeps it alive until the floating
-        // embedMemory promise settles — same reasoning as handleImport's batch
-        // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
-        // not a requirement to wait out a race.
-        await vi.waitFor(
-          () => {
-            const index = loadEmbeddingIndex(globalRoot);
-            expect(index[globalId]).toHaveLength(MINILM_DIMENSIONS);
-          },
-          { timeout: 60_000, interval: 250 },
-        );
+        // execFileSync returns only once `promote` has exited, and that process ends only after its floating embed settles.
+        expect(loadEmbeddingIndex(globalRoot)[globalId]).toHaveLength(MINILM_DIMENSIONS);
       }
     } finally {
       cleanUp(home, cwd);
     }
-  }, 90_000);
+  });
 });

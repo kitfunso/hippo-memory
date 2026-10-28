@@ -196,36 +196,24 @@ describe('compactSummaryBody', () => {
 
 describe('hostile input is read in linear time', () => {
   const REPEATS = 100_000;
-  const LIMIT_MS = 2_000;
+  // A quadratic scan of these inputs takes minutes, so 2 s fails it while a linear one never comes close.
 
-  it(
-    'leaves 200,000 unclosed analysis tags as they are',
-    () => {
-      const text = '<analysis>'.repeat(2 * REPEATS);
-      expect(compactSummaryBody(text)).toBe(text);
-    },
-    LIMIT_MS,
-  );
+  it('leaves 200,000 unclosed analysis tags as they are', () => {
+    const text = '<analysis>'.repeat(2 * REPEATS);
+    expect(compactSummaryBody(text)).toBe(text);
+  }, 2_000);
 
-  it(
-    'finds no heading in a line of 300,000 tabs between two letters',
-    () => {
-      expect(parseCompactionItems(`x${'\t'.repeat(3 * REPEATS)}x`)).toEqual({ found: false, items: [] });
-    },
-    LIMIT_MS,
-  );
+  it('finds no heading in a line of 300,000 tabs between two letters', () => {
+    expect(parseCompactionItems(`x${'\t'.repeat(3 * REPEATS)}x`)).toEqual({ found: false, items: [] });
+  }, 2_000);
 
-  it(
-    'ends the list at a marker line whose text holds a bare carriage return after 200,000 spaces',
-    () => {
-      const line = `* ${'  '.repeat(REPEATS)}a\rb`;
-      expect(parseCompactionItems(`Memories for hippo:\n- one\n${line}\n- two`)).toEqual({
-        found: true,
-        items: ['one'],
-      });
-    },
-    LIMIT_MS,
-  );
+  it('ends the list at a marker line whose text holds a bare carriage return after 200,000 spaces', () => {
+    const line = `* ${'  '.repeat(REPEATS)}a\rb`;
+    expect(parseCompactionItems(`Memories for hippo:\n- one\n${line}\n- two`)).toEqual({
+      found: true,
+      items: ['one'],
+    });
+  }, 2_000);
 });
 
 describe('parseCompactionItems: odd whitespace', () => {

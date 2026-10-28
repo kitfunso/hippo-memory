@@ -154,7 +154,7 @@ describe('E1 driver', () => {
     const b = await runArmSeed('full', 11, TINY);
     expect(JSON.stringify(a.epochs)).toBe(JSON.stringify(b.epochs));
     expect(a.meta.protocolHash).toBe(b.meta.protocolHash);
-  }, 16_000);
+  });
 
   it('baseline arms produce rankings (bm25-static + recency-window)', async () => {
     const bm25 = await runArmSeed('bm25-static', 4, TINY);

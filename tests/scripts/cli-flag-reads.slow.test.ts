@@ -59,7 +59,7 @@ export const handleConfig = kindVerbs(configKind);
 export const handleComputed = kindVerbs(computedKind);
 `;
 
-describe('cli-flag-reads', { timeout: 30_000 }, () => {
+describe('cli-flag-reads', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'cli-flag-reads-'));

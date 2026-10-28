@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
-import { spawn } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { classifyTransportFailure, HttpResponseError } from '../../src/surface/cli/client.js';
@@ -10,6 +9,8 @@ import { boundPort } from '../_helpers/listen.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -59,25 +60,13 @@ async function startResettingServer(
   return { server, port: await boundPort(server), posts };
 }
 
-function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const env = { ...process.env, ...ROUTED_CLI_ENV };
-    const child = spawn(process.execPath, [CLI_PATH, ...args], {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString('utf8');
-    });
-    child.stderr.on('data', (c: Buffer) => {
-      stderr += c.toString('utf8');
-    });
-    child.on('close', (code) => resolve({ status: code ?? -1, stdout, stderr }));
-  });
+async function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
+  const env = { ...process.env, ...ROUTED_CLI_ENV };
+  const { code, stdout, stderr } = await startNode([CLI_PATH, ...args], { cwd, env, input: '' }).exited(
+    STORE_RUN_MS,
+    STORE_RUN_REASON,
+  );
+  return { status: code ?? -1, stdout, stderr };
 }
 
 function countMemories(hippoRoot: string, content: string): number {

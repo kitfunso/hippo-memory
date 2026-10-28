@@ -1,8 +1,10 @@
 // The vitest project a test file runs in follows from its name; vitest.config.ts and check-test-env.mjs read this.
 // A test that starts a child process, the HTTP server or a worker thread waits on the operating system, so it keeps 30 s.
+// Own timeouts read: number literals with any sign, the last named key of an object literal, a const holding either; null (a hit): a spread or computed key, a let, a twice-declared name, an object const used elsewhere.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import ts from 'typescript';
 import { isLocalSpec, readFacts } from './ts-facts.mjs';
 
 /** Each builds real git repositories and worktrees per case, too slow for every shard: vitest.eval.config.ts runs them. */
@@ -23,14 +25,17 @@ export const EVAL_TESTS = [
   'z0-codex-guards',
   'z0-codex-faults',
   'z0-codex-install',
+  'z0-codex-session.process',
+  'z0-snapfail',
+  'replay',
 ].map((name) => `tests/eval/token-eval-${name}.test.ts`);
 
 export const PROCESS_GLOBS = ['tests/**/*.process.test.ts', 'tests/**/*.process.test.mjs'];
 export const SERVER_GLOBS = ['tests/**/*.server.test.ts', 'tests/**/*.server.test.mjs'];
-/** Tests that start nothing but need minutes of CPU or disk: seeded stores in the thousands, a TypeScript program over src. */
+/** Tests that start nothing but need seconds of CPU or disk: a seed past a page, a TypeScript program over src. */
 export const SLOW_GLOBS = ['tests/**/*.slow.test.ts', 'tests/**/*.slow.test.mjs'];
-/** A unit test that asks for more than this of its own is slow, and takes the slow project's budget instead. */
-export const UNIT_OWN_TIMEOUT_CEILING_MS = 30_000;
+/** No test, hook or vitest wait in the default run sets more than this of its own: a test waits on an event, not a timer. */
+export const OWN_TIMEOUT_CEILING_MS = 10_000;
 
 /** A test that names the child process module starts a child. */
 export const STARTS_A_CHILD = /\bchild_process\b/;
@@ -47,17 +52,207 @@ export function projectOfName(file) {
   return m ? /** @type {'process' | 'server' | 'slow'} */ (m[1]) : 'unit';
 }
 
-const OWN_TIMEOUT = /\}, *(\d[\d_]*)\)|\btestTimeout: *(\d[\d_]*)/g;
+const TESTS = new Set(['it', 'test', 'describe', 'suite']);
+const HOOKS = new Set([
+  'beforeEach',
+  'afterEach',
+  'beforeAll',
+  'afterAll',
+  'aroundEach',
+  'aroundAll',
+  'onTestFinished',
+  'onTestFailed',
+]);
+const CONTEXT_HOOKS = new Set(['onTestFinished', 'onTestFailed']);
+const MODIFIERS = new Set(['only', 'skip', 'concurrent', 'sequential', 'fails', 'todo', 'shuffle']);
+const TABLE_MODIFIERS = new Set(['each', 'for', 'skipIf', 'runIf', 'extend']);
+
+const apiOfName = (name) => (TESTS.has(name) ? 'test' : HOOKS.has(name) ? 'hook' : null);
+
+/** The member name of `a.b` or `a['b']`; '' for a computed key. */
+function memberOf(e) {
+  if (ts.isPropertyAccessExpression(e)) return { object: e.expression, name: e.name.text };
+  if (ts.isElementAccessExpression(e)) {
+    const key = e.argumentExpression;
+    return { object: e.expression, name: ts.isStringLiteralLike(key) ? key.text : '' };
+  }
+  return null;
+}
+
+/** 'test' or 'hook' for a callee that is a test function, a hook or an alias of one, through any modifier. */
+function apiOf(e, aliases) {
+  if (ts.isIdentifier(e)) {
+    if (aliases.has(e.text)) return aliases.get(e.text);
+    return apiOfName(e.text);
+  }
+  const member = memberOf(e);
+  if (member) {
+    if (CONTEXT_HOOKS.has(member.name)) return 'hook';
+    if (ts.isIdentifier(member.object) && aliases.namespaces.has(member.object.text)) return apiOfName(member.name);
+    // A computed key fails closed: `it[mode]` is read as a test, so its timeout still counts.
+    return MODIFIERS.has(member.name) || member.name === '' ? apiOf(member.object, aliases) : null;
+  }
+  if (ts.isConditionalExpression(e)) return apiOf(e.whenTrue, aliases) ?? apiOf(e.whenFalse, aliases);
+  if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression)) {
+    return TABLE_MODIFIERS.has(e.expression.name.text) ? apiOf(e.expression.expression, aliases) : null;
+  }
+  return null;
+}
+
+/** The api a destructured name takes: `{ it: x } = vitest` names the api, `{ skip } = it` a modifier of one. */
+function destructuredApi(element, initializer, aliases) {
+  const key = element.propertyName ?? element.name;
+  if (!ts.isIdentifier(key) && !ts.isStringLiteralLike(key)) return null;
+  const from = apiOf(initializer, aliases);
+  if (from) return MODIFIERS.has(key.text) || TABLE_MODIFIERS.has(key.text) ? from : null;
+  return apiOfName(key.text);
+}
+
+/** Names bound to a test function or hook (import, const, destructuring), vitest namespaces, and consts holding options. */
+function aliasesOf(sourceFile) {
+  const aliases = Object.assign(new Map(), { namespaces: new Set(), consts: new Map() });
+  const visit = (n, parent) => {
+    if (ts.isImportSpecifier(n) && n.propertyName) {
+      const api = apiOfName(n.propertyName.text);
+      if (api) aliases.set(n.name.text, api);
+    } else if (ts.isImportDeclaration(n) && n.moduleSpecifier.text === 'vitest') {
+      const bindings = n.importClause?.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) aliases.namespaces.add(bindings.name.text);
+    } else if (ts.isVariableDeclaration(n) && n.initializer && ts.isObjectBindingPattern(n.name)) {
+      for (const element of n.name.elements) {
+        const api = ts.isIdentifier(element.name) ? destructuredApi(element, n.initializer, aliases) : null;
+        if (api) aliases.set(element.name.text, api);
+      }
+    } else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      const api = apiOf(n.initializer, aliases);
+      if (api) aliases.set(n.name.text, api);
+      else holdConst(aliases.consts, n, parent);
+    }
+    ts.forEachChild(n, (child) => visit(child, n));
+  };
+  visit(sourceFile, undefined);
+  dropChangedObjects(sourceFile, aliases);
+  return aliases;
+}
+
+/** A const that holds a number or an object literal; a name declared twice holds null, as either may be read. */
+function holdConst(consts, decl, list) {
+  const name = decl.name.text;
+  const isConst = list !== undefined && ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
+  const value = ts.isObjectLiteralExpression(decl.initializer) || numberOf(decl.initializer) !== undefined;
+  consts.set(name, isConst && value && !consts.has(name) ? decl.initializer : null);
+}
+
+/** An object const used anywhere but as an argument this rule reads may be changed (`opts.timeout = x`), so it holds null. */
+function dropChangedObjects(sourceFile, aliases) {
+  const visit = (n, parent) => {
+    const held = ts.isIdentifier(n) ? aliases.consts.get(n.text) : undefined;
+    if (held && ts.isObjectLiteralExpression(held) && !namesNoValue(n, parent)) {
+      const read = ts.isCallExpression(parent) && parent.arguments.includes(n) && setsTimeouts(parent, aliases);
+      if (!read) aliases.consts.set(n.text, null);
+    }
+    ts.forEachChild(n, (child) => visit(child, n));
+  };
+  visit(sourceFile, undefined);
+}
+
+/** A declared name, a member name or a property key: an identifier that reads no variable. */
+function namesNoValue(n, parent) {
+  if (parent === undefined) return false;
+  if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent)) return parent.name === n;
+  return ts.isPropertyAccessExpression(parent) && parent.name === n;
+}
+
+/** The value of a number literal, with or without a minus sign; undefined for anything else. */
+function numberOf(e) {
+  if (ts.isNumericLiteral(e)) return Number(e.text);
+  const negative = ts.isPrefixUnaryExpression(e) && e.operator === ts.SyntaxKind.MinusToken;
+  return negative && ts.isNumericLiteral(e.operand) ? -Number(e.operand.text) : undefined;
+}
+
+/** Milliseconds a timeout argument names, null when it cannot be proved, undefined when it sets none. */
+function msOf(arg, key = 'timeout', consts = new Map()) {
+  if (!arg) return undefined;
+  if (ts.isIdentifier(arg) && consts.has(arg.text)) {
+    const held = consts.get(arg.text);
+    return held ? msOf(held, key) : null;
+  }
+  const literal = numberOf(arg);
+  if (literal !== undefined) return literal;
+  if (!ts.isObjectLiteralExpression(arg)) return null;
+  // A spread or computed key anywhere may set the key, before or after a named one, so the object fails closed.
+  const unread = (p) => ts.isSpreadAssignment(p) || (p.name && ts.isComputedPropertyName(p.name));
+  if (arg.properties.some(unread)) return null;
+  const named = (p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === key;
+  // JavaScript keeps the last of two equal keys.
+  const prop = arg.properties.filter(named).at(-1);
+  if (!prop) return undefined;
+  return ts.isPropertyAssignment(prop) ? (numberOf(prop.initializer) ?? null) : null;
+}
+
+/** A timeout the default run may not set: over the ceiling, 0 or less (no timeout to Vitest), or unproved. */
+export const breaksCeiling = (ms) => ms === null || ms <= 0 || ms > OWN_TIMEOUT_CEILING_MS;
+
+/** `vi.waitFor`, `V.vi.waitFor` or `vi['waitFor']`: the object may sit under a vitest namespace. */
+function isMember(e, object, name, aliases) {
+  const member = memberOf(e);
+  if (!member || member.name !== name) return false;
+  const inner = memberOf(member.object);
+  if (inner && ts.isIdentifier(inner.object) && aliases.namespaces.has(inner.object.text)) return inner.name === object;
+  return ts.isIdentifier(member.object) && member.object.text === object;
+}
+
+const WAITS = [
+  ['vi', 'waitFor'],
+  ['vi', 'waitUntil'],
+  ['expect', 'poll'],
+];
+
+/** The timeouts one call sets: a test's third argument or options object, a hook's second, a vitest wait's options. */
+function timeoutsOf(call, aliases) {
+  const [first, second, third] = call.arguments;
+  const ms = (arg, key) => msOf(arg, key, aliases.consts);
+  if (isMember(call.expression, 'vi', 'setConfig', aliases)) {
+    return [ms(first, 'testTimeout'), ms(first, 'hookTimeout')];
+  }
+  if (WAITS.some(([o, n]) => isMember(call.expression, o, n, aliases))) return [ms(second)];
+  const api = apiOf(call.expression, aliases);
+  if (api === 'hook') return [ms(second)];
+  if (api !== 'test') return [];
+  // Before a body, the second argument is options in any form (`describe(name, opts, fn)`); one it cannot read is null.
+  const options = second && !isFunction(second) && third ? second : undefined;
+  return [ms(options), third && !isFunction(third) ? ms(third) : undefined];
+}
+
+const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
+
+/** A test, hook, vitest wait or vi.setConfig call: one whose arguments timeoutsOf reads. */
+function setsTimeouts(call, aliases) {
+  if (isMember(call.expression, 'vi', 'setConfig', aliases)) return true;
+  if (WAITS.some(([o, n]) => isMember(call.expression, o, n, aliases))) return true;
+  return apiOf(call.expression, aliases) !== null;
+}
 
 /**
- * The longest timeout a test source sets for itself, per test, per hook or with vi.setConfig.
+ * Every timeout a test source sets for itself: per test, suite or hook (with any modifier or alias), vi.setConfig,
+ * vi.waitFor and expect.poll. A name, an expression or a spread gives `ms: null`, since its value is unknown here.
  * @param {string} source
- * @returns {number} milliseconds, 0 when it sets none
+ * @param {string} [fileName]
+ * @returns {{ line: number, ms: number | null }[]}
  */
-export function longestOwnTimeoutMs(source) {
-  let longest = 0;
-  for (const m of source.matchAll(OWN_TIMEOUT)) longest = Math.max(longest, Number((m[1] ?? m[2]).replaceAll('_', '')));
-  return longest;
+export function ownTimeouts(source, fileName = 'file.ts') {
+  const { sourceFile } = readFacts(source, fileName, []);
+  const aliases = aliasesOf(sourceFile);
+  const found = [];
+  const visit = (n) => {
+    if (ts.isCallExpression(n)) {
+      const line = sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1;
+      for (const ms of timeoutsOf(n, aliases)) if (ms !== undefined) found.push({ line, ms });
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 /** A test that lifts its own unit budget with `vi.setConfig({ testTimeout })`. */

@@ -1,6 +1,5 @@
 // A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -10,6 +9,7 @@ import { serveKeyed } from '../_helpers/keyed-server.js';
 import { createReadyProbe } from '../../src/surface/server/ready.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -87,7 +87,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
       expect(statSync(`${db}-wal`).size / 4096).toBeGreaterThan(2 * inlineLimit);
       expect(readFileSync(db).equals(before)).toBe(true);
       for (let n = 16; n < 80; n++) expect(await post(handle, `runbook step ${n}`)).toBe(200);
-      await expect.poll(() => readFileSync(db).equals(before), { timeout: 20_000 }).toBe(false);
+      await expect.poll(() => readFileSync(db).equals(before), { timeout: 10_000 }).toBe(false);
     } finally {
       await handle.stop();
     }
@@ -111,25 +111,21 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
         'process.stdin.resume();',
       ].join('\n'),
     );
-    const holder = spawn(process.execPath, ['--no-warnings', script, join(root, 'hippo.db')], {
-      stdio: ['pipe', 'pipe', 'inherit'],
-    });
+    const holder = startNode(['--no-warnings', script, join(root, 'hippo.db')]);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let handle: ServerHandle | undefined;
     try {
-      await new Promise<void>((ok) => holder.stdout.once('data', () => ok()));
+      await holder.line(/^locked$/, 'the exclusive lock held');
       handle = await serveKeyed({ hippoRoot: root, port: 0 });
       // The lock is still held, so only an open that gave up early can have logged this by now.
       const gaveUp = stderrSpy.mock.calls
         .map((c) => String(c[0]))
         .filter((l) => l.includes('could not hold a store connection'));
       expect(gaveUp).toHaveLength(1);
-      expect(holder.exitCode).toBeNull();
+      expect(holder.running()).toBe(true);
     } finally {
       stderrSpy.mockRestore();
-      const gone = new Promise((ok) => holder.once('exit', ok));
-      holder.kill();
-      await gone;
+      await holder.stop();
       await handle?.stop();
     }
   });

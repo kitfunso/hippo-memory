@@ -1,15 +1,12 @@
 // Whole-tenant walks read keyset pages: no statement hands back more than a page of rows, and no row is dropped.
+// Each case seeds two pages and more of rows, so it runs in the slow project.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  loadAllEntries,
-  loadAllL2Summaries,
-  loadAmbientCandidates,
-  writeEntriesTogether,
-} from '../_helpers/root-forms.js';
+import { loadAllEntries, loadAllL2Summaries, loadAmbientCandidates } from '../_helpers/root-forms.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 
@@ -30,7 +27,7 @@ function seeded(pinned: boolean, extra: Partial<MemoryEntry> = {}) {
     ...extra,
     created: new Date(Date.UTC(2026, 5, 1, 0, 0, i)).toISOString(),
   }));
-  writeEntriesTogether(root, entries);
+  writeRowsOnly(root, entries);
   return { root, ids: entries.map((e) => e.id) };
 }
 

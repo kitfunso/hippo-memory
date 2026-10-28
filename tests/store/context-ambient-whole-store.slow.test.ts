@@ -60,8 +60,7 @@ describe('ambient summary over the whole store', () => {
     expect(line).not.toContain('narrow focus');
   });
 
-  // Seeds more rows than the 2000-row cap in a real store, and a runner's disk sets how long that takes.
-  it('a no-query read of a store past the candidate cap reports its true total', { timeout: 30_000 }, async () => {
+  it('a no-query read of a store past the candidate cap reports its true total', async () => {
     const CAP = 2000;
     const total = CAP + 25;
     const db = openHippoDb(store);

@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');
@@ -35,7 +36,7 @@ process.stdout.write(JSON.stringify({ length: vector.length, first3: vector.slic
         ...process.env,
         HIPPO_MODEL_CACHE: MODEL_CACHE,
       },
-      timeout: 60_000,
+      timeout: HANG_GUARD_MS,
       cwd: REPO_ROOT,
     });
 
@@ -51,5 +52,5 @@ process.stdout.write(JSON.stringify({ length: vector.length, first3: vector.slic
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);
     }
-  }, 90_000); // allow up to 90 s for first model load + child process overhead
+  });
 });

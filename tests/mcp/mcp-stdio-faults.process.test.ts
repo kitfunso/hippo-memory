@@ -2,67 +2,47 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { once } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { localIndex } from '../_helpers/cli-stores.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const serverPath = path.resolve('dist/surface/mcp/server.js');
 let tmpHome: string;
-const procs: ChildProcessWithoutNullStreams[] = [];
+const procs: StartedChild[] = [];
 
 interface Run {
-  proc: ChildProcessWithoutNullStreams;
-  /** The next stdout line; a line that never comes fails at the test timeout. */
+  child: StartedChild;
+  /** The next non-empty stdout line, under the event deadline. */
   nextLine: () => Promise<string>;
   /** Every line written to stdout so far, read or not. */
   replies: () => readonly string[];
   stderr: () => string;
-  exited: Promise<number | null>;
+  exited: () => Promise<number | null>;
 }
 
 function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
-  const proc = spawn(process.execPath, args, {
+  const child = startNode(args, {
     cwd: tmpHome,
     env: { ...process.env, HIPPO_HOME: path.join(tmpHome, '.hippo'), ...env },
-    stdio: ['pipe', 'pipe', 'pipe'],
   });
-  procs.push(proc);
-  const lines: string[] = [];
-  const written: string[] = [];
-  const waiters: Array<(line: string) => void> = [];
-  let out = '';
-  let err = '';
-  proc.stdout.on('data', (chunk: Buffer) => {
-    out += chunk.toString('utf8');
-    let idx;
-    while ((idx = out.indexOf('\n')) !== -1) {
-      const line = out.slice(0, idx).trim();
-      out = out.slice(idx + 1);
-      if (!line) continue;
-      written.push(line);
-      const waiter = waiters.shift();
-      if (waiter) waiter(line);
-      else lines.push(line);
-    }
-  });
-  proc.stderr.on('data', (chunk: Buffer) => {
-    err += chunk.toString('utf8');
-  });
-  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
-  const exited = new Promise<number | null>((resolve) => proc.once('close', (code) => resolve(code)));
-  const nextLine = (): Promise<string> =>
-    new Promise((resolve) => {
-      const cached = lines.shift();
-      if (cached) return resolve(cached);
-      waiters.push(resolve);
-    });
-  return { proc, nextLine, replies: () => written, stderr: () => err, exited };
+  procs.push(child);
+  return {
+    child,
+    nextLine: async () => (await child.line(/^\s*(\S.*?)\s*$/, 'the next stdout line'))[1]!,
+    replies: () =>
+      child
+        .output()
+        .stdout.split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    stderr: () => child.output().stderr,
+    exited: async () => (await child.exited(STORE_RUN_MS, STORE_RUN_REASON)).code,
+  };
 }
 
 const toolCall = (id: number | undefined, name: string, args: Record<string, string>): string =>
@@ -145,39 +125,38 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  for (const proc of procs.splice(0)) {
-    if (proc.exitCode !== null || proc.signalCode !== null) continue;
-    // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the hook timeout.
-    const exited = once(proc, 'exit');
-    proc.stdin.end();
-    await exited;
+  for (const child of procs.splice(0)) {
+    if (!child.running()) continue;
+    // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the exit deadline.
+    await child.endInput();
+    await child.exited();
   }
 });
 
 describe('MCP stdio fault handling', () => {
   it('answers malformed JSON with a -32700 parse error and keeps serving', async () => {
     const run = start([serverPath]);
-    run.proc.stdin.write('{"jsonrpc":"2.0","id":1,"method":\n');
+    run.child.send('{"jsonrpc":"2.0","id":1,"method":\n');
     const reply = JSON.parse(await run.nextLine());
     expect(reply).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
 
-    run.proc.stdin.write('null\n[1,2]\n');
-    run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
+    run.child.send('null\n[1,2]\n');
+    run.child.send(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     const list = JSON.parse(await run.nextLine());
     expect(list.id).toBe(3);
-    expect(run.proc.exitCode).toBeNull();
+    expect(run.child.running()).toBe(true);
   });
 
   it('answers a frame that has an id and no string method with -32600, and only logs one that has neither', async () => {
     const run = start([serverPath]);
-    run.proc.stdin.write('{"jsonrpc":"2.0","id":2,"method":7}\n{"jsonrpc":"2.0","id":"abc","result":{}}\n');
+    run.child.send('{"jsonrpc":"2.0","id":2,"method":7}\n{"jsonrpc":"2.0","id":"abc","result":{}}\n');
     const invalid = { code: -32600, message: 'Invalid Request: method must be a string' };
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 2, error: invalid });
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 'abc', error: invalid });
 
     // No id means a notification, which may not be answered: the next line out is the reply to the frame after it.
-    run.proc.stdin.write('{"jsonrpc":"2.0","params":{}}\n');
-    run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
+    run.child.send('{"jsonrpc":"2.0","params":{}}\n');
+    run.child.send(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     expect(JSON.parse(await run.nextLine()).id).toBe(3);
     // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
     const droppedLines = (): string[] =>
@@ -188,18 +167,18 @@ describe('MCP stdio fault handling', () => {
     await vi.waitFor(() => expect(droppedLines()).toHaveLength(1), { timeout: 5000 });
     const dropped = droppedLines();
     expect(dropped[0]).toMatch(/^\[hippo\] warn: mcp: dropped a frame with no method and no id/);
-    expect(run.proc.exitCode).toBeNull();
+    expect(run.child.running()).toBe(true);
   });
 
   it('exits 0 without a crash trace when the client closes its end of stdout', async () => {
     const run = start([serverPath]);
-    run.proc.stdout.destroy();
+    run.child.closeOutput();
     // Replies written after the pipe closed fail with EPIPE.
     for (let id = 1; id <= 5; id++) {
-      run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}
+      run.child.send(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}
 `);
     }
-    expect(await run.exited).toBe(0);
+    expect(await run.exited()).toBe(0);
     expect(run.stderr()).not.toMatch(/uncaught exception|EPIPE/);
   });
 
@@ -208,22 +187,21 @@ describe('MCP stdio fault handling', () => {
     const embeddings = await heldEmbeddings();
     try {
       const run = start([serverPath]);
-      run.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      run.child.send(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       expect(JSON.parse(await run.nextLine()).id).toBe(1);
       // Recall embeds its query only when the store holds a vector to compare it with.
       expect(await embedAll(localIndex(embeddings.store))).toBe(1);
       embeddings.hold();
-      run.proc.stdin.write(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
+      run.child.send(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
       await embeddings.queryAsked;
-      run.proc.stdin.end();
       // The end of stdin is in the pipe once the parent's side has flushed it; the child then reads it on its next loop turn.
-      await waitFor(() => run.proc.stdin.writableFinished, { what: 'stdin end flushed' });
-      expect(run.proc.exitCode).toBeNull();
+      await run.child.endInput();
+      expect(run.child.running()).toBe(true);
       embeddings.release();
       const reply = JSON.parse(await run.nextLine());
       expect(reply.id).toBe(9);
       expect(reply.result.content[0].text).toContain('the staging queue drains at midnight');
-      expect(await run.exited).toBe(0);
+      expect(await run.exited()).toBe(0);
     } finally {
       embeddings.close();
     }
@@ -236,10 +214,10 @@ describe('MCP stdio fault handling', () => {
     async function startOnShortDeadline(embeddings: Awaited<ReturnType<typeof heldEmbeddings>>): Promise<Run> {
       // Seeded by a server on the default deadline, so only a held recall can reach the short one.
       const seed = start([serverPath]);
-      seed.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      seed.child.send(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       expect(JSON.parse(await seed.nextLine()).id).toBe(1);
-      seed.proc.stdin.end();
-      expect(await seed.exited).toBe(0);
+      await seed.child.endInput();
+      expect(await seed.exited()).toBe(0);
       expect(await embedAll(localIndex(embeddings.store))).toBe(1);
       embeddings.hold();
       return start([serverPath], { HIPPO_REQUEST_DEADLINE_MS: '1500' });
@@ -257,8 +235,8 @@ describe('MCP stdio fault handling', () => {
       run: Run,
     ): Promise<unknown[]> {
       embeddings.release();
-      run.proc.stdin.end();
-      expect(await run.exited).toBe(0);
+      await run.child.endInput();
+      expect(await run.exited()).toBe(0);
       return run.replies().map((line) => JSON.parse(line).id);
     }
 
@@ -266,7 +244,7 @@ describe('MCP stdio fault handling', () => {
       const embeddings = await heldEmbeddings();
       try {
         const run = await startOnShortDeadline(embeddings);
-        run.proc.stdin.write(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
+        run.child.send(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
         expect(JSON.parse(await run.nextLine())).toEqual({
           jsonrpc: '2.0',
           id: 9,
@@ -283,7 +261,7 @@ describe('MCP stdio fault handling', () => {
           /^\[hippo\] warn: mcp: tools\/call hippo_recall did not answer within 1500 ms; .* method=tools\/call/,
         );
 
-        run.proc.stdin.write(list(10));
+        run.child.send(list(10));
         expect(JSON.parse(await run.nextLine()).id).toBe(10);
         expect(await repliesAfterTheLateFinish(embeddings, run)).toEqual([9, 10]);
       } finally {
@@ -295,11 +273,11 @@ describe('MCP stdio fault handling', () => {
       const embeddings = await heldEmbeddings();
       try {
         const run = await startOnShortDeadline(embeddings);
-        run.proc.stdin.write(toolCall(undefined, 'hippo_recall', { query: 'staging queue' }));
-        await vi.waitFor(() => expect(timeoutLines(run)).toHaveLength(1), { timeout: 15000 });
+        run.child.send(toolCall(undefined, 'hippo_recall', { query: 'staging queue' }));
+        await vi.waitFor(() => expect(timeoutLines(run)).toHaveLength(1), { timeout: 10_000 });
 
         // The first line out is the reply to the call sent after the deadline passed.
-        run.proc.stdin.write(list(10));
+        run.child.send(list(10));
         expect(JSON.parse(await run.nextLine()).id).toBe(10);
         expect(await repliesAfterTheLateFinish(embeddings, run)).toEqual([10]);
       } finally {
@@ -315,35 +293,35 @@ describe('MCP stdio fault handling', () => {
 
     // A declared length over the cap is refused at the header; its body is dropped as it arrives, so the next frame is read as itself.
     const declared = 2 * 1024 * 1024;
-    run.proc.stdin.write(`Content-Length: ${declared}\r\n\r\n`);
+    run.child.send(`Content-Length: ${declared}\r\n\r\n`);
     expect(JSON.parse(await run.nextLine())).toEqual(refusal);
-    run.proc.stdin.write(Buffer.alloc(declared, 0x78));
-    run.proc.stdin.write(list(1));
+    run.child.send(Buffer.alloc(declared, 0x78));
+    run.child.send(list(1));
     expect(JSON.parse(await run.nextLine()).id).toBe(1);
 
     // A line that never ends is refused once it passes the cap; the frame after its newline still answers.
-    run.proc.stdin.write(Buffer.alloc(1024 * 1024 + 64 * 1024, 0x79));
+    run.child.send(Buffer.alloc(1024 * 1024 + 64 * 1024, 0x79));
     expect(JSON.parse(await run.nextLine())).toEqual(refusal);
-    run.proc.stdin.write(`yyy\n${list(2)}`);
+    run.child.send(`yyy\n${list(2)}`);
     expect(JSON.parse(await run.nextLine()).id).toBe(2);
-    expect(run.proc.exitCode).toBeNull();
+    expect(run.child.running()).toBe(true);
   });
 
   it('reads a newline-delimited frame and a Content-Length frame written whole, in order', async () => {
     const run = start([serverPath]);
     const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
 
-    run.proc.stdin.write(`${list(1)}\n`);
+    run.child.send(`${list(1)}\n`);
     expect(JSON.parse(await run.nextLine()).id).toBe(1);
 
     const body = list(2);
-    run.proc.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+    run.child.send(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
     expect(JSON.parse(await run.nextLine()).id).toBe(2);
   });
 
   it('exits non-zero and logs the stack on an uncaught exception', async () => {
     const run = start([crashScript("throw new Error('boom-uncaught');")]);
-    const code = await run.exited;
+    const code = await run.exited();
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(
       /mcp uncaught exception: boom-uncaught .*errorClass=Error stack="Error: boom-uncaught\s+at /,
@@ -352,7 +330,7 @@ describe('MCP stdio fault handling', () => {
 
   it('exits non-zero and logs the stack on an unhandled rejection', async () => {
     const run = start([crashScript("Promise.reject(new TypeError('boom-rejected'));")]);
-    const code = await run.exited;
+    const code = await run.exited();
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(
       /mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack="TypeError: boom-rejected\s+at /,

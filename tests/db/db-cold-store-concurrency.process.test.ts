@@ -5,35 +5,34 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { getCurrentSchemaVersion } from '../../src/db/index.js';
-import { waitFor } from '../_helpers/wait-for.js';
+import { removeWhenStopped } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 let root: string;
 
-afterEach(() => {
-  try {
-    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only
-  }
-});
+afterEach(() => removeWhenStopped(root));
 
 // The race only exists across processes, so the workers import the build output.
 const DIST_DB = join(import.meta.dirname, '..', '..', 'dist', 'db/index.js');
 const DB_URL = pathToFileURL(DIST_DB).href;
+// Worker side: past the parent's 10 s wait for every ready line, so no worker gives up while the parent still waits.
+const BARRIER_MS = 20_000;
 
 // Spawn latency alone staggers the workers too far apart to collide, so each one
-// reports ready, spins on a barrier file, and the parent releases them all at once.
-function workerScript(hippoRoot: string, barrier: string, ready: string): string {
+// prints ready, spins on a barrier file, and the parent releases them all at once.
+function workerScript(hippoRoot: string, barrier: string): string {
   return `
-    import { existsSync, writeFileSync } from 'node:fs';
+    import { existsSync } from 'node:fs';
     import { openHippoDb, getSchemaVersion, closeHippoDb } from ${JSON.stringify(DB_URL)};
-    writeFileSync(${JSON.stringify(ready)}, 'ready');
-    const deadline = Date.now() + 60000;
+    process.stdout.write('ready\\n');
+    const deadline = Date.now() + ${BARRIER_MS};
+    const tick = new Int32Array(new SharedArrayBuffer(4));
     while (existsSync(${JSON.stringify(barrier)})) {
       if (Date.now() > deadline) { console.log('barrier-timeout'); process.exit(3); }
+      Atomics.wait(tick, 0, 0, 1);
     }
     const db = openHippoDb(${JSON.stringify(hippoRoot)});
     const version = getSchemaVersion(db);
@@ -42,39 +41,12 @@ function workerScript(hippoRoot: string, barrier: string, ready: string): string
   `;
 }
 
-function readyFile(i: number): string {
-  return join(root, `ready-${i}`);
-}
-
-async function waitForReady(count: number, timeoutMs: number): Promise<void> {
-  const missing = (): number[] => Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
-  await waitFor(() => missing().length === 0, { timeoutMs, what: `workers ${missing().join(', ')} at the barrier` });
-}
-
-function runWorkers(
-  count: number,
-  barrier: string,
-): Promise<Array<{ code: number | null; stdout: string; stderr: string }>> {
-  const children = [];
-  for (let i = 0; i < count; i++) {
+function startWorkers(count: number, barrier: string): StartedChild[] {
+  return Array.from({ length: count }, (_, i) => {
     const file = join(root, `open-worker-${i}.mjs`);
-    writeFileSync(file, workerScript(root, barrier, readyFile(i)), 'utf8');
-    children.push(
-      new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve) => {
-        const child = spawn(process.execPath, [file], { stdio: ['ignore', 'pipe', 'pipe'] });
-        let stdout = '';
-        let stderr = '';
-        child.stdout.on('data', (chunk) => {
-          stdout += String(chunk);
-        });
-        child.stderr.on('data', (chunk) => {
-          stderr += String(chunk);
-        });
-        child.on('exit', (code) => resolve({ code, stdout: stdout.trim(), stderr }));
-      }),
-    );
-  }
-  return Promise.all(children);
+    writeFileSync(file, workerScript(root, barrier), 'utf8');
+    return startNode([file], { input: '' });
+  });
 }
 
 describe('openHippoDb on a cold store under concurrent processes', () => {
@@ -83,13 +55,17 @@ describe('openHippoDb on a cold store under concurrent processes', () => {
     const barrier = join(root, 'barrier');
     writeFileSync(barrier, 'x', 'utf8');
 
-    const pending = runWorkers(8, barrier);
+    const workers = startWorkers(8, barrier);
     try {
-      await waitForReady(8, 60000);
+      // Parent side: each worker's ready line, under the event deadline.
+      await Promise.all(workers.map((w, i) => w.line(/^ready$/, `worker ${i} at the barrier`)));
     } finally {
       rmSync(barrier, { force: true });
     }
-    const results = await pending;
+    const results = (await Promise.all(workers.map((w) => w.exited(STORE_RUN_MS, STORE_RUN_REASON)))).map((r) => ({
+      ...r,
+      stdout: r.stdout.trim().split('\n').pop(),
+    }));
 
     const failed = results.filter((r) => r.code !== 0);
     expect(failed.map((r) => r.stderr.split('\n').find((l) => l.includes('Error')) ?? `exit ${r.code}`)).toEqual([]);

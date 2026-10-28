@@ -1,5 +1,5 @@
 // `hippo learn --git` usage, result lines and stored rows, in process on a real store and real git repos.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -33,8 +33,7 @@ function temp(label: string): string {
   return dir;
 }
 
-function gitRepo(subjects: readonly string[]): string {
-  const repo = temp('learn-git-repo');
+function gitRepo(subjects: readonly string[], repo = temp('learn-git-repo')): string {
   const git = (...args: string[]): void => {
     execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
   };
@@ -79,8 +78,14 @@ async function learn(
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }
 
-// These cases build a five-commit repo and run learn on it, about a dozen git processes each.
-const GIT_HEAVY_MS = 51_000;
+// One five-commit repo for the cases that read it: building it is a dozen git processes, and learn only reads its log.
+let subjectsRepo = '';
+beforeAll(() => {
+  subjectsRepo = gitRepo(SUBJECTS, mkdtempSync(join(tmpdir(), 'hippo-learn-git-repo-')));
+});
+afterAll(() => {
+  rmSync(subjectsRepo, { recursive: true, force: true });
+});
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', join(temp('learn-git-home'), 'global'));
@@ -102,58 +107,50 @@ describe('hippo learn --git (in process)', () => {
     expect(r.stderr).toContain('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
   });
 
-  it(
-    'with --repos prefixes each result line with the repo, stores the lessons and invalidates what a migration replaces',
-    async () => {
-      const repo = gitRepo(SUBJECTS);
-      const root = seededStore();
+  it('with --repos prefixes each result line with the repo, stores the lessons and invalidates what a migration replaces', async () => {
+    const repo = subjectsRepo;
+    const root = seededStore();
 
-      const first = await learn(root, { git: true, days: '30', repos: repo }, repo);
-      expect(first.status).toBe(0);
-      expect(first.stdout).toContain('Scanning git log for the last 30 days...');
-      expect(first.stdout).toContain('[<repo>]    Invalidated 1 memories referencing "webpack"');
-      expect(first.stdout).toContain(
-        '[<repo>] 2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.',
-      );
-      expect(first.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped across 1 repos.');
+    const first = await learn(root, { git: true, days: '30', repos: repo }, repo);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain('Scanning git log for the last 30 days...');
+    expect(first.stdout).toContain('[<repo>]    Invalidated 1 memories referencing "webpack"');
+    expect(first.stdout).toContain(
+      '[<repo>] 2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.',
+    );
+    expect(first.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped across 1 repos.');
 
-      const rows = rowsOf(root);
-      expect(Object.keys(rows)).toHaveLength(4);
-      for (const content of LEARNED) {
-        expect(rows[content]).toMatchObject({ source: 'git-learn', confidence: 'observed' });
-        expect(rows[content]!.tags).toEqual(expect.arrayContaining(['error', 'git-learned']));
-      }
-      expect(rows[WEBPACK_SEED]).toMatchObject({ confidence: 'stale' });
-      expect(rows[WEBPACK_SEED]!.tags).toContain('invalidated');
-      expect(rows[CACHE_SEED]).toMatchObject({ confidence: 'verified', tags: ['seed'] });
+    const rows = rowsOf(root);
+    expect(Object.keys(rows)).toHaveLength(4);
+    for (const content of LEARNED) {
+      expect(rows[content]).toMatchObject({ source: 'git-learn', confidence: 'observed' });
+      expect(rows[content]!.tags).toEqual(expect.arrayContaining(['error', 'git-learned']));
+    }
+    expect(rows[WEBPACK_SEED]).toMatchObject({ confidence: 'stale' });
+    expect(rows[WEBPACK_SEED]!.tags).toContain('invalidated');
+    expect(rows[CACHE_SEED]).toMatchObject({ confidence: 'verified', tags: ['seed'] });
 
-      const again = await learn(root, { git: true, days: '30', repos: repo }, repo);
-      expect(again.status).toBe(0);
-      expect(again.stdout).toContain(
-        '[<repo>] 0 new lessons added, 3 duplicates skipped, 1 low-information subject(s) dropped.',
-      );
-      expect(again.stdout).toContain('Git learn complete: 0 new lessons added, 3 duplicates skipped across 1 repos.');
-      expect(Object.keys(rowsOf(root))).toHaveLength(4);
-    },
-    GIT_HEAVY_MS,
-  );
+    const again = await learn(root, { git: true, days: '30', repos: repo }, repo);
+    expect(again.status).toBe(0);
+    expect(again.stdout).toContain(
+      '[<repo>] 0 new lessons added, 3 duplicates skipped, 1 low-information subject(s) dropped.',
+    );
+    expect(again.stdout).toContain('Git learn complete: 0 new lessons added, 3 duplicates skipped across 1 repos.');
+    expect(Object.keys(rowsOf(root))).toHaveLength(4);
+  });
 
-  it(
-    'without --repos reads the working directory and writes the same lessons',
-    async () => {
-      const root = seededStore();
-      process.chdir(gitRepo(SUBJECTS));
+  it('without --repos reads the working directory and writes the same lessons', async () => {
+    const root = seededStore();
+    process.chdir(subjectsRepo);
 
-      const r = await learn(root, { git: true, days: '30' });
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain('   Invalidated 1 memories referencing "webpack"');
-      expect(r.stdout).toContain('2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.');
-      expect(r.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped.');
-      expect(r.stdout).not.toContain('across');
-      expect(LEARNED.every((content) => rowsOf(root)[content]?.source === 'git-learn')).toBe(true);
-    },
-    GIT_HEAVY_MS,
-  );
+    const r = await learn(root, { git: true, days: '30' });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('   Invalidated 1 memories referencing "webpack"');
+    expect(r.stdout).toContain('2 new lessons added, 1 duplicates skipped, 1 low-information subject(s) dropped.');
+    expect(r.stdout).toContain('Git learn complete: 2 new lessons added, 1 duplicates skipped.');
+    expect(r.stdout).not.toContain('across');
+    expect(LEARNED.every((content) => rowsOf(root)[content]?.source === 'git-learn')).toBe(true);
+  });
 
   it('says so when the directory is not a git repository', async () => {
     const root = seededStore();

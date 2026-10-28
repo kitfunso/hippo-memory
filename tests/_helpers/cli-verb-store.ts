@@ -15,7 +15,6 @@ import { hippoRunAsync } from './spawn-hippo.js';
 import { writeEntry } from './root-forms.js';
 import { initTestStore } from './store-template.js';
 
-const SPAWN_MS = 60_000;
 const STRENGTH_DECIMALS = 6;
 // Wall-clock times a write stamps; a test cannot name them, so rows leave them out.
 const VOLATILE_COLUMNS = ['created', 'last_retrieved', 'valid_from', 'updated_at'];
@@ -181,7 +180,7 @@ export class Store {
   async run(...args: string[]): Promise<Ran> {
     const opts = { cwd: this.cwd, env: this.env };
     // Async in both modes, so a run that calls a server this process holds leaves the thread free to answer.
-    const r = this.spawned ? await hippoRunAsync(args, { ...opts, timeout: SPAWN_MS }) : await runCliAs(args, opts);
+    const r = this.spawned ? await hippoRunAsync(args, opts) : await runCliAs(args, opts);
     return { status: r.status, stdout: this.mask(r.stdout), stderr: this.mask(ownStderr(r.stderr)) };
   }
 

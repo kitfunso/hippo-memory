@@ -2,7 +2,7 @@
 // (src/store/sqlite/grant.ts); openHippoDb without one is a plain connection of its own.
 import { existsSync } from 'node:fs';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
-import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
+import { defaultBusyWaitMs } from './busy.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { assertStoreFolder, openHippoDbReadOnly } from './open.js';
 import { SESSION_OPEN, type RequestStores } from './request-stores.js';
@@ -75,7 +75,7 @@ export class DbGrant {
     if (!existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
     const db = new DatabaseSync(file, { readOnly });
     try {
-      db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}`);
+      db.exec(`PRAGMA busy_timeout = ${defaultBusyWaitMs()}`);
       return fn(db);
     } finally {
       db.close();

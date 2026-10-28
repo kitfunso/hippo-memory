@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 
 const REPO = join(import.meta.dirname, '..', '..');
 const OXLINT = join(REPO, 'node_modules', 'oxlint', 'bin', 'oxlint');
@@ -54,7 +55,7 @@ function lint(files: Record<string, string>): Map<string, string[]> {
       writeFileSync(join(root, p), text);
     }
     const args = [OXLINT, '-c', configIn(root), '-f', 'json', ...Object.keys(files)];
-    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8' });
+    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8', timeout: HANG_GUARD_MS });
     // SAFETY: oxlint's json format prints { diagnostics: [...] } with a code and filename on each.
     const { diagnostics } = JSON.parse(r.stdout) as { diagnostics: Diagnostic[] };
     const hits = new Map<string, string[]>();
@@ -340,7 +341,7 @@ function cruise(files: Record<string, string>, rule: string): string[] {
     writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { module: 'nodenext' } }));
     const config = join(REPO, '.dependency-cruiser.cjs');
     const args = [DEPCRUISE, 'src', '--config', config, '--output-type', 'json'];
-    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8' });
+    const r = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf-8', timeout: HANG_GUARD_MS });
     // SAFETY: depcruise's json output carries summary.violations, each with its from path and rule name.
     const { summary } = JSON.parse(r.stdout) as { summary: { violations: Violation[] } };
     return summary.violations.filter((v) => v.rule.name === rule).map((v) => v.from);
@@ -401,7 +402,7 @@ function sqliteLoads(files: Record<string, string>): string[] {
       writeFileSync(join(root, p), text);
     }
     const script = join(REPO, 'scripts', 'check-sqlite-loads.mjs');
-    const r = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf-8' });
+    const r = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf-8', timeout: HANG_GUARD_MS });
     return [...r.stderr.matchAll(/^ {2}(src\/\S+):\d+ /gm)].map(([, file]) => file);
   } finally {
     rmSync(root, { recursive: true, force: true });

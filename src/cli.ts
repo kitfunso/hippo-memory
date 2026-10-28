@@ -2,7 +2,13 @@
 // Hippo CLI entry point: parses argv and dispatches each verb through the table in
 // surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
+import {
+  envBusyWaitMs,
+  envSkipAutoIntegrations,
+  envTenant,
+  validateFlags,
+} from './base/util/env.js';
+import { setDefaultBusyWaitMs } from './surface/open-store.js';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
@@ -297,6 +303,8 @@ function warnUnknownFlagValues(): void {
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
+  const wait = envBusyWaitMs();
+  if (wait !== undefined) setDefaultBusyWaitMs(wait);
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
   try {

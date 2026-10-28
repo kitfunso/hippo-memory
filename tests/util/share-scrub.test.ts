@@ -231,11 +231,7 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
     ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
     ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
-  ])(
-    'scrubs a 1 MiB run of %s before the watchdog fires',
-    (_name, build) => {
-      expect(() => scanWithinWatchdog(scrubForSharing, build(ONE_MIB), WATCHDOG_MS)).not.toThrow();
-    },
-    2 * WATCHDOG_MS,
-  );
+  ])('scrubs a 1 MiB run of %s before the watchdog fires', (_name, build) => {
+    expect(() => scanWithinWatchdog(scrubForSharing, build(ONE_MIB), WATCHDOG_MS)).not.toThrow();
+  });
 });

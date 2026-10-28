@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
@@ -9,6 +8,7 @@ import { localIndex } from '../_helpers/cli-stores.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
 import { tryEmbedLock } from '../../src/store/sqlite/embed-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 afterEach(() => {
@@ -40,18 +40,14 @@ afterEach(() => {
 const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
 const LOCK_FILE = 'embeddings.lock.db';
 
-/** A child process that holds the lock file until it is killed. */
-async function holdInChild(lockPath: string): Promise<ChildProcess> {
-  const child = spawn(process.execPath, [HOLDER, lockPath], { stdio: ['ignore', 'pipe', 'ignore'] });
-  await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
+/** A child process that holds the lock file until it is stopped. */
+async function holdInChild(lockPath: string): Promise<StartedChild> {
+  const child = startNode([HOLDER, lockPath]);
+  await child.line(/^HELD$/, `the lock on ${lockPath} held`);
   return child;
 }
 
-const kill = (child: ChildProcess): Promise<void> =>
-  new Promise((resolve) => {
-    child.once('close', () => resolve());
-    child.kill('SIGKILL');
-  });
+const kill = (child: StartedChild): Promise<void> => child.stop();
 
 // Fake timers drive the waiter's poll loop, so "it waited" is proven by poll count, not by how long a sleep ran.
 async function expectWaitsUntilReleased(release: () => Promise<void>): Promise<void> {
@@ -97,7 +93,7 @@ describe('embeddings.json cross-process lock', () => {
     try {
       await expectWaitsUntilReleased(() => kill(holder));
     } finally {
-      holder.kill();
+      await holder.stop();
     }
   });
 

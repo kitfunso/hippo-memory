@@ -32,7 +32,7 @@ beforeAll(() => {
       created: isoAgo(i * 3),
     })),
   );
-}, 60_000);
+});
 
 afterAll(() => {
   store.cleanup();

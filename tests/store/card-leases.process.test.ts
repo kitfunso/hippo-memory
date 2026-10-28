@@ -552,7 +552,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
   it('card claim prints the run id and lease; card show prints Lease/Heartbeat/run lines', async () => {
     const { home, env } = await setupCliHome();
     try {
-      const create = runCliSpawned(home, env, 'card', 'create', '--title', 't');
+      const create = await runCli(home, env, 'card', 'create', '--title', 't');
       const id = cardIdFrom(create.out);
       expect(id).toMatch(/^card_[0-9a-f]{12}$/);
 

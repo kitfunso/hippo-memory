@@ -20,9 +20,9 @@ import {
   activeGoalsWithPolicies,
   appendConsolidationRun,
   loadAmbientCandidates,
-  writeEntriesTogether,
   updateStats,
 } from '../_helpers/root-forms.js';
+import { writeRowsOnly } from '../_helpers/seed-rows.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -47,7 +47,7 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 function seed(root: string, entries: readonly MemoryEntry[]): void {
-  writeEntriesTogether(root, entries);
+  writeRowsOnly(root, entries);
 }
 
 /** Runs `write` on a short-lived handle, for fixtures the store API has no writer for. */

@@ -150,7 +150,7 @@ describe('cli sleep golden output', () => {
   beforeAll(() => {
     template = makeStore('sleep-golden-template').root;
     seedLocal(template);
-  }, 30_000); // Seeds a real store, and a runner's disk sets how long that takes.
+  });
 
   it.each(CASES)('$name', async (c) => {
     expect(await run(c)).toMatchSnapshot();

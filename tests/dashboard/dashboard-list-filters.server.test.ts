@@ -127,7 +127,7 @@ beforeAll(() => {
   } finally {
     closeHippoDb(db);
   }
-}, 60_000);
+});
 
 afterAll(() => {
   store.cleanup();

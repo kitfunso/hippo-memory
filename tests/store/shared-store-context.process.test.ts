@@ -12,6 +12,7 @@ import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { HANG_GUARD_MS } from '../_helpers/wait-for.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -274,7 +275,7 @@ describe('hippo context on a shared store', () => {
       cwd,
       env: { ...process.env, HIPPO_HOME: home },
       encoding: 'utf8',
-      timeout: 60_000,
+      timeout: HANG_GUARD_MS,
     });
     expect(r.status, r.stderr).toBe(1);
     expect(r.stderr).toContain("a shared store needs the caller's project");

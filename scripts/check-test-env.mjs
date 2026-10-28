@@ -14,8 +14,9 @@ import {
   STARTS_A_CHILD,
   STARTS_A_SERVER,
   projectOfName,
-  longestOwnTimeoutMs,
-  UNIT_OWN_TIMEOUT_CEILING_MS,
+  OWN_TIMEOUT_CEILING_MS,
+  breaksCeiling,
+  ownTimeouts,
   reachesChildProcess,
 } from './lib/test-classes.mjs';
 
@@ -191,11 +192,10 @@ export function misnamedTests(dir) {
   const startsChild = startsVia(helpers, STARTS_A_CHILD);
   const startsServer = startsVia(helpers, STARTS_A_SERVER);
   const skipped = new Set(EVAL_TESTS);
-  // The token-eval harness belongs to another owner and keeps its names.
   const hits = [];
   for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
     const file = relative(dirname(dir), path).replaceAll('\\', '/');
-    if (skipped.has(file) || file.startsWith('tests/eval/token-eval-')) continue;
+    if (skipped.has(file)) continue;
     const source = readFileSync(path, 'utf8');
     const has = projectOfName(file);
     // A test that spawns inside src never names child_process, so the import graph decides when it lifts its own budget.
@@ -206,14 +206,30 @@ export function misnamedTests(dir) {
         : startsServer(source)
           ? 'server'
           : 'unit';
-    // A slow test starts nothing, so its name is the only mark; a unit test that asks for a long budget of its own earns it.
-    const want =
-      started === 'unit' && (has === 'slow' || longestOwnTimeoutMs(source) > UNIT_OWN_TIMEOUT_CEILING_MS)
-        ? 'slow'
-        : started;
+    // A slow test starts nothing, so its name is the only mark.
+    const want = started === 'unit' && has === 'slow' ? 'slow' : started;
     if (want !== has) hits.push({ file, has, want });
   }
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+/**
+ * Returns one entry per timeout over OWN_TIMEOUT_CEILING_MS, at or under 0, or one this check cannot prove, that a test file in the
+ * default run sets for itself. The eval config runs EVAL_TESTS with its own budget.
+ * @param {string} dir the tests folder
+ * @returns {{ file: string, line: number, ms: number | null }[]}
+ */
+export function longTimeouts(dir) {
+  const skipped = new Set(EVAL_TESTS);
+  const hits = [];
+  for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
+    const file = relative(dirname(dir), path).replaceAll('\\', '/');
+    if (skipped.has(file)) continue;
+    for (const t of ownTimeouts(readFileSync(path, 'utf8'), path)) {
+      if (breaksCeiling(t.ms)) hits.push({ file, ...t });
+    }
+  }
+  return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
 }
 
 /** The variable names a reader in env.ts is built from. */
@@ -237,9 +253,17 @@ export function unscrubbedEnvReads(envSource, scrubbedNames = ENV_SCRUBBED_IN_TE
 const RENAME = {
   process: 'starts a child process: name it *.process.test.ts',
   server: 'starts the server or a worker thread and no child: name it *.server.test.ts',
-  slow: 'starts nothing but asks for more than 30 s of its own: name it *.slow.test.ts and drop the timeout override',
   unit: 'starts no child, server or worker thread: drop .process or .server from its name',
 };
+
+function reportLong(dir, long) {
+  if (long.length === 0) return;
+  console.error(`\nTimeouts over ${OWN_TIMEOUT_CEILING_MS} ms, at or under 0, or not proved, in ${dir}/:`);
+  for (const t of long) console.error(`  ${t.file}:${t.line} ${t.ms ?? 'not proved'}`);
+  console.error(
+    'Wait on an event (started-child.ts, waitFor), cut the seed, or name a CPU-bound test *.slow.test.ts and drop the override.\n',
+  );
+}
 
 function report(dir, hits, misnamed, unscrubbed) {
   if (hits.length > 0) {
@@ -270,7 +294,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const misnamed = misnamedTests(dir);
   const envFile = join(dirname(dir), 'src/base/util/env.ts');
   const unscrubbed = existsSync(envFile) ? unscrubbedEnvReads(readFileSync(envFile, 'utf8')) : [];
+  const long = longTimeouts(dir);
   report(dir, hits, misnamed, unscrubbed);
-  if (hits.length > 0 || misnamed.length > 0 || unscrubbed.length > 0) process.exit(1);
-  console.log(`No test in ${dir}/ leaks a stubbed env, and each test's name matches what it starts. OK.`);
+  reportLong(dir, long);
+  if (hits.length > 0 || misnamed.length > 0 || unscrubbed.length > 0 || long.length > 0) process.exit(1);
+  console.log(
+    `No test in ${dir}/ leaks a stubbed env, sets a long timeout, or has a name that does not match what it starts. OK.`,
+  );
 }

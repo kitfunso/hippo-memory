@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -14,6 +14,8 @@ import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { HippoConfig } from '../../src/base/config/config.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -286,24 +288,15 @@ describe('what one hook call records', () => {
       ['A', []],
       ['B', []],
     ]);
-    const runAsync = (sessionId: string, prompt: string): Promise<void> =>
-      new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [HIPPO_JS, ...HOOK_ARGS], {
-          cwd: proj,
-          env: { ...BASE_ENV, HIPPO_HOME: path.join(proj, 'global') },
-        });
-        let stderr = '';
-        child.stderr.on('data', (d: Buffer) => {
-          stderr += d.toString();
-        });
-        child.on('error', reject);
-        child.on('close', (code) => {
-          stderrBySession.get(sessionId)?.push(...ledgerLines(stderr));
-          if (code === 0) resolve();
-          else reject(new Error(`hook exited ${code}: ${stderr}`));
-        });
-        child.stdin.end(JSON.stringify(claude(sessionId, prompt)));
-      });
+    const runAsync = async (sessionId: string, prompt: string): Promise<void> => {
+      const { code, stderr } = await startNode([HIPPO_JS, ...HOOK_ARGS], {
+        cwd: proj,
+        env: { ...BASE_ENV, HIPPO_HOME: path.join(proj, 'global') },
+        input: JSON.stringify(claude(sessionId, prompt)),
+      }).exited(STORE_RUN_MS, STORE_RUN_REASON);
+      stderrBySession.get(sessionId)?.push(...ledgerLines(stderr));
+      if (code !== 0) throw new Error(`hook exited ${code}: ${stderr}`);
+    };
     for (let round = 0; round < 3; round++) {
       await Promise.all([
         runAsync('A', `round ${round} question for A`),

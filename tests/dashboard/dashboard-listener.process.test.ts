@@ -1,16 +1,16 @@
 // The dashboard's listener: a port it cannot open, the socket deadlines it shares with the API server, and a stop on a signal.
-import { afterEach, describe, expect, it, onTestFailed } from 'vitest';
-import { readFileSync, rmSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { serve } from '../../src/server.js';
-import { removeScratch, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
+import { scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { startDashboard } from '../_helpers/dashboard-fixture.js';
 import { boundPort } from '../_helpers/listen.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot, removeWhenStopped } from '../_helpers/make-root.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 const CONNECTIONS_CLI = resolve(__dirname, '..', 'fixtures', 'dashboard-connections-cli.mjs');
@@ -18,18 +18,11 @@ const CONNECTIONS_CLI = resolve(__dirname, '..', 'fixtures', 'dashboard-connecti
 const scratches: Scratch[] = [];
 const roots: string[] = [];
 const holders: Server[] = [];
-const children: ChildProcessWithoutNullStreams[] = [];
 
 afterEach(async () => {
-  for (const child of children.splice(0)) {
-    if (child.exitCode !== null || child.signalCode !== null) continue;
-    const gone = new Promise((done) => child.once('exit', done));
-    child.kill('SIGKILL');
-    await gone;
-  }
   for (const holder of holders.splice(0)) await new Promise((done) => holder.close(done));
-  for (const s of scratches.splice(0)) removeScratch(s);
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const s of scratches.splice(0)) await removeWhenStopped(s.dir);
+  for (const root of roots.splice(0)) await removeWhenStopped(root);
 });
 
 /** A scratch project with a store, its own home folder and its own global store. */
@@ -40,56 +33,10 @@ function project(): Scratch {
   return s;
 }
 
-interface Exit {
-  readonly code: number | null;
-  readonly signal: NodeJS.Signals | null;
-}
-
-interface Watched {
-  readonly stderr: () => string;
-  readonly output: () => string;
-  /** Settles with the match once stdout holds `pattern`; fails when the child ends first. */
-  readonly printed: (pattern: RegExp) => Promise<RegExpExecArray>;
-  readonly exited: Promise<Exit>;
-}
-
-function watch(child: ChildProcessWithoutNullStreams): Watched {
-  let stdout = '';
-  let stderr = '';
-  const waiting: Array<() => void> = [];
-  child.stdout.on('data', (chunk: Buffer) => {
-    stdout += chunk.toString('utf8');
-    for (const check of waiting) check();
-  });
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString('utf8');
-  });
-  const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
-  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
-  onTestFailed(() => {
-    console.error(output());
-  });
-  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
-  const exited = new Promise<Exit>((done) => child.once('close', (code, signal) => done({ code, signal })));
-  const printed = (pattern: RegExp): Promise<RegExpExecArray> =>
-    new Promise((done, fail) => {
-      void exited.then(({ code, signal }) =>
-        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the dashboard printed ${pattern}`)),
-      );
-      const check = (): void => {
-        const match = pattern.exec(stdout);
-        if (match !== null) done(match);
-      };
-      waiting.push(check);
-      check();
-    });
-  return { stderr: () => stderr, output, printed, exited };
-}
-
 /** Node cannot send a signal to another process on Windows (a kill there ends it outright), so the fixture raises Ctrl+C's SIGINT itself. */
-function deliverStop(child: ChildProcessWithoutNullStreams): void {
-  if (process.platform === 'win32') child.stdin.write('stop\n');
-  else child.kill('SIGTERM');
+function deliverStop(child: StartedChild): void {
+  if (process.platform === 'win32') child.send('stop\n');
+  else process.kill(child.pid, 'SIGTERM');
 }
 
 describe('hippo dashboard listener', () => {
@@ -100,7 +47,7 @@ describe('hippo dashboard listener', () => {
     const port = await boundPort(holder);
     const s = project();
 
-    const run = hippoRun(['dashboard', '--port', String(port)], { cwd: s.proj, env: s.env, timeout: 60_000 });
+    const run = hippoRun(['dashboard', '--port', String(port)], { cwd: s.proj, env: s.env });
 
     expect(ownStderr(run.stderr)).toBe(
       `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.\n`,
@@ -127,15 +74,11 @@ describe('hippo dashboard listener', () => {
   it('closes the listener and the snapshot store, then exits 0, on the stop signal this platform can deliver', async () => {
     const s = project();
     const reportFile = join(s.dir, 'connections.json');
-    const child = spawn(process.execPath, [CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'], {
-      cwd: s.proj,
-      env: s.env,
-    });
-    children.push(child);
-    const watched = watch(child);
+    const child = startNode([CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'], { cwd: s.proj, env: s.env });
     // The ticket is never on stdout; the banner names the URL file that holds it.
-    const [, port, urlFile] = await watched.printed(
+    const [, port, urlFile] = await child.line(
       /Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/,
+      'the dashboard banner',
     );
     const ticket = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
     const ticketUrl = `http://127.0.0.1:${port}/?token=${ticket}`;
@@ -149,10 +92,10 @@ describe('hippo dashboard listener', () => {
     expect(overview.status, await overview.text()).toBe(200);
 
     deliverStop(child);
-    // `hippo serve` allows a signal shutdown 15 s, inside the test timeout; a child that never ends fails there.
-    expect(await watched.exited, watched.output()).toEqual({ code: 0, signal: null });
+    const exit = await child.exited();
+    expect({ code: exit.code, signal: exit.signal }, exit.stdout + exit.stderr).toEqual({ code: 0, signal: null });
     expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toEqual({ atSignal: 1, atExit: 0 });
-    expect(watched.stderr()).toMatch(/received SIG(INT|TERM), shutting down/);
-    expect(watched.stderr()).not.toContain('did not finish within');
+    expect(exit.stderr).toMatch(/received SIG(INT|TERM), shutting down/);
+    expect(exit.stderr).not.toContain('did not finish within');
   });
 });

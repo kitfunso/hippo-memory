@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
 import {
   loadTurnPosition,
   pruneSessionFiles,
@@ -14,6 +13,7 @@ import {
 } from '../../src/surface/capture/session-worker.js';
 import type { StatFn } from '../../src/host/file-lock.js';
 import type { SessionTurn } from '../../src/surface/capture/transcript.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const ID = 'vscode-sess-1';
@@ -35,18 +35,14 @@ afterEach(() => {
 
 const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
 
-/** A child process that holds the lock file until it is killed. */
-async function holdInChild(lock: string): Promise<ChildProcess> {
-  const child = spawn(process.execPath, [HOLDER, lock], { stdio: ['ignore', 'pipe', 'ignore'] });
-  await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
+/** A child process that holds the lock file until it is stopped. */
+async function holdInChild(lock: string): Promise<StartedChild> {
+  const child = startNode([HOLDER, lock]);
+  await child.line(/^HELD$/, `the lock on ${lock} held`);
   return child;
 }
 
-const kill = (child: ChildProcess): Promise<void> =>
-  new Promise((resolve) => {
-    child.once('close', () => resolve());
-    child.kill('SIGKILL');
-  });
+const kill = (child: StartedChild): Promise<void> => child.stop();
 
 interface Recorder {
   readonly runs: WorkerMode[];

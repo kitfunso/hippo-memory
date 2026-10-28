@@ -66,7 +66,7 @@ describe('hippo watch (built CLI, no server)', () => {
     }
     expect(s.audit()).toEqual(rows.map((r) => `default cli remember ${String(r['id'])}`));
     expect(s.counters()).toEqual({ total_forgotten: '0', total_remembered: '2' });
-  }, 32_000);
+  });
 
   it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
@@ -622,7 +622,7 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
       global: ['hook_recall inject 1 30', 'hook_recall reread 2 60'],
     });
     expect(s.audit()).toEqual(['__host__ cli consolidate', '__host__ cli consolidate']);
-  }, 42_000);
+  });
 
   it('a store that refuses the rows is logged, and the other store is still counted', async () => {
     const s = new Store({ global: true });

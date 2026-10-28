@@ -2,16 +2,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn } from 'node:child_process';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hashArm } from '../../src/base/session/pilot-arm.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -245,16 +246,11 @@ describe('the per-prompt hook', () => {
   });
 
   it('two concurrent processes on a fresh session: one row, both print nothing', async () => {
-    const child = () =>
-      new Promise<{ code: number | null; out: string }>((resolve) => {
-        const c = spawn(process.execPath, [HIPPO_JS, ...HOOK_ARGS], { cwd: proj, env: env() });
-        let out = '';
-        c.stdout.on('data', (d) => {
-          out += String(d);
-        });
-        c.on('close', (code) => resolve({ code, out }));
-        c.stdin.end(JSON.stringify(prompt('race')));
-      });
+    const child = async (): Promise<{ code: number | null; out: string }> => {
+      const run = startNode([HIPPO_JS, ...HOOK_ARGS], { cwd: proj, env: env(), input: JSON.stringify(prompt('race')) });
+      const { code, stdout } = await run.exited(STORE_RUN_MS, STORE_RUN_REASON);
+      return { code, out: stdout };
+    };
     const results = await Promise.all([child(), child()]);
     expect(results.map((r) => [r.code, r.out])).toEqual([
       [0, ''],

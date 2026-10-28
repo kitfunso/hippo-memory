@@ -190,7 +190,7 @@ describe('hippo share --auto --dry-run', () => {
     };
     for (const key of ['ANTHROPIC_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_TENANT']) delete env[key];
     const hippo = (...args: string[]): string => {
-      const res = hippoRun(args, { cwd: proj, env, timeout: 20_000, exe: 'node' });
+      const res = hippoRun(args, { cwd: proj, env, exe: 'node' });
       expect(res.status, res.stderr).toBe(0);
       return res.stdout;
     };

@@ -9,6 +9,8 @@ interface StatementProto {
 }
 interface DatabaseProto {
   exec(sql: string): void;
+  close(): void;
+  readonly isOpen: boolean;
 }
 type StatementCall = (this: StatementProto, ...params: SqlParams) => object | undefined;
 
@@ -66,6 +68,26 @@ export async function recordStatementsAsync<T>(fn: () => Promise<T>): Promise<St
     return { result: await fn(), statements, rowsRead: tally.rows, reads: tally.reads };
   } finally {
     for (const spy of spies) spy.mockRestore();
+  }
+}
+
+/** The `PRAGMA busy_timeout = <ms>` each connection `fn` opens sets, recorded without counting every row read. */
+export async function recordBusyWaitsAsync<T>(
+  fn: () => Promise<T>,
+): Promise<{ result: T; waits: string[]; opened: Set<DatabaseProto> }> {
+  const waits: string[] = [];
+  // A root that holds its stores for the life of the process leaves them to its caller to close.
+  const opened = new Set<DatabaseProto>();
+  const exec = DatabaseSync.prototype.exec;
+  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseProto, sql: string) {
+    if (sql.startsWith('PRAGMA busy_timeout =')) waits.push(sql);
+    opened.add(this);
+    exec.call(this, sql);
+  });
+  try {
+    return { result: await fn(), waits, opened };
+  } finally {
+    spy.mockRestore();
   }
 }
 

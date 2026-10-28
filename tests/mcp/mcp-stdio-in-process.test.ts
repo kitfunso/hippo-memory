@@ -5,8 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'v
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import {
+  callMatching,
+  captureWrites,
+  fire,
+  recordListeners,
+  stubExit,
+  type Listener,
+} from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { recordBusyWaitsAsync } from '../_helpers/count-statements.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -50,6 +59,14 @@ function replies(): Reply[] {
   return written.map((line): Reply => JSON.parse(line));
 }
 
+/** Settles once the loop has written the reply to `id`: every stdout write here is one JSON reply line. */
+function replyTo(id: number): Promise<unknown[]> {
+  // SAFETY: every stdout write in this loop is one JSON reply line.
+  return callMatching(vi.mocked(process.stdout.write), (chunk) => (JSON.parse(String(chunk)) as Reply).id === id, {
+    what: `the reply to ${id}`,
+  });
+}
+
 describe('startStdioLoop, in process', () => {
   it('answers bad frames, lists tools, saves a remembered row in a new global store, and exits 0 once stdin ends', async () => {
     startStdioLoop(cliStdioHost());
@@ -66,7 +83,7 @@ describe('startStdioLoop, in process', () => {
         params: { name: 'hippo_remember', arguments: { text: 'the staging queue drains at midnight' } },
       }),
     );
-    await vi.waitFor(() => expect(replies().map((r) => r.id)).toContain(3), { timeout: 15_000 });
+    await replyTo(3);
 
     const byId = new Map(replies().map((r) => [r.id, r]));
     expect(byId.get(null)).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
@@ -86,7 +103,7 @@ describe('startStdioLoop, in process', () => {
     }
 
     fire(stdin, 'end');
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0)' });
   });
 
   it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
@@ -99,15 +116,40 @@ describe('startStdioLoop, in process', () => {
     const ids = (): Array<Reply['id']> => replies().map((r) => r.id);
 
     dribble(`${list(1)}\n`, 3);
-    await vi.waitFor(() => expect(ids()).toEqual([1]), { timeout: 15_000 });
+    await replyTo(1);
+    expect(ids()).toEqual([1]);
 
     const body = list(2);
     dribble(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 4);
-    await vi.waitFor(() => expect(ids()).toContain(2), { timeout: 15_000 });
+    await replyTo(2);
 
     // Two frames split mid-way across one chunk boundary each still come out in order.
     dribble(`${list(3)}\n${list(4)}\n`, 17);
-    await vi.waitFor(() => expect(ids()).toContain(4), { timeout: 15_000 });
+    await replyTo(4);
     expect(ids().filter((id) => id === 3 || id === 4)).toEqual([3, 4]);
+  });
+});
+
+describe('the MCP server run as the main module', () => {
+  it('opens the store with the lock wait HIPPO_BUSY_WAIT_MS names', async () => {
+    vi.stubEnv('HIPPO_MCP_STDIO', '1');
+    vi.stubEnv('HIPPO_BUSY_WAIT_MS', '300');
+    vi.resetModules();
+    // Never settles: the main block awaits the loop for the life of the process.
+    void import('../../src/surface/mcp/server.js');
+    await waitFor(() => stdin.has('data'), { what: 'the stdio loop on stdin' });
+    const call = { name: 'hippo_remember', arguments: { text: 'the knob reaches the stdio root' } };
+    const { waits, opened } = await recordBusyWaitsAsync(async () => {
+      feed(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: call }));
+      await replyTo(9);
+    });
+    expect(replies().find((r) => r.id === 9)?.error).toBeUndefined();
+    expect(waits.length).toBeGreaterThan(0);
+    expect(new Set(waits)).toEqual(new Set(['PRAGMA busy_timeout = 300']));
+
+    fire(stdin, 'end');
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0)' });
+    // Its stores live as long as the process, which the stubbed exit leaves running.
+    for (const db of opened) if (db.isOpen) db.close();
   });
 });

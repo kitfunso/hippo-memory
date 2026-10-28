@@ -184,7 +184,6 @@ describe('card routes', () => {
   let showPJson: string;
   let showCJson: string;
 
-  // Seeds a real store and runs four CLI verbs in process, and a runner's disk sets how long that takes.
   beforeAll(async () => {
     home = makeRoot('w2c-routes', { init: false });
     cwd = join(home, 'cwd');
@@ -231,7 +230,7 @@ describe('card routes', () => {
 
     server = await startFor(hippoRoot, tenant);
     port = server.port;
-  }, 30_000);
+  });
 
   afterAll(async () => {
     await server.stop();

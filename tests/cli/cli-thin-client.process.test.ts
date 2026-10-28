@@ -2,17 +2,17 @@ import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import { mintAdminKey } from '../_helpers/admin-server.js';
 import { rmSync, existsSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Readable } from 'node:stream';
-import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { detectServer, type ServerInfo } from '../../src/surface/server/server-detect.js';
+import { detectServer } from '../../src/surface/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
-import { waitFor } from '../_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { startNode } from '../_helpers/started-child.js';
+import { STORE_RUN_MS, STORE_RUN_REASON } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,7 +34,6 @@ function makeWorkspace(): string {
 }
 
 interface SpawnedServer {
-  child: ChildProcessByStdio<null, Readable, Readable>;
   port: number;
   url: string;
   stop: () => Promise<void>;
@@ -42,61 +41,28 @@ interface SpawnedServer {
 
 // Port 0 lets the OS pick, so there is no probe-then-bind window for another process to take the port.
 async function startServer(workspace: string): Promise<SpawnedServer> {
-  const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0'], {
+  const child = startNode([CLI_PATH, 'serve', '--port', '0'], {
     cwd: workspace,
     env: { ...process.env, HIPPO_PORT: '0' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
+    input: '',
   });
-  let stdoutBuf = '';
-  let stderrBuf = '';
-  child.stdout.on('data', (chunk: Buffer) => {
-    stdoutBuf += chunk.toString('utf8');
-  });
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderrBuf += chunk.toString('utf8');
-  });
-
-  // detectServer is the CLI's own reader: it skips the empty claim serve() writes first and answers only once /health
-  // reports the pidfile's started_at.
+  await child.line(/listening on (\S+)/, 'hippo serve listening');
+  // detectServer is the CLI's own reader: it answers only once /health reports the pidfile's started_at. serve prints
+  // its line after the pidfile is written, so one read must answer.
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
-  const ready: ServerInfo[] = [];
-  await waitFor(
-    async () => {
-      if (child.exitCode !== null) {
-        throw new Error(`hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`);
-      }
-      const info = await detectServer(join(workspace, '.hippo'));
-      if (info !== null) ready.push(info);
-      return ready.length > 0;
-    },
-    { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' },
-  ).catch((err: Error) => {
-    child.kill('SIGKILL');
-    throw new Error(`${err.message}. stdout=${stdoutBuf} stderr=${stderrBuf}`);
-  });
+  const info = await detectServer(join(workspace, '.hippo'));
+  if (info === null) {
+    throw new Error(`hippo serve is listening but detectServer found no server: ${child.output().stderr}`);
+  }
 
   const stop = async (): Promise<void> => {
-    if (child.exitCode !== null) return;
-    child.kill('SIGTERM');
-    // Windows doesn't actually deliver SIGTERM; fall back to SIGKILL after a beat.
-    await waitFor(() => child.exitCode !== null, { timeoutMs: 3_000, intervalMs: 50 }).catch(() => undefined);
-    if (child.exitCode === null) child.kill('SIGKILL');
-    // Wait for the pidfile to be cleared OR for the process to be gone, then
-    // best-effort wipe so the next spawn starts clean.
-    await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(() => undefined);
-    if (existsSync(pidfilePath)) {
-      try {
-        rmSync(pidfilePath);
-      } catch {
-        /* ignore */
-      }
-    }
+    // SIGTERM runs serve's shutdown on POSIX; Windows has no SIGTERM, so stop() then kills the tree.
+    await child.stop({ graceful: true });
+    // A hard kill leaves the pidfile, so the next spawn starts clean.
+    rmSync(pidfilePath, { force: true });
   };
 
-  const [info] = ready;
-  if (info === undefined) throw new Error('server ready without pidfile info');
-  return { child, port: info.port, url: info.url, stop };
+  return { port: info.port, url: info.url, stop };
 }
 
 interface CliResult {
@@ -133,24 +99,13 @@ function runCli(workspace: string, ...cliArgs: string[]): CliResult {
  * requests. execFileSync (used by runCli) freezes this process's event loop
  * for the whole child run, which starves any in-process server.
  */
-function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult> {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
-      cwd: workspace,
-      env: { ...process.env, ...ROUTED_CLI_ENV },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString('utf8');
-    });
-    child.stderr.on('data', (c: Buffer) => {
-      stderr += c.toString('utf8');
-    });
-    child.on('close', () => resolve({ stdout, stderr }));
-  });
+async function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult> {
+  const env = { ...process.env, ...ROUTED_CLI_ENV };
+  const { stdout, stderr } = await startNode([CLI_PATH, ...cliArgs], { cwd: workspace, env, input: '' }).exited(
+    STORE_RUN_MS,
+    STORE_RUN_REASON,
+  );
+  return { stdout, stderr };
 }
 
 function getActorForContent(workspace: string, contentNeedle: string): string | null {
@@ -255,7 +210,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 53_000);
+  });
 
   // Starts a server process and a CLI process for each path.
   it('remember --error stores the same tags and half-life whether it routes or takes the direct path', async () => {
@@ -293,7 +248,7 @@ describe('cli thin-client mode', () => {
       rmSync(routedWorkspace, { recursive: true, force: true });
       rmSync(directWorkspace, { recursive: true, force: true });
     }
-  }, 37_000);
+  });
 
   it('self-heals on a stale pidfile', async () => {
     const workspace = makeWorkspace();
@@ -682,7 +637,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 38_000);
+  });
 
   // Starts a server process and a CLI process for remember and for forget.
   it('a routed forget on the local key of a row with no writer fails with the 403 text and the HIPPO_API_KEY hint', async () => {
@@ -713,7 +668,7 @@ describe('cli thin-client mode', () => {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
-  }, 38_000);
+  });
 
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();

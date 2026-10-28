@@ -1,13 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
-import { once } from 'node:events';
-import { createInterface } from 'node:readline';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseFrame } from '../../src/surface/mcp/framing.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { startNode, type StartedChild } from '../_helpers/started-child.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -65,7 +63,7 @@ describe('parseFrame', () => {
 describe('hippo mcp stdio', () => {
   let tmpHome: string;
   let tmpHippo: string;
-  let proc: ChildProcessWithoutNullStreams | null = null;
+  let proc: StartedChild | null = null;
 
   beforeEach(() => {
     tmpHome = makeRoot('mcp-test', { init: false });
@@ -77,11 +75,10 @@ describe('hippo mcp stdio', () => {
   });
 
   afterEach(async () => {
-    if (proc && proc.exitCode === null && proc.signalCode === null) {
-      // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the hook timeout.
-      const exited = once(proc, 'exit');
-      proc.stdin.end();
-      await exited;
+    if (proc?.running()) {
+      // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the exit deadline.
+      await proc.endInput();
+      await proc.exited();
     }
   });
 
@@ -90,20 +87,10 @@ describe('hippo mcp stdio', () => {
     if (!fs.existsSync(serverPath)) {
       throw new Error(`Build first: ${serverPath} missing`);
     }
-    proc = spawn(process.execPath, [serverPath], {
-      cwd: tmpHome,
-      env: { ...process.env, HIPPO_HOME: tmpHippo },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    // A reply that never comes (the issue #13 hang) fails at the test timeout.
-    const lines = createInterface({ input: proc.stdout })[Symbol.asyncIterator]();
-    const nextReply = async (): Promise<string> => {
-      for (;;) {
-        const { value, done } = await lines.next();
-        if (done) throw new Error('stdout closed before a reply');
-        if (value.trim()) return value.trim();
-      }
-    };
+    const child = startNode([serverPath], { cwd: tmpHome, env: { ...process.env, HIPPO_HOME: tmpHippo } });
+    proc = child;
+    // A reply that never comes (the issue #13 hang) fails at the event deadline.
+    const nextReply = async (): Promise<string> => (await child.line(/^\s*(\S.*?)\s*$/, 'the next reply'))[1]!;
 
     const initMsg = JSON.stringify({
       jsonrpc: '2.0',
@@ -115,7 +102,7 @@ describe('hippo mcp stdio', () => {
         clientInfo: { name: 'test', version: '1.0' },
       },
     });
-    proc.stdin.write(initMsg + '\n');
+    child.send(initMsg + '\n');
     // Critically: do NOT close stdin. This is what mcp2cli does and what
     // issue #13 says hangs forever.
 
@@ -132,7 +119,7 @@ describe('hippo mcp stdio', () => {
       id: 2,
       method: 'tools/list',
     });
-    proc.stdin.write(listMsg + '\n');
+    child.send(listMsg + '\n');
     const listLine = await nextReply();
     const listResp = JSON.parse(listLine);
     expect(listResp.id).toBe(2);

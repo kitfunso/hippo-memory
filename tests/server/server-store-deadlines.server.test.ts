@@ -21,6 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { waitFor } from '../_helpers/wait-for.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
@@ -181,8 +182,13 @@ const insert = db.prepare("INSERT INTO audit_log (ts, tenant_id, actor, op, targ
 for (let i = 0; i < 500; i++) insert.run();
 parentPort.postMessage('in-transaction');
 if (workerData.during === 'statement') {
-  // Runs for seconds; were the thread to live past it, the lines below would commit.
-  db.prepare('WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 40000000) SELECT count(*) FROM c').get();
+  // Each row calls into JS, where terminate() lands mid-statement; the cap only bounds a kill that never comes.
+  const calls = new Int32Array(workerData.calls);
+  db.function('next_row', () => {
+    Atomics.add(calls, 0, 1);
+    return 1;
+  });
+  db.prepare('WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + next_row() FROM c WHERE x < 2000000000) SELECT count(*) FROM c').get();
   Atomics.store(new Int32Array(workerData.flag), 0, 1);
   db.exec('COMMIT');
   parentPort.postMessage('committed');
@@ -192,19 +198,22 @@ if (workerData.during === 'statement') {
 `;
 
 describe('a writer thread killed inside an open transaction on a WAL database', () => {
-  // A worker thread starts, writes until it is killed, and the file is reopened and checked; CI runners take tens of seconds.
+  // A worker thread starts, writes until it is killed, and the file is reopened and checked.
   it.each(['between statements', 'statement'])(
     'leaves the file consistent with none of its rows, and the next write lands (killed during: %s)',
     async (during) => {
       const root = newRoot();
       const file = getHippoDbPath(root);
       const flag = new SharedArrayBuffer(4);
+      const calls = new SharedArrayBuffer(4);
       const messages: string[] = [];
       const worker = new Worker(KILLED_WRITER, {
         eval: true,
         execArgv: ['--no-warnings'],
-        workerData: { file, during, flag },
+        workerData: { file, during, flag, calls },
       });
+      const errors: Error[] = [];
+      worker.on('error', (err: Error) => errors.push(err));
       const exited = new Promise<void>((resolve) => worker.once('exit', () => resolve()));
       await new Promise<void>((resolve) =>
         worker.on('message', (message: string) => {
@@ -212,6 +221,9 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
           resolve();
         }),
       );
+      // A statement that has called back a thousand times is running, not failed, when the kill lands.
+      const running = (): boolean => Atomics.load(new Int32Array(calls), 0) > 1_000;
+      if (during === 'statement') await waitFor(running, { what: 'the statement running', intervalMs: 1 });
 
       void worker.terminate();
       await exited;
@@ -221,14 +233,13 @@ describe('a writer thread killed inside an open transaction on a WAL database', 
       next.exec('PRAGMA busy_timeout = 0');
       expect(next.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
       expect(next.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
-      expect([messages, new Int32Array(flag)[0]]).toEqual([['in-transaction'], 0]);
+      expect([messages, new Int32Array(flag)[0], errors]).toEqual([['in-transaction'], 0, []]);
       expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'uncommitted'").get()).toEqual({ n: 0 });
       next.exec(
         "INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('t', 'default', 'kill-proof', 'after', NULL, '{}')",
       );
       expect(next.prepare("SELECT count(*) AS n FROM audit_log WHERE op = 'after'").get()).toEqual({ n: 1 });
     },
-    120_000,
   );
 });
 

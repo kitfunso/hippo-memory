@@ -1,4 +1,4 @@
-// Each dashboard read hands JavaScript the same rows on a tenant five times larger: counts come from SQL aggregates, a
+// Each dashboard read hands JavaScript the same rows on a tenant twice as large: counts come from SQL aggregates, a
 // page from one sorted LIMIT, the scatter from a fixed grid past its point cap.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -14,7 +14,8 @@ const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as co
 const BASE_ROWS = 100;
 // 4,100 alpha rows, past the scatter's 4,000 point cap, so both sizes draw the grid.
 const FIRST_COPIES = 41;
-const FIVE_TIMES = FIRST_COPIES * 5;
+// Twice keeps the case under 10 s on CI (11.0 s at five times); a read that grows with the tenant still doubles.
+const TWICE = FIRST_COPIES * 2;
 
 const QUERY: MemoryQuery = {
   offset: 0,
@@ -95,17 +96,17 @@ beforeAll(() => {
     { memory_a_id: 'mem_b003', memory_b_id: 'mem_beta1', reason: 'across projects', score: 0.8 },
   ]);
   embed(store.hippoRoot, ['mem_b001', 'mem_b004', 'mem_beta1']);
-}, 120_000);
+});
 
 afterAll(() => {
   store.cleanup();
 });
 
-describe('dashboard reads at five times the rows', () => {
+describe('dashboard reads at twice the rows', () => {
   it('hand JavaScript the same rows for the overview, scatter, pages and search', async () => {
     growAlphaTo(store.hippoRoot, FIRST_COPIES);
     const before = await rowsReadPerRead();
-    growAlphaTo(store.hippoRoot, FIVE_TIMES);
+    growAlphaTo(store.hippoRoot, TWICE);
     const after = await rowsReadPerRead();
 
     expect(after).toEqual(before);
@@ -116,13 +117,13 @@ describe('dashboard reads at five times the rows', () => {
     try {
       const stamp = await clock.at('default');
       const overview = await buildOverview(reads, stamp);
-      const page = await buildMemoryPage(reads, stamp, 'p:alpha', { ...QUERY, offset: BASE_ROWS * FIVE_TIMES - 10 });
+      const page = await buildMemoryPage(reads, stamp, 'p:alpha', { ...QUERY, offset: BASE_ROWS * TWICE - 10 });
       const search = await buildSearch(reads, stamp, 'needle');
 
-      expect(overview.total).toBe(BASE_ROWS * FIVE_TIMES + 1);
-      expect(page?.total).toBe(BASE_ROWS * FIVE_TIMES);
+      expect(overview.total).toBe(BASE_ROWS * TWICE + 1);
+      expect(page?.total).toBe(BASE_ROWS * TWICE);
       expect(page?.rows).toHaveLength(10);
-      expect(search.hits).toEqual({ 'p:alpha': 34 * FIVE_TIMES });
+      expect(search.hits).toEqual({ 'p:alpha': 34 * TWICE });
     } finally {
       await reads.close();
     }

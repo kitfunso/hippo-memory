@@ -14,6 +14,7 @@ import type {
 import { StoreBusyError } from '../../base/ports/store.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { replyError, type FailureReply } from './failure-reply.js';
+import { defaultBusyWaitMs } from '../open-store.js';
 
 /** What the dashboard routes read; each call is dated by the dashboard's clocks when it is sent. */
 export interface DashboardReader {
@@ -67,6 +68,11 @@ export type ReaderReply =
 export interface ReaderInit {
   readonly hippoRoot: string;
   readonly tenantId: string;
+}
+
+/** What the thread starts with: module state is per thread, so the lock wait a root set goes along. */
+export interface ReaderThreadData extends ReaderInit {
+  readonly busyWaitMs: number;
 }
 
 export interface ReaderClocks {
@@ -126,7 +132,7 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
   const worker = new Worker(THREAD_ENTRY, {
     env: SHARE_ENV,
     execArgv: ['--no-warnings'],
-    workerData: init,
+    workerData: { ...init, busyWaitMs: defaultBusyWaitMs() } satisfies ReaderThreadData,
   });
   // The listener keeps the process alive; the thread alone must not.
   worker.unref();
