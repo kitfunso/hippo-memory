@@ -14,6 +14,8 @@ import {
   type Listener,
 } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { recordBusyWaitsAsync } from '../_helpers/count-statements.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -125,5 +127,29 @@ describe('startStdioLoop, in process', () => {
     dribble(`${list(3)}\n${list(4)}\n`, 17);
     await replyTo(4);
     expect(ids().filter((id) => id === 3 || id === 4)).toEqual([3, 4]);
+  });
+});
+
+describe('the MCP server run as the main module', () => {
+  it('opens the store with the lock wait HIPPO_BUSY_WAIT_MS names', async () => {
+    vi.stubEnv('HIPPO_MCP_STDIO', '1');
+    vi.stubEnv('HIPPO_BUSY_WAIT_MS', '300');
+    vi.resetModules();
+    // Never settles: the main block awaits the loop for the life of the process.
+    void import('../../src/surface/mcp/server.js');
+    await waitFor(() => stdin.has('data'), { what: 'the stdio loop on stdin' });
+    const call = { name: 'hippo_remember', arguments: { text: 'the knob reaches the stdio root' } };
+    const { waits, opened } = await recordBusyWaitsAsync(async () => {
+      feed(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: call }));
+      await replyTo(9);
+    });
+    expect(replies().find((r) => r.id === 9)?.error).toBeUndefined();
+    expect(waits.length).toBeGreaterThan(0);
+    expect(new Set(waits)).toEqual(new Set(['PRAGMA busy_timeout = 300']));
+
+    fire(stdin, 'end');
+    await callMatching(exit, (code) => code === 0, { what: 'process.exit(0)' });
+    // Its stores live as long as the process, which the stubbed exit leaves running.
+    for (const db of opened) if (db.isOpen) db.close();
   });
 });

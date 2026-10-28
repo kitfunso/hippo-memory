@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
-import { recordStatementsAsync } from '../_helpers/count-statements.js';
+import { recordBusyWaitsAsync } from '../_helpers/count-statements.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import type { StartedChild } from '../_helpers/started-child.js';
 import { waitFor } from '../_helpers/wait-for.js';
@@ -287,10 +287,9 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('the worker run takes its lock wait from HIPPO_BUSY_WAIT_MS on every store it opens', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     const workerArgs = ['__session-end-worker', '--log-file', logFile(), '--transcript', transcript];
-    const { statements } = await recordStatementsAsync(() =>
+    const { waits } = await recordBusyWaitsAsync(() =>
       hippo([...workerArgs, '--session-id', VSCODE_SESSION, '--turn'], s.proj, { ...s.env, ...SHORT_BUSY_WAIT }),
     );
-    const waits = statements.filter((sql) => sql.startsWith('PRAGMA busy_timeout ='));
     expect(waits.length).toBeGreaterThan(0);
     expect(new Set(waits)).toEqual(new Set(['PRAGMA busy_timeout = 300']));
     expect(fs.readFileSync(logFile(), 'utf8')).toContain('Captured 1 items');

@@ -2,6 +2,7 @@
 // its life.
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
+import { setDefaultBusyWaitMs } from '../../db/busy.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import { SESSION_OPEN } from '../../db/request-stores.js';
 import type { OpenedDb } from '../../db/connect.js';
@@ -194,6 +195,7 @@ function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with
  * no handle on the store's files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
+  setDefaultBusyWaitMs(init.processBusyWaitMs);
   // A thread is its own composition root: its runtime holds its mirror writes and closes its
   // connection at stop.
   const runtime = new StoreRuntime();

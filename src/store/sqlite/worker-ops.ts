@@ -75,6 +75,8 @@ export interface WorkerInit {
   readonly mode: OpMode;
   /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
+  /** The process's default lock wait, for every other open: a thread's module state starts at 5000. */
+  readonly processBusyWaitMs: number;
   /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it
    * holds. */
   readonly pinned?: boolean;

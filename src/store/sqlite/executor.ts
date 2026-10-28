@@ -5,6 +5,7 @@ import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../base/records/audit-report.js';
 import type { StoreRules } from '../../base/ports/infra.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
+import { defaultBusyWaitMs } from '../../db/busy.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
 import { DeadlineExceededError } from '../../base/errors/http-errors.js';
@@ -424,6 +425,7 @@ class WorkerPool implements SqliteExecutor {
       hippoRoot: this.#hippoRoot,
       mode: lane.mode,
       busyWaitMs: this.#busyWaitMs,
+      processBusyWaitMs: defaultBusyWaitMs(),
       rules: this.#rules,
       ...(shared && { commitFlag: shared }),
       ...(lane.pinned && {

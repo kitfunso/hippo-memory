@@ -1,4 +1,4 @@
-// Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It
+// Entry of the dashboard's reader thread; dashboard-reader.ts starts it, and only tests import it. It
 // owns the snapshot clock and answers each read through the api's dashboard functions.
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
@@ -12,13 +12,7 @@ import { configReader } from '../../host/config-file.js';
 import { defaultDashboardReads, defaultStore, setDefaultBusyWaitMs } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type {
-  ReaderCall,
-  ReaderInit,
-  ReaderReply,
-  ReaderThreadData,
-  ReaderValue,
-} from './dashboard-reader.js';
+import type { ReaderCall, ReaderReply, ReaderThreadData, ReaderValue } from './dashboard-reader.js';
 import { failureReply } from './failure-reply.js';
 import { rootInfra } from '../../infra/ports.js';
 
@@ -42,7 +36,12 @@ function readerStore(
   return { store, view: { reads, clock: stamps } };
 }
 
-function serveReads(port: MessagePort, { hippoRoot, tenantId }: ReaderInit): void {
+/** The thread's root: module state is per thread, so it sets the server's lock wait before any open. */
+export function serveReads(
+  port: MessagePort,
+  { hippoRoot, tenantId, busyWaitMs }: ReaderThreadData,
+): void {
+  setDefaultBusyWaitMs(busyWaitMs);
   const loadConfig = configReader(envRuntimeSettings);
   const infra = rootInfra();
   // Set from each call, so each read is dated and aged by the clocks the server read when the
@@ -129,7 +128,5 @@ function answer(port: MessagePort, reply: ReaderReply): void {
 
 if (parentPort) {
   // SAFETY: dashboard-reader.ts is the only code that starts this file, and it passes a ReaderThreadData.
-  const data = workerData as ReaderThreadData;
-  setDefaultBusyWaitMs(data.busyWaitMs);
-  serveReads(parentPort, data);
+  serveReads(parentPort, workerData as ReaderThreadData);
 }
