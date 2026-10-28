@@ -357,6 +357,12 @@ const READS: readonly Read[] = [
     'deploy-duration',
   ),
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
+  read('consolidation.particleIdsByRecall', (s) => s.consolidation.particleIdsByRecall({ limit: 5 }), 'mem_p_noise'),
+  read(
+    'dagReads.sessionRawKeys',
+    (s) => s.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
+    /contentLength: \d+/,
+  ),
   read(
     'dagReads.summaryWithDescendants',
     (s) =>

@@ -124,6 +124,11 @@ export class Survivors {
     this.held.set(row.id, row);
   }
 
+  /** Whether the run kept `id`. */
+  has(id: string): boolean {
+    return this.held.has(id) || this.strength.has(id);
+  }
+
   /** The survivors among `ids`, in that order. */
   async get(ids: readonly string[]): Promise<MemoryEntry[]> {
     const unchanged = ids.filter((id) => !this.held.has(id) && this.strength.has(id));

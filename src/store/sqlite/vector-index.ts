@@ -27,6 +27,7 @@ import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
+import type { RecallCursor, RecallIdPage } from '../../base/ports/store/consolidation.js';
 import { tenantAnd } from './tenant.js';
 import type {
   VectorBackfillQuery,
@@ -274,6 +275,32 @@ export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleS
     const particles = count > 0 && count <= fullUpTo ? listStoredParticles(db) : null;
     return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
   });
+}
+
+/** Up to `page.limit` ids that have a stored particle, last recalled first, off
+ * idx_memories_last_retrieved so a read stops at the page however many memories there are. */
+export function storedParticleIdsByRecall(
+  db: DatabaseSyncLike,
+  page: { readonly limit: number; readonly after?: RecallCursor },
+): RecallIdPage {
+  const { after } = page;
+  const seek = after ? ' AND last_retrieved <= ? AND (last_retrieved < ? OR id > ?)' : '';
+  const rows = cachedStatement(
+    db,
+    `SELECT id, last_retrieved FROM memories INDEXED BY idx_memories_last_retrieved ` +
+      `WHERE id IN (SELECT memory_id FROM memory_physics)${seek} ` +
+      `ORDER BY last_retrieved DESC, id ASC LIMIT ?`,
+  ).all(
+    ...(after ? [after.lastRetrieved, after.lastRetrieved, after.id] : []),
+    page.limit + 1,
+  ) as Array<{ id: string; last_retrieved: string }>;
+  const kept = rows.slice(0, page.limit);
+  const last = kept.at(-1);
+  return {
+    ids: kept.map((row) => row.id),
+    next:
+      rows.length > page.limit && last ? { lastRetrieved: last.last_retrieved, id: last.id } : null,
+  };
 }
 
 /** The memory id of every stored particle in listStoredParticles's order, so a caller reads only

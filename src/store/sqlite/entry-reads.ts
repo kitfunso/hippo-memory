@@ -24,7 +24,12 @@ import {
 } from './keyset.js';
 import type { EntryIdPage } from '../../base/ports/store/consolidation.js';
 import type { IdPage, IdPageRequest } from '../../base/ports/store/vectors.js';
-import type { SessionRawCount, SessionRawQuery } from '../../base/ports/store/context-reads.js';
+import type {
+  SessionRawCount,
+  SessionRawKey,
+  SessionRawKeys,
+  SessionRawQuery,
+} from '../../base/ports/store/context-reads.js';
 import type { OriginTally } from '../../base/ports/store/project-tags.js';
 import type { EntrySignals, EntryTextKeyPage } from '../../base/ports/store/sharing.js';
 import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
@@ -127,25 +132,63 @@ function sessionRawWhere({
   };
 }
 
+/** The scope rule `passesScopeFilterForRecall` applies, as SQL: an explicit scope matches
+ * exactly, none admits what the default deny lets through and `ownScope`. */
+function sessionScopeAdmit({
+  scope,
+  ownScope,
+}: Pick<SessionRawCount, 'scope' | 'ownScope'>): SqlFragment {
+  return scope !== undefined && scope !== ''
+    ? { sql: 'scope = ?', params: [scope] }
+    : scopeAdmitSql('', ownScope);
+}
+
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without
- * leaking rows the caller could not load. Mirrors `passesScopeFilterForRecall`'s default-deny:
- * explicit scope matches exactly, none admits only `ownScope`. */
+ * leaking rows the caller could not load. */
 export function countSessionRawMemories(
   db: DatabaseSyncLike,
   query: SessionRows<SessionRawCount>,
 ): number {
   if (!query.sessionId) return 0;
   const where = sessionRawWhere(query);
-  const { scope, ownScope } = query;
-  const admit =
-    scope !== undefined && scope !== ''
-      ? { sql: 'scope = ?', params: [scope] }
-      : scopeAdmitSql('', ownScope);
+  const admit = sessionScopeAdmit(query);
   const row = cachedStatement(
     db,
     `SELECT COUNT(*) AS c FROM memories WHERE ${where.sql} AND ${admit.sql}`,
   ).get(...where.params, ...admit.params) as { c?: number } | undefined;
   return Number(row?.c ?? 0);
+}
+
+// SAFETY: the read below selects every key of this row.
+interface SessionRawKeyRow {
+  readonly id: string;
+  readonly created: string;
+  readonly strength: number;
+  readonly dag_parent_id: string | null;
+  readonly chars: number;
+}
+
+/** The newest `limit` rows `countSessionRawMemories` counts, oldest first, without their
+ * content: the scope rule runs before the LIMIT, so rows the caller cannot see take no place. */
+export function listSessionRawKeys(
+  db: DatabaseSyncLike,
+  query: SessionRows<SessionRawKeys>,
+): SessionRawKey[] {
+  if (!query.sessionId) return [];
+  const where = sessionRawWhere(query);
+  const admit = sessionScopeAdmit(query);
+  const rows = cachedStatement(
+    db,
+    `SELECT id, created, strength, dag_parent_id, length(content) AS chars FROM memories ` +
+      `WHERE ${where.sql} AND ${admit.sql} ORDER BY created DESC, id DESC LIMIT ?`,
+  ).all(...where.params, ...admit.params, query.limit > 0 ? query.limit : -1) as SessionRawKeyRow[];
+  return rows.reverse().map((r) => ({
+    id: r.id,
+    created: r.created,
+    strength: Number(r.strength),
+    dagParentId: r.dag_parent_id,
+    contentLength: Number(r.chars),
+  }));
 }
 
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass

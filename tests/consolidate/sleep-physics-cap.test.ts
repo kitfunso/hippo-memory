@@ -18,6 +18,8 @@ import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -118,17 +120,78 @@ describe('sleep physics cap', () => {
 
   it('defaults to 1000 particles', () => {
     const stored = Array.from({ length: 1001 }, (_, i) => `m${String(i).padStart(4, '0')}`);
-    expect(particlesToSimulate(stored, new Map())).toHaveLength(1000);
+    expect(particlesToSimulate(stored, [])).toHaveLength(1000);
   });
 
-  it('keeps load order and every particle under the cap, and breaks recall ties by memory id past it', () => {
+  it('keeps load order and every particle under the cap, and fills past it from the unranked by memory id', () => {
     const stored = ['c', 'a', 'd', 'b'];
-    const at = (id: string, lastRetrieved: string) => [id, { lastRetrieved }] as const;
-    const entries = new Map([at('a', '2026-01-01'), at('b', '2026-01-03'), at('c', '2026-01-01')]);
+    // Most recently recalled first: b, then a and c, which tie.
+    const recalled = ['b', 'a', 'c'];
 
-    expect(particlesToSimulate(stored, entries, 4)).toBe(stored);
-    // b is the latest; a and c tie and a wins on id; d has no survivor row, so it is dropped first.
-    expect(particlesToSimulate(stored, entries, 2)).toEqual(['a', 'b']);
-    expect(particlesToSimulate(stored, entries, 3)).toEqual(['c', 'a', 'b']);
+    expect(particlesToSimulate(stored, recalled, 4)).toBe(stored);
+    expect(particlesToSimulate(stored, recalled, 2)).toEqual(['a', 'b']);
+    expect(particlesToSimulate(stored, recalled, 3)).toEqual(['c', 'a', 'b']);
+    expect(particlesToSimulate(stored, ['b'], 3)).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('sleep physics cap reads', () => {
+  const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
+
+  interface SeededRun {
+    run: SleepRun;
+    root: string;
+  }
+
+  function seededRun(stored: number): SeededRun {
+    const root = makeRoot('physics-cap-reads');
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ physics: { enabled: true } }));
+    const entries: MemoryEntry[] = Array.from({ length: stored }, (_, i) => ({
+      ...createMemory(`fact number ${i} about service ${i * 7919} in region ${i % 13}`, { layer: Layer.Semantic }),
+      lastRetrieved: new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
+    }));
+    writeEntriesTogether(root, entries);
+    const db = openHippoDb(root);
+    try {
+      savePhysicsState(
+        db,
+        entries.map((e, i) => particle(e.id, i)),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+    return { run: sleepRunOver(root, entries), root };
+  }
+
+  it('reads the rows of the particles it moves and no other, however many are stored', async () => {
+    const read = async (stored: number) => {
+      const { run } = seededRun(stored);
+      const log = await recordStatementsAsync(() => physicsPass(run, CAP));
+      expect(run.result.physicsSimulated).toBe(CAP);
+      return log.reads.filter(({ sql }) => sql.startsWith(FULL_ROW)).reduce((sum, r) => sum + r.rows, 0);
+    };
+    const few = await read(40);
+    const many = await read(120);
+    expect(few).toBe(CAP);
+    expect(many).toBe(few);
+  });
+
+  it('pages the recall order off idx_memories_last_retrieved', async () => {
+    const { run, root } = seededRun(30);
+    const { statements } = await recordStatementsAsync(() => run.store.consolidation.particleIdsByRecall({ limit: 5 }));
+    const sql = statements.find((s) => s.includes('memory_physics'));
+    if (sql === undefined) throw new Error('particleIdsByRecall prepared no statement over memory_physics');
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(6) as Array<{ detail: string }>)
+        .map((r) => r.detail)
+        .join(' | ');
+      expect(plan).toContain('USING INDEX idx_memories_last_retrieved');
+      expect(plan).not.toContain('TEMP B-TREE FOR ORDER BY');
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

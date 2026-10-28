@@ -118,6 +118,21 @@ export interface SessionRawCount extends SessionRawQuery {
   readonly ownScope?: string;
 }
 
+/** What choosing a session's window needs of a raw row, read without its content. */
+export interface SessionRawKey {
+  readonly id: string;
+  readonly created: string;
+  readonly strength: number;
+  readonly dagParentId: string | null;
+  /** Characters of the row's content, as SQLite counts them (never more than its UTF-16 length). */
+  readonly contentLength: number;
+}
+
+export interface SessionRawKeys extends SessionRawCount {
+  /** The newest this many rows; zero or less reads them all. */
+  readonly limit: number;
+}
+
 export type { DescendantAdmission };
 
 /** The two fields `descendantAdmits` judges a row by. */
@@ -158,6 +173,9 @@ export interface DagReads {
    * `passesScopeFilterForRecall` applies, so the count never tells of a row the caller could not
    * read. */
   sessionRawCount(query: SessionRawCount): Promise<number>;
+  /** The rows `sessionRawCount` counts, newest `limit` of them oldest first (created then id),
+   * as keys without content. */
+  sessionRawKeys(query: SessionRawKeys): Promise<SessionRawKey[]>;
   /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write
    * of this process lands between levels; null if no such row. Each level lists the children of
    * the one above, parent by parent, children by created then id ascending; a row is listed
@@ -172,5 +190,6 @@ export interface DagReads {
 /** What each DagReads method does to the store; every adapter honours it. */
 export const DAG_READS_EFFECTS = {
   sessionRawCount: 'read',
+  sessionRawKeys: 'read',
   summaryWithDescendants: 'read',
 } as const satisfies MethodEffects<DagReads>;

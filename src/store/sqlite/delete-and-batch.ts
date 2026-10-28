@@ -459,11 +459,13 @@ function moveDormantAndDelete(
   for (const move of movable) {
     insertDormantRow(db, move);
   }
-  const deleteRow = cachedStatement(db, 'DELETE FROM memories WHERE id = ?');
-  for (const id of [...deletableIds, ...movable.map((m) => m.entry.id)]) {
-    deleteRow.run(id);
-    out.removedIds.push(id);
+  const doomed = [...deletableIds, ...movable.map((m) => m.entry.id)];
+  for (const chunk of chunked(doomed)) {
+    cachedStatement(db, 'DELETE FROM memories WHERE id IN (SELECT value FROM json_each(?))').run(
+      JSON.stringify(chunk),
+    );
   }
+  for (const id of doomed) out.removedIds.push(id);
 }
 
 /** DAG parents to mark dirty inside the batch transaction, with the tenant each belongs to. */

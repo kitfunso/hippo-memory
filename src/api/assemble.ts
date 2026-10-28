@@ -1,18 +1,13 @@
 // Session context assembly under a token budget.
 
 import { estimateTokens } from '../base/util/token-text.js';
-import { READ_PAGE_ROWS, readAll } from '../base/util/pages.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
-import {
-  passesScopeFilterForRecall,
-  assertScopeRequestAllowed,
-  personalScopeOf,
-} from '../base/scope/recall-scope.js';
+import { assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context, ContextWith } from './types.js';
-import type { EntryCursor } from '../base/ports/store/types.js';
+import type { SessionRawKey } from '../base/ports/store/context-reads.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -29,14 +24,15 @@ export interface AssembleOptions {
   /** Exact scope match when set, so an authorised caller can assemble a private session.
    * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
   scope?: string;
-  /** Hard row cap on the SELECT that loads session raws (default 5000); `truncated` is set when
-   * it is hit. */
+  /** Hard cap on the session raws the window is chosen from (default 5000); `truncated` is set
+   * when it is hit. */
   rowCap?: number;
   cost?: AssembleCost;
   project?: CallerProject;
 }
 
 // Absent, the budget pays for content alone. `fixed` gets the largest count the header can print.
+// `item` must not shrink as `content` grows: the window is chosen before the content is read.
 export interface AssembleCost {
   item: (it: AssembledContextItem) => number;
   fixed: (widest: number) => number;
@@ -89,7 +85,7 @@ export async function assemble(
 
   if (!sessionId) return emptyResult(sessionId, 0, false);
 
-  const { scoped, totalRaw, truncated } = await loadScopedRaws(ctx, sessionId, opts, own);
+  const { scoped, totalRaw, truncated } = await loadScopedKeys(ctx, sessionId, opts, own);
   if (scoped.length === 0) return emptyResult(sessionId, totalRaw, truncated);
 
   // Split newest N into fresh tail; rest is older.
@@ -101,9 +97,9 @@ export async function assemble(
   const { olderItems, summarized } =
     summarizeOlder && olderRows.length > 0
       ? await substituteSummaries(ctx, { olderRows, scope: opts.scope, own, project: opts.project })
-      : { olderItems: olderRows.map(rawItem), summarized: 0 };
+      : { olderItems: olderRows.map(keyItem), summarized: 0 };
 
-  const tailItems = tailRows.map(freshTailItem);
+  const tailItems = tailRows.map((k) => ({ ...keyItem(k), isFreshTail: true }));
 
   // Byte compare is chronological for the fixed-form UTC ISO timestamps (invariant documented in
   // src/base/memory/entry.ts above MemoryEntry).
@@ -112,76 +108,92 @@ export async function assemble(
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
   const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
-  const { items, tokens, evicted } = evictToBudget([...olderItems, ...tailItems], itemCost, room);
+  const { items, tokens, evicted } = await fitToBudget(
+    ctx,
+    [...olderItems, ...tailItems],
+    itemCost,
+    room,
+  );
 
   return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+}
+
+// Priced at a content length that cannot exceed the real one, so the first pass drops only rows the
+// real costs drop too; the rows left are then read whole and the same eviction runs on them.
+async function fitToBudget(
+  ctx: Context,
+  start: AssembledContextItem[],
+  itemCost: (it: AssembledContextItem) => number,
+  room: number,
+): Promise<BudgetFit> {
+  const first = evictToBudget(start, itemCost, room);
+  const second = evictToBudget(await withContent(ctx, first.items), itemCost, room);
+  return { ...second, evicted: first.evicted + second.evicted };
+}
+
+/** A key as an item whose content is as long as the row's, and nothing else. */
+function keyItem(k: SessionRawKey): AssembledContextItem {
+  return {
+    id: k.id,
+    content: 'x'.repeat(k.contentLength),
+    createdAt: k.created,
+    strength: k.strength,
+  };
+}
+
+// A raw row deleted since the keys were read is left out.
+async function withContent(
+  ctx: Context,
+  items: AssembledContextItem[],
+): Promise<AssembledContextItem[]> {
+  const rawIds = items.filter((it) => !it.isSummary).map((it) => it.id);
+  const rows = new Map(
+    (rawIds.length > 0 ? await ctx.store.entriesByIds(rawIds, ctx.tenantId) : []).map((r) => [
+      r.id,
+      r,
+    ]),
+  );
+  return items.flatMap((it) => {
+    if (it.isSummary) return [it];
+    const row = rows.get(it.id);
+    if (!row) return [];
+    return [it.isFreshTail ? freshTailItem(row) : rawItem(row)];
+  });
 }
 
 function emptyResult(sessionId: string, totalRaw: number, truncated: boolean): AssembleResult {
   return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
 }
 
-/** The session's raw rows the caller may see, newest `rowCap` at most, with the uncapped count
- * of them. */
-interface ScopedRaws {
-  scoped: MemoryEntry[];
+/** The keys of the session's raw rows the caller may see, newest `rowCap` at most, with the
+ * uncapped count of them. */
+interface ScopedKeys {
+  scoped: SessionRawKey[];
   totalRaw: number;
   truncated: boolean;
 }
 
-async function loadScopedRaws(
+async function loadScopedKeys(
   ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOptions,
   own: string | undefined,
-): Promise<ScopedRaws> {
+): Promise<ScopedKeys> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
-  const origins = opts.project ? projectNames(opts.project) : undefined;
   const dag = ctx.store.dagReads;
-  const rows = await sessionRawRows(ctx, sessionId, rowCap, origins);
-  const truncated = rows.length === rowCap;
-  // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
-  const scoped = rows.filter((r) => passesScopeFilterForRecall(r.scope ?? null, opts.scope, own));
-  let totalRaw: number;
-  if (truncated) {
-    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope caller cannot infer
-    // private rows by comparing totalRaw to items.length.
-    totalRaw = await dag.sessionRawCount({
-      tenantId: ctx.tenantId,
-      sessionId,
-      scope: opts.scope,
-      ownScope: own,
-      origins,
-    });
-  } else {
-    totalRaw = scoped.length;
-  }
-  return { scoped, totalRaw, truncated };
-}
-
-/** The session's live raw rows oldest first, only the newest `cap` when it is positive; none for
- * an empty id. */
-async function sessionRawRows(
-  ctx: Context,
-  sessionId: string,
-  cap: number,
-  origins: readonly string[] | undefined,
-): Promise<MemoryEntry[]> {
-  if (!sessionId) return [];
-  const raws = {
+  const query = {
     tenantId: ctx.tenantId,
-    kinds: ['raw'],
-    live: true,
     sessionId,
-    origins: origins === undefined ? undefined : ['', ...origins],
-  } as const;
-  const { store } = ctx;
-  if (cap > 0) {
-    return (await store.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
-  }
-  return readAll((after?: EntryCursor) =>
-    store.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
-  );
+    scope: opts.scope,
+    ownScope: own,
+    origins: opts.project ? projectNames(opts.project) : undefined,
+  };
+  const scoped = await dag.sessionRawKeys({ ...query, limit: rowCap });
+  const truncated = rowCap > 0 && scoped.length === rowCap;
+  // The scope rule runs in SQL, so a no-scope caller cannot infer private rows by comparing
+  // totalRaw to items.length.
+  const totalRaw = truncated ? await dag.sessionRawCount(query) : scoped.length;
+  return { scoped, totalRaw, truncated };
 }
 
 function rawItem(r: MemoryEntry): AssembledContextItem {
@@ -211,7 +223,7 @@ interface SubstitutedOlder {
 }
 
 interface SubstituteSummariesOptions {
-  readonly olderRows: MemoryEntry[];
+  readonly olderRows: SessionRawKey[];
   readonly scope: string | undefined;
   readonly own: string | undefined;
   readonly project: CallerProject | undefined;
@@ -245,13 +257,13 @@ async function substituteSummaries(
   }
   for (const r of olderRows) {
     if (claimedRawIds.has(r.id)) continue;
-    olderItems.push(rawItem(r));
+    olderItems.push(keyItem(r));
   }
   return { olderItems, summarized };
 }
 
-function groupByParent(rows: MemoryEntry[]): Map<string, MemoryEntry[]> {
-  const byParent = new Map<string, MemoryEntry[]>();
+function groupByParent(rows: SessionRawKey[]): Map<string, SessionRawKey[]> {
+  const byParent = new Map<string, SessionRawKey[]>();
   for (const r of rows) {
     if (!r.dagParentId) continue;
     const list = byParent.get(r.dagParentId) ?? [];

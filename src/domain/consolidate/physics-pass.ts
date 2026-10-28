@@ -1,6 +1,7 @@
 import { refreshParticleProperties } from '../../base/rank/particle-refresh.js';
 import { simulate, type ForceContext } from '../../base/rank/physics.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { RecallCursor } from '../../base/ports/store/consolidation.js';
 import { recordPhaseFailure, type SleepRun } from './run.js';
 
 // Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their
@@ -28,7 +29,7 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   const storedIds = await consolidation.particleIds();
   if (storedIds.length === 0) return;
 
-  const recalled = await recallTimes(run, storedIds.length > maxParticles);
+  const recalled = await recalledSurvivors(run, storedIds, maxParticles);
   const ids = particlesToSimulate(storedIds, recalled, maxParticles);
   const stored = await run.store.vectors.stored('particles', ids);
   const particles = ids.flatMap((id) => stored.get(id) ?? []);
@@ -53,33 +54,37 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   });
 }
 
-/** Each survivor's last recall, read only when the cap applies. */
-async function recallTimes(
+/** The survivors among the stored particles, most recently recalled first, read page by page off
+ * the store's recall order until `max` are found; only when the cap applies. */
+async function recalledSurvivors(
   run: SleepRun,
-  capped: boolean,
-): Promise<Map<string, Pick<MemoryEntry, 'lastRetrieved'>>> {
-  const times = new Map<string, Pick<MemoryEntry, 'lastRetrieved'>>();
-  if (!capped) return times;
-  for await (const e of run.survivors.rows()) times.set(e.id, { lastRetrieved: e.lastRetrieved });
-  return times;
+  stored: readonly string[],
+  max: number,
+): Promise<string[]> {
+  if (stored.length <= max) return [];
+  const found: string[] = [];
+  let after: RecallCursor | undefined;
+  while (found.length < max) {
+    const page = await run.store.consolidation.particleIdsByRecall({ limit: max, after });
+    for (const id of page.ids) if (run.survivors.has(id) && found.length < max) found.push(id);
+    if (!page.next) break;
+    after = page.next;
+  }
+  return found;
 }
 
 /**
- * Every stored particle id in load order up to the cap; past it, the most recently recalled
- * survivors (memory id breaks ties), then particles with no survivor. */
+ * Every stored particle id in load order up to the cap; past it, the `recalled` survivors (most
+ * recently recalled first), then the other particles by memory id. */
 export function particlesToSimulate(
   stored: readonly string[],
-  entries: ReadonlyMap<string, Pick<MemoryEntry, 'lastRetrieved'>>,
+  recalled: readonly string[],
   max: number = SLEEP_PHYSICS_MAX_PARTICLES,
 ): readonly string[] {
   if (stored.length <= max) return stored;
-  const recalled = (id: string): string => entries.get(id)?.lastRetrieved ?? '';
-  const ranked = [...stored].sort((a, b) => {
-    const [ra, rb] = [recalled(a), recalled(b)];
-    if (ra !== rb) return ra < rb ? 1 : -1;
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
-  const kept = new Set(ranked.slice(0, max));
+  const kept = new Set(recalled.slice(0, max));
+  const rest = stored.filter((id) => !kept.has(id)).sort();
+  for (const id of rest.slice(0, max - kept.size)) kept.add(id);
   // Load order, not rank order: the force sums run in this order, so a capped run matches an
   // uncapped one over the same set.
   return stored.filter((id) => kept.has(id));

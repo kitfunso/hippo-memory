@@ -16,7 +16,8 @@ const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
   StatementSync: { prototype: ReturnType<DatabaseSyncLike['prepare']> & { readonly sourceSQL: string } };
 };
 
-const ROW_OP = /INSERT INTO memories\(|^DELETE FROM memories WHERE id = \?$/;
+const ROW_OP = /INSERT INTO memories\(/;
+const ROW_DELETE = /^DELETE FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)$/;
 const roots: string[] = [];
 
 afterEach(() => {
@@ -122,7 +123,14 @@ describe('commitInChunks', () => {
       this: typeof StatementSync.prototype,
       ...params: unknown[]
     ) {
-      if (ROW_OP.test(this.sourceSQL.trim())) now += 10;
+      const sql = this.sourceSQL.trim();
+      if (ROW_OP.test(sql)) now += 10;
+      if (ROW_DELETE.test(sql)) {
+        // SAFETY: the delete's one parameter is the JSON array of ids the store binds.
+        const ids = JSON.parse(String(params[0])) as string[];
+        // One statement deletes the chunk, so the clock still moves once per row.
+        now += 10 * ids.length;
+      }
       return run.apply(this, params);
     });
 
