@@ -28,12 +28,12 @@ export const SECRET_TAGS: ReadonlySet<string> = new Set([
 const OPEN = '(?<![A-Za-z0-9])';
 const CLOSE = '(?![A-Za-z0-9])';
 const bounded = (source: string, close = CLOSE): RegExp => new RegExp(`${OPEN}${source}${close}`);
-/** A pattern; `keyShaped` ones have an open body that words joined by `-` or `_` also fill, so a match counts
- * only when its `body` group holds a digit or a capital letter (keyShapedBody). */
+/** A pattern; `openBody` ones have an open body that words joined by `-` or `_` also fill, so a match counts
+ * only when its `body` group holds a digit or a capital letter (bodyLooksRandom). */
 interface SecretPattern {
   readonly name: string;
   readonly re: RegExp;
-  readonly keyShaped?: true;
+  readonly openBody?: true;
 }
 
 const SECRET_PATTERNS: readonly SecretPattern[] = [
@@ -44,7 +44,7 @@ const SECRET_PATTERNS: readonly SecretPattern[] = [
   {
     name: 'slack-token',
     re: bounded(String.raw`xox[baprs]-(?<body>[A-Za-z0-9-]{10,})`, ''),
-    keyShaped: true,
+    openBody: true,
   },
   { name: 'stripe-key', re: bounded(String.raw`[sr]k_(?:live|test)_[A-Za-z0-9]{16,}`) },
   { name: 'google-api-key', re: bounded(String.raw`AIza[0-9A-Za-z_-]{35}`, `(?:${CLOSE}|(?<=-))`) },
@@ -53,11 +53,11 @@ const SECRET_PATTERNS: readonly SecretPattern[] = [
   { name: 'hippo-api-key', re: bounded(String.raw`hk_[a-z2-7]{24}\.[a-z2-7]{32}`) },
   { name: 'npm-token', re: bounded(String.raw`npm_[A-Za-z0-9]{36}`) },
   { name: 'huggingface-token', re: bounded(String.raw`hf_[A-Za-z]{34}`) },
-  { name: 'gitlab-token', re: bounded(String.raw`glpat-(?<body>[\w-]{20,})`, ''), keyShaped: true },
+  { name: 'gitlab-token', re: bounded(String.raw`glpat-(?<body>[\w-]{20,})`, ''), openBody: true },
   {
     name: 'google-oauth-token',
     re: bounded(String.raw`ya29\.(?<body>[\w-]{20,})`, ''),
-    keyShaped: true,
+    openBody: true,
   },
   {
     name: 'slack-webhook',
@@ -71,12 +71,12 @@ const SECRET_PATTERNS: readonly SecretPattern[] = [
   {
     name: 'sk-style-key',
     re: bounded(String.raw`sk-(?<body>[A-Za-z0-9_-]{20,})`, ''),
-    keyShaped: true,
+    openBody: true,
   },
   {
     name: 'sk-underscore-key',
     re: bounded(String.raw`sk_(?<body>[A-Za-z0-9]+_[A-Za-z0-9_]{6,})`),
-    keyShaped: true,
+    openBody: true,
   },
   // A value needs 12+ token-safe chars and a digit, so `token = estimateTokens(...)` stays; the match opens at
   // the keyword a secret name ends in (dbPassword), and pwd and pass need a `_` (OLDPWD, bypass).
@@ -106,7 +106,7 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
 
 /** A random key body holds a digit or a capital; a name in lowercase words almost never does. Checked on the
  * matched body after the match, never as a lookahead, so a long run is scanned once. */
-const keyShapedBody = (m: RegExpExecArray): boolean => /[0-9A-Z]/.test(m.groups?.body ?? '');
+const bodyLooksRandom = (m: RegExpExecArray): boolean => /[0-9A-Z]/.test(m.groups?.body ?? '');
 
 // Global copies built once; matchAll clones a RegExp, so calls share no lastIndex.
 const SECRET_GLOBAL: readonly SecretPattern[] = SECRET_PATTERNS.map((p) => ({
@@ -118,10 +118,10 @@ const STRICT_GLOBAL: readonly SecretPattern[] = [
   ...STRICT_ONLY_PATTERNS.map((re, i) => ({ name: `strict-${i}`, re })),
 ];
 
-/** Each match of `pattern` in `text` that counts: every match, or for a keyShaped pattern a key-shaped body. */
-function* hits({ re, keyShaped }: SecretPattern, text: string): Generator<RegExpExecArray> {
+/** Each match of `pattern` in `text` that counts: every match, or for a openBody pattern a key-shaped body. */
+function* hits({ re, openBody }: SecretPattern, text: string): Generator<RegExpExecArray> {
   for (const m of text.matchAll(re)) {
-    if (m[0].length > 0 && (!keyShaped || keyShapedBody(m))) yield m;
+    if (m[0].length > 0 && (!openBody || bodyLooksRandom(m))) yield m;
   }
 }
 

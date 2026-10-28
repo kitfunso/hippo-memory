@@ -33,27 +33,30 @@ export function containerPrefix(tool: ToolId, container: string): string {
   return `${toolSourcePrefix(tool)}${container}/`;
 }
 
-/** A note's key as a row's source holds it: the key part of its stored source. */
+/** A note's key as a row's source holds it: the key's own stored form. The `#<hash>` tail is a field hippo
+ * builds, so it never enters the span finder. */
 export function storedItemKey(key: string): string {
-  return storedSource(`${key}#`).slice(0, -1);
+  return storedSource(key);
 }
 
 export function itemSource(
   prefix: string,
   { key, text }: { readonly key: string; readonly text: string },
 ): string {
-  return storedSource(`${prefix}${key}#${itemHash(text)}`);
+  return `${prefix}${storedItemKey(key)}#${itemHash(text)}`;
 }
 
-/** The stored key and hash of a source under `prefix`; the hash follows the last `#`, since a file
- * name may hold one too. A raw older source is read in its stored form, so it matches its note. */
+/** The stored key and hash of a source under `prefix`: split at the last `#` first, since a file name may
+ * hold one too, then store the key part, so a raw older source matches its note. */
 export function splitSource(
   source: string,
   prefix: string,
 ): { readonly key: string; readonly hash: string } {
-  const rest = storedSource(source).slice(prefix.length);
+  const rest = source.slice(prefix.length);
   const cut = rest.lastIndexOf('#');
-  return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
+  return cut < 0
+    ? { key: storedItemKey(rest), hash: '' }
+    : { key: storedItemKey(rest.slice(0, cut)), hash: rest.slice(cut + 1) };
 }
 
 function capped(text: string): string {

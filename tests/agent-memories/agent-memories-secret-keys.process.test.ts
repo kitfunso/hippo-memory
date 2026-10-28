@@ -132,6 +132,17 @@ describe('agent memory sync of a note named with a secret', () => {
     expect(toolTally(await sync(), 'openclaw')).toMatchObject({ setAside: 1, replaced: 0 });
   });
 
+  it('a note named with a PEM begin line syncs twice into one row, with no second write', async () => {
+    const name = runtimeJoin('-----BEGIN ', 'PRIVATE KEY-----', '.md');
+    note(projectNotes(w), name, BODY);
+    expect(toolTally(await sync(), 'claude-code').imported).toBe(1);
+    const [first] = liveRows(w.local);
+    expect(toolTally(await sync(), 'claude-code')).toMatchObject({ imported: 0, replaced: 0, unchanged: 1 });
+    expect(agentRows(w.local).map((e) => e.id)).toEqual([first!.id]);
+    expect(first!.source).toMatch(/\/\[REDACTED~[0-9a-f]{12}\]#[0-9a-f]+$/);
+    expect(rawHolders('PRIVATE KEY')).toBe(0);
+  });
+
   it('two notes that differ only in the token keep two identities', async () => {
     const dir = projectNotes(w);
     note(dir, `deploy-${TOKEN_A}.md`, BODY);
