@@ -29,17 +29,26 @@ const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(hippoHomeDir())
  * read, so a store nested in another checkout keeps its folder name. */
 function namesAt(
   root: string,
-  legacyName: string,
+  rawLegacy: string,
   remoteOn: RemoteRule,
-): Pick<ProjectIdentity, 'name' | 'aliases'> {
-  const [fileId, remoteId] = [projectFileId(root), originRemoteId(root)].map((n) =>
-    n === null ? null : storedProjectName(n),
-  );
+): Pick<ProjectIdentity, 'name' | 'aliases' | 'legacyName' | 'rawNames'> {
+  const raw = [projectFileId(root), originRemoteId(root), rawLegacy];
+  const [fileId, remoteId] = raw.slice(0, 2).map((n) => (n === null ? null : storedProjectName(n)));
+  const legacyName = storedProjectName(rawLegacy);
   const name = fileId ?? (remoteOn() ? remoteId : null) ?? legacyName;
   const aliases = [...new Set([fileId, remoteId, legacyName])].filter(
     (n): n is string => n !== null && n !== name,
   );
-  return aliases.length > 0 ? { name, aliases } : { name };
+  const rawNames = raw
+    .filter((n): n is string => n !== null && storedProjectName(n) !== n.toLowerCase())
+    .map((n) => n.toLowerCase());
+  const names: Pick<ProjectIdentity, 'name' | 'aliases' | 'legacyName' | 'rawNames'> = {
+    name,
+    legacyName,
+  };
+  if (aliases.length > 0) names.aliases = aliases;
+  if (rawNames.length > 0) names.rawNames = rawNames;
+  return names;
 }
 
 /** Compare two resolved paths, case-insensitively on Windows. */
@@ -100,11 +109,10 @@ export function walkIdentity(
   const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(real, home, stops);
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    const legacyName = storedProjectName(
-      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root),
-    );
+    const folderName =
+      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root);
     return {
-      identity: { root, ...namesAt(root, legacyName, remoteOn), legacyName, isHome: false },
+      identity: { root, ...namesAt(root, folderName, remoteOn), isHome: false },
       rooted: true,
     };
   }
@@ -129,12 +137,7 @@ function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const common = realpathOrResolve(dirs.commonDir);
   const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
   if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
-  return (
-    path
-      .basename(repo)
-      .replace(/\.git$/i, '')
-      .toLowerCase() || null
-  );
+  return path.basename(repo).replace(/\.git$/i, '') || null;
 }
 
 interface MarkerWalk {

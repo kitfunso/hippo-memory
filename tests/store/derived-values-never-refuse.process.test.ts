@@ -10,6 +10,8 @@ import { adminActor } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { initHippo, runHippo, spawnHippo, transcriptJsonl, withScratchEnv } from '../_helpers/pre-compact-e2e.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import { writeEntry } from '../_helpers/root-forms.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 // A made-up sk-style body, lowercase so the folder name and its lowercased project name hold the same bytes.
 const BODY = 'fakefolder0123456789abcdef7';
@@ -82,6 +84,21 @@ describe('a folder named like a key', () => {
       closeHippoDb(db);
     }
     expect(filesHolding(path.join(root, '.hippo'), BODY)).toEqual([]);
+  });
+
+  it('a row a base build stamped with the raw folder name stays in the default context', async () => {
+    const store = path.join(root, '.hippo');
+    const entry = { ...createMemory('PINNED: the folder keeps its rollback plan'), pinned: true };
+    writeEntry(store, entry);
+    const db = openHippoDb(store);
+    try {
+      db.prepare('UPDATE memories SET origin_project = ? WHERE id = ?').run(FOLDER, entry.id);
+    } finally {
+      closeHippoDb(db);
+    }
+    const result = await runHippo(['context', '--pinned-only'], cwd, env);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('the folder keeps its rollback plan');
   });
 
   it('a hook call whose project the client resolved from it succeeds', async () => {

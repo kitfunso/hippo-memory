@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { detectSecret, redactSecretsStrict, storedSource } from '../../src/base/util/secret-detect.js';
 import { runtimeJoin } from '../_helpers/secret-shapes.js';
+import { storedProjectName } from '../../src/base/scope/project-identity.js';
+import { extractPathTags } from '../../src/domain/search/path-context.js';
 
 const WORD_NAMES = [
   runtimeJoin('sk-', 'hynix-memory-analysis'),
@@ -42,5 +44,19 @@ describe('key-shaped bodies', () => {
     redactSecretsStrict(text);
     storedSource(text);
     expect(performance.now() - started).toBeLessThan(200);
+  });
+});
+
+describe('derived names scan the original case', () => {
+  const aws = runtimeJoin('AKIA', 'Q7'.repeat(8));
+
+  it('storedProjectName keeps no lowercased key', () => {
+    const stored = storedProjectName(`repo-${aws}`);
+    expect(stored).toBe(stored.toLowerCase());
+    expect(stored).not.toContain(aws.toLowerCase());
+  });
+
+  it('extractPathTags drops a segment that holds a key before lowercasing it', () => {
+    expect(extractPathTags(`/work/${aws}/src`)).toEqual(['path:work', 'path:src']);
   });
 });

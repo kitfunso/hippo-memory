@@ -39,8 +39,8 @@ export function extractPathTags(dirPath: string): string[] {
   return segments
     .filter((s) => s.length >= 2 && !noise.has(s.toLowerCase()))
     .slice(-PATH_SEGMENTS_KEPT)
-    .map((s) => `path:${s.toLowerCase()}`)
-    .filter((tag) => redactSecretsStrict(tag) === tag);
+    .filter((s) => redactSecretsStrict(s) === s)
+    .map((s) => `path:${s.toLowerCase()}`);
 }
 
 /** The path tags a recall in `cwd` boosts; none when the caller names no folder. */
