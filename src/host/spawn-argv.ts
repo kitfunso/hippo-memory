@@ -56,14 +56,13 @@ export function npmShimEntry(shimPath: string): string | null {
 }
 
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
+const HAS_FOLDER = /[\\/]/;
 
-/**
- * The file `command` names on win32: as given when it has a folder, else the first hit on PATH
- * (never the working folder, where a project file could stand in for a tool), trying each PATHEXT.
- */
-function resolveWindowsCommand(command: string): string | null {
+/** The file `command` names on win32: tried as given when it has a folder, else on each PATH
+ * folder in turn, with each PATHEXT. */
+function findWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = /[\\/]/.test(command)
+  const dirs = HAS_FOLDER.test(command)
     ? ['']
     : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
   for (const dir of dirs) {
@@ -78,28 +77,41 @@ function resolveWindowsCommand(command: string): string | null {
   return null;
 }
 
+/** Windows runs a bare name from the working folder before PATH, where a repo file could stand in
+ * for a tool; so on win32 a bare name comes from PATH alone, or throws ENOENT. */
+export function resolveCommand(command: string): string {
+  if (process.platform !== 'win32') return command;
+  const hit = findWindowsCommand(command);
+  if (hit !== null) return hit;
+  if (HAS_FOLDER.test(command)) return command;
+  throw Object.assign(
+    new Error(
+      `${command} was not found on PATH (hippo never runs a program from the working folder)`,
+    ),
+    { code: 'ENOENT', path: command },
+  );
+}
+
 /**
  * Spawns argv[0] with the rest as its arguments and no shell. Node refuses to start a .cmd or
  * .bat without one (CVE-2024-27980), so on win32 such a shim runs through cmd.exe with every
- * argument quoted for it. */
+ * argument quoted for it. Throws ENOENT when a bare name is not on PATH (see resolveCommand). */
 export function spawnArgv(argv: readonly string[], options: SpawnOptions): ChildProcess {
   const [command, ...args] = argv;
   if (command === undefined || command.length === 0) {
     throw new RangeError('spawnArgv needs a command: argv is empty');
   }
-  if (process.platform === 'win32') {
-    const resolved = resolveWindowsCommand(command);
-    const ext = resolved === null ? '' : path.extname(resolved).toLowerCase();
-    if (resolved !== null && (ext === '.cmd' || ext === '.bat')) {
-      return spawn('cmd.exe', cmdShimArgs(resolved, args), {
-        ...options,
-        windowsHide: options.windowsHide ?? true,
-        shell: false,
-        windowsVerbatimArguments: true,
-      });
-    }
+  const resolved = resolveCommand(command);
+  const ext = path.extname(resolved).toLowerCase();
+  if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat') && isFile(resolved)) {
+    return spawn(resolveCommand('cmd.exe'), cmdShimArgs(resolved, args), {
+      ...options,
+      windowsHide: options.windowsHide ?? true,
+      shell: false,
+      windowsVerbatimArguments: true,
+    });
   }
-  return spawn(command, args, {
+  return spawn(resolved, args, {
     ...options,
     windowsHide: options.windowsHide ?? true,
     shell: false,

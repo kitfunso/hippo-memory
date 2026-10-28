@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { userInfo } from 'node:os';
 import { errorFields, log } from '../base/util/log.js';
+import { resolveCommand } from './spawn-argv.js';
 
 const ICACLS_TIMEOUT_MS = 10_000;
 
@@ -10,7 +11,7 @@ const ICACLS_TIMEOUT_MS = 10_000;
 export function restrictToCurrentUser(file: string): void {
   const user = userInfo().username;
   try {
-    execFileSync('icacls', [file, '/inheritance:r', '/grant:r', `${user}:F`], {
+    execFileSync(resolveCommand('icacls'), [file, '/inheritance:r', '/grant:r', `${user}:F`], {
       stdio: 'pipe',
       windowsHide: true,
       timeout: ICACLS_TIMEOUT_MS,

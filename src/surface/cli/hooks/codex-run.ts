@@ -9,7 +9,7 @@ import {
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { exitAfterFlush } from '../../../base/util/crash-handlers.js';
 import { ignoringCodes } from '../../../base/util/expected-errors.js';
-import { cmdShimArgs, npmShimEntry } from '../../../host/spawn-argv.js';
+import { cmdShimArgs, npmShimEntry, resolveCommand } from '../../../host/spawn-argv.js';
 import { printError } from '../output.js';
 import { handleLastSleep } from '../last-sleep.js';
 import type { CommandContext } from '../flag-values.js';
@@ -39,7 +39,7 @@ function spawnRealCodex(
   }
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
-    return spawn('cmd.exe', cmdShimArgs(realCodexPath, forwardArgs), {
+    return spawn(resolveCommand('cmd.exe'), cmdShimArgs(realCodexPath, forwardArgs), {
       cwd,
       stdio: 'inherit',
       windowsHide: false,

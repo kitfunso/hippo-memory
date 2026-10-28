@@ -1,6 +1,7 @@
 // Best-effort browser launch for CLI verbs that write a file.
 import { spawn } from 'node:child_process';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { resolveCommand } from '../../host/spawn-argv.js';
 
 /** The part of a child process the launch reads. */
 interface Launched {
@@ -18,7 +19,11 @@ type Launcher = (
 const CMD_METACHARS = /[&|<>^%!"\r\n]/;
 
 /** `launch` is the process starter; tests hand in a stand-in. */
-export function openInBrowser(out: string, launch: Launcher = spawn): void {
+// Resolved here, not in the caller, so an injected launcher still sees the plain command name.
+const launchResolved: Launcher = (cmd, args, opts) =>
+  spawn(resolveCommand(cmd), args, { ...opts, windowsHide: true });
+
+export function openInBrowser(out: string, launch: Launcher = launchResolved): void {
   if (process.platform === 'win32' && CMD_METACHARS.test(out)) {
     log.warn(
       `graph view: not opening ${out} in the browser, since cmd.exe would run part of its name as a command; open ` +

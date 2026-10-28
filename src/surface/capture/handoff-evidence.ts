@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
+import { resolveCommand } from '../../host/spawn-argv.js';
 
 const DEFAULT_TIMEOUT_MS = 2000;
 
@@ -14,7 +15,7 @@ const GIT_FATAL_STATUS = 128;
  * is logged, once. */
 function gitOutput(args: readonly string[], cwd: string, timeoutMs: number): string | null {
   try {
-    return execFileSync('git', args, {
+    return execFileSync(resolveCommand('git'), args, {
       cwd,
       encoding: 'utf8',
       timeout: timeoutMs,

@@ -34,4 +34,24 @@ describe('ensureKeyGitignored', () => {
     ensureKeyGitignored(root);
     expect(readFileSync(ignoreFile(), 'utf8')).toBe('a\r\nserver.key\r\n');
   });
+
+  // Git takes the last rule that matches, and a leading space is part of the pattern.
+  it.each([
+    ['a later negation', 'server.key\n!*.key\n'],
+    ['a leading space', ' server.key\n'],
+  ])('appends the key line when the file lists it but %s leaves it unignored', (_, text) => {
+    writeFileSync(ignoreFile(), text);
+    ensureKeyGitignored(root);
+    expect(readFileSync(ignoreFile(), 'utf8')).toBe(`${text}server.key\n`);
+  });
+
+  it.each([
+    ['trailing spaces', 'server.key   \n'],
+    ['a negation above it', '!*.key\nserver.key\n'],
+    ['comments and blank lines below it', 'server.key\n# mine\n\n'],
+  ])('adds nothing when the key line already wins despite %s', (_, text) => {
+    writeFileSync(ignoreFile(), text);
+    ensureKeyGitignored(root);
+    expect(readFileSync(ignoreFile(), 'utf8')).toBe(text);
+  });
 });

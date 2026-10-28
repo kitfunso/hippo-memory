@@ -2,6 +2,7 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import type { GitCall, GitRunner } from '../base/ports/git.js';
 import { errorMessage } from '../base/util/log.js';
+import { resolveCommand } from '../host/spawn-argv.js';
 
 const STDIO = { drop: ['ignore', 'pipe', 'ignore'], keep: ['pipe', 'pipe', 'pipe'] } as const;
 
@@ -30,7 +31,7 @@ export const processGit: GitRunner = {
     try {
       return {
         ok: true,
-        stdout: execFileSync('git', args, {
+        stdout: execFileSync(resolveCommand('git'), args, {
           ...optionalOptions(call),
           encoding: 'utf8',
           timeout: call.timeoutMs,

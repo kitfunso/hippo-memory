@@ -11,12 +11,13 @@ import { printError } from './output.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
+import { resolveCommand } from '../../host/spawn-argv.js';
 
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name;
  * empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
-    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+    const out = execFileSync(resolveCommand('git'), ['worktree', 'list', '--porcelain'], {
       encoding: 'utf8',
       timeout: GIT_CALL_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'],
