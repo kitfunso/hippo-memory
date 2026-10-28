@@ -212,7 +212,7 @@ describe('conflicts never pair across a personal scope', () => {
       now,
       { strength: PRODUCTION_STRENGTH },
     );
-    expect(pair.map((p) => [p.memory_a_id, p.memory_b_id])).toEqual([['a', 'b']]);
+    expect(pair.map((p) => [p.memoryAId, p.memoryBId])).toEqual([['a', 'b']]);
   });
 
   it('two owners, or a case variant of one owner, never pair', async () => {

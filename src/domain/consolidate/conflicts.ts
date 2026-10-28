@@ -144,7 +144,7 @@ function tenantConflicts(
       }
       const reasonAndScore = describeConflict(a.profile, b.profile);
       if (!reasonAndScore) continue;
-      found.push([a.place, b.place, { memory_a_id: a.id, memory_b_id: b.id, ...reasonAndScore }]);
+      found.push([a.place, b.place, { memoryAId: a.id, memoryBId: b.id, ...reasonAndScore }]);
     }
   }
   return found;

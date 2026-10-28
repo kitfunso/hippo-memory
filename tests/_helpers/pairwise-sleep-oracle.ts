@@ -11,7 +11,7 @@ const CONFLICT_OVERLAP_THRESHOLD = 0.5;
 const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
-export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
+export type DetectedConflict = { memoryAId: string; memoryBId: string; reason: string; score: number };
 
 /** For each i, the j > i (ascending) whose textOverlap with i reaches the merge threshold. */
 export function pairwiseMergePartners(contents: readonly string[]): number[][] {
@@ -47,8 +47,8 @@ export function pairwiseDetectConflicts(
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
       detected.push({
-        memory_a_id: survivors[i].id,
-        memory_b_id: survivors[j].id,
+        memoryAId: survivors[i].id,
+        memoryBId: survivors[j].id,
         reason: reasonAndScore.reason,
         score: reasonAndScore.score,
       });

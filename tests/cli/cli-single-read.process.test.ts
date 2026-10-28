@@ -126,11 +126,7 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     const s = new Store({ spawned: true });
     s.seedAged(A, CREATED, CLEAN);
     s.seedAged(B, CREATED, LONG);
-    replaceDetectedConflicts(
-      s.root,
-      [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }],
-      NOW,
-    );
+    replaceDetectedConflicts(s.root, [{ memoryAId: A, memoryBId: B, reason: 'retry counts differ', score: 0.8 }], NOW);
     s.settle();
     const before = held(s);
     const shown = printed(
@@ -158,11 +154,7 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
     const s = new Store();
     s.seedAged(A, CREATED, CLEAN, { tenantId: 'other' });
     s.seedAged(B, CREATED, LONG, { tenantId: 'other' });
-    replaceDetectedConflicts(
-      s.root,
-      [{ memory_a_id: A, memory_b_id: B, reason: 'retry counts differ', score: 0.8 }],
-      NOW,
-    );
+    replaceDetectedConflicts(s.root, [{ memoryAId: A, memoryBId: B, reason: 'retry counts differ', score: 0.8 }], NOW);
     s.settle();
     const before = held(s);
     expect(await s.run('resolve', '7')).toEqual(refused('Conflict 7 not found or already resolved.'));

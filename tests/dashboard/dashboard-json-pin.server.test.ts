@@ -57,8 +57,8 @@ function seedOthers(root: string): void {
   seed(root, 'global shared word', { id: 'mem_p_g01', originProject: '' });
   seed(root, 'unassigned shared word', { id: 'mem_p_u01', originProject: null, tags: ['Shared'] });
   replaceDetectedConflicts(root, [
-    { memory_a_id: 'mem_p_a01', memory_b_id: 'mem_p_a13', reason: 'inside alpha', score: 0.9 },
-    { memory_a_id: 'mem_p_a02', memory_b_id: 'mem_p_b01', reason: 'across projects', score: 0.8 },
+    { memoryAId: 'mem_p_a01', memoryBId: 'mem_p_a13', reason: 'inside alpha', score: 0.9 },
+    { memoryAId: 'mem_p_a02', memoryBId: 'mem_p_b01', reason: 'across projects', score: 0.8 },
   ]);
   embed(root, ['mem_p_a01', 'mem_p_a05', 'mem_p_b01']);
 }

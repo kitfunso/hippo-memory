@@ -69,7 +69,7 @@ async function rejectLoser(): Promise<RejectedLoser> {
   const keepId = put('Always use semicolons in PowerShell');
   const loserId = put(LOSER);
   replaceDetectedConflicts(root, [
-    { memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 },
+    { memoryAId: keepId, memoryBId: loserId, reason: 'contradictory chaining advice', score: 0.85 },
   ]);
   const conflictId = (await listMemoryConflicts(root, 'open'))[0]!.id;
   const resolve = () => conflictResolve(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });

@@ -44,7 +44,7 @@ afterEach(async () => {
 const row = (id: string) => readEntry(store.hippoRoot, id)!;
 
 async function openConflict(aId: string, bId: string, reason: string, tenantId = 'default'): Promise<number> {
-  replaceDetectedConflicts(store.hippoRoot, [{ memory_a_id: aId, memory_b_id: bId, reason, score: 0.9 }]);
+  replaceDetectedConflicts(store.hippoRoot, [{ memoryAId: aId, memoryBId: bId, reason, score: 0.9 }]);
   return (await listMemoryConflicts(store.hippoRoot, '*', tenantId)).find((c) => c.reason === reason)!.id;
 }
 

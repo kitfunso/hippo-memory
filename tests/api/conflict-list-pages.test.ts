@@ -30,7 +30,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const conflictOf = (a: string, b: string) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradiction', score: 0.9 });
+const conflictOf = (a: string, b: string) => ({ memoryAId: a, memoryBId: b, reason: 'contradiction', score: 0.9 });
 
 /** `n` open conflicts between team rows, plus `extra`, all detected at one instant so the pages must break ties on id. */
 function seedTeamConflicts(n: number, tenantId = 'default', extra: ReturnType<typeof conflictOf>[] = []): void {

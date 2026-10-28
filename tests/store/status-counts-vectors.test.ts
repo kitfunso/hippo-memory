@@ -184,9 +184,9 @@ async function seedEveryCase(): Promise<void> {
   replaceDetectedConflicts(
     root,
     [
-      { memory_a_id: fresh, memory_b_id: aged, reason: 'open, one tenant', score: 0.9 },
-      { memory_a_id: otherA, memory_b_id: otherB, reason: 'open, the other tenant', score: 0.8 },
-      { memory_a_id: fresh, memory_b_id: boosted, reason: 'resolved below', score: 0.7 },
+      { memoryAId: fresh, memoryBId: aged, reason: 'open, one tenant', score: 0.9 },
+      { memoryAId: otherA, memoryBId: otherB, reason: 'open, the other tenant', score: 0.8 },
+      { memoryAId: fresh, memoryBId: boosted, reason: 'resolved below', score: 0.7 },
     ],
     NOW,
   );

@@ -35,8 +35,8 @@ function seedConflicts(n: number): void {
   );
   writeEntriesTogether(root, rows);
   const pairs = Array.from({ length: n }, (_, i) => ({
-    memory_a_id: rows[2 * i]!.id,
-    memory_b_id: rows[2 * i + 1]!.id,
+    memoryAId: rows[2 * i]!.id,
+    memoryBId: rows[2 * i + 1]!.id,
     reason: `contradiction ${i}`,
     score: 0.5 + i / (4 * n),
   }));

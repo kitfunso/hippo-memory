@@ -167,8 +167,8 @@ async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<str
     root,
     [
       {
-        memory_a_id: 'mem_acme_04',
-        memory_b_id: 'mem_acme_11',
+        memoryAId: 'mem_acme_04',
+        memoryBId: 'mem_acme_11',
         reason: 'stale',
         score: 0.6,
       },

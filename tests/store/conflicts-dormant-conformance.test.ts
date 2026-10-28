@@ -54,8 +54,8 @@ async function seedConflicts(): Promise<void> {
   const more = { scoped: ['kafka', 'rabbit'], tenantB: ['b1', 'b2'], crossTenant: ['keep', 'b1'] } as const;
   const named = Object.entries({ ...pairs, ...more });
   const detected = named.map(([, [a, b]]) => ({
-    memory_a_id: rows[a]!.id,
-    memory_b_id: rows[b]!.id,
+    memoryAId: rows[a]!.id,
+    memoryBId: rows[b]!.id,
     reason: 'contradiction',
     score: 0.9,
   }));

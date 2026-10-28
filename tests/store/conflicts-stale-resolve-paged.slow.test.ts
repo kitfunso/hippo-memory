@@ -24,8 +24,8 @@ describe('resolving stale open conflicts', () => {
     }));
     writeEntriesTogether(root, entries);
     const pairs = Array.from({ length: PAIRS }, (_, i) => ({
-      memory_a_id: entries[2 * i].id,
-      memory_b_id: entries[2 * i + 1].id,
+      memoryAId: entries[2 * i].id,
+      memoryBId: entries[2 * i + 1].id,
       reason: 'test',
       score: 0.9,
     }));

@@ -48,8 +48,8 @@ async function seed(dir: string): Promise<void> {
   replaceDetectedConflicts(
     dir,
     [
-      { memory_a_id: pinned.id, memory_b_id: aged.id, reason: 'open', score: 0.9 },
-      { memory_a_id: recentB.id, memory_b_id: olderB.id, reason: 'resolved below', score: 0.8 },
+      { memoryAId: pinned.id, memoryBId: aged.id, reason: 'open', score: 0.9 },
+      { memoryAId: recentB.id, memoryBId: olderB.id, reason: 'resolved below', score: 0.8 },
     ],
     NOW,
   );

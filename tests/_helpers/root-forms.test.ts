@@ -73,7 +73,7 @@ describe('conflicts', () => {
       row(`${t} for the dev server`),
     );
     writeEntriesTogether(root, [x!, y!, z!]);
-    replaceDetectedConflicts(root, [{ memory_a_id: x!.id, memory_b_id: y!.id, reason: 'contradiction', score: 0.9 }]);
+    replaceDetectedConflicts(root, [{ memoryAId: x!.id, memoryBId: y!.id, reason: 'contradiction', score: 0.9 }]);
     return { x: x!, y: y! };
   };
 

@@ -91,8 +91,8 @@ beforeAll(() => {
     { ...createMemory('beta row', { tags: [] }), id: 'mem_beta1', originProject: 'beta', created: isoAgo(3) },
   ]);
   replaceDetectedConflicts(store.hippoRoot, [
-    { memory_a_id: 'mem_b001', memory_b_id: 'mem_b002', reason: 'inside alpha', score: 0.9 },
-    { memory_a_id: 'mem_b003', memory_b_id: 'mem_beta1', reason: 'across projects', score: 0.8 },
+    { memoryAId: 'mem_b001', memoryBId: 'mem_b002', reason: 'inside alpha', score: 0.9 },
+    { memoryAId: 'mem_b003', memoryBId: 'mem_beta1', reason: 'across projects', score: 0.8 },
   ]);
   embed(store.hippoRoot, ['mem_b001', 'mem_b004', 'mem_beta1']);
 }, 120_000);

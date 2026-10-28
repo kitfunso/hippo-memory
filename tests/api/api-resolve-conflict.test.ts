@@ -43,7 +43,7 @@ async function seedPair(): Promise<Pair> {
   writeEntry(root, a);
   writeEntry(root, b);
   replaceDetectedConflicts(root, [
-    { memory_a_id: a.id, memory_b_id: b.id, reason: 'contradictory deploy advice', score: 0.9 },
+    { memoryAId: a.id, memoryBId: b.id, reason: 'contradictory deploy advice', score: 0.9 },
   ]);
   const [conflict] = await listMemoryConflicts(root, 'open', TENANT);
   if (!conflict) throw new Error('seeded conflict not found');
