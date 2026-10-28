@@ -56,32 +56,67 @@ export function npmShimEntry(shimPath: string): string | null {
 }
 
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
+// What a bare-name launch with no shell accepts; it cannot run a .cmd or .bat.
+const NATIVE_EXTS = ['.com', '.exe'];
 const HAS_FOLDER = /[\\/]/;
+// A quoted PATH folder may hold a `;`, so a slice runs from its quote to the next `;` after it.
+const PATH_SLICE = /(?:"[^"]*"?|'[^']*'?)?[^;]*/g;
+
+/** PATH's folders with their quotes off; a relative one is dropped, since it names a place under
+ * the working folder. */
+function pathFolders(): string[] {
+  return (envPath() ?? '')
+    .match(PATH_SLICE)!
+    .map((slice) => slice.replace(/^["']/, '').replace(/["']$/, ''))
+    .filter((dir) => dir.length > 0 && path.win32.isAbsolute(dir));
+}
+
+/** True when `file` exists and is no folder. An app execution alias (WindowsApps) is a link that
+ * stat refuses, yet Windows starts it, so the link itself is read. */
+function isProgramFile(file: string): boolean {
+  try {
+    const stats = fs.lstatSync(file, { throwIfNoEntry: false });
+    return stats !== undefined && !stats.isDirectory();
+  } catch (err) {
+    log.debug(
+      `cannot read ${file} while looking up a command: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+    return false;
+  }
+}
 
 /** The file `command` names on win32: tried as given when it has a folder, else on each PATH
- * folder in turn, with each PATHEXT. */
-function findWindowsCommand(command: string): string | null {
-  const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = HAS_FOLDER.test(command)
-    ? ['']
-    : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
+ * folder in turn, with each of `exts`. */
+function findWindowsCommand(command: string, exts: readonly string[]): string | null {
+  const dirs = HAS_FOLDER.test(command) ? [''] : pathFolders();
   for (const dir of dirs) {
-    const base = dir === '' ? command : path.join(dir, command);
+    const base = dir === '' ? command : path.win32.join(dir, command);
     const candidates =
       path.extname(command) === ''
         ? exts.map((ext) => base + ext)
         : [base, ...exts.map((ext) => base + ext)];
-    const hit = candidates.find(isFile);
+    const hit = candidates.find(isProgramFile);
     if (hit !== undefined) return hit;
   }
   return null;
 }
 
+export interface ResolveOptions {
+  /** True for a caller that can run a .cmd or .bat shim (spawnArgv), so PATHEXT is tried; else
+   * only what a launch with no shell can start. */
+  readonly shims?: boolean;
+}
+
 /** Windows runs a bare name from the working folder before PATH, where a repo file could stand in
  * for a tool; so on win32 a bare name comes from PATH alone, or throws ENOENT. */
-export function resolveCommand(command: string): string {
+export function resolveCommand(command: string, options: ResolveOptions = {}): string {
   if (process.platform !== 'win32') return command;
-  const hit = findWindowsCommand(command);
+  const exts =
+    options.shims === true
+      ? (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0)
+      : NATIVE_EXTS;
+  const hit = findWindowsCommand(command, exts);
   if (hit !== null) return hit;
   if (HAS_FOLDER.test(command)) return command;
   throw Object.assign(
@@ -101,7 +136,7 @@ export function spawnArgv(argv: readonly string[], options: SpawnOptions): Child
   if (command === undefined || command.length === 0) {
     throw new RangeError('spawnArgv needs a command: argv is empty');
   }
-  const resolved = resolveCommand(command);
+  const resolved = resolveCommand(command, { shims: true });
   const ext = path.extname(resolved).toLowerCase();
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat') && isFile(resolved)) {
     return spawn(resolveCommand('cmd.exe'), cmdShimArgs(resolved, args), {

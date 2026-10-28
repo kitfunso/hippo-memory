@@ -47,6 +47,36 @@ describe.runIf(process.platform === 'win32')('resolveCommand on win32', () => {
   it('uses a name with a folder as given', () => {
     expect(resolveCommand(join(dir, 'no-such-tool'))).toBe(join(dir, 'no-such-tool'));
   });
+
+  it('finds a tool in a quoted PATH folder', () => {
+    const bin = join(dir, 'Program Files', 'Git', 'cmd');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, 'git.exe'), '');
+    vi.stubEnv('PATH', `"${bin}"`);
+    expect(resolveCommand('git')).toBe(join(bin, 'git.exe'));
+  });
+
+  it('skips a relative PATH folder, which would name the working folder', () => {
+    const work = join(dir, 'work');
+    mkdirSync(work);
+    writeFileSync(join(work, 'hippo-stand-in.exe'), '');
+    vi.stubEnv('PATH', '.');
+    process.chdir(work);
+    expect(() => resolveCommand('hippo-stand-in')).toThrow(expect.objectContaining({ code: 'ENOENT' }));
+  });
+
+  it('gives a launch with no shell the .exe behind an earlier .cmd, and spawnArgv the shim', () => {
+    const shims = join(dir, 'shims');
+    const bin = join(dir, 'bin');
+    mkdirSync(shims);
+    mkdirSync(bin);
+    writeFileSync(join(shims, 'git.cmd'), '');
+    writeFileSync(join(bin, 'git.exe'), '');
+    vi.stubEnv('PATH', `${shims};${bin}`);
+    vi.stubEnv('PATHEXT', '.com;.exe;.bat;.cmd');
+    expect(resolveCommand('git')).toBe(join(bin, 'git.exe'));
+    expect(resolveCommand('git', { shims: true })).toBe(join(shims, 'git.cmd'));
+  });
 });
 
 describe.runIf(process.platform !== 'win32')('resolveCommand elsewhere', () => {

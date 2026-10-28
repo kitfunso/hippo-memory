@@ -1,6 +1,6 @@
 // A program file planted in the folder a launch runs in must never stand in for the tool hippo
 // meant to start.
-import { copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,6 +49,17 @@ describe.runIf(process.platform === 'win32')('a tool planted in the working fold
     }
     expect(ran()).toBe(false);
     expect(failure).toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('leaves spawnArgv running a .cmd shim that sits on PATH before an .exe', async () => {
+    const shims = join(dir, 'shims');
+    mkdirSync(shims, { recursive: true });
+    writeFileSync(join(shims, 'hippo-stand-in.cmd'), `@echo shim> "${join(dir, MARKER)}"\r\n`);
+    vi.stubEnv('PATH', `${shims};${dir};${join(process.env.SystemRoot ?? 'C:/Windows', 'System32')}`);
+    vi.stubEnv('PATHEXT', '.com;.exe;.bat;.cmd');
+    const child = spawnArgv(['hippo-stand-in'], { stdio: 'ignore' });
+    await new Promise((done) => child.on('close', done).on('error', done));
+    expect(readFileSync(join(dir, MARKER), 'utf8').trim()).toBe('shim');
   });
 
   it('is not run as git by the handoff evidence reader', () => {
