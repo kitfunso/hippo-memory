@@ -6,7 +6,6 @@ import {
   learn as apiLearn,
   MCP_LEARN,
 } from '../../api/index.js';
-import { processGit } from '../../infra/git-runner.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
 import { mcpApiContext, type GroupToolCall, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
@@ -54,14 +53,9 @@ export async function runLearnTool({
 }: GroupToolCall<'lessonWrites' | 'vectors' | 'vectorWrites'>): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
-  // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio
-  // and a host admin (mcpActor fails closed).
-  const result = await apiLearn(api, {
-    repoPath: process.cwd(),
-    days,
-    profile: MCP_LEARN,
-    git: processGit,
-  });
+  // With no repoPath api learn reads the server's own folder, not a remote caller's, so it refuses
+  // all but stdio and a host admin (mcpActor fails closed).
+  const result = await apiLearn(api, { days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') {
     return 'No fix/revert/bug commits found in the specified period.';

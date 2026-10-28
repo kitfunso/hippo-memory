@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import * as api from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
-import { cliConfig, cliApiContext } from './api-context.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
@@ -47,7 +47,7 @@ export async function handleDormant({
     console.log(JSON.stringify({ dormant: rows }, null, 2));
     return;
   }
-  printDormantRows(rows, queryArgs.length > 0, root);
+  printDormantRows(rows, queryArgs.length > 0, ctx);
 }
 
 async function changeDormant(
@@ -82,11 +82,11 @@ async function changeDormant(
 function printDormantRows(
   rows: Awaited<ReturnType<typeof api.dormantList>>,
   hasQuery: boolean,
-  root: string,
+  { hippoRoot: root, config }: CliContext,
 ): void {
   if (rows.length === 0) {
     console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
-    if (!cliConfig(root).dormant.enabled) {
+    if (!config.dormant.enabled) {
       console.log(
         'Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ' +
           `${path.join(root, 'config.json')}.`,

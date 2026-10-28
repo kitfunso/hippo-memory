@@ -11,13 +11,7 @@ import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
-import {
-  cliConfig,
-  cliApiContext,
-  cliSecondStore,
-  cliStore,
-  type CliStore,
-} from './api-context.js';
+import { cliApiContext, cliSecondStore, cliStore, type CliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context-render.js';
 import { printError } from './output.js';
@@ -84,7 +78,7 @@ async function explainQuery({
   const ctx = cliApiContext(hippoRoot, tenantId);
   const scope = await explainScope(ctx, flags, globalRoot, query);
 
-  const engine = engineFlags(flags, cliConfig(hippoRoot));
+  const engine = engineFlags(flags, ctx.config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const now = ctx.infra.clock();
   const cost = (r: SearchResult): number =>

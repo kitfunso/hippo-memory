@@ -166,6 +166,15 @@ const strayStore = {
   severity: 'error',
 };
 
+// One rule per depth, for the file's own folder, its parent and its grandparent: $1 is that folder.
+const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
+  name: `no-own-barrel-${up}`,
+  comment: 'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
+  severity: 'error',
+  from: { path: `^(src/.+/)${below}[^/]+$`, pathNot: up === 0 ? '/index\\.ts$' : '^$' },
+  to: { path: '^$1index\\.ts$' },
+}));
+
 const reachRules = [
   {
     name: 'no-io-below-host',
@@ -202,6 +211,7 @@ const reachRules = [
     from: { path: '^src/store/rules/' },
     to: { pathNot: '^src/(base|store/rules)/' },
   },
+  ...ownBarrels,
   { name: 'store-folders', ...strayStore, from: STRAY_STORE, to: {} },
   { name: 'store-folders-used', ...strayStore, from: {}, to: STRAY_STORE },
   { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },

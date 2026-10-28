@@ -5,7 +5,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { DatabaseSyncLike } from './index.js';
+import type { DatabaseSyncLike } from './sqlite.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';

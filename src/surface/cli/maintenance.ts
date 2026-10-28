@@ -4,7 +4,6 @@ import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import {
   embedCoverage,
   memoryEmbedMissing,
@@ -12,7 +11,7 @@ import {
   storedVectorCount,
 } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
-import { cliConfig, cliApiContext, type CliContext } from './api-context.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import {
@@ -165,7 +164,7 @@ export async function handleEmbed(
     return;
   }
 
-  const provider = readyEmbedProvider(root, given);
+  const provider = readyEmbedProvider(ctx, given);
   if (!provider) return;
   await embedMissing(ctx, provider);
 }
@@ -214,13 +213,13 @@ async function printEmbedStatus(ctx: CliContext): Promise<void> {
 }
 
 /** The provider to embed with, or null after saying why none is usable. */
-function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingProvider | null {
+function readyEmbedProvider(ctx: CliContext, given?: EmbeddingProvider): EmbeddingProvider | null {
   // Embedding (unlike status/reset) needs an available provider.
   const embedProvider =
     given ??
     (() => {
       try {
-        return resolveEmbeddingProvider(cliConfig(root).embeddings);
+        return ctx.infra.embedderFor(ctx.config.embeddings);
       } catch (err) {
         printError(errorMessage(err));
         return null;
@@ -231,7 +230,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     return null;
   }
   if (embedProvider.isAvailable()) return embedProvider;
-  if (cliConfig(root).embeddings.enabled === false) {
+  if (ctx.config.embeddings.enabled === false) {
     console.log(
       'Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.',
     );

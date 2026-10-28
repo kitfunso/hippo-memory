@@ -2,7 +2,8 @@
 // promptHookContext (a remote hook route's call). promptHookContext keeps the server-side copy of
 // the CLI's contextGet flags (surface/cli/context.ts); only the CLI parity case in
 // tests/store/prompt-hook-context.process.test.ts ties the two.
-import type { Context, ContextOptions, ContextResult, ContextResultEntry } from './index.js';
+import type { Context } from './types.js';
+import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { assembleContext } from './context.js';
 import { sharedStoreOf, strengthOf } from './types.js';
 import type { StrengthModel } from '../base/memory/strength.js';

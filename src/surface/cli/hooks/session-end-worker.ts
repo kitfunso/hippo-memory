@@ -23,6 +23,7 @@ import {
   sessionEndWork as runSessionEnd,
 } from '../../../api/session-end.js';
 import { cliApiContext } from '../api-context.js';
+import { workingFolder } from '../shared.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import {
   appendSessionEndCloseLog,
@@ -88,7 +89,7 @@ function runSessionEndWork({
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
-    currentProject: () => ctx.infra.machine.projectIdentity(process.cwd()),
+    currentProject: () => ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     // The run writes to this folder's own store, else to the global one in its reach.
     capture: async (into, turns, originProject) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
@@ -98,7 +99,7 @@ function runSessionEndWork({
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
     workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
-    evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
+    evidence: () => collectHandoffEvidence(workingFolder(ctx), 'unknown'),
   });
 }
 

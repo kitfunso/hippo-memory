@@ -6,8 +6,7 @@ import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/ch
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
-import { processGit } from '../../infra/git-runner.js';
-import { cliApiContext, cliInitGlobal } from './api-context.js';
+import { cliApiContext, cliInitGlobal, type CliContext } from './api-context.js';
 import { fail } from './exit.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
@@ -20,6 +19,13 @@ export function requireInit(hippoRoot: string): void {
   }
 }
 
+/** The folder a command runs in, as its context's machine names it. */
+export function workingFolder({ infra }: Pick<CliContext, 'infra'>): string {
+  return (
+    infra.machine.cwd ?? fail('This command needs a working folder, and its context names none.')
+  );
+}
+
 /** Runs churn staleness for the repo this process runs in, against every store its memories can
  * live in. */
 export async function runChurnStaleForRepo(
@@ -27,9 +33,10 @@ export async function runChurnStaleForRepo(
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), {
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  return markChurnStaleInReach(ctx, {
     root: hippoRoot,
-    repoDir: process.cwd(),
+    repoDir: workingFolder(ctx),
     dryRun,
   });
 }
@@ -57,6 +64,8 @@ export interface LearnFromRepoOptions {
   readonly days: number;
   /** Prefixes each printed line, so a multi-repo scan says which repo spoke. */
   readonly label?: string;
+  /** The context to learn on; a test hands in one whose ports it controls. */
+  readonly ctx?: CliContext;
 }
 
 export async function learnFromRepo({
@@ -65,13 +74,13 @@ export async function learnFromRepo({
   repoPath,
   days,
   label,
+  ctx = cliApiContext(hippoRoot, tenantId),
 }: LearnFromRepoOptions): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
-  const result = await learn(cliApiContext(hippoRoot, tenantId), {
+  const result = await learn(ctx, {
     repoPath,
     days,
     profile: CLI_LEARN,
-    git: processGit,
   });
   if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);

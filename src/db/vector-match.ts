@@ -1,6 +1,6 @@
 /** The nearest-row scan over `memory_vectors`: ranking, the top-k heap and the paged scan. */
 
-import type { DatabaseSyncLike } from './index.js';
+import type { DatabaseSyncLike } from './sqlite.js';
 import { ZERO_NORM, cosineToQuery, norm } from '../base/rank/cosine.js';
 import { cachedStatement } from './statement-cache.js';
 import { decodeVector } from './vector-store.js';
