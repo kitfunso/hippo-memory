@@ -12,6 +12,8 @@ const wait = (name) => {
 fs.writeFileSync(mark(`ready-${id}`), '');
 wait('go');
 const take = takeFileLock(path.join(dir, lockName));
-fs.writeFileSync(mark(`result-${id}.json`), JSON.stringify({ kind: take.kind }));
+// The parent reads the result as soon as its name exists, so it must appear whole: write aside, then rename.
+fs.writeFileSync(mark(`result-${id}.json.part`), JSON.stringify({ kind: take.kind }));
+fs.renameSync(mark(`result-${id}.json.part`), mark(`result-${id}.json`));
 wait('done');
 if (take.kind === 'taken') take.lock.release();

@@ -38,7 +38,12 @@ describe('Windows daily task', () => {
         expect(schtasks('/query', '/tn', name, '/xml')).toContain('<Command>conhost.exe</Command>');
         schtasks('/run', '/tn', name);
         const out = join(dir, 'out.txt');
-        await waitFor(() => existsSync(out), { timeoutMs: 10_000, intervalMs: 200, what: 'the scheduled task output' });
+        // echo creates out.txt before it writes the line, so wait for the line, not the name.
+        await waitFor(() => existsSync(out) && readFileSync(out, 'utf8').trim() !== '', {
+          timeoutMs: 10_000,
+          intervalMs: 200,
+          what: 'the scheduled task output',
+        });
         expect(readFileSync(out, 'utf8').trim()).toBe('ran');
       } finally {
         if (created) schtasks('/delete', '/tn', name, '/f');
