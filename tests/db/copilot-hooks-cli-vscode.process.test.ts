@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from '../_helpers/store-write-lock.js';
 import type { StartedChild } from '../_helpers/started-child.js';
 import { waitFor } from '../_helpers/wait-for.js';
@@ -282,16 +283,17 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   });
 
-  // The worker the hook spawns, run here: SQLite's busy_timeout waits log nothing, so the oracle is the clock. Three
-  // waits at the 5 s default take 15 s at least; at the knob's 300 ms the run ends well inside 12 s.
-  it('the worker run takes its lock wait from HIPPO_BUSY_WAIT_MS, so a busy store fails it in seconds', async () => {
+  // The worker the hook spawns, run here: each store it opens sets its lock wait as `PRAGMA busy_timeout = <ms>`.
+  it('the worker run takes its lock wait from HIPPO_BUSY_WAIT_MS on every store it opens', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
-    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
     const workerArgs = ['__session-end-worker', '--log-file', logFile(), '--transcript', transcript];
-    const started = Date.now();
-    await hippo([...workerArgs, '--session-id', VSCODE_SESSION, '--turn'], s.proj, { ...s.env, ...SHORT_BUSY_WAIT });
-    expect(Date.now() - started).toBeLessThan(12_000);
-    expect(fs.readFileSync(logFile(), 'utf8')).toContain('capture failed: database is locked');
+    const { statements } = await recordStatementsAsync(() =>
+      hippo([...workerArgs, '--session-id', VSCODE_SESSION, '--turn'], s.proj, { ...s.env, ...SHORT_BUSY_WAIT }),
+    );
+    const waits = statements.filter((sql) => sql.startsWith('PRAGMA busy_timeout ='));
+    expect(waits.length).toBeGreaterThan(0);
+    expect(new Set(waits)).toEqual(new Set(['PRAGMA busy_timeout = 300']));
+    expect(fs.readFileSync(logFile(), 'utf8')).toContain('Captured 1 items');
   });
 
   it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
