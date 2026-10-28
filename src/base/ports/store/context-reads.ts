@@ -103,7 +103,7 @@ export interface AmbientStoreFilter {
   now: Date;
 }
 
-/** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and
+/** One session's live raw rows inside a tenant; `origins` keeps those projects' rows and
  * rows of no project, unset keeps every origin. */
 export interface SessionRawQuery {
   readonly tenantId: string;
@@ -131,6 +131,10 @@ export interface SessionRawKey {
 export interface SessionRawKeys extends SessionRawCount {
   /** The newest this many rows; zero or less reads them all. */
   readonly limit: number;
+}
+
+export interface SessionRawRows extends SessionRawCount {
+  readonly ids: readonly string[];
 }
 
 export type { DescendantAdmission };
@@ -176,6 +180,9 @@ export interface DagReads {
   /** The rows `sessionRawCount` counts, newest `limit` of them oldest first (created then id),
    * as keys without content. */
   sessionRawKeys(query: SessionRawKeys): Promise<SessionRawKey[]>;
+  /** The rows of `query.ids` that `sessionRawCount` still counts, whole, in no set order; one
+   * that left the session, its scope or the live rows since its key was read is not returned. */
+  sessionRawRows(query: SessionRawRows): Promise<MemoryEntry[]>;
   /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write
    * of this process lands between levels; null if no such row. Each level lists the children of
    * the one above, parent by parent, children by created then id ascending; a row is listed
@@ -191,5 +198,6 @@ export interface DagReads {
 export const DAG_READS_EFFECTS = {
   sessionRawCount: 'read',
   sessionRawKeys: 'read',
+  sessionRawRows: 'read',
   summaryWithDescendants: 'read',
 } as const satisfies MethodEffects<DagReads>;

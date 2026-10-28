@@ -13,7 +13,7 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/t
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { MAX_FRESH_RAW } from '../../base/util/limits.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
-import { listEntriesWhere } from './entry-filter.js';
+import { listEntriesWhere, narrowingAnd } from './entry-filter.js';
 import {
   afterIdAnd,
   entriesPage,
@@ -29,6 +29,7 @@ import type {
   SessionRawKey,
   SessionRawKeys,
   SessionRawQuery,
+  SessionRawRows,
 } from '../../base/ports/store/context-reads.js';
 import type { OriginTally } from '../../base/ports/store/project-tags.js';
 import type { EntrySignals, EntryTextKeyPage } from '../../base/ports/store/sharing.js';
@@ -117,18 +118,19 @@ export function originAnd(origins: readonly string[] | null | undefined): SqlFra
 /** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
 type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
 
-/** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant
- * and origins. */
+/** The WHERE every session raw-row read shares: the session's live raw rows in the tenant and
+ * origins, live as entriesWhere({ live: true }) reads it. */
 function sessionRawWhere({
   sessionId,
   tenantId,
   origins,
 }: SessionRows<SessionRawQuery>): SqlFragment {
+  const session = narrowingAnd({ sessionId, live: true });
   const tenant = tenantAnd(tenantId);
   const origin = originAnd(origins);
   return {
-    sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${origin.sql}`,
-    params: [sessionId, ...tenant.params, ...origin.params],
+    sql: `kind = 'raw'${session.sql}${tenant.sql}${origin.sql}`,
+    params: [...session.params, ...tenant.params, ...origin.params],
   };
 }
 
@@ -191,6 +193,26 @@ export function listSessionRawKeys(
   }));
 }
 
+/** The rows of `query.ids` that `countSessionRawMemories` still counts, read whole: a row made
+ * private, superseded or moved since its key was read is left out. */
+export function readSessionRawRows(
+  db: DatabaseSyncLike,
+  query: SessionRows<SessionRawRows>,
+): MemoryEntry[] {
+  if (!query.sessionId) return [];
+  const where = sessionRawWhere(query);
+  const admit = sessionScopeAdmit(query);
+  return chunked([...new Set(query.ids)]).flatMap((chunk) =>
+    (
+      cachedStatement(
+        db,
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+          `WHERE id IN (SELECT value FROM json_each(?)) AND ${where.sql} AND ${admit.sql}`,
+      ).all(JSON.stringify(chunk), ...where.params, ...admit.params) as MemoryRow[]
+    ).map(rowToEntry),
+  );
+}
+
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass
  * `sessionId` or concurrent sessions show up in each other's fresh tail. The tenant-wide shape
  * is discouraged: `api.recall` throws `RecallContractError` for it when
@@ -205,10 +227,11 @@ export function listFreshRawMemories(
   if (count <= 0) return [];
   const capped = Math.min(count, MAX_FRESH_RAW);
   const params: Array<string | number> = [];
-  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
+  const live = narrowingAnd({ live: true });
+  let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw'${live.sql}`;
   const tenant = tenantAnd(tenantId);
   sql += tenant.sql;
-  params.push(...tenant.params);
+  params.push(...live.params, ...tenant.params);
   if (sessionId !== undefined && sessionId !== '') {
     sql += ' AND source_session_id = ?';
     params.push(sessionId);

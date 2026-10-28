@@ -7,7 +7,7 @@ import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context, ContextWith } from './types.js';
-import type { SessionRawKey } from '../base/ports/store/context-reads.js';
+import type { SessionRawCount, SessionRawKey } from '../base/ports/store/context-reads.js';
 
 export const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -85,7 +85,7 @@ export async function assemble(
 
   if (!sessionId) return emptyResult(sessionId, 0, false);
 
-  const { scoped, totalRaw, truncated } = await loadScopedKeys(ctx, sessionId, opts, own);
+  const { scoped, totalRaw, truncated, query } = await loadScopedKeys(ctx, sessionId, opts, own);
   if (scoped.length === 0) return emptyResult(sessionId, totalRaw, truncated);
 
   // Split newest N into fresh tail; rest is older.
@@ -110,6 +110,7 @@ export async function assemble(
   const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
   const { items, tokens, evicted } = await fitToBudget(
     ctx,
+    query,
     [...olderItems, ...tailItems],
     itemCost,
     room,
@@ -121,13 +122,14 @@ export async function assemble(
 // Priced at a content length that cannot exceed the real one, so the first pass drops only rows the
 // real costs drop too; the rows left are then read whole and the same eviction runs on them.
 async function fitToBudget(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
+  query: SessionRawCount,
   start: AssembledContextItem[],
   itemCost: (it: AssembledContextItem) => number,
   room: number,
 ): Promise<BudgetFit> {
   const first = evictToBudget(start, itemCost, room);
-  const second = evictToBudget(await withContent(ctx, first.items), itemCost, room);
+  const second = evictToBudget(await withContent(ctx, query, first.items), itemCost, room);
   return { ...second, evicted: first.evicted + second.evicted };
 }
 
@@ -141,18 +143,15 @@ function keyItem(k: SessionRawKey): AssembledContextItem {
   };
 }
 
-// A raw row deleted since the keys were read is left out.
+// Read under the rule the keys were chosen by, so a row a write hid or deleted since is left out.
 async function withContent(
-  ctx: Context,
+  ctx: ContextWith<'dagReads'>,
+  query: SessionRawCount,
   items: AssembledContextItem[],
 ): Promise<AssembledContextItem[]> {
-  const rawIds = items.filter((it) => !it.isSummary).map((it) => it.id);
-  const rows = new Map(
-    (rawIds.length > 0 ? await ctx.store.entriesByIds(rawIds, ctx.tenantId) : []).map((r) => [
-      r.id,
-      r,
-    ]),
-  );
+  const ids = items.filter((it) => !it.isSummary).map((it) => it.id);
+  const read = ids.length > 0 ? await ctx.store.dagReads.sessionRawRows({ ...query, ids }) : [];
+  const rows = new Map(read.map((r) => [r.id, r]));
   return items.flatMap((it) => {
     if (it.isSummary) return [it];
     const row = rows.get(it.id);
@@ -171,6 +170,8 @@ interface ScopedKeys {
   scoped: SessionRawKey[];
   totalRaw: number;
   truncated: boolean;
+  /** The admission the keys were read under. */
+  query: SessionRawCount;
 }
 
 async function loadScopedKeys(
@@ -181,7 +182,7 @@ async function loadScopedKeys(
 ): Promise<ScopedKeys> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const dag = ctx.store.dagReads;
-  const query = {
+  const query: SessionRawCount = {
     tenantId: ctx.tenantId,
     sessionId,
     scope: opts.scope,
@@ -193,7 +194,7 @@ async function loadScopedKeys(
   // The scope rule runs in SQL, so a no-scope caller cannot infer private rows by comparing
   // totalRaw to items.length.
   const totalRaw = truncated ? await dag.sessionRawCount(query) : scoped.length;
-  return { scoped, totalRaw, truncated };
+  return { scoped, totalRaw, truncated, query };
 }
 
 function rawItem(r: MemoryEntry): AssembledContextItem {

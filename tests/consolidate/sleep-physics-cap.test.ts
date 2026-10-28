@@ -20,6 +20,7 @@ import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import type { RecallCursor } from '../../src/base/ports/store/consolidation.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -118,6 +119,37 @@ describe('sleep physics cap', () => {
     expect(moved.every((sim) => sim !== undefined && sim !== STALE_SIM)).toBe(true);
   });
 
+  it("ranks a particle this run rehearsed by the run's recall time, which the store does not hold yet", async () => {
+    const root = makeRoot('physics-cap-rehearsed');
+    roots.push(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ physics: { enabled: true } }));
+    const entries: MemoryEntry[] = Array.from({ length: STORED }, (_, i) => ({
+      ...createMemory(`fact number ${i} about service ${i * 7919} in region ${i % 13}`, { layer: Layer.Semantic }),
+      lastRetrieved: new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
+    }));
+    writeEntriesTogether(root, entries);
+    const db = openHippoDb(root);
+    try {
+      savePhysicsState(
+        db,
+        entries.map((e, i) => particle(e.id, i)),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+    const run = sleepRunOver(root, entries);
+    // The oldest on disk, recalled in this run as replay does: the store sees the new time only at the flush.
+    const rehearsed = { ...entries[0]!, lastRetrieved: run.now.toISOString() };
+    await run.survivors.set([rehearsed]);
+    await physicsPass(run, CAP);
+
+    const after = storedParticles(root);
+    expect(after.get(rehearsed.id)?.lastSimulation).not.toBe(STALE_SIM);
+    // The cap still holds: the least recently recalled of the rest gives up its place.
+    expect(after.get(entries[STORED - CAP]!.id)?.lastSimulation).toBe(STALE_SIM);
+    expect(run.result.physicsSimulated).toBe(CAP);
+  });
+
   it('defaults to 1000 particles', () => {
     const stored = Array.from({ length: 1001 }, (_, i) => `m${String(i).padStart(4, '0')}`);
     expect(particlesToSimulate(stored, [])).toHaveLength(1000);
@@ -125,7 +157,7 @@ describe('sleep physics cap', () => {
 
   it('keeps load order and every particle under the cap, and fills past it from the unranked by memory id', () => {
     const stored = ['c', 'a', 'd', 'b'];
-    // Most recently recalled first: b, then a and c, which tie.
+    // Ranked by the caller, most recently recalled first.
     const recalled = ['b', 'a', 'c'];
 
     expect(particlesToSimulate(stored, recalled, 4)).toBe(stored);
@@ -177,21 +209,66 @@ describe('sleep physics cap reads', () => {
     expect(many).toBe(few);
   });
 
-  it('pages the recall order off idx_memories_last_retrieved', async () => {
+  it('pages the whole recall order off idx_memories_last_retrieved, with no sort of its own', async () => {
     const { run, root } = seededRun(30);
-    const { statements } = await recordStatementsAsync(() => run.store.consolidation.particleIdsByRecall({ limit: 5 }));
-    const sql = statements.find((s) => s.includes('memory_physics'));
-    if (sql === undefined) throw new Error('particleIdsByRecall prepared no statement over memory_physics');
+    const consolidation = run.store.consolidation;
+    const { statements } = await recordStatementsAsync(async () => {
+      const first = await consolidation.particlesByRecall({ limit: 5 });
+      if (first.next) await consolidation.particlesByRecall({ limit: 5, after: first.next });
+    });
+    const [firstSql, seekSql] = statements.filter((s) => s.includes('memory_physics'));
+    if (firstSql === undefined || seekSql === undefined) {
+      throw new Error('particlesByRecall prepared no first and seek statement over memory_physics');
+    }
     const db = openHippoDb(root);
     try {
       // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
-      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(6) as Array<{ detail: string }>)
-        .map((r) => r.detail)
-        .join(' | ');
-      expect(plan).toContain('USING INDEX idx_memories_last_retrieved');
-      expect(plan).not.toContain('TEMP B-TREE FOR ORDER BY');
+      const plan = (sql: string, ...params: Array<string | number>) =>
+        (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as Array<{ detail: string }>)
+          .map((r) => r.detail)
+          .join(' | ');
+      for (const p of [
+        plan(firstSql, 6),
+        plan(seekSql, '2026-01-01T00:10:00.000Z', '2026-01-01T00:10:00.000Z', 9, 6),
+      ]) {
+        expect(p).toContain('USING INDEX idx_memories_last_retrieved');
+        expect(p).not.toContain('TEMP B-TREE');
+      }
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it('reads each page of a recall time many particles share in a flat number of rows, each particle once', async () => {
+    const { run, root } = seededRun(0);
+    const tied: MemoryEntry[] = Array.from({ length: 60 }, (_, i) => ({
+      ...createMemory(`tied fact ${i} about host ${i * 31}`, { layer: Layer.Semantic }),
+      lastRetrieved: '2026-01-01T00:00:00.000Z',
+    }));
+    writeEntriesTogether(root, tied);
+    const db = openHippoDb(root);
+    try {
+      savePhysicsState(
+        db,
+        tied.map((e, i) => particle(e.id, i)),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+    const PAGE = 7;
+    const seen: string[] = [];
+    const { reads } = await recordStatementsAsync(async () => {
+      let after: RecallCursor | undefined;
+      do {
+        const page = await run.store.consolidation.particlesByRecall({ limit: PAGE, after });
+        seen.push(...page.memories.map((m) => m.id));
+        after = page.next ?? undefined;
+      } while (after);
+    });
+    const pages = reads.filter((r) => r.sql.includes('memory_physics'));
+    expect(pages).toHaveLength(Math.ceil(tied.length / PAGE));
+    for (const p of pages) expect(p.rows).toBeLessThanOrEqual(PAGE + 1);
+    expect(new Set(seen).size).toBe(tied.length);
+    expect(seen).toHaveLength(tied.length);
   });
 });

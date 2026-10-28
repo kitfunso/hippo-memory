@@ -27,7 +27,7 @@ import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { RecallCursor, RecallIdPage } from '../../base/ports/store/consolidation.js';
+import type { RecallCursor, RecallPage } from '../../base/ports/store/consolidation.js';
 import { tenantAnd } from './tenant.js';
 import type {
   VectorBackfillQuery,
@@ -277,29 +277,31 @@ export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleS
   });
 }
 
-/** Up to `page.limit` ids that have a stored particle, last recalled first, off
- * idx_memories_last_retrieved so a read stops at the page however many memories there are. */
-export function storedParticleIdsByRecall(
+/** Up to `page.limit` memories that have a stored particle, in recall order. The index holds
+ * rowid after last_retrieved, so it supplies the whole order and a page seeks past ties. */
+export function storedParticlesByRecall(
   db: DatabaseSyncLike,
   page: { readonly limit: number; readonly after?: RecallCursor },
-): RecallIdPage {
+): RecallPage {
   const { after } = page;
-  const seek = after ? ' AND last_retrieved <= ? AND (last_retrieved < ? OR id > ?)' : '';
+  const seek = after ? ' AND last_retrieved <= ? AND (last_retrieved < ? OR rowid < ?)' : '';
   const rows = cachedStatement(
     db,
-    `SELECT id, last_retrieved FROM memories INDEXED BY idx_memories_last_retrieved ` +
+    `SELECT rowid AS seq, id, last_retrieved FROM memories INDEXED BY idx_memories_last_retrieved ` +
       `WHERE id IN (SELECT memory_id FROM memory_physics)${seek} ` +
-      `ORDER BY last_retrieved DESC, id ASC LIMIT ?`,
+      `ORDER BY last_retrieved DESC, rowid DESC LIMIT ?`,
   ).all(
-    ...(after ? [after.lastRetrieved, after.lastRetrieved, after.id] : []),
+    ...(after ? [after.lastRetrieved, after.lastRetrieved, after.rowid] : []),
     page.limit + 1,
-  ) as Array<{ id: string; last_retrieved: string }>;
+  ) as Array<{ seq: number; id: string; last_retrieved: string }>;
   const kept = rows.slice(0, page.limit);
   const last = kept.at(-1);
   return {
-    ids: kept.map((row) => row.id),
+    memories: kept.map((row) => ({ id: row.id, lastRetrieved: row.last_retrieved })),
     next:
-      rows.length > page.limit && last ? { lastRetrieved: last.last_retrieved, id: last.id } : null,
+      rows.length > page.limit && last
+        ? { lastRetrieved: last.last_retrieved, rowid: Number(last.seq) }
+        : null,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   readEntriesByIds,
   countSessionRawMemories,
   listSessionRawKeys,
+  readSessionRawRows,
   readChildrenByParent,
 } from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
@@ -207,6 +208,7 @@ export function sqliteDagReads(on: OnHandle): DagReads {
     {
       sessionRawCount: countSessionRawMemories,
       sessionRawKeys: listSessionRawKeys,
+      sessionRawRows: readSessionRawRows,
       summaryWithDescendants: summaryWithDescendants,
     },
     openStore,
