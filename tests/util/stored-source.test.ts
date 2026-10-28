@@ -37,8 +37,8 @@ describe('storedSource', () => {
   });
 
   it('keeps two parts that redact alike apart, and the parts around them as they were', () => {
-    const one = storedSource(`${PREFIX}MEMORY.md/${GL}-deployment-configuration/aaaaaaaaaaaa#11`);
-    const two = storedSource(`${PREFIX}MEMORY.md/${GL}-staging-authentication/aaaaaaaaaaaa#11`);
+    const one = storedSource(`${PREFIX}MEMORY.md/${GL}-deployment7Configuration/aaaaaaaaaaaa#11`);
+    const two = storedSource(`${PREFIX}MEMORY.md/${GL}-staging7Authentication/aaaaaaaaaaaa#11`);
     expect(one).not.toBe(two);
     expect(one.split('/')).toHaveLength(4);
     expect(one.startsWith(`${PREFIX}MEMORY.md/[REDACTED~`)).toBe(true);

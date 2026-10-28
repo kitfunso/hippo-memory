@@ -129,4 +129,20 @@ describe('storedSource over generated sources', () => {
     }
     expect(failures).toEqual([]);
   });
+
+  it(`keeps ${CASES} names in lowercase words, after an open-body prefix, as they are`, () => {
+    const draw = rng(SEED + 1);
+    const prefixes = ['sk-', runtimeJoin('gl', 'pat-'), runtimeJoin('xo', 'xb-'), 'ya29.', 'sk_x_', '_sk-', 'my_sk_'];
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const changed: string[] = [];
+    for (let n = 0; n < CASES && changed.length < 5; n++) {
+      const words = Array.from({ length: 3 + Math.floor(draw() * 4) }, () =>
+        body(draw, 3 + Math.floor(draw() * 6), lower),
+      );
+      const name = `${pick(draw, prefixes)}${words.join(pick(draw, ['-', '_']))}`;
+      const source = `${pick(draw, WORDS)}/${name}#${pick(draw, WORDS)}`;
+      if (storedSource(source) !== source || redactSecretsStrict(source) !== source) changed.push(source);
+    }
+    expect(changed).toEqual([]);
+  });
 });

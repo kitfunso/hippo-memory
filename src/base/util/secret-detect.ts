@@ -28,16 +28,24 @@ export const SECRET_TAGS: ReadonlySet<string> = new Set([
 const OPEN = '(?<![A-Za-z0-9])';
 const CLOSE = '(?![A-Za-z0-9])';
 const bounded = (source: string, close = CLOSE): RegExp => new RegExp(`${OPEN}${source}${close}`);
-/** An sk key opens after no word character, or after `_` when its body holds a digit. */
-const skOpen = (prefix: string): string =>
-  String.raw`(?:(?<=_)(?=${prefix}[A-Za-z0-9_-]*\d)|(?<![A-Za-z0-9_]))`;
+/** A pattern; `keyShaped` ones have an open body that words joined by `-` or `_` also fill, so a match counts
+ * only when its `body` group holds a digit or a capital letter (keyShapedBody). */
+interface SecretPattern {
+  readonly name: string;
+  readonly re: RegExp;
+  readonly keyShaped?: true;
+}
 
-const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
+const SECRET_PATTERNS: readonly SecretPattern[] = [
   { name: 'aws-access-key', re: bounded(String.raw`AKIA[0-9A-Z]{16}`) },
   { name: 'github-token', re: bounded(String.raw`(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}`) },
   { name: 'github-fine-grained-pat', re: bounded(String.raw`github_pat_[A-Za-z0-9_]{22,}`) },
   // A class that holds `-` runs to its end, so a token that ends in a hyphen needs no close.
-  { name: 'slack-token', re: bounded(String.raw`xox[baprs]-[A-Za-z0-9-]{10,}`, '') },
+  {
+    name: 'slack-token',
+    re: bounded(String.raw`xox[baprs]-(?<body>[A-Za-z0-9-]{10,})`, ''),
+    keyShaped: true,
+  },
   { name: 'stripe-key', re: bounded(String.raw`[sr]k_(?:live|test)_[A-Za-z0-9]{16,}`) },
   { name: 'google-api-key', re: bounded(String.raw`AIza[0-9A-Za-z_-]{35}`, `(?:${CLOSE}|(?<=-))`) },
   // hk_ is hippo's own API key (sqlite/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes
@@ -45,8 +53,12 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'hippo-api-key', re: bounded(String.raw`hk_[a-z2-7]{24}\.[a-z2-7]{32}`) },
   { name: 'npm-token', re: bounded(String.raw`npm_[A-Za-z0-9]{36}`) },
   { name: 'huggingface-token', re: bounded(String.raw`hf_[A-Za-z]{34}`) },
-  { name: 'gitlab-token', re: bounded(String.raw`glpat-[\w-]{20,}`, '') },
-  { name: 'google-oauth-token', re: bounded(String.raw`ya29\.[\w-]{20,}`, '') },
+  { name: 'gitlab-token', re: bounded(String.raw`glpat-(?<body>[\w-]{20,})`, ''), keyShaped: true },
+  {
+    name: 'google-oauth-token',
+    re: bounded(String.raw`ya29\.(?<body>[\w-]{20,})`, ''),
+    keyShaped: true,
+  },
   {
     name: 'slack-webhook',
     re: bounded(
@@ -55,12 +67,16 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
     ),
   },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // detectSecret flags sk- and sk_<vendor>_ only beside a key-ish noun; after `_` the body needs a digit,
-  // so snake_case names such as convert_sk_model_to_onnx stay.
-  { name: 'sk-style-key', re: new RegExp(String.raw`${skOpen('sk-')}sk-[A-Za-z0-9_-]{20,}`) },
+  // detectSecret flags sk- and sk_<vendor>_ only beside a key-ish noun.
+  {
+    name: 'sk-style-key',
+    re: bounded(String.raw`sk-(?<body>[A-Za-z0-9_-]{20,})`, ''),
+    keyShaped: true,
+  },
   {
     name: 'sk-underscore-key',
-    re: new RegExp(String.raw`${skOpen('sk_')}sk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}${CLOSE}`),
+    re: bounded(String.raw`sk_(?<body>[A-Za-z0-9]+_[A-Za-z0-9_]{6,})`),
+    keyShaped: true,
   },
   // A value needs 12+ token-safe chars and a digit, so `token = estimateTokens(...)` stays; the match opens at
   // the keyword a secret name ends in (dbPassword), and pwd and pass need a `_` (OLDPWD, bypass).
@@ -88,6 +104,27 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
+/** A random key body holds a digit or a capital; a name in lowercase words almost never does. Checked on the
+ * matched body after the match, never as a lookahead, so a long run is scanned once. */
+const keyShapedBody = (m: RegExpExecArray): boolean => /[0-9A-Z]/.test(m.groups?.body ?? '');
+
+// Global copies built once; matchAll clones a RegExp, so calls share no lastIndex.
+const SECRET_GLOBAL: readonly SecretPattern[] = SECRET_PATTERNS.map((p) => ({
+  ...p,
+  re: new RegExp(p.re.source, `${p.re.flags}g`),
+}));
+const STRICT_GLOBAL: readonly SecretPattern[] = [
+  ...SECRET_GLOBAL,
+  ...STRICT_ONLY_PATTERNS.map((re, i) => ({ name: `strict-${i}`, re })),
+];
+
+/** Each match of `pattern` in `text` that counts: every match, or for a keyShaped pattern a key-shaped body. */
+function* hits({ re, keyShaped }: SecretPattern, text: string): Generator<RegExpExecArray> {
+  for (const m of text.matchAll(re)) {
+    if (m[0].length > 0 && (!keyShaped || keyShapedBody(m))) yield m;
+  }
+}
+
 /** Scan a memory's tags + content for secret material; pure and deterministic, no filesystem or
  * store access. */
 export function detectSecret(entry: { content: string; tags: string[] }): SecretDetection {
@@ -96,8 +133,9 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
       return { flagged: true, reason: `tag:${tag.toLowerCase()}` };
     }
   }
-  for (const { name, re } of SECRET_PATTERNS) {
-    if (!re.test(entry.content)) continue;
+  for (const pattern of SECRET_GLOBAL) {
+    const { name } = pattern;
+    if (hits(pattern, entry.content).next().done) continue;
     if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(entry.content)) continue;
     return { flagged: true, reason: `pattern:${name}` };
   }
@@ -178,22 +216,12 @@ function pemSpans(text: string): Span[] {
   return spans;
 }
 
-// Global copies built once; matchAll clones a RegExp, so calls share no lastIndex. detectSecret keeps its own.
-const STRICT_GLOBAL: readonly RegExp[] = [
-  ...SECRET_PATTERNS.map(
-    ({ re }) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
-  ),
-  ...STRICT_ONLY_PATTERNS,
-];
-
 /** Every secret span of `text`, matched on the whole text, sorted, overlapping spans merged. */
 export function secretSpans(text: string): Span[] {
   if (!text) return [];
   const found: Span[] = pemSpans(text);
-  for (const re of STRICT_GLOBAL) {
-    for (const m of text.matchAll(re)) {
-      if (m[0].length > 0) found.push([m.index, m.index + m[0].length]);
-    }
+  for (const pattern of STRICT_GLOBAL) {
+    for (const m of hits(pattern, text)) found.push([m.index, m.index + m[0].length]);
   }
   if (found.length < 2) return found;
   found.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
@@ -234,7 +262,7 @@ export function storedOrNull(text: string | null | undefined): string | null {
 // SHORTCUT: an unkeyed digest lets a row holder confirm a guessed low-entropy secret; a per-store key fixes it.
 const digest = (raw: string): string =>
   createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, ID_SUFFIX_CHARS);
-/** A marker naming its raw part; `[` and `]` end every token class, so no pattern extends it. */
+/** A marker naming its raw part; the multi-pass loop in storedSource makes the stored form stable. */
 const taggedMarker = (raw: string): string => `[REDACTED~${digest(raw)}]`;
 const isSeparator = (ch: string): boolean => ch === '/' || ch === '#';
 /** Passes before a source whose stored form keeps making new spans collapses to one tagged marker. */
