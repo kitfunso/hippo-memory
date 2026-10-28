@@ -1,5 +1,6 @@
 // The active task snapshot rows and the continuity key that scopes them, for the Sessions group and
 // the handoffs.
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { originInSql } from './rule-sql.js';
@@ -70,7 +71,7 @@ function insertSnapshot(
     redactSecretsStrict(snapshot.task),
     redactSecretsStrict(snapshot.summary),
     redactSecretsStrict(snapshot.nextStep),
-    snapshot.source ?? 'cli',
+    redactSecretsStrict(snapshot.source ?? 'cli'),
     snapshot.sessionId ?? null,
     snapshot.scope ?? null,
     tenantId,
@@ -95,6 +96,7 @@ export function saveActiveTaskSnapshot(
 ): TaskSnapshot {
   const { hippoRoot } = files;
   assertTenantId('saveActiveTaskSnapshot', tenantId);
+  refuseSecretKeys({ sessionId: snapshot.sessionId, scope: snapshot.scope });
   assertKeyedOnSharedStore('saveActiveTaskSnapshot', files, key);
   const stamp = key ? continuityStamp(key) : null;
   const owned = key ? continuityWhere(key) : null;

@@ -1,15 +1,21 @@
-// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart
-// from spacing. A digit, sign or word that differs is a different value, so nothing looser may
-// count as a copy.
+// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal as stored,
+// apart from spacing. A digit, sign or word outside a secret that differs is a different value.
 import type { MemoryEntry } from '../memory/entry.js';
+import { redactSecretsStrict } from './secret-detect.js';
 
 type Text = Pick<MemoryEntry, 'content'> & { source?: string; pinned?: boolean };
 
-export function duplicateKey(text: string): string {
+/** `text` with each run of spaces one space, trimmed, secrets left as written. */
+export function spacedText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** A 53-bit hash (cyrb53) of the text with every space removed: texts duplicateKey calls equal
+/** The key of the text as stored, so a raw legacy row and its redacted twin are the same text. */
+export function duplicateKey(text: string): string {
+  return spacedText(redactSecretsStrict(text));
+}
+
+/** A 53-bit hash (cyrb53) of the text with every space removed: texts spacedText calls equal
  * share it. */
 export function duplicateHash(text: string): number {
   const bare = text.replace(/\s+/g, '');

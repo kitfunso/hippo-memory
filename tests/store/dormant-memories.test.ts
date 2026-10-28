@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
-import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
+import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/entry-deletes.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
@@ -38,6 +38,7 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { runtimeJoin } from '../_helpers/secret-shapes.js';
 
 const { writeEntry, sqliteStore, apiCtx, objectsAt } = sessionPerTest();
 
@@ -145,20 +146,20 @@ describe('dormant memories are on by default, with an opt-out', () => {
     expect(warnings.some((w) => w.includes('retentionDays'))).toBe(true);
   });
 
-  it('a faded memory holding a secret is deleted, never kept dormant', async () => {
+  // A write stores secret text redacted, so only a row written before that holds one raw.
+  it('a faded legacy memory holding a raw secret is deleted, never kept dormant', async () => {
     const home = makeRoot('dormant-secret', { config: DORMANT_ON });
-    const secret = aged(
-      createMemory('billing sandbox uses api_key=Zx81Qa92Lm37Pt45Rk for the nightly job', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      }),
-      90,
-    );
+    const raw = `billing sandbox uses api_key=${runtimeJoin('Zx81Qa92', 'Lm37Pt45Rk')} for the nightly job`;
+    const secret = aged(createMemory(raw, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
     const plain = aged(
       createMemory('the billing sandbox nightly job runs at 02:00 UTC', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       90,
     );
     writeEntry(home, secret);
     writeEntry(home, plain);
+    const db = openHippoDb(home);
+    db.prepare('UPDATE memories SET content = ? WHERE id = ?').run(raw, secret.id);
+    closeHippoDb(db);
 
     const result = await consolidate(home, { now: FIXED_NOW });
 

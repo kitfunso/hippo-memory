@@ -1,4 +1,5 @@
 import { scryptSync } from 'node:crypto';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import {
   DEFAULT_KEY_TTL_DAYS,
   isUsableKey,
@@ -11,6 +12,7 @@ import {
 } from '../../base/scope/api-key.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
+import { storedOrNull } from '../../base/util/secret-detect.js';
 import { keysetAfter } from '../../db/sql.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -44,6 +46,7 @@ export interface CreateApiKeyResult {
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
+  refuseSecretKeys({ tenantId: key.tenantId, ownerSubject: key.ownerSubject });
   // Migration v26 (role column) has already run; an older binary ignores expires_at and would
   // honour an expired key, so the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
@@ -55,7 +58,7 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
     key.keyId,
     key.keyHash,
     key.tenantId,
-    key.label,
+    storedOrNull(key.label),
     key.createdAt,
     key.role,
     key.ownerSubject,
@@ -146,6 +149,7 @@ export function revokeApiKey(
 
 /** Grant `keyId` read access to one restricted `scope`. Idempotent. */
 export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
+  refuseSecretKeys({ scope });
   cachedStatement(
     db,
     `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)

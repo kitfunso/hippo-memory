@@ -3,7 +3,7 @@
 import { type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { keysetAfter } from '../../db/sql.js';
-import { scopeAdmitSql } from './rule-sql.js';
+import { holdsTextSql, scopeAdmitSql } from './rule-sql.js';
 import {
   type BriefReceipt,
   type ObjectByKind,
@@ -78,8 +78,9 @@ function listRows<K extends ObjectKind>(
     params.push(query.status);
   }
   if (query.filter && spec.filterColumn) {
-    clauses.push(`${spec.filterColumn} = ?`);
-    params.push(query.filter);
+    const filter = holdsTextSql(spec.filterColumn, query.filter);
+    clauses.push(filter.sql);
+    params.push(...filter.params);
   }
   if (query.memoryId !== undefined) {
     clauses.push('memory_id = ?');
@@ -110,9 +111,9 @@ function policiesInForce(
   query: PoliciesInForceQuery,
 ): Policy[] {
   const { asOf, name } = query;
-  const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
-  const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
-  if (name !== undefined) params.push(name);
+  const named = name === undefined ? null : holdsTextSql('p.policy_name', name);
+  const nameClause = named ? `AND ${named.sql}` : '';
+  const params: Array<string | number> = [tenantId, asOf, asOf, asOf, ...(named?.params ?? [])];
   const rows = cachedStatement(
     db,
     `

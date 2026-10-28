@@ -13,7 +13,9 @@ import type {
 } from '../../base/ports/store.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from './entry-row.js';
-import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from './entry-writes.js';
+import { writeEntryMirrors } from './entry-writes.js';
+import { archiveRaw } from './entry-lifecycle.js';
+import { writeInOwnTenant } from './entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
  * sees it. */

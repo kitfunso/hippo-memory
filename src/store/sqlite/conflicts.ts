@@ -3,9 +3,11 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/t
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import {
+  contentDigests,
   rejectionDigest,
   normalizeValueForRejection,
 } from '../../base/records/rejection-digest.js';
+import { onlyRedacted, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   MEMORY_CONFLICT_COLUMNS,
@@ -19,7 +21,7 @@ import { readEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { Handles, StoreFiles } from './open.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { deleteEntryCore } from './entry-deletes.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -353,7 +355,7 @@ function upsertDetectedConflicts(
     upsert.run(
       conflict.memory_a_id,
       conflict.memory_b_id,
-      conflict.reason,
+      redactSecretsStrict(conflict.reason),
       conflict.score,
       detectedAt,
       detectedAt,
@@ -408,6 +410,7 @@ interface ConflictResolveMeta {
   rejected: boolean;
   removedIds: string[];
   rejectedDigest?: string;
+  tombstoneSkipped?: 'all-secret';
 }
 
 // A side still in the tenant and still holding the scope the api decided on.
@@ -468,6 +471,8 @@ interface LoserRemoval {
   loserRemoved: boolean;
   loserWasRaw: boolean;
   rejectedDigest: string | undefined;
+  /** The loser's stored text was redaction markers alone, so no tombstone was written. */
+  tombstoneSkipped: boolean;
   extraRemovedIds: string[];
   extraRemovedRawIds: string[];
 }
@@ -484,6 +489,7 @@ function emptyRemoval(): LoserRemoval {
     loserRemoved: false,
     loserWasRaw: false,
     rejectedDigest: undefined,
+    tombstoneSkipped: false,
     extraRemovedIds: [],
     extraRemovedRawIds: [],
   };
@@ -551,7 +557,7 @@ function recordRejectedLoserValue(
     rejectedBy: r.actor,
     rejectedAt: r.at,
     sourceMemoryId: r.loser.id,
-    normalizedChars: normalizeValueForRejection(loserRow.content).length,
+    normalizedChars: normalizeValueForRejection(redactSecretsStrict(loserRow.content)).length,
   });
 }
 
@@ -587,7 +593,10 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope)) {
+    if (
+      !contentDigests(dup.content).includes(rejectedDigest) ||
+      !ownScopeTouches(ownScope, dup.scope)
+    ) {
       continue;
     }
     dups.push({ id: dup.id, kind: dup.kind });
@@ -605,10 +614,15 @@ function removeDuplicatesOfRejectedValue(
   }
 }
 
-/** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns
- * the digest. */
-function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string {
-  const rejectedDigest = rejectionDigest(loser.loserRow.content);
+/** Tombstones the digest of the loser's stored text and removes its same-tenant duplicates into
+ * `removal`; returns the digest, or undefined for a loser all secret, which names no value. */
+function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string | undefined {
+  const stored = redactSecretsStrict(loser.loserRow.content);
+  if (onlyRedacted(stored)) {
+    loser.removal.tombstoneSkipped = true;
+    return undefined;
+  }
+  const rejectedDigest = rejectionDigest(stored);
   recordRejectedLoserValue(db, loser.r, loser.loserRow, rejectedDigest);
   removeDuplicatesOfRejectedValue(db, loser, rejectedDigest);
   return rejectedDigest;
@@ -673,6 +687,7 @@ function auditConflictResolve(
   // Assigned only when present so the serialized audit payload keeps omitting the key, exactly as
   // the pre-migration object literal did.
   if (rejectedDigest !== undefined) conflictResolveMeta.rejectedDigest = rejectedDigest;
+  if (removal.tombstoneSkipped) conflictResolveMeta.tombstoneSkipped = 'all-secret';
   // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s
   // Record<string, JsonValue> metadata otherwise.
   audit(db, 'conflict_resolve', {

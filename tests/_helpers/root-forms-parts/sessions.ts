@@ -53,7 +53,7 @@ export function saveSessionHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key?: ContinuityKey,
 ): SessionHandoff {
-  return onHandle(hippoRoot, (db) => handoffsSql.saveSessionHandoff(db, tenantId, handoff, key), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.saveCallerHandoff(db, tenantId, handoff, key), openStore);
 }
 
 export function loadLatestHandoff(

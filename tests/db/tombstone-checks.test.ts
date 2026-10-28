@@ -12,7 +12,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { tombstoneChecks as checksOver } from '../../src/domain/consolidate/tombstones.js';
 
 const roots: string[] = [];
-const DIGEST = rejectionDigest('the staging password is hunter2');
+const VALUE = 'the staging password is hunter2';
+const DIGEST = rejectionDigest(VALUE);
 
 afterEach(() => {
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
@@ -61,9 +62,9 @@ describe('tombstoneChecks', () => {
   it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', async () => {
     const root = storeWithTombstone();
     const checks = tombstoneChecks(root, false);
-    expect((await checks.find('ta', DIGEST))?.reason).toBe('leaked');
-    expect(await checks.find('tb', DIGEST)).toBeNull();
-    expect(await checks.find('ta', rejectionDigest('another value'))).toBeNull();
+    expect((await checks.find('ta', VALUE))?.reason).toBe('leaked');
+    expect(await checks.find('tb', VALUE)).toBeNull();
+    expect(await checks.find('ta', 'another value')).toBeNull();
     await checks.audit(refusal('m1'));
     expect(refusals(root, 'ta').map((e) => [e.actor, e.targetId, e.metadata])).toEqual([
       ['sleep', 'm1', { digest: DIGEST }],
@@ -73,7 +74,7 @@ describe('tombstoneChecks', () => {
   it('under a dry run finds nothing, writes nothing and never opens the store', async () => {
     const root = storeWithTombstone();
     const checks = tombstoneChecks(path.join(root, 'no-store-here'), true);
-    expect(await checks.find('ta', DIGEST)).toBeNull();
+    expect(await checks.find('ta', VALUE)).toBeNull();
     await checks.audit(refusal('m1'));
     expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
   });

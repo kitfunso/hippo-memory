@@ -2,6 +2,7 @@
  *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
 
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
+import { refuseSecretKeyList } from '../../base/errors/secret-keys.js';
 import { createMemory, Layer, MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../host/global-store.js';
@@ -99,6 +100,7 @@ export function importEntriesInto(
   options: TargetedImport,
 ): ImportResult {
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
+  refuseSecretKeyList('tags', allTags);
   const baseHalfLifeDays = loadConfig(options.target.root).defaultHalfLifeDays;
   const newEntry = (chunk: string): MemoryEntry =>
     createImportEntry({ chunk, source, allTags, options, baseHalfLifeDays });

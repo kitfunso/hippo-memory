@@ -1,5 +1,6 @@
 // The card run lifecycle: claim, heartbeat, block, review, complete and reclaim, with their run checks.
 
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { HandoffOutcome, isHandoffOutcome } from '../../base/session/handoff.js';
 import { Card, CardStatus, assertCardTransition, CARD_LEASE_MS } from '../../base/records/card.js';
@@ -130,6 +131,7 @@ export function claimCard(
 ): (Card & { runId: number }) | null {
   assertTenantId('claimCard', tenantId);
   assertFilled('runtime', runtime);
+  refuseSecretKeys({ runtime, sessionId });
   const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
     const changes = transitionCard(db, tenantId, id, {
       from: ['ready', 'blocked'],

@@ -11,7 +11,13 @@ import type {
 import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
-import { containerId, containerPrefix, splitSource, type ContainerMachine } from './source.js';
+import {
+  containerId,
+  containerPrefix,
+  splitSource,
+  storedItemKey,
+  type ContainerMachine,
+} from './source.js';
 import type { SyncOptions } from './sync.js';
 import type { ImportStore } from './types.js';
 
@@ -92,7 +98,7 @@ async function handOverPlan(
 ): Promise<ContainerApply> {
   // A note the local pass could not read has no local row yet, so its global copy stays until it
   // does.
-  const unread = new Set(work.container.skipped);
+  const unread = new Set(work.container.skipped.map(storedItemKey));
   const tag = work.tool.tag;
   const rows: MemoryEntry[] = [];
   const steps: ImportStep[] = [];

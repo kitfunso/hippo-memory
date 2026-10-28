@@ -1,6 +1,7 @@
 // Tombstone keys are a pure hash of the normalized value, so the domain computes them without
 // reaching the store.
 import { createHash } from 'node:crypto';
+import { textForms } from '../util/secret-detect.js';
 
 /** Normalize content for rejection digests: NFC, lowercase, collapse whitespace runs, trim. No
  * punctuation stripping: over-normalizing causes false refusals, worse than misses. */
@@ -12,4 +13,10 @@ export function normalizeValueForRejection(content: string): string {
  * resistance, not the 16-char redaction hash used for query hashing. */
 export function rejectionDigest(content: string): string {
   return createHash('sha256').update(normalizeValueForRejection(content)).digest('hex');
+}
+
+/** The digest of each form a stored copy of `text` may hold, the stored form's first: a legacy row
+ * or tombstone keeps the raw digest. */
+export function contentDigests(text: string): readonly string[] {
+  return textForms(text).map(rejectionDigest);
 }

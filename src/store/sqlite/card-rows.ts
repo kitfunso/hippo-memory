@@ -1,6 +1,7 @@
 // Card rows: the columns, the row mappers, the comment insert, the blank-text check and the
 // unknown-card error that card reads and writes share.
 
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { type DatabaseSyncLike } from '../../db/index.js';
 import { Card, CardStatus, CardRun, CardComment } from '../../base/records/card.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -122,7 +123,15 @@ export function insertCardComment(
     INSERT INTO card_comments (card_id, author, body, created_at, tenant_id)
     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
   `,
-  ).run(cardId, author, body, now, tenantId, cardId, tenantId);
+  ).run(
+    cardId,
+    redactSecretsStrict(author),
+    redactSecretsStrict(body),
+    now,
+    tenantId,
+    cardId,
+    tenantId,
+  );
   if (Number(result.changes ?? 0) === 0) {
     throw unknownCard(cardId);
   }

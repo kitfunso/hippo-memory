@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -9,6 +10,13 @@ import {
 } from '../../base/session/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
+import {
+  redactPayload,
+  redactSecretsStrict,
+  sameStoredText,
+  storedOrNull,
+  storedPath,
+} from '../../base/util/secret-detect.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
 import {
@@ -47,9 +55,9 @@ function transcriptSource(
   if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
   // A retried session end reads the same transcript, so it must not add a second revision.
   const same =
-    existing?.taskId === derived.task &&
-    existing.summary === derived.summary &&
-    existing.nextAction === derived.nextStep;
+    sameStoredText(existing?.taskId, derived.task) &&
+    sameStoredText(existing?.summary, derived.summary) &&
+    sameStoredText(existing?.nextAction, derived.nextStep);
   if (existing && same) return null;
   const snapshot = { ...derived, scope: null };
   return { snapshot, evidence: { ...evidence, derivedFrom: 'transcript' }, fromTranscript: true };
@@ -86,7 +94,7 @@ function sessionEndHandoff(
   const { snapshot } = source;
   const carry =
     existing != null &&
-    existing.taskId === snapshot.task &&
+    sameStoredText(existing.taskId, snapshot.task) &&
     (existing.scope ?? null) === (snapshot.scope ?? null);
   return {
     version: 1,
@@ -120,14 +128,14 @@ type HandoffColumn = readonly [column: string, value: string | null];
  * apart. */
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
-    ['repo_root', handoff.repoRoot ?? null],
-    ['task_id', handoff.taskId ?? null],
-    ['summary', handoff.summary],
-    ['next_action', handoff.nextAction ?? null],
-    ['artifacts_json', JSON.stringify(handoff.artifacts ?? [])],
+    ['repo_root', storedPath(handoff.repoRoot)],
+    ['task_id', storedOrNull(handoff.taskId)],
+    ['summary', redactSecretsStrict(handoff.summary)],
+    ['next_action', storedOrNull(handoff.nextAction)],
+    ['artifacts_json', redactPayload(JSON.stringify(handoff.artifacts ?? []))],
     ['scope', handoff.scope ?? null],
-    ['constraints_json', JSON.stringify(handoff.constraints ?? [])],
-    ['evidence_json', handoff.evidence ? JSON.stringify(handoff.evidence) : null],
+    ['constraints_json', redactPayload(JSON.stringify(handoff.constraints ?? []))],
+    ['evidence_json', handoff.evidence ? redactPayload(JSON.stringify(handoff.evidence)) : null],
     ['outcome', handoff.outcome ?? null],
     ['target_runtime', handoff.targetRuntime ?? null],
     ['card_id', handoff.cardId ?? null],
@@ -160,8 +168,21 @@ function insertHandoffRow(
   );
 }
 
+/** A caller's handoff, its keys refused when secret-shaped; session end carries stored ones, so
+ * only this entrance checks them. The repo root is the CLI's cwd, so it stores redacted instead. */
+export function saveCallerHandoff(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
+  key?: ContinuityKey | null,
+): SessionHandoff {
+  const { sessionId, cardId, targetRuntime, scope, outcome } = handoff;
+  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome });
+  return saveSessionHandoff(db, tenantId, handoff, key);
+}
+
 /** Save a session handoff record; returns the persisted handoff. */
-export function saveSessionHandoff(
+function saveSessionHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
@@ -365,6 +386,7 @@ export function writeSessionEndHandoff(
 ): SessionHandoff | null {
   const { sessionId, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
+  refuseSecretKeys({ sessionId });
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = readActiveTaskSnapshot(db, files, tenantId, key);
   const existing = readLatestHandoff(db, { tenantId, sessionId, opts: {}, key });

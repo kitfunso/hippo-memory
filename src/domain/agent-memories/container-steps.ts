@@ -7,7 +7,7 @@ import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import type { ContainerPlan } from './plan.js';
 import type { Tally } from '../../base/memory/agent-memory-report.js';
-import { itemSource, splitSource, storedText } from './source.js';
+import { itemSource, splitSource, storedItemKey, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 
 /** What a plan's steps read beside the plan: the rows by id as they will stand, and the dormant
@@ -24,6 +24,7 @@ export function planSteps(
   rows: PlanRows,
 ): ImportStep[] {
   const items = new Map(w.container.items.map((item) => [item.key, item]));
+  const storedKeys = new Set(w.container.items.map((item) => storedItemKey(item.key)));
   const item = (key: string): MemoryItem =>
     found(items.get(key), `planned key ${key} was not read`);
   const live = (id: string): MemoryEntry =>
@@ -49,7 +50,9 @@ export function planSteps(
     ...plan.setAside.map((id): ImportStep => ({
       kind: 'setAside',
       id,
-      why: items.has(splitSource(live(id).source, w.prefix).key) ? 'note-changed' : 'note-gone',
+      why: storedKeys.has(splitSource(live(id).source, w.prefix).key)
+        ? 'note-changed'
+        : 'note-gone',
     })),
   ];
 }

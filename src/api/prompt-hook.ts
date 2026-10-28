@@ -32,6 +32,7 @@ import type { MemoryEntry } from '../base/memory/entry.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
+import { refuseSecretKeyList } from '../base/errors/secret-keys.js';
 import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
@@ -347,6 +348,7 @@ export interface PromptHookOptions {
  * route is bounded too. */
 export function assertCallerIds(sessionId: string, project: CallerProject): void {
   const { name, legacyName, aliases = [] } = project;
+  refuseSecretKeyList('session id and project names', [sessionId, name, legacyName, ...aliases]);
   if (aliases.length > MAX_PROJECT_ALIASES) {
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   }

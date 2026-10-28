@@ -3,6 +3,8 @@
 // `origin`, else the folder name. src/host/project-identity.ts walks the disk to resolve one.
 import { BadRequestError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
+import { refuseSecretKeyList } from '../errors/secret-keys.js';
+import { secretSpans, storedSource } from '../util/secret-detect.js';
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
@@ -17,6 +19,9 @@ export interface ProjectIdentity {
   /** Every other name this root resolves to (the project file id, the origin remote even with
    * the rule off, legacyName), so rows written under an earlier id stay readable. */
   aliases?: readonly string[];
+  /** The lowercased raw names whose stored form differs, from this machine's folder, remote or project file:
+   * matched on read so rows stamped before stored names stay in their project; never sent or stored. */
+  rawNames?: readonly string[];
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
 }
@@ -30,7 +35,9 @@ export interface ResolveProjectIdentityOptions {
 
 /** A reader's project: a bare name, or an identity whose own rows may also carry its legacy
  * folder name. */
-export type ProjectRef = string | Pick<ProjectIdentity, 'name' | 'legacyName' | 'aliases'>;
+export type ProjectRef =
+  | string
+  | Pick<ProjectIdentity, 'name' | 'legacyName' | 'aliases' | 'rawNames'>;
 
 function isBareName(project: ProjectRef): project is string {
   return typeof project === 'string';
@@ -45,9 +52,19 @@ export function projectId(project: ProjectRef): string {
  * legacy name. */
 export function projectNames(project: ProjectRef): readonly string[] {
   if (isBareName(project) || project.name === '') return [projectId(project)];
-  return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter(
-    (n) => n !== '',
-  );
+  const names = [
+    project.name,
+    ...(project.aliases ?? []),
+    project.legacyName,
+    ...(project.rawNames ?? []),
+  ];
+  return [...new Set(names)].filter((n) => n !== '');
+}
+
+/** The form a project name hippo derived from a folder, a remote or a project file is kept in: lowercase, with any
+ * secret span stored as storedSource stores it, so a folder named like a key never refuses a write. */
+export function storedProjectName(name: string): string {
+  return (secretSpans(name).length === 0 ? name : storedSource(name)).toLowerCase();
 }
 
 // Each project name is matched against every candidate row, so the caller's list stays short.
@@ -63,6 +80,7 @@ export function assertCallerProject(project: {
 }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
+  refuseSecretKeyList('project names', [name, ...aliases]);
   if (aliases.length > MAX_PROJECT_ALIASES) {
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   }

@@ -5,6 +5,7 @@ import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memo
 import type { RerankStep } from '../../base/rank/search-types.js';
 import type { ActiveGoals, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 const MAX_FINAL_MULTIPLIER = 3.0;
 const FIRST_MATCH_BOOST = 2.0;
@@ -116,7 +117,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const { trace } = opts;
   if (active.goals.length === 0) return { results, log: [] };
 
-  const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
+  // Goal names are stored redacted and tags raw, so both sides are keyed in stored form.
+  const goalsByTag = new Map(active.goals.map((g) => [redactSecretsStrict(g.goalName), g]));
   const goals = { goalsByTag, policiesByGoalId: active.policies };
 
   // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker
@@ -126,7 +128,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const boosted = results
     .map((r) => {
       const tags = r.entry.tags ?? [];
-      const matches = tags.filter((t) => goalsByTag.has(t));
+      const matches = [...new Set(tags.map(redactSecretsStrict))].filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier({ entry: r.entry, tags, matches, ...goals });
       // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by

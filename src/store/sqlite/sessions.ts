@@ -1,6 +1,11 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
 // binding.
-import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
+import {
+  freshActiveSnapshot,
+  SNAPSHOT_CLEAR_STATUSES,
+} from '../../base/session/session-snapshot.js';
+import { BadRequestError } from '../../base/errors/api-errors.js';
 import {
   HOOK_DB_WAIT_MS,
   sessionOf,
@@ -8,6 +13,8 @@ import {
   type DatabaseSyncLike,
 } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
+import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
+import { holdsTextSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
@@ -32,7 +39,7 @@ import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
   readHandoff,
   readLatestHandoff,
-  saveSessionHandoff,
+  saveCallerHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
 } from './handoffs.js';
@@ -112,6 +119,7 @@ function insertSessionEventRow(
   event: SessionEventInput,
   now: string,
 ): number {
+  refuseSecretKeys({ sessionId: event.sessionId, eventType: event.eventType, scope: event.scope });
   const result = cachedStatement(
     db,
     `
@@ -121,12 +129,12 @@ function insertSessionEventRow(
     `,
   ).run(
     event.sessionId,
-    event.task ?? null,
+    storedOrNull(event.task),
     event.eventType,
-    event.content,
-    event.source ?? 'cli',
+    redactSecretsStrict(event.content),
+    redactSecretsStrict(event.source ?? 'cli'),
     event.scope ?? null,
-    JSON.stringify(event.metadata ?? {}),
+    redactPayload(JSON.stringify(event.metadata ?? {})),
     tenantId,
     now,
   );
@@ -204,8 +212,9 @@ export function listSessionEvents(
     params.push(options.session_id);
   }
   if (options.task) {
-    clauses.push('task = ?');
-    params.push(options.task);
+    const task = holdsTextSql('task', options.task);
+    clauses.push(task.sql);
+    params.push(...task.params);
   }
 
   const limit = Math.max(1, Math.trunc(options.limit ?? SESSION_EVENT_LIMIT));
@@ -283,6 +292,7 @@ function insertOwnerRow(
   db: DatabaseSyncLike,
   { tenantId, sessionId, owner, createdAt }: OwnerRowOptions,
 ): number {
+  refuseSecretKeys({ sessionId, owner });
   const result = cachedStatement(
     db,
     `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
@@ -383,6 +393,7 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
 /** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
  * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
+  refuseSecretKeys({ scope: item.scope, sessionId: item.sessionId });
   const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
     const result = cachedStatement(
@@ -395,10 +406,10 @@ function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush)
     ).run(
       item.scope,
       item.sessionId ?? null,
-      item.taskId ?? null,
+      storedOrNull(item.taskId),
       item.importance ?? 0,
-      item.content,
-      JSON.stringify(item.metadata ?? {}),
+      redactSecretsStrict(item.content),
+      redactPayload(JSON.stringify(item.metadata ?? {})),
       now,
       now,
       tenantId,
@@ -496,7 +507,7 @@ function saveAny(
   }
   if (kind === 'event') return appendSessionEvent(db, files, tenantId, row);
   if (kind === 'working_memory') return wmPush(db, tenantId, row);
-  if ('handoff' in row) return saveSessionHandoff(db, tenantId, row.handoff, key);
+  if ('handoff' in row) return saveCallerHandoff(db, tenantId, row.handoff, key);
   if ('sessionEnd' in row) {
     return writeSessionEndHandoff(db, { files, tenantId, request: row.sessionEnd, key });
   }
@@ -523,6 +534,12 @@ function clearAny(
   ...[tenantId, kind, close, key]: SessionClearArgs
 ) {
   if (kind === 'working_memory') return wmClear(db, tenantId, close);
+  // Both snapshot paths bind the status as given, so the one check sits here.
+  if (!SNAPSHOT_CLEAR_STATUSES.some((status) => status === close.status)) {
+    throw new BadRequestError(
+      `snapshot status is not one of ${SNAPSHOT_CLEAR_STATUSES.join(', ')}`,
+    );
+  }
   if (close.sessionId === undefined) {
     return clearActiveTaskSnapshot(db, files, tenantId, close.status);
   }

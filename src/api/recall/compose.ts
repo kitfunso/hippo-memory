@@ -1,6 +1,7 @@
 // Recall composition: from the loaded candidates and the plan's reads to the reply and its rows;
 // touches no store. The bands are placed in bands.ts.
 import { estimateTokens } from '../../base/util/token-text.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
@@ -103,6 +104,7 @@ export function planRecall(
   ctx: Context,
   { opts, all, personalScope, profile }: PlanRecallOptions,
 ): RecallPlan {
+  refuseSecretKeys({ sessionId: opts.boost?.sessionId });
   const limit = opts.window?.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, personalScope);
   const { sessionId, goalTag } = opts.boost ?? {};

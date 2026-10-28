@@ -5,7 +5,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { heldTexts } from '../../base/util/same-text.js';
 import { audit } from './audit-event.js';
-import { deleteEntryCore } from './delete-and-batch.js';
+import { deleteEntryCore } from './entry-deletes.js';
 import {
   deleteDormantRow,
   dormantSnapshotsByIds,
@@ -26,9 +26,11 @@ import {
   checkRejectionGuard,
 } from './rejection.js';
 import {
+  contentDigests,
   normalizeValueForRejection,
   rejectionDigest,
 } from '../../base/records/rejection-digest.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type {
   AppliedRejection,
   LiftedRejection,
@@ -277,7 +279,9 @@ function applyRejection(
     rejection,
     memoryId === undefined ? undefined : entryRejectRow(db, memoryId),
   );
-  const digest = rejectionDigest(content);
+  // Every tombstone names the stored form, so values differing only in a secret share one.
+  const stored = redactSecretsStrict(content);
+  const digest = rejectionDigest(stored);
   const rejectedAt = files.clock().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
     insertRejectedValue(db, {
@@ -287,12 +291,12 @@ function applyRejection(
       rejectedBy: actor,
       rejectedAt,
       sourceMemoryId: memoryId ?? null,
-      normalizedChars: normalizeValueForRejection(content).length,
+      normalizedChars: normalizeValueForRejection(stored).length,
     }),
   );
-  // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
-  // needs a schema migration, held until approved.
-  const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
+  // SHORTCUT: hashes every text of the tenant in each form (two digests when it redacts), a page at a
+  // time with no lock held; a digest column needs a schema migration, held until approved.
+  const holdsValue: HoldsValue = (text) => contentDigests(text).includes(digest);
   const found = listHolderIds(db, rejection, holdsValue);
   const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 

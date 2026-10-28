@@ -7,6 +7,7 @@ import { LOCAL_KEY_SUBJECT } from './local-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
 import { HttpError } from '../../base/errors/http-errors.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
@@ -153,6 +154,10 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;
+  // An audit row and a lookup key hold both as sent, so a secret-shaped one is refused.
+  if (redactSecretsStrict(subject) !== subject || redactSecretsStrict(tenant) !== tenant) {
+    return null;
+  }
   const clean: ResolvedBearer = {
     tenantId: tenant,
     subject,

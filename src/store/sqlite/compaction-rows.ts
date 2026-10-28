@@ -3,8 +3,10 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
+import { redactPayload, redactSecretsStrict, storedPath } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
-import type { OriginMoveOptions } from './entry-writes.js';
+import type { OriginMoveOptions } from './entry-rewrites.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -140,11 +142,18 @@ export function openTranscriptRows(
   );
 }
 
+/** The session and trigger are keys a caller sent, so a secret-shaped one is refused; the cwd and transcript path
+ * come from the folder, so they store redacted instead. */
+function refuseCompactionKeys(m: Pick<StartedCompactionInput, 'sessionId' | 'trigger'>): void {
+  refuseSecretKeys({ sessionId: m.sessionId, trigger: m.trigger });
+}
+
 export function insertStartedCompaction(
   db: DatabaseSyncLike,
   tenantId: string,
   start: StartedCompactionInput,
 ): void {
+  refuseCompactionKeys(start);
   cachedStatement(
     db,
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, ` +
@@ -156,8 +165,8 @@ export function insertStartedCompaction(
     start.sessionId,
     start.originProject,
     start.trigger,
-    start.cwd,
-    start.transcriptPath,
+    storedPath(start.cwd),
+    storedPath(start.transcriptPath),
     start.startedAt,
   );
 }
@@ -177,7 +186,14 @@ export function markCompactionSummarized(
     `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = ` +
       `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
+  ).run(
+    redactSecretsStrict(summary),
+    redactPayload(itemsJson),
+    summarizedAt,
+    ...stamp,
+    tenantId,
+    id,
+  );
   return (result.changes ?? 0) > 0;
 }
 
@@ -188,6 +204,7 @@ export function insertSummarizedCompaction(
   row: SummarizedInsert,
 ): void {
   const { id, summary, itemsJson, summarizedAt, requestId } = row;
+  refuseCompactionKeys(meta);
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
@@ -202,12 +219,12 @@ export function insertSummarizedCompaction(
     meta.sessionId,
     meta.originProject,
     meta.trigger,
-    meta.cwd,
-    meta.transcriptPath,
+    storedPath(meta.cwd),
+    storedPath(meta.transcriptPath),
     meta.startedAt,
     summarizedAt,
-    summary,
-    itemsJson,
+    redactSecretsStrict(summary),
+    redactPayload(itemsJson),
     ...stamp,
   );
 }

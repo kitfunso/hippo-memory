@@ -1,6 +1,7 @@
 // hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not,
 // each call on a handle of its own.
 import { otherSessionsRequest } from '../rules/request-ids.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type {
   FailureEvent,
@@ -94,6 +95,11 @@ function failureTotals(
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the
  * new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
+  refuseSecretKeys({
+    sessionId: event.sessionId,
+    tool: event.tool,
+    ownerSubject: event.ownerSubject,
+  });
   const row = failureRow(event, handleNow(db));
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
   cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(retentionCutoff(row.ts));

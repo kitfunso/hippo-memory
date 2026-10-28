@@ -1,5 +1,6 @@
 // hippo.db's Cards group, the agent work board: create, list, detail and the comment write.
 
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { generateId } from '../../base/memory/entry.js';
 import { withWriteScope, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { SessionHandoff, rowToSessionHandoff } from '../../base/session/handoff.js';
@@ -74,10 +75,10 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
     `,
     ).run(
       id,
-      input.title,
+      redactSecretsStrict(input.title),
       status,
-      input.repo ?? null,
-      input.contract ?? null,
+      storedOrNull(input.repo),
+      storedOrNull(input.contract),
       input.budget ?? null,
       now,
       now,

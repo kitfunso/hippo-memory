@@ -5,6 +5,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, setFtsInSync } from '../../src/db/index.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { restoreRawTextAt } from '../_helpers/legacy-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -55,6 +56,8 @@ function seed(): MemoryEntry[] {
     row('Shared lesson nine held in a local merge', 9),
   ];
   write(globalRoot, g);
+  // g[6] is a legacy secret row: writes now redact, and the sync veto guards rows kept raw.
+  restoreRawTextAt(globalRoot, [g[6]]);
   write(localRoot, [
     { ...g[0], content: 'A local edit of lesson zero' },
     row('Shared lesson one about caching', 1),

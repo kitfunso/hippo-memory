@@ -2,6 +2,7 @@
 // the schema triggers are the backstop for a write that skips this module.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -163,7 +164,7 @@ export function insertEntityRow(
 ): Entity {
   assertTenantId('insertEntity', tenantId);
   assertEntityType(opts.entityType);
-  const name = checkedName('insertEntity', opts.name);
+  const name = redactSecretsStrict(checkedName('insertEntity', opts.name));
   const now = handleStamp(db);
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
@@ -229,7 +230,7 @@ export function updateEntityRow(
   opts: UpdateEntityOptions,
 ): Entity | null {
   assertTenantId('updateEntity', tenantId);
-  const name = checkedName('updateEntity', opts.name);
+  const name = redactSecretsStrict(checkedName('updateEntity', opts.name));
   const row = cachedStatement(
     db,
     `SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`,

@@ -4,6 +4,7 @@
  * are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the
  * surrounding call. */
 
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -42,6 +43,7 @@ const RESULT_ROWS_PER_INSERT = 100;
  * `finishRecall` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
+    refuseSecretKeys({ sessionId: input.sessionId });
     const queryHash = blockHash(input.query);
     const ts = handleStamp(db);
     return withWriteScope(db, 'write_recall_trace', () => {

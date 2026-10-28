@@ -24,7 +24,8 @@ export const SESSION_VERBS = {
     snapshot show          Show the active task snapshot
       --json               Output as JSON
     snapshot clear         Clear the active task snapshot
-      --status <status>    Mark final status (default: cleared)`,
+      --status <status>    Final status: cleared, done, completed or abandoned
+                           (default: cleared)`,
     ],
   }),
   session: verb(() => import('../session.js'), 'handleSession', {

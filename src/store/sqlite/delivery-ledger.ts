@@ -1,5 +1,6 @@
 // The delivery ledger writer: one event and its candidates per write, then the retention prune.
 
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
 import {
@@ -289,6 +290,8 @@ function writeDeliveryEvent(
   prune: DeliveryPruneSchedule,
 ): number | null {
   try {
+    const { sessionId, hostTurnId, toolUseId, runtime } = input;
+    refuseSecretKeys({ sessionId, hostTurnId, toolUseId, runtime });
     const now = Date.now();
     const pruning = prune.due(now);
     const eventId = withWriteScope(db, 'write_delivery_event', () => {

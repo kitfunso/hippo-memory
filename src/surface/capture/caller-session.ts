@@ -1,6 +1,7 @@
 // The checks every caller call shares: ids, project, the session's owner and the pilot arm, all
 // from the request, never the server's env or folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { ownerOrSubject, type Context, type ContextWith } from '../../api/types.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
@@ -62,12 +63,14 @@ export function checkedWorkingState(state: WorkingState | null): WorkingState | 
 }
 
 export function assertTrigger(trigger: string | null): void {
+  refuseSecretKeys({ trigger });
   if (trigger !== null && trigger.length > MAX_ID_LEN) {
     throw new BadRequestError(`trigger: at most ${MAX_ID_LEN} characters`);
   }
 }
 
 export function assertRequestId(requestId: string): void {
+  refuseSecretKeys({ requestId });
   if (requestId.trim() === '') throw new BadRequestError('request id: required');
   if (requestId.length > MAX_ID_LEN) {
     throw new BadRequestError(`request id: at most ${MAX_ID_LEN} characters`);

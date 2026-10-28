@@ -5,7 +5,6 @@ import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { duplicateKey, heldTexts, mergedText } from '../../base/util/same-text.js';
 import { successorAfterRetirement } from '../../base/memory/merged-row.js';
-import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
@@ -63,12 +62,8 @@ interface RetireHeldTextOptions {
 }
 
 function retireHeldText({ run, index, row, sources, rejected }: RetireHeldTextOptions): void {
-  const digests = rejected.get(row.tenantId);
-  const successor = successorAfterRetirement(
-    row,
-    sources,
-    (text) => digests?.has(rejectionDigest(text)) === true,
-  );
+  const texts = rejected.get(row.tenantId);
+  const successor = successorAfterRetirement(row, sources, (text) => texts?.has(text) === true);
   if (successor === undefined) return;
   run.result.events.push({
     kind: 'retiredText',
@@ -92,8 +87,8 @@ function askedTexts(row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>)
   return [...new Set([...live, ...heldTexts(row)])];
 }
 
-/** Per tenant, the digests of the page's asked texts that tenant rejected: one read per tenant,
- * not one per text. */
+/** Per tenant, the page's asked texts that tenant rejected in any form: one read per tenant, not
+ * one per text. */
 async function rejectedAmongPage(
   run: SleepRun,
   rows: readonly MemoryEntry[],
@@ -101,13 +96,13 @@ async function rejectedAmongPage(
 ): Promise<Map<string, ReadonlySet<string>>> {
   const asked = new Map<string, string[]>();
   for (const row of rows) {
-    const digests = asked.get(row.tenantId) ?? [];
-    digests.push(...askedTexts(row, sources).map(rejectionDigest));
-    asked.set(row.tenantId, digests);
+    const texts = asked.get(row.tenantId) ?? [];
+    texts.push(...askedTexts(row, sources));
+    asked.set(row.tenantId, texts);
   }
   const rejected = new Map<string, ReadonlySet<string>>();
-  for (const [tenantId, digests] of asked) {
-    rejected.set(tenantId, await run.tombstones.rejectedAmong(tenantId, digests));
+  for (const [tenantId, texts] of asked) {
+    rejected.set(tenantId, await run.tombstones.rejectedAmong(tenantId, texts));
   }
   return rejected;
 }
@@ -318,12 +313,10 @@ async function mergeRejected({
   used,
 }: MergeRejectedOptions): Promise<boolean> {
   const { tombstones } = run;
-  const newDigest = rejectionDigest(semantic.content);
-  // tombstones from older releases hold this format's digest
-  const oldDigest = rejectionDigest(legacyMergeContents(related));
-  const newHit = await tombstones.find(semantic.tenantId, newDigest);
-  const tombstone = newHit ?? (await tombstones.find(semantic.tenantId, oldDigest));
-  const mergeDigest = newHit ? newDigest : oldDigest;
+  const newHit = await tombstones.find(semantic.tenantId, semantic.content);
+  // tombstones from older releases hold the old format's digest
+  const tombstone =
+    newHit ?? (await tombstones.find(semantic.tenantId, legacyMergeContents(related)));
   if (!tombstone) return false;
   // Still mark used: these members are not re-tried against a different cluster in this pass; the
   // next sleep re-clusters them fresh. the old format digested the uncapped list, so rows past the
@@ -335,7 +328,7 @@ async function mergeRejected({
     actor: 'sleep',
     op: 'reject_refusal',
     metadata: {
-      digest: mergeDigest,
+      digest: tombstone.digest,
       reason: tombstone.reason,
       sourceIds: rejected.map((e) => e.id),
     },

@@ -1,5 +1,6 @@
 // The typed-object writes: audit rows, close, save with versions, the half-life mirror and incident open.
 
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { placeholders } from '../../db/sql.js';
@@ -202,7 +203,7 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
     cols.push('version', 'change_summary');
     values.push(
       row.version,
-      row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null),
+      row.save.supersedesId === undefined ? null : storedOrNull(row.save.changeSummary),
     );
   }
   const result = cachedStatement(
@@ -365,8 +366,8 @@ function openIncidentRow(
   ).run(
     memoryId,
     tenantId,
-    incidentText,
-    context ?? null,
+    redactSecretsStrict(incidentText),
+    storedOrNull(context),
     JSON.stringify(linkedMemoryIds),
     open.at,
   );
@@ -407,7 +408,7 @@ function resolveRow(
       SET status = 'resolved', resolution_text = ?, resolved_at = ?
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
-    ).run(resolve.text, resolve.at, id, tenantId);
+    ).run(redactSecretsStrict(resolve.text), resolve.at, id, tenantId);
     if (updated.changes === 0) {
       const existing = cachedStatement(
         db,

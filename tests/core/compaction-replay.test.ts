@@ -6,6 +6,8 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { replayCompactions, saveCompaction } from '../../src/surface/capture/compaction-record.js';
 import { compactionByRequest, saveItems } from '../../src/store/sqlite/compactions-record.js';
+import { insertStartedCompaction } from '../../src/store/sqlite/compaction-rows.js';
+import { runtimeJoin } from '../_helpers/secret-shapes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   compactionMemories,
@@ -276,6 +278,33 @@ describe('replay of records a killed hook left', () => {
     expect(record.status).toBe('done');
     expect(record.summary).toContain('Primary Request');
     expect(JSON.parse(record.items_json!)).toEqual(ITEMS);
+  });
+
+  it('fills a started record whose transcript sits under a folder named like a key, and stores no raw byte of it', async () => {
+    const body = 'Proj7Key2Folder9Notes4Abc';
+    const dir = path.join(s.proj, runtimeJoin('sk-', body));
+    fs.mkdirSync(dir, { recursive: true });
+    const transcript = path.join(dir, 't.jsonl');
+    fs.writeFileSync(transcript, `${transcriptLine(29, true, CONTINUED(ITEMS))}\n`);
+    const db = openHippoDb(s.hippoRoot);
+    try {
+      insertStartedCompaction(db, 'default', {
+        id: 'cmp-key',
+        sessionId: 's1',
+        originProject: 'proj',
+        trigger: 'auto',
+        cwd: dir,
+        transcriptPath: transcript,
+        startedAt: ago(30),
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
+    expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
+    const [record] = compactionRows(s.hippoRoot);
+    expect(record.status).toBe('done');
+    expect(JSON.stringify(rows('SELECT cwd, transcript_path FROM compactions'))).not.toContain(body);
   });
 
   it('ignores a compact summary written before the record started, and a record under 10 minutes old', async () => {

@@ -1,5 +1,7 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
 import type {
   ActiveGoals,
   Goal,
@@ -176,6 +178,7 @@ function pushGoal(
   goal: Omit<PushGoalOptions, 'tenantId'>,
 ): Goal {
   const opts: PushGoalOptions = { ...goal, tenantId };
+  refuseSecretKeys({ sessionId: opts.sessionId, parentGoalId: opts.parentGoalId });
   const id = newGoalId();
   const createdAt = handleStamp(db);
   const policy = opts.policy ? retrievalPolicyOf(id, opts.policy) : undefined;
@@ -190,10 +193,10 @@ function pushGoal(
       id,
       opts.sessionId,
       opts.tenantId,
-      opts.goalName,
+      redactSecretsStrict(opts.goalName),
       opts.level ?? DEFAULT_GOAL_LEVEL,
       opts.parentGoalId ?? null,
-      opts.successCondition ?? null,
+      storedOrNull(opts.successCondition),
       createdAt,
     );
     if (policy) insertRetrievalPolicy(db, policy);

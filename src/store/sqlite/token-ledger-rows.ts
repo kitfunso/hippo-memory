@@ -1,6 +1,7 @@
 // SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction
 // and the arithmetic.
 import type { DatabaseSyncLike } from '../../db/index.js';
+import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import { placeholders } from '../../db/sql.js';
 import type { TenantId } from '../../base/util/tenant.js';
@@ -19,6 +20,7 @@ interface TokenRowInput {
 }
 
 export function insertTokenRow(db: DatabaseSyncLike, row: TokenRowInput): void {
+  refuseSecretKeys({ sessionId: row.sessionId });
   cachedStatement(
     db,
     `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash)
