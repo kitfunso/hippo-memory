@@ -9,7 +9,8 @@ import { remember, promote, supersede } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
+import { supersedeNow } from '../_helpers/supersede-now.js';
+import { gateFirstWrite } from '../_helpers/write-gate.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
@@ -83,15 +84,39 @@ describe('api tenant isolation', () => {
   });
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
-  it('supersede refuses the writer that read the row before another process superseded it', async () => {
+  it('supersede refuses the writer that read the row before another writer superseded it', async () => {
     const alpha = (): FullContext => apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' });
     const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
-    const winner = await stageSupersedeWinner(alpha(), created.id, 'the winner');
-    const refused = supersede(alpha(), created.id, 'the loser');
+    const ctx = alpha();
+    const { store } = ctx;
+    const readAs: (string | null)[] = [];
+    let successorId = '';
+    const loser: FullContext = {
+      ...ctx,
+      store: {
+        ...store,
+        entriesByIds: async (...args) => {
+          const rows = await store.entriesByIds(...args);
+          readAs.push(...rows.map((row) => row.supersededBy));
+          return rows;
+        },
+        entryWrites: {
+          ...store.entryWrites,
+          supersede: gateFirstWrite(
+            (...args: Parameters<typeof store.entryWrites.supersede>) => store.entryWrites.supersede(...args),
+            async () => {
+              successorId = await supersedeNow(alpha(), created.id, 'the winner');
+            },
+          ),
+        },
+      },
+    };
+    const refused = supersede(loser, created.id, 'the loser');
     await expect(refused).rejects.toBeInstanceOf(ConflictError);
     await expect(refused).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
-    await winner.committed;
+    // A read after the winner's commit would see its successor and refuse at the early check instead.
+    expect(readAs).toEqual([null]);
 
     const db = openHippoDb(home);
     try {
@@ -100,7 +125,7 @@ describe('api tenant isolation', () => {
         `SELECT superseded_by FROM memories WHERE id = ?`,
         created.id,
       );
-      expect(old?.superseded_by).toBe(winner.successorId);
+      expect(old?.superseded_by).toBe(successorId);
       // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
       const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
       expect(Number(rows?.c)).toBe(2);
@@ -109,7 +134,7 @@ describe('api tenant isolation', () => {
       closeHippoDb(db);
     }
     await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(
-      `is already superseded by ${winner.successorId}`,
+      `is already superseded by ${successorId}`,
     );
   });
 

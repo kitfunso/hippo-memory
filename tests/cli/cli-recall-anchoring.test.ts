@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
-import { sessionRing, snapshotRing } from '../../src/api/recall/finish.js';
+import { sessionRing, snapshotRing } from '../../src/api/recall/session-rings.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

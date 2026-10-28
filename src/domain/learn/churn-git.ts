@@ -1,4 +1,4 @@
-/** Git reads for churn-staleness (src/domain/learn/invalidation.ts), through the caller's git
+/** Git reads for churn-staleness (src/domain/learn/churn-evidence.ts), through the caller's git
  * runner. */
 
 import type { GitResult, GitRunner } from '../../base/ports/git.js';

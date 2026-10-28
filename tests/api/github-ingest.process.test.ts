@@ -13,7 +13,7 @@ import type {
   GitHubPullRequestReviewCommentEvent,
 } from '../../src/surface/connectors/github/types.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { stageScratchWinner } from '../_helpers/race-winner.js';
+import { gateConnectorWrite } from '../_helpers/write-gate.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
@@ -99,8 +99,8 @@ interface LostRace {
   readonly winner: IngestResult;
 }
 
-/** The second worker's write of the same issue event, run on a scratch store so its rows can be copied in under a held lock. */
-async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Promise<IngestResult> {
+/** The second worker's write of the same issue event, on its own context. */
+async function storeAsOtherWorker(root: string, { event }: IngestInput): Promise<IngestResult> {
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
   if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
   const { issue, repository } = event.payload;
@@ -109,20 +109,24 @@ async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Prom
     issue.updated_at ?? null,
   );
   const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
-  const stored = await rememberUntrusted(ctx(scratch), { ...opts, event: logged });
+  const stored = await rememberUntrusted(ctx(root), { ...opts, event: logged });
   return {
     status: stored.duplicate ? 'skipped_duplicate' : 'ingested',
     memoryId: stored.duplicate?.memoryId ?? stored.id,
   };
 }
 
-/** Ingests `input` as the loser of a race: another process holds the write lock with the second worker's rows, and commits them while this ingest waits. */
+/** Ingests `input` as the loser of a race: the second worker's write commits after this ingest's pre-check and before its own write. */
 async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
-  const scratch = makeRoot('gh-winner');
-  const winner = await storeAsOtherWorker(scratch, input);
-  const staged = await stageScratchWinner(root, scratch, ['memories', 'github_event_log']);
-  const loser = await ingestEvent(ctx(root), input);
-  await staged.committed;
+  const winners: IngestResult[] = [];
+  const gated = gateConnectorWrite(ctx(root), async () => {
+    winners.push(await storeAsOtherWorker(root, input));
+  });
+  const loser = await ingestEvent(gated.ctx, input);
+  // A pre-check after the second worker's commit answers 'duplicate' and never reaches the guarded write.
+  expect(gated.preChecks).toEqual([false]);
+  const [winner] = winners;
+  if (!winner) throw new Error('the loser never reached its write, so the second worker never ran');
   return { loser, winner };
 }
 

@@ -24,7 +24,7 @@ import type {
   VectorIndex,
   VectorMatch,
   VectorMatchQuery,
-} from './vector-store.js';
+} from './vector-match.js';
 
 // Rows below the file's newest that may be checked for the newest row still holding what the file
 // read.

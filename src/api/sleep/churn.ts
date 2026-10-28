@@ -3,7 +3,7 @@
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
-import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
+import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/churn-stale.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import type { Context, ContextWith } from '../types.js';
 

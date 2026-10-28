@@ -3,8 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { stageWinner } from '../_helpers/race-winner.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
@@ -14,7 +13,10 @@ interface StatementProto {
   get(...params: unknown[]): object | undefined;
   all(...params: unknown[]): object[];
   iterate(...params: unknown[]): Iterable<object>;
+  readonly sourceSQL: string;
 }
+// The refresh's one read of every stored conflicts_with_json, made before it takes the write lock.
+const STORED_REFS_READ = "WHERE conflicts_with_json != '[]'";
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike, and StatementSync is what its prepare returns.
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: { prototype: DatabaseSyncLike };
@@ -58,6 +60,15 @@ function refsOf(root: string, id: string): string | null {
     return (
       db.prepare(`SELECT conflicts_with_json AS refs FROM memories WHERE id = ?`).get(id) as { refs: string | null }
     ).refs;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function setRefs(root: string, id: string, refs: string): void {
+  const db = openHippoDb(root);
+  try {
+    db.prepare(`UPDATE memories SET conflicts_with_json = ? WHERE id = ?`).run(refs, id);
   } finally {
     closeHippoDb(db);
   }
@@ -153,16 +164,35 @@ describe('conflict refresh', () => {
     expect(refsOf(root, 'mem_bulk_7')).toBe('[]');
   });
 
-  it('keeps a value another process set between the read and the write', async () => {
+  it('keeps a value another writer set between the read and the write', () => {
     const root = bulkStore(4);
-    // The other writer holds the lock before the refresh starts, so the refresh reads the old table and waits to write.
-    const winner = await stageWinner(getHippoDbPath(root), [
-      `UPDATE memories SET conflicts_with_json = '["mem_bulk_3"]' WHERE id = 'mem_bulk_1'`,
-    ]);
+    let gated = false;
+    const readAs: string[] = [];
+    const { exec } = DatabaseSync.prototype;
+    const { all } = StatementSync.prototype;
+    // The other writer commits on its own handle when the refresh opens its write scope, which is after the refresh's reads.
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+      if (sql === 'BEGIN IMMEDIATE' && !gated) {
+        gated = true;
+        setRefs(root, 'mem_bulk_1', '["mem_bulk_3"]');
+      }
+      exec.call(this, sql);
+    });
+    // The refresh counts a row its stored-refs read did not return as '[]', so this records mem_bulk_1 the same way.
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      const rows = all.apply(this, params);
+      if (this.sourceSQL.includes(STORED_REFS_READ)) {
+        const row = rows.find((r) => 'id' in r && r.id === 'mem_bulk_1');
+        readAs.push(row && 'conflicts_with_json' in row ? String(row.conflicts_with_json) : '[]');
+      }
+      return rows;
+    });
 
     replaceDetectedConflicts(root, [pair(1, 2)], NOW);
-    await winner.committed;
+    vi.restoreAllMocks();
 
+    // A refresh that read after the other writer would hold its value as the stored one and overwrite it.
+    expect(readAs).toEqual(['[]']);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_3"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');
   });

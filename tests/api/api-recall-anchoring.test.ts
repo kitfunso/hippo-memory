@@ -20,7 +20,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
-import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../../src/api/recall/finish.js';
+import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../../src/api/recall/anchoring.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';

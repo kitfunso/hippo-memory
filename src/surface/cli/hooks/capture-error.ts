@@ -2,7 +2,7 @@
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { parseJson } from '../../../base/util/json.js';
 import { isInitialized } from '../../../host/project-identity.js';
-import { flushDeliveryRecorder, startToolFailureRecorder } from '../../../api/prompt-hook.js';
+import { flushDeliveryRecorder, startToolFailureRecorder } from '../../../api/ledger-db.js';
 import { captureToolFailure } from '../../capture/capture-error.js';
 import { readHookStdin } from '../stdin.js';
 import { cliApiContext, cliHookRequest } from '../api-context.js';

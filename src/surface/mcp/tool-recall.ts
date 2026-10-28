@@ -6,13 +6,9 @@ import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/sa
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
-import {
-  hashQueryText,
-  RECALL_RECORDING,
-  sessionRing,
-  type HintConfig,
-  type RingBuffer,
-} from '../../api/recall/finish.js';
+import { RECALL_RECORDING } from '../../api/recall/finish.js';
+import { sessionRing, type RingBuffer } from '../../api/recall/session-rings.js';
+import { hashQueryText, type HintConfig } from '../../api/recall/anchoring.js';
 import { retrieveRanking } from '../../api/recall/recall.js';
 import { fitRecall } from '../../api/recall/rows.js';
 import {

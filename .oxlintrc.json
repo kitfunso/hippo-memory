@@ -384,8 +384,8 @@
           {
             "patterns": [
               {
-                "regex": "api/recall/pipeline[.]js$",
-                "importNames": ["rankRecall"],
+                "regex": "api/recall/(pipeline|rank-search|rank-stages)[.]js$",
+                "importNames": ["rankRecall", "loadRecallPool", "searchPool", "rankStages"],
                 "message": "The CLI ranks a recall through retrieveWithCliCore() in src/api/recall/request.ts."
               },
               {

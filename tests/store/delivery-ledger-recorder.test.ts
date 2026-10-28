@@ -13,7 +13,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
+import { flushDeliveryRecorder } from '../../src/api/ledger-db.js';
 import type { Ledger } from '../../src/base/ports/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';

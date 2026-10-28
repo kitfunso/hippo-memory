@@ -6,7 +6,7 @@ import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
+import { topVectorMatches, type VectorIndex } from '../../db/vector-match.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,

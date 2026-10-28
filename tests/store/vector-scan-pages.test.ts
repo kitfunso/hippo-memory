@@ -2,7 +2,8 @@
 // full sort's, ties across a page edge included, and no one statement hands back more than a page.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { decodeVector, topVectorMatches, type VectorMatch } from '../../src/db/vector-store.js';
+import { decodeVector } from '../../src/db/vector-store.js';
+import { topVectorMatches, type VectorMatch } from '../../src/db/vector-match.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, SCAN_PAGE_ROWS, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
