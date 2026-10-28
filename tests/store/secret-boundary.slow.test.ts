@@ -178,6 +178,7 @@ async function driveSessions(): Promise<void> {
       handoff: {
         version: 1,
         sessionId: 's1',
+        repoRoot: text('session_handoffs.repo_root'),
         taskId: text('session_handoffs.task_id'),
         summary: text('session_handoffs.summary'),
         nextAction: text('session_handoffs.next_action'),
@@ -456,7 +457,6 @@ const KEY_WRITES = {
   'recall_traces.session_id': () => retrieve(admin(), { query: 'deploy', boost: { sessionId: KEY } }),
   'session_owners.session_id': () => sessions().bindSessionOwner(TENANT, KEY, 'owner-a', 60_000),
   'session_owners.owner_subject': () => sessions().bindSessionOwner(TENANT, 's-owner', KEY, 60_000),
-  'session_handoffs.repo_root': () => handoff({ repoRoot: KEY }),
   'token_ledger.session_id': async () =>
     withDb((db) =>
       insertTokenRow(db, {

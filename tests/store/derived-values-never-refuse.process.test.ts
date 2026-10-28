@@ -101,6 +101,25 @@ describe('a folder named like a key', () => {
     expect(result.stdout).toContain('the folder keeps its rollback plan');
   });
 
+  it('handoff create from inside it succeeds and stores the repo root redacted', async () => {
+    const result = await runHippo(
+      ['handoff', 'create', '--summary', 'ship the rollback plan', '--session', 's1'],
+      cwd,
+      env,
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const db = openHippoDb(path.join(root, '.hippo'));
+    try {
+      // SAFETY: the SELECT names exactly the one column the record holds.
+      const rows = db.prepare('SELECT repo_root FROM session_handoffs').all() as { repo_root: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.repo_root).toContain('[REDACTED');
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(filesHolding(path.join(root, '.hippo'), BODY)).toEqual([]);
+  });
+
   it('a hook call whose project the client resolved from it succeeds', async () => {
     vi.stubEnv('HIPPO_HOME', dir);
     const project = resolveProjectIdentity(cwd);

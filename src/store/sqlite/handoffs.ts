@@ -15,6 +15,7 @@ import {
   redactSecretsStrict,
   sameStoredText,
   storedOrNull,
+  storedPath,
 } from '../../base/util/secret-detect.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
@@ -127,7 +128,7 @@ type HandoffColumn = readonly [column: string, value: string | null];
  * apart. */
 function handoffContentColumns(handoff: Omit<SessionHandoff, 'updatedAt'>): HandoffColumn[] {
   return [
-    ['repo_root', handoff.repoRoot ?? null],
+    ['repo_root', storedPath(handoff.repoRoot)],
     ['task_id', storedOrNull(handoff.taskId)],
     ['summary', redactSecretsStrict(handoff.summary)],
     ['next_action', storedOrNull(handoff.nextAction)],
@@ -168,15 +169,15 @@ function insertHandoffRow(
 }
 
 /** A caller's handoff, its keys refused when secret-shaped; session end carries stored ones, so
- * only this entrance checks them. */
+ * only this entrance checks them. The repo root is the CLI's cwd, so it stores redacted instead. */
 export function saveCallerHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key?: ContinuityKey | null,
 ): SessionHandoff {
-  const { sessionId, cardId, targetRuntime, scope, outcome, repoRoot } = handoff;
-  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome, repoRoot });
+  const { sessionId, cardId, targetRuntime, scope, outcome } = handoff;
+  refuseSecretKeys({ sessionId, cardId, targetRuntime, scope, outcome });
   return saveSessionHandoff(db, tenantId, handoff, key);
 }
 

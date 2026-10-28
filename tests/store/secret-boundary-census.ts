@@ -376,7 +376,7 @@ const CENSUS = {
   },
   session_handoffs: {
     session_id: refused('saveCallerHandoff'),
-    repo_root: refused('saveCallerHandoff'),
+    repo_root: vetted('saveSessionHandoff'),
     task_id: vetted('saveSessionHandoff'),
     summary: vetted('saveSessionHandoff'),
     next_action: vetted('saveSessionHandoff'),
