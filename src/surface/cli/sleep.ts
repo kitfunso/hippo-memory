@@ -179,7 +179,7 @@ async function runSleepCommand(
   // A store with no `hippo serve` gets its saved vector graph from its sleeps.
   if (!result.dryRun) {
     await saveVectorGraphFile(hippoRoot, {
-      maxVectors: cliConfig(hippoRoot).vectorGraph.maxVectors,
+      maxVectors: ctx.config.vectorGraph.maxVectors,
     });
   }
 }

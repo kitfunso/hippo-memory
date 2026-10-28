@@ -3,7 +3,7 @@
  * SQLite, with BLOB columns for 384-dim vectors.
  */
 
-import type { DatabaseSyncLike } from './index.js';
+import type { DatabaseSyncLike } from './sqlite.js';
 import { withWriteScope } from './busy.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
 import type { MemoryEntry } from '../base/memory/entry.js';

@@ -10,7 +10,6 @@ import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { vectorSourceOf } from '../../domain/search/hybrid.js';
 import { defaultStore } from '../open-store.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import {
   bootstrapCorpus,
   compareSummaries,
@@ -117,21 +116,21 @@ async function runCorpusEval(
       ? {
           local: cliFolder(hippoRoot),
           global: cliFolder(globalRoot),
-          embedderFor: resolveEmbeddingProvider,
+          embedderFor: infra.embedderFor,
         }
       : undefined,
     source: vectorSourceOf({
       store: defaultStore(hippoRoot),
       config: cliConfig(hippoRoot),
       onHippoDb: true,
-      embedderFor: resolveEmbeddingProvider,
+      embedderFor: infra.embedderFor,
     }),
     mmr: !boolFlag(flags, 'no-mmr'),
     mmrLambda: numberFlag(flags, 'mmr-lambda'),
     embeddingWeight: numberFlag(flags, 'embedding-weight'),
     localBump,
     runtime: cliConfig(hippoRoot).runtime,
-    cwd: process.cwd(),
+    cwd: infra.machine.cwd,
     switches: infra.evalSwitches ?? PRODUCTION_SWITCHES,
     now: infra.clock(),
   });

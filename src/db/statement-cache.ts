@@ -1,4 +1,4 @@
-import type { DatabaseSyncLike } from './index.js';
+import type { DatabaseSyncLike } from './sqlite.js';
 
 const STATEMENT_CACHE_MAX = 512;
 const statementCache = new WeakMap<

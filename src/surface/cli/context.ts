@@ -6,14 +6,12 @@ import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
 import { isSubagentPayload } from '../../base/util/hook-payload.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { autoDetectContext } from '../../api/context-auto.js';
-import { processGit } from '../../infra/git-runner.js';
-import { resolveProjectIdentity } from '../../host/project-identity.js';
 import { bookLedgerTurn, ledgerReachOf } from '../../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../api/context.js';
-import { cliApiContext, cliHookRequest } from './api-context.js';
+import { cliApiContext, cliHookRequest, type CliContext } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { strengthOf } from '../../api/types.js';
 import {
@@ -40,7 +38,7 @@ import {
   parseLimitFlag,
   stringFlagOrExit,
 } from './flag-values.js';
-import { requireInit } from './shared.js';
+import { requireInit, workingFolder } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { continuityTexts } from './print.js';
 import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
@@ -162,17 +160,16 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;
 
+  const ctx = cliApiContext(hippoRoot, resolvedTenant);
   // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls
   // back to '*'.
-  const query = contextQuery(args, flags);
-
-  const ctx = cliApiContext(hippoRoot, resolvedTenant);
+  const query = contextQuery(args, flags, ctx);
   const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
   const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const now = ctx.infra.clock();
   const input: ContextOptsInput = { query, budget, pinnedOnly, format, framing, session, rec, now };
 
-  const result = await api.contextGet(ctx, buildContextOpts(flags, input));
+  const result = await api.contextGet(ctx, buildContextOpts(flags, input, ctx));
   if (!hasContextData(result)) {
     rec?.delivered({ state: 'empty' });
     return;
@@ -204,9 +201,9 @@ function contextView(
   };
 }
 
-function contextQuery(args: string[], flags: CliFlags): string {
+function contextQuery(args: string[], flags: CliFlags, ctx: CliContext): string {
   const query = args.join(' ').trim();
-  return !query && boolFlag(flags, 'auto') ? autoDetectContext(processGit) : query;
+  return !query && boolFlag(flags, 'auto') ? autoDetectContext(ctx.infra.machine.git) : query;
 }
 
 async function renderContextView(view: ContextView, format: string, query: string): Promise<void> {
@@ -252,7 +249,11 @@ interface ContextOptsInput {
   readonly now: Date;
 }
 
-function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOptions {
+function buildContextOpts(
+  flags: CliFlags,
+  input: ContextOptsInput,
+  ctx: CliContext,
+): api.ContextOptions {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const ctxActiveScope = ctxExplicitScope || envActiveScope();
@@ -266,7 +267,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     scope: ctxActiveScope ?? undefined,
     includeRecent: parseCountFlag(flags, 'include-recent'),
     crossProject,
-    currentProject: resolveProjectIdentity(process.cwd()),
+    currentProject: ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in

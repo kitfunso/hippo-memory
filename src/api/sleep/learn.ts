@@ -53,11 +53,12 @@ export const MCP_LEARN: LearnProfile = Object.freeze({
 });
 
 export interface LearnOptions {
-  repoPath: string;
+  /** The repo to read; absent, the folder the context's machine runs in. */
+  repoPath?: string;
   days: number;
   profile: LearnProfile;
-  /** Runs the git reads, since the api layer never starts a process. */
-  git: GitRunner;
+  /** Runs the git reads, since the api layer never starts a process; absent, the machine's git. */
+  git?: GitRunner;
   /** Rows read per page of the tenant scan; defaults to TENANT_PAGE_ROWS. */
   pageRows?: number;
 }
@@ -86,8 +87,10 @@ export async function learn(
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
-  if (!isGitRepo(opts.git, opts.repoPath)) return { status: 'not-a-repo', ...none };
-  const gitLog = fetchGitLog(opts.git, opts.repoPath, opts.days);
+  const repoPath = opts.repoPath ?? ctx.infra.machine.cwd;
+  const git = opts.git ?? ctx.infra.machine.git;
+  if (repoPath === undefined || !isGitRepo(git, repoPath)) return { status: 'not-a-repo', ...none };
+  const gitLog = fetchGitLog(git, repoPath, opts.days);
   if (!gitLog.trim()) return { status: 'no-commits', ...none };
   const config = ctx.config;
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);
@@ -98,7 +101,7 @@ export async function learn(
   return {
     status: 'scanned',
     lowInfo: dropped.length,
-    ...(await writeLessons(ctx, kept, opts, config)),
+    ...(await writeLessons(ctx, kept, { ...opts, repoPath }, config)),
   };
 }
 
@@ -234,7 +237,7 @@ async function scanTenant(
 async function writeLessons(
   ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
   lessons: readonly string[],
-  opts: LearnOptions,
+  opts: LearnOptions & { readonly repoPath: string },
   config: HippoConfig,
 ): Promise<LessonCounts> {
   const { tenantId } = ctx;

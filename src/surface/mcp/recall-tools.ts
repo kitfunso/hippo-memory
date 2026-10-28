@@ -7,7 +7,6 @@ import {
   contextGet as apiGetContext,
 } from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
-import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -108,10 +107,12 @@ export async function runDrillTool({ args, ctx, api }: GroupToolCall<'dagReads'>
 function localProject(
   hippoRoot: string,
   ownsCwd: boolean,
-  { projectIdentity }: Pick<Machine, 'projectIdentity'>,
+  { projectIdentity, cwd }: Pick<Machine, 'projectIdentity' | 'cwd'>,
 ): ProjectIdentity {
   const storeProject = projectIdentity(path.dirname(path.resolve(hippoRoot)));
-  return storeProject.name !== '' || !ownsCwd ? storeProject : projectIdentity(process.cwd());
+  return storeProject.name !== '' || !ownsCwd || cwd === undefined
+    ? storeProject
+    : projectIdentity(cwd);
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall): Promise<string> {
@@ -129,7 +130,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   const result = await apiGetContext(mcpApiContext(ctx), {
     // The server's git state is no remote caller's, so a project or remote caller gets rows by
     // strength without a query.
-    q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(processGit),
+    q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(ctx.infra.machine.git),
     budget,
     exactScope,
     currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd, ctx.infra.machine),

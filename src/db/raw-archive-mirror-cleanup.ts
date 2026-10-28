@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { DatabaseSyncLike } from './index.js';
+import type { DatabaseSyncLike } from './sqlite.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 
 const LAYERS = ['episodic', 'buffer', 'semantic'] as const;

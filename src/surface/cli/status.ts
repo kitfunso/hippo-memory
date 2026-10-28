@@ -14,7 +14,6 @@ import {
 import { strengthOf } from '../../api/types.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
@@ -34,7 +33,7 @@ import {
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
-import { cliConfig, cliApiContext, type CliContext } from './api-context.js';
+import { cliApiContext, type CliContext } from './api-context.js';
 import { defaultDiagnostics } from '../open-store.js';
 
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -49,10 +48,12 @@ import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { CliExit, fail } from './exit.js';
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 
-export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Promise<void> {
+export async function handleStatus(
+  { hippoRoot, tenantId }: CommandContext,
+  ctx: CliContext = cliApiContext(hippoRoot, tenantId),
+): Promise<void> {
   requireInit(hippoRoot);
 
-  const ctx = cliApiContext(hippoRoot, tenantId);
   const { stats, counts } = await storeStatus(ctx, ctx.infra.clock(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
@@ -103,7 +104,7 @@ async function printEmbeddingStatus(
     );
     return;
   }
-  const embeddingsDisabled = cliConfig(ctx.hippoRoot).embeddings.enabled === false;
+  const embeddingsDisabled = ctx.config.embeddings.enabled === false;
   const embAvail = embedProvider.isAvailable();
   if (embeddingsDisabled) {
     console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
@@ -132,7 +133,7 @@ async function printEmbeddingStatus(
 
 function statusEmbedProvider(ctx: CliContext): EmbeddingProvider | null {
   try {
-    return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
+    return ctx.infra.embedderFor(ctx.config.embeddings);
   } catch (err) {
     // Status reports a bad provider config as "misconfigured" below instead of failing.
     log.warn('status: the embedding provider config is not usable', errorFields(err));
@@ -161,7 +162,7 @@ async function printPhysicsStatus(ctx: CliContext): Promise<void> {
       console.log('');
       console.log(
         `Physics: ${stats.count} particles, ` +
-          `${physicsEnergyText(stats, cliConfig(ctx.hippoRoot).physics.gMemory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
+          `${physicsEnergyText(stats, ctx.config.physics.gMemory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
       );
     }
   } catch (err) {

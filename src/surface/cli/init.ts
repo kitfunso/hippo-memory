@@ -118,7 +118,7 @@ async function learnScannedRepo(
   const repoHippo = path.join(repo, HIPPO_DIR);
   let added = 0;
   let lowInfo = 0;
-  if (learn && isGitRepo(processGit, repo)) {
+  if (learn && isGitRepo(machine.git, repo)) {
     const result = await learnFromRepo({
       hippoRoot: repoHippo,
       tenantId,

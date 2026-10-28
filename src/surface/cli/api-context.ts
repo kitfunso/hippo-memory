@@ -40,6 +40,7 @@ import {
   envTenant,
 } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
+import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
   createCallerState,
   newRowsOn,
@@ -48,7 +49,6 @@ import {
 } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
@@ -109,7 +109,7 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & Stor
   return {
     store: cliStore(hippoRoot),
     config: cliConfig(hippoRoot),
-    embedderFor: resolveEmbeddingProvider,
+    embedderFor: cliInfra().embedderFor,
   };
 }
 
@@ -184,6 +184,7 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 function cliReach(
   hippoRoot: string,
   store: HippoStore & StoreGroups,
+  embedderFor: EmbedderFor,
   session = commandSession,
 ): ContextReach {
   const { ledger, folderFiles } = store;
@@ -195,7 +196,7 @@ function cliReach(
       host: cliHost,
     }),
     cliConfig,
-    resolveEmbeddingProvider,
+    embedderFor,
     { ledger, folderFiles, config: cliConfig(hippoRoot) },
   );
 }
@@ -211,7 +212,8 @@ export function cliApiContext(
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
-  const reach = cliReach(hippoRoot, store);
+  const infra = cliInfra();
+  const reach = cliReach(hippoRoot, store, infra.embedderFor);
   return {
     hippoRoot,
     tenantId,
@@ -220,7 +222,7 @@ export function cliApiContext(
     reach,
     config,
     callers,
-    infra: cliInfra(),
+    infra,
   };
 }
 
@@ -232,7 +234,9 @@ export function cliSecondStore(root: string): GlobalInReach {
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one,
  * probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
-  return ledgerReachOf({ reach: cliReach(hippoRoot, cliStore(hippoRoot)) });
+  return ledgerReachOf({
+    reach: cliReach(hippoRoot, cliStore(hippoRoot), cliInfra().embedderFor),
+  });
 }
 
 /** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
@@ -274,6 +278,7 @@ export function cliStdioHost(): McpHost<CliStore> {
     (session: StoreSession, signal: AbortSignal) =>
     (hippoRoot: string, tenantId: string): McpContext<CliStore> => {
       const store = cliStore(hippoRoot, session);
+      const infra = cliInfra();
       return {
         hippoRoot,
         tenantId,
@@ -285,9 +290,9 @@ export function cliStdioHost(): McpHost<CliStore> {
         storeFor: (own) => own,
         tools,
         config: cliConfig(hippoRoot),
-        reach: cliReach(hippoRoot, store, session),
+        reach: cliReach(hippoRoot, store, infra.embedderFor, session),
         callers: callersOn(hippoRoot, store),
-        infra: cliInfra(),
+        infra,
         signal,
       };
     };

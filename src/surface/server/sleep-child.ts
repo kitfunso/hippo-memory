@@ -5,7 +5,6 @@ import { evalStoreRules } from '../../infra/eval-switches.js';
 import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rootInfra } from '../../infra/ports.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
 import {
@@ -44,14 +43,15 @@ function sleepJob(
   const storeAt = storeIn(session);
   const store = storeAt(hippoRoot);
   const config = loadConfig(hippoRoot);
+  const infra = childInfra();
   const reach = contextReach(
     defaultReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
-    resolveEmbeddingProvider,
+    infra.embedderFor,
     { ledger: store.ledger, folderFiles: store.folderFiles, config },
   );
   return sleepWholeStore(
-    { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() },
+    { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra },
     job.opts,
   );
 }

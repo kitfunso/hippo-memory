@@ -15,7 +15,6 @@ import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types
 import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
-import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
@@ -389,9 +388,9 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
     config,
   };
   // Per request, never cached at serve: the global store can be created while the server runs.
-  const reach = contextReach(opts.reachOf(team), opts.configAt, resolveEmbeddingProvider, ledger);
-  const callers = opts.callers;
   const infra = opts.infra();
+  const reach = contextReach(opts.reachOf(team), opts.configAt, infra.embedderFor, ledger);
+  const callers = opts.callers;
   const actor = bearerActor(id);
   const { store, signal } = opts;
   return { tenantId: id.tenantId, actor, store, reach, config, callers, clientKey, infra, signal };
