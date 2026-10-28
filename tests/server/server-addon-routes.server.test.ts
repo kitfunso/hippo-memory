@@ -228,7 +228,7 @@ describe('an add-on route on a worker store', () => {
   }
 
   it('answers from the store workers with the reply the in-process store gives', async () => {
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     const onWorkers = await once();
     const inProcess = await once(sqliteStore(root));
     expect(onWorkers).toEqual({ status: 200, reply: ['addon-test'] });
@@ -237,7 +237,7 @@ describe('an add-on route on a worker store', () => {
   });
 
   it('answers 501 when a call the op table missed opens hippo.db on the server thread', async () => {
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     // keyWrites answered by the worker store's server-thread part, as a method missing from WORKER_OPS would be.
     const unrouted = sqliteStoreOn(handlesOf(root, { workerOnly: true }));
     const swapped = () => Object.assign(workerSqliteStore(root), { keyWrites: unrouted.keyWrites });

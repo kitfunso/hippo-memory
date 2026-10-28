@@ -5,6 +5,7 @@ import { resolveCodexSessionTranscript } from '../../capture/codex-session.js';
 import { resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
 import { readSessionScan, recordSessionDigest } from '../../capture/session-digest.js';
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
+import type { LineLog } from '../../../base/util/log.js';
 import { isInitialized, resolveProjectIdentity } from '../../../host/project-identity.js';
 import { cliConfig, cliStore } from '../api-context.js';
 import { type CliFlags, type CommandContext, parseCountFlag, stringFlag } from '../flag-values.js';
@@ -113,7 +114,7 @@ async function captureCodexRollout(
   { hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
   transcriptPath: string,
 ): Promise<void> {
-  const digestLog = (message: string): void => appendSessionEndCloseLog(logFile, message);
+  const digestLog: LineLog = (message, opts) => appendSessionEndCloseLog(logFile, message, opts);
   const scan = readSessionScan(transcriptPath, digestLog);
   const captureOpts: CaptureOptions = {
     source: 'last-session',

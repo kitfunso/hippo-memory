@@ -11,7 +11,7 @@ import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
 import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { postReply } from '../../base/util/thread-reply.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
 import { failureReply } from './failure-reply.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -110,15 +110,12 @@ async function replyTo(
 /** Posts the reply; one that cannot be copied to the server becomes its failure, so no request
  * waits forever. */
 function answer(port: MessagePort, reply: ReaderReply): void {
-  try {
-    port.postMessage(reply);
-  } catch (err) {
-    log.error(
-      `dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`,
-      errorFields(err),
-    );
-    port.postMessage({ id: reply.id, ...failureReply(err) });
-  }
+  postReply(port, {
+    reply,
+    transfer: [],
+    failureOf: (err) => ({ id: reply.id, ...failureReply(err) }),
+    what: `dashboard reader: reply ${reply.id}`,
+  });
 }
 
 if (parentPort) {

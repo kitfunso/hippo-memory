@@ -384,7 +384,7 @@ describe('the server-thread block of the routes this file covers', () => {
     '%s fails when its handler opens hippo.db on the server thread',
     async (_route, swapped, send, status) => {
       const { root } = await copy();
-      const info = vi.spyOn(log, 'info');
+      const info = vi.spyOn(log, 'trail');
       // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 

@@ -569,11 +569,32 @@ describe('boot and the other Retry-After replies', () => {
     expect((await recall(bearer(a, { 'x-request-id': 'req-two' }))).status).toBe(429);
     expect((await recall(bearer(a, { 'x-request-id': 'req-three' }))).status).toBe(429);
     const written = stderr.mock.calls.map(([chunk]) => String(chunk));
-    expect(written.filter((line) => line.includes('rate limit'))).toEqual([
+    expect(written.filter((line) => line.includes('warn: caller over its rate limit'))).toEqual([
       expect.stringMatching(
         /^\[hippo\] warn: caller over its rate limit.* requestId=req-two tenant=default person=oid-log\n$/,
       ),
     ]);
     expect(written.join('')).not.toContain(a.slice(a.indexOf('.') + 1));
+  });
+
+  it('writes the access line and the 4xx line of each request at the default log threshold', async () => {
+    vi.stubEnv('HIPPO_LOG', '');
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await start({ perAddress: WIDE });
+    expect((await recall(localKey())).status).toBe(200);
+    const bad = await send('/v1/memories', {
+      method: 'POST',
+      headers: { ...localKey(), ...JSON_BODY, 'x-request-id': 'req-bad' },
+      body: '{',
+    });
+    expect(bad.status).toBe(400);
+    const written = stderr.mock.calls.map(([chunk]) => String(chunk));
+    expect(written).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^\[hippo\] info: request .*status=200/),
+        expect.stringMatching(/^\[hippo\] info: request .*requestId=req-bad .*status=400/),
+        expect.stringMatching(/^\[hippo\] info: (?!request ).*requestId=req-bad status=400/),
+      ]),
+    );
   });
 });

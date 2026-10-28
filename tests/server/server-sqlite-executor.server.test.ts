@@ -257,7 +257,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
 
   it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, send) => {
     const root = newRoot();
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     // The worker-backed store with one group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), {
       objects: serverThreadPart(root).objects,

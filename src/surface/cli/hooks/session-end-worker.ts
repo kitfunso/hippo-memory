@@ -10,6 +10,7 @@ import { runCapture } from '../../capture/command.js';
 import { transcriptWorkingState } from '../../capture/working-state.js';
 import { collectHandoffEvidence } from '../../capture/handoff-evidence.js';
 import type { SessionTurn } from '../../capture/transcript.js';
+import type { LineLog } from '../../../base/util/log.js';
 import {
   loadTurnPosition,
   runSessionWorker,
@@ -73,7 +74,7 @@ function runSessionEndWork({
   const transcriptPath = stringFlag(flags, 'transcript');
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;
-  const logLine = (line: string): void => appendSessionEndCloseLog(logFile, line);
+  const logLine: LineLog = (line, opts) => appendSessionEndCloseLog(logFile, line, opts);
   const ctx = cliApiContext(hippoRoot, tenantId);
   return runSessionEnd<SessionTurn, SessionScan>(ctx, {
     mode,

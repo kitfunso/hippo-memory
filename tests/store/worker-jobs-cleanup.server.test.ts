@@ -1,4 +1,4 @@
-// A store worker whose reply cannot be posted still closes its stores and its port on 'stop', and logs the failure.
+// A store worker whose reply cannot be posted ends itself, closing its stores and its port, so the server rejects the call still waiting; it logs the failure.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
@@ -16,8 +16,8 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-describe('store worker stop after a failed reply', () => {
-  it('closes the stores and the port when the last job could not post its reply, and logs it with the error fields', async () => {
+describe('store worker after a reply that cannot be posted', () => {
+  it('closes the stores and the port by itself, and logs it with the error fields', async () => {
     const root = makeRoot('worker-jobs-cleanup');
     roots.push(root);
     const { port1, port2 } = new MessageChannel();
@@ -47,12 +47,9 @@ describe('store worker stop after a failed reply', () => {
         requestId: undefined,
         walPages: 100,
       };
-      port2.postMessage(job);
-      await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(2));
-
       const closesBefore = closeStores.mock.calls.length;
       const closed = new Promise((resolve) => port2.once('close', resolve));
-      port2.postMessage('stop');
+      port2.postMessage(job);
       await closed;
       // Let a rejection that nothing handled reach the process event.
       await new Promise((resolve) => setImmediate(resolve));
@@ -60,7 +57,7 @@ describe('store worker stop after a failed reply', () => {
       expect(post).toHaveBeenCalledTimes(2);
       expect(closeStores).toHaveBeenCalledTimes(closesBefore + 1);
       expect(logged).toHaveBeenCalledWith(
-        'store worker: no reply was posted for job 7',
+        'store worker: the reply to job 7: its failure could not be sent either, ending the thread',
         expect.objectContaining({ errorClass: 'Error', stack: expect.stringContaining('port is gone') }),
       );
       expect(unhandled).toEqual([]);

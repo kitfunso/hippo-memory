@@ -1,8 +1,9 @@
 /** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or
- * unknown means warn. `HIPPO_LOG_FORMAT=json` writes JSON lines. */
+ * unknown means warn (a server also writes its request trail). `HIPPO_LOG_FORMAT=json` writes JSON lines. */
 
 import { envLogJson, envLogLevel } from './env.js';
 import { currentRequestId } from './request-scope.js';
+import { redactSecretsStrict } from './secret-detect.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
@@ -41,13 +42,21 @@ const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 const fieldValue = (value: string): string =>
   /[\s"=]/.test(value) ? JSON.stringify(value) : value;
 
-/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as
- * before. */
-export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
-  const extras = Object.entries(fields)
+/** One line to a hook's own log file; `fields` carries a caught error's errorFields. */
+export type LineLog = (line: string, opts?: { readonly fields?: LogFields }) => void;
+
+/** ` key=value` for each defined field, for a line a side file writes itself. */
+export function formatFields(fields: LogFields = {}): string {
+  return Object.entries(fields)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => ` ${k}=${fieldValue(oneLine(String(v)))}`)
     .join('');
+}
+
+/** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as
+ * before. */
+export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
+  const extras = formatFields(fields);
   return `[hippo] ${level}: ${oneLine(message)}${extras}`;
 }
 
@@ -59,7 +68,10 @@ export function formatLogJson(level: LogLevel, message: string, fields: LogField
 }
 
 function write(level: LogLevel, message: string, fields?: LogFields): void {
-  if (!isLevelEnabled(level)) return;
+  if (isLevelEnabled(level)) emit(level, message, fields);
+}
+
+function emit(level: LogLevel, message: string, fields?: LogFields): void {
   // The request id is ambient, so a line logged deep in a library call still names the request it
   // ran for.
   const stamped: LogFields = {
@@ -157,14 +169,31 @@ function causeChain(err: Error): string | undefined {
   return links.length > 0 ? links.join(' <- ') : undefined;
 }
 
+const VALUE_PREVIEW_CHARS = 200;
+
+/** A short, secret-redacted text of a thrown non-Error value. */
+function valuePreview<E>(value: E): string {
+  let text: string;
+  try {
+    text = value instanceof Object ? JSON.stringify(value) : String(value);
+  } catch {
+    // A throwing toString or a cyclic object has no text to show; the class name still logs.
+    return '(unprintable)';
+  }
+  const redacted = redactSecretsStrict(text ?? String(value));
+  return redacted.length > VALUE_PREVIEW_CHARS
+    ? `${redacted.slice(0, VALUE_PREVIEW_CHARS)}...`
+    : redacted;
+}
+
 /** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has
- * no stack. Both texts repeat the message, so `scrub` runs over them where the message is
- * redacted. */
+ * no stack but a short preview of the value. Both texts repeat the message, so `scrub` runs over
+ * them where the message is redacted. */
 export function errorFields<E>(
   err: E,
   scrub: (text: string) => string = (text) => text,
 ): LogFields {
-  if (!(err instanceof Error)) return { errorClass: 'NonError' };
+  if (!(err instanceof Error)) return { errorClass: 'NonError', value: scrub(valuePreview(err)) };
   const cause = causeChain(err);
   return {
     errorClass: err.constructor.name,
@@ -183,11 +212,28 @@ export function errorClassFields<E>(err: E): LogFields {
     : { errorClass: err.constructor.name, errno: code };
 }
 
+let requestTrailOn = false;
+
+/** A server process calls this at start, so its per-request lines write by default. A set
+ * `HIPPO_LOG` still decides, and CLI and hook processes never call it. */
+export function enableRequestTrail(): void {
+  requestTrailOn = true;
+}
+
+/** An info-level line of the server's request trail: written at info, and also at the default
+ * threshold once the process has enabled the trail. */
+function trail(message: string, fields?: LogFields): void {
+  if (isLevelEnabled('info') || (requestTrailOn && !isLogLevel(envLogLevel()))) {
+    emit('info', message, fields);
+  }
+}
+
 export const log = {
   error: (message: string, fields?: LogFields): void => write('error', message, fields),
   warn: (message: string, fields?: LogFields): void => write('warn', message, fields),
   info: (message: string, fields?: LogFields): void => write('info', message, fields),
   debug: (message: string, fields?: LogFields): void => write('debug', message, fields),
+  trail,
   once,
   warnThenDebug,
   warnThenSample,
