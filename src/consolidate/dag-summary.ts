@@ -7,6 +7,7 @@ import { certainDefect } from '../core/memory-quality.js';
 export interface DagSummaryOptions {
   apiKey: string;
   model?: string;
+  apiBaseUrl?: string;
   fetcher?: typeof fetch;
   onError?: (msg: string) => void;
 }
@@ -39,6 +40,7 @@ export async function generateDagSummary(
   const reply = await sendAnthropicMessage({
     apiKey: opts.apiKey,
     model: opts.model,
+    apiBaseUrl: opts.apiBaseUrl,
     maxTokens: SUMMARY_MAX_TOKENS,
     prompt,
     fetcher: opts.fetcher,

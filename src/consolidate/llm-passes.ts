@@ -21,7 +21,7 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
     result.details.push(line);
     log.warn(`consolidate ${phase}: ${msg}`);
   };
-  const llmOpts = { apiKey, model: config.extraction.model, fetcher };
+  const llmOpts = { apiKey, model: config.extraction.model, apiBaseUrl: config.extraction.apiBaseUrl, fetcher };
   return { apiKey, llmError, llmOpts };
 }
 

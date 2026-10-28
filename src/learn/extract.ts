@@ -23,6 +23,7 @@ export interface ExtractedFact {
 export interface ExtractOptions {
   apiKey: string;
   model?: string;
+  apiBaseUrl?: string;
   fetcher?: typeof fetch;
   /**
    * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call
@@ -56,6 +57,7 @@ export async function extractFacts(
   const reply = await sendAnthropicMessage({
     apiKey: opts.apiKey,
     model: opts.model,
+    apiBaseUrl: opts.apiBaseUrl,
     maxTokens: EXTRACTION_MAX_TOKENS,
     prompt: EXTRACTION_PROMPT + redactSecretsStrict(text),
     fetcher: opts.fetcher,

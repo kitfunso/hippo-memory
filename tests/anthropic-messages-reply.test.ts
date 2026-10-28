@@ -11,6 +11,9 @@ function send(body: string): ReturnType<typeof sendAnthropicMessage> {
 describe('sendAnthropicMessage reply reading', () => {
   it('returns the first text block, trimmed', async () => {
     expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({ ok: true, text: 'tea' });
+    expect(await send(JSON.stringify({
+      content: [{ type: 'thinking', thinking: 'reasoning' }, { type: 'text', text: '  tea  ' }],
+    }))).toEqual({ ok: true, text: 'tea' });
   });
 
   it('reports a reply with no text block as an empty failure, not as ok', async () => {

@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, t
 import { extractFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { refineSemanticMemory } from '../src/cli/refine-llm.js';
+import { sendAnthropicMessage } from '../src/util/anthropic-messages.js';
 
 // Real local HTTP server per case; the callers' own `fetcher` option points them at it, so the request bytes are what a real call sends.
 type Mode = 'ok' | 'http400' | 'http500' | 'badjson' | 'empty' | 'hang' | 'refused';
@@ -202,6 +203,30 @@ describe.each(callers)('$name over a real local server', (spec) => {
       expect(parsed.model).toBe('claude-sonnet-4-6');
       expect(parsed.max_tokens).toBe(spec.maxTokens);
       expect(parsed.messages.map((m) => m.role)).toEqual(['user']);
+    }
+  });
+});
+
+describe('MiniMax Anthropic-compatible routing', () => {
+  it.each([
+    ['https://api.minimax.io/anthropic', 'MiniMax-M3.1-Flash'],
+    ['https://api.minimaxi.com/anthropic/', 'MiniMax-M3'],
+  ])('uses the configured base URL for %s', async (apiBaseUrl, model) => {
+    const wire = await startWire('ok', 'configured reply');
+    try {
+      const reply = await sendAnthropicMessage({
+        apiKey: KEY,
+        apiBaseUrl,
+        model,
+        maxTokens: 10,
+        prompt: 'hi',
+        fetcher: wire.fetcher,
+      });
+      expect(reply).toEqual({ ok: true, text: 'configured reply' });
+      expect(wire.calledUrls).toEqual([`${apiBaseUrl.replace(/\/$/, '')}/v1/messages`]);
+      expect(JSON.parse(wire.requests[0]!.body)).toMatchObject({ model });
+    } finally {
+      await wire.close();
     }
   });
 });

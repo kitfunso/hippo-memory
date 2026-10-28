@@ -501,6 +501,22 @@ Two or more related episodes get merged into a single semantic memory. The origi
 
 Sleep keeps the store tidy. It has not been shown to improve recall. In round 2 of the mechanism audit, a slept LongMemEval store scored 3.6 points lower at hit@5 than the same store never slept, and no scorer showed sleep helping ([PR #232](https://github.com/kitfunso/hippo-memory/pull/232)).
 
+To use MiniMax for fact extraction and DAG summaries, put a MiniMax API key in
+`ANTHROPIC_API_KEY` and select its Anthropic-compatible endpoint and model in
+`.hippo/config.json`:
+
+```json
+{
+  "extraction": {
+    "model": "MiniMax-M3.1-Flash",
+    "apiBaseUrl": "https://api.minimax.io/anthropic"
+  }
+}
+```
+
+`MiniMax-M3` is also supported. For the China region, use
+`https://api.minimaxi.com/anthropic` as `apiBaseUrl`.
+
 **Experimental: learned memory-value rescue (opt-in, default off).** With
 `{"memoryValue":{"enabled":true}}` in `.hippo/config.json`, sleep consults a learned
 linear memory-value scorer before deleting a decayed memory: a memory that scores in the

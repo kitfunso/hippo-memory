@@ -99,6 +99,8 @@ export interface HippoConfig {
   extraction: {
     enabled: boolean | 'auto';
     model: string;
+    /** Anthropic Messages-compatible API base URL; `/v1/messages` is appended by the client. */
+    apiBaseUrl?: string;
   };
   multihop: {
     enabled: boolean;

@@ -35,6 +35,24 @@ describe('config.pinnedInject', () => {
   });
 });
 
+describe('config.extraction', () => {
+  it('keeps an Anthropic-compatible API base URL with the selected model', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-'));
+    try {
+      fs.writeFileSync(path.join(tmp, 'config.json'), JSON.stringify({
+        extraction: { model: 'MiniMax-M3.1-Flash', apiBaseUrl: 'https://api.minimax.io/anthropic' },
+      }));
+      expect(loadConfig(tmp).extraction).toEqual({
+        enabled: 'auto',
+        model: 'MiniMax-M3.1-Flash',
+        apiBaseUrl: 'https://api.minimax.io/anthropic',
+      });
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
 interface Loaded {
   cfg: HippoConfig;
   warnings: string[];

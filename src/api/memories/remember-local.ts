@@ -161,6 +161,7 @@ export async function extractRememberedFacts(
     const found = await extractFacts(entry.content, {
       apiKey,
       model: extraction.model,
+      apiBaseUrl: extraction.apiBaseUrl,
       fetcher,
       onError: (msg) => {
         failures.push(msg);

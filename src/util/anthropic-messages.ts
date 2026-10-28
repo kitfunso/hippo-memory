@@ -10,6 +10,7 @@ import { type JsonValue, isJsonObject, isJsonString } from './json.js';
 import { redactSecretsStrict } from './secret-detect.js';
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+const MESSAGES_PATH = '/v1/messages';
 const API_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 // Callers ask for at most 1,200 tokens, a reply of a few KB; 1 MiB leaves room for a verbose envelope.
@@ -20,16 +21,26 @@ const UTF8_MAX_BYTES_PER_CHAR = 4;
 // A bad or missing key, no credit, no permission, an unknown model: every later call gets the same answer.
 const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 404]);
 
-/** The first content block's text, trimmed; empty when the reply has no such block. */
+/** The first text content block, trimmed; thinking blocks may precede it. */
 function firstText(reply: { [key: string]: JsonValue }): string {
-  const first = Array.isArray(reply.content) ? reply.content[0] : undefined;
-  const text = isJsonObject(first) ? first.text : undefined;
-  return isJsonString(text) ? text.trim() : '';
+  if (!Array.isArray(reply.content)) return '';
+  for (const block of reply.content) {
+    const text = isJsonObject(block) ? block.text : undefined;
+    if (isJsonString(text)) return text.trim();
+  }
+  return '';
+}
+
+function messagesUrl(apiBaseUrl: string | undefined): string {
+  const base = apiBaseUrl?.trim().replace(/\/+$/, '');
+  return base ? `${base}${MESSAGES_PATH}` : MESSAGES_URL;
 }
 
 export interface AnthropicMessageRequest {
   apiKey: string;
   model?: string;
+  /** Anthropic Messages-compatible API base URL; defaults to the native endpoint. */
+  apiBaseUrl?: string;
   maxTokens: number;
   prompt: string;
   /** Injected for tests; defaults to the real fetch. */
@@ -68,7 +79,7 @@ async function errorSnippet(res: Response): Promise<string> {
 export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promise<AnthropicMessageResult> {
   let res: Response;
   try {
-    res = await fetchWithRetry(MESSAGES_URL, {
+    res = await fetchWithRetry(messagesUrl(req.apiBaseUrl), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
