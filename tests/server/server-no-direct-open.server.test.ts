@@ -261,7 +261,7 @@ describe('serve() under a store that is not hippo.db, on a folder that refuses h
   });
 
   it('leaves no hippo.db in the served folder or the global store', () => {
-    expect(readdirSync(served).sort()).toEqual([OTHER_STORE_MARKER, 'server.key', 'server.pid']);
+    expect(readdirSync(served).sort()).toEqual(['.gitignore', OTHER_STORE_MARKER, 'server.key', 'server.pid'].sort());
     expect(existsSync(join(hippoHomeDir(), 'hippo.db'))).toBe(homeBefore);
   });
 });

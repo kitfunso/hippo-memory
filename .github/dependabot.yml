@@ -1,5 +1,5 @@
 # Workflow actions are pinned to commit SHAs; this keeps the pins and their version comments current.
-# npm: one grouped pull request a month per package directory for minor and patch releases; a major comes alone. Nothing merges itself.
+# npm: one grouped pull request a week per package directory for minor and patch releases; a major comes alone. Nothing merges itself.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -12,8 +12,8 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: weekly
+    open-pull-requests-limit: 10
     groups:
       npm-root:
         patterns: ['*']
@@ -21,8 +21,8 @@ updates:
   - package-ecosystem: npm
     directory: /ui
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: weekly
+    open-pull-requests-limit: 10
     groups:
       npm-ui:
         patterns: ['*']
@@ -30,8 +30,8 @@ updates:
   - package-ecosystem: npm
     directory: /website
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: weekly
+    open-pull-requests-limit: 10
     groups:
       npm-website:
         patterns: ['*']

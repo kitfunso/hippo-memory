@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { envApiKey } from '../../base/util/env.js';
 import { errorCode, errorFields, log } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
+import { ensureKeyGitignored } from '../../host/key-gitignore.js';
+import { restrictToCurrentUser } from '../../host/windows-acl.js';
 
 const KEY_FILE = 'server.key';
 // Its own prefix, so the token never reaches an auth resolver or the API-key table.
@@ -62,6 +64,9 @@ export function issueLocalKey(hippoRoot: string): LocalKey {
   writeFileAtomic(path, `${token}\n`, { mode: KEY_FILE_MODE });
   // A file left by an older run keeps its own mode through the rename.
   chmodSync(path, KEY_FILE_MODE);
+  // chmod only toggles the read-only bit on Windows, so the ACL is what keeps other accounts out.
+  if (process.platform === 'win32') restrictToCurrentUser(path);
+  ensureKeyGitignored(hippoRoot);
   const held = digest(token);
   return {
     matches: (given) => given.startsWith(KEY_PREFIX) && timingSafeEqual(held, digest(given)),

@@ -145,7 +145,7 @@ describe('a publicJson path under a store that is not hippo.db', () => {
       // The same key on a core route does reach the store, so the zero above is the public path skipping it.
       expect((await send('GET', '/v1/memories?q=x', `Bearer ${WELL_FORMED_KEY}`)).status).toBe(401);
       expect(lookups).toBe(1);
-      expect(readdirSync(bare)).toEqual(['server.key', 'server.pid']);
+      expect(readdirSync(bare).sort()).toEqual(['.gitignore', 'server.key', 'server.pid']);
     } finally {
       await handle?.stop();
       handle = null;
