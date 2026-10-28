@@ -4,7 +4,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { refuseSecretKeys } from '../../base/errors/secret-keys.js';
-import { redactPayload, redactSecretsStrict, storedOrNull } from '../../base/util/secret-detect.js';
+import { redactPayload, redactSecretsStrict, storedPath } from '../../base/util/secret-detect.js';
 import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
 import type { OriginMoveOptions } from './entry-rewrites.js';
 
@@ -165,8 +165,8 @@ export function insertStartedCompaction(
     start.sessionId,
     start.originProject,
     start.trigger,
-    storedOrNull(start.cwd),
-    storedOrNull(start.transcriptPath),
+    storedPath(start.cwd),
+    storedPath(start.transcriptPath),
     start.startedAt,
   );
 }
@@ -219,8 +219,8 @@ export function insertSummarizedCompaction(
     meta.sessionId,
     meta.originProject,
     meta.trigger,
-    storedOrNull(meta.cwd),
-    storedOrNull(meta.transcriptPath),
+    storedPath(meta.cwd),
+    storedPath(meta.transcriptPath),
     meta.startedAt,
     summarizedAt,
     redactSecretsStrict(summary),

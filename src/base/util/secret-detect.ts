@@ -305,6 +305,13 @@ export function storedSource(source: string): string {
   return secretSpans(out).length === 0 ? out : taggedMarker(source);
 }
 
+/** A path's stored form: unchanged with no span, else with `/` separators and each part stored as storedSource
+ * stores it, so host/stored-path.ts can find the raw path again one directory entry at a time. */
+export function storedPath(path: string | null | undefined): string | null {
+  if (path == null) return null;
+  return secretSpans(path).length === 0 ? path : storedSource(path.replace(/\\/g, '/'));
+}
+
 /** Every form a row's `source` may hold for `source`: the stored form, then a raw older one. */
 export function sourceForms(source: string): readonly string[] {
   const stored = storedSource(source);

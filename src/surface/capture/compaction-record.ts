@@ -24,6 +24,7 @@ import type {
 } from '../../base/ports/store/capture.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import { loadConfig } from '../../host/config-file.js';
+import { resolveStoredPath } from '../../host/stored-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
@@ -249,10 +250,12 @@ async function replaySpool(run: Replay): Promise<number> {
 
 /** Fills one open record from its transcript; true when it saved items. */
 async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<boolean> {
-  if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
+  const transcript =
+    record.transcriptPath === null ? null : resolveStoredPath(record.transcriptPath);
+  if (transcript === null || !fs.existsSync(transcript)) return false;
   const before =
     record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
-  const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), before);
+  const found = transcriptSummary(transcript, Date.parse(record.startedAt), before);
   let text: CompactionText | null = null;
   if (found !== null) {
     const { found: listed, ...read } = readCompactionText(found);
