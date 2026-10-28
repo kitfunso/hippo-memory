@@ -120,13 +120,16 @@ type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly t
 
 /** The WHERE every session raw-row read shares: the session's live raw rows in the tenant and
  * origins, live as entriesWhere({ live: true }) reads it. */
-function sessionRawWhere({
-  sessionId,
-  tenantId,
-  origins,
-}: SessionRows<SessionRawQuery>): SqlFragment {
-  const session = narrowingAnd({ sessionId, live: true });
-  const tenant = tenantAnd(tenantId);
+// The tenant term never picks the index: idx_memories_tenant_created would walk the whole tenant.
+// `seek` names what does: the session index, or the primary key of an id list.
+function sessionRawWhere(
+  { sessionId, tenantId, origins }: SessionRows<SessionRawQuery>,
+  seek: 'session' | 'ids' = 'session',
+): SqlFragment {
+  const column = (name: string): string =>
+    seek === 'ids' && name === 'source_session_id' ? `+${name}` : name;
+  const session = narrowingAnd({ sessionId, live: true }, column);
+  const tenant = tenantAnd(tenantId, TENANT_IS);
   const origin = originAnd(origins);
   return {
     sql: `kind = 'raw'${session.sql}${tenant.sql}${origin.sql}`,
@@ -200,7 +203,7 @@ export function readSessionRawRows(
   query: SessionRows<SessionRawRows>,
 ): MemoryEntry[] {
   if (!query.sessionId) return [];
-  const where = sessionRawWhere(query);
+  const where = sessionRawWhere(query, 'ids');
   const admit = sessionScopeAdmit(query);
   return chunked([...new Set(query.ids)]).flatMap((chunk) =>
     (
