@@ -15,6 +15,7 @@ import {
   STARTS_A_SERVER,
   projectOfName,
   OWN_TIMEOUT_CEILING_MS,
+  breaksCeiling,
   ownTimeouts,
   reachesChildProcess,
 } from './lib/test-classes.mjs';
@@ -213,7 +214,7 @@ export function misnamedTests(dir) {
 }
 
 /**
- * Returns one entry per timeout over OWN_TIMEOUT_CEILING_MS, or one this check cannot read, that a test file in the
+ * Returns one entry per timeout over OWN_TIMEOUT_CEILING_MS, at or under 0, or one this check cannot prove, that a test file in the
  * default run sets for itself. The eval config runs EVAL_TESTS with its own budget.
  * @param {string} dir the tests folder
  * @returns {{ file: string, line: number, ms: number | null }[]}
@@ -225,7 +226,7 @@ export function longTimeouts(dir) {
     const file = relative(dirname(dir), path).replaceAll('\\', '/');
     if (skipped.has(file)) continue;
     for (const t of ownTimeouts(readFileSync(path, 'utf8'), path)) {
-      if (t.ms === null || t.ms > OWN_TIMEOUT_CEILING_MS) hits.push({ file, ...t });
+      if (breaksCeiling(t.ms)) hits.push({ file, ...t });
     }
   }
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
@@ -257,8 +258,8 @@ const RENAME = {
 
 function reportLong(dir, long) {
   if (long.length === 0) return;
-  console.error(`\nTimeouts over ${OWN_TIMEOUT_CEILING_MS} ms, or not a literal, in ${dir}/:`);
-  for (const t of long) console.error(`  ${t.file}:${t.line} ${t.ms ?? 'not a literal'}`);
+  console.error(`\nTimeouts over ${OWN_TIMEOUT_CEILING_MS} ms, at or under 0, or not proved, in ${dir}/:`);
+  for (const t of long) console.error(`  ${t.file}:${t.line} ${t.ms ?? 'not proved'}`);
   console.error(
     'Wait on an event (started-child.ts, waitFor), cut the seed, or name a CPU-bound test *.slow.test.ts and drop the override.\n',
   );

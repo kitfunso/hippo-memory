@@ -227,6 +227,35 @@ describe('ownTimeouts', () => {
     expect(at(`it[mode]('a', ${FN}, 20_000);`)).toEqual([20_000]);
   });
 
+  it('reads what Vitest uses: a spread or computed key anywhere gives null, and the last of two named keys wins', () => {
+    const cases: Array<[string, number | null]> = [
+      ['{ timeout: 1000, ...o }', null],
+      ['{ ...o, timeout: 1000 }', null],
+      ['{ timeout: 1000, ...{ timeout: 60_000 } }', null],
+      ['{ [key]: 1, timeout: 1000 }', null],
+      ['{ timeout: 1000, timeout: 60_000 }', 60_000],
+      ['{ timeout: 60_000, timeout: 1000 }', 1000],
+      ['{ timeout }', null],
+      ['{ timeout: -1 }', -1],
+    ];
+    for (const [opts, ms] of cases) {
+      expect(at(`it('a', ${FN}, ${opts});`), opts).toEqual([ms]);
+      expect(at(`const held = ${opts};\nit('a', ${FN}, held);`), `const ${opts}`).toEqual([ms]);
+      expect(at(`await vi.waitFor(${FN}, ${opts});`), `waitFor ${opts}`).toEqual([ms]);
+    }
+    expect(at('vi.setConfig({ testTimeout: 1000, ...o });')).toEqual([null, null]);
+    expect(at('vi.setConfig({ hookTimeout: 1000, hookTimeout: 0 });')).toEqual([0]);
+  });
+
+  it('reads 0 and a negative number, and gives null for a name it cannot hold to one value', () => {
+    expect(at(`it('a', ${FN}, 0);`)).toEqual([0]);
+    expect(at(`it('a', ${FN}, -1);`)).toEqual([-1]);
+    expect(at(`const T = 0;\nit('a', ${FN}, T);`)).toEqual([0]);
+    expect(at(`let t = 1000;\nt = 60_000;\nit('a', ${FN}, t);`)).toEqual([null]);
+    expect(at(`const opts = { timeout: 1000 };\nopts.timeout = 60_000;\nit('a', ${FN}, opts);`)).toEqual([null]);
+    expect(at(`const T = 1000;\n{ const T = 60_000; it('a', ${FN}, T); }`)).toEqual([null]);
+  });
+
   it('gives null for a timeout it cannot read: a name or a spread', () => {
     expect(at(`it('a', ${FN}, LONG);`)).toEqual([null]);
     expect(at(`it('a', ${FN}, { ...o });`)).toEqual([null]);
@@ -245,18 +274,24 @@ describe('ownTimeouts', () => {
 });
 
 describe('longTimeouts', () => {
-  it('lists each timeout over 10 s or unreadable, in any test file the eval config does not run', () => {
+  it('lists each timeout over 10 s, at or under 0, or unreadable, in any test file the eval config does not run', () => {
     const files = {
       'a.test.ts': `it('a', ${FN}, 20_000);\nit('b', ${FN}, 10_000);\n`,
       'b.process.test.ts': `it('a', ${FN}, LONG);\n`,
       'eval/token-eval-other.test.ts': `it('a', ${FN}, 20_000);\n`,
       'eval/token-eval-ab-run.test.ts': `it('a', ${FN}, 600_000);\n`,
       'ok.test.ts': `it('a', ${FN});\n`,
+      'zero.test.ts': `it('a', ${FN}, 0);\nit('b', ${FN}, 1000);\nawait expect.poll(${FN}, { timeout: -1 }).toBe(1);\n`,
+      'spread.test.ts': `vi.setConfig({ testTimeout: 1000, ...{ testTimeout: 60_000 } });\n`,
     };
     expect(inTree(files, longTimeouts)).toEqual([
       { file: 'tests/a.test.ts', line: 1, ms: 20_000 },
       { file: 'tests/b.process.test.ts', line: 1, ms: null },
       { file: 'tests/eval/token-eval-other.test.ts', line: 1, ms: 20_000 },
+      { file: 'tests/spread.test.ts', line: 1, ms: null },
+      { file: 'tests/spread.test.ts', line: 1, ms: null },
+      { file: 'tests/zero.test.ts', line: 1, ms: 0 },
+      { file: 'tests/zero.test.ts', line: 3, ms: -1 },
     ]);
   });
 });

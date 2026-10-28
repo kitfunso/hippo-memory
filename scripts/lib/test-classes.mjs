@@ -1,5 +1,6 @@
 // The vitest project a test file runs in follows from its name; vitest.config.ts and check-test-env.mjs read this.
 // A test that starts a child process, the HTTP server or a worker thread waits on the operating system, so it keeps 30 s.
+// Own timeouts read: number literals with any sign, the last named key of an object literal, a const holding either; null (a hit): a spread or computed key, a let, a twice-declared name, an object const used elsewhere.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -110,7 +111,7 @@ function destructuredApi(element, initializer, aliases) {
 /** Names bound to a test function or hook (import, const, destructuring), vitest namespaces, and consts holding options. */
 function aliasesOf(sourceFile) {
   const aliases = Object.assign(new Map(), { namespaces: new Set(), consts: new Map() });
-  const visit = (n) => {
+  const visit = (n, parent) => {
     if (ts.isImportSpecifier(n) && n.propertyName) {
       const api = apiOfName(n.propertyName.text);
       if (api) aliases.set(n.name.text, api);
@@ -125,33 +126,72 @@ function aliasesOf(sourceFile) {
     } else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
       const api = apiOf(n.initializer, aliases);
       if (api) aliases.set(n.name.text, api);
-      else if (ts.isObjectLiteralExpression(n.initializer) || ts.isNumericLiteral(n.initializer)) {
-        aliases.consts.set(n.name.text, n.initializer);
-      }
+      else holdConst(aliases.consts, n, parent);
     }
-    ts.forEachChild(n, visit);
+    ts.forEachChild(n, (child) => visit(child, n));
   };
-  visit(sourceFile);
+  visit(sourceFile, undefined);
+  dropChangedObjects(sourceFile, aliases);
   return aliases;
 }
 
-/** Milliseconds a timeout argument names, null when it is not a literal, undefined when it sets none. */
+/** A const that holds a number or an object literal; a name declared twice holds null, as either may be read. */
+function holdConst(consts, decl, list) {
+  const name = decl.name.text;
+  const isConst = list !== undefined && ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
+  const value = ts.isObjectLiteralExpression(decl.initializer) || numberOf(decl.initializer) !== undefined;
+  consts.set(name, isConst && value && !consts.has(name) ? decl.initializer : null);
+}
+
+/** An object const used anywhere but as an argument this rule reads may be changed (`opts.timeout = x`), so it holds null. */
+function dropChangedObjects(sourceFile, aliases) {
+  const visit = (n, parent) => {
+    const held = ts.isIdentifier(n) ? aliases.consts.get(n.text) : undefined;
+    if (held && ts.isObjectLiteralExpression(held) && !namesNoValue(n, parent)) {
+      const read = ts.isCallExpression(parent) && parent.arguments.includes(n) && setsTimeouts(parent, aliases);
+      if (!read) aliases.consts.set(n.text, null);
+    }
+    ts.forEachChild(n, (child) => visit(child, n));
+  };
+  visit(sourceFile, undefined);
+}
+
+/** A declared name, a member name or a property key: an identifier that reads no variable. */
+function namesNoValue(n, parent) {
+  if (parent === undefined) return false;
+  if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent)) return parent.name === n;
+  return ts.isPropertyAccessExpression(parent) && parent.name === n;
+}
+
+/** The value of a number literal, with or without a minus sign; undefined for anything else. */
+function numberOf(e) {
+  if (ts.isNumericLiteral(e)) return Number(e.text);
+  const negative = ts.isPrefixUnaryExpression(e) && e.operator === ts.SyntaxKind.MinusToken;
+  return negative && ts.isNumericLiteral(e.operand) ? -Number(e.operand.text) : undefined;
+}
+
+/** Milliseconds a timeout argument names, null when it cannot be proved, undefined when it sets none. */
 function msOf(arg, key = 'timeout', consts = new Map()) {
   if (!arg) return undefined;
-  if (ts.isIdentifier(arg) && consts.has(arg.text)) return msOf(consts.get(arg.text), key);
-  if (ts.isNumericLiteral(arg)) return Number(arg.text);
-  if (!ts.isObjectLiteralExpression(arg)) return null;
-  const named = (p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === key;
-  const prop = arg.properties.find(named);
-  if (prop) {
-    return ts.isPropertyAssignment(prop) && ts.isNumericLiteral(prop.initializer)
-      ? Number(prop.initializer.text)
-      : null;
+  if (ts.isIdentifier(arg) && consts.has(arg.text)) {
+    const held = consts.get(arg.text);
+    return held ? msOf(held, key) : null;
   }
-  // A spread or a computed key may be the timeout, so it fails closed.
+  const literal = numberOf(arg);
+  if (literal !== undefined) return literal;
+  if (!ts.isObjectLiteralExpression(arg)) return null;
+  // A spread or computed key anywhere may set the key, before or after a named one, so the object fails closed.
   const unread = (p) => ts.isSpreadAssignment(p) || (p.name && ts.isComputedPropertyName(p.name));
-  return arg.properties.some(unread) ? null : undefined;
+  if (arg.properties.some(unread)) return null;
+  const named = (p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === key;
+  // JavaScript keeps the last of two equal keys.
+  const prop = arg.properties.filter(named).at(-1);
+  if (!prop) return undefined;
+  return ts.isPropertyAssignment(prop) ? (numberOf(prop.initializer) ?? null) : null;
 }
+
+/** A timeout the default run may not set: over the ceiling, 0 or less (no timeout to Vitest), or unproved. */
+export const breaksCeiling = (ms) => ms === null || ms <= 0 || ms > OWN_TIMEOUT_CEILING_MS;
 
 /** `vi.waitFor`, `V.vi.waitFor` or `vi['waitFor']`: the object may sit under a vitest namespace. */
 function isMember(e, object, name, aliases) {
@@ -185,6 +225,13 @@ function timeoutsOf(call, aliases) {
 }
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
+
+/** A test, hook, vitest wait or vi.setConfig call: one whose arguments timeoutsOf reads. */
+function setsTimeouts(call, aliases) {
+  if (isMember(call.expression, 'vi', 'setConfig', aliases)) return true;
+  if (WAITS.some(([o, n]) => isMember(call.expression, o, n, aliases))) return true;
+  return apiOf(call.expression, aliases) !== null;
+}
 
 /**
  * Every timeout a test source sets for itself: per test, suite or hook (with any modifier or alias), vi.setConfig,
