@@ -36,8 +36,8 @@ async function seedConflict() {
 
   replaceDetectedConflicts(tmpDir, [
     {
-      memory_a_id: a.id,
-      memory_b_id: b.id,
+      memoryAId: a.id,
+      memoryBId: b.id,
       reason: 'Contradictory advice about PowerShell chaining operators',
       score: 0.85,
     },
@@ -222,8 +222,8 @@ describe('conflict tenant isolation', () => {
     writeEntry(tmpDir, b);
     replaceDetectedConflicts(tmpDir, [
       {
-        memory_a_id: a.id,
-        memory_b_id: b.id,
+        memoryAId: a.id,
+        memoryBId: b.id,
         reason: `contradictory advice for ${tenant}`,
         score: 0.8,
       },
@@ -244,8 +244,8 @@ describe('conflict tenant isolation', () => {
     for (const m of [a1, a2, b1, b2]) writeEntry(tmpDir, m);
 
     replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'tenant-a conflict', score: 0.8 },
-      { memory_a_id: b1.id, memory_b_id: b2.id, reason: 'tenant-b conflict', score: 0.8 },
+      { memoryAId: a1.id, memoryBId: a2.id, reason: 'tenant-a conflict', score: 0.8 },
+      { memoryAId: b1.id, memoryBId: b2.id, reason: 'tenant-b conflict', score: 0.8 },
     ]);
 
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
@@ -293,7 +293,7 @@ describe('conflict tenant isolation', () => {
     // refMap rebuild skipped it. The row lingered status='open' forever.
     replaceDetectedConflicts(
       tmpDir,
-      [{ memory_a_id: a.id, memory_b_id: b.id, reason: 're-detected cross-tenant', score: 0.9 }],
+      [{ memoryAId: a.id, memoryBId: b.id, reason: 're-detected cross-tenant', score: 0.9 }],
       '2026-05-22T12:00:00.000Z',
     );
 
@@ -336,8 +336,8 @@ describe('conflict tenant isolation', () => {
     writeEntry(tmpDir, c);
 
     replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'cross-tenant', score: 0.9 },
-      { memory_a_id: a.id, memory_b_id: c.id, reason: 'within-tenant', score: 0.9 },
+      { memoryAId: a.id, memoryBId: b.id, reason: 'cross-tenant', score: 0.9 },
+      { memoryAId: a.id, memoryBId: c.id, reason: 'within-tenant', score: 0.9 },
     ]);
 
     // Only the within-tenant (a, c) conflict is persisted.
@@ -354,7 +354,7 @@ describe('conflict tenant isolation', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
     replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'same-tenant at first', score: 0.8 },
+      { memoryAId: a.id, memoryBId: b.id, reason: 'same-tenant at first', score: 0.8 },
     ]);
     expect(readEntry(tmpDir, a.id)!.conflictsWith).toContain(b.id);
 
@@ -368,9 +368,7 @@ describe('conflict tenant isolation', () => {
 
     // Re-run detection passing the same pair, so the row stays open and the
     // refMap rebuild — not the resolve-stale path — is what must exclude it.
-    replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'now cross-tenant', score: 0.8 },
-    ]);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'now cross-tenant', score: 0.8 }]);
 
     // a's conflicts_with must no longer carry b's id.
     expect(readEntry(tmpDir, a.id)!.conflictsWith).not.toContain(b.id);

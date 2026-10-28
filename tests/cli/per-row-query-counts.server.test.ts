@@ -215,8 +215,8 @@ describe('the dashboard detail', () => {
       const [subject, ...others] = rows(n + 1, 'detail');
       seed(ctxFor(root), [subject, ...others]);
       replaceDetectedConflicts(root, [
-        ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
-        { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
+        ...others.map((e) => ({ memoryAId: subject.id, memoryBId: e.id, reason: 'names the subject', score: 0.9 })),
+        { memoryAId: others[0].id, memoryBId: others[1].id, reason: 'between two others', score: 0.8 },
       ]);
       const view = dashboardOf(root, () => Date.now());
       const { result, statements } = await recordStatementsAsync(() =>
@@ -271,8 +271,8 @@ describe('hippo_status', () => {
       const elsewhere = rows(2, 'elsewhere', { tenantId: 'other' });
       seed(ctxFor(root), [...own, ...elsewhere]);
       replaceDetectedConflicts(root, [
-        { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },
-        { memory_a_id: elsewhere[0].id, memory_b_id: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
+        { memoryAId: own[0].id, memoryBId: own[1].id, reason: 'own pair', score: 0.9 },
+        { memoryAId: elsewhere[0].id, memoryBId: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
       ]);
       const { result, rowsRead } = await recordStatementsAsync(() =>
         handleMcpRequest(

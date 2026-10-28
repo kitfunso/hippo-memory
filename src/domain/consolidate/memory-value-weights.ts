@@ -1,12 +1,14 @@
 /**
  * Frozen learned memory-value weight vector, GENERATED from
  * benchmarks/memory-value/weights-learned.json; never edit by hand (a sync test fails CI on drift).
+ * The literal keeps the artifact's snake_case keys; the export maps them to camelCase.
  * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read
  * this as production ranking advice.
  */
 
-/** The 8 live feature dims the fitter optimized over (FIT_DIMS). */
-export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.freeze({
+import { fromArtifact } from './memory-value-artifact.js';
+
+const ARTIFACT_WEIGHTS = {
   age_days: -0.3245577821391783,
   half_life_days: 0.11410695580440973,
   strength: -0.06310995260145681,
@@ -15,7 +17,12 @@ export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.fre
   outcome_negative: 0.37679543146869454,
   outcome_ratio: 0.0770929409760307,
   content_length: -0.6154742645858876,
-});
+} as const;
+
+/** The 8 live feature dims the fitter optimized over (FIT_DIMS), keyed in camelCase. */
+export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.freeze(
+  fromArtifact(ARTIFACT_WEIGHTS),
+);
 
 /** sha256 of benchmarks/memory-value/weights-learned.json at freeze time (weights-learned.meta.json's
  *  `weightsFileSha256`). */

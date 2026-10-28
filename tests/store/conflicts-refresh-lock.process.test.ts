@@ -75,8 +75,8 @@ function setRefs(root: string, id: string, refs: string): void {
 }
 
 const pair = (a: number, b: number) => ({
-  memory_a_id: `mem_bulk_${a}`,
-  memory_b_id: `mem_bulk_${b}`,
+  memoryAId: `mem_bulk_${a}`,
+  memoryBId: `mem_bulk_${b}`,
   reason: 'opposite values',
   score: 0.9,
 });

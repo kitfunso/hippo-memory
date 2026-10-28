@@ -149,10 +149,10 @@ describe('dashboard tallies', () => {
     const r1 = seed(store.hippoRoot, 'region is eu');
     const r2 = seed(store.hippoRoot, 'region is us');
     replaceDetectedConflicts(store.hippoRoot, [
-      { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'inside alpha', score: 0.9 },
-      { memory_a_id: a1.id, memory_b_id: b1.id, reason: 'across projects', score: 0.8 },
-      { memory_a_id: a2.id, memory_b_id: q.id, reason: 'quarantined member', score: 0.7 },
-      { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
+      { memoryAId: a1.id, memoryBId: a2.id, reason: 'inside alpha', score: 0.9 },
+      { memoryAId: a1.id, memoryBId: b1.id, reason: 'across projects', score: 0.8 },
+      { memoryAId: a2.id, memoryBId: q.id, reason: 'quarantined member', score: 0.7 },
+      { memoryAId: r1.id, memoryBId: r2.id, reason: 'already settled', score: 0.6 },
     ]);
     const settled = (await listMemoryConflicts(store.hippoRoot, 'open', 'default')).find(
       (c) => c.reason === 'already settled',
@@ -207,9 +207,7 @@ describe('dashboard tallies', () => {
     seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
     seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
     seed(root, 'another tenant', { tenantId: 'other' });
-    replaceDetectedConflicts(root, [
-      { memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 },
-    ]);
+    replaceDetectedConflicts(root, [{ memoryAId: pinned.id, memoryBId: wrong.id, reason: 'inside alpha', score: 0.9 }]);
     embed(root, [pinned.id, wrong.id]);
 
     const got = await totals();

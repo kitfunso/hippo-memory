@@ -22,14 +22,14 @@ import { DAY_MS } from '../../base/util/time.js';
 
 /** The 8 live feature dims (FIT_DIMS) — canonical order for iteration. */
 const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
-  'age_days',
-  'half_life_days',
+  'ageDays',
+  'halfLifeDays',
   'strength',
-  'retrieval_count',
-  'outcome_positive',
-  'outcome_negative',
-  'outcome_ratio',
-  'content_length',
+  'retrievalCount',
+  'outcomePositive',
+  'outcomeNegative',
+  'outcomeRatio',
+  'contentLength',
 ];
 
 /** The keep-budget operating point (the only point with measured evidence): a code constant tied to that evidence, not
@@ -43,14 +43,14 @@ const RESCUE_BUDGET = 0.3;
 const MIN_RESCUE_GROUP = 10;
 
 export interface MvFeatureVector {
-  age_days: number;
-  half_life_days: number;
+  ageDays: number;
+  halfLifeDays: number;
   strength: number;
-  retrieval_count: number;
-  outcome_positive: number;
-  outcome_negative: number;
-  outcome_ratio: number;
-  content_length: number;
+  retrievalCount: number;
+  outcomePositive: number;
+  outcomeNegative: number;
+  outcomeRatio: number;
+  contentLength: number;
 }
 
 /**
@@ -64,15 +64,15 @@ function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel):
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   return {
-    age_days: ageDays,
-    half_life_days: entry.halfLifeDays,
+    ageDays,
+    halfLifeDays: entry.halfLifeDays,
     // clock-basis, never the production decay basis — see doc comment above
     strength: calculateStrength(entry, now, rules),
-    retrieval_count: entry.retrievalCount,
-    outcome_positive: pos,
-    outcome_negative: neg,
-    outcome_ratio: (pos - neg) / (pos + neg + 1), // same formula as extract.mjs / calculateRewardFactor's ratio term
-    content_length: entry.content.length,
+    retrievalCount: entry.retrievalCount,
+    outcomePositive: pos,
+    outcomeNegative: neg,
+    outcomeRatio: (pos - neg) / (pos + neg + 1), // same formula as extract.mjs / calculateRewardFactor's ratio term
+    contentLength: entry.content.length,
   };
 }
 

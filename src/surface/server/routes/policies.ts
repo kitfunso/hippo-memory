@@ -8,9 +8,6 @@ import { MAX_DATE_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js'
 import type { VersionedRouteConfig } from './object-routes.js';
 import type { ObjectRequest } from './kind-routes.js';
 
-// The date fields get a type and length check only: the store parses the date, and the cap bounds a
-// junk string before it reaches the Date parser.
-
 async function handlePoliciesAsOf(rr: ObjectRequest): Promise<void> {
   const { res, query, ctx } = rr;
   const date = query.get('date');
@@ -27,6 +24,8 @@ export const POLICY_ROUTES: VersionedRouteConfig<'policy'> = {
   noun: 'policy',
   field: 'policy',
   listField: 'policies',
+  // The date fields get a type and length check only: the store parses them, and the cap bounds a
+  // junk string before it reaches the Date parser.
   create: (ctx, body) =>
     objectCreate(ctx, 'policy', {
       policyName: requiredString(body, 'policyName', { max: MAX_SHORT_FIELD_LEN }),

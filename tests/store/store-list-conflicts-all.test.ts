@@ -31,12 +31,12 @@ describe("listMemoryConflicts '*' sentinel", () => {
 
     // Insert two open conflicts.
     replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 },
-      { memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 },
+      { memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 },
+      { memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 },
     ]);
 
     // Resolve one by re-running with only the other.
-    replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 }]);
 
     const openOnly = await listMemoryConflicts(tmpDir, 'open');
     expect(openOnly).toHaveLength(1);
@@ -53,10 +53,10 @@ describe("listMemoryConflicts '*' sentinel", () => {
     writeEntry(tmpDir, c);
 
     replaceDetectedConflicts(tmpDir, [
-      { memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 },
-      { memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 },
+      { memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 },
+      { memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 },
     ]);
-    replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 }]);
 
     const all = await listMemoryConflicts(tmpDir, '*');
     expect(all).toHaveLength(2);
@@ -70,7 +70,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
-    replaceDetectedConflicts(tmpDir, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 }]);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 }]);
     replaceDetectedConflicts(tmpDir, []);
 
     // listMemoryConflicts(tmpDir) === listMemoryConflicts(tmpDir, 'open')
@@ -84,7 +84,7 @@ describe("listMemoryConflicts '*' sentinel", () => {
     const b = createMemory('beta', { layer: Layer.Semantic });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
-    replaceDetectedConflicts(tmpDir, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 }]);
+    replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 }]);
 
     const resolved = await listMemoryConflicts(tmpDir, 'resolved');
     expect(resolved).toHaveLength(0);

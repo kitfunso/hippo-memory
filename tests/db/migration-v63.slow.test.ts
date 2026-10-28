@@ -63,7 +63,7 @@ const PAIRS = [
   ['m_a', 'm_b'],
   ['m_a', 'm_c'],
   ['m_d', 'm_e'],
-].map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'test', score: 0.9 }));
+].map(([a, b]) => ({ memoryAId: a, memoryBId: b, reason: 'test', score: 0.9 }));
 
 /** Copies `templateId`'s row under `n` fresh ids in one statement, so 10,000 rows seed in well under a second. */
 function fill(db: DatabaseSyncLike, templateId: string, n: number): void {

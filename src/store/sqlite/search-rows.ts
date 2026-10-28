@@ -16,6 +16,7 @@ import {
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
+import { ftsAnyPhrase } from './fts-phrase.js';
 import { placeholders } from '../../db/sql.js';
 import type { OriginFilter } from '../../base/ports/store/types.js';
 import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
@@ -175,7 +176,7 @@ function listFtsCandidates(
   limit: number,
 ): MemoryRow[] {
   try {
-    const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+    const ftsQuery = ftsAnyPhrase(terms);
     // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
     // idx_memories_tenant_created keeps that join cheap.
     return cachedStatement(
@@ -240,11 +241,7 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
       `SELECT ${MEMORY_SEARCH_COLUMNS}, m.updated_at FROM memories_trigram t CROSS JOIN memories m ` +
       `ON m.rowid = t.rowid WHERE memories_trigram MATCH ?` +
       `${p.tenantPredicate}${p.archivedClauseAlias}${p.aliasScope.sql}${p.currentAlias}`,
-    params: [
-      terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR '),
-      ...p.tenantParams,
-      ...p.scopeParams,
-    ],
+    params: [ftsAnyPhrase(terms), ...p.tenantParams, ...p.scopeParams],
   };
 }
 

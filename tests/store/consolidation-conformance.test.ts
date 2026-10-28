@@ -235,7 +235,7 @@ describe('Consolidation', () => {
       ],
       snapshot: new Map([[id('edited'), rows.edited!]]),
     };
-    const conflict = { memory_a_id: id('twin1'), memory_b_id: id('twin2'), reason: 'contradiction', score: 0.9 };
+    const conflict = { memoryAId: id('twin1'), memoryBId: id('twin2'), reason: 'contradiction', score: 0.9 };
     const sqlite = await conforms([
       (g) => g.commit({ flush, expireBefore: '2020-01-01T00:00:00.000Z', dryRun: false, holdMs: 0 }),
       (g) => g.commit({ flush: null, expireBefore: '2030-01-01T00:00:00.000Z', dryRun: true, holdMs: 0 }),

@@ -510,8 +510,8 @@ describe('personal memories walk (plan lane T)', () => {
       project: alpha,
     });
     replaceDetectedConflicts(store, [
-      { memory_a_id: p1, memory_b_id: p2, reason: 'walk: A pair', score: 0.9 },
-      { memory_a_id: t1, memory_b_id: t2, reason: 'walk: team pair', score: 0.9 },
+      { memoryAId: p1, memoryBId: p2, reason: 'walk: A pair', score: 0.9 },
+      { memoryAId: t1, memoryBId: t2, reason: 'walk: team pair', score: 0.9 },
     ]);
     const open = await listMemoryConflicts(store, 'open', 'default');
     const pairOf = (id: string): number => open.find((c) => c.memoryAId === id || c.memoryBId === id)!.id;

@@ -108,8 +108,8 @@ beforeAll(() => {
     { ...createMemory('beta kafka', { tags: [] }), id: 'mem_beta1', originProject: 'beta', created: isoAgo(3) },
   ]);
   replaceDetectedConflicts(store.hippoRoot, [
-    { memory_a_id: 'mem_l001', memory_b_id: 'mem_l002', reason: 'inside alpha', score: 0.9 },
-    { memory_a_id: 'mem_l040', memory_b_id: 'mem_beta1', reason: 'across projects', score: 0.8 },
+    { memoryAId: 'mem_l001', memoryBId: 'mem_l002', reason: 'inside alpha', score: 0.9 },
+    { memoryAId: 'mem_l040', memoryBId: 'mem_beta1', reason: 'across projects', score: 0.8 },
   ]);
 }, 60_000);
 

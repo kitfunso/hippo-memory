@@ -117,7 +117,7 @@ describe('memory wire goldens', () => {
   });
 
   it('a conflict: hippo conflicts --json, trace --json open_conflicts and the conflict mirror', async () => {
-    const pair = { memory_a_id: everyFieldEntry().id, memory_b_id: recallableEntry().id };
+    const pair = { memoryAId: everyFieldEntry().id, memoryBId: recallableEntry().id };
     replaceDetectedConflicts(root, [{ ...pair, reason: 'deploy target', score: 0.87654321 }], FAKE_NOW);
     // A row write refreshes the side mirrors, the conflict one among them.
     writeEntry(root, recallableEntry());

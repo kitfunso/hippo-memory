@@ -56,7 +56,7 @@ function replyText(res: McpResponse | null): string {
 async function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): Promise<number[]> {
   replaceDetectedConflicts(
     root,
-    pairs.map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradictory deploy advice', score: 0.9 })),
+    pairs.map(([a, b]) => ({ memoryAId: a, memoryBId: b, reason: 'contradictory deploy advice', score: 0.9 })),
   );
   const open = await listMemoryConflicts(root, 'open', 'default');
   return pairs.map(([a]) => {

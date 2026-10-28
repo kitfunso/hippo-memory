@@ -103,7 +103,7 @@ describe('conflicts group', () => {
     const b = entry('deploys never run from main');
     writeEntry(r, a);
     writeEntry(r, b);
-    replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
+    replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'contradiction', score: 0.9 }]);
     const sync = sqliteStore(r).conflicts;
     const served = sqliteStore(r).conflicts;
     const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
@@ -177,7 +177,7 @@ describe('reports group', () => {
     const b = entry('second note');
     writeEntry(r, a);
     writeEntry(r, b);
-    replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'x', score: 0.9 }]);
+    replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'x', score: 0.9 }]);
     const sync = sqliteStore(r).reports;
     const served = sqliteStore(r).reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);

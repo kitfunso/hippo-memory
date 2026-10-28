@@ -162,7 +162,7 @@ describe('replaceDetectedConflicts', () => {
       const entries = rows(n, 'conflict');
       seed(ctxFor(root), entries);
       const mirrorsRewritten = ageMirrors(root);
-      const pair = { memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 };
+      const pair = { memoryAId: entries[0].id, memoryBId: entries[1].id, reason: 'test', score: 0.9 };
       const { statements } = recordStatements(() => replaceDetectedConflicts(root, [pair]));
       expect(countMatching(statements, 'UPDATE memories SET conflicts_with_json')).toBe(2);
       expect(mirrorsRewritten()).toBe(2);
@@ -178,7 +178,7 @@ describe('replaceDetectedConflicts', () => {
       const entries = rows(n, 'resolve');
       seed(ctxFor(root), entries);
       replaceDetectedConflicts(root, [
-        { memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 },
+        { memoryAId: entries[0].id, memoryBId: entries[1].id, reason: 'test', score: 0.9 },
       ]);
       const [conflict] = await listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);

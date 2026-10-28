@@ -187,8 +187,8 @@ export interface SleepRecord {
 }
 
 export type DetectedConflict = {
-  memory_a_id: string;
-  memory_b_id: string;
+  memoryAId: string;
+  memoryBId: string;
   reason: string;
   score: number;
 };

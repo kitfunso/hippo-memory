@@ -165,6 +165,6 @@ describe('sleep overlap index matches the pairwise passes', () => {
     }));
     const got = await detectConflicts(onConflict, NOW, { strength: PRODUCTION_STRENGTH });
     expect(got).toEqual(pairwiseDetectConflicts(onConflict, NOW));
-    expect(got.map((c) => [c.memory_a_id, c.memory_b_id])).toEqual([['c0', 'c1']]);
+    expect(got.map((c) => [c.memoryAId, c.memoryBId])).toEqual([['c0', 'c1']]);
   });
 });

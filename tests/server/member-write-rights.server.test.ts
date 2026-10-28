@@ -143,7 +143,7 @@ describe('write rights on a team memory over MCP', () => {
   it("refuses hippo_resolve forget of another person's loser with the 403 text, and lets a member forget its own", async () => {
     const bobs = await writes(keys.bob, 'deploys run from the main branch', { owner: BOB });
     const carols = await writes(keys.carol, 'deploys never run from the main branch', { owner: CAROL });
-    replaceDetectedConflicts(root, [{ memory_a_id: bobs, memory_b_id: carols, reason: 'deploy advice', score: 0.9 }]);
+    replaceDetectedConflicts(root, [{ memoryAId: bobs, memoryBId: carols, reason: 'deploy advice', score: 0.9 }]);
     const [conflict] = await listMemoryConflicts(root, 'open', 'default');
     const conflictId = conflict!.id;
 

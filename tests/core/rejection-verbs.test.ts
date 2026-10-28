@@ -149,8 +149,8 @@ describe('resolveConflict rejection wiring', () => {
     writeEntry(tmpDir, b);
     replaceDetectedConflicts(tmpDir, [
       {
-        memory_a_id: a.id,
-        memory_b_id: b.id,
+        memoryAId: a.id,
+        memoryBId: b.id,
         reason: 'contradictory chaining advice',
         score: 0.85,
       },
@@ -258,8 +258,8 @@ describe('resolveConflict rejection wiring', () => {
     writeEntry(tmpDir, rawLoser);
     replaceDetectedConflicts(tmpDir, [
       {
-        memory_a_id: a.id,
-        memory_b_id: rawLoser.id,
+        memoryAId: a.id,
+        memoryBId: rawLoser.id,
         reason: 'raw conflict',
         score: 0.85,
       },
@@ -294,8 +294,8 @@ describe('resolveConflict rejection wiring', () => {
 
     replaceDetectedConflicts(tmpDir, [
       {
-        memory_a_id: a.id,
-        memory_b_id: rawLoser.id,
+        memoryAId: a.id,
+        memoryBId: rawLoser.id,
         reason: 'raw conflict for mirror-purge test',
         score: 0.85,
       },
@@ -334,8 +334,8 @@ describe('resolveConflict rejection wiring', () => {
     writeEntry(tmpDir, rawLoser);
     replaceDetectedConflicts(tmpDir, [
       {
-        memory_a_id: a.id,
-        memory_b_id: rawLoser.id,
+        memoryAId: a.id,
+        memoryBId: rawLoser.id,
         reason: 'raw+reject conflict',
         score: 0.85,
       },

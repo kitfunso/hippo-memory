@@ -31,8 +31,8 @@ function seedTwoTenants() {
   const b2 = createMemory('tenant_b says the build uses vite', { tenantId: 'tenant_b' });
   for (const m of [a1, a2, b1, b2]) writeEntry(tmp.hippoRoot, m);
   replaceDetectedConflicts(tmp.hippoRoot, [
-    { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'deploy target', score: 0.9 },
-    { memory_a_id: b1.id, memory_b_id: b2.id, reason: 'build tool', score: 0.8 },
+    { memoryAId: a1.id, memoryBId: a2.id, reason: 'deploy target', score: 0.9 },
+    { memoryAId: b1.id, memoryBId: b2.id, reason: 'build tool', score: 0.8 },
   ]);
   return { a1, a2, b1 };
 }

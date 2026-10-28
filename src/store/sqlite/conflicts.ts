@@ -44,13 +44,8 @@ const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
 
-function canonicalConflictPair(
-  aId: string,
-  bId: string,
-): { memory_a_id: string; memory_b_id: string } {
-  return aId < bId
-    ? { memory_a_id: aId, memory_b_id: bId }
-    : { memory_a_id: bId, memory_b_id: aId };
+function canonicalConflictPair(aId: string, bId: string): { memoryAId: string; memoryBId: string } {
+  return aId < bId ? { memoryAId: aId, memoryBId: bId } : { memoryAId: bId, memoryBId: aId };
 }
 
 // Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
@@ -91,7 +86,7 @@ function memberOf({
   originProject,
 }: MemberOfOptions): ConflictMember | null {
   if (id === null || kind === null) return null;
-  return { scope, kind, superseded_by: supersededBy, origin_project: originProject };
+  return { scope, kind, supersededBy, originProject };
 }
 
 function toConflictRow(r: ConflictJoinRow): ConflictRow {
@@ -253,7 +248,7 @@ function readConflictRefresh(
     tenantById.set(r.id, r.tenant_id);
     if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
   }
-  const given = [...new Set(detected.flatMap((c) => [c.memory_a_id, c.memory_b_id]))].filter(
+  const given = [...new Set(detected.flatMap((c) => [c.memoryAId, c.memoryBId]))].filter(
     (id) => !tenantById.has(id),
   );
   for (const ids of chunked(given)) {
@@ -283,7 +278,7 @@ function writeConflictRefresh(
   detectedAt: string,
 ): string[] {
   const canonicalDetected = detected.map((conflict) => ({
-    ...canonicalConflictPair(conflict.memory_a_id, conflict.memory_b_id),
+    ...canonicalConflictPair(conflict.memoryAId, conflict.memoryBId),
     reason: conflict.reason,
     score: conflict.score,
   }));
@@ -301,7 +296,7 @@ function resolveStaleOpenConflicts(
   detectedAt: string,
 ): void {
   const detectedKeys = new Set(
-    canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`),
+    canonicalDetected.map((conflict) => `${conflict.memoryAId}::${conflict.memoryBId}`),
   );
 
   let after = 0;
@@ -349,10 +344,10 @@ function upsertDetectedConflicts(
   );
   for (const conflict of canonicalDetected) {
     // Skip cross-tenant pairs — never persist a conflict spanning tenants.
-    if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
+    if (!sameTenant(conflict.memoryAId, conflict.memoryBId)) continue;
     upsert.run(
-      conflict.memory_a_id,
-      conflict.memory_b_id,
+      conflict.memoryAId,
+      conflict.memoryBId,
       conflict.reason,
       conflict.score,
       detectedAt,

@@ -219,7 +219,7 @@ beforeAll(async () => {
     seed(`harbourline leaf ${i} under the beta rollup`, 'acme', { dagLevel: 1, dagParentId: ids.betaSumO });
   }
 
-  const pair = (a: string, b: string, reason: string) => ({ memory_a_id: a, memory_b_id: b, reason, score: 0.9 });
+  const pair = (a: string, b: string, reason: string) => ({ memoryAId: a, memoryBId: b, reason, score: 0.9 });
   const conflictRows = {
     acme: [
       seed('the acme cache must stay on during deploys', 'acme'),

@@ -516,7 +516,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     ).memoryId!;
     pinTo90(root, loser, 47);
     pinTo90(root, winner);
-    replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
+    replaceDetectedConflicts(root, [{ memoryAId: loser, memoryBId: winner, reason: 'contradiction', score: 0.9 }]);
     expect(await resolveConflictKeeping(root, 'default', (await listMemoryConflicts(root))[0]!.id, winner)).toBe(true);
     unrecord(root, META_KEY.typedHalfLife);
     expect(halfLifeOf(root, loser)).toBe(92);

@@ -10,6 +10,7 @@ import type { EntryFilter } from '../../base/ports/store/reports.js';
 import type { EntryTextKey } from '../../base/ports/store/sharing.js';
 import { bareText } from '../rules/copies.js';
 import { narrowingAnd } from './entry-filter.js';
+import { ftsPhrase } from './fts-phrase.js';
 import { bareTextSql } from './rule-sql.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
 import { duplicateKey } from '../../base/util/same-text.js';
@@ -33,7 +34,7 @@ const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MA
 /** The index query for `text`'s first words; null when the phrase might name no token. */
 function holdingPhrase(text: string): string | null {
   const opening = openingPhrase(text);
-  return opening === null ? null : `content : "${opening.replaceAll('"', '""')}"`;
+  return opening === null ? null : `content : ${ftsPhrase(opening)}`;
 }
 
 // mayHoldCopy over `memories` columns; binds the JSON list of bare texts twice.
