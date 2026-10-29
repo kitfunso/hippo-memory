@@ -4,7 +4,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmodSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { envApiKey } from '../../base/util/env.js';
+import { envApiKey, envSystemRoot } from '../../base/util/env.js';
 import { errorCode, errorFields, log } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { ensureKeyGitignored } from '../../host/key-gitignore.js';
@@ -65,7 +65,7 @@ export function issueLocalKey(hippoRoot: string): LocalKey {
   // A file left by an older run keeps its own mode through the rename.
   chmodSync(path, KEY_FILE_MODE);
   // chmod only toggles the read-only bit on Windows, so the ACL is what keeps other accounts out.
-  if (process.platform === 'win32') restrictToCurrentUser(path);
+  if (process.platform === 'win32') restrictToCurrentUser(path, envSystemRoot());
   ensureKeyGitignored(hippoRoot);
   const held = digest(token);
   return {

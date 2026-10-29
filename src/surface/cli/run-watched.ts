@@ -28,14 +28,7 @@ export function runWatched(
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
   kill: (pid: number) => Promise<void> = killTree,
 ): Promise<{ exitCode: number; stderr: string }> {
-  let child: ChildProcess;
-  try {
-    child = spawnArgv(argv, WATCHED_SPAWN_OPTIONS);
-  } catch (err) {
-    // A command not found on PATH ends as a failed start does: exit 1, the reason as stderr.
-    return Promise.resolve({ exitCode: 1, stderr: errorMessage(err) });
-  }
-  return watchChild(child, deadlineMs, kill);
+  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs, kill);
 }
 
 const WATCHED_SPAWN_OPTIONS: SpawnOptions = {

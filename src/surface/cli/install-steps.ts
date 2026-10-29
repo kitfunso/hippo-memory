@@ -7,7 +7,6 @@ import type { InstallResult } from '../hooks-install/rules/json-hooks.js';
 import { CODEX_TRUST_LINE, installJsonHooks } from '../hooks-install/json-hooks.js';
 import { envSkipSchedule } from '../../base/util/env.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
-import { resolveCommand } from '../../host/spawn-argv.js';
 import {
   DAILY_TASK_NAME,
   buildDailyRunnerCommand,
@@ -84,14 +83,6 @@ type RunScheduler = (
   opts: ExecFileSyncOptionsWithStringEncoding,
 ) => string;
 
-// Resolved here, not by each step, so an injected runner still sees the plain tool name.
-const runScheduler: RunScheduler = (file, args, opts) =>
-  execFileSync(resolveCommand(file), args, {
-    ...opts,
-    windowsHide: true,
-    timeout: opts.timeout ?? SCHEDULER_CALL_TIMEOUT_MS,
-  });
-
 /**
  * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the
  * scheduler refused or is missing.
@@ -109,7 +100,7 @@ function warnSchedulerTimedOut(command: string): void {
 
 export function setupDailySchedule(
   globalRoot: string,
-  run: RunScheduler = runScheduler,
+  run: RunScheduler = execFileSync,
   platform: NodeJS.Platform = process.platform,
 ): void {
   // Checked here, not per caller, so init, init --scan and setup all honour it.

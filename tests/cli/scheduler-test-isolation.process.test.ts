@@ -60,13 +60,8 @@ describe('the suite never reaches the real scheduler', () => {
       expect(r.stdout).not.toContain(SKIP_LINE);
       expect(r.stdout).toMatch(/schtasks \/create|To schedule the machine-level daily runner/);
       expect(r.calls[0]).toBe('preload');
-      if (process.platform === 'win32') {
-        // win32 looks schtasks up on PATH before it starts anything, so the empty PATH ends the try there.
-        expect(r.calls).toEqual(['preload']);
-      } else {
-        expect(r.calls.length).toBeGreaterThan(1);
-        expect(r.calls.slice(1).every((c) => /^(execSync|execFileSync) (schtasks|crontab)\b/.test(c))).toBe(true);
-      }
+      expect(r.calls.length).toBeGreaterThan(1);
+      expect(r.calls.slice(1).every((c) => /^(execSync|execFileSync) (schtasks|crontab)\b/.test(c))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

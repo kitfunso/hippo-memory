@@ -80,15 +80,19 @@ describe('quoteCmdArg', () => {
 });
 
 describe.skipIf(process.platform !== 'win32')('spawnArgv command lookup', () => {
-  it('does not find a shim that sits only in the working folder', () => {
+  it('does not find a shim that sits only in the working folder', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hippo-cwd-shim-'));
     const marker = join(dir, 'ran.txt');
     writeFileSync(join(dir, 'planted.cmd'), `@echo ran> "${marker}"\r\n`);
     const cwd = vi.spyOn(process, 'cwd').mockReturnValue(dir);
     vi.stubEnv('PATH', process.env.SystemRoot ? join(process.env.SystemRoot, 'System32') : '');
     try {
-      // A bare name with no PATH hit fails the start at once, before anything runs.
-      expect(() => spawnArgv(['planted'], { stdio: 'ignore' })).toThrow(expect.objectContaining({ code: 'ENOENT' }));
+      const child = spawnArgv(['planted'], { stdio: 'ignore' });
+      const code = await new Promise<string>((resolve) => {
+        child.on('error', (e: NodeJS.ErrnoException) => resolve(e.code ?? 'error'));
+        child.on('exit', () => resolve('exit'));
+      });
+      expect(code).toBe('ENOENT');
       expect(existsSync(marker)).toBe(false);
     } finally {
       cwd.mockRestore();
