@@ -30,7 +30,8 @@ import {
 import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
-import { runCliCommand } from './surface/cli/cli-runtime.js';
+import { cliCommand, type CliCommand } from './surface/cli/api-context.js';
+import { withStoreRuntime } from './surface/open-store.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(
@@ -253,6 +254,7 @@ async function main(
   args: string[],
   flags: CliFlags,
   hippoRoot: string,
+  cli: CliCommand,
 ): Promise<void> {
   if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
@@ -283,9 +285,9 @@ async function main(
     throw new CliExit(1);
   }
   assertVerbPorted(spec, CLI_STORE);
-  const run = (): void | Promise<void> =>
-    spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
-  await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
+  const run = (verb: CliCommand): Promise<void> =>
+    spec.run({ hippoRoot, tenantId: envTenant(), args, flags, cli: verb });
+  await (spec.scoped ? cli.request(run) : run(cli));
 }
 
 /** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
@@ -300,7 +302,10 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   const { command, args, flags } = parseArgs(argv);
   warnUnknownFlagValues();
   try {
-    await runCliCommand(() => main(command, args, flags, getHippoRoot(process.cwd())));
+    // One store runtime per command: its held writes run and its idle handles close as it ends.
+    await withStoreRuntime((runtime) =>
+      main(command, args, flags, getHippoRoot(process.cwd()), cliCommand(runtime)),
+    );
   } catch (err) {
     // The verb printed its own message. The process ends as a success does, never by process.exit,
     // which on Windows aborts Node (libuv async.c) while a fetch still has work in flight.

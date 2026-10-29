@@ -2,7 +2,7 @@
 // fresh read of the folder.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleStatus, physicsEnergyText } from '../../src/surface/cli/status.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoConfig } from '../../src/base/config/config.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
@@ -16,7 +16,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('status', () => {
   it('takes the embedder and its enabled flag from the context', async () => {
     const root = makeRoot('status-ctx-embed');
-    const base = cliApiContext(root, 'default');
+    const base = cliCommand().apiContext(root, 'default');
     const asked: HippoConfig['embeddings'][] = [];
     const provider = {
       kind: 'local',
@@ -37,7 +37,13 @@ describe('status', () => {
       },
     };
     const out = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, ctx);
+    await handleStatus({
+      cli: { ...cliCommand(), apiContext: () => ctx },
+      hippoRoot: root,
+      tenantId: 'default',
+      args: [],
+      flags: {},
+    });
     const lines = out.mock.calls.map((c) => String(c[0]));
     expect(asked).toEqual([ctx.config.embeddings]);
     expect(lines.some((l) => l.includes('disabled in config'))).toBe(true);
@@ -57,11 +63,17 @@ describe('status', () => {
       lastSimulation: '2026-01-01T00:00:00.000Z',
     }));
     await sqliteStore(root).consolidation.saveParticles(saved);
-    const base = cliApiContext(root, 'default');
+    const base = cliCommand().apiContext(root, 'default');
     const gMemory = base.config.physics.gMemory + 7;
     const ctx = { ...base, config: { ...base.config, physics: { ...base.config.physics, gMemory } } };
     const out = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, ctx);
+    await handleStatus({
+      cli: { ...cliCommand(), apiContext: () => ctx },
+      hippoRoot: root,
+      tenantId: 'default',
+      args: [],
+      flags: {},
+    });
     const line = out.mock.calls.map((c) => String(c[0])).find((l) => l.startsWith('Physics:'));
     expect(line).toContain(physicsEnergyText({ count: 2, particles: saved }, gMemory));
   });

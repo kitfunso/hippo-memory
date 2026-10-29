@@ -30,6 +30,7 @@ import {
   writeEntry,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -639,7 +640,13 @@ describe('personal memories walk (plan lane T)', () => {
     const mine = seedRow('the harrowfen pump note for the cli, kept by A', A_SCOPE, '');
     const run = (flags: Record<string, string | boolean>) =>
       runInProcess(() =>
-        handleRecall({ hippoRoot: store, tenantId: 'default', args: ['harrowfen'], flags: { json: true, ...flags } }),
+        handleRecall({
+          cli: cliCommand(),
+          hippoRoot: store,
+          tenantId: 'default',
+          args: ['harrowfen'],
+          flags: { json: true, ...flags },
+        }),
       );
     expect((await run({})).stdout).toContain(team.id);
     const scoped = await run({ scope: A_SCOPE });

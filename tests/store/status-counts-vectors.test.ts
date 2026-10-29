@@ -21,6 +21,7 @@ import {
   storedVectorSummary,
 } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -131,7 +132,7 @@ describe('hippo status embedding lines', () => {
     };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
+      await handleStatus({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args: [], flags: {} });
     } finally {
       proto[Symbol.iterator] = original;
       log.mockRestore();
@@ -297,7 +298,7 @@ describe('hippo status read bound', () => {
     const { statements } = await (async () => {
       try {
         return await recordStatementsAsync(() =>
-          handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }),
+          handleStatus({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args: [], flags: {} }),
         );
       } finally {
         log.mockRestore();

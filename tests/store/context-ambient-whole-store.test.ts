@@ -14,7 +14,7 @@ import {
   ambientStateFromTallies,
   foldAmbientRows,
 } from '../../src/base/memory/ambient.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -135,7 +135,9 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     }
 
     // Both sides score by the ratio the CLI root reads from the environment.
-    const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
+    const sql = await cliCommand()
+      .store(store)
+      .contextReads.ambientTallies('default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
     const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
     foldAmbientRows(js, live, NOW, withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio));

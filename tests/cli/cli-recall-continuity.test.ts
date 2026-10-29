@@ -8,6 +8,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const { writeEntry } = sessionPerTest();
 
@@ -28,7 +29,9 @@ afterEach(() => {
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
-  return runInProcess(() => handleRecall({ hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }));
+  return runInProcess(() =>
+    handleRecall({ cli: cliCommand(), hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }),
+  );
 }
 
 async function seedContinuity(): Promise<void> {

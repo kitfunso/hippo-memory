@@ -13,6 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let root = '';
 let store = '';
@@ -56,7 +57,13 @@ describe('hippo eval output (in process)', () => {
     const transcript: string[] = [];
     const step = async (label: string, corpus: string | null, flags: Flags = {}): Promise<void> => {
       const r = await runInProcess(() =>
-        handleEval({ hippoRoot: store, tenantId: 'default', args: corpus === null ? [] : [corpus], flags }),
+        handleEval({
+          cli: cliCommand(),
+          hippoRoot: store,
+          tenantId: 'default',
+          args: corpus === null ? [] : [corpus],
+          flags,
+        }),
       );
       transcript.push(`$ eval ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
@@ -75,7 +82,7 @@ describe('hippo eval output (in process)', () => {
     writeFileSync(badCorpus, '{"cases": 3}');
     const baseline = join(root, 'baseline.json');
     const baselineRun = await runInProcess(() =>
-      handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { json: true } }),
+      handleEval({ cli: cliCommand(), hippoRoot: store, tenantId: 'default', args: [corpus], flags: { json: true } }),
     );
     // SAFETY: `eval --json` prints the EvalSummary, whose cases each carry a numeric ndcgAt10.
     const prior = JSON.parse(baselineRun.stdout) as { cases: Array<{ ndcgAt10: number }> };
@@ -118,7 +125,9 @@ describe('hippo eval output (in process)', () => {
 
   it('names the file and the missing field when the corpus or baseline has the wrong shape', async () => {
     const run = (corpus: string, flags: Flags = {}) =>
-      runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags }));
+      runInProcess(() =>
+        handleEval({ cli: cliCommand(), hippoRoot: store, tenantId: 'default', args: [corpus], flags }),
+      );
     const noQuery = join(root, 'no-query.json');
     writeFileSync(noQuery, JSON.stringify([{ id: 'a', expectedIds: ['m1'] }]));
     const corpusReply = await run(noQuery);

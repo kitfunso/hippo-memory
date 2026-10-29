@@ -16,16 +16,7 @@ import {
 import { importMarkdownInto } from '../importers/markdown.js';
 import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
-import {
-  cliApiContext,
-  cliImportBatch,
-  cliInitGlobal,
-  cliInfra,
-  cliStore,
-  cliStoreBatch,
-  cliSyncOptions,
-  type CliContext,
-} from './api-context.js';
+import { cliInitGlobal, cliInfra, type CliContext, type CliCommand } from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requireInit } from './shared.js';
@@ -82,6 +73,7 @@ export async function handleImport({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
@@ -90,7 +82,7 @@ export async function handleImport({
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
   if (boolFlag(flags, 'agents')) {
-    return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
+    return await importAgentMemories(cli, hippoRoot, tenantId, { useGlobal, dryRun });
   }
 
   if (useGlobal) {
@@ -99,6 +91,7 @@ export async function handleImport({
     requireInit(hippoRoot);
   }
   await importIntoStore({
+    cli,
     hippoRoot,
     tenantId,
     targetRoot,
@@ -111,6 +104,7 @@ export async function handleImport({
 }
 
 interface ImportRun {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly targetRoot: string;
@@ -123,14 +117,14 @@ interface ImportRun {
 
 /** A vault folder or one file, written to the store `--global` picked. */
 async function importIntoStore(run: ImportRun): Promise<void> {
-  const { hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
+  const { cli, hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
   const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, batch: cliImportBatch(targetRoot), clock: cliInfra().clock },
+    target: { root: targetRoot, batch: cli.importBatch(targetRoot), clock: cliInfra().clock },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it
@@ -139,6 +133,7 @@ async function importIntoStore(run: ImportRun): Promise<void> {
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) {
     return await importVaultFolder({
+      cli,
       hippoRoot,
       tenantId,
       folderPath: vault,
@@ -148,7 +143,7 @@ async function importIntoStore(run: ImportRun): Promise<void> {
       dryRun,
     });
   }
-  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
+  importFromFile(targetRoot, args, flags, { cli, importOptions, useGlobal, dryRun, tenantId });
 }
 
 type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPTInto>;
@@ -202,6 +197,7 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
 }
 
 interface ImportFromFileOptions {
+  readonly cli: CliCommand;
   readonly importOptions: TargetedImport;
   readonly useGlobal: boolean;
   readonly dryRun: boolean;
@@ -214,7 +210,7 @@ function importFromFile(
   flags: CliFlags,
   options: ImportFromFileOptions,
 ): void {
-  const { importOptions, useGlobal, dryRun, tenantId } = options;
+  const { cli, importOptions, useGlobal, dryRun, tenantId } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
@@ -233,7 +229,7 @@ function importFromFile(
   // The importers' writeEntry sites don't embed, so the new rows are embedded here in one pass.
   if (!dryRun && result.imported >= 1) {
     backfillVectors(
-      cliApiContext(targetRoot, tenantId),
+      cli.apiContext(targetRoot, tenantId),
       useGlobal ? 'hippo embed --global' : 'hippo embed',
     );
   }
@@ -278,11 +274,12 @@ function printFileImportSummary(
 }
 
 async function importAgentMemories(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
-  const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
+  const opts = cli.syncOptions(tenantId, currentMachine(), { dryRun });
   // A folder without a store of its own imports as session end would there, so its notes are not
   // hidden.
   const report =
@@ -294,6 +291,7 @@ async function importAgentMemories(
 }
 
 interface VaultFolderOptions {
+  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   folderPath: string;
@@ -304,7 +302,7 @@ interface VaultFolderOptions {
 }
 
 async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
-  const { hippoRoot, tenantId, folderPath, flags, importOptions, useGlobal, dryRun } = options;
+  const { cli, hippoRoot, tenantId, folderPath, flags, importOptions, useGlobal, dryRun } = options;
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
     ...importOptions,
@@ -312,11 +310,11 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
   const vaultResult = await importVaultInto(folderPath, vaultOptions, {
-    store: cliStore(hippoRoot),
-    batch: cliStoreBatch(hippoRoot),
+    store: cli.store(hippoRoot),
+    batch: cli.storeBatch(hippoRoot),
     infra: cliInfra(),
   });
-  printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
+  printVaultSummary(vaultResult, folderPath, cli.apiContext(hippoRoot, tenantId), dryRun);
 }
 
 function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {

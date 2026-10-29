@@ -5,13 +5,17 @@ import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
-import { cliApiContext } from './api-context.js';
+import type { CliCommand } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and
  * runs again next time. */
-export async function repairQualityOnce(root: string, tenantId: string): Promise<void> {
+export async function repairQualityOnce(
+  cli: CliCommand,
+  root: string,
+  tenantId: string,
+): Promise<void> {
   try {
-    const result = await memoryQualityRepairOnce(cliApiContext(root, tenantId));
+    const result = await memoryQualityRepairOnce(cli.apiContext(root, tenantId));
     if (result === null) return;
     if (!result.supported) {
       log.warn(

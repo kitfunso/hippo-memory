@@ -16,6 +16,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadEveryTenantEntries, readEntry } from '../_helpers/root-forms.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const NO_OWNER_TEXT =
   'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
@@ -146,6 +147,7 @@ describe('client scopes', () => {
     try {
       await expect(
         handleRemember({
+          cli: cliCommand(),
           hippoRoot: root,
           tenantId: 'default',
           args: ['cli personal attempt'],
@@ -154,6 +156,7 @@ describe('client scopes', () => {
       ).rejects.toThrow(BadRequestError);
       expect(loadEveryTenantEntries(root)).toHaveLength(0);
       await handleRemember({
+        cli: cliCommand(),
         hippoRoot: root,
         tenantId: 'default',
         args: ['cli team note'],

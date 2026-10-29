@@ -11,6 +11,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -192,7 +193,9 @@ describe('POST /v1/auth/keys defaults', () => {
 
 describe('hippo auth create defaults', () => {
   const create = (flags: Record<string, string | boolean>) =>
-    runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags }));
+    runInProcess(() =>
+      handleAuth({ cli: cliCommand(), hippoRoot: home, tenantId: 'default', args: ['create'], flags }),
+    );
 
   it('prints the role and the expiry date, and says on stderr which defaults it took and how to ask for an admin key', async () => {
     const run = await create({});
@@ -273,7 +276,13 @@ describe('the first key of a store', () => {
     const before = await fetch(`${handle.url}/v1/quarantine`);
     expect(before.status).toBe(401);
     const run = await runInProcess(() =>
-      handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { role: 'admin', json: true } }),
+      handleAuth({
+        cli: cliCommand(),
+        hippoRoot: home,
+        tenantId: 'default',
+        args: ['create'],
+        flags: { role: 'admin', json: true },
+      }),
     );
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;
@@ -284,7 +293,7 @@ describe('the first key of a store', () => {
 
   it('gets no wider role for being first: with no role named it is a member key', async () => {
     const run = await runInProcess(() =>
-      handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { json: true } }),
+      handleAuth({ cli: cliCommand(), hippoRoot: home, tenantId: 'default', args: ['create'], flags: { json: true } }),
     );
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;

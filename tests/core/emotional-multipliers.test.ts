@@ -13,7 +13,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
 } from '../../src/base/memory/strength.js';
 import { outcome, retrieve } from '../../src/api/index.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -157,7 +157,7 @@ describe('the CLI root reads the ratio into the store it builds', () => {
     try {
       const entry = makeEntry('negative');
       writeEntry(root, entry);
-      await outcome(cliApiContext(root, 'default'), [entry.id], false);
+      await outcome(cliCommand().apiContext(root, 'default'), [entry.id], false);
       return readEntry(root, entry.id)!.strength;
     } finally {
       safeRmSync(root);

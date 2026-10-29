@@ -7,7 +7,7 @@ import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { handoffText, snapshotText } from '../../src/api/context/context-render.js';
@@ -33,7 +33,7 @@ let home: string;
 let hippoRoot: string;
 let globalRoot: string;
 
-const ctx = () => cliApiContext(hippoRoot, 'default');
+const ctx = () => cliCommand().apiContext(hippoRoot, 'default');
 const setting = (activeScope: string | null, primaryIsGlobal = false): RecallStoreSetting => ({
   globalRoot,
   primaryIsGlobal,

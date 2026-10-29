@@ -14,6 +14,7 @@ import type { TokenSurface } from '../../src/base/ports/store/ledger.js';
 import { PATH_TAGS, query, Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const NO_STORE =
@@ -300,7 +301,11 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
       new Response(JSON.stringify({ content: [{ text }] }), { status });
   const refine = (s: Store, fetcher: typeof fetch, opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {}) =>
     s.call(() =>
-      refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
+      refineStore(cliCommand(), s.root, {
+        llm: anthropicLlm({ apiKey: 'no-key', fetcher }),
+        tenantId: 'default',
+        ...opts,
+      }),
     );
 
   /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */

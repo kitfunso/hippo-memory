@@ -16,7 +16,7 @@ import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/infra/spool-files.js';
 import { startCompaction } from '../../src/store/sqlite/capture/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import {
   openHippoDb,
   openHippoDbReadOnly,
@@ -471,7 +471,7 @@ describe('hippo doctor', () => {
       ),
     ).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
 
-    await projectNameRepair(cliApiContext(global, 'default'), { dryRun: false });
+    await projectNameRepair(cliCommand().apiContext(global, 'default'), { dryRun: false });
     expect(
       (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'projects',

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { memoryList } from '../../src/api/memories/memories.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { handleHandoff } from '../../src/surface/cli/handoff.js';
 import { handleSession } from '../../src/surface/cli/session.js';
 import { handleSnapshot, handleWm } from '../../src/surface/cli/continuity.js';
@@ -26,10 +26,16 @@ import { removeDir } from '../_helpers/remove-dir.js';
 const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed' }]);
 
 let root = '';
-const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
+const c = (args: string[], flags: CliFlags): CommandContext => ({
+  cli: cliCommand(),
+  hippoRoot: root,
+  tenantId: 'default',
+  args,
+  flags,
+});
 
 async function stored() {
-  const ctx = cliApiContext(root, 'default');
+  const ctx = cliCommand().apiContext(root, 'default');
   const { sessions } = ctx.store;
   return {
     snapshot: Boolean(await sessions.loadSnapshot('default', {}, null)),
@@ -39,7 +45,7 @@ async function stored() {
     memories: (await memoryList(ctx)).length,
   };
 }
-const sessionsOf = (hippoRoot: string) => cliApiContext(hippoRoot, 'default').store.sessions;
+const sessionsOf = (hippoRoot: string) => cliCommand().apiContext(hippoRoot, 'default').store.sessions;
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
 
 beforeEach(() => {
@@ -157,7 +163,7 @@ describe('a text flag with a value', () => {
     expect(trace.stdout).toContain('Recorded trace');
     const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
     expect(remembered.status).toBe(0);
-    expect(await memoryList(cliApiContext(root, 'default'))).toHaveLength(2);
+    expect(await memoryList(cliCommand().apiContext(root, 'default'))).toHaveLength(2);
   });
 
   it('export and import read their format and file flags', async () => {

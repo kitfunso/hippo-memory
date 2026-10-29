@@ -13,6 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { createCard } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { root, useCardsRoot } from '../_helpers/work-queue-cards.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 useCardsRoot();
 
@@ -100,6 +101,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
       const create = await runInProcess(() =>
         handleCard({
+          cli: cliCommand(),
           hippoRoot: join(home, '.hippo'),
           tenantId: 'default',
           args: ['create'],
@@ -314,7 +316,9 @@ describe('the card verb is wired through the flag parser and the command table',
       b.id,
     ]);
 
-    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }));
+    const run = await runInProcess(() =>
+      COMMANDS.card.run({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args, flags }),
+    );
 
     expect(run.status, run.stderr).toBe(0);
     const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';

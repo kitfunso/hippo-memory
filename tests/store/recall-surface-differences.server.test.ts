@@ -36,6 +36,7 @@ import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { testInfra } from '../_helpers/infra.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 // Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
 let callers: CallerState;
@@ -76,7 +77,7 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
   const out = await runInProcess(() =>
-    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+    handleRecall({ cli: cliCommand(), hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
   );
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };

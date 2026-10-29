@@ -33,7 +33,7 @@ import {
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
-import { cliApiContext, type CliContext } from './api-context.js';
+import { type CliContext, type CliCommand } from './api-context.js';
 import { defaultDiagnostics } from '../open-store.js';
 
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -48,11 +48,9 @@ import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { CliExit, fail } from './exit.js';
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 
-export async function handleStatus(
-  { hippoRoot, tenantId }: CommandContext,
-  ctx: CliContext = cliApiContext(hippoRoot, tenantId),
-): Promise<void> {
+export async function handleStatus({ cli, hippoRoot, tenantId }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
 
   const { stats, counts } = await storeStatus(ctx, ctx.infra.clock(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
@@ -181,15 +179,21 @@ export function physicsEnergyText(
 }
 
 interface InspectMemoryOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly id: string;
 }
 
-async function inspectMemory({ hippoRoot, tenantId, id }: InspectMemoryOptions): Promise<void> {
+async function inspectMemory({
+  cli,
+  hippoRoot,
+  tenantId,
+  id,
+}: InspectMemoryOptions): Promise<void> {
   requireInit(hippoRoot);
 
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   const entry = await memoryGet(ctx, id);
   if (!entry) {
     fail(`Memory not found: ${id}`);
@@ -243,9 +247,14 @@ function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {
 /** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved
  * by skipped unchanged blocks, and re-read hook tokens. Counts are estimates (characters / 4),
  * the same estimate every budget uses. */
-export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleTokens({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const days = parseCountFlag(flags, 'days');
   const summary = await api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
   if (boolFlag(flags, 'json')) {
@@ -304,11 +313,12 @@ export async function handleFailures({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const days = parseCountFlag(flags, 'days');
   const summary = await api.failureSummary(ctx, { days: days > 0 ? days : undefined });
   if (boolFlag(flags, 'json')) {
@@ -358,9 +368,10 @@ export async function handleCorrectionLatency({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const report = await correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
+  const report = await correctionLatencyReport(cli.apiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
@@ -394,9 +405,10 @@ export async function handleProvenance({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const coverage = await provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
+  const coverage = await provenanceCoverageReport(cli.apiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {
@@ -471,10 +483,15 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
   );
 }
 
-export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+export async function handleInspect({
+  hippoRoot,
+  tenantId,
+  args,
+  cli,
+}: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  await inspectMemory({ hippoRoot, tenantId, id });
+  await inspectMemory({ cli, hippoRoot, tenantId, id });
 }

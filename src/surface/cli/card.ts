@@ -1,6 +1,5 @@
 // The `hippo card` verb (the agent work board); main() loads it lazily from the command table.
 
-import { cliStore } from './api-context.js';
 import { isHandoffOutcome } from '../../base/session/handoff.js';
 import { type Card, type CardStatus, isCardStatus } from '../../base/records/card.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -21,6 +20,7 @@ import {
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { CliExit, fail } from './exit.js';
+import type { CliCommand } from './api-context.js';
 
 // Each subcommand's usage line, written once so the repeated checks cannot drift.
 const CARD_USAGE = {
@@ -96,14 +96,15 @@ function cardRunFlag(flags: CliFlags): number | undefined {
 }
 
 interface CardRefusalOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly id: string;
 }
 
 // Reads after the store already refused, so this only explains the refusal, never changes it.
-async function cardRefusal({ hippoRoot, tenantId, id }: CardRefusalOptions): Promise<string> {
-  const detail = await cliStore(hippoRoot).cards.detail(tenantId, id);
+async function cardRefusal({ cli, hippoRoot, tenantId, id }: CardRefusalOptions): Promise<string> {
+  const detail = await cli.store(hippoRoot).cards.detail(tenantId, id);
   const liveRun = detail?.runs.find((r) => !r.ended);
   return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
@@ -136,6 +137,7 @@ const CARD_SUBCOMMAND_FLAGS = {
 } satisfies Record<CardSubcommand, string[]>;
 
 type CardHandler = (
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -144,7 +146,13 @@ type CardHandler = (
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to
  * its handler. */
-export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export function handleCard({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
 
@@ -164,10 +172,11 @@ export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext)
       fail(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
     }
   }
-  return CARD_HANDLERS[known](hippoRoot, tenantId, args, flags);
+  return CARD_HANDLERS[known](cli, hippoRoot, tenantId, args, flags);
 }
 
 async function cardCreate(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   _args: string[],
@@ -194,7 +203,7 @@ async function cardCreate(
 
   let card: Card;
   try {
-    card = await cliStore(hippoRoot).cards.create(tenantId, {
+    card = await cli.store(hippoRoot).cards.create(tenantId, {
       title,
       repo,
       contract,
@@ -208,6 +217,7 @@ async function cardCreate(
 }
 
 async function cardShow(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -217,7 +227,7 @@ async function cardShow(
   if (!id) {
     throw usageError('show');
   }
-  const detail = await cliStore(hippoRoot).cards.detail(tenantId, id);
+  const detail = await cli.store(hippoRoot).cards.detail(tenantId, id);
   if (!detail) {
     fail(`No card found with id ${id}.`);
   }
@@ -231,16 +241,18 @@ async function cardShow(
 /** Every page of the tenant's cards in list order, the largest page at a time, so the list
  * prints as it reads. */
 async function* cardPages(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   status?: CardStatus,
 ): AsyncGenerator<Card[]> {
   const read = (after?: KeysetPosition) =>
-    cliStore(hippoRoot).cards.list(tenantId, { status, limit: MAX_LIST_LIMIT, after });
+    cli.store(hippoRoot).cards.list(tenantId, { status, limit: MAX_LIST_LIMIT, after });
   for await (const page of keysetPages(read)) yield page.cards;
 }
 
 async function cardList(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   _args: string[],
@@ -250,7 +262,7 @@ async function cardList(
   if (status !== undefined && !isCardStatus(status)) {
     fail(`Invalid status: "${status}".`);
   }
-  const pages = cardPages(hippoRoot, tenantId, status);
+  const pages = cardPages(cli, hippoRoot, tenantId, status);
   if (boolFlag(flags, 'json')) {
     await printJsonList('cards', pages);
     return;
@@ -267,6 +279,7 @@ async function cardList(
 }
 
 async function cardClaim(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -280,7 +293,7 @@ async function cardClaim(
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
-    card = await cliStore(hippoRoot).cards.claim(tenantId, id, runtime, sessionId);
+    card = await cli.store(hippoRoot).cards.claim(tenantId, id, runtime, sessionId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -293,6 +306,7 @@ async function cardClaim(
 }
 
 async function cardHeartbeat(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -305,17 +319,20 @@ async function cardHeartbeat(
   }
   let card: Card | null;
   try {
-    card = await cliStore(hippoRoot).cards.heartbeat(tenantId, id, runId);
+    card = await cli.store(hippoRoot).cards.heartbeat(tenantId, id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
-    fail(`Could not heartbeat card ${id} (${await cardRefusal({ hippoRoot, tenantId, id })}).`);
+    fail(
+      `Could not heartbeat card ${id} (${await cardRefusal({ cli, hippoRoot, tenantId, id })}).`,
+    );
   }
   console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
 }
 
 async function cardBlock(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -329,19 +346,20 @@ async function cardBlock(
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = await cliStore(hippoRoot).cards.block(tenantId, id, reason, runId);
+    card = await cli.store(hippoRoot).cards.block(tenantId, id, reason, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
     const why =
-      runId === undefined ? 'not running' : await cardRefusal({ hippoRoot, tenantId, id });
+      runId === undefined ? 'not running' : await cardRefusal({ cli, hippoRoot, tenantId, id });
     fail(`Could not block card ${id} (${why}).`);
   }
   console.log(`Blocked card ${card.id}`);
 }
 
 async function cardReview(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -354,19 +372,20 @@ async function cardReview(
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = await cliStore(hippoRoot).cards.review(tenantId, id, runId);
+    card = await cli.store(hippoRoot).cards.review(tenantId, id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
     const why =
-      runId === undefined ? 'not running' : await cardRefusal({ hippoRoot, tenantId, id });
+      runId === undefined ? 'not running' : await cardRefusal({ cli, hippoRoot, tenantId, id });
     fail(`Could not move card ${id} to review (${why}).`);
   }
   console.log(`Card ${card.id} moved to review`);
 }
 
 async function cardComplete(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -380,13 +399,13 @@ async function cardComplete(
   const runId = cardRunFlag(flags);
   let result: { card: Card; promotedChildren: string[] } | null;
   try {
-    result = await cliStore(hippoRoot).cards.complete(tenantId, id, outcomeRaw, runId);
+    result = await cli.store(hippoRoot).cards.complete(tenantId, id, outcomeRaw, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!result) {
     const why =
-      runId === undefined ? 'not in review' : await cardRefusal({ hippoRoot, tenantId, id });
+      runId === undefined ? 'not in review' : await cardRefusal({ cli, hippoRoot, tenantId, id });
     fail(`Could not complete card ${id} (${why}).`);
   }
   console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
@@ -395,11 +414,16 @@ async function cardComplete(
   }
 }
 
-async function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
+async function cardReclaim(
+  cli: CliCommand,
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+): Promise<void> {
   if (args.length > 1) {
     throw usageError('reclaim');
   }
-  const ids = await cliStore(hippoRoot).cards.reclaimExpired(tenantId);
+  const ids = await cli.store(hippoRoot).cards.reclaimExpired(tenantId);
   if (ids.length === 0) {
     console.log('No expired leases.');
     return;
@@ -410,6 +434,7 @@ async function cardReclaim(hippoRoot: string, tenantId: string, args: string[]):
 }
 
 async function cardComment(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -421,7 +446,7 @@ async function cardComment(
   }
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw
   // from the store instead.
-  const cards = cliStore(hippoRoot).cards;
+  const cards = cli.store(hippoRoot).cards;
   const card = (await cards.detail(tenantId, id))?.card;
   if (!card) {
     fail(`No card found with id ${id}.`);

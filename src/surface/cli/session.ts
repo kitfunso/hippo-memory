@@ -1,7 +1,6 @@
 // `hippo session`: log, show, complete and resume one agent session.
 
 import { continuityLatest } from '../../api/continuity/continuity.js';
-import { cliApiContext, cliStore } from './api-context.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,
@@ -19,6 +18,7 @@ import {
 } from './flag-values.js';
 import { fail } from './exit.js';
 import { SESSION_EVENT_LIMIT } from '../../base/util/limits.js';
+import type { CliCommand } from './api-context.js';
 
 /** The flags every `hippo session` subcommand reads up front. */
 interface SessionArgs {
@@ -28,6 +28,7 @@ interface SessionArgs {
 }
 
 async function sessionLog(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   s: SessionArgs,
@@ -43,7 +44,7 @@ async function sessionLog(
     );
   }
 
-  const event = await cliStore(hippoRoot).sessions.save(tenantId, 'event', {
+  const event = await cli.store(hippoRoot).sessions.save(tenantId, 'event', {
     sessionId: s.sessionId,
     task: s.task || null,
     eventType: eventType || 'note',
@@ -57,12 +58,13 @@ async function sessionLog(
 }
 
 async function sessionShow(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   s: SessionArgs,
   flags: CliFlags,
 ): Promise<void> {
-  const events = await cliStore(hippoRoot).sessions.read(tenantId, 'event', {
+  const events = await cli.store(hippoRoot).sessions.read(tenantId, 'event', {
     sessionId: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
@@ -77,12 +79,13 @@ async function sessionShow(
 }
 
 async function sessionLatest(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   s: SessionArgs,
   flags: CliFlags,
 ): Promise<void> {
-  const { snapshot, events } = await continuityLatest(cliApiContext(hippoRoot, tenantId), {
+  const { snapshot, events } = await continuityLatest(cli.apiContext(hippoRoot, tenantId), {
     sessionId: s.sessionId,
     limit: s.limit,
   });
@@ -116,6 +119,7 @@ type SessionCompleteMetadata = {
 };
 
 async function sessionComplete(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   s: SessionArgs,
@@ -138,7 +142,7 @@ async function sessionComplete(
   const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
-  const event = await cliStore(hippoRoot).sessions.save(tenantId, 'event', {
+  const event = await cli.store(hippoRoot).sessions.save(tenantId, 'event', {
     sessionId,
     task: task || null,
     eventType: 'session_complete',
@@ -149,7 +153,7 @@ async function sessionComplete(
 
   console.log(`Completed session ${event.sessionId} with outcome=${outcome} (event #${event.id})`);
 
-  const stamped = await cliStore(hippoRoot).sessions.save(tenantId, 'handoff', {
+  const stamped = await cli.store(hippoRoot).sessions.save(tenantId, 'handoff', {
     sessionId,
     outcome,
   });
@@ -163,6 +167,7 @@ export async function handleSession({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
@@ -172,28 +177,30 @@ export async function handleSession({
   const limit = Math.max(1, numberFlag(flags, 'limit') || SESSION_EVENT_LIMIT);
   const s: SessionArgs = { sessionId, task, limit };
 
-  if (subcommand === 'log') return sessionLog(hippoRoot, tenantId, s, flags);
-  if (subcommand === 'show') return sessionShow(hippoRoot, tenantId, s, flags);
-  if (subcommand === 'latest') return sessionLatest(hippoRoot, tenantId, s, flags);
-  if (subcommand === 'complete') return sessionComplete(hippoRoot, tenantId, s, flags);
-  if (subcommand === 'resume') return sessionResume({ hippoRoot, tenantId, sessionId });
+  if (subcommand === 'log') return sessionLog(cli, hippoRoot, tenantId, s, flags);
+  if (subcommand === 'show') return sessionShow(cli, hippoRoot, tenantId, s, flags);
+  if (subcommand === 'latest') return sessionLatest(cli, hippoRoot, tenantId, s, flags);
+  if (subcommand === 'complete') return sessionComplete(cli, hippoRoot, tenantId, s, flags);
+  if (subcommand === 'resume') return sessionResume({ cli, hippoRoot, tenantId, sessionId });
 
   fail('Usage: hippo session <log|show|latest|resume|complete>');
 }
 
 interface SessionResumeOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly sessionId: string;
 }
 
 async function sessionResume({
+  cli,
   hippoRoot,
   tenantId,
   sessionId,
 }: SessionResumeOptions): Promise<void> {
   const query = { sessionId: sessionId || null };
-  const handoff = await cliStore(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
+  const handoff = await cli.store(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;

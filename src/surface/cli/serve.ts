@@ -16,7 +16,6 @@ import {
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
-import { cliStdioHost } from './api-context.js';
 import {
   DEFAULT_DASHBOARD_PORT,
   DEFAULT_SERVER_HOST,
@@ -62,12 +61,12 @@ export async function handleDashboard({
   await new Promise(() => {}); // run until Ctrl+C
 }
 
-export async function handleMcp(): Promise<void> {
+export async function handleMcp({ cli }: CommandContext): Promise<void> {
   // Start MCP server over stdio. Dynamic import keeps main CLI lean; the dispatcher itself is
   // transport-agnostic, so we explicitly attach the stdio loop here. (HTTP/SSE transport is wired
   // in src/server.ts and imports the same module without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
-  mod.startStdioLoop(cliStdioHost());
+  mod.startStdioLoop(cli.stdioHost());
   // Server runs until stdin closes, so we never reach here
   await new Promise(() => {}); // hang forever
 }

@@ -8,11 +8,15 @@ import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
-import { cliApiContext } from './api-context.js';
 import { openInBrowser } from './open-browser.js';
+import type { CliCommand } from './api-context.js';
 
-async function extractAndReport(hippoRoot: string, tenantId: string): Promise<void> {
-  const result = await graphExtract(cliApiContext(hippoRoot, tenantId));
+async function extractAndReport(
+  cli: CliCommand,
+  hippoRoot: string,
+  tenantId: string,
+): Promise<void> {
+  const result = await graphExtract(cli.apiContext(hippoRoot, tenantId));
   const byType = Object.entries(result.byType)
     .map(([t, n]) => `${t} ${n}`)
     .join(', ');
@@ -28,12 +32,13 @@ async function extractAndReport(hippoRoot: string, tenantId: string): Promise<vo
 }
 
 async function graphShow(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   entity: string | undefined,
   flags: CliFlags,
 ): Promise<void> {
-  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), {
+  const model = await graphViewOnHost(cli.apiContext(hippoRoot, tenantId), {
     entity,
     limit: DEFAULT_VIEW_LIMIT,
   });
@@ -70,6 +75,7 @@ async function graphShow(
 }
 
 async function graphView(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   entity: string | undefined,
@@ -79,7 +85,7 @@ async function graphView(
   if (format !== 'html' && format !== 'canvas') {
     fail("graph view: --format must be 'html' or 'canvas'");
   }
-  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), {
+  const model = await graphViewOnHost(cli.apiContext(hippoRoot, tenantId), {
     entity,
     limit: DEFAULT_VIEW_LIMIT,
   });
@@ -99,13 +105,14 @@ export async function handleGraph({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'extract') return extractAndReport(hippoRoot, tenantId);
+  if (subcommand === 'extract') return extractAndReport(cli, hippoRoot, tenantId);
   const entity = stringFlag(flags, 'entity');
-  if (subcommand === 'show') return graphShow(hippoRoot, tenantId, entity, flags);
-  if (subcommand === 'view') return graphView(hippoRoot, tenantId, entity, flags);
+  if (subcommand === 'show') return graphShow(cli, hippoRoot, tenantId, entity, flags);
+  if (subcommand === 'view') return graphView(cli, hippoRoot, tenantId, entity, flags);
 
   fail(
     'Usage:\n' +

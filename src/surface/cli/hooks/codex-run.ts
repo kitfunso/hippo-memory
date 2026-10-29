@@ -14,6 +14,7 @@ import { printError } from '../output.js';
 import { handleLastSleep } from '../last-sleep.js';
 import type { CommandContext } from '../flag-values.js';
 import { handleCodexSessionEndWorker } from './codex-session-end-worker.js';
+import type { CliCommand } from '../api-context.js';
 
 function spawnRealCodex(
   realCodexPath: string,
@@ -50,7 +51,7 @@ function spawnRealCodex(
   return spawn(realCodexPath, forwardArgs, { cwd, stdio: 'inherit', windowsHide: false });
 }
 
-export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): void {
+export function handleCodexRun({ cli, hippoRoot, tenantId, args }: CommandContext): void {
   const realCodexPath = installedRealCodexPath();
   const startedAtMs = Date.now();
   // Codex reads CODEX_HOME at each launch, so resolve it now; the log path is the installer's own,
@@ -75,6 +76,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
 
   child.on('exit', async (code, signal) => {
     await launchCodexSessionEndWorker({
+      cli,
       hippoRoot,
       tenantId,
       historyPath,
@@ -87,6 +89,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
 }
 
 interface CodexSessionEndWorkerOptions {
+  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   historyPath: string;
@@ -96,7 +99,7 @@ interface CodexSessionEndWorkerOptions {
 }
 
 async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions): Promise<void> {
-  const { hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile } = options;
+  const { cli, hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile } = options;
   const workerArgs = [
     process.argv[1],
     '__codex-session-end-worker',
@@ -116,6 +119,7 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
   // Awaited so the sleep write can't be killed by the exit calls below.
   try {
     await handleCodexSessionEndWorker({
+      cli,
       hippoRoot,
       tenantId,
       args: [],

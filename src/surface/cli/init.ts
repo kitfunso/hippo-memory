@@ -14,7 +14,7 @@ import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
+import { cliInitGlobal, type CliCommand } from './api-context.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import {
@@ -81,6 +81,7 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 interface InitScannedRepoOptions {
+  readonly cli: CliCommand;
   readonly repo: string;
   readonly tenantId: string;
   readonly globalRoot: string;
@@ -88,6 +89,7 @@ interface InitScannedRepoOptions {
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
 async function initScannedRepo({
+  cli,
   repo,
   tenantId,
   globalRoot,
@@ -95,13 +97,14 @@ async function initScannedRepo({
   const repoHippo = path.join(repo, HIPPO_DIR);
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
-    await initMemoryStore(cliApiContext(repoHippo, tenantId));
+    await initMemoryStore(cli.apiContext(repoHippo, tenantId));
   }
   registerWorkspace(globalRoot, repo);
   return alreadyExists;
 }
 
 interface LearnScannedRepoOptions {
+  cli: CliCommand;
   repo: string;
   tenantId: string;
   seedDays: number;
@@ -114,14 +117,13 @@ interface LearnScannedRepoOptions {
 async function learnScannedRepo(
   options: LearnScannedRepoOptions,
 ): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
-  const { repo, tenantId, seedDays, learn, machine, agentImport } = options;
+  const { cli, repo, tenantId, seedDays, learn, machine, agentImport } = options;
   const repoHippo = path.join(repo, HIPPO_DIR);
   let added = 0;
   let lowInfo = 0;
   if (learn && isGitRepo(machine.git, repo)) {
     const result = await learnFromRepo({
-      hippoRoot: repoHippo,
-      tenantId,
+      ctx: cli.apiContext(repoHippo, tenantId),
       repoPath: repo,
       days: seedDays,
       label: path.basename(repo),
@@ -132,7 +134,7 @@ async function learnScannedRepo(
   if (learn) {
     mergeReports(
       agentImport,
-      await importProjectMemories(repoHippo, cliSyncOptions(tenantId, machine)),
+      await importProjectMemories(repoHippo, cli.syncOptions(tenantId, machine)),
     );
   }
   return { added, lowInfo };
@@ -182,13 +184,14 @@ async function initEachScannedRepo(
   repos: readonly string[],
   scan: RepoScan,
 ): Promise<Omit<ScanSummary, 'repoCount'>> {
-  const { tenantId, globalRoot, seedDays, learn, machine, agentImport } = scan;
+  const { cli, tenantId, globalRoot, seedDays, learn, machine, agentImport } = scan;
   let totalLessons = 0;
   // Rolled up so the cross-repo summary reports the gate too: a dropped subject is never invisible.
   let totalLowInfo = 0;
   for (const repo of repos) {
-    const alreadyExists = await initScannedRepo({ repo, tenantId, globalRoot });
+    const alreadyExists = await initScannedRepo({ cli, repo, tenantId, globalRoot });
     const { added, lowInfo } = await learnScannedRepo({
+      cli,
       repo,
       tenantId,
       seedDays,
@@ -200,7 +203,7 @@ async function initEachScannedRepo(
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = await memoryList(cliApiContext(path.join(repo, HIPPO_DIR), tenantId), {
+    const entries = await memoryList(cli.apiContext(path.join(repo, HIPPO_DIR), tenantId), {
       everyTenant: true,
     });
     console.log(
@@ -211,7 +214,12 @@ async function initEachScannedRepo(
   return { totalLessons, totalLowInfo };
 }
 
-async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function initScannedRepos(
+  cli: CliCommand,
+  scanDir: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -228,14 +236,14 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
   const machine = currentMachine();
   const agentImport = emptyReport();
   const learn = !boolFlag(flags, 'no-learn');
-  const scan: RepoScan = { tenantId, globalRoot, seedDays, learn, machine, agentImport };
+  const scan: RepoScan = { cli, tenantId, globalRoot, seedDays, learn, machine, agentImport };
   const totals = await initEachScannedRepo(repos, scan);
 
   printScanSummary({ repoCount: repos.length, ...totals });
   if (learn) {
     mergeReports(
       agentImport,
-      await importUserMemories(globalRoot, cliSyncOptions(tenantId, machine)),
+      await importUserMemories(globalRoot, cli.syncOptions(tenantId, machine)),
     );
     printAgentImport(agentImport, '');
   }
@@ -247,7 +255,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> {
+async function initGlobalOnly(cli: CliCommand, tenantId: string, flags: CliFlags): Promise<void> {
   const globalRoot = hippoHomeDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
@@ -257,18 +265,21 @@ async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> 
   }
   if (!boolFlag(flags, 'no-learn')) {
     printAgentImport(
-      await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
+      await importUserMemories(globalRoot, cli.syncOptions(tenantId, currentMachine())),
     );
   }
 }
 
-async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
+async function seedFromGitHistory(
+  cli: CliCommand,
+  hippoRoot: string,
+  tenantId: string,
+): Promise<void> {
   if (!isGitRepo(processGit, process.cwd())) return;
   const seedDays = SEED_DAYS_SINGLE;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
   const { added, skipped } = await learnFromRepo({
-    hippoRoot,
-    tenantId,
+    ctx: cli.apiContext(hippoRoot, tenantId),
     repoPath: process.cwd(),
     days: seedDays,
   });
@@ -279,15 +290,20 @@ async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<
   }
 }
 
-export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleInit({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   if (boolFlag(flags, 'scan')) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    await initScannedRepos(scanDir, tenantId, flags);
+    await initScannedRepos(cli, scanDir, tenantId, flags);
     return;
   }
 
   if (boolFlag(flags, 'global')) {
-    await initGlobalOnly(tenantId, flags);
+    await initGlobalOnly(cli, tenantId, flags);
     return;
   }
 
@@ -295,7 +311,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
   } else {
-    await initMemoryStore(cliApiContext(hippoRoot, tenantId));
+    await initMemoryStore(cli.apiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
     console.log('   Files: hippo.db stats.json');
@@ -316,12 +332,12 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
   if (!alreadyExists && learn && !boolFlag(flags, 'global')) {
-    await seedFromGitHistory(hippoRoot, tenantId);
+    await seedFromGitHistory(cli, hippoRoot, tenantId);
   }
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) {
-    printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
+    printAgentImport(await importForStore(hippoRoot, cli.syncOptions(tenantId, currentMachine())));
   }
 }
 

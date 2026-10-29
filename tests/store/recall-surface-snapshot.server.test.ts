@@ -29,6 +29,7 @@ import {
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
@@ -156,7 +157,9 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
 
 function viaCli(s: Store, c: SnapshotCase): Promise<InProcessResult> {
   const flags: CliFlags = { json: true, ...c.cli };
-  return runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }));
+  return runInProcess(() =>
+    handleRecall({ cli: cliCommand(), hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
 }
 
 const SURFACES = { http: viaHttp, mcp: viaMcp, cli: viaCli };

@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import {
@@ -45,7 +45,7 @@ async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
 
 async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<string[]> {
   const s = freshStore(templates, 'local');
-  host = cliStdioHost();
+  host = cliCommand().stdioHost();
   try {
     return normalize(await run(s), s);
   } finally {

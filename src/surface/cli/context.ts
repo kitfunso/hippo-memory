@@ -11,7 +11,7 @@ import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../api/context/context.js';
-import { cliApiContext, cliHookRequest, type CliContext } from './api-context.js';
+import { type CliCommand, type CliContext } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { strengthOf } from '../../api/types.js';
 import {
@@ -53,20 +53,21 @@ import {
 type PrintContextOptions = Omit<RenderContextOptions, 'rec'>;
 
 async function printContext({
+  cli,
   hippoRoot,
   tenantId,
   args,
   flags,
   stdinText,
 }: PrintContextOptions): Promise<void> {
-  const rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+  const rec = await startDeliveryRecorder(cli.apiContext(hippoRoot, tenantId), {
     stdinText,
     runtime: hookRuntime(flags),
     eventType: boolFlag(flags, 'pinned-only') ? undefined : 'context',
     envSessionId: hostSessionId(),
   });
   // No try/finally: a render throw keeps its own exit code and writes no event.
-  await renderContext({ hippoRoot, tenantId, args, flags, stdinText, rec });
+  await renderContext({ cli, hippoRoot, tenantId, args, flags, stdinText, rec });
   await flushDeliveryRecorder(rec);
 }
 
@@ -101,6 +102,7 @@ interface ContextGate {
 }
 
 interface ContextGateOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly resolvedTenant: string;
   readonly flags: CliFlags;
@@ -110,6 +112,7 @@ interface ContextGateOptions {
 
 /** Null when this call renders nothing: the pilot holdout arm, or a budget of zero. */
 async function contextGate({
+  cli,
   hippoRoot,
   resolvedTenant,
   flags,
@@ -129,7 +132,7 @@ async function contextGate({
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no
   // budget or content branch.
   if (
-    await inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, {
+    await inPilotHoldout(cli, hippoRoot, resolvedTenant, currentSessionId, {
       write: payloadSessionId !== undefined,
     })
   ) {
@@ -146,6 +149,7 @@ async function contextGate({
 }
 
 interface RenderContextOptions {
+  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   args: string[];
@@ -155,12 +159,12 @@ interface RenderContextOptions {
 }
 
 async function renderContext(options: RenderContextOptions): Promise<void> {
-  const { hippoRoot, tenantId: resolvedTenant, args, flags, stdinText, rec } = options;
-  const gate = await contextGate({ hippoRoot, resolvedTenant, flags, stdinText, rec });
+  const { cli, hippoRoot, tenantId: resolvedTenant, args, flags, stdinText, rec } = options;
+  const gate = await contextGate({ cli, hippoRoot, resolvedTenant, flags, stdinText, rec });
   if (gate === null) return;
   const { pinnedOnly, session, budget } = gate;
 
-  const ctx = cliApiContext(hippoRoot, resolvedTenant);
+  const ctx = cli.apiContext(hippoRoot, resolvedTenant);
   // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls
   // back to '*'.
   const query = contextQuery(args, flags, ctx);
@@ -355,6 +359,7 @@ async function renderContextMarkdown(view: ContextView): Promise<void> {
 }
 
 export async function handleContext({
+  cli,
   hippoRoot,
   tenantId,
   args,
@@ -363,7 +368,7 @@ export async function handleContext({
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await cliHookRequest(() =>
-    printContext({ hippoRoot: hookStoreRoot(root), tenantId, args, flags, stdinText }),
+  await cli.hookRequest((hook) =>
+    printContext({ cli: hook, hippoRoot: hookStoreRoot(root), tenantId, args, flags, stdinText }),
   );
 }

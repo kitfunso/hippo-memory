@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { handleEval, parseEvalBaseline } from '../../src/surface/cli/eval.js';
 import { CliExit } from '../../src/surface/cli/exit.js';
 import type { JsonValue } from '../../src/base/util/json.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const METRICS = { mrr: 0.9, recallAt5: 0.8, ndcgAt5: 0.7 };
 const GOOD: JsonValue = {
@@ -54,6 +55,7 @@ describe('hippo eval --suite --baseline', () => {
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const run = handleEval({
+      cli: cliCommand(),
       hippoRoot: dir,
       tenantId: 'default',
       args: [],

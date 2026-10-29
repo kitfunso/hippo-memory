@@ -11,7 +11,7 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { originFromSource } from '../../src/host/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { saveCompaction } from '../../src/surface/capture/compaction-record.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -203,7 +203,7 @@ function storeWithFoldableTag(flagged: boolean): TaggedStore {
 }
 
 async function repairOnce(store: string): Promise<void> {
-  await projectNameRepairOnce(cliApiContext(store, 'default'));
+  await projectNameRepairOnce(cliCommand().apiContext(store, 'default'));
 }
 
 describe('the one-time sleep repair', () => {

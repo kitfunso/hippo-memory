@@ -20,6 +20,7 @@ import { renderGraphHtml } from '../../src/surface/cli/graph-page.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -129,7 +130,7 @@ describe('embedding provider', () => {
 describe('repo scan in init', () => {
   const scan = async (dir: string): Promise<void> => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    await handleInit({ hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
+    await handleInit({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
   };
 
   it('warns with path and code for an unexpected readdir failure', async () => {

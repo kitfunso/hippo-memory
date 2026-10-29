@@ -18,6 +18,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
   return runCliAs(args, {
@@ -83,6 +84,7 @@ describe('hippo github CLI', () => {
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
       await handleGitHub({
+        cli: cliCommand(),
         hippoRoot,
         tenantId: 'default',
         args: ['backfill'],
@@ -294,6 +296,7 @@ describe('hippo github CLI', () => {
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
       await handleGitHub({
+        cli: cliCommand(),
         hippoRoot,
         tenantId: 'default',
         args: ['backfill'],

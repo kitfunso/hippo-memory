@@ -9,7 +9,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -32,7 +32,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const root = makeRoot('embed-lock-backoff');
     const held = takeFileLock(join(root, 'embeddings.lock.db'));
     expect(held.kind).toBe('taken');
-    const index = cliStore(root).embeddingIndex;
+    const index = cliCommand().store(root).embeddingIndex;
     vi.useFakeTimers({ now: Date.parse('2026-01-15T00:00:00.000Z') });
     const startedAt = Date.now();
     const asked: number[] = [];
@@ -44,7 +44,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const run = embedAll(
       {
         embeddingIndex: { ...index, step },
-        rows: cliStore(root),
+        rows: cliCommand().store(root),
         embeddings: loadConfig(root).embeddings,
         embedderFor: resolveEmbeddingProvider,
         failureNotices: new FailureNotices(),

@@ -7,7 +7,7 @@ import { readSessionScan, recordSessionDigest } from '../../capture/session-dige
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import type { LineLog } from '../../../base/util/log.js';
 import { isInitialized, resolveProjectIdentity } from '../../../host/project-identity.js';
-import { cliConfig, cliStore } from '../api-context.js';
+import { cliConfig, type CliCommand } from '../api-context.js';
 import { type CliFlags, type CommandContext, parseCountFlag, stringFlag } from '../flag-values.js';
 import {
   appendSessionEndCloseLog,
@@ -18,6 +18,7 @@ import {
 } from '../hook-runtime.js';
 
 export async function handleCodexSessionEndWorker({
+  cli,
   hippoRoot,
   tenantId,
   flags,
@@ -32,11 +33,12 @@ export async function handleCodexSessionEndWorker({
     return;
   }
 
-  await sleepCodexProjectStore(hippoRoot, tenantId, logFile);
-  await captureCodexTranscript({ hippoRoot, tenantId, store, flags, logFile });
+  await sleepCodexProjectStore(cli, hippoRoot, tenantId, logFile);
+  await captureCodexTranscript({ cli, hippoRoot, tenantId, store, flags, logFile });
 }
 
 async function sleepCodexProjectStore(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   logFile: string | null,
@@ -48,6 +50,7 @@ async function sleepCodexProjectStore(
       await (
         await import('../sleep.js')
       ).sleepStore({
+        cli,
         hippoRoot,
         tenantId,
         args: [],
@@ -60,11 +63,12 @@ async function sleepCodexProjectStore(
     appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', {
       startFresh: true,
     });
-    await logSessionEndImport(logFile, tenantId, undefined);
+    await logSessionEndImport(cli, logFile, tenantId, undefined);
   }
 }
 
 interface CodexStoreOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly store: string;
@@ -76,6 +80,7 @@ interface CaptureCodexTranscriptOptions extends CodexStoreOptions {
 }
 
 async function captureCodexTranscript({
+  cli,
   hippoRoot,
   tenantId,
   store,
@@ -89,7 +94,7 @@ async function captureCodexTranscript({
       appendSessionEndCloseLog(logFile, 'skip capture: no Codex transcript for this session');
       return;
     }
-    await captureCodexRollout({ hippoRoot, tenantId, store, logFile }, transcriptPath);
+    await captureCodexRollout({ cli, hippoRoot, tenantId, store, logFile }, transcriptPath);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: transcript scan or digest', err);
   }
@@ -111,7 +116,7 @@ function codexTranscriptPath(flags: CliFlags): string | undefined {
 }
 
 async function captureCodexRollout(
-  { hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
+  { cli, hippoRoot, tenantId, store, logFile }: CodexStoreOptions,
   transcriptPath: string,
 ): Promise<void> {
   const digestLog: LineLog = (message, opts) => appendSessionEndCloseLog(logFile, message, opts);
@@ -127,12 +132,12 @@ async function captureCodexRollout(
     sessionTurns: scan?.turns,
   };
   try {
-    await runCapture(captureTarget(store), captureOpts);
+    await runCapture(captureTarget(cli, store), captureOpts);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: capture', err);
   }
   // The Codex wrapper passes no session id, so the rollout file names the session.
   const digestKey = path.basename(transcriptPath, '.jsonl');
   const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
-  await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);
+  await recordSessionDigest(hippoRoot, cli.store(hippoRoot), scan, digestOpts);
 }

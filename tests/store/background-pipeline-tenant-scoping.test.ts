@@ -26,6 +26,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -105,7 +106,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
     // tenant-a scope: only tenant-a entries are returned by loadAllEntries,
     // and the tenant-a entry is not consolidated → scanned=0.
-    const result = await refineStore(hippoRoot, {
+    const result = await refineStore(cliCommand(), hippoRoot, {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
@@ -116,7 +117,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(result.scanned).toBe(0); // tenant-b's consolidated entry not visible
 
     // Positive control: host-wide scan does see the consolidated entry
-    const hostWide = await refineStore(hippoRoot, {
+    const hostWide = await refineStore(cliCommand(), hippoRoot, {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
@@ -155,7 +156,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       return new Response(JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }), { status: 200 });
     };
 
-    const result = await refineStore(hippoRoot, {
+    const result = await refineStore(cliCommand(), hippoRoot, {
       llm: anthropicLlm({ apiKey: 'test', fetcher }),
       tenantId: 'tenant-a',
     });
@@ -318,7 +319,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     expect(allHostWide.length).toBe(2);
     expect(allHostWide.every((e) => e.content.startsWith('[Consolidated from'))).toBe(true);
 
-    const result = await refineStore(hippoRoot, {
+    const result = await refineStore(cliCommand(), hippoRoot, {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>

@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, learn, MCP_LEARN } from '../../src/api/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { sharedStoreRefusal } from '../../src/surface/mcp/shared-gate.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -157,9 +157,11 @@ describe('the MCP tool gate on a shared store', () => {
   });
 
   it('leaves stdio alone: the stdio host is never gated on a shared store', async () => {
-    await cliStdioHost().runFrame(new AbortController().signal, async (contextFor) => {
-      const ctx = contextFor(flaggedStore(), 'default');
-      for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
-    });
+    await cliCommand()
+      .stdioHost()
+      .runFrame(new AbortController().signal, async (contextFor) => {
+        const ctx = contextFor(flaggedStore(), 'default');
+        for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
+      });
   });
 });

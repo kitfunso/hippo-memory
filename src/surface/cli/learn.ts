@@ -6,7 +6,6 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { DEFAULT_LEARN_DAYS } from '../../base/util/limits.js';
 import { runWatched } from './run-watched.js';
 import { rememberFailedCommand } from '../../api/memories/remember-local.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { requireInit, learnFromRepo, type LearnFromRepoOptions } from './shared.js';
 import { type CommandContext, boolFlag, nonEmptyStringFlag, numberFlag } from './flag-values.js';
@@ -29,7 +28,12 @@ function watchedCommand(args: readonly string[]): string[] {
   return [...args];
 }
 
-export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+export async function handleWatch({
+  hippoRoot,
+  tenantId,
+  args,
+  cli,
+}: CommandContext): Promise<void> {
   const argv = watchedCommand(args);
   const command = argv.join(' ');
   const { exitCode, stderr } = await runWatched(argv);
@@ -47,7 +51,7 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
   // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with
   // the message below and still exit with the wrapped command's real exit code.
   try {
-    await rememberFailedCommand(cliApiContext(hippoRoot, tenantId), { command, exitCode, stderr });
+    await rememberFailedCommand(cli.apiContext(hippoRoot, tenantId), { command, exitCode, stderr });
 
     const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);
@@ -64,7 +68,12 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
   throw new CliExit(exitCode);
 }
 
-export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleLearn({
+  cli,
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   if (!boolFlag(flags, 'git')) {
@@ -76,15 +85,11 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
   console.log(`Scanning git log for the last ${days} days...`);
 
   const reposFlag = nonEmptyStringFlag(flags, 'repos');
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   if (reposFlag) {
-    await learnFromRepos(reposFlag, { hippoRoot, tenantId, days });
+    await learnFromRepos(reposFlag, { ctx, days });
   } else {
-    const { added, skipped } = await learnFromRepo({
-      hippoRoot,
-      tenantId,
-      repoPath: process.cwd(),
-      days,
-    });
+    const { added, skipped } = await learnFromRepo({ ctx, repoPath: process.cwd(), days });
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
 }

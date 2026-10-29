@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js';
+import { cliConfig, cliInfra, type CliCommand } from './api-context.js';
 import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -57,6 +57,7 @@ const MAX_DELTAS_SHOWN = 5;
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else
  * it scores a corpus file. */
 async function evaluateCorpus(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   corpusPath: string | null,
@@ -71,7 +72,7 @@ async function evaluateCorpus(
 
   const entries = boolFlag(flags, 'suite')
     ? []
-    : await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+    : await memoryList(cli.apiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (boolFlag(flags, 'bootstrap')) {
     writeBootstrapCorpus(entries, flags);
@@ -83,7 +84,7 @@ async function evaluateCorpus(
     return;
   }
 
-  const summary = await runCorpusEval(hippoRoot, corpusPath, entries, flags);
+  const summary = await runCorpusEval(cli, hippoRoot, corpusPath, entries, flags);
 
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
@@ -99,6 +100,7 @@ async function evaluateCorpus(
 }
 
 async function runCorpusEval(
+  cli: CliCommand,
   hippoRoot: string,
   corpusPath: string | null,
   entries: MemoryEntry[],
@@ -114,8 +116,8 @@ async function runCorpusEval(
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot)
       ? {
-          local: cliFolder(hippoRoot),
-          global: cliFolder(globalRoot),
+          local: cli.folder(hippoRoot),
+          global: cli.folder(globalRoot),
           embedderFor: infra.embedderFor,
         }
       : undefined,
@@ -410,7 +412,8 @@ export async function handleEval({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
-  await evaluateCorpus(hippoRoot, tenantId, corpusPath, flags);
+  await evaluateCorpus(cli, hippoRoot, tenantId, corpusPath, flags);
 }

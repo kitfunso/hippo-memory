@@ -6,7 +6,6 @@ import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import * as api from '../../api/index.js';
 import { archiveRefusal, forgetRefusal, pickWrites } from './memory-writes.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CommandContext,
@@ -22,8 +21,14 @@ import { errorMessage } from '../../base/util/log.js';
 import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
+import type { CliCommand } from './api-context.js';
 
-export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleOutcome({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const good = boolFlag(flags, 'good');
@@ -34,7 +39,7 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
   }
 
   // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   const specificId = stringFlagOrExit(flags, 'id') || null;
 
   let updated: number;
@@ -60,6 +65,7 @@ const ARCHIVE_REASON_REQUIRED =
   'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
 interface PreviewForgetOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly id: string;
@@ -69,13 +75,14 @@ interface PreviewForgetOptions {
 // Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a
 // guess.
 async function previewForget({
+  cli,
   hippoRoot,
   tenantId,
   id,
   archive,
 }: PreviewForgetOptions): Promise<void> {
   requireInit(hippoRoot);
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   let entry: MemoryEntry;
   try {
     entry = await api.removalTarget(ctx, id, archive);
@@ -93,6 +100,7 @@ export async function handleForget({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
@@ -104,10 +112,10 @@ export async function handleForget({
     fail(ARCHIVE_REASON_REQUIRED);
   }
   if (boolFlag(flags, 'dry-run')) {
-    await previewForget({ hippoRoot, tenantId, id, archive });
+    await previewForget({ cli, hippoRoot, tenantId, id, archive });
     return;
   }
-  const writes = await pickWrites(hippoRoot, tenantId);
+  const writes = await pickWrites(cli, hippoRoot, tenantId);
   if (archive) {
     await writes.archive(id, reason);
     console.log(`Archived ${id}`);
@@ -118,6 +126,7 @@ export async function handleForget({
 }
 
 async function invalidateChurn(
+  cli: CliCommand,
   hippoRoot: string,
   tenantId: string,
   args: string[],
@@ -132,7 +141,12 @@ async function invalidateChurn(
   }
   const churnDryRun = boolFlag(flags, 'dry-run');
   let churnFailed = false;
-  for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, churnDryRun)) {
+  for (const { root, result } of await runChurnStaleForRepo(
+    cli,
+    hippoRoot,
+    tenantId,
+    churnDryRun,
+  )) {
     if (result.error) {
       printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       churnFailed = true;
@@ -166,9 +180,10 @@ export async function handleInvalidate({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  if (boolFlag(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
+  if (boolFlag(flags, 'churn')) return invalidateChurn(cli, hippoRoot, tenantId, args, flags);
   const target = args[0];
   if (flagValueless(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode (pattern mode writes
@@ -190,7 +205,7 @@ export async function handleInvalidate({
     to: reason,
     type: 'migration',
   };
-  const result = await api.memoryInvalidate(cliApiContext(hippoRoot, tenantId), invTarget, {
+  const result = await api.memoryInvalidate(cli.apiContext(hippoRoot, tenantId), invTarget, {
     dryRun,
     onlyId,
   });

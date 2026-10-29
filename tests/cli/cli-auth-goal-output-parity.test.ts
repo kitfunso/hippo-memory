@@ -9,6 +9,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 // One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
@@ -83,7 +84,9 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => handleAuth({ hippoRoot: root, tenantId: 'default', args, flags }));
+      const r = await runInProcess(() =>
+        handleAuth({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args, flags }),
+      );
       transcript.push(`$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
 
@@ -137,7 +140,9 @@ describe('hippo goal (in process)', () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleGoal({ hippoRoot: root, tenantId: 'default', args, flags }));
+      const r = await runInProcess(() =>
+        handleGoal({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args, flags }),
+      );
       transcript.push(`$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout.trim();
     };

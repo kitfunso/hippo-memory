@@ -8,6 +8,7 @@ import { appendSessionEvent, saveActiveTaskSnapshot } from '../_helpers/root-for
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const SNAPSHOT_JSON =
   '{"id":1,"task":"pin the wire","summary":"s","next_step":"n","status":"active","source":"test",' +
@@ -17,7 +18,13 @@ const EVENT_JSON =
   '"scope":null,"metadata":{"k":1},"created_at":"<at>"}';
 
 let root = '';
-const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
+const c = (args: string[], flags: CliFlags): CommandContext => ({
+  cli: cliCommand(),
+  hippoRoot: root,
+  tenantId: 'default',
+  args,
+  flags,
+});
 
 /** The printed JSON, key order kept, with each timestamp masked. */
 async function printed(run: () => Promise<void>): Promise<string> {

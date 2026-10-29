@@ -9,6 +9,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const SUBJECTS = [
   'docs: explain the release checklist',
@@ -74,7 +75,9 @@ async function learn(
   flags: Record<string, string | boolean>,
   repo = '',
 ): Promise<{ status: number; stdout: string; stderr: string }> {
-  const r = await runInProcess(() => handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }));
+  const r = await runInProcess(() =>
+    handleLearn({ cli: cliCommand(), hippoRoot: root, tenantId: 'default', args: [], flags }),
+  );
   const mask = (text: string): string => (repo ? text.replaceAll(basename(repo), '<repo>') : text);
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }

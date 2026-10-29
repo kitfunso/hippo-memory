@@ -7,7 +7,6 @@ import { toWire } from '../../base/memory/memory-wire.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryList } from '../../api/memories/memories.js';
 import { pickWrites } from './memory-writes.js';
-import { cliApiContext } from './api-context.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import {
@@ -20,8 +19,14 @@ import {
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
+import type { CliCommand } from './api-context.js';
 
-export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleSync({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const globalRoot = hippoHomeDir();
@@ -32,7 +37,7 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
 
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = boolFlag(flags, 'cross-project');
-  const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), {
+  const count = await api.syncFromGlobal(cli.apiContext(hippoRoot, tenantId), {
     includeCrossProject,
   });
   const skipNote = includeCrossProject
@@ -41,12 +46,17 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
-export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+export async function handlePromote({
+  hippoRoot,
+  tenantId,
+  args,
+  cli,
+}: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  const { globalId, globalStore } = await (await pickWrites(hippoRoot, tenantId)).promote(id);
+  const { globalId, globalStore } = await (await pickWrites(cli, hippoRoot, tenantId)).promote(id);
   console.log(`Promoted ${id} to global store as ${globalId}`);
   if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }
@@ -56,14 +66,15 @@ export async function handleShare({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const shareId = args[0];
   if (shareId === '--auto' || boolFlag(flags, 'auto')) {
-    await shareAuto(hippoRoot, tenantId, flags);
+    await shareAuto(cli, hippoRoot, tenantId, flags);
   } else if (shareId) {
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
-    const ctx = cliApiContext(hippoRoot, tenantId);
+    const ctx = cli.apiContext(hippoRoot, tenantId);
     const result = await api.shareToGlobal(ctx, shareId, { force });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
@@ -84,11 +95,16 @@ export async function handleShare({
 }
 
 /** `hippo share --auto`: shares every memory at or above the transfer threshold. */
-async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function shareAuto(
+  cli: CliCommand,
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
   const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
   const dryRun = boolFlag(flags, 'dry-run');
-  const results = await api.autoShareToGlobal(cliApiContext(hippoRoot, tenantId), {
+  const results = await api.autoShareToGlobal(cli.apiContext(hippoRoot, tenantId), {
     minScore,
     dryRun,
   });
@@ -110,11 +126,16 @@ async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): 
   }
 }
 
-export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handlePeers({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer
   // discovery.
   const allTenants = boolFlag(flags, 'all-tenants');
-  const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
+  const peers = await api.sharePeers(cli.apiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
   } else {
@@ -136,11 +157,12 @@ export async function handleExport({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const format = stringFlagOrExit(flags, 'format') || 'json';
   const outputPath = args[0] || null;
-  const entries = await memoryList(cliApiContext(hippoRoot, tenantId));
+  const entries = await memoryList(cli.apiContext(hippoRoot, tenantId));
 
   let output: string;
   if (format === 'markdown' || format === 'md') {

@@ -6,7 +6,7 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { RequestStores } from '../../src/db/index.js';
 import { SESSION_OPEN } from '../../src/db/request-stores.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -50,7 +50,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    const host = cliStdioHost();
+    const host = cliCommand().stdioHost();
     await remember(host, root, 'the deploy moved to friday');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await remember(host, root, 'alice owns the billing service');
@@ -87,7 +87,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    await remember(cliStdioHost(), root, 'the deploy moved to friday');
+    await remember(cliCommand().stdioHost(), root, 'the deploy moved to friday');
     const frame = sessions[0];
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     opens.mockRestore();

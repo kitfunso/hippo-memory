@@ -17,7 +17,7 @@ import {
   importSessionFolder,
 } from '../../src/api/agent-memories.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -207,7 +207,7 @@ describe('agent memory sync: routing and sharing', () => {
         )
         .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()),
     );
-    const repair = (dryRun: boolean) => projectNameRepair(cliApiContext(w.global, 'default'), { dryRun });
+    const repair = (dryRun: boolean) => projectNameRepair(cliCommand().apiContext(w.global, 'default'), { dryRun });
 
     expect((await repair(true)).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);

@@ -12,6 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let root = '';
 let store = '';
@@ -69,7 +70,9 @@ describe('hippo context output (in process)', () => {
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags, stdin?: string): Promise<void> => {
       const r = await runInProcess(() =>
-        withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args, flags })),
+        withHookStdin(stdin, () =>
+          handleContext({ cli: cliCommand(), hippoRoot: store, tenantId: 'default', args, flags }),
+        ),
       );
       transcript.push(
         `$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`,

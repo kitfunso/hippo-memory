@@ -7,6 +7,7 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let root = '';
 
@@ -43,7 +44,9 @@ describe('hippo card output (in process)', () => {
     const transcript: string[] = [];
     const ids: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleCard({ hippoRoot: store, tenantId: 'default', args, flags }));
+      const r = await runInProcess(() =>
+        handleCard({ cli: cliCommand(), hippoRoot: store, tenantId: 'default', args, flags }),
+      );
       transcript.push(`$ card ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout;
     };

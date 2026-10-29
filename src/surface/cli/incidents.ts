@@ -4,7 +4,6 @@ import type { ContextWith } from '../../api/types.js';
 import { incidentOpen, incidentResolve } from '../../api/objects/object-kinds.js';
 import { objectClose, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
 import type { Incident } from '../../base/records/object-types.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   flagValueless,
@@ -89,10 +88,11 @@ export async function handleIncident({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   if (subcommand === 'list') return incidentList(ctx, flags);
   if (subcommand === 'get') return incidentGet(ctx, args);
   if (subcommand === 'resolve') return resolveIncident(ctx, args, flags);

@@ -127,8 +127,8 @@ function crashScript(failure: string): string {
     file,
     [
       `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
-      `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/cli/api-context.js')).href)});`,
-      'startStdioLoop(cliStdioHost());',
+      `const { cliCommand } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/cli/api-context.js')).href)});`,
+      'startStdioLoop(cliCommand().stdioHost());',
       // A later turn, so the failure reaches the crash handlers rather than the module's own evaluation.
       `setImmediate(() => { ${failure} });`,
     ].join('\n'),

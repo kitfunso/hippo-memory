@@ -27,6 +27,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const { writeEntry } = sessionPerTest();
 
@@ -177,7 +178,13 @@ describe('cli recall scope default-deny', () => {
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
     const res = await runInProcess(() =>
-      handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }),
+      handleExplain({
+        cli: cliCommand(),
+        hippoRoot: join(home, '.hippo'),
+        tenantId: 'default',
+        args: ['deploykey'],
+        flags: {},
+      }),
     );
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);

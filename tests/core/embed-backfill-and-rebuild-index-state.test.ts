@@ -16,7 +16,7 @@ import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embed
 import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
+import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import {
@@ -291,7 +291,7 @@ describe('a model identity change on hippo.db', () => {
   it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const index = cliStore(root).embeddingIndex;
+    const index = cliCommand().store(root).embeddingIndex;
     const staged: number[] = [];
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {
@@ -306,7 +306,7 @@ describe('a model identity change on hippo.db', () => {
     };
     const target = {
       embeddingIndex: watched,
-      rows: cliStore(root),
+      rows: cliCommand().store(root),
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),
