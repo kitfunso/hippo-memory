@@ -196,6 +196,9 @@ export type McpContextFor<S extends RequiredStore = RequiredStore> = (
  * src/surface/mcp does not. */
 export interface McpHost<S extends RequiredStore = RequiredStore> {
   runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor<S>) => Promise<T>): Promise<T>;
+  /** Waits up to `withinMs` for the work the frames handed off, such as an embed; resolves with
+   * how many were still running. */
+  settle(withinMs: number): Promise<number>;
 }
 
 /** One tool call after the store, config and tenant are resolved; every handler reads the same

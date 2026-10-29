@@ -18,8 +18,23 @@ export class DetachedSet {
     this.#work.add(kept);
   }
 
-  /** Resolves once every kept promise has settled, work detached while it waits included. */
-  async settle(): Promise<void> {
+  /** Waits for every kept promise, work detached meanwhile included, up to `withinMs`; returns how many still run. */
+  async settle(withinMs?: number): Promise<number> {
+    const drained = this.#drain();
+    if (withinMs === undefined) {
+      await drained;
+      return 0;
+    }
+    let bound: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<void>((resolve) => {
+      bound = setTimeout(resolve, withinMs);
+    });
+    await Promise.race([drained, timedOut]);
+    clearTimeout(bound);
+    return this.#work.size;
+  }
+
+  async #drain(): Promise<void> {
     while (this.#work.size > 0) await Promise.all(this.#work);
   }
 }

@@ -311,5 +311,6 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   return {
     runFrame: (signal, run) =>
       runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', runtime),
+    settle: (withinMs) => runtime.settle(withinMs),
   };
 }

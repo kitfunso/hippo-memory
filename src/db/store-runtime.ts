@@ -122,9 +122,10 @@ export class StoreRuntime {
     this.#detached.detach(work);
   }
 
-  /** Resolves once the detached work has settled, for a root that closes its stores itself. */
-  settle(): Promise<void> {
-    return this.#detached.settle();
+  /** Waits for the detached work, up to `withinMs` when given, for a root that closes its stores
+   * itself; resolves with how many were still running. */
+  settle(withinMs?: number): Promise<number> {
+    return this.#detached.settle(withinMs);
   }
 
   /** Settles the detached work, which may still write through the stores, then runs closeNow. */

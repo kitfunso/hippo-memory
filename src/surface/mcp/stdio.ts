@@ -133,7 +133,9 @@ function track(method: string, call: Promise<void>): void {
     .catch((err) => log.error(`mcp: ${method} failed after it was dispatched`, errorFields(err)));
 }
 
-async function drainInFlight(): Promise<void> {
+/** Waits for the calls in flight, then for the work they handed off, one bound for both. */
+async function drainInFlight<S extends RequiredStore>(host: McpHost<S>): Promise<void> {
+  const started = performance.now();
   if (inFlight.size > 0) {
     let bound: NodeJS.Timeout | undefined;
     const timedOut = new Promise<void>((resolve) => {
@@ -148,10 +150,17 @@ async function drainInFlight(): Promise<void> {
       { method },
     );
   }
+  const left = await host.settle(Math.max(0, STDIN_END_DRAIN_MS - (performance.now() - started)));
+  if (left > 0) {
+    log.warn(
+      `mcp: ${left} handed-off task(s), such as an embed, still running ${STDIN_END_DRAIN_MS} ms after stdin closed`,
+      { left },
+    );
+  }
 }
 
-async function exitWhenDrained(): Promise<void> {
-  await drainInFlight();
+async function exitWhenDrained<S extends RequiredStore>(host: McpHost<S>): Promise<void> {
+  await drainInFlight(host);
   exitAfterFlush(0);
 }
 
@@ -300,7 +309,7 @@ export function startStdioLoop<S extends RequiredStore>(host: McpHost<S>): void 
   );
 
   process.stdin.on('end', () => {
-    exitWhenDrained().catch((err) => {
+    exitWhenDrained(host).catch((err) => {
       log.error('mcp: draining the calls in flight failed; exiting', errorFields(err));
       exitAfterFlush(1);
     });
@@ -310,7 +319,7 @@ export function startStdioLoop<S extends RequiredStore>(host: McpHost<S>): void 
   // A crash waits for the calls in flight as stdin's end does, so a client is not left without its
   // reply.
   installCrashHandlers('mcp', {
-    run: drainInFlight,
+    run: () => drainInFlight(host),
     boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
   });
 }
