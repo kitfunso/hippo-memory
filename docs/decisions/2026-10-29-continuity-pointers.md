@@ -26,6 +26,7 @@ The Z0 round 2 eval failed its cost gate (H4): on tasks with no lesson, hippo co
 ## Consequences
 - Another session's hook output fell from 858 to 375 characters, and `hippo context --auto` from 982 to 540 (verify evidence, 4d078af84 against eb5f72823).
 - Hooked sessions lose the per-task call's retrieval strengthening and last-recall attribution, because the pinned-only path is read-only (`src/api/context.ts:213-216`). They also lose the git-aware recall at session start.
+- The plugin no longer prints its `hippo init` hint at session start. `hippo status` checks only the project store, so it cannot stand in for the hook's project-then-global lookup.
 - A pointer's command finds its store from the agent shell's folder. A shell inside another hippo project gets "not found".
 
 ## Reconsider when
