@@ -1,7 +1,7 @@
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { fitBudget } from './finalize.js';
-import { rankBm25, type SearchOptions } from './bm25-search.js';
+import { rankBm25, type Bm25SearchOptions } from './bm25-search.js';
 import {
   DEFAULT_RECALL_BUDGET,
   type RankTime,
@@ -29,7 +29,7 @@ function newEntitiesOf(topK: SearchResult[], query: string): string[] {
 export function rankMultihop(
   query: string,
   entries: MemoryEntry[],
-  options: SearchOptions & RankTime,
+  options: Bm25SearchOptions & RankTime,
 ): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search()

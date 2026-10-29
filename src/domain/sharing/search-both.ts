@@ -41,13 +41,13 @@ export function logEmbedAllFailure<E>(caller: string, err: E): void {
   );
 }
 
-export interface SearchOptions {
+export interface SearchBothOptions {
   budget?: number;
   now?: Date;
   minResults?: number;
 }
 
-export interface SearchBothHybridOptions extends SearchOptions {
+export interface SearchBothHybridOptions extends SearchBothOptions {
   embeddingWeight?: number;
   explain?: boolean;
   mmr?: boolean;
