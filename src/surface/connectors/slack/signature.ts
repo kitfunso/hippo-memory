@@ -34,7 +34,7 @@ export interface VerifyOptions {
   previousSecret?: string;
   /** Current unix seconds. Injectable for tests. */
   now?: number;
-  /** Max allowed skew in seconds. Default 5 minutes (Slack's recommendation). */
+  /** Max allowed skew in seconds. Default DEFAULT_SKEW_SECONDS (Slack's recommendation). */
   skewSeconds?: number;
 }
 

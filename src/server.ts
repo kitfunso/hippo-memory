@@ -1,16 +1,14 @@
-import {
-  type Actor,
-  authCreate as authCreateIn,
-  type AuthCreateOptions,
-  type AuthCreateResult,
-  authCreateSelf as authCreateSelfIn,
-  type AuthCreateSelfOptions,
-  type AuthCreateSelfResult,
-  authRevoke as authRevokeIn,
-  type AuthRevokeResult,
-  type EntryContext as Context,
+import * as api from './api/index.js';
+import type {
+  Actor,
+  AuthCreateOptions,
+  AuthCreateResult,
+  AuthCreateSelfOptions,
+  AuthCreateSelfResult,
+  AuthRevokeResult,
+  EntryContext as Context,
 } from './api/index.js';
-import { withEntryInfra } from './surface/entry-infra.js';
+import { filled } from './surface/entry-infra.js';
 import {
   BadRequestError,
   ConflictError,
@@ -19,22 +17,13 @@ import {
 } from './base/errors/api-errors.js';
 
 /** Mints a key stamped by the caller's clock, else the host's. */
-export function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
-  return authCreateIn(withEntryInfra(ctx), opts);
-}
+export const authCreate = filled(api.authCreate);
 
 /** Mints the signed-in caller's own key, stamped by the caller's clock, else the host's. */
-export function authCreateSelf(
-  ctx: Context,
-  opts: AuthCreateSelfOptions,
-): Promise<AuthCreateSelfResult> {
-  return authCreateSelfIn(withEntryInfra(ctx), opts);
-}
+export const authCreateSelf = filled(api.authCreateSelf);
 
 /** Revokes a key, stamped by the caller's clock, else the host's. */
-export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
-  return authRevokeIn(withEntryInfra(ctx), keyId);
-}
+export const authRevoke = filled(api.authRevoke);
 
 export { serve } from './surface/server/boot.js';
 export { promptHookContext } from './surface/server/prompt-hook-context.js';

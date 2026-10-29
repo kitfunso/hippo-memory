@@ -2,7 +2,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../../base/errors/api-errors.js';
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { StoreFiles } from '../runtime/open.js';
 import { writeEntryRow } from '../entries/entry-writes.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
@@ -276,7 +276,7 @@ function closeOpenPredictionRow(
       `,
   ).run(opts.actualValue ?? null, opts.closureState, now, opts.closureNote ?? null, id, tenantId);
 
-  if (updateResult.changes === 0) throwCloseMiss(db, tenantId, id);
+  if (changedRows(updateResult) === 0) throwCloseMiss(db, tenantId, id);
 
   const row = cachedStatement(
     db,

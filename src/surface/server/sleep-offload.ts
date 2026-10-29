@@ -7,7 +7,7 @@ import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { replyError, type FailureReply } from './failure-reply.js';
 
-const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
+export const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
 /** What the child needs to rebuild the request's context (the store handle itself cannot cross a
  * process boundary), or the store an auto-sleep consolidates. */
@@ -150,8 +150,8 @@ const SLEEP_RETRY_AFTER_SEC = 30;
 /** A server's sleeps, one at a time in a child process: POST /v1/sleep and the auto-sleep a
  * write starts share it. */
 export interface SleepQueue {
-  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline (10 minutes, or
-   * HIPPO_SLEEP_TIMEOUT_MS). */
+  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline
+   * (DEFAULT_SLEEP_DEADLINE_MS, or HIPPO_SLEEP_TIMEOUT_MS). */
   readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;

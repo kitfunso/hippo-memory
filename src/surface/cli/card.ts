@@ -34,7 +34,7 @@ const CARD_USAGE = {
   reclaim:
     'hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)',
   comment: 'hippo card comment <id> --body "..." [--author <name>]',
-} as const;
+} as const satisfies Partial<Record<CardSubcommand, string>>;
 
 function usageError(sub: keyof typeof CARD_USAGE): CliExit {
   printError(`Usage: ${CARD_USAGE[sub]}`);
@@ -110,19 +110,7 @@ async function cardRefusal({ cli, hippoRoot, tenantId, id }: CardRefusalOptions)
 }
 
 // One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on
-// fails fast instead of silently doing nothing.
-type CardSubcommand =
-  | 'create'
-  | 'show'
-  | 'list'
-  | 'claim'
-  | 'heartbeat'
-  | 'block'
-  | 'review'
-  | 'complete'
-  | 'reclaim'
-  | 'comment';
-
+// fails fast instead of silently doing nothing. Its keys name the subcommands for every table here.
 const CARD_SUBCOMMAND_FLAGS = {
   create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
   show: ['json'],
@@ -134,7 +122,9 @@ const CARD_SUBCOMMAND_FLAGS = {
   complete: ['outcome', 'run'],
   reclaim: new Array<string>(),
   comment: ['body', 'author'],
-} satisfies Record<CardSubcommand, string[]>;
+};
+
+type CardSubcommand = keyof typeof CARD_SUBCOMMAND_FLAGS;
 
 type CardHandler = (cmd: CommandContext) => Promise<void>;
 
@@ -146,9 +136,7 @@ export function handleCard(cmd: CommandContext): Promise<void> {
   const subcommand = args[0] ?? '';
 
   if (!Object.hasOwn(CARD_SUBCOMMAND_FLAGS, subcommand)) {
-    fail(
-      'Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>',
-    );
+    fail(`Usage: hippo card <${Object.keys(CARD_SUBCOMMAND_FLAGS).join('|')}>`);
   }
   // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real
   // key.
@@ -413,6 +401,8 @@ async function cardComment({
   console.log(`Added comment ${comment.id} to card ${id}`);
 }
 
+// A table of functions, not a field on each flag entry: scripts/cli-flag-reads.mjs follows
+// `TABLE[key](...)` into every handler to check the flags each one reads.
 const CARD_HANDLERS = {
   create: cardCreate,
   show: cardShow,

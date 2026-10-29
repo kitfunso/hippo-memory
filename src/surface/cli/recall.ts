@@ -18,7 +18,7 @@ import { printError } from './output.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallHeading } from './print.js';
-import { continuityJson, type ContinuityBlockJson } from '../../api/continuity/continuity-json.js';
+import { continuityJson, type ContinuityBlockJson } from '../../base/session/continuity-json.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 import {

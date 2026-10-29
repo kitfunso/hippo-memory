@@ -6,6 +6,9 @@ import {
   type AmbientTallies,
 } from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
+import type { StoreRules } from '../base/ports/infra.js';
+import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
+import * as openStore from '../surface/open-store.js';
 export type {
   ApiKeyListItem,
   ApiKeyListRow,
@@ -64,10 +67,11 @@ export type {
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
-// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
-// hippo.db's, which the composition roots open as their default store.
+/** hippo.db's store, which an add-on swaps for its own HippoStore in serve(). It takes only an
+ * add-on's rules, since a runtime or a session belongs to a composition root. */
+export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups =
+  openStore.sqliteStore;
 export {
-  publishedDefaultStore as sqliteStore,
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,

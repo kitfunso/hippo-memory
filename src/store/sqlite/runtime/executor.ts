@@ -67,9 +67,10 @@ export interface ExecutorOptions extends StoreRules {
   /** Lock wait of each thread's connection; defaults to the server's. */
   readonly busyWaitMs?: number;
   /** Calls that may wait for one thread; the server passes HIPPO_STORE_QUEUE_MAX; defaults to
-   * 256. */
+   * DEFAULT_QUEUE_MAX. */
   readonly queueMax?: number;
-  /** How long past its deadline a write may still report its own outcome; defaults to 2000 ms. */
+  /** How long past its deadline a write may still report its own outcome; defaults to
+   * DEFAULT_WRITE_GRACE_MS. */
   readonly writeGraceMs?: number;
   /** Stored vectors a store holds before the pinned reader builds its vector graph; defaults to
    * VECTOR_GRAPH_THRESHOLD. */

@@ -5,7 +5,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { DatabaseSyncLike } from './sqlite.js';
+import { changedRows, type DatabaseSyncLike } from './sqlite.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';
@@ -134,11 +134,11 @@ export function countVectors(db: DatabaseSyncLike): VectorCounts {
 
 /** Drop vectors whose memory row is gone; returns how many went. */
 export function deleteOrphanVectors(db: DatabaseSyncLike): number {
-  return Number(
+  return changedRows(
     cachedStatement(
       db,
       'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)',
-    ).run().changes ?? 0,
+    ).run(),
   );
 }
 

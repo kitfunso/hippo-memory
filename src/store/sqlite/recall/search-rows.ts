@@ -205,15 +205,16 @@ function listFtsCandidates(
   }
 }
 
-/** Substring matches in content or tags: the trigram index answers each term of 3 or more
- * characters over every admitted row, and LIKE tests the rest over the newest admitted rows. */
+/** Substring matches in content or tags: the trigram index answers each term of MIN_TRIGRAM_CHARS
+ * or more characters over every admitted row, and LIKE tests the rest over the newest admitted
+ * rows. */
 function listLikeCandidates(
   db: DatabaseSyncLike,
   terms: string[],
   p: SearchPredicates,
   limit: number,
 ): MemoryRow[] {
-  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has
+  // FTS5's trigram index cannot look up a term under MIN_TRIGRAM_CHARS; a store without FTS5 has
   // no index at all.
   const indexed = isFtsAvailable(db)
     ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS)

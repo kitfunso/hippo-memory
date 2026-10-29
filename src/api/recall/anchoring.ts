@@ -15,7 +15,7 @@ export interface AnchoringHint {
   /** The memory ID that is anchoring the agent's reasoning. */
   memoryId: string;
   /** For 'memory_dominance': how many distinct queries in the recent window had this memory as their top-1 result.
-   *  Always >= 3 when emitted. */
+   *  Always at least `minDominance` when emitted. */
   queryCount?: number;
   /** Human-readable summary surfaced to the agent. */
   summary: string;
@@ -40,14 +40,14 @@ export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOptions {
   /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId. Default
-   *  3. */
+   *  DEFAULT_MIN_DOMINANCE. */
   minDominance?: number;
   /** query_repeat window: how many recent history entries to scan for query repeat.
-   *  Default 5. */
+   *  Default DEFAULT_RECENT_REPEAT_WINDOW. */
   recentRepeatWindow?: number;
   /**
    * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within
-   * this many history entries. Default 3.
+   * this many history entries. Default DEFAULT_COOLDOWN.
    */
   cooldown?: number;
 }
@@ -95,7 +95,8 @@ function fnv1a32(text: string): number {
 /**
  * Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both
  * rules fire, since it spans DIFFERENT queries. Cooldown is per memory: a hint on the SAME
- * topMemoryId within `cooldown=3` history entries is suppressed. Returns an AnchoringHint or null.
+ * topMemoryId within `cooldown` history entries (DEFAULT_COOLDOWN by default) is suppressed.
+ * Returns an AnchoringHint or null.
  */
 export function detectAnchoring(
   history: RecallHistorySnapshot,

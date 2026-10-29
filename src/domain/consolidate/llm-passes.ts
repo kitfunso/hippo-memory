@@ -247,8 +247,8 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
 }
 
 // 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same
-// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard
-// ceiling 1000), prevents runaway LLM cost.
+// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default
+// DEFAULT_DAG_REBUILD_CAP, hard ceiling MAX_DAG_REBUILD_CAP), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {

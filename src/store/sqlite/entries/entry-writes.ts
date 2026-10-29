@@ -1,8 +1,10 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
-// and the shared entry write path.
+// and the shared entry write path. A name ending InTx writes inside the caller's transaction;
+// one ending InOwnTx opens a write scope of its own on the caller's handle.
 import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
 import {
+  changedRows,
   closeHippoDb,
   type DatabaseSyncLike,
   type DbGrant,
@@ -103,7 +105,7 @@ export function writePromotedEntry(
         },
       ]);
     });
-  writeEntryOn(db, files, entry, { actor: opts.actor, afterWrite });
+  writeEntryInOwnTx(db, files, entry, { actor: opts.actor, afterWrite });
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its
@@ -182,7 +184,7 @@ export function addTagToEntries(
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row
  * still commits alone. `opts.afterWrite` shares the INSERT's SAVEPOINT. */
-export function writeEntryOn(
+export function writeEntryInOwnTx(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
@@ -266,7 +268,7 @@ export function strengthenRetrievedInOwnTx(
   if (strengthensNothing(ids, opts)) return new Set();
   try {
     return withWriteScope(db, 'strengthen_retrieved', () =>
-      strengthenRetrievedOn(db, ids, opts, rules),
+      strengthenRetrievedInTx(db, ids, opts, rules),
     );
   } catch (error) {
     warnStrengthenFailed(error);
@@ -315,7 +317,7 @@ const RETRIEVAL_UPDATE_SQL =
 
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the
  * caller decides. */
-export function strengthenRetrievedOn(
+export function strengthenRetrievedInTx(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
@@ -431,7 +433,7 @@ export function renameEntrySource(
     db,
     `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
   ).run(to, id, tenantId, from);
-  return Number(moved.changes ?? 0);
+  return changedRows(moved);
 }
 
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the
@@ -448,7 +450,7 @@ export function renameEntrySourceAndOrigin(
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
       `AND source = ?`,
   ).run(to, origin, id, tenantId, from);
-  return Number(done.changes ?? 0);
+  return changedRows(done);
 }
 
 /** A tenant's row `id` and the row `newId` that supersedes it. */
@@ -467,7 +469,7 @@ export function supersedeEntry(
     db,
     `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
   ).run(newId, id, tenantId);
-  return Number(result.changes ?? 0) !== 0;
+  return changedRows(result) > 0;
 }
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a
@@ -529,7 +531,7 @@ export function writeOutcome(
   outcome: OutcomeWrite,
   traceId?: number,
 ): string[] {
-  const memoryIds = applyOutcomeOn(db, outcome, files).map((entry) => entry.id);
+  const memoryIds = applyOutcomeInOwnTx(db, outcome, files).map((entry) => entry.id);
   if (traceId !== undefined && memoryIds.length > 0) {
     recordTraceOutcome(db, {
       traceId,
@@ -605,7 +607,7 @@ export function writeInOwnTenant(
  * hippo.db's form of the port's row lock, each a set statement whatever the id count. Returns
  * one entry per applied id with repeats, as callers count them. An outcome never changes
  * content, so the rejected-value guard has nothing to check. */
-function applyOutcomeOn(
+function applyOutcomeInOwnTx(
   db: DatabaseSyncLike,
   outcome: OutcomeWrite,
   rules: StoreModel,

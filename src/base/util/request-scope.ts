@@ -10,8 +10,8 @@ interface RequestScope {
 
 const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
 
-/** How long a request may run: 120 s, or the HIPPO_REQUEST_DEADLINE_MS value the root read,
- * where 0 turns it off. */
+/** How long a request may run: DEFAULT_REQUEST_DEADLINE_MS, or the HIPPO_REQUEST_DEADLINE_MS value
+ * the root read, where 0 turns it off. */
 export function requestDeadlineMs(configured?: number): number {
   return configured ?? DEFAULT_REQUEST_DEADLINE_MS;
 }

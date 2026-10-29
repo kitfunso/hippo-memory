@@ -21,7 +21,7 @@ const RAY_ID_MAX_CHARS = 64;
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 120_000;
-// Workers AI rejects a request with more than 64 questions, one per candidate here.
+// Workers AI rejects a request with more than this many questions, one per candidate here.
 const MAX_CANDIDATES = 64;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
 

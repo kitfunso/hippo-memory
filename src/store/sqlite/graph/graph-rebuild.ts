@@ -108,8 +108,8 @@ function applyGraphOps(
   return runGraphRebuildTransaction(db, tenantId, (tx) => applyGraphOpsOn(tx, tenantId, ops, opts));
 }
 
-// Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could
-// otherwise fail.
+// Sleep's wait, not a request's SERVER_DB_WAIT_MS: each chunk is a fresh BEGIN IMMEDIATE a hook's
+// write could otherwise fail.
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {

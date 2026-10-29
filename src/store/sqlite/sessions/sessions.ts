@@ -2,6 +2,7 @@
 // binding.
 import { freshActiveSnapshot } from '../../../base/session/session-snapshot.js';
 import {
+  changedRows,
   HOOK_DB_WAIT_MS,
   sessionOf,
   withWriteScope,
@@ -103,7 +104,7 @@ function closeTaskSnapshotsForSession(
     `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND ` +
       `session_id = ?${owned ? ` AND ${owned.sql}` : ''}`,
   ).run(status, now, tenantId, sessionId, ...(owned?.params ?? []));
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 function insertSessionEventRow(
@@ -287,7 +288,7 @@ function insertOwnerRow(
     db,
     `INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`,
   ).run(tenantId, sessionId, owner, createdAt);
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred
@@ -483,7 +484,7 @@ function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFi
   const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(
     ...where.params,
   );
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 function saveAny(

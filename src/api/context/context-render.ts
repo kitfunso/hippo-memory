@@ -317,8 +317,8 @@ export const drillCost: DrillDownCost = {
   fixed: (s, w) => printedTokens(drillHead(s, w, w, true)),
 };
 
-// Headers and footer are reserved at their widest (counts at the budget itself, strength at 100%)
-// before any entry.
+// Headers and footer are reserved at their widest (counts at the budget itself, strength at
+// FULL_STRENGTH_PCT) before any entry.
 export function contextCost(
   format: 'markdown' | 'additional-context',
   framing: string,

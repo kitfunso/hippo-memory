@@ -8,11 +8,11 @@ import { rootInfra } from '../../infra/ports.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
 import {
-  defaultReach,
-  defaultStore,
-  runStoreRequest,
+  sqliteReach,
+  sqliteStore,
+  runSqliteRequest,
   saveVectorGraphFile,
-  type StoreSession,
+  type RequestStores,
 } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -28,8 +28,8 @@ type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 const EXIT_MARGIN_MS = 5_000;
 
 const loadConfig = configReader(envRuntimeSettings);
-const storeIn = (session: StoreSession) => (root: string) =>
-  defaultStore(root, { ...evalStoreRules(envLossAversionRatio()), session });
+const storeIn = (session: RequestStores) => (root: string) =>
+  sqliteStore(root, { ...evalStoreRules(envLossAversionRatio()), session });
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
 const childInfra = rootInfra(childHost);
@@ -38,14 +38,14 @@ const childInfra = rootInfra(childHost);
  * store. */
 function sleepJob(
   { hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>,
-  session: StoreSession,
+  session: RequestStores,
 ): Promise<SleepResult> {
   const storeAt = storeIn(session);
   const store = storeAt(hippoRoot);
   const config = loadConfig(hippoRoot);
   const infra = childInfra();
   const reach = contextReach(
-    defaultReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
+    sqliteReach({ hippoRoot, store, shared: undefined, openGlobal: storeAt, host: childHost }),
     loadConfig,
     infra.embedderFor,
     { ledger: store.ledger, folderFiles: store.folderFiles, config },
@@ -82,7 +82,7 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepMessage.
   const job = message as SleepMessage;
-  const work = (session: StoreSession): Promise<JobResult> =>
+  const work = (session: RequestStores): Promise<JobResult> =>
     job.kind === 'consolidate'
       ? autoSleepConsolidate({
           store: storeIn(session)(job.hippoRoot),
@@ -93,7 +93,7 @@ process.once('message', (message) => {
       : sleepJob(job, session);
   // The server's own session and lock wait, so a busy store answers as it did when sleep ran in the
   // server.
-  runStoreRequest(work, 'server')
+  runSqliteRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(async (reply) => {

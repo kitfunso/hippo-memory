@@ -67,8 +67,8 @@ export function gatePromptRecall<T extends { id: string; tokens: ReadonlySet<str
   return kept.slice(0, gate.maxItems);
 }
 
-// bm25 ranks every row matching any term, so fewer and rarer terms bound latency; 8 is a bound, not
-// tuned.
+// bm25 ranks every row matching any term, so fewer and rarer terms bound latency;
+// RAREST_TERM_COUNT is a bound, not tuned.
 export const RAREST_TERM_COUNT = 8;
 
 /** Terms sorted by ascending FTS doc count (rarest first), zero-count terms dropped, ties by term.

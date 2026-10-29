@@ -8,8 +8,8 @@ import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
-// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet
-// bounded so a wedged git cannot stall sleep.
+// Longer than GIT_CALL_TIMEOUT_MS, one-line git reads' wait, because a full log dump on a large
+// repo is slow, yet bounded so a wedged git cannot stall sleep.
 const GIT_TIMEOUT_MS = MINUTE_MS;
 
 /** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on

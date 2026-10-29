@@ -29,13 +29,15 @@ import {
   SEED_DAYS_SCAN,
   SEED_DAYS_SINGLE,
 } from '../flag-defaults.js';
-import { type VerbSpec, verb } from '../verb-row.js';
+import { type RemovedFlag, type VerbSpec, verb } from '../verb-row.js';
 
 const SEED_DAYS_HELP = `${SEED_DAYS_SCAN} for --scan, ${SEED_DAYS_SINGLE} for single`;
 const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
-const RANKER_ADVICE =
-  'Drop it: recall ranks by hybrid search, BM25 blended with cosine similarity.';
-const RANKER_FLAGS_REMOVED = { physics: RANKER_ADVICE, classic: RANKER_ADVICE };
+const RANKER_REMOVED: RemovedFlag = {
+  removedIn: '3.0',
+  advice: 'Drop it: recall ranks by hybrid search, BM25 blended with cosine similarity.',
+};
+const RANKER_FLAGS_REMOVED = { physics: RANKER_REMOVED, classic: RANKER_REMOVED };
 
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {

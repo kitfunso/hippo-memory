@@ -34,8 +34,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 
-// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees
-// no change.
+// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below
+// MAX_AUTH_KEYS_PAGE keys sees no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this

@@ -93,8 +93,8 @@ export interface ApplyRerankerOptions {
   readonly onRanked?: (ranked: RerankResult) => SearchResult;
 }
 
-/** Reranks the top `topK` (default 50), stamps pre and post ranks, then maps each head row
- * through `onRanked`. */
+/** Reranks the top `topK` (default DEFAULT_RERANK_TOP_K), stamps pre and post ranks, then maps each
+ * head row through `onRanked`. */
 export async function applyReranker({
   query,
   ordered,

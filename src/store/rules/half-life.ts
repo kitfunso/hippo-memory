@@ -6,8 +6,8 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 /** The base every store used before the base was recorded. */
 const LEGACY_HALF_LIFE_BASE = 7;
 
-/** The base a stored meta value names: 7 days when none was recorded or it is not a positive
- * number. */
+/** The base a stored meta value names: LEGACY_HALF_LIFE_BASE days when none was recorded or it is
+ * not a positive number. */
 export function recordedHalfLifeBase(stored: string | undefined): number {
   const raw = Number(stored ?? LEGACY_HALF_LIFE_BASE);
   return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;

@@ -25,7 +25,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 
-export interface SearchOptions {
+export interface Bm25SearchOptions {
   budget?: number;
   now?: Date;
   hippoRoot?: string;
@@ -67,7 +67,7 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
 export function rankBm25(
   query: string,
   entries: MemoryEntry[],
-  options: SearchOptions & RankTime,
+  options: Bm25SearchOptions & RankTime,
 ): SearchResult[] {
   const now = rankNow(options);
   const pool = currentEntries(entries, options);

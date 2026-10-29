@@ -7,14 +7,15 @@ import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 import type { StoreRuntime } from './store-runtime.js';
 
 // WAL pages at which a connection checkpoints inside its own commit: SQLite's default, so a long
-// write pays the checkpoint's two flushes once per 1,000 pages, not once per 100.
+// write pays the checkpoint's two flushes once per this many pages, not once per 100.
 const INLINE_CHECKPOINT_PAGES = 1000;
 
 // The same limit while a worker checkpoints the store: SQLite still bounds the WAL when the worker
 // falls behind.
 const BACKSTOP_CHECKPOINT_PAGES = 4000;
 
-// Sized so one background checkpoint covers about 1000 WAL pages of recalls, SQLite's own default.
+// Sized so one background checkpoint covers about INLINE_CHECKPOINT_PAGES WAL pages of recalls,
+// SQLite's own default.
 const RESPONSES_PER_CHECKPOINT = 32;
 
 // After a checkpoint that left frames behind, a sooner retry keeps what an inline checkpoint would

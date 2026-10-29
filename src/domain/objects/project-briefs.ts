@@ -21,8 +21,8 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
   'closed',
 ]);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the 4096 short-field
- *  convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the
+ *  MAX_SHORT_FIELD_LEN short-field convention. */
 export const MAX_REPO_LEN = 256;
 export const MAX_BRIEF_SUMMARY_LEN = 8192;
 /** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan

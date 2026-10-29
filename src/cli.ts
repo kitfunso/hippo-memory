@@ -224,11 +224,10 @@ function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined):
 
 function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | undefined): void {
   const declared = spec?.flags;
-  // card checks its flags per subcommand, with a stricter message.
-  if (command === 'card') return;
-  for (const [name, advice] of Object.entries(spec?.removedFlags ?? {})) {
+  if (spec?.checksOwnFlags) return;
+  for (const [name, { removedIn, advice }] of Object.entries(spec?.removedFlags ?? {})) {
     if (Object.hasOwn(flags, name)) {
-      fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
+      fail(`hippo ${command}: --${name} was removed in ${removedIn}. ${advice}`);
     }
   }
   const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');

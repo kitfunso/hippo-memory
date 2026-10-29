@@ -83,8 +83,8 @@ function isReadableFile(filePath: string): boolean {
 }
 
 /** PreCompact stdout is the summarizer's instructions; sent before the snapshot work because a
- * locked store can run the hook past its 30 s limit, and via writeSync because process.exit
- * drops buffered pipe output. */
+ * locked store can run the hook past its HOOK_LONG_TIMEOUT_SECONDS limit, and via writeSync
+ * because process.exit drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): string | null {
   const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
@@ -241,7 +241,8 @@ export interface PostCompactOptions {
   ) => Promise<void>;
 }
 
-/** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
+/** A PostCompact hook has HOOK_MEDIUM_TIMEOUT_SECONDS in all; replay stops starting new records
+ * after this. */
 const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
 /** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns

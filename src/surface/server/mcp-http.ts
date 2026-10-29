@@ -33,7 +33,7 @@ const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a
-// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to
+// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS) in v1. Both dispatch to
 // handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`); an SSE stream is
 // checked at open and again before every ping.
 
@@ -193,9 +193,9 @@ export async function handleMcpStream(
   // keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and
-  // closes with 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default
-  // 3600) ends it as 'max_age_exceeded'.
+  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default
+  // DEFAULT_SSE_HEARTBEAT_MS) and closes with 'auth_revoked' if the key was revoked or rotated;
+  // MCP_SSE_MAX_AGE_SEC (default DEFAULT_SSE_MAX_AGE_SEC) ends it as 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 

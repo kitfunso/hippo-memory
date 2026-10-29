@@ -12,7 +12,7 @@ export const MAX_SENTENCES = 5;
 export const MAX_SENTENCE_CHARS = 300;
 /** At about 20 chars per repo path this keeps the Changed line near 50 tokens. */
 export const MAX_FILES = 10;
-/** 300 tokens at 4 chars each: 20% of the 1500-token default budget of both context surfaces. */
+/** 20% of DEFAULT_CONTEXT_BUDGET, both context surfaces' default budget, at 4 chars a token. */
 const MAX_DIGEST_CHARS = 1200;
 
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;

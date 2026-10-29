@@ -1,19 +1,19 @@
 /**
  * Reciprocal Rank Fusion (Cormack, Clarke and Buettcher 2009): fuses N ranked lists by summing
- * weighted 1/(k + rank) per candidate. K is the standard 60, the value hybridSearch already uses;
- * do NOT tune it without a cross-corpus eval. Generic over the id type (hybridSearch uses number,
- * the LongMemEval benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch
- * code it replaced; tests/search/rrf.test.ts is the contract.
+ * weighted 1/(k + rank) per candidate. RRF_K is the standard value, the one rankHybrid already
+ * uses; do NOT tune it without a cross-corpus eval. Generic over the id type (rankHybrid uses
+ * number, the LongMemEval benchmark string). Behaviour MUST stay byte-identical to the inline
+ * rankHybrid code it replaced; tests/search/rrf.test.ts is the contract.
  */
 
 export const RRF_K = 60;
 
 export interface RrfFuseOptions {
-  /** Smoothing constant. Default RRF_K = 60. */
+  /** Smoothing constant. Default RRF_K. */
   k?: number;
   /**
    * Rank assigned to candidates absent from a list; default `max(rankedLists.map(l => l.length))
-   * + 1`, the convention hybridSearch used (`entries.length + 1`). */
+   * + 1`, the convention rankHybrid uses (`entries.length + 1`). */
   absentRank?: number;
 }
 

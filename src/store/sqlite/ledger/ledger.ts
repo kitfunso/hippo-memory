@@ -46,8 +46,8 @@ interface EnsurePilotArmOptions {
 
 /** The stored arm, else the hash arm written once; on any error the hash arm comes back
  * unrecorded. */
-// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a
-// handle opened in that scope.
+// The wait is the caller's lock-wait scope (a hook's HOOK_DB_WAIT_MS, a server request's
+// SERVER_DB_WAIT_MS); it holds on a handle opened in that scope.
 function ensurePilotArm(
   db: DatabaseSyncLike,
   { tenantId, sessionId, rateBp, opts = {} }: EnsurePilotArmOptions,

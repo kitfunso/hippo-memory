@@ -41,7 +41,7 @@ import {
 import { requireInit, workingFolder } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { continuityTexts } from './print.js';
-import { sessionEventJson, snapshotJson } from '../../api/continuity/continuity-json.js';
+import { sessionEventJson, snapshotJson } from '../../base/session/continuity-json.js';
 import {
   hostSessionId,
   hookStoreRoot,

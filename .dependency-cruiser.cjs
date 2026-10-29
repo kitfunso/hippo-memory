@@ -1,6 +1,6 @@
 // Import rules for src/, built from layers.json so the map and the rules cannot drift.
 // Run: npm run check:deps. Name and syntax rules (requireGroup in routes, SQLite words, process.env)
-// live in .oxlintrc.json; runtime cycles between features are .dependency-cruiser-cycles.cjs.
+// live in oxlint.config.ts; runtime cycles between features are .dependency-cruiser-cycles.cjs.
 'use strict';
 const { existsSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');

@@ -2,7 +2,7 @@
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
-import { defaultDiagnostics, defaultStore } from '../../src/surface/open-store.js';
+import { sqliteDiagnosticsStore, sqliteStore } from '../../src/surface/open-store.js';
 import { evalStoreRules } from '../../src/infra/eval-switches.js';
 import { envLossAversionRatio } from '../../src/base/util/env.js';
 import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
@@ -16,7 +16,7 @@ import { TEST_RUN } from './test-run.js';
 /** hippo.db under `root` with no runtime: a test holds it across its commands and reads its mirrors
  * at once. */
 export function storeAt(root: string): CliStore {
-  return defaultStore(root, evalStoreRules(envLossAversionRatio()));
+  return sqliteStore(root, evalStoreRules(envLossAversionRatio()));
 }
 
 export function captureTarget(root: string): CaptureTarget {
@@ -31,7 +31,7 @@ export function captureTarget(root: string): CaptureTarget {
 }
 
 export function diagnosticsBodies(root: string): DoctorStore {
-  return defaultDiagnostics(root);
+  return sqliteDiagnosticsStore(root);
 }
 
 /** hippo.db's ledger under `root`, with the folder facts its delivery rows name. */

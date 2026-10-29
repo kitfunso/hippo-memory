@@ -35,9 +35,9 @@ const STRENGTH_FLOOR = 0.1;
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still
-  // eligible, just unlikely). The clamp is required because sampleForReplay needs all weights
-  // positive.
+  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at REWARD_FLOOR
+  // (still eligible, just unlikely). The clamp is required because sampleForReplay needs all
+  // weights positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);

@@ -1,23 +1,19 @@
 // hippo.db's Conflicts group: listing and resolving the memory_conflicts rows.
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../../base/util/tenant.js';
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import {
   rejectionDigest,
   normalizeValueForRejection,
 } from '../../../base/records/rejection-digest.js';
 import { archiveRawMemory } from '../entries/raw-archive.js';
-import {
-  MEMORY_CONFLICT_COLUMNS,
-  type MemoryConflictRow,
-  parseJsonArray,
-  rowToMemoryConflict,
-} from '../runtime/rows.js';
+import { MEMORY_CONFLICT_COLUMNS, parseJsonArray, rowToMemoryConflict } from '../runtime/rows.js';
 import { audit } from '../audit/audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from '../folder-files/mirrors.js';
 import { readEntriesByIds } from '../entries/entry-reads.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { ownScopeTouches } from '../../../base/scope/recall-scope.js';
+import type { ConflictWire } from '../../../base/memory/conflict-wire.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { deleteEntryCore } from '../entries/delete-and-batch.js';
 import { keysetPage } from '../../../base/util/keyset.js';
@@ -56,7 +52,7 @@ const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memb
 
 // SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/checks/check-row-casts.mjs proves
 // it.
-interface ConflictJoinRow extends MemoryConflictRow {
+interface ConflictJoinRow extends ConflictWire {
   a_id: string | null;
   a_scope: string | null;
   a_kind: string | null;
@@ -69,44 +65,21 @@ interface ConflictJoinRow extends MemoryConflictRow {
   b_origin_project: string | null;
 }
 
-/** One member's joined columns, each null when the left join found no row. */
-interface MemberOfOptions {
-  readonly id: string | null;
-  readonly scope: string | null;
-  readonly kind: string | null;
-  readonly supersededBy: string | null;
-  readonly originProject: string | null;
-}
-
-function memberOf({
-  id,
-  scope,
-  kind,
-  supersededBy,
-  originProject,
-}: MemberOfOptions): ConflictMember | null {
+/** One side's member from its MEMBER_COLS columns; null when the left join found no row. */
+function memberOf(r: ConflictJoinRow, side: 'a' | 'b'): ConflictMember | null {
+  const id = r[`${side}_id` as const];
+  const kind = r[`${side}_kind` as const];
   if (id === null || kind === null) return null;
-  return { scope, kind, supersededBy, originProject };
+  return {
+    scope: r[`${side}_scope` as const],
+    kind,
+    supersededBy: r[`${side}_superseded_by` as const],
+    originProject: r[`${side}_origin_project` as const],
+  };
 }
 
 function toConflictRow(r: ConflictJoinRow): ConflictRow {
-  return {
-    conflict: rowToMemoryConflict(r),
-    a: memberOf({
-      id: r.a_id,
-      scope: r.a_scope,
-      kind: r.a_kind,
-      supersededBy: r.a_superseded_by,
-      originProject: r.a_origin_project,
-    }),
-    b: memberOf({
-      id: r.b_id,
-      scope: r.b_scope,
-      kind: r.b_kind,
-      supersededBy: r.b_superseded_by,
-      originProject: r.b_origin_project,
-    }),
-  };
+  return { conflict: rowToMemoryConflict(r), a: memberOf(r, 'a'), b: memberOf(r, 'b') };
 }
 
 /** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no
@@ -388,7 +361,7 @@ function rebuildConflictsWithJson(
     const stored = storedRefs.has(id) ? (storedRefs.get(id) ?? null) : '[]';
     const refsJson = JSON.stringify(Array.from(refMap.get(id) ?? []).sort());
     if (stored === refsJson) continue;
-    if (Number(update.run(refsJson, id, stored).changes ?? 0) > 0) changedIds.push(id);
+    if (changedRows(update.run(refsJson, id, stored)) > 0) changedIds.push(id);
   }
   return changedIds;
 }
@@ -426,7 +399,7 @@ function claimConflict(
       `((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) AND ${SIDE_HOLDS} AND ` +
       `${SIDE_HOLDS}`,
   ).run(resolution.at, conflictId, ...pair, ...sides);
-  return Number(claimed.changes ?? 0) > 0;
+  return changedRows(claimed) > 0;
 }
 
 /** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one

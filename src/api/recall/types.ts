@@ -19,13 +19,13 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 /** How many rows a recall loads and returns, and the bands it adds beside them. */
 export interface RecallWindowOptions {
   limit?: number;
-  /** Candidates the scorer loads (default: the store's 200-row window), decoupled from `limit`;
+  /** Candidates the scorer loads (default DEFAULT_SEARCH_CANDIDATE_LIMIT), decoupled from `limit`;
    * NOT a hard cap, as fresh-tail and summaries can exceed `limit`. Must be a positive finite
    * integer (else `RecallContractError`, `invalid_scorer_window`). Library-only: HTTP, MCP and
    * `client.ts` do not serialize it. */
   scorerWindow?: number;
   /** DAG-aware recall (default true): entries overflowing `limit` that share a level-2 parent
-   * get that summary appended instead, capped at ceil(limit 0.3) extra rows. */
+   * get that summary appended instead, capped at ceil(limit * SUMMARY_SUB_FRACTION) extra rows. */
   summarizeOverflow?: boolean;
   /** Fresh tail (default 0 = off, capped at MAX_FRESH_RAW): prepend the last N kind='raw' rows
    * (tenant + scope filtered, deduped against BM25 hits) even when the query terms miss. */
@@ -208,11 +208,11 @@ export interface RecallResult {
   total: number;
   tokens: number;
   continuity?: ContinuityBlock;
-  /** Tokens consumed by the continuity block (snapshot, handoff and the last 5 events' full content), each via
-   *  Math.ceil(len/4) like `tokens`; undefined when not requested. Callers needing a tighter budget should truncate
-   *  event.content themselves. */
+  /** Tokens consumed by the continuity block (snapshot, handoff and the last CONTINUITY_EVENT_LIMIT
+   *  events' full content), each via Math.ceil(len/4) like `tokens`; undefined when not requested.
+   *  Callers needing a tighter budget should truncate event.content themselves. */
   continuityTokens?: number;
-  /** Scorer window used for this recall: `opts.scorerWindow`, else the store default (200).
+  /** Scorer window used for this recall: `opts.scorerWindow`, else DEFAULT_SEARCH_CANDIDATE_LIMIT.
    * Optional in the type so test fakes built before the field still compile; always present on
    * values returned by `api.recall`. */
   windowSize?: number;

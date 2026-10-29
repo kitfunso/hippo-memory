@@ -2,7 +2,7 @@
 
 import { CONTINUITY_EVENT_LIMIT, continuityLatest } from '../../api/continuity/continuity.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
-import { snapshotJson } from '../../api/continuity/continuity-json.js';
+import { snapshotJson } from '../../base/session/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot } from './print.js';
 import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';

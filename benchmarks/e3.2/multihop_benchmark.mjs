@@ -81,7 +81,7 @@ for (const c of chains) {
     query: c.succ.slice(0, 38),
     predInBase: baseRank !== null ? `rank ${baseRank}` : 'MISS',
     predInHops: hopRank !== null ? `rank ${hopRank}` : 'MISS',
-    viaGraph: hopRow?.graphVia ?? null,
+    viaGraph: hopRow?.graph_via ?? null,
   });
 }
 console.log('graph extract:', extract.trim().split('\n').pop());

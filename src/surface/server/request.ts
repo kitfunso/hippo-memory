@@ -50,8 +50,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
-// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered
-// before it is called slow.
+// Above DEFAULT_BODY_DEADLINE_MS and DEFAULT_RESOLVER_DEADLINE_MS, so a request those govern is
+// answered before it is called slow.
 const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
 /** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or
