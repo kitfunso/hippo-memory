@@ -11,6 +11,7 @@ import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } 
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
+import { isPointerSafeId } from '../util/session-id.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
@@ -215,15 +216,7 @@ export async function getContext(
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
 
-  return {
-    entries: recorded.items,
-    tokens,
-    activeSnapshot: sections.shownSnapshot ?? undefined,
-    sessionHandoff: sections.shownHandoff ?? undefined,
-    ...pointerModes(sections),
-    recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
-    ambientState: recorded.ambientState,
-  };
+  return contextResult(recorded, tokens, sections);
 }
 
 type AmbientPools = Awaited<ReturnType<typeof loadPools>>;
@@ -420,10 +413,10 @@ async function loadTaskSections(
     raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
   const sessionHandoff =
     raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
-  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id);
-  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId);
+  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id, 'pointer');
+  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
   // Events are the raw snapshot's session's; the pointer's command prints them, so they never reach the purse.
-  const trailMode = continuityModeFor(opts, plan, raw.snapshot?.session_id);
+  const trailMode = continuityModeFor(opts, plan, raw.snapshot?.session_id, 'pointer');
   const recentSessionEvents = trailMode === 'pointer'
     ? []
     : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
@@ -442,13 +435,14 @@ async function loadTaskSections(
   return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left: left() };
 }
 
-// The caller's own state prints whole; a shared store's follows its owner, whom a local command cannot reach.
+// A pointer prints only when its command returns this reader's row; own, shared-store and unsafe-id state prints whole.
+// No id: a snapshot points at `hippo snapshot show`, the store's one active snapshot; no command names a handoff.
 function continuityModeFor(
-  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined,
+  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined, noIdMode: ContinuityMode,
 ): ContinuityMode {
   if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
-  const own = !!sessionId && sessionId === opts.currentSessionId;
-  return own ? 'full' : 'pointer';
+  if (!sessionId) return noIdMode;
+  return sessionId === opts.currentSessionId || !isPointerSafeId(sessionId) ? 'full' : 'pointer';
 }
 
 // The mode is left out of a full print, so every reader's result reads as before.
@@ -457,6 +451,18 @@ function pointerModes(s: TaskSections): Pick<ContextResult, 'snapshotMode' | 'ha
   if (s.shownSnapshot && s.snapshotMode === 'pointer') modes.snapshotMode = 'pointer';
   if (s.shownHandoff && s.handoffMode === 'pointer') modes.handoffMode = 'pointer';
   return modes;
+}
+
+function contextResult(recorded: RecordedRetrieval, tokens: number, s: TaskSections): ContextResult {
+  return {
+    entries: recorded.items,
+    tokens,
+    activeSnapshot: s.shownSnapshot ?? undefined,
+    sessionHandoff: s.shownHandoff ?? undefined,
+    ...pointerModes(s),
+    recentEvents: s.shownEvents.length > 0 ? s.shownEvents : undefined,
+    ambientState: recorded.ambientState,
+  };
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {

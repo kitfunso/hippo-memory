@@ -109,8 +109,8 @@ describe('hippo context continuity assembly', () => {
 
       const out = await runHippo({ budget: '500' }, caller);
 
-      expect(out).toContain('run `hippo session latest --id sess-current`');
-      expect(out).toContain('run `hippo handoff latest --session sess-current`');
+      expect(out).toContain('run `hippo session latest --id=sess-current`');
+      expect(out).toContain('run `hippo handoff latest --session=sess-current`');
       expect(out).not.toContain('Open the PR for the current branch');
       expect(out).not.toContain('Current session is about the continuity-first slice.');
       expect(out).not.toContain('## Recent Session Trail');

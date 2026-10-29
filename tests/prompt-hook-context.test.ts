@@ -122,7 +122,7 @@ describe('promptHookContext', () => {
     // 'parity' saved the snapshot, so it reads the whole text; 'parity-recent' is another session and reads a pointer.
     expect(expected[0]).toContain('half done');
     expect(expected[0]).not.toContain('hippo session latest');
-    expect(expected[1]).toContain('run `hippo session latest --id parity`');
+    expect(expected[1]).toContain('run `hippo session latest --id=parity`');
     expect(expected[1]).not.toContain('half done');
     for (const out of expected) {
       expect(out).toContain('rollback plan');
@@ -148,7 +148,7 @@ describe('promptHookContext', () => {
     expect(whole.stdout).toContain('half done');
     expect(whole.stdout).not.toContain('hippo session latest');
     const pointer = await ask({ continuity: 'pointer' });
-    expect(pointer.stdout).toContain('run `hippo session latest --id owner`');
+    expect(pointer.stdout).toContain('run `hippo session latest --id=owner`');
     expect(pointer.stdout).not.toContain('half done');
   });
 
@@ -163,7 +163,7 @@ describe('promptHookContext', () => {
     expect(out.stdout).toContain('half done');
     const local = localHook(dir, { ...payload, session_id: 'state-only-cli' });
     expect(local).toContain('Active Task Snapshot');
-    expect(local).toContain('run `hippo session latest --id state-only`');
+    expect(local).toContain('run `hippo session latest --id=state-only`');
     expect(local).not.toContain('half done');
   });
 

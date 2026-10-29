@@ -16,6 +16,7 @@ import { SESSION_DIGEST_TAG } from '../src/core/session-digest-row.js';
 import { Layer } from '../src/core/memory.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import { parseArgs } from '../src/cli.js';
 import { handleContext } from '../src/cli/context.js';
 import { handleHandoff, handleSession } from '../src/cli/continuity.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
@@ -42,12 +43,12 @@ const at = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
 
 function handoffPointer(h: SessionHandoff): string {
   return `## Session Handoff\n\n- Session ${h.sessionId} left a handoff at ${at(h.updatedAt)} UTC. ` +
-    `If this task continues it, run \`hippo handoff latest --session ${h.sessionId}\`.\n`;
+    `If this task continues it, run \`hippo handoff latest --session=${h.sessionId}\`.\n`;
 }
 
 function snapshotPointer(s: TaskSnapshot): string {
   return `## Active Task Snapshot\n\n- Session ${s.session_id} saved a task snapshot at ${at(s.updated_at)} UTC. ` +
-    `If this task continues it, run \`hippo session latest --id ${s.session_id}\`.\n`;
+    `If this task continues it, run \`hippo session latest --id=${s.session_id}\`.\n`;
 }
 
 function additionalContext(stdout: string): string {
@@ -135,22 +136,20 @@ describe('task state in a project store', () => {
       expect(handoffSectionText(saveHandoff('earlier'), 'pointer').length).toBeLessThan(220);
     });
 
-    it('leaves out a session id that is unsafe to paste into a command, and points at `hippo handoff latest`', async () => {
-      const handoff = saveHandoff(UNSAFE_ID);
+    it.each([
+      ['unsafe to paste into a command', UNSAFE_ID],
+      ['longer than the id cap', 'x'.repeat(MAX_ID_LEN + 1)],
+      ['empty, so no command can name the row', ''],
+    ])('prints the whole handoff, and no command, when its session id is %s', async (_name, id) => {
+      saveHandoff(id);
       const text = await hookText('now');
-      expect(text).toContain(
-        `## Session Handoff\n\n- A session left a handoff at ${at(handoff.updatedAt)} UTC. ` +
-          'If this task continues it, run `hippo handoff latest`.\n',
-      );
-      expect(text).not.toContain('rm -rf');
-      expect(text).not.toContain('a b');
-      expect(handoffSectionText(handoff, 'pointer')).not.toContain(UNSAFE_ID);
-    });
-
-    it('leaves out a session id longer than the id cap', () => {
-      const handoff = saveHandoff('x'.repeat(MAX_ID_LEN + 1));
-      expect(handoffSectionText(handoff, 'pointer')).not.toContain('xxx');
-      expect(handoffSectionText(handoff, 'pointer')).toContain('run `hippo handoff latest`.');
+      expect(text).toContain(`- Session: ${id}`);
+      expect(text).toContain(HANDOFF_SUMMARY);
+      expect(text).toContain(NEXT_ACTION);
+      expect(text).not.toContain('hippo handoff latest');
+      const result = await getContext(apiCtx(store), hookOpts(1500, 'pointer'));
+      expect(result.sessionHandoff?.summary).toBe(HANDOFF_SUMMARY);
+      expect(result.handoffMode).toBeUndefined();
     });
 
     it('names a normal session id with letters, digits, hyphens and underscores', async () => {
@@ -199,22 +198,23 @@ describe('task state in a project store', () => {
       expect(snapshotSectionText(saveSnapshot('earlier'), 'pointer').length).toBeLessThan(220);
     });
 
-    it('leaves out a session id that is unsafe to paste into a command, and points at `hippo snapshot show`', async () => {
-      const snapshot = saveSnapshot(UNSAFE_ID);
+    it.each([
+      ['unsafe to paste into a command', UNSAFE_ID],
+      ['longer than the id cap', 'x'.repeat(MAX_ID_LEN + 1)],
+    ])('prints the whole snapshot and its trail, and no command, when its session id is %s', async (_name, id) => {
+      saveSnapshot(id);
+      logEvent(id);
       const text = await hookText('now');
-      expect(text).toContain(
-        `## Active Task Snapshot\n\n- A task snapshot from ${at(snapshot.updated_at)} UTC names no session. ` +
-          'If this task continues it, run `hippo snapshot show`.\n',
-      );
-      expect(text).not.toContain('rm -rf');
-      expect(text).not.toContain('a b');
-      expect(snapshotSectionText(snapshot, 'pointer')).not.toContain(UNSAFE_ID);
-    });
-
-    it('leaves out a session id longer than the id cap', () => {
-      const snapshot = saveSnapshot('x'.repeat(MAX_ID_LEN + 1));
-      expect(snapshotSectionText(snapshot, 'pointer')).not.toContain('xxx');
-      expect(snapshotSectionText(snapshot, 'pointer')).toContain('run `hippo snapshot show`.');
+      expect(text).toContain(`- Session: ${id}`);
+      expect(text).toContain(SNAPSHOT_SUMMARY);
+      expect(text).toContain('Recent Session Trail');
+      expect(text).toContain(TRAIL_EVENT);
+      expect(text).not.toContain('hippo session latest');
+      expect(text).not.toContain('hippo snapshot show');
+      const result = await getContext(apiCtx(store), hookOpts(1500, 'pointer'));
+      expect(result.activeSnapshot?.summary).toBe(SNAPSHOT_SUMMARY);
+      expect(result.snapshotMode).toBeUndefined();
+      expect(result.recentEvents).toHaveLength(1);
     });
 
     it('names a normal session id with letters, digits, hyphens and underscores', async () => {
@@ -374,24 +374,70 @@ describe('task state in a project store', () => {
   });
 
   describe('the commands a pointer names', () => {
-    it('print the full text: hippo session latest --id and hippo handoff latest --session', async () => {
-      const snapshot = saveSnapshot('earlier');
-      const handoff = saveHandoff('earlier');
-      logEvent('earlier');
-      const run = (fn: typeof handleSession, args: string[], flags: CliFlags) =>
-        runInProcess(() => fn({ hippoRoot: store, tenantId: 'default', args, flags }));
+    /** Runs the `hippo <verb> ...` line a pointer printed, through the CLI's own parser and the verb handler. */
+    async function runPrinted(text: string, verb: 'session' | 'handoff') {
+      const printed = [...text.matchAll(/run `hippo ([^`]+)`/g)].map((m) => m[1]).find((c) => c.startsWith(`${verb} `));
+      expect(printed, text).toBeDefined();
+      const { args, flags } = parseArgs(['node', 'hippo', ...printed!.split(' ')]);
+      expect(flags['help'], printed).toBeUndefined();
+      const handler = verb === 'session' ? handleSession : handleHandoff;
+      const r = await runInProcess(() => handler({ hippoRoot: store, tenantId: 'default', args, flags }));
+      expect(r.status, r.stderr).toBe(0);
+      return { printed: printed!, stdout: r.stdout };
+    }
 
-      const session = await run(handleSession, ['latest'], { id: 'earlier' });
-      expect(session.status, session.stderr).toBe(0);
+    it('print the full text: hippo session latest --id=<id> and hippo handoff latest --session=<id>', async () => {
+      const snapshot = saveSnapshot('earlier');
+      saveHandoff('earlier');
+      logEvent('earlier');
+      const text = await hookText('now');
+
+      const session = await runPrinted(text, 'session');
+      expect(session.printed).toBe('session latest --id=earlier');
       expect(session.stdout).toContain(`- Task: ${snapshot.task}`);
       expect(session.stdout).toContain(SNAPSHOT_SUMMARY);
       expect(session.stdout).toContain(TRAIL_EVENT);
 
-      const latest = await run(handleHandoff, ['latest'], { session: handoff.sessionId });
-      expect(latest.status, latest.stderr).toBe(0);
+      const latest = await runPrinted(text, 'handoff');
+      expect(latest.printed).toBe('handoff latest --session=earlier');
       expect(latest.stdout).toContain('- Session: earlier');
       expect(latest.stdout).toContain(HANDOFF_SUMMARY);
       expect(latest.stdout).toContain(NEXT_ACTION);
+    });
+
+    it('read a session id that starts with -- as the id, not as a flag', async () => {
+      const snapshot = saveSnapshot('--help');
+      const handoff = saveHandoff('--help');
+      logEvent('--help');
+      const text = await hookText('now');
+      expect(text).toContain(snapshotPointer(snapshot));
+      expect(text).toContain(handoffPointer(handoff));
+      expect(text).toContain('`hippo session latest --id=--help`');
+      expect(text).toContain('`hippo handoff latest --session=--help`');
+
+      const session = await runPrinted(text, 'session');
+      expect(session.stdout).toContain(SNAPSHOT_SUMMARY);
+      expect(session.stdout).toContain(TRAIL_EVENT);
+      expect(session.stdout).not.toContain('Usage');
+
+      const latest = await runPrinted(text, 'handoff');
+      expect(latest.stdout).toContain('- Session: --help');
+      expect(latest.stdout).toContain(HANDOFF_SUMMARY);
+      expect(latest.stdout).not.toContain('Usage');
+    });
+
+    it("return the very handoff the full print shows, though another session's finished handoff is newer", async () => {
+      const unfinished = saveHandoff('earlier', { summary: 'Unfinished: the sweep still times out in staging' });
+      saveHandoff('newer', { summary: 'Finished: the queue worker shipped', outcome: 'success' });
+
+      const whole = await getContext(apiCtx(store), hookOpts(1500, 'full'));
+      expect(whole.sessionHandoff?.summary).toBe(unfinished.summary);
+
+      const text = await hookText('now');
+      expect(text).toContain(handoffPointer(unfinished));
+      const latest = await runPrinted(text, 'handoff');
+      expect(latest.stdout).toContain(unfinished.summary);
+      expect(latest.stdout).not.toContain('Finished: the queue worker shipped');
     });
   });
 });

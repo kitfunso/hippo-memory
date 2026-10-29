@@ -55,7 +55,7 @@ export interface ContextOpts {
   currentSessionId?: string | null;
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
-  /** Default 'full'; under 'pointer' the caller's own session and a shared store still print whole. */
+  /** Default 'full'; under 'pointer' the caller's own session, a shared store and an unsafe id still print whole. */
   continuity?: ContinuityMode;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
   cost?: ContextCost;

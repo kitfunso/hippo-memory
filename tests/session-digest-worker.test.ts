@@ -178,7 +178,7 @@ describe('context prints the handoff or the digest, never both', SLOW, () => {
     claudeWorker('S1', claudeTranscript('s1'));
     expect(loadAllEntries(path.join(repo, '.hippo')).map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = context('additional-context');
-    expect(text).toContain('run `hippo handoff latest --session S1`');
+    expect(text).toContain('run `hippo handoff latest --session=S1`');
     expect(text).not.toContain('Changed:');
     expect(text).not.toContain('upload timeout');
     const json = JSON.parse(context('json'));

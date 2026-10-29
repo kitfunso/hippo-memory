@@ -5,7 +5,7 @@ exports[`hippo context output (in process) > prints the same bytes and exit code
 --- stdout
 ## Active Task Snapshot
 
-- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id=sess-golden\`.
 
 ## Project Memory (2 entries, 121 tokens)
 
@@ -20,7 +20,7 @@ $ context markdown --framing assert -> 0
 --- stdout
 ## Active Task Snapshot
 
-- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id=sess-golden\`.
 
 ## Project Memory (1 entries, 100 tokens)
 
@@ -38,7 +38,7 @@ $ context json -> 0
 
 $ context additional-context -> 0
 --- stdout
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.\\n\\n## Project Memory (2 entries, 92 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]\\n- **[verified] always run the migration dry run before deploying** [deploy]"}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id=sess-golden\`.\\n\\n## Project Memory (2 entries, 92 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]\\n- **[verified] always run the migration dry run before deploying** [deploy]"}}
 --- stderr
 
 $ context no match -> 0
@@ -54,7 +54,7 @@ $ context budget 0 -> 0
 
 $ context pinned-only hook -> 0
 --- stdout
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.\\n\\n## Project Memory (1 entries, 71 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id=sess-golden\`.\\n\\n## Project Memory (1 entries, 71 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
 --- stderr
 
 $ context pinned-only hook (unchanged) -> 0
@@ -66,7 +66,7 @@ $ context pinned-only markdown -> 0
 --- stdout
 ## Active Task Snapshot
 
-- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id=sess-golden\`.
 
 ## Project Memory (1 entries, 73 tokens)
 
