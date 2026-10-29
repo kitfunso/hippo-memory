@@ -2,7 +2,7 @@
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
-import { defaultDiagnostics } from '../../src/surface/open-store.js';
+import { sqliteDiagnosticsStore } from '../../src/surface/open-store.js';
 import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { detachedEmbedder } from '../../src/api/embeddings.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -23,7 +23,7 @@ export function captureTarget(root: string): CaptureTarget {
 }
 
 export function diagnosticsBodies(root: string): DoctorStore {
-  return defaultDiagnostics(root);
+  return sqliteDiagnosticsStore(root);
 }
 
 /** hippo.db's ledger under `root`, with the folder facts its delivery rows name. */

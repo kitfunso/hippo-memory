@@ -12,10 +12,10 @@ import * as sources from '../surface/importers/sources.js';
 import { importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVaultInto, type VaultTarget } from '../surface/importers/vault.js';
 import {
-  defaultImportFiles,
-  defaultStore,
-  runStoreBatch,
-  runStoreRequest,
+  sqliteImportFiles,
+  sqliteStore,
+  runSqliteBatch,
+  runSqliteRequest,
 } from '../surface/open-store.js';
 import { entryInfra } from '../surface/entry-infra.js';
 import { evalClock } from '../infra/eval-switches.js';
@@ -23,7 +23,7 @@ import { evalClock } from '../infra/eval-switches.js';
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
   const batch = <T>(run: (files: ImportFiles) => T): T =>
-    runStoreBatch((session) => run(defaultImportFiles(root, { session })));
+    runSqliteBatch((session) => run(sqliteImportFiles(root, { session })));
   return { ...options, target: { root, batch, clock: evalClock() } };
 }
 
@@ -64,9 +64,9 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
  * double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const batch: VaultTarget['batch'] = (run) =>
-    runStoreRequest((session) => run(defaultStore(options.hippoRoot, { session })), 'cli');
+    runSqliteRequest((session) => run(sqliteStore(options.hippoRoot, { session })), 'cli');
   return importVaultInto(folderPath, options, {
-    store: defaultStore(options.hippoRoot),
+    store: sqliteStore(options.hippoRoot),
     batch,
     infra: entryInfra(),
   });

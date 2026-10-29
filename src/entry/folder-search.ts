@@ -5,7 +5,7 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { OriginFilter } from '../base/ports/store/types.js';
-import { defaultStore } from '../surface/open-store.js';
+import { sqliteStore } from '../surface/open-store.js';
 import { listRecallEntriesInFolder } from '../surface/testing-kit.js';
 import type { TenantId } from '../base/util/tenant.js';
 import {
@@ -13,11 +13,7 @@ import {
   folderEmbedTarget,
   type EmbedOutcome,
 } from '../domain/search/embed-memories.js';
-import {
-  rankHybrid,
-  vectorSourceOf,
-  type HybridSearchOptions,
-} from '../domain/search/hybrid.js';
+import { rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
 import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
@@ -47,7 +43,7 @@ export function folderVectorSource({
   if (!hippoRoot) return undefined;
   const config = { embeddings: embeddings ?? loadConfig(hippoRoot).embeddings };
   return vectorSourceOf({
-    store: store ?? defaultStore(hippoRoot),
+    store: store ?? sqliteStore(hippoRoot),
     config,
     onHippoDb: true,
     embedderFor: resolveEmbeddingProvider,
@@ -71,7 +67,7 @@ export async function hybridSearch(
     cwd: options.cwd ?? process.cwd(),
     source: options.source ?? folderVectorSource(options),
     graphGlobal:
-      globalRoot && globalRoot !== options.hippoRoot ? defaultStore(globalRoot) : undefined,
+      globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
   });
 }
 
@@ -94,7 +90,7 @@ export async function physicsSearch(
 
 /** The eval kit's folder form of embedMemory, for frozen scripts written against it. */
 export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const store = defaultStore(hippoRoot);
+  const store = sqliteStore(hippoRoot);
   try {
     const config = loadConfig(hippoRoot);
     const target = folderEmbedTarget(

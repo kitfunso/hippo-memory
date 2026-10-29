@@ -21,15 +21,15 @@ import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
-  defaultImportFiles,
-  defaultImportStores,
-  defaultReach,
-  defaultStore,
-  runStoreBatch,
-  runStoreHookRequest,
-  runStoreRequest,
-  type StoreOptions,
-  type StoreSession,
+  sqliteImportFiles,
+  sqliteImportStores,
+  sqliteReach,
+  sqliteStore,
+  runSqliteBatch,
+  runSqliteHookRequest,
+  runSqliteRequest,
+  type SqliteStoreOptions,
+  type RequestStores,
 } from '../open-store.js';
 import { cliRuntime } from './cli-runtime.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -71,11 +71,11 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 
 // A CLI process runs one command, so the session that command opened is this root's state, as
 // cliHost is, not a scope.
-let commandSession: StoreSession | undefined;
+let commandSession: RequestStores | undefined;
 
 // A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores
 // share one.
-function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
+function cliStoreOptions(session: RequestStores | undefined): SqliteStoreOptions {
   return {
     ...evalStoreRules(envLossAversionRatio()),
     runtime: session?.runtime ?? cliRuntime(),
@@ -91,11 +91,11 @@ export type CliStore = HippoStore & StoreGroups;
  * graph it holds. */
 export function cliStore(
   hippoRoot: string,
-  session: StoreSession | undefined = commandSession,
+  session: RequestStores | undefined = commandSession,
 ): CliStore {
   const opts = cliStoreOptions(session);
   const maxVectors = cliConfig(hippoRoot).vectorGraph.maxVectors;
-  return askingNearestFirst(defaultStore(hippoRoot, opts), {
+  return askingNearestFirst(sqliteStore(hippoRoot, opts), {
     hippoRoot,
     ask: serverNearestAsk(hippoRoot),
     maxVectors,
@@ -117,23 +117,24 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & Stor
  * return their result. */
 export function cliImportFiles(
   hippoRoot: string,
-  session: StoreSession | undefined = commandSession,
+  session: RequestStores | undefined = commandSession,
 ): ImportFiles {
-  return defaultImportFiles(hippoRoot, cliStoreOptions(session));
+  return sqliteImportFiles(hippoRoot, cliStoreOptions(session));
 }
 
 /** An import's batch on `hippoRoot`: one handle per store for its synchronous run of writes. */
 export function cliImportBatch(hippoRoot: string): <T>(run: (files: ImportFiles) => T) => T {
-  return (run) => runStoreBatch((session) => run(cliImportFiles(hippoRoot, session)), cliRuntime());
+  return (run) =>
+    runSqliteBatch((session) => run(cliImportFiles(hippoRoot, session)), cliRuntime());
 }
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of
  * it. */
 export function cliInitGlobal(): void {
-  defaultImportFiles(hippoHomeDir()).ensure();
+  sqliteImportFiles(hippoHomeDir()).ensure();
 }
 
-async function asCommand<T>(session: StoreSession, run: () => T | Promise<T>): Promise<T> {
+async function asCommand<T>(session: RequestStores, run: () => T | Promise<T>): Promise<T> {
   const outer = commandSession;
   commandSession = session;
   try {
@@ -146,7 +147,7 @@ async function asCommand<T>(session: StoreSession, run: () => T | Promise<T>): P
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's
  * work and answers undefined. */
 export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
-  return runStoreHookRequest((session) => asCommand(session, run), cliRuntime());
+  return runSqliteHookRequest((session) => asCommand(session, run), cliRuntime());
 }
 
 /** A CLI verb's agent-memory import options: each target reads its own config.json and opens
@@ -157,7 +158,7 @@ export function cliSyncOptions(
   machine: Machine,
   extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
 ): SyncOptions {
-  const stores = defaultImportStores(cliStoreOptions(commandSession));
+  const stores = sqliteImportStores(cliStoreOptions(commandSession));
   return { tenantId, configAt: cliConfig, machine, stores, run: cliInfra(), ...extra };
 }
 
@@ -166,13 +167,13 @@ export function cliStoreBatch(
   hippoRoot: string,
 ): <T>(run: (store: HippoStore & StoreGroups) => Promise<T>) => Promise<T> {
   return (run) =>
-    runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime());
+    runSqliteRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime());
 }
 
 /** The session a scoped CLI verb runs in, one handle per store; named here so no other surface
  * opens one. */
 export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
-  return runStoreRequest((session) => asCommand(session, run), 'cli', cliRuntime());
+  return runSqliteRequest((session) => asCommand(session, run), 'cli', cliRuntime());
 }
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
@@ -189,7 +190,7 @@ function cliReach(
 ): ContextReach {
   const { ledger, folderFiles } = store;
   return contextReach(
-    defaultReach({
+    sqliteReach({
       hippoRoot,
       store,
       openGlobal: (root) => cliStore(root, session),
@@ -243,7 +244,7 @@ export function cliLedgerReach(hippoRoot: string): LedgerReach {
  * it. */
 function rootAutoSleep(root: string, hostTenantId: string): () => Promise<void> {
   return () =>
-    runStoreRequest(
+    runSqliteRequest(
       (session) =>
         autoSleepConsolidate({
           store: cliStore(root, session),
@@ -275,7 +276,7 @@ export function cliStdioHost(): McpHost<CliStore> {
     return { ...shared, autoSleep: { ...sleeps, hostTenantId, newSince: newRowsOn(store) } };
   };
   const contextIn =
-    (session: StoreSession, signal: AbortSignal) =>
+    (session: RequestStores, signal: AbortSignal) =>
     (hippoRoot: string, tenantId: string): McpContext<CliStore> => {
       const store = cliStore(hippoRoot, session);
       const infra = cliInfra();
@@ -300,6 +301,6 @@ export function cliStdioHost(): McpHost<CliStore> {
   // builds.
   return {
     runFrame: (signal, run) =>
-      runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
+      runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),
   };
 }

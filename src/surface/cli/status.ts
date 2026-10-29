@@ -34,7 +34,7 @@ import {
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
 import { cliApiContext, type CliContext } from './api-context.js';
-import { defaultDiagnostics } from '../open-store.js';
+import { sqliteDiagnosticsStore } from '../open-store.js';
 
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
@@ -422,7 +422,7 @@ export async function handleDoctor({ tenantId, flags }: CommandContext): Promise
   const report = await runDoctor({
     version: readPackageVersion(),
     tenantId,
-    diagnosticsBodies: defaultDiagnostics,
+    diagnosticsBodies: sqliteDiagnosticsStore,
   });
   console.log(boolFlag(flags, 'json') ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
@@ -443,7 +443,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
     tenantId,
     includeLogs,
     now,
-    diagnosticsBodies: defaultDiagnostics,
+    diagnosticsBodies: sqliteDiagnosticsStore,
   });
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);

@@ -9,7 +9,7 @@ import { DASHBOARD_GROUPS } from './dashboard-types.js';
 import { configReader } from '../../host/config-file.js';
 import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
-import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
+import { defaultServerRuntime, type SqliteServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
@@ -71,7 +71,7 @@ export class DashboardListenError extends Error {
  * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
-  { store, storeFor, host }: ServerRuntime,
+  { store, storeFor, host }: SqliteServerRuntime,
 ): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
@@ -140,7 +140,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
 
 function dashboardListener(
   serving: DashboardServing,
-  runtime: ServerRuntime,
+  runtime: SqliteServerRuntime,
   inflight: Set<ServerResponse>,
 ): Server {
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API

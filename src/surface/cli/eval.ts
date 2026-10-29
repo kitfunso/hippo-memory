@@ -9,7 +9,7 @@ import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { vectorSourceOf } from '../../domain/search/hybrid.js';
-import { defaultStore } from '../open-store.js';
+import { sqliteStore } from '../open-store.js';
 import {
   bootstrapCorpus,
   compareSummaries,
@@ -120,7 +120,7 @@ async function runCorpusEval(
         }
       : undefined,
     source: vectorSourceOf({
-      store: defaultStore(hippoRoot),
+      store: sqliteStore(hippoRoot),
       config: cliConfig(hippoRoot),
       onHippoDb: true,
       embedderFor: infra.embedderFor,
