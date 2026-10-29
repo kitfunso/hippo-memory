@@ -17,7 +17,7 @@ import {
   resolveLastSessionTranscript,
 } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
-import type { StoreGroups, StoreWith } from '../../base/ports/store.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
@@ -53,10 +53,7 @@ export interface CaptureOptions {
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly store: Pick<
-    StoreWith<'captures' | 'folderFiles' | 'rejections'>,
-    'captures' | 'hippoDb'
-  >;
+  readonly store: Pick<StoreWith<'captures' | 'folderFiles' | 'rejections'>, 'hippoDb'>;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -163,13 +160,13 @@ async function captureFromCli(
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are
 // hidden, so they must not stop its own copy.
 async function storedKeysInView(
-  store: Pick<StoreGroups, 'captures'>,
+  store: Pick<StoreWith<'captures'>, 'hippoDb'>,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Promise<Set<string>> {
   const { tenantId, ...filter } = captureDedup(options);
   const texts = extracted.map((item) => item.content);
-  return storedTextKeys(await store.captures.textsHolding(tenantId, texts, filter));
+  return storedTextKeys(await store.hippoDb.captures.textsHolding(tenantId, texts, filter));
 }
 
 /** The rows a capture's dedup reads, as data, so the store's write can read them again in its
@@ -274,7 +271,7 @@ export interface CaptureWriteOptions {
 /** A folder's store with the config its root loaded for this capture, and where its rows'
  * vectors go. */
 export interface ConfiguredStore {
-  readonly store: Pick<StoreGroups, 'captures'>;
+  readonly store: Pick<StoreWith<'captures'>, 'hippoDb'>;
   readonly config: HippoConfig;
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -321,7 +318,7 @@ export async function captureExtractedItems(
     captureEntry(item, options, config.defaultHalfLifeDays),
   );
   const { actor, lean, dedup } = options;
-  const outcomes = await store.captures.write(plan.entries, { actor, lean, dedup });
+  const outcomes = await store.hippoDb.captures.write(plan.entries, { actor, lean, dedup });
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
   const counted = new Set<number>();
   for (const slot of plan.slots) {

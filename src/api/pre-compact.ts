@@ -75,7 +75,7 @@ export async function preCompact(ctx: PreCompactContext, run: PreCompactRun): Pr
   // Nothing derivable skips the write, so junk never replaces a user-authored active snapshot.
   const derived = run.workingState();
   if (!derived) return;
-  const { compactionHooks } = ctx.store;
+  const { compactionHooks } = ctx.store.hippoDb;
   await saveDerivedSnapshot(ctx, {
     sessionId,
     key: null,
@@ -92,7 +92,7 @@ export async function callerPreCompact(
   ctx: CallerPreCompactContext,
   { start, key, derived }: CallerCompaction,
 ): Promise<void> {
-  const { compactions } = ctx.store;
+  const { compactions } = ctx.store.hippoDb;
   const recordId = await startRecord(
     () => compactions.start(ctx.tenantId, start),
     CALLER_LOG.failed,
@@ -137,7 +137,7 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
       transcriptPath,
     };
     recordId = await startRecord(
-      () => ctx.store.compactionHooks.start(ctx.tenantId, start),
+      () => ctx.store.hippoDb.compactionHooks.start(ctx.tenantId, start),
       run.log,
     );
     printed = run.printInstruction();

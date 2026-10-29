@@ -40,7 +40,7 @@ export async function saveCompactionItemsForCaller(
   }
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (await callerInHoldout(ctx, req.sessionId)) return { written: 0 };
-  const { written, notes } = await ctx.store.compactions.saveCallerItems(ctx.tenantId, {
+  const { written, notes } = await ctx.store.hippoDb.compactions.saveCallerItems(ctx.tenantId, {
     sessionId: req.sessionId,
     trigger: req.trigger,
     requestId: req.requestId,

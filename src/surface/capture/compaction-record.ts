@@ -22,7 +22,7 @@ import type {
   OpenCompaction,
   StepFailure,
 } from '../../base/ports/store/capture.js';
-import type { StoreGroups } from '../../base/ports/store.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
@@ -42,7 +42,7 @@ export const PRE_COMPACT_INSTRUCTION =
  * resolved. */
 export interface CompactionFolder {
   readonly root: string;
-  readonly store: Pick<StoreGroups, 'compactionHooks'>;
+  readonly store: Pick<StoreWith<'compactionHooks'>, 'hippoDb'>;
   readonly tenantId: string;
 }
 
@@ -121,7 +121,7 @@ export async function saveCompaction(
   if (!found) log('no memories section');
 
   const { defaultHalfLifeDays } = loadConfig(root);
-  const { result, spoolReason, notes } = await store.compactionHooks.save({
+  const { result, spoolReason, notes } = await store.hippoDb.compactionHooks.save({
     tenantId,
     meta,
     text,
@@ -290,7 +290,7 @@ export async function replayCompactions(
   opts: ReplayOptions = {},
 ): Promise<number> {
   const run: Replay = {
-    hooks: store.compactionHooks,
+    hooks: store.hippoDb.compactionHooks,
     root,
     tenantId,
     log,

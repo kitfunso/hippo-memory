@@ -77,7 +77,7 @@ function logFailure(
   outcome: FailureOutcome,
 ): Promise<number> {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
-  return store.failureLog.record({
+  return store.hippoDb.failureLog.record({
     tenantId,
     sessionId: payloadString(payload, 'session_id'),
     tool: payloadString(payload, 'tool_name'),

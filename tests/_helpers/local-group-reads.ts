@@ -97,8 +97,8 @@ export async function seedLocalGroups(root: string): Promise<void> {
 const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
 
 export const LOCAL_GROUP_READS: readonly Read[] = [
-  read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
-  read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
+  read('hippoDb.captures.textsHolding', (s) => s.hippoDb.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
+  read('hippoDb.compactionHooks.openRecords', (s) => s.hippoDb.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
   read(
     'hippoDb.consolidation.entryIdsPage',
     (s) => s.hippoDb.consolidation.entryIdsPage({ limit: 3 }),

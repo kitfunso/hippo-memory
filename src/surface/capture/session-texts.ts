@@ -64,7 +64,7 @@ export async function captureSessionTexts(
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
   // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
-  const held = await ctx.store.captures.textsHolding(
+  const held = await ctx.store.hippoDb.captures.textsHolding(
     dedup.tenantId,
     items.map((i) => i.content),
     { project: dedup.project },

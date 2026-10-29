@@ -73,7 +73,7 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
   });
   const card = await s.cards.create(TENANT, { title: 'cut the eu release' });
   await s.cards.claim(TENANT, card.id, 'codex', SESSION);
-  await s.failureLog.record({
+  await s.hippoDb.failureLog.record({
     tenantId: TENANT,
     sessionId: SESSION,
     tool: 'Bash',
@@ -250,7 +250,11 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     (s) => s.hippoDb.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]),
     /^\[ true \]$/,
   ),
-  read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),
+  read(
+    'hippoDb.failureLog.requestOutcome',
+    (s) => s.hippoDb.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION),
+    "'stored'",
+  ),
   read('hippoDb.sharing.sourceTallies', (s) => s.hippoDb.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 

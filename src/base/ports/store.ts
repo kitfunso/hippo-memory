@@ -88,6 +88,10 @@ const LOCAL_GROUP_NAMES = [
   'consolidation',
   'learning',
   'dormant',
+  'captures',
+  'compactionHooks',
+  'compactions',
+  'failureLog',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

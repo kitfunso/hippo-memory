@@ -12,11 +12,7 @@ import { listAmbientCandidates, listContextCandidates, schemaFit } from './recal
 import { readEntriesInIdOrder, listFreshRawMemories } from './entries/entry-reads.js';
 import { listEntriesWhere } from './entries/entry-filter.js';
 import { sqliteAgentImport } from './maintenance/agent-import.js';
-import { sqliteCaptures } from './capture/captures.js';
-import { sqliteCompactionHooks } from './capture/compaction-hooks.js';
 import { sqliteCards } from './records/cards.js';
-import { sqliteFailureLog } from './capture/failure-log.js';
-import { sqliteCompactions } from './capture/compactions.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
@@ -66,13 +62,9 @@ function sqliteLocalGroups(
 ): Omit<SleepGroups & CaptureGroups & MaintenanceGroups, LocalGroup> {
   const { on } = handles;
   return {
-    captures: sqliteCaptures(handles),
-    compactionHooks: sqliteCompactionHooks(handles),
     projectTags: sqliteProjectTags(handles),
     diagnostics: sqliteDiagnostics(on),
     agentImport: sqliteAgentImport(handles),
-    compactions: sqliteCompactions(handles),
-    failureLog: sqliteFailureLog(on),
   };
 }
 

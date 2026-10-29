@@ -436,7 +436,7 @@ export async function autoShare(
   // twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
-    candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));
+    candidates.push(...(await pageCandidates(to.hippoDb.captures, page, minScore, options.stats)));
   }
 
   if (dryRun) return candidates;

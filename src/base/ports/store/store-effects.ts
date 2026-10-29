@@ -2,7 +2,6 @@
 // from it.
 import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
 import { AUDIT_LOG_EFFECTS } from './audit.js';
-import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
 import { CONTEXT_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
@@ -11,7 +10,6 @@ import { GOALS_EFFECTS } from './goals.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
-import { FAILURE_LOG_EFFECTS } from './rejections.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
 import type { BaseMethods, StoreGroups } from '../store.js';
@@ -44,11 +42,7 @@ export const STORE_EFFECTS = {
   objects: OBJECTS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
-  failureLog: FAILURE_LOG_EFFECTS,
-  compactions: COMPACTIONS_EFFECTS,
   embeddingIndex: EMBEDDING_INDEX_EFFECTS,
-  captures: CAPTURES_EFFECTS,
-  compactionHooks: COMPACTION_HOOKS_EFFECTS,
   projectTags: PROJECT_TAGS_EFFECTS,
   diagnostics: DIAGNOSTICS_EFFECTS,
   agentImport: AGENT_IMPORT_EFFECTS,

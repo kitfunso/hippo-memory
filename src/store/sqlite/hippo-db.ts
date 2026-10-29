@@ -1,5 +1,14 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteFailureLog } from './capture/failure-log.js';
+import { sqliteCompactions } from './capture/compactions.js';
+import { sqliteCompactionHooks } from './capture/compaction-hooks.js';
+import { sqliteCaptures } from './capture/captures.js';
+import {
+  CAPTURES_EFFECTS,
+  COMPACTION_HOOKS_EFFECTS,
+  COMPACTIONS_EFFECTS,
+} from '../../base/ports/store/capture.js';
 import { sqliteDormant } from './dormant/dormant.js';
 import { DORMANT_EFFECTS } from '../../base/ports/store/dormant.js';
 import { sqliteLearning } from './learning/learning.js';
@@ -29,7 +38,7 @@ import { REPORTS_EFFECTS } from '../../base/ports/store/reports.js';
 import { sqliteLastRecall } from './recall/last-recall.js';
 import { LAST_RECALL_EFFECTS } from '../../base/ports/store/recall-writes.js';
 import { sqliteRejections } from './review/rejections.js';
-import { REJECTIONS_EFFECTS } from '../../base/ports/store/rejections.js';
+import { REJECTIONS_EFFECTS, FAILURE_LOG_EFFECTS } from '../../base/ports/store/rejections.js';
 import { sqliteConnectorEvents } from './connectors/connector-events.js';
 import { sqliteConnectorWrites } from './connectors/connector-writes.js';
 import {
@@ -71,6 +80,10 @@ export function hippoDbRepos(handles: Handles) {
     consolidation: sqliteConsolidation(handles),
     learning: sqliteLearning(handles),
     dormant: sqliteDormant(handles),
+    captures: sqliteCaptures(handles),
+    compactionHooks: sqliteCompactionHooks(handles),
+    compactions: sqliteCompactions(handles),
+    failureLog: sqliteFailureLog(handles.on),
   };
 }
 
@@ -109,4 +122,8 @@ export const HIPPO_DB_EFFECTS = {
   consolidation: CONSOLIDATION_EFFECTS,
   learning: LEARNING_EFFECTS,
   dormant: DORMANT_EFFECTS,
+  captures: CAPTURES_EFFECTS,
+  compactionHooks: COMPACTION_HOOKS_EFFECTS,
+  compactions: COMPACTIONS_EFFECTS,
+  failureLog: FAILURE_LOG_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

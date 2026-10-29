@@ -94,7 +94,7 @@ export async function captureFailureForCaller(
   const ctx = withEntryInfra(given);
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const earlier = await ctx.store.failureLog.requestOutcome(
+  const earlier = await ctx.store.hippoDb.failureLog.requestOutcome(
     ctx.tenantId,
     req.requestId,
     req.sessionId,
@@ -136,10 +136,10 @@ async function logOutcome(
   try {
     // The request id allows one row, so a retry rewrites the first try's outcome.
     if (retried) {
-      await ctx.store.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
+      await ctx.store.hippoDb.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
       return;
     }
-    await ctx.store.failureLog.record({
+    await ctx.store.hippoDb.failureLog.record({
       tenantId: ctx.tenantId,
       sessionId: req.sessionId,
       tool: req.tool,
