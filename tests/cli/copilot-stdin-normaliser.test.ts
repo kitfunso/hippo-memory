@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
 import { hookPayloadSessionId } from '../../src/base/util/hook-payload.js';
-import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import { createDeliveryRecorder } from '../../src/api/delivery/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryRuntime } from '../../src/base/session/delivery.js';
 import { readClaudeCodePreCompact } from '../../src/base/session/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../../src/surface/capture/failure-reading.js';

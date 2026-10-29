@@ -188,10 +188,10 @@ export type {
   ContextOptions,
   ContextResult,
   ContextResultEntry,
-} from './context-types.js';
-export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context.js';
-export { NO_QUERY } from './context-plan.js';
-export { contextProjectFor, type ProjectFacts } from './context-project.js';
+} from './context/context-types.js';
+export { DEFAULT_CONTEXT_BUDGET, contextGet } from './context/context.js';
+export { NO_QUERY } from './context/context-plan.js';
+export { contextProjectFor, type ProjectFacts } from './context/context-project.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';
 export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';

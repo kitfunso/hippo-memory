@@ -1,9 +1,9 @@
 // HTTP replies and the CLI's --json keep snake_case keys, as clients read them; the port's rows are
 // camelCase.
-import type { JsonValue } from '../base/util/json.js';
-import type { SessionHandoff } from '../base/session/handoff.js';
-import type { ContinuityBlock } from '../base/ports/store.js';
-import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
+import type { JsonValue } from '../../base/util/json.js';
+import type { SessionHandoff } from '../../base/session/handoff.js';
+import type { ContinuityBlock } from '../../base/ports/store.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 
 export interface TaskSnapshotJson {
   id: number;

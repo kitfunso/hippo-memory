@@ -3,9 +3,9 @@ import {
   hookPayloadSessionId,
   hookPayloadString,
   isSubagentPayload,
-} from '../base/util/hook-payload.js';
-import { blockHash, estimateTokens } from '../base/util/token-text.js';
-import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
+} from '../../base/util/hook-payload.js';
+import { blockHash, estimateTokens } from '../../base/util/token-text.js';
+import { MAX_HOOK_FIELD_LEN } from '../../base/util/limits.js';
 import type {
   DeliveryCandidateInput,
   DeliveryEventInput,
@@ -14,7 +14,7 @@ import type {
   DeliveryRuntime,
   DeliverySessionState,
   DeliveryStage,
-} from '../base/session/delivery.js';
+} from '../../base/session/delivery.js';
 import type { DeliveryRecorderInit } from './delivery-recorder.js';
 import type { Candidate, ObservedPick, RecorderState } from './delivery-observation.js';
 

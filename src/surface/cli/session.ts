@@ -1,13 +1,13 @@
 // `hippo session`: log, show, complete and resume one agent session.
 
-import { continuityLatest } from '../../api/continuity.js';
+import { continuityLatest } from '../../api/continuity/continuity.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,
   type HandoffOutcome,
 } from '../../base/session/handoff.js';
-import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
+import { sessionEventJson, snapshotJson } from '../../api/continuity/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents } from './print.js';
 import {

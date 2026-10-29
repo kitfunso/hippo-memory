@@ -1,5 +1,5 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
-import { assembleCost, contextCost, drillCost } from '../../../api/context-render.js';
+import { assembleCost, contextCost, drillCost } from '../../../api/context/context-render.js';
 import {
   assemble,
   type AssembleOptions,
@@ -11,7 +11,11 @@ import {
   retrieve,
 } from '../../../api/index.js';
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
-import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
+import {
+  continuityJson,
+  sessionEventJson,
+  snapshotJson,
+} from '../../../api/continuity/continuity-json.js';
 import {
   httpParams,
   optionalFlagParam,

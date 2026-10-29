@@ -1,21 +1,25 @@
 // Which stores a context call reaches and what it may spend.
-import type { StrengthModel } from '../base/memory/strength.js';
-import type { MemoryEntry } from '../base/memory/entry.js';
-import type { ContextReads, RequiredStore, StoreWith } from '../base/ports/store.js';
-import type { HippoConfig } from '../base/config/config.js';
-import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { DeliveryObserver } from './delivery-recorder.js';
+import type { StrengthModel } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { ContextReads, RequiredStore, StoreWith } from '../../base/ports/store.js';
+import type { HippoConfig } from '../../base/config/config.js';
+import type { ProjectRef } from '../../base/scope/project-identity.js';
+import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextCost, ContextOptions } from './context-types.js';
-import { estimateTokens } from '../base/util/token-text.js';
-import { BadRequestError } from '../base/errors/api-errors.js';
-import { log } from '../base/util/log.js';
-import { classifyOriginProject, projectId, projectNames } from '../base/scope/project-identity.js';
-import { DEFAULT_CONFIG } from '../base/config/config.js';
-import { promptTokens } from '../base/rank/prompt-recall.js';
-import { personalScopeOf } from '../base/scope/recall-scope.js';
-import { finiteOr } from '../domain/context/select-policy.js';
-import { type Context, type ContextReach, type GlobalInReach, strengthOf } from './types.js';
-import type { AmbientRecallRequest } from '../base/ports/store/context-reads.js';
+import { estimateTokens } from '../../base/util/token-text.js';
+import { BadRequestError } from '../../base/errors/api-errors.js';
+import { log } from '../../base/util/log.js';
+import {
+  classifyOriginProject,
+  projectId,
+  projectNames,
+} from '../../base/scope/project-identity.js';
+import { DEFAULT_CONFIG } from '../../base/config/config.js';
+import { promptTokens } from '../../base/rank/prompt-recall.js';
+import { personalScopeOf } from '../../base/scope/recall-scope.js';
+import { finiteOr } from '../../domain/context/select-policy.js';
+import { type Context, type ContextReach, type GlobalInReach, strengthOf } from '../types.js';
+import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.js';
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {

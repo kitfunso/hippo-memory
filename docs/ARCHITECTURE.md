@@ -118,7 +118,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `authList`: Read-only — no audit emit (matches A5).
 - `authGrant`: Grant `keyId` read access to one restricted `scope` (ROADMAP Part VIII EI2). Admin only.
 
-### src/api/context-types.ts
+### src/api/context/context-types.ts
 - `contextGet` (section banner): contextGet (extracted from cmdContext - Task 5 of the api.ts refactor)
 - `ContextOpts`: Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
 - `ContextOpts`: Scope narrow (T5 execute decision): rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) are NOT included here. The print helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`, `printSessionEvents`) are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire those commands. CLI handles rendering + auto-resolution. Episode B can add `api.renderContext` once a shared rendering need actually materializes.
@@ -127,13 +127,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ContextOpts.prompt`: Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`.
 - `ContextResultEntry.promptRecall`: Z1: admitted by the prompt-recall gate, not the recent-N backfill or a pin.
 
-### src/api/context.ts
+### src/api/context/context.ts
 - `ambientAdmitEntry`: - S4 secret veto is UNCONDITIONAL: neither crossProject nor contextProjectIsolation:false re-includes secrets.
 - `ambientAdmitEntry`: - S2 envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
 - `ambientAdmitEntry`: - S3 origin partition: other-project rows are excluded unless `includeCrossProject`.
 - `ambientSecretAdmit`: v39 S4: the secret half of the ambient policy on its own, for callers that apply their own scope rule.
 
-### src/api/context-pools.ts
+### src/api/context/context-pools.ts
 - `loadAmbientEntries`: DF3's quality floor runs on the recent-N slice AFTER this load, so the load counts by it too, or it stops short of a store whose newest rows are junk.
 
 ### src/api/sleep/dormant.ts

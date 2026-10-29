@@ -13,7 +13,7 @@ import {
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { snapshotFields, WORKING_STATE_CAPS } from '../../src/base/session/working-state.js';
-import { compactResumeText } from '../../src/api/context-render.js';
+import { compactResumeText } from '../../src/api/context/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
 import type { ContextWith, EntryContext } from '../../src/api/types.js';

@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { contextBlockLines } from '../../src/api/context-render.js';
+import { contextBlockLines } from '../../src/api/context/context-render.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { SleepResult } from '../../src/api/index.js';

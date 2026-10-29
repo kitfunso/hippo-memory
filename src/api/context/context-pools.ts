@@ -1,22 +1,22 @@
 // Which rows a context call loads.
-import type { MemoryEntry } from '../base/memory/entry.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type {
   AmbientLoadResult,
   ContextCandidateFilter,
   AmbientRecallRequest,
   AmbientRefusal,
   RecentOrigins,
-} from '../base/ports/store/context-reads.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../base/rank/search-types.js';
-import type { SessionHandoff } from '../base/session/handoff.js';
-import { projectNames } from '../base/scope/project-identity.js';
+} from '../../base/ports/store/context-reads.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
+import type { SessionHandoff } from '../../base/session/handoff.js';
+import { projectNames } from '../../base/scope/project-identity.js';
 import {
   ambientAdmits,
   ambientEnvelopeAdmits,
   type AmbientAdmission,
-} from '../base/scope/read-admission.js';
+} from '../../base/scope/read-admission.js';
 import type { ContextOptions } from './context-types.js';
-import type { Context } from './types.js';
+import type { Context } from '../types.js';
 import { NO_QUERY, globalSource, type ContextPlan, type ContextSource } from './context-plan.js';
 
 /** The ambient admit rules. */

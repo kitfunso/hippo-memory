@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { autoDetectContext } from '../../src/api/context-auto.js';
+import { autoDetectContext } from '../../src/api/context/context-auto.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 let repo: string;

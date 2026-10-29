@@ -2,17 +2,17 @@
 import {
   freshActiveSnapshot,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
-} from '../base/session/session-snapshot.js';
-import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
-import type { SessionHandoff } from '../base/session/handoff.js';
-import { tokenPurse } from '../base/util/token-text.js';
-import { projectNames } from '../base/scope/project-identity.js';
-import { passesScopeFilterForRecall } from '../base/scope/recall-scope.js';
+} from '../../base/session/session-snapshot.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { SessionHandoff } from '../../base/session/handoff.js';
+import { tokenPurse } from '../../base/util/token-text.js';
+import { projectNames } from '../../base/scope/project-identity.js';
+import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { ContextPlan } from './context-plan.js';
 import type { ContextOptions } from './context-types.js';
-import { type Context, ownerOrSubject } from './types.js';
-import type { ContinuityKey } from '../base/ports/store/types.js';
-import { CONTINUITY_EVENT_LIMIT } from './continuity.js';
+import { type Context, ownerOrSubject } from '../types.js';
+import type { ContinuityKey } from '../../base/ports/store/types.js';
+import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
 
 /** The task-state sections printed ahead of the memories, and the budget left once they are
  * paid. */

@@ -13,7 +13,7 @@ import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
   COMPACT_RESUME_MAX_AGE_MS,
   compactResumeText,
-} from './context-render.js';
+} from './context/context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import { newRowsOn } from './callers.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';

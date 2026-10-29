@@ -2,10 +2,10 @@
 // was considered, why each was rejected, what reached stdout. No DB access (the caller hands
 // build()'s output to src/store/sqlite/ledger/delivery-ledger.ts); hashes, ids, counts and enums only, never
 // text. The observer state is delivery-observation.ts; the event row it builds is delivery-event.ts.
-import type { MemoryEntry } from '../base/memory/entry.js';
-import type { PromptRecallGate } from '../base/rank/prompt-recall.js';
-import { errorFields, errorMessage, log } from '../base/util/log.js';
-import type { Ledger } from '../base/ports/store.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { PromptRecallGate } from '../../base/rank/prompt-recall.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import type { Ledger } from '../../base/ports/store.js';
 import type {
   DeliveryBlockState,
   DeliveryEventInput,
@@ -15,7 +15,7 @@ import type {
   DeliveryRuntime,
   DeliveryStage,
   DeliveryWriteStore,
-} from '../base/session/delivery.js';
+} from '../../base/session/delivery.js';
 import {
   type RecorderState,
   type Guard,

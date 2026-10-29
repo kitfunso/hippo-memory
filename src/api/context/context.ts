@@ -1,24 +1,24 @@
 // Ambient context injection: contextGet, the selection it drives and the retrieval it records.
-import type { TaskSnapshot } from '../base/ports/store/sessions.js';
-import { markRetrieved } from '../base/memory/entry.js';
-import { dropHeldCopies } from '../base/util/same-text.js';
-import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
-import { errorMessage, log, errorFields } from '../base/util/log.js';
-import { classifyOriginProject, projectNames } from '../base/scope/project-identity.js';
+import type { TaskSnapshot } from '../../base/ports/store/sessions.js';
+import { markRetrieved } from '../../base/memory/entry.js';
+import { dropHeldCopies } from '../../base/util/same-text.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { classifyOriginProject, projectNames } from '../../base/scope/project-identity.js';
 import {
   addAmbientTallies,
   ambientStateFromTallies,
   type AmbientState,
   type AmbientTallies,
-} from '../base/memory/ambient.js';
-import { assertScopeRequestAllowed } from '../base/scope/recall-scope.js';
+} from '../../base/memory/ambient.js';
+import { assertScopeRequestAllowed } from '../../base/scope/recall-scope.js';
 import { selectPinned, selectStrongest } from './context-select.js';
 import { selectBySearch } from './context-search.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
-import { strengthenOf } from './recall/finish.js';
-import { keepShownIds } from './recall/last-recalled.js';
-import type { Context, ContextWith } from './types.js';
-import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
+import { strengthenOf } from '../recall/finish.js';
+import { keepShownIds } from '../recall/last-recalled.js';
+import type { Context, ContextWith } from '../types.js';
+import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import {
   NO_QUERY,
   type ContextPlan,

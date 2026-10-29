@@ -5,7 +5,7 @@ import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
   COMPACT_RESUME_MAX_AGE_MS,
   compactResumeText,
-} from '../../api/context-render.js';
+} from '../../api/context/context-render.js';
 import { bookTokenUse, ledgerReachOf } from '../../api/ledger-db.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';

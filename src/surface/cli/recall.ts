@@ -12,14 +12,14 @@ import type {
 } from '../../base/records/planning-fallacy.js';
 import { type AnchoringHint } from '../../api/recall/anchoring.js';
 import type { AvailabilityHint } from '../../api/availability.js';
-import { printedTokens } from '../../api/context-render.js';
+import { printedTokens } from '../../api/context/context-render.js';
 import { loadScopedContinuity, recallJsonRow } from '../../api/recall/rows.js';
 import { cliApiContext, cliSecondStore } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallHeading } from './print.js';
-import { continuityJson, type ContinuityBlockJson } from '../../api/continuity-json.js';
+import { continuityJson, type ContinuityBlockJson } from '../../api/continuity/continuity-json.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 import {

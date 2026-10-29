@@ -18,7 +18,7 @@ import {
   passesScopeFilterForRecall,
 } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
-import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
+import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 

@@ -1,32 +1,32 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print
 // cannot drift.
-import { MINUTE_MS } from '../base/util/time.js';
+import { MINUTE_MS } from '../../base/util/time.js';
 import {
   calculateStrength,
   confidenceFacets,
   confidenceLabel,
   PRODUCTION_STRENGTH,
   type StrengthModel,
-} from '../base/memory/strength.js';
-import type { MemoryEntry } from '../base/memory/entry.js';
-import { estimateTokens } from '../base/util/token-text.js';
-import { renderAmbientSummary, type AmbientState } from '../base/memory/ambient.js';
-import { formatHandoffEvidenceLine, type SessionHandoff } from '../base/session/handoff.js';
-import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
-import type { AssembleCost, AssembleResult, AssembledContextItem } from './assemble.js';
+} from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { estimateTokens } from '../../base/util/token-text.js';
+import { renderAmbientSummary, type AmbientState } from '../../base/memory/ambient.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { AssembleCost, AssembleResult, AssembledContextItem } from '../assemble.js';
 import type { ContextCost, ContextResultEntry } from './context-types.js';
 import type {
   DrillDownChild,
   DrillDownCost,
   DrillDownResult,
   DrillDownSummary,
-} from './objects/drill-down.js';
-import { DATE_PREFIX_CHARS } from '../base/util/token-text.js';
+} from '../objects/drill-down.js';
+import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import {
   CONNECTOR_SOURCE_TAGS,
   INSTRUCTION_LIKE_TAG,
   UNTRUSTED_ORIGIN_TAG,
-} from './instruction-detect.js';
+} from '../instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */

@@ -14,7 +14,7 @@ import type { RequiredStore, LastRecall, LastRecallWrites } from '../../base/por
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import type { ContextOptions } from '../context-types.js';
+import type { ContextOptions } from '../context/context-types.js';
 import type { Context } from '../types.js';
 import { rankCtxOf, rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import { BUDGET_RANKED } from './profiles.js';

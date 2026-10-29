@@ -10,7 +10,11 @@ import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from '../../src/api/delivery/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/ledger-db.js';

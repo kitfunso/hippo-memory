@@ -43,7 +43,7 @@ import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { RecallWrites } from '../../base/ports/store.js';
-import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
+import { CONTINUITY_EVENT_LIMIT } from '../continuity/continuity.js';
 
 /** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets
  * `recordAs` also has the recall recorded in full. */

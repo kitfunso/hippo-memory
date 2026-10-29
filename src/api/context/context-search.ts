@@ -1,17 +1,17 @@
 // How a query picks context rows.
-import { recallScopeFilter } from '../base/scope/recall-scope.js';
-import type { MemoryEntry } from '../base/memory/entry.js';
-import { auditQueryFields } from '../base/records/audit-report.js';
-import { rankBothStores } from '../domain/sharing/search-both.js';
-import { searchByEngine } from '../domain/search/engine.js';
-import { vectorSourceOf } from '../domain/search/hybrid.js';
-import type { HybridVectorCandidates, VectorSource } from '../domain/search/vector.js';
-import type { SearchResult } from '../base/rank/search-types.js';
+import { recallScopeFilter } from '../../base/scope/recall-scope.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { auditQueryFields } from '../../base/records/audit-report.js';
+import { rankBothStores } from '../../domain/sharing/search-both.js';
+import { searchByEngine } from '../../domain/search/engine.js';
+import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import type { HybridVectorCandidates, VectorSource } from '../../domain/search/vector.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
 import type { ContextResultEntry } from './context-types.js';
-import { heldIds } from './recall/finish.js';
-import type { Context } from './types.js';
-import type { AmbientLoadResult } from '../base/ports/store/context-reads.js';
-import type { AppendAuditOptions } from '../base/ports/store/types.js';
+import { heldIds } from '../recall/finish.js';
+import type { Context } from '../types.js';
+import type { AmbientLoadResult } from '../../base/ports/store/context-reads.js';
+import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import { type ContextPlan, globalStoreInReach, globalInReach } from './context-plan.js';
 import type { ContextAdmission, ContextPools } from './context-pools.js';
 

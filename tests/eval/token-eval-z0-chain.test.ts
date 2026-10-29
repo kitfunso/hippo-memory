@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { contextBlockLines } from '../../src/api/context-render.js';
+import { contextBlockLines } from '../../src/api/context/context-render.js';
 import { injectedRows } from '../../scripts/token-eval/surfaces.mjs';
 import {
   cleanup, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readLedger, find,

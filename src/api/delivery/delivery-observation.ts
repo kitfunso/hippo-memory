@@ -1,13 +1,13 @@
 // What the delivery recorder watches: the candidates, the picks and the guarded observer methods.
-import type { MemoryEntry } from '../base/memory/entry.js';
-import { scoreOverlap } from '../base/rank/prompt-recall.js';
-import { blockHash } from '../base/util/token-text.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { scoreOverlap } from '../../base/rank/prompt-recall.js';
+import { blockHash } from '../../base/util/token-text.js';
 import type {
   DeliveryPool,
   DeliveryRejectReason,
   DeliveryStage,
   DeliveryWriteStore,
-} from '../base/session/delivery.js';
+} from '../../base/session/delivery.js';
 import type {
   DeliveryFacts,
   DeliveryObserver,

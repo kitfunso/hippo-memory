@@ -135,7 +135,7 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
   ];
 }
 
-/** contextGet's pinned-only admit and quality floor before 3.0, as api/context.ts composed them. */
+/** contextGet's pinned-only admit and quality floor before 3.0, as api/context/context.ts composed them. */
 function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
   const secretAdmit = (e: MemoryEntry): boolean => {
     if (!detectSecret(e).flagged) return true;

@@ -1,14 +1,14 @@
 // contextGet's selection stages: the pinned-only branch and the strongest-first branch.
-import { calculateStrength, type StrengthModel } from '../base/memory/strength.js';
-import type { MemoryEntry } from '../base/memory/entry.js';
-import { isWorthSurfacing } from '../base/memory/memory-quality.js';
-import { DEFAULT_LOCAL_BUMP } from '../base/rank/search-types.js';
-import { compareScoredResults } from '../base/rank/compare.js';
-import { scopeMatch } from '../base/rank/active-scope.js';
-import { scopeBoostFor } from '../domain/search/boosts.js';
-import type { HippoConfig } from '../base/config/config.js';
-import { promptTokens, contentTokens, gatePromptRecall } from '../base/rank/prompt-recall.js';
-import type { DeliveryObserver } from './delivery-recorder.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
+import { DEFAULT_LOCAL_BUMP } from '../../base/rank/search-types.js';
+import { compareScoredResults } from '../../base/rank/compare.js';
+import { scopeMatch } from '../../base/rank/active-scope.js';
+import { scopeBoostFor } from '../../domain/search/boosts.js';
+import type { HippoConfig } from '../../base/config/config.js';
+import { promptTokens, contentTokens, gatePromptRecall } from '../../base/rank/prompt-recall.js';
+import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
   admitWithinBudget,
@@ -17,7 +17,7 @@ import {
   reservePinned,
   strongestWithin,
   type Picked,
-} from '../domain/context/select-policy.js';
+} from '../../domain/context/select-policy.js';
 import type { ContextPlan } from './context-plan.js';
 import type { ContextAdmission, ContextPools } from './context-pools.js';
 

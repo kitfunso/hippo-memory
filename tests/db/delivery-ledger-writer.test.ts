@@ -7,7 +7,7 @@ import {
   writeDeliveryEventVia,
 } from '../../src/store/sqlite/ledger/delivery-ledger.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
-import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import { createDeliveryRecorder } from '../../src/api/delivery/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
 import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/base/session/delivery.js';
 import { createMemory } from '../../src/entry/memory.js';

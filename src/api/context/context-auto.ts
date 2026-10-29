@@ -1,6 +1,6 @@
-import type { GitRunner } from '../base/ports/git.js';
-import { errorFields, log } from '../base/util/log.js';
-import { GIT_PROMPT_TIMEOUT_MS } from '../base/util/time.js';
+import type { GitRunner } from '../../base/ports/git.js';
+import { errorFields, log } from '../../base/util/log.js';
+import { GIT_PROMPT_TIMEOUT_MS } from '../../base/util/time.js';
 
 const MAX_DIFF_TERMS = 10;
 

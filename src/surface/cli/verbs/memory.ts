@@ -19,7 +19,7 @@ import {
   DEFAULT_GRAPH_HOPS,
   DEFAULT_GRAPH_SEED_COUNT,
 } from '../../../base/rank/recall-defaults.js';
-import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context/context.js';
 import { DEFAULT_MAX_NEIGHBORS } from '../../../domain/graph/recall.js';
 import { JEV_DEFAULT_TOP_K } from '../../../domain/rerankers/hosted.js';
 import { DEFAULT_RERANK_TOP_K } from '../../../domain/search/rerank.js';
