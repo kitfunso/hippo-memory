@@ -14,7 +14,7 @@ import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type ContextWith } from './types.js';
-import type { ParticleStats, StoredVectorSummary } from '../base/ports/store.js';
+import type { StoredVectorSummary } from '../base/ports/store.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 
 export interface StoreStatus {
@@ -61,16 +61,6 @@ export async function embeddingReindexNeeded(
 ): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return indexStep(ctx.store.embeddingIndex, { kind: 'reindex', providerId });
-}
-
-/** The stored particles' count and mean speed, and the particles while at most `fullUpTo`. Every
- * tenant, so the host admin only. */
-export async function storedParticleStats(
-  ctx: ContextWith<'embeddingIndex'>,
-  fullUpTo: number,
-): Promise<ParticleStats> {
-  requireHostAdmin(ctx, 'Reading every tenant');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'particles', fullUpTo });
 }
 
 /** Every correction link, one keyset page per store call. */

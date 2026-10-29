@@ -1,6 +1,5 @@
-// The vector side of a store for the embed and import verbs: embed what is missing, count coverage,
-// re-seed physics. Vectors and physics rows carry no tenant, so each op covers the whole store and
-// needs the host admin.
+// The vector side of a store for the embed and import verbs: embed what is missing and count
+// coverage. Vectors carry no tenant, so each op covers the whole store and needs the host admin.
 
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
@@ -16,8 +15,8 @@ import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
- * failure is a warning. A capture runs outside any Context, so its root hands the eval switches
- * and clock as `run`. */
+ * failure is a warning. A capture runs outside any Context, so its root hands its warned failures
+ * as `run`. */
 export function detachedEmbedder(
   folder: ConfiguredFolder<RequiredStore>,
   run: EmbedRun,
@@ -48,10 +47,4 @@ export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Pro
 export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
   return indexStep(ctx.store.embeddingIndex, { kind: 'coverage' });
-}
-
-/** Re-seed every memory's physics particle from its vector; returns how many it reset. */
-export async function resetPhysicsFromVectors(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
-  requireHostAdmin(ctx, 'Resetting physics');
-  return indexStep(ctx.store.embeddingIndex, { kind: 'reset' });
 }

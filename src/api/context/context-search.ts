@@ -3,8 +3,7 @@ import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
-import { searchByEngine } from '../../domain/search/engine.js';
-import { vectorSourceOf } from '../../domain/search/hybrid.js';
+import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
 import type { HybridVectorCandidates, VectorSource } from '../../domain/search/vector.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { ContextResultEntry } from './context-types.js';
@@ -22,8 +21,8 @@ export interface SelectBySearchOptions {
   readonly admission: ContextAdmission;
 }
 
-/** Real query: hybrid search over both stores, or physics/hybrid over the local rows; emits the
- * 'recall' audit row. */
+/** Real query: hybrid search over both stores, or over the local rows; emits the 'recall' audit
+ * row. */
 export async function selectBySearch(
   ctx: Context,
   { plan, left, pools, admission }: SelectBySearchOptions,
@@ -155,27 +154,21 @@ async function searchLocalRows(
 ): Promise<ContextResultEntry[]> {
   const { left, minResults, localEntries, admit } = options;
   const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
-  const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await searchByEngine({
+  const ctxResults = await hybridSearch(query, localEntries, {
+    ...engineSettings(ctx, plan),
     source: vectorSourceOf({
       store,
       config: ctxConfig,
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    query,
-    pool: localEntries,
-    physics: usePhysicsCtx ? ctxConfig.physics : null,
-    options: {
-      ...engineSettings(ctx, plan),
-      budget: left,
-      minResults,
-      cost: localCost,
-      vectorCandidates,
-    },
+    budget: left,
+    minResults,
+    cost: localCost,
+    vectorCandidates,
   });
   return ctxResults.map((r) => ({
     entry: r.entry,

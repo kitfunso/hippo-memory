@@ -24,7 +24,7 @@ export function traceWindow(
 
 // 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via
 // source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which inherits
-// decay, search, replay and physics. The store read the sessions with their events at sleep begin,
+// decay, search and replay. The store read the sessions with their events at sleep begin,
 // and one tombstone read covers every trace.
 export async function promoteSessionTraces(
   run: SleepRun,

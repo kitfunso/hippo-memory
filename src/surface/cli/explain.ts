@@ -102,7 +102,7 @@ async function explainQuery({
     },
     sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
   });
-  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now });
+  printExplainResults({ rank, query, asJson, now });
 }
 
 interface ExplainScope {
@@ -156,22 +156,13 @@ async function inspectRanking(
 
 interface PrintExplainResultsOptions {
   readonly rank: RankRecallResult;
-  readonly usePhysics: boolean;
   readonly query: string;
   readonly asJson: boolean;
   readonly now: Date;
 }
 
-function printExplainResults({
-  rank,
-  usePhysics,
-  query,
-  asJson,
-  now,
-}: PrintExplainResultsOptions): void {
-  const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
-    usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
+function printExplainResults({ rank, query, asJson, now }: PrintExplainResultsOptions): void {
+  const modeUsed = rank.globalEntries.length > 0 ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);
 
   const candidates = rank.localEntries.length + rank.globalEntries.length;
@@ -264,13 +255,7 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log();
     return;
   }
-  if (b.mode === 'physics') {
-    console.log(`    mode:      physics-gravity`);
-    console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
-    console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
-  } else {
-    printHybridBreakdown(r, b);
-  }
+  printHybridBreakdown(r, b);
   console.log();
 }
 

@@ -1,6 +1,6 @@
 // The order recall gives scored candidates must come from the candidates alone: never from the order they arrived in, and a higher score never moves one down.
 import { describe, it, expect } from 'vitest';
-import { comparePhysicsResultsBy, compareScoredResults, type ScoredEntryLike } from '../../src/base/rank/compare.js';
+import { compareScoredResults, type ScoredEntryLike } from '../../src/base/rank/compare.js';
 import { arr, both, forAll, int, map, pick, type Gen } from '../_helpers/property.js';
 
 // Few distinct values, so most draws tie on score and many tie on every key before the id; the last three have no difference to subtract.
@@ -31,12 +31,6 @@ const ARRIVALS: Gen<{ scored: ScoredEntryLike; turn: number }[]> = map(
     drawn.map(([[score, draft], turn], index) => ({ scored: { score, entry: { ...draft, id: `m${index}` } }, turn })),
 );
 
-interface Row {
-  memoryId: string;
-  score: number;
-  content: string;
-}
-
 function ranked(candidates: readonly ScoredEntryLike[]): string[] {
   return [...candidates].sort(compareScoredResults).map((c) => c.entry.id);
 }
@@ -49,19 +43,6 @@ describe('ranking properties', () => {
       const order = ranked(first);
       expect(ranked(second)).toEqual(order);
       expect(ranked([...first].reverse())).toEqual(order);
-    });
-  });
-
-  it('the physics comparator ranks any arrival order the same, by id or by a content tie key', async () => {
-    await forAll(0x9415, 500, both(ARRIVALS, pick([true, false])), ([arrivals, byContent]) => {
-      const compare = comparePhysicsResultsBy<Row>((row) => row.score, byContent ? (row) => row.content : undefined);
-      const order = (rows: readonly Row[]): string[] => [...rows].sort(compare).map((row) => row.memoryId);
-      const first = arrivals.map(({ scored }) => ({
-        memoryId: scored.entry.id,
-        score: scored.score,
-        content: scored.entry.content,
-      }));
-      expect(order([...first].reverse())).toEqual(order(first));
     });
   });
 

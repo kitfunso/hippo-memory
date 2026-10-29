@@ -87,15 +87,15 @@ describe('MCP hippo_recall scorer_window', () => {
 
   it('scorer_window+fresh_tail_count exercises the api.recall appendix path', async () => {
     // The appendix-marker assertion is non-deterministic in this test
-    // because the physics scorer dedupes fresh-tail rows that already
+    // because the hybrid scorer dedupes fresh-tail rows that already
     // appear in the primary ranked block. With all alpha-matching content,
-    // fresh-tail rows are usually all in physics's top set → empty
+    // fresh-tail rows are usually all in the scorer's top set → empty
     // appendix. Mix in non-matching rows so fresh-tail surfaces unique IDs
-    // physics never scored.
+    // the scorer never scored.
     //
     // Insert beta rows AFTER the alpha seeds (set up in beforeEach) so
     // they're newest. fresh_tail_count=5 surfaces last 5 regardless of
-    // query 'alpha'. BM25 / physics only score alpha rows. Beta rows in
+    // query 'alpha'. BM25 and hybrid only score alpha rows. Beta rows in
     // fresh-tail dedup-survive into the appendix.
     for (let i = 0; i < 5; i++) {
       writeEntry(
@@ -116,7 +116,7 @@ describe('MCP hippo_recall scorer_window', () => {
     expect(text).toContain('Found 30 memories:');
     // Appendix renders "## Fresh tail / substituted summaries" header
     // (src/surface/mcp/server.ts:470). Confirm the appendix path fired with the
-    // beta rows that physics didn't score.
+    // beta rows that the scorer didn't score.
     expect(text).toContain('Fresh tail / substituted summaries');
   });
 });

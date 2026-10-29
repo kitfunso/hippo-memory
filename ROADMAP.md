@@ -1498,7 +1498,7 @@ Triggered by a founder question: can hippo save organisations tokens and make an
 |---|---|---|
 | Token budgets on every surface (recall 4000, context 1500, MCP recall 4000, MCP context 3000, pinned inject 1500) | `src/cli.ts`, `src/api/index.ts`, `src/base/config/config.ts` | Works; the MCP descriptions advertised 1500 for both until PR #227 |
 | Greedy score-ordered packing, dedup, MMR, `minResults` | `src/search.ts:694-785` | Fills the budget; never stops early on weak results |
-| Lifecycle stress eval with a per-condition `tokens` field | `scripts/lifecycle-stress/run.mjs` | The only token-reporting harness; headline NULL (Part III) |
+| Lifecycle stress eval with a per-condition `tokens` field | `scripts/lifecycle-stress/run.mjs` | Removed in 3.0 with the physics search it ranked by; headline NULL (Part III) |
 | Structured handoff and snapshot caps instead of transcripts | `src/base/session/handoff.ts`, `src/capture.ts:1026` | Bounded by design (non-goal 12) |
 
 ### Track TE - Token efficiency

@@ -36,7 +36,7 @@
       {
         "goal_id": "<goal>",
         "memory_id": "mem_p_goal",
-        "score": 1.8362861032768978,
+        "score": 1.1126851051900444,
         "session_id": "golden-session",
       },
     ],
@@ -165,115 +165,115 @@
       {
         "memory_id": "mem_p_goal",
         "result_rank": 1,
-        "score": 1.8362861032768978,
+        "score": 1.1126851051900444,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_scoped",
+        "memory_id": "mem_p_plain",
         "result_rank": 2,
-        "score": 1,
+        "score": 0.758704424861508,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_fill0",
+        "memory_id": "mem_p_pinned",
         "result_rank": 3,
-        "score": 1,
+        "score": 0.689413159086841,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_trace",
         "result_rank": 4,
-        "score": 0.9638377685691942,
+        "score": 0.6767696132430834,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_plain",
+        "memory_id": "mem_p_scoped",
         "result_rank": 5,
-        "score": 0.9538596061193713,
+        "score": 0.6564718467252996,
         "trace_id": 1,
       },
       {
-        "memory_id": "mem_p_pinned",
+        "memory_id": "mem_p_fill5",
         "result_rank": 6,
-        "score": 0.8097990916674902,
+        "score": 0.6154275451060394,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_new",
         "result_rank": 7,
-        "score": 0.7615077684928934,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_x_child1",
-        "result_rank": 8,
-        "score": 0.7448405727609662,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_fill5",
-        "result_rank": 9,
-        "score": 0.70788926631612,
+        "score": 0.6150989568356894,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill2",
+        "result_rank": 8,
+        "score": 0.5988953932036504,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_child1",
+        "result_rank": 9,
+        "score": 0.598412043986112,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
         "result_rank": 10,
-        "score": 0.6754737630119814,
+        "score": 0.5941724735663813,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill1",
         "result_rank": 11,
-        "score": 0.6647912299588369,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_fill4",
-        "result_rank": 12,
-        "score": 0.6334863420954138,
+        "score": 0.5939417488289693,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_p_fill3",
+        "result_rank": 12,
+        "score": 0.5892943908223514,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
         "result_rank": 13,
-        "score": 0.6228202400360385,
+        "score": 0.566143509551575,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_x_child2",
         "result_rank": 14,
-        "score": 0.5869299718770729,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_p_noise",
-        "result_rank": 15,
-        "score": 0.5625999104070418,
+        "score": 0.5615573417563245,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_x_raw",
-        "result_rank": 16,
-        "score": 0.5491483162685015,
-        "trace_id": 1,
-      },
-      {
-        "memory_id": "mem_x_cafe",
-        "result_rank": 17,
-        "score": 0.4255733167281292,
+        "result_rank": 15,
+        "score": 0.5581741654453207,
         "trace_id": 1,
       },
       {
         "memory_id": "<claim>",
+        "result_rank": 16,
+        "score": 0.537117795705814,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_noise",
+        "result_rank": 17,
+        "score": 0.3573891787326622,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_x_cafe",
         "result_rank": 18,
-        "score": 0.3855055268255927,
+        "score": 0.24661193303867684,
         "trace_id": 1,
       },
       {
         "memory_id": "mem_x_summary",
         "result_rank": 19,
-        "score": 0.26773003877693086,
+        "score": 0.18155248586006573,
         "trace_id": 1,
       },
     ],
@@ -299,15 +299,6 @@
 [verified] tags: goal-alpha (strength=1.00)
 deploy goal work: migrate the rollout scripts to the new runner
 
-[verified] (strength=1.00)
-deploy checklist for team alpha runs smoke tests first
-
-[verified] (strength=1.00)
-deploy log line 0 for the nightly batch
-
-[verified] (strength=1.00)
-deploy trace: ran the canary and promoted it
-
 [verified] tags: deploy (strength=1.00)
 deploy pipeline uses blue green rollout for the api
 
@@ -315,40 +306,49 @@ deploy pipeline uses blue green rollout for the api
 deploy freeze applies to the billing service on fridays
 
 [verified] (strength=1.00)
-deploy target is the new staging cluster in eu west
+deploy trace: ran the canary and promoted it
 
 [verified] (strength=1.00)
-deploy batch child one moved the cron
+deploy checklist for team alpha runs smoke tests first
 
 [verified] (strength=1.00)
 deploy log line 5 for the nightly batch
 
 [verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] (strength=1.00)
 deploy log line 2 for the nightly batch
 
 [verified] (strength=1.00)
-deploy log line 1 for the nightly batch
+deploy batch child one moved the cron
 
 [verified] (strength=1.00)
 deploy log line 4 for the nightly batch
 
 [verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
 deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
 
 [verified] (strength=1.00)
 deploy batch child two moved the queue
 
 [verified] (strength=1.00)
-unrelated note about lunch options near the office
-
-[verified] (strength=1.00)
 raw capture of the deploy window from the golden session
-
-[verified] (strength=1.00)
-café opening hours for the team lunch
 
 [observed] tags: prediction, deploy-duration (strength=1.00)
 rollout duration estimate for the eu cluster
+
+[verified] (strength=1.00)
+unrelated note about lunch options near the office
+
+[verified] (strength=1.00)
+café opening hours for the team lunch
 
 [verified] tags: dag-summary (strength=1.00)
 rollout summary for the nightly batch move

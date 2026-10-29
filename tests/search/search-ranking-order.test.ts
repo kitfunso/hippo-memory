@@ -8,10 +8,8 @@ import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/entry.j
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { savePhysicsState } from '../../src/db/physics-state.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
-import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
+import { hybridSearch } from '../../src/entry/folder-search.js';
 import type { ScoreBreakdown, SearchResult } from '../../src/base/rank/search-types.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -227,30 +225,13 @@ function seedStore(): string {
       memoryId: from,
     });
   }
-  const db = openHippoDb(root);
-  try {
-    savePhysicsState(
-      db,
-      (['d1', 'd2', 'd3', 's1', 'z2', 'n1'] as const).map((id, i) => ({
-        memoryId: id,
-        position: VECTORS[id],
-        velocity: [0.01 * i, 0, 0],
-        mass: 1 + i / 4,
-        charge: 0,
-        temperature: 0.5,
-        lastSimulation: NOW.toISOString(),
-      })),
-    );
-  } finally {
-    closeHippoDb(db);
-  }
   return root;
 }
 
 /** The blend's order with MMR on: d6, a near copy of d5, sits below d3 although it scores higher. */
 const BLEND = ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'd3', 'd6', 'c1', 'd4'];
 
-describe('hybrid and physics with a store', () => {
+describe('hybrid with a store', () => {
   let root: string;
 
   beforeAll(() => {
@@ -322,31 +303,5 @@ describe('hybrid and physics with a store', () => {
     const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), vectorCandidates });
     expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'], false);
-  });
-
-  it('physics merges its pool with the classic one; its top row ties the classic top', async () => {
-    const res = await physicsSearch('deploy pipeline', clone(), { ...opts(), queryEmbedding: [1, 0, 0] });
-    expectRanked(res, ['x1', 'z2', 's1', 'n1', 'd5', 'd1', 'd6', 'd3', 'd2', 'c1', 'd4']);
-    expect(score(res, 'z2')).toBe(score(res, 'x1'));
-    expect([breakdownOf(res, 'x1').mode, breakdownOf(res, 'z2').mode]).toEqual(['hybrid', 'physics']);
-  });
-
-  it('physics with asOf, a summary deboost and vector candidates returns the old row alone', async () => {
-    const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
-    const res = await physicsSearch('deploy pipeline', clone(), {
-      ...opts(),
-      asOf: ago(50),
-      summaryDeboost: 0.6,
-      vectorCandidates,
-    });
-    expectRanked(res, ['o1']);
-  });
-
-  it('physics with no provider falls back to the BM25 order', async () => {
-    vi.stubEnv('OPENAI_API_KEY', undefined);
-    const res = await physicsSearch('deploy pipeline', clone(), opts());
-    expectRanked(res, ids(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 100_000 })));
-    expect(res.every((r) => r.cosine === 0)).toBe(true);
-    expect(new Set(res.flatMap((r) => r.breakdown?.mode ?? []))).toEqual(new Set(['bm25-only']));
   });
 });
