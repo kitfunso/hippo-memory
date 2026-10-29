@@ -84,15 +84,15 @@ export function isDagSummary(entry: MemoryEntry): boolean {
 const isDeboost = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value > 0 && value <= 1;
 
-/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then 0.85; values outside
- * (0, 1] fall through. */
+/** Summary deboost: per-call, then the root's HIPPO_SUMMARY_DEBOOST, then DEFAULT_SUMMARY_DEBOOST;
+ * values outside (0, 1] fall through. */
 export function resolveSummaryDeboost(perCall?: number, configured?: number): number {
   if (isDeboost(perCall)) return perCall;
   return isDeboost(configured) ? configured : DEFAULT_SUMMARY_DEBOOST;
 }
 
-/** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get
- * 1.0. */
+/** DEFAULT_FRESHNESS_BOOST for a summary rebuilt within the window; null, unparseable and future
+ * timestamps get 1.0. */
 function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
   if (!isDagSummary(entry) || !entry.lastRebuiltAt) return 1.0;
   const rebuiltMs = new Date(entry.lastRebuiltAt).getTime();

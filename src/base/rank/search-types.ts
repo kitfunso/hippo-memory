@@ -82,23 +82,22 @@ export interface ScoreBreakdown {
   cosine: number;
   /** Blended base score before multipliers. */
   base: number;
-  /** Multiplier from memory strength: 0.5 + 0.5*strength. */
+  /** Multiplier from memory strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength. The
+   * constants named here live in domain/search/boosts.ts and path-context.ts, written once. */
   strengthMultiplier: number;
-  /** Multiplier from age: 0.8 + 0.2*recencyBoost. */
+  /** Multiplier from age: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost. */
   recencyMultiplier: number;
-  /** 1.2 if tagged 'decision', else 1.0. */
+  /** DECISION_TAG_BOOST if tagged 'decision', else 1.0. */
   decisionBoost: number;
-  /** 1.0..1.3 based on cwd path tag overlap. */
+  /** pathBoostMultiplier: 1.0 plus PATH_BOOST_WEIGHT times the cwd path tag overlap. */
   pathBoost: number;
-  /** 1.5 if scope matches, 0.5 if scope mismatches, 1.0 if neutral. */
+  /** SCOPE_MATCH_BOOST if scope matches, SCOPE_MISMATCH_BOOST if it mismatches, 1.0 if neutral. */
   scopeBoost: number;
-  /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a local+global merge);
-   * 1.0 otherwise. */
+  /** Extra multiplier applied post-hybrid (the caller's local bump on a local hit in a local+global
+   * merge); 1.0 otherwise. */
   sourceBump: number;
-  /**
-   * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from
-   * the slow strength path.
-   */
+  /** Immediate outcome nudge, outcomeNudge within the OUTCOME_NUDGE_* bounds; separate from the
+   * slow strength path. */
   outcomeBoost: number;
   /** CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */
   churnStaleMultiplier: number;
@@ -120,9 +119,9 @@ export interface ScoreBreakdown {
   lastRebuiltAt?: string | null;
   /** Cumulative rebuild_count. Summaries only. */
   rebuildCount?: number;
-  /** Deboost applied (1.0 for non-summaries; default 0.85 for summaries). */
+  /** Deboost applied: 1.0 for non-summaries, resolveSummaryDeboost for summaries. */
   summaryDeboost?: number;
-  /** 1.05 if a summary was rebuilt within 7 days; 1.0 otherwise. */
+  /** DEFAULT_FRESHNESS_BOOST if a summary was rebuilt within FRESHNESS_WINDOW_MS; 1.0 otherwise. */
   summaryFreshnessBoost?: number;
 }
 
