@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Prints the test files a change reaches, one per line (or --json), so a lane runs what its diff touches, not a guess.
-// Usage: node scripts/affected-tests.mjs [--json] [--base <ref>] [changed file ...]; files default to the diff from <ref>.
+// Usage: node scripts/affected-tests.mjs [--json] [--base <ref>] [changed file ...]; no file means changes since <ref>.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -45,7 +45,7 @@ const literalPath = (args) =>
 const isText = (node) =>
   ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 
-/** What a source loads at run time (imports tsc keeps, `import()`, require, vi.mock, dist/ files) and its other strings. */
+/** What a source loads at run time (kept imports, `import()`, require, vi.mock, dist/ files) and its other strings. */
 function readSource(text, file) {
   const { sourceFile, imports, distImports } = readFacts(text, file, ['imports', 'distImports']);
   const specs = imports.filter((i) => !i.typeOnly).map((i) => i.spec);
@@ -150,14 +150,13 @@ export function affectedTests(root, changed) {
   };
 }
 
-/** The files changed from `base` in the repo at `root`, whatever folder the command runs from. */
+/** Files changed since HEAD left `base`, uncommitted and new ones too; a rename keeps the old path for importers. */
 export function changedSince(root, base) {
-  const out = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
-    cwd: root,
-    encoding: 'utf8',
-    timeout: 30_000,
-  });
-  return out.split('\n').filter(Boolean);
+  const git = (...args) =>
+    execFileSync('git', args, { cwd: root, encoding: 'utf8', timeout: 30_000 }).split('\n').filter(Boolean);
+  const [from] = git('merge-base', base, 'HEAD');
+  const edited = git('diff', '--name-only', '--no-renames', from);
+  return [...new Set([...edited, ...git('ls-files', '--others', '--exclude-standard')])];
 }
 
 const USAGE = 'node scripts/affected-tests.mjs [--json] [--base <ref> | --base=<ref>] [changed file ...]';
@@ -198,7 +197,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       changed = changedSince(root, args.base);
     } catch (err) {
       fail(
-        `git diff against ${args.base} failed (${err.message.split('\n')[0]}).`,
+        `git could not list the changes since ${args.base} (${err.message.split('\n')[0]}).`,
         'fetch the base (git fetch origin), pass --base <ref>, or name the changed files as arguments.',
       );
     }

@@ -22,7 +22,7 @@ npm run smoke:openclaw-install
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
 - Name a new test file after the behaviour it pins, not the ticket (`store-stats-concurrency.test.ts`, not `a7-t3.test.ts`). Seed test stores through `makeRoot` or `makeStore`, `createMemory` and `writeEntry`; write raw SQL only when the test is about SQL. `makeRoot` copies a store migrated once per run, so call `initStore` only to test a migration or a first open.
 - A test that starts a child process ends in `.process.test.ts`; one that starts only the HTTP server or a worker thread ends in `.server.test.ts`. Both get 30 s and the rest 5 s; `scripts/checks/check-test-env.mjs` fails a name that does not match.
-- Run the tests a change reaches, not a hand-picked list: `node scripts/affected-tests.mjs` prints them from the diff against `origin/next/3.0` (`--base <ref>`, `--json`, or name the changed files), and leaves out the eval tests.
+- Run the tests a change reaches, not a hand-picked list: `node scripts/affected-tests.mjs` prints them from the changes since the branch left `origin/next/3.0`, staged, unstaged and new files included (`--base <ref>`, `--json`, or name the changed files), and leaves out the eval tests.
 - A new test file needs a contract with no owner file: find the owner and add a row first.
 - One owner per contract at the strongest boundary, with one wire-up row per other transport; a test written to carry a refactor is deleted by the PR that lands it.
 - No production export for a test; seed helpers live in `tests/_helpers`.
