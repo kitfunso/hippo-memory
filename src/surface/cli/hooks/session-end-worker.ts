@@ -23,7 +23,6 @@ import {
   heldLog,
   sessionEndWork as runSessionEnd,
 } from '../../../api/session-end.js';
-import { cliApiContext } from '../api-context.js';
 import { workingFolder } from '../shared.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import {
@@ -33,31 +32,30 @@ import {
   logSessionEndImport,
   reportSessionEndFailure,
 } from '../hook-runtime.js';
+import type { CliCommand } from '../api-context.js';
 
-export async function handleSessionEndWorker({
-  hippoRoot,
-  tenantId,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleSessionEndWorker(cmd: CommandContext): Promise<void> {
+  const { flags } = cmd;
   await runSessionWorker(
     stringFlag(flags, 'session-id') ?? null,
     boolFlag(flags, 'turn') ? 'turn' : 'full',
-    (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode),
+    (mode) => sessionEndWork(cmd, mode),
   );
 }
 
 async function sessionEndWork(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   mode: WorkerMode,
 ): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const held = heldLog((line) => appendSessionEndCloseLog(logFile, line));
-  await flushingOnExit(held, () => runSessionEndWork({ hippoRoot, tenantId, flags, mode, held }));
+  await flushingOnExit(held, () =>
+    runSessionEndWork({ cli, hippoRoot, tenantId, flags, mode, held }),
+  );
 }
 
 interface RunSessionEndWorkOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly flags: CliFlags;
@@ -66,6 +64,7 @@ interface RunSessionEndWorkOptions {
 }
 
 function runSessionEndWork({
+  cli,
   hippoRoot,
   tenantId,
   flags,
@@ -76,15 +75,15 @@ function runSessionEndWork({
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;
   const logLine: LineLog = (line, opts) => appendSessionEndCloseLog(logFile, line, opts);
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   return runSessionEnd<SessionTurn, SessionScan>(ctx, {
     mode,
     sessionId,
     transcriptPath,
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
     held,
-    sleep: () => sleepFolderStore(hippoRoot, tenantId, flags, logFile),
-    importAgentNotes: () => logSessionEndImport(logFile, tenantId, transcriptPath),
+    sleep: () => sleepFolderStore({ cli, hippoRoot, tenantId, args: [], flags }, logFile),
+    importAgentNotes: () => logSessionEndImport(cli, logFile, tenantId, transcriptPath),
     readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
     cursor: {
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
@@ -95,7 +94,14 @@ function runSessionEndWork({
     capture: async (into, turns, originProject) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
       if (root === undefined) return false;
-      return captureEndedSession(root, { tenantId, flags, transcriptPath, turns, originProject });
+      return captureEndedSession(root, {
+        cli,
+        tenantId,
+        flags,
+        transcriptPath,
+        turns,
+        originProject,
+      });
     },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
@@ -106,14 +112,9 @@ function runSessionEndWork({
 
 /** Sleeps the folder's own store; a failure goes to the session log, and capture runs
  * regardless. */
-async function sleepFolderStore(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-  closeLogFile: string | null,
-): Promise<void> {
+async function sleepFolderStore(cmd: CommandContext, closeLogFile: string | null): Promise<void> {
   try {
-    await (await import('../sleep.js')).sleepStore({ hippoRoot, tenantId, args: [], flags });
+    await (await import('../sleep.js')).sleepStore(cmd);
   } catch (err) {
     // sleepStore writes its own failure line only once its log tee is open.
     reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
@@ -121,6 +122,7 @@ async function sleepFolderStore(
 }
 
 interface EndedCapture {
+  readonly cli: CliCommand;
   readonly tenantId: string;
   readonly flags: CliFlags;
   readonly transcriptPath: string | undefined;
@@ -131,11 +133,11 @@ interface EndedCapture {
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 async function captureEndedSession(
   store: string,
-  { tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
+  { cli, tenantId, flags, transcriptPath, turns, originProject }: EndedCapture,
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
-    await runCapture(captureTarget(store), {
+    await runCapture(captureTarget(cli, store), {
       source: 'last-session',
       transcriptPath,
       logFile,

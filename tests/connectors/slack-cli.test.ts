@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq } from '../../src/api/dead-letters.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -24,7 +24,7 @@ describe('hippo slack CLI', () => {
   });
 
   it('hippo slack dlq list prints DLQ rows', async () => {
-    await parkInDlq(slackDlq, sqliteStore(join(root, '.hippo')), {
+    await parkInDlq({ store: sqliteStore(join(root, '.hippo')) }, slackDlq, {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad event',

@@ -4,7 +4,6 @@
 import * as predictionsApi from '../../api/objects/predictions.js';
 import type { ContextWith } from '../../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -161,9 +160,10 @@ export async function handlePredict({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   const subcommand = args[0] ?? '';
   if (subcommand === 'close') return predictClose(ctx, args, flags);
   if (subcommand === 'list') return predictList(ctx, flags);

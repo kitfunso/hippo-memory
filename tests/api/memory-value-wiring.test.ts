@@ -221,11 +221,7 @@ describe('(d) flag-off byte-identical', () => {
     const configPath = path.join(dir, 'config.json');
     fs.writeFileSync(
       configPath,
-      JSON.stringify(
-        { replay: { count: 0 }, physics: { enabled: false }, autoTraceCapture: false, dormant: { enabled: false } },
-        null,
-        2,
-      ),
+      JSON.stringify({ replay: { count: 0 }, autoTraceCapture: false, dormant: { enabled: false } }, null, 2),
     );
 
     const tenants = ['d-t1', 'd-t2', 'd-t3'];
@@ -287,7 +283,7 @@ describe('(d) flag-off byte-identical', () => {
     expect(result.removed).toBe(expectedRemovedIds.size);
     expect(result.decayed).toBe(expectedSurvivorIds.size);
     expect(detailLines(result).some((l) => l.includes('🛟'))).toBe(false);
-    // Full details array: with replay/physics/autoTraceCapture off and no
+    // Full details array: with replay/autoTraceCapture off and no
     // Episodic/conflicting content, decay's removed lines are the entirety
     // of detailLines(result), in loadAllEntries order.
     expect(detailLines(result)).toEqual(expectedRemovedDetails);

@@ -1,5 +1,5 @@
-// The published hybridSearch and physicsSearch: each fills the hippo.db folder, working-folder and
-// eval-switch defaults, then calls the domain ranker of that name. The eval kit's embedMemory and
+// The published hybridSearch: it fills the hippo.db folder, working-folder and eval-switch
+// defaults, then calls the domain ranker of that name. The eval kit's embedMemory and
 // loadRecallSearchEntries take a folder the same way.
 
 import type { MemoryEntry } from '../base/memory/entry.js';
@@ -16,7 +16,6 @@ import {
 import { rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
 import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
-import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import { entryInfra } from '../surface/entry-infra.js';
@@ -68,23 +67,6 @@ export async function hybridSearch(
     source: options.source ?? folderVectorSource(options),
     graphGlobal:
       globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
-  });
-}
-
-/**
- * Scores memories by gravity, momentum and cluster amplification; rows without physics state rank
- * through hybridSearch. Reads hippo.db under `hippoRoot` when no store is passed.
- */
-export async function physicsSearch(
-  query: string,
-  entries: MemoryEntry[],
-  options: PhysicsSearchOptions = {},
-): Promise<SearchResult[]> {
-  const source = entries.length > 0 ? folderVectorSource(options) : undefined;
-  return rankPhysics(query, entries, {
-    ...withEvalSwitches(options),
-    cwd: options.cwd ?? process.cwd(),
-    source,
   });
 }
 

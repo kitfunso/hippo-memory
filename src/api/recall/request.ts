@@ -48,7 +48,7 @@ const MAX_RECALL_LIMIT = 1000;
 const MAX_SCORER_WINDOW = 1000;
 // Bounds BM25 tokenisation cost while covering pasted error messages.
 const MAX_CONTEXT_QUERY_LEN = 1024;
-const RECALL_MODES = ['bm25', 'hybrid', 'physics'] as const;
+const RECALL_MODES = ['bm25', 'hybrid'] as const;
 
 /** A recall or context input the caller must fix; MCP answers it with an isError result, HTTP
  * with a 400. */
@@ -148,7 +148,7 @@ function modeParam(params: RequestParams): RecallOptions['mode'] {
   const value = params.get('mode');
   if (value === undefined || value === null) return undefined;
   const mode = RECALL_MODES.find((m) => m === value);
-  if (!mode) throw new RecallRequestError("mode must be 'bm25', 'hybrid', or 'physics'");
+  if (!mode) throw new RecallRequestError("mode must be 'bm25' or 'hybrid'");
   return mode;
 }
 

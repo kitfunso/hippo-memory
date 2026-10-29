@@ -23,8 +23,14 @@ afterEach(() => removeDir(root));
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {
     const id = (await remember(cli(), { content: 'the backup job runs on tuesdays at noon' })).id;
-    const run = await runInProcess(() =>
-      handleReject({ hippoRoot: root, tenantId: 'default', args: [id], flags: { reason: 'wrong day' } }),
+    const run = await runInProcess((cli) =>
+      handleReject({
+        cli,
+        hippoRoot: root,
+        tenantId: 'default',
+        args: [id],
+        flags: { reason: 'wrong day' },
+      }),
     );
     expect(run.status).toBe(0);
     expect(readEntry(root, id, 'default')).toBeNull();
@@ -35,8 +41,9 @@ describe('the CLI curate verbs go through src/api', () => {
 
   it('hippo invalidate weakens the matching row through the api', async () => {
     const id = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
-    const run = await runInProcess(() =>
+    const run = await runInProcess((cli) =>
       handleInvalidate({
+        cli,
         hippoRoot: root,
         tenantId: 'default',
         args: ['jenkins'],

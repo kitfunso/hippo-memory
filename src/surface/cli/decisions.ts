@@ -21,7 +21,6 @@ import {
   stringFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { cliApiContext } from './api-context.js';
 import type { ContextWith } from '../../api/types.js';
 import {
   closeObjectVerb,
@@ -72,10 +71,11 @@ export async function handleDecide({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   if (subcommand === 'list') return decideList(ctx, flags);
   if (subcommand === 'get') return decideGet(ctx, args);
   if (subcommand === 'close') return decideClose(ctx, args);

@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { makeRoot } from '../_helpers/make-root.js';
 import { installCodexWrapper } from '../../src/surface/hooks-install/codex-wrapper.js';
 import { writeNpmPs1Shim } from '../_helpers/npm-ps1-shim.js';
+import { initTestStore } from '../_helpers/store-template.js';
+import { loadAllEntries } from '../_helpers/root-forms.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
@@ -18,7 +20,12 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */
-function runWithMissingNode(args: readonly string[], logLevel: string, input?: string): SpawnSyncReturns<string> {
+function runWithMissingNode(
+  args: readonly string[],
+  logLevel: string,
+  input?: string,
+  preloadLines: readonly string[] = [],
+): SpawnSyncReturns<string> {
   const preload = path.join(dir, 'missing-node.mjs');
   // The Windows Codex shim is started with Node too, so that one start (a script named codex.js) keeps the real Node.
   const lines = [
@@ -29,6 +36,7 @@ function runWithMissingNode(args: readonly string[], logLevel: string, input?: s
     'const spawn = cp.spawn;',
     "cp.spawn = (cmd, args, ...rest) => spawn(Array.isArray(args) && String(args[0]).endsWith('codex.js') ? real : cmd, args, ...rest);",
     'syncBuiltinESMExports();',
+    ...preloadLines,
   ];
   fs.writeFileSync(preload, `${lines.join('\n')}\n`);
   const env: NodeJS.ProcessEnv = {
@@ -47,6 +55,19 @@ function runWithMissingNode(args: readonly string[], logLevel: string, input?: s
     encoding: 'utf8',
   });
 }
+
+// Held writes stay held: an unref'd timer never fires, as when the process exits before it, and the clock runs a
+// thousand times slow, so every stats write after the first lands inside the hold window. Only a flush lands one.
+const HELD_UNTIL_FLUSHED = [
+  'const probe = setTimeout(() => undefined, 0);',
+  'const timeout = Object.getPrototypeOf(probe);',
+  'clearTimeout(probe);',
+  'const unref = timeout.unref;',
+  'timeout.unref = function () { clearTimeout(this); return unref.call(this); };',
+  'const realNow = Date.now;',
+  'const startedAt = realNow();',
+  'Date.now = () => startedAt + Math.floor((realNow() - startedAt) / 1000);',
+];
 
 describe('hippo session-end worker spawn', () => {
   it('logs a worker that fails to start and still exits 0', () => {
@@ -102,5 +123,50 @@ describe('hippo codex-run worker spawn', () => {
     expect(run.stderr).toContain('ENOENT');
     // No Node exists for a detached worker here, so this line can only come from the inline run.
     expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: no hippo store');
+  });
+
+  it('writes the inline capture to disk before it exits', () => {
+    // A project store under the cwd, where the inline capture writes.
+    const projectRoot = path.join(dir, '.hippo');
+    initTestStore(projectRoot);
+    const rule =
+      'We decided how to ship the zeta service. Never deploy the zeta service on Fridays; see runbook-zeta.md.';
+    const rollout = [
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: rule }] },
+      },
+      {
+        type: 'response_item',
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Noted.' }] },
+      },
+    ];
+    // A stand-in Codex that leaves one session behind under the CODEX_HOME it runs with.
+    const fakeCodex = path.join(dir, 'fake-codex.mjs');
+    fs.writeFileSync(
+      fakeCodex,
+      [
+        "import fs from 'node:fs';",
+        "import path from 'node:path';",
+        "const sessions = path.join(process.env.CODEX_HOME, 'sessions', '2026', '10', '03');",
+        'fs.mkdirSync(sessions, { recursive: true });',
+        `fs.appendFileSync(path.join(process.env.CODEX_HOME, 'history.jsonl'), ${JSON.stringify(`${JSON.stringify({ session_id: 'sess-b', ts: 2, text: 'hi' })}\n`)});`,
+        `fs.writeFileSync(path.join(sessions, 'rollout-2026-10-03T10-00-00-sess-b.jsonl'), ${JSON.stringify(`${rollout.map((line) => JSON.stringify(line)).join('\n')}\n`)});`,
+        '',
+      ].join('\n'),
+    );
+    installNodeAsCodex(path.join(dir, 'real-bin'));
+
+    const run = runWithMissingNode(['codex-run', '--', fakeCodex], 'debug', undefined, HELD_UNTIL_FLUSHED);
+
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stderr).toContain('the session-end worker did not spawn, running inline');
+    expect(loadAllEntries(projectRoot, 'default').some((e) => e.content.includes('zeta'))).toBe(true);
+    // The capture's stats write is held, so stats.json counts it only if the command flushed before it exited.
+    // SAFETY: the store writes stats.json from LegacyStats, where total_remembered is a count.
+    const stats = JSON.parse(fs.readFileSync(path.join(projectRoot, 'stats.json'), 'utf8')) as {
+      total_remembered: number;
+    };
+    expect(stats.total_remembered).toBeGreaterThan(0);
   });
 });

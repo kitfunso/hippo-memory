@@ -55,21 +55,14 @@ const CASES: ReadonlyArray<readonly [string, SnapshotCase]> = [
     { query: 'deploy', http: { scope: 'team-alpha' }, mcp: { scope: 'team-alpha' }, cli: { scope: 'team-alpha' } },
   ],
   ['goal session', { query: 'deploy', http: SESSION_HTTP, mcp: SESSION_MCP, cli: SESSION_CLI }],
-  [
-    'physics mode',
-    { query: 'deploy rollout', http: { mode: 'physics' }, mcp: { mode: 'physics' }, cli: { physics: true } },
-  ],
-  [
-    'hybrid mode',
-    { query: 'deploy rollout', http: { mode: 'hybrid' }, mcp: { mode: 'hybrid' }, cli: { classic: true } },
-  ],
+  ['hybrid mode', { query: 'deploy rollout', http: { mode: 'hybrid' }, mcp: { mode: 'hybrid' } }],
   [
     'hybrid mode with a goal session',
     {
       query: 'deploy',
       http: { mode: 'hybrid', ...SESSION_HTTP },
       mcp: { mode: 'hybrid', ...SESSION_MCP },
-      cli: { classic: true, why: true, ...SESSION_CLI },
+      cli: { why: true, ...SESSION_CLI },
     },
   ],
   ['limit', { query: 'deploy', http: { limit: '3' }, mcp: { limit: 3 }, cli: { limit: '3' } }],
@@ -156,7 +149,9 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
 
 function viaCli(s: Store, c: SnapshotCase): Promise<InProcessResult> {
   const flags: CliFlags = { json: true, ...c.cli };
-  return runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }));
+  return runInProcess((cli) =>
+    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
 }
 
 const SURFACES = { http: viaHttp, mcp: viaMcp, cli: viaCli };

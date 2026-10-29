@@ -74,15 +74,6 @@ async function stageEmbeddingIndex(
   return staged;
 }
 
-async function resetPhysicsFromIndex({ step }: IndexTurn): Promise<void> {
-  try {
-    await step({ kind: 'reset' });
-  } catch (err) {
-    // Best effort: retrieval still falls back without physics state.
-    log.warn(`physics reset after reindex failed: ${errorMessage(err)}`, errorFields(err));
-  }
-}
-
 const EMBED_LOCK_WAIT_MS = 10_000;
 // A held lock is usually a whole embed run, so the polls back off rather than wake 200 times in the
 // budget.
@@ -211,7 +202,6 @@ async function embedMemoryLocked(
       model: embeddingIndexIdentity(identity),
     });
     await step({ kind: 'saveModel', providerId: identity });
-    await initializePhysicsIfMissing(on, entry, vector);
     return 'indexed';
   } catch (err) {
     // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
@@ -232,25 +222,7 @@ async function rebuildIndexForProvider(
   await on.step({ kind: 'begin' });
   const staged = await stageEmbeddingIndex(on, provider);
   await on.step({ kind: 'commit', model: embeddingIndexIdentity(provider.id) });
-  await resetPhysicsFromIndex(on);
   return staged;
-}
-
-async function initializePhysicsIfMissing(
-  { step }: IndexTurn,
-  entry: MemoryEntry,
-  vector: number[],
-): Promise<void> {
-  try {
-    await step({ kind: 'seed', entry, vector });
-  } catch (err) {
-    // Physics init is best-effort and must not fail the embedding that just landed.
-    log.warnThenDebug(
-      'physics-state-seed',
-      `physics state not initialised for ${entry.id}: ${errorMessage(err)}`,
-      errorFields(err),
-    );
-  }
 }
 
 /** One step on a session of its own, closed after, for an index read or write that takes no

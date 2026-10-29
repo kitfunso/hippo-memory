@@ -1,6 +1,5 @@
 // hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open
 // until it settles.
-import { loadPhysicsState } from '../../../db/physics-state.js';
 import { graphServesStore } from '../../../db/vector-graph-index.js';
 import { GraphFileIndex } from '../../../db/vector-graph-reader.js';
 import type { VectorIndex } from '../../../db/vector-match.js';
@@ -26,7 +25,6 @@ type PartReads = {
 
 const storedBodies: PartReads = {
   vectors: readStoredVectorViews,
-  particles: (db, ids) => loadPhysicsState(db, [...ids]),
 };
 
 const rowReadsBodies: Bodies<RowReads> = {

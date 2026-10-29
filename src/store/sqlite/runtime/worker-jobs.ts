@@ -41,7 +41,7 @@ function workerOps(
   const store = sqliteStoreOn(handles);
   const vectors = sqliteVectorReads(handles, graphs);
   const stored = async (part: StoredPart, ids: readonly string[]) =>
-    part === 'vectors' ? packVectors(await vectors.stored(part, ids)) : vectors.stored(part, ids);
+    packVectors(await vectors.stored(part, ids));
   return { ...store, vectors: { ...vectors, stored } };
 }
 

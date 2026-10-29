@@ -1,34 +1,25 @@
-// embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
+// embedAll and embedMemory on hippo.db with no store: the vectors and model identity a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
-import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, getMeta, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
-import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
-import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import {
-  peakRowsRead,
-  recordStatements,
-  recordStatementsAsync,
-  type StatementLog,
-} from '../_helpers/count-statements.js';
+import { peakRowsRead, recordStatementsAsync, type StatementLog } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { localIndex } from '../_helpers/cli-stores.js';
+import { localIndex, storeAt } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
@@ -49,7 +40,7 @@ let home: string;
 let embeddings: HashedEmbeddings;
 /** 180 rows indexed by `fake-old`, 120 rows with no vector. */
 let partly: string;
-/** Every row indexed by `fake-old`, each with a particle dated SEEDED_AT. */
+/** Every row indexed by `fake-old`. */
 let indexedOld: string;
 let n = 0;
 
@@ -64,7 +55,6 @@ interface VectorRow {
 interface IndexState {
   readonly vectors: VectorRow[];
   readonly model: string;
-  readonly particles: PhysicsParticle[];
 }
 
 const fakeVector = (id: string, entry: MemoryEntry): number[] => hashedVector(`${id} ${embeddingInputText(entry)}`);
@@ -128,7 +118,6 @@ function indexOn(root: string): IndexState {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid')
         .all() as VectorRow[],
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadAllPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);
@@ -147,20 +136,13 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
 // A backfill and a rebuild need each row once, not time order, so they walk ids on the primary key.
 const byId = (a: MemoryEntry, b: MemoryEntry): number => (a.id < b.id ? -1 : 1);
 
-function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
-  return { ...initializeParticle(entry, vector, PRODUCTION_STRENGTH, new Date(at)), position: vector.map(Math.fround) };
-}
-
-/** The state a rebuild under `providerId` must leave: every row in id order, each with a particle dated FAKE_NOW. */
+/** The state a rebuild under `providerId` must leave: every row in id order. */
 function rebuiltState(root: string, providerId: string, vectorOf: (entry: MemoryEntry) => number[]): IndexState {
   const entries = loadEveryTenantEntries(root).sort(byId);
   const model = embeddingIndexIdentity(providerId);
   return {
     vectors: entries.map((e) => vectorRow(e, model, vectorOf(e))),
     model,
-    particles: entries
-      .map((e) => particleOf(e, vectorOf(e), FAKE_NOW))
-      .sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
   };
 }
 
@@ -182,17 +164,6 @@ beforeAll(async () => {
 
   indexedOld = copyOf(partly);
   await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
-  const db = openHippoDb(indexedOld);
-  try {
-    savePhysicsState(
-      db,
-      loadEveryTenantEntries(indexedOld).map((e) =>
-        initializeParticle(e, fakeVector('fake-old', e), PRODUCTION_STRENGTH, new Date(SEEDED_AT)),
-      ),
-    );
-  } finally {
-    closeHippoDb(db);
-  }
 });
 
 afterAll(async () => {
@@ -235,7 +206,6 @@ describe('embedAll backfill on hippo.db', () => {
     expect(indexOn(root)).toEqual({
       vectors: [...before.vectors, ...pending.map((e) => vectorRow(e, model, fakeVector('fake-old', e)))],
       model,
-      particles: [],
     });
   });
 
@@ -256,13 +226,12 @@ describe('embedAll backfill on hippo.db', () => {
 });
 
 describe('a model identity change on hippo.db', () => {
-  it("embedAll rebuilds every tenant's vectors under the new model, saves its identity and resets every particle", async () => {
+  it("embedAll rebuilds every tenant's vectors under the new model and saves its identity", async () => {
     const root = copyOf(indexedOld);
-    expect(indexOn(root).particles.map((p) => p.lastSimulation)).toEqual(Array.from({ length: ROWS }, () => SEEDED_AT));
     expect(await embedAll(localIndex(root), undefined, fake('fake-new'))).toBe(ROWS);
     const state = indexOn(root);
     expect(state).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
-    expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
+    expect(state.vectors).toHaveLength(ROWS);
   });
 
   it('embedAll rebuilds a 300-row index, and embedMemory leaves it alone past the inline reindex cap', async () => {
@@ -276,7 +245,7 @@ describe('a model identity change on hippo.db', () => {
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
   });
 
-  it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {
+  it('keeps the old vectors and identity when the provider fails part way through the rebuild', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
     const last = embeddingInputText(loadEveryTenantEntries(root)[ROWS - 1]);
@@ -291,7 +260,7 @@ describe('a model identity change on hippo.db', () => {
   it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const index = cliStore(root).embeddingIndex;
+    const index = storeAt(root).embeddingIndex;
     const staged: number[] = [];
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {
@@ -306,7 +275,7 @@ describe('a model identity change on hippo.db', () => {
     };
     const target = {
       embeddingIndex: watched,
-      rows: cliStore(root),
+      rows: storeAt(root),
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),
@@ -325,7 +294,6 @@ function peakFullRowsRead(log: StatementLog<unknown>, fullReads: number): number
 }
 
 describe('rows held while embedding hippo.db', () => {
-  // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
     { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
     {
@@ -333,7 +301,7 @@ describe('rows held while embedding hippo.db', () => {
       template: (): string => indexedOld,
       id: 'fake-new',
       embedded: ROWS,
-      fullReads: 10,
+      fullReads: 5,
     },
   ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded, fullReads }) => {
     const root = copyOf(template());
@@ -349,20 +317,5 @@ describe('rows held while embedding hippo.db', () => {
     expect(Math.max(...calls)).toBe(PAGE);
     expect(peakFullRowsRead(log, fullReads)).toBe(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
-  });
-
-  it("resets particles for both tenants' embedded rows, reading the rows and vectors at most 64 at a time", () => {
-    const root = copyOf(partly);
-    const embedded = Object.keys(loadEmbeddingIndex(root)).sort();
-    const log = recordStatements(() => resetStoredParticles(root));
-    const { particles } = indexOn(root);
-    const tenantOf = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e.tenantId]));
-    expect([log.result, particles.length]).toEqual([180, 180]);
-    expect(particles.map((p) => p.memoryId)).toEqual(embedded);
-    expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
-    // Only the embedded rows of each 64-id slice are read, so no slice reads a full page of rows here.
-    expect(peakFullRowsRead(log, 5)).toBeLessThanOrEqual(PAGE);
-    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
-    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeGreaterThan(0);
   });
 });

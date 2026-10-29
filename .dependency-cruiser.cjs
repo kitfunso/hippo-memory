@@ -77,6 +77,8 @@ const barrels = Object.entries(layers.barrels).map(([file, folder]) => ({
 const { adapter, dbReach } = layers;
 const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
+// The published store kit, the one surface file that names src/store: a pure rule it re-exports.
+const STORE_KIT = 'entry/store-kit.ts';
 
 const adapterRules = [
   {
@@ -133,18 +135,18 @@ const storeReach = [
     to: { path: '^src/store/' },
   },
   {
-    name: 'cli-store-runtime',
-    comment: 'the CLI calls a src/api function; a type import from the store is fine',
+    name: 'surface-through-api',
+    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one, and src/${STORE_KIT} re-exports the pure graph diff from src/store/rules`,
     severity: 'error',
-    from: { path: '^src/(cli\\.ts$|surface/cli/)' },
-    to: { path: '^src/(store|db)/', dependencyTypesNot: ['type-only', 'type-import'] },
+    from: { path: layerPaths('surface'), pathNot: srcPaths([], [...entrances, STORE_KIT]) },
+    to: { path: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
   },
   {
-    name: 'dashboard-through-api',
-    comment: 'the dashboard reads and writes through src/api, never the store, the db or the CLI',
+    name: 'dashboard-not-cli',
+    comment: 'the dashboard reads and writes through src/api, never through the CLI',
     severity: 'error',
     from: { path: '^src/surface/dashboard/' },
-    to: { path: '^src/(store/|db/|surface/cli/|cli\\.ts$)' },
+    to: { path: '^src/(surface/cli/|cli\\.ts$)' },
   },
 ];
 

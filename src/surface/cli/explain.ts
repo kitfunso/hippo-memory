@@ -11,7 +11,7 @@ import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
-import { cliApiContext, cliSecondStore, cliStore, type CliStore } from './api-context.js';
+import { type CliCommand, type CliContext, type CliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import { printedTokens } from '../../api/context/context-render.js';
 import { printError } from './output.js';
@@ -35,7 +35,7 @@ const EXPLAIN_PREVIEW_CHARS = 48;
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the
  * policy hides. */
 async function noteScopeHidden(
-  ctx: ReturnType<typeof cliApiContext>,
+  ctx: CliContext,
   global: CliStore | undefined,
   query: string,
   requested: string | undefined,
@@ -55,6 +55,7 @@ interface InspectedSlot {
 }
 
 interface ExplainQueryOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly query: string;
@@ -62,6 +63,7 @@ interface ExplainQueryOptions {
 }
 
 async function explainQuery({
+  cli,
   hippoRoot,
   tenantId,
   query,
@@ -75,8 +77,8 @@ async function explainQuery({
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = hippoHomeDir();
-  const ctx = cliApiContext(hippoRoot, tenantId);
-  const scope = await explainScope(ctx, flags, globalRoot, query);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const scope = await explainScope(cli, ctx, flags, globalRoot, query);
 
   const engine = engineFlags(flags, ctx.config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
@@ -100,9 +102,9 @@ async function explainQuery({
       multihop: false,
       explain: true,
     },
-    sources: scope.origin.globalOn ? cliSecondStore(globalRoot) : undefined,
+    sources: scope.origin.globalOn ? cli.secondStore(globalRoot) : undefined,
   });
-  printExplainResults({ rank, usePhysics: engine.usePhysics, query, asJson, now });
+  printExplainResults({ rank, query, asJson, now });
 }
 
 interface ExplainScope {
@@ -112,7 +114,8 @@ interface ExplainScope {
 }
 
 async function explainScope(
-  ctx: ReturnType<typeof cliApiContext>,
+  cli: CliCommand,
+  ctx: CliContext,
   flags: CliFlags,
   globalRoot: string,
   query: string,
@@ -125,7 +128,7 @@ async function explainScope(
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   await noteScopeHidden(
     ctx,
-    origin.globalOn ? cliStore(globalRoot) : undefined,
+    origin.globalOn ? cli.store(globalRoot) : undefined,
     query,
     explicitScope || undefined,
   );
@@ -133,7 +136,7 @@ async function explainScope(
 }
 
 async function inspectRanking(
-  ctx: ReturnType<typeof cliApiContext>,
+  ctx: CliContext,
   query: string,
   ranking: Omit<api.CliCoreInspection, 'inspect'>,
 ): Promise<RankRecallResult> {
@@ -156,22 +159,13 @@ async function inspectRanking(
 
 interface PrintExplainResultsOptions {
   readonly rank: RankRecallResult;
-  readonly usePhysics: boolean;
   readonly query: string;
   readonly asJson: boolean;
   readonly now: Date;
 }
 
-function printExplainResults({
-  rank,
-  usePhysics,
-  query,
-  asJson,
-  now,
-}: PrintExplainResultsOptions): void {
-  const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
-    usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
+function printExplainResults({ rank, query, asJson, now }: PrintExplainResultsOptions): void {
+  const modeUsed = rank.globalEntries.length > 0 ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);
 
   const candidates = rank.localEntries.length + rank.globalEntries.length;
@@ -264,13 +258,7 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log();
     return;
   }
-  if (b.mode === 'physics') {
-    console.log(`    mode:      physics-gravity`);
-    console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
-    console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
-  } else {
-    printHybridBreakdown(r, b);
-  }
+  printHybridBreakdown(r, b);
   console.log();
 }
 
@@ -326,6 +314,7 @@ function printBoostLines(r: SearchResult, b: ScoreBreakdown): void {
 }
 
 export async function handleExplain({
+  cli,
   hippoRoot,
   tenantId,
   args,
@@ -335,5 +324,5 @@ export async function handleExplain({
   if (!query) {
     fail('Please provide a search query.');
   }
-  await explainQuery({ hippoRoot, tenantId, query, flags });
+  await explainQuery({ cli, hippoRoot, tenantId, query, flags });
 }

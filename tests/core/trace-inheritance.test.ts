@@ -12,15 +12,11 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { calculateStrength } from '../../src/entry/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { sampleForReplay } from '../../src/domain/consolidate/replay.js';
-import { savePhysicsState, loadPhysicsState } from '../../src/db/physics-state.js';
-import { initializeParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
-import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 pinClock();
 
@@ -88,33 +84,12 @@ describe('Trace layer inherits core memory mechanics', () => {
     for (const id of picked) expect(traces.find((t) => t.id === id)?.layer).toBe(Layer.Trace);
   });
 
-  it('physics state is created for traces on first consolidate', async () => {
-    // Persist a trace.
-    const trace = createMemory7('Task: physics trace\nOutcome: success\nSteps:\n  1. do thing', {
+  it('consolidate runs over a store holding a trace and keeps it', async () => {
+    const trace = createMemory7('Task: kept trace\nOutcome: success\nSteps:\n  1. do thing', {
       layer: Layer.Trace,
       traceOutcome: 'success',
     });
     writeEntry(tmpDir, trace);
-
-    // Simulate what embeddings.ts does when embeddings are available:
-    // initialize a particle for the trace entry and persist it. This is the
-    // same code path non-trace memories use — no trace-specific branch
-    // exists, which is exactly the "inherits for free" claim.
-    const fakeEmbedding = Array.from({ length: 16 }, (_, i) => Math.sin(i));
-    const db = openHippoDb(tmpDir);
-    try {
-      // At its own last_retrieved an unretrieved neutral trace has strength 1, so its mass is 1.
-      const particle = initializeParticle(trace, fakeEmbedding, PRODUCTION_STRENGTH, new Date(trace.lastRetrieved));
-      savePhysicsState(db, [particle]);
-      const map = loadPhysicsState(db, [trace.id]);
-      expect(map.has(trace.id)).toBe(true);
-      expect(map.get(trace.id)!.mass).toBe(1);
-    } finally {
-      closeHippoDb(db);
-    }
-
-    // And consolidate() runs cleanly over a store that contains a trace
-    // with physics state — no layer-specific crash, no data loss.
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(result.dryRun).toBe(false);
     const survivors = loadAllEntries(tmpDir, 'default');

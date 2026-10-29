@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`cli recall and explain golden output > explain --include-superseded --classic 1`] = `
+exports[`cli recall and explain golden output > explain --include-superseded --limit 3 1`] = `
 {
   "status": 0,
   "stderr": "[note] 1 candidate hidden by recall scope policy (pass an explicit --scope to inspect).
@@ -275,15 +275,6 @@ deploy pipeline uses blue green rollout for the api
 }
 `;
 
-exports[`cli recall and explain golden output > recall --classic 1`] = `
-{
-  "status": 0,
-  "stderr": "",
-  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
-",
-}
-`;
-
 exports[`cli recall and explain golden output > recall --goal 1`] = `
 {
   "status": 0,
@@ -472,15 +463,6 @@ exports[`cli recall and explain golden output > recall --multihop 1`] = `
 `;
 
 exports[`cli recall and explain golden output > recall --outcome success 1`] = `
-{
-  "status": 0,
-  "stderr": "",
-  "stdout": "{"query":"deploy","budget":4000,"results":[{"id":"mem_golden_plain","score":0.09879838426791585,"strength":1,"tokens":13,"tags":["deploy"],"content":"deploy pipeline uses blue green rollout for the api","layer":"episodic"},{"id":"mem_golden_scoped","score":0.09770043574193,"strength":1,"tokens":14,"tags":["deploy"],"content":"deploy checklist for team alpha runs smoke tests first","layer":"episodic"},{"id":"mem_golden_pinned","score":0.09140785725293225,"strength":1,"tokens":14,"tags":["deploy","billing"],"content":"deploy freeze applies to the billing service on fridays","layer":"episodic"},{"id":"mem_golden_trace","score":0.07708147565165151,"strength":1,"tokens":11,"tags":[],"content":"deploy trace: ran the canary and promoted it","layer":"trace","trace_outcome":"success"},{"id":"mem_golden_new","score":0.07159376622565247,"strength":1,"tokens":13,"tags":[],"content":"deploy target is the new staging cluster in eu west","layer":"episodic"},{"id":"mem_golden_goal","score":0.06758172472852353,"strength":1,"tokens":16,"tags":["goal-alpha"],"content":"deploy goal work: migrate the rollout scripts to the new runner","layer":"episodic"}],"total":6,"suppressionSummary":{"totalCandidates":6,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
-",
-}
-`;
-
-exports[`cli recall and explain golden output > recall --physics 1`] = `
 {
   "status": 0,
   "stderr": "",

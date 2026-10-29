@@ -299,7 +299,7 @@ describe('published runtime exports', () => {
         loadConfig
         normalizeValueForRejection
         ownScopeTouches
-        passesScopeFilterForRecall physicsSearch
+        passesScopeFilterForRecall
         rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup runStoreConformance
         sqliteStore
         tallyAmbientEntries targetReader",

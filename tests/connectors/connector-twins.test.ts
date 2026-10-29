@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
-import { parkInDlq, replayParked } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq, replayParked } from '../../src/api/dead-letters.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { rememberWithEventLog } from '../../src/surface/connectors/ingest.js';
@@ -48,12 +48,12 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   });
 
   it('each DLQ reads one row and bumps its retry count the same way', async () => {
-    const g = await parkInDlq(githubDlq, sqliteStore(root), {
+    const g = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',
     });
-    const s = await parkInDlq(slackDlq, sqliteStore(root), {
+    const s = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',
@@ -71,7 +71,7 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   });
 
   it('the shared replay counts a refused re-ingest once and a missing signature not at all', async () => {
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{"a":1}',
       error: 'e',
@@ -87,14 +87,18 @@ describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
         reason: 'no tenant',
       }),
     });
-    expect(await replayParked(steps(false), sqliteStore(root), { tenantId: 'default', id, force: false })).toEqual({
+    expect(
+      await replayParked({ tenantId: 'default', store: sqliteStore(root) }, steps(false), { id, force: false }),
+    ).toEqual({
       ok: false,
       status: 'sig_missing',
       memoryId: null,
       retryCount: 0,
       reason: 'no signature',
     });
-    expect(await replayParked(steps(false), sqliteStore(root), { tenantId: 'default', id, force: true })).toEqual({
+    expect(
+      await replayParked({ tenantId: 'default', store: sqliteStore(root) }, steps(false), { id, force: true }),
+    ).toEqual({
       ok: false,
       status: 'unroutable',
       memoryId: null,

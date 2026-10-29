@@ -3,7 +3,6 @@
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
 import type { EntryCursor } from '../../../src/base/ports/store/types.js';
-import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
 import {
   EMBEDDING_MODEL_META_KEY,
@@ -28,12 +27,10 @@ import { openStore } from '../../../src/store/sqlite/runtime/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/recall/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
 import * as tokenLedgerSql from '../../../src/store/sqlite/ledger/token-ledger.js';
-import { particleStats } from '../../../src/store/sqlite/vectors/vector-index.js';
 import * as vectorIndexSql from '../../../src/store/sqlite/vectors/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
-import { evalNow, evalSwitches } from '../../../src/infra/eval-switches.js';
 import { handlesOf, onHandle, sqliteStore } from '../test-session.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
@@ -141,22 +138,6 @@ export function saveStoredVectors(
   model: string,
 ): number {
   return onHandle(hippoRoot, (db) => upsertVectors(db, rows, model));
-}
-
-export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
-  return onHandle(hippoRoot, (db) => particleStats(db, Infinity).particles ?? []);
-}
-
-export function resetStoredParticles(hippoRoot: string): number {
-  return onHandle(hippoRoot, (db) =>
-    vectorIndexSql.resetStoredParticles(db, { strength: evalSwitches().strength, clock: evalNow }),
-  );
-}
-
-export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  return onHandle(hippoRoot, (db) =>
-    vectorIndexSql.seedStoredParticle(db, { strength: evalSwitches().strength, clock: evalNow }, entry, vector),
-  );
 }
 
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {

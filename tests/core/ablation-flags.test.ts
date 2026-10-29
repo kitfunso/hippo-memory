@@ -218,25 +218,6 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(result[0].confidence).toBe('stale'); // no stale->observed promotion
   });
 
-  it('physics mass recomputed under ablated rules ignores ALL recall history', async () => {
-    // The physicsSearch join recomputes mass as
-    // computeMass(calculateStrength(entry, now), rc) under the flag; both
-    // functions apply ablated semantics internally, so a heavily-recalled
-    // entry and an untouched twin produce the SAME mass - no history leaks
-    // through either the count multiplier or the frozen-strength component.
-    const { computeMass } = await import('../../src/base/rank/physics.js');
-    const created = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
-    const hot = agedMemory(10);
-    hot.created = created;
-    hot.retrievalCount = 16;
-    hot.lastRetrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
-    const cold = agedMemory(10);
-    cold.created = created;
-    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount, evalSwitches().strength)).toBe(
-      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount, evalSwitches().strength),
-    );
-  });
-
   it('isolation: decay still runs', () => {
     expect(calculateStrength(agedMemory(30), NOW, abl())).toBeLessThan(calculateStrength(agedMemory(0), NOW, abl()));
   });
@@ -248,17 +229,6 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     withHistory.retrievalCount = 16;
     const without = agedMemory(10);
     expect(calculateStrength(withHistory, NOW, abl())).toBe(calculateStrength(without, NOW, abl()));
-  });
-
-  it('neutralizes physics particle mass too: retrieval history cannot leak via gravity', async () => {
-    // Query gravity ranks the physics pool by particle mass, which scales with
-    // retrieval_count; under the flag, mass must ignore retrieval history in
-    // both the init and refresh paths (computeMass is the single shared site).
-    const { computeMass } = await import('../../src/base/rank/physics.js');
-    expect(computeMass(0.8, 16, evalSwitches().strength)).toBe(computeMass(0.8, 0, evalSwitches().strength));
-    // Sanity: WITHOUT the flag, history raises mass.
-    clearAblationEnv();
-    expect(computeMass(0.8, 16, evalSwitches().strength)).toBeGreaterThan(computeMass(0.8, 0, evalSwitches().strength));
   });
 
   it('anchors decay at created: prior clock resets cannot leak in', () => {

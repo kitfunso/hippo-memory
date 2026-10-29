@@ -55,8 +55,14 @@ describe('hippo eval output (in process)', () => {
   it('prints the same bytes and exit codes in every mode', async () => {
     const transcript: string[] = [];
     const step = async (label: string, corpus: string | null, flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() =>
-        handleEval({ hippoRoot: store, tenantId: 'default', args: corpus === null ? [] : [corpus], flags }),
+      const r = await runInProcess((cli) =>
+        handleEval({
+          cli,
+          hippoRoot: store,
+          tenantId: 'default',
+          args: corpus === null ? [] : [corpus],
+          flags,
+        }),
       );
       transcript.push(`$ eval ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
@@ -74,8 +80,8 @@ describe('hippo eval output (in process)', () => {
     const badCorpus = join(root, 'bad.json');
     writeFileSync(badCorpus, '{"cases": 3}');
     const baseline = join(root, 'baseline.json');
-    const baselineRun = await runInProcess(() =>
-      handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags: { json: true } }),
+    const baselineRun = await runInProcess((cli) =>
+      handleEval({ cli, hippoRoot: store, tenantId: 'default', args: [corpus], flags: { json: true } }),
     );
     // SAFETY: `eval --json` prints the EvalSummary, whose cases each carry a numeric ndcgAt10.
     const prior = JSON.parse(baselineRun.stdout) as { cases: Array<{ ndcgAt10: number }> };
@@ -118,7 +124,7 @@ describe('hippo eval output (in process)', () => {
 
   it('names the file and the missing field when the corpus or baseline has the wrong shape', async () => {
     const run = (corpus: string, flags: Flags = {}) =>
-      runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags }));
+      runInProcess((cli) => handleEval({ cli, hippoRoot: store, tenantId: 'default', args: [corpus], flags }));
     const noQuery = join(root, 'no-query.json');
     writeFileSync(noQuery, JSON.stringify([{ id: 'a', expectedIds: ['m1'] }]));
     const corpusReply = await run(noQuery);

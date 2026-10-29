@@ -100,7 +100,7 @@ export interface RecallTraceOptions {
 export interface RecallOptions {
   query: string;
   /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
-  mode?: 'bm25' | 'hybrid' | 'physics';
+  mode?: 'bm25' | 'hybrid';
   window?: RecallWindowOptions;
   filter?: RecallFilterOptions;
   boost?: RecallBoostOptions;

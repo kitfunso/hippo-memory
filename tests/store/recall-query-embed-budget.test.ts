@@ -10,7 +10,6 @@ import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { retrieve } from '../../src/api/index.js';
-import { physicsSearch } from '../../src/entry/folder-search.js';
 import { embedQueryBy } from '../../src/domain/search/vector.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -19,7 +18,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -163,22 +162,6 @@ describe("a recall's query embedding", () => {
     expect(await recall(root)).toEqual(expect.arrayContaining([LEXICAL, VECTOR_ONLY]));
     expect(embeddings.requests() - before).toBe(2);
     expect(fallbackLines()).toEqual([]);
-  });
-
-  it('spends one budget, not two, when physics search hands a stalled query to hybrid search', async () => {
-    const root = seedStore();
-    embeddings.setFault('stall');
-    const before = embeddings.requests();
-
-    const ranked = await physicsSearch(QUERY, loadAllEntries(root, 'default'), {
-      hippoRoot: root,
-      budget: 1_000_000,
-      runtime: { queryEmbedTimeoutMs: BUDGET_MS },
-    });
-
-    expect(ranked.map((r) => r.entry.content)).toEqual([LEXICAL]);
-    expect(embeddings.requests() - before).toBe(1);
-    expect(fallbackLines()).toHaveLength(1);
   });
 
   it('spends one budget, not two, across the local and the global store', async () => {

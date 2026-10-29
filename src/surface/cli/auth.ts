@@ -1,13 +1,13 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
 import * as api from '../../api/index.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import type { ApiKeyListItem } from '../../base/ports/store/keys.js';
+import type { CliCommand } from './api-context.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -34,11 +34,12 @@ function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
 
-async function createApiKey(
-  hippoRoot: string,
-  defaultTenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function createApiKey({
+  cli,
+  hippoRoot,
+  tenantId: defaultTenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
@@ -52,7 +53,7 @@ async function createApiKey(
   // another tenant from the local machine). It flows through ctx.tenantId, NOT through opts;
   // authCreate's opts no longer accepts a tenantId field, so the HTTP layer cannot smuggle a
   // body.tenantId across.
-  const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
+  const ctx = cli.apiContext(root, tenantFlag ?? defaultTenantId);
   const result = await mintApiKey(ctx, {
     label: labelFlag,
     role,
@@ -111,12 +112,12 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function listApiKeys({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
 
-  const items = await api.authListAllTenants(cliApiContext(root, tenantId), !includeRevoked);
+  const items = await api.authListAllTenants(cli.apiContext(root, tenantId), !includeRevoked);
 
   if (asJson) {
     console.log(JSON.stringify(items));
@@ -139,14 +140,15 @@ async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags)
 }
 
 interface KeyContextOptions {
+  readonly cli: CliCommand;
   readonly root: string;
   readonly tenantId: string;
   readonly keyId: string;
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-async function keyContext({ root, tenantId, keyId }: KeyContextOptions): Promise<api.Context> {
-  const hostCtx = cliApiContext(root, tenantId);
+async function keyContext({ cli, root, tenantId, keyId }: KeyContextOptions): Promise<api.Context> {
+  const hostCtx = cli.apiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     fail(`Unknown key_id: ${keyId}`);
@@ -155,6 +157,7 @@ async function keyContext({ root, tenantId, keyId }: KeyContextOptions): Promise
 }
 
 interface RevokeApiKeyOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly keyId: string;
@@ -162,12 +165,13 @@ interface RevokeApiKeyOptions {
 }
 
 async function revokeApiKey({
+  cli,
   hippoRoot,
   tenantId,
   keyId,
   flags,
 }: RevokeApiKeyOptions): Promise<void> {
-  const ctx = await keyContext({ root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
+  const ctx = await keyContext({ cli, root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
   let revokedAt: string;
   try {
     revokedAt = (await api.authRevoke(ctx, keyId)).revokedAt;
@@ -182,6 +186,7 @@ async function revokeApiKey({
 }
 
 interface AuthScopeGrantOptions {
+  cli: CliCommand;
   hippoRoot: string;
   tenantId: string;
   keyId: string;
@@ -193,8 +198,8 @@ interface AuthScopeGrantOptions {
 /** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant,
  * restricted-scope and audit checks live in one place. */
 async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
-  const { hippoRoot, tenantId, keyId, scope, grant, flags } = options;
-  const ctx = await keyContext({ root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
+  const { cli, hippoRoot, tenantId, keyId, scope, grant, flags } = options;
+  const ctx = await keyContext({ cli, root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });
   try {
     if (grant) await api.authGrant(ctx, keyId, scope);
     else await api.authUngrant(ctx, keyId, scope);
@@ -210,12 +215,8 @@ async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
   );
 }
 
-export async function handleAuth({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleAuth(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const sub = args[0];
   if (!sub) {
     fail('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
@@ -223,17 +224,17 @@ export async function handleAuth({
   const subArgs = args.slice(1);
   switch (sub) {
     case 'create':
-      await createApiKey(hippoRoot, tenantId, flags);
+      await createApiKey(cmd);
       return;
     case 'list':
-      await listApiKeys(hippoRoot, tenantId, flags);
+      await listApiKeys(cmd);
       return;
     case 'revoke': {
       const keyId = subArgs[0];
       if (!keyId) {
         fail('Usage: hippo auth revoke <key_id>');
       }
-      await revokeApiKey({ hippoRoot, tenantId, keyId, flags });
+      await revokeApiKey({ cli, hippoRoot, tenantId, keyId, flags });
       return;
     }
     case 'grant':
@@ -242,7 +243,15 @@ export async function handleAuth({
       if (!keyId || !scope) {
         fail(`Usage: hippo auth ${sub} <key_id> <scope>`);
       }
-      await changeKeyScope({ hippoRoot, tenantId, keyId, scope, grant: sub === 'grant', flags });
+      await changeKeyScope({
+        cli,
+        hippoRoot,
+        tenantId,
+        keyId,
+        scope,
+        grant: sub === 'grant',
+        flags,
+      });
       return;
     }
     default:

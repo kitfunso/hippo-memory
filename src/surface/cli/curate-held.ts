@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import * as api from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
-import { cliApiContext, type CliContext } from './api-context.js';
+import { type CliContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
@@ -26,9 +26,10 @@ export async function handleDormant({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'restore' || sub === 'forget') {
@@ -121,9 +122,10 @@ export async function handleQuarantine({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'approve' || sub === 'reject') {

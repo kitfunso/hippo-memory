@@ -34,7 +34,6 @@ export type ConsolidateEvent =
   | { kind: 'dagProfiles'; profiles: number; l2sLinked: number }
   | { kind: 'retiredText'; id: string; successorId: string | null }
   | { kind: 'merged'; count: number; preview: string }
-  | { kind: 'physics'; particles: number; shown: number; stored: number; avgVelocity: number }
   | { kind: 'ftsResynced'; indexedRows: number; memories: number }
   | { kind: 'halfLifeRescaled'; count: number; from: number; to: number }
   | { kind: 'halfLifeTyped'; count: number; from: number; to: number }
@@ -46,6 +45,4 @@ export type ConsolidateEvent =
   | { kind: 'tracePromoted'; id: string; sessionId: string; outcome: string }
   | { kind: 'tracesPromoted'; count: number }
   | { kind: 'sessionSkippedMixedScope'; sessionId: string }
-  | { kind: 'replayed'; ids: readonly string[] }
-  /** A pass threw and was skipped; the sleep went on without it. */
-  | { kind: 'phaseSkipped'; phase: string; message: string };
+  | { kind: 'replayed'; ids: readonly string[] };

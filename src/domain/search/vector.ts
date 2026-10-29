@@ -66,8 +66,8 @@ function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
 }
 
-/** One deadline for every query embedding a recall makes, so two stores or a physics fallback
- * share the budget; the request's own abort ends it as well. */
+/** One deadline for every query embedding a recall makes, so two stores share the budget; the
+ * request's own abort ends it as well. */
 export function startQueryEmbedDeadline({
   runtime,
   signal,

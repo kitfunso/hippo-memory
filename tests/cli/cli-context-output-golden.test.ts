@@ -68,8 +68,8 @@ describe('hippo context output (in process)', () => {
   it('prints the same bytes and exit codes in every format', async () => {
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags, stdin?: string): Promise<void> => {
-      const r = await runInProcess(() =>
-        withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args, flags })),
+      const r = await runInProcess((cli) =>
+        withHookStdin(stdin, () => handleContext({ cli, hippoRoot: store, tenantId: 'default', args, flags })),
       );
       transcript.push(
         `$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`,

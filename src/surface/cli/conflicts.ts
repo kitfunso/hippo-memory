@@ -4,7 +4,6 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
 import {
   type CommandContext,
   boolFlag,
@@ -16,6 +15,7 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { printJsonList } from './json-list.js';
 import { fail } from './exit.js';
+import type { CliScope } from './api-context.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 
@@ -23,11 +23,12 @@ export async function handleConflicts({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const status = stringFlagOrExit(flags, 'status') ?? 'open';
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   const read = (page: api.ConflictPageOptions) =>
     api.conflictList(ctx, status, { everyTenant: true }, page);
   if (boolFlag(flags, 'json')) {
@@ -74,11 +75,10 @@ function printConflictLines(conflicts: api.ConflictPage['conflicts']): void {
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(
-  hippoRoot: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   conflictId: number,
-  tenantId: string,
 ): Promise<void> {
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   const conflict = await api.conflictGet(ctx, conflictId);
   if (!conflict || conflict.status !== 'open') {
     fail(`Conflict ${conflictId} not found or already resolved.`);
@@ -105,12 +105,8 @@ async function showConflictForResolve(
   );
 }
 
-export async function handleResolve({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleResolve(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
 
   // Accept "42" or "conflict_42"
@@ -122,7 +118,7 @@ export async function handleResolve({
 
   const keepId = stringFlagOrExit(flags, 'keep') ?? '';
   if (!keepId) {
-    await showConflictForResolve(hippoRoot, conflictId, tenantId);
+    await showConflictForResolve(cmd, conflictId);
     return;
   }
 
@@ -132,7 +128,7 @@ export async function handleResolve({
   // keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
-  const result = await api.conflictResolve(cliApiContext(hippoRoot, tenantId), conflictId, {
+  const result = await api.conflictResolve(cli.apiContext(hippoRoot, tenantId), conflictId, {
     keepId,
     forget: forgetLoser,
     rejectLoser,

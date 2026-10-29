@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { deserializeEntry } from '../../src/base/memory/markdown.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -19,6 +18,7 @@ import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 const { writeEntry } = sessionPerTest();
 
@@ -127,15 +127,17 @@ describe('memory wire goldens', () => {
   });
 
   it('MCP hippo_recall text', async () => {
-    const res = await cliStdioHost().runFrame(new AbortController().signal, (contextFor) =>
-      handleMcpRequest(
-        {
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'tools/call',
-          params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
-        },
-        { ...contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
+    const res = await asCommand((cli) =>
+      cli.stdioHost().runFrame(new AbortController().signal, (contextFor) =>
+        handleMcpRequest(
+          {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
+          },
+          { ...contextFor(root, GOLDEN_TENANT), project: { name: '', legacyName: '' } },
+        ),
       ),
     );
     // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
