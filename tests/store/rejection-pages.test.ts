@@ -123,7 +123,7 @@ describe('rejections.apply across pages', () => {
     const ids = seed();
     const dormant = seedDormant();
 
-    const applied = await sqliteStore(root).rejections.apply(rejection());
+    const applied = await sqliteStore(root).hippoDb.rejections.apply(rejection());
 
     const removed = [ids[2], ids[600], ids[700], ids[800], dormant.direct, dormant.merged];
     expect(applied.removedIds).toEqual(removed);

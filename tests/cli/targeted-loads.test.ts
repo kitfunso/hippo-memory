@@ -160,7 +160,7 @@ describe('rejections.apply', () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
-    const { rejections } = sqliteStore(root);
+    const { rejections } = sqliteStore(root).hippoDb;
     const { result, statements } = await recordStatementsAsync(
       async () =>
         await rejections.apply({

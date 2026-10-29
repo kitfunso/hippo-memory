@@ -53,7 +53,7 @@ export async function rejectValue(
   opts: RejectFlowOptions,
 ): Promise<RejectFlowResult> {
   assertRejectOpts(opts);
-  return store.rejections.apply({
+  return store.hippoDb.rejections.apply({
     tenantId: opts.tenantId,
     actor: opts.actor,
     reason: opts.reason,
@@ -83,7 +83,7 @@ export async function unrejectValue(
   if (digestOrPrefix.trim().length === 0) {
     return { status: 'not_found' };
   }
-  return store.rejections.lift(tenantId, digestOrPrefix, actor);
+  return store.hippoDb.rejections.lift(tenantId, digestOrPrefix, actor);
 }
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
@@ -91,5 +91,5 @@ export function listRejectionsForTenant(
   store: StoreWith<'rejections'>,
   tenantId: string,
 ): Promise<RejectedValueRow[]> {
-  return store.rejections.list(tenantId);
+  return store.hippoDb.rejections.list(tenantId);
 }

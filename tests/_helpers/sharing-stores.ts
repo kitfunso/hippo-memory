@@ -4,10 +4,10 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { ConfiguredFolder } from '../../src/base/config/configured-folder.js';
-import type { HippoStore, StoreGroups } from '../../src/base/ports/store.js';
+import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
 
 /** A folder's store, config and the real embedder, with the folder a test reopens. */
-export type TestFolder = ConfiguredFolder<HippoStore & StoreGroups> & { readonly root: string };
+export type TestFolder = ConfiguredFolder<HippoDbStore> & { readonly root: string };
 
 /** The folder's hippo.db beside its folder, with its config as the CLI loads it. */
 export function folderStore(root: string): TestFolder {

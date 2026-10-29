@@ -1,5 +1,7 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteRejections } from './review/rejections.js';
+import { REJECTIONS_EFFECTS } from '../../base/ports/store/rejections.js';
 import { sqliteConnectorEvents } from './connectors/connector-events.js';
 import { sqliteConnectorWrites } from './connectors/connector-writes.js';
 import {
@@ -25,6 +27,7 @@ export function hippoDbRepos(handles: Handles) {
     auditMaintenance: sqliteAuditMaintenance(handles),
     connectorWrites: sqliteConnectorWrites(handles),
     connectorEvents: sqliteConnectorEvents(handles.on),
+    rejections: sqliteRejections(handles),
   };
 }
 
@@ -47,4 +50,5 @@ export const HIPPO_DB_EFFECTS = {
   auditMaintenance: AUDIT_MAINTENANCE_EFFECTS,
   connectorWrites: CONNECTOR_WRITES_EFFECTS,
   connectorEvents: CONNECTOR_EVENTS_EFFECTS,
+  rejections: REJECTIONS_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

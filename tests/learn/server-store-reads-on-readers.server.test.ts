@@ -240,10 +240,10 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.correctionLinks', (s) => s.reports.correctionLinks({ limit: 10 }), /oldId: 'mem_/),
   read('reports.rawProvenance', (s) => s.reports.rawProvenance({ limit: 10 }), /total: [1-9]/),
   read('reports.createdSinceLastSleep', (s) => s.reports.createdSinceLastSleep(TENANT, NOW), /^[1-9]\d*$/),
-  read('rejections.list', (s) => s.rejections.list(TENANT), "reason: 'wrong'"),
+  read('hippoDb.rejections.list', (s) => s.hippoDb.rejections.list(TENANT), "reason: 'wrong'"),
   read(
-    'rejections.refusedAmong',
-    (s) => s.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]),
+    'hippoDb.rejections.refusedAmong',
+    (s) => s.hippoDb.rejections.refusedAmong([{ tenantId: TENANT, entryId: 'mem_new', content: REFUSED }]),
     /^\[ true \]$/,
   ),
   read('failureLog.requestOutcome', (s) => s.failureLog.requestOutcome(TENANT, 'req-seeded', SESSION), "'stored'"),

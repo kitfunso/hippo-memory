@@ -168,7 +168,7 @@ describe('Conflicts', () => {
           .then((found) =>
             found.map((e) => ({ content: e.content, halfLifeDays: e.halfLifeDays, conflictsWith: e.conflictsWith })),
           ),
-      (_g, s) => s.rejections.list(TENANT_A),
+      (_g, s) => s.hippoDb.rejections.list(TENANT_A),
     ]);
     expect(ids(valueAt<ConflictRowPage>(outcomes, 0))).toHaveLength(4);
     expect(outcomes.slice(7, 13).map((o) => ('value' in o ? o.value : o))).toEqual([

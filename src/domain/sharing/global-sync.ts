@@ -108,7 +108,7 @@ function copiesOf(
 /** The texts held twice whose first copy a rejection refuses. */
 async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Promise<Set<string>> {
   const firsts = copies.filter((e) => twins.has(textKey(e)));
-  const refused = await store.rejections.refusedAmong(
+  const refused = await store.hippoDb.rejections.refusedAmong(
     firsts.map((e) => ({ tenantId: e.tenantId, entryId: e.id, content: e.content })),
   );
   return new Set(firsts.filter((_, i) => refused[i]).map(textKey));

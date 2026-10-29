@@ -144,7 +144,7 @@ async function refusalsOf(
     entryId: '',
     content: storedText(item.text),
   }));
-  const rejected = await s.store.rejections.refusedAmong(checks);
+  const rejected = await s.store.hippoDb.rejections.refusedAmong(checks);
   asked.forEach((item, i) => {
     if (rejected[i]) out.set(item.key, 'rejected');
   });

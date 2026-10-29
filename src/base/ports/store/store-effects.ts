@@ -19,7 +19,7 @@ import { LEDGER_EFFECTS } from './ledger.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { LAST_RECALL_EFFECTS } from './recall-writes.js';
-import { FAILURE_LOG_EFFECTS, REJECTIONS_EFFECTS } from './rejections.js';
+import { FAILURE_LOG_EFFECTS } from './rejections.js';
 import { REPORTS_EFFECTS } from './reports.js';
 import { PROMOTION_EFFECTS, SHARING_EFFECTS } from './sharing.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
@@ -62,7 +62,6 @@ export const STORE_EFFECTS = {
   conflicts: CONFLICTS_EFFECTS,
   dormant: DORMANT_EFFECTS,
   reports: REPORTS_EFFECTS,
-  rejections: REJECTIONS_EFFECTS,
   failureLog: FAILURE_LOG_EFFECTS,
   compactions: COMPACTIONS_EFFECTS,
   ledger: LEDGER_EFFECTS,

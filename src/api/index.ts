@@ -95,15 +95,14 @@ export type {
 } from './objects/drill-down.js';
 export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
+export { forget, removalTarget } from './memories/forget.js';
 export {
-  forget,
   liftRejection,
   listRejections,
   reject,
   rejectOnHost,
-  removalTarget,
   unreject,
-} from './memories/forget.js';
+} from './hippo-db/rejections.js';
 export {
   AUTO_SHARE_MIN_SCORE,
   autoShareToGlobal,
@@ -114,7 +113,8 @@ export {
 } from './sharing.js';
 export type { SharePeer } from './sharing.js';
 export { memoryPin } from './memories/pin.js';
-export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
+export type { ForgetResult } from './memories/forget.js';
+export type { RejectOptions, RejectResult } from './hippo-db/rejections.js';
 export {
   conflictPages,
   conflictGet,

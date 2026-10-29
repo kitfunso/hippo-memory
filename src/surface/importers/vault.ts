@@ -420,7 +420,7 @@ async function storeVaultNote({
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches
   // what a real run would refuse.
   if (run.dryRun) {
-    const [refused] = await run.ctx.store.rejections.refusedAmong([
+    const [refused] = await run.ctx.store.hippoDb.rejections.refusedAmong([
       { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
     ]);
     return !refused;

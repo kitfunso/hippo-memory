@@ -18,7 +18,6 @@ import { sqliteCompactionHooks } from './capture/compaction-hooks.js';
 import { sqliteCards } from './records/cards.js';
 import { sqliteConflicts } from './review/conflicts.js';
 import { sqliteDormant } from './dormant/dormant.js';
-import { sqliteRejections } from './review/rejections.js';
 import { sqliteFailureLog } from './capture/failure-log.js';
 import { sqliteCompactions } from './capture/compactions.js';
 import { sqliteReports } from './reports/reports.js';
@@ -123,7 +122,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     goals: sqliteGoals(on),
     conflicts: sqliteConflicts(handles),
     reports: sqliteReports(handles),
-    rejections: sqliteRejections(handles),
     ...sqliteFolderGroups(handles),
     close: () => answered(() => files.runtime?.held.flush(files.hippoRoot)),
   };

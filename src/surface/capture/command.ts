@@ -17,7 +17,7 @@ import {
   resolveLastSessionTranscript,
 } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
-import type { StoreGroups } from '../../base/ports/store.js';
+import type { StoreGroups, StoreWith } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 
@@ -53,7 +53,10 @@ export interface CaptureOptions {
 export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
-  readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
+  readonly store: Pick<
+    StoreWith<'captures' | 'folderFiles' | 'rejections'>,
+    'captures' | 'folderFiles' | 'hippoDb'
+  >;
   /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
 }
@@ -335,14 +338,19 @@ export async function captureExtractedItems(
 }
 
 interface PreviewStore {
-  readonly store: Pick<StoreGroups, 'rejections'>;
+  readonly store: Pick<StoreWith<'rejections'>, 'hippoDb'>;
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
 /** A dry run asks the store the same rejected-value question the write's gate does, so a
  * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
-  { store: { rejections }, config }: PreviewStore,
+  {
+    store: {
+      hippoDb: { rejections },
+    },
+    config,
+  }: PreviewStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: ReadonlySet<string>,
