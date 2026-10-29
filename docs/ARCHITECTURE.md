@@ -74,7 +74,7 @@ The rankers in `src/domain/search` read none of these. They take the switches as
 Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
 
 1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
-2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `hybridSearch` is unaffected).
+2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `rankHybrid` is unaffected).
 
 Nothing caches these env vars. The readers here read them on each call, so a test that stubs one sees it at once and resets nothing. `HIPPO_LOSS_AVERSION_RATIO` is a root setting: the CLI, `serve()`, the stdio MCP host, the sleep child and the dashboard read it once when they build their store and hand it down as `lossAversionRatio` (`sqliteStore(root, { lossAversionRatio })`, `strengthOptionsOf(config.runtime)`); a library caller passes it the same way.
 
