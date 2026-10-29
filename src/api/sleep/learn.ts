@@ -81,7 +81,7 @@ type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invali
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
 export async function learn(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  ctx: ContextWith<'lessonWrites'>,
   opts: LearnOptions,
 ): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
@@ -113,7 +113,7 @@ interface QueuedLesson {
 /** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
  * a later lesson matches against them. */
 interface LessonBatch {
-  readonly ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>;
+  readonly ctx: ContextWith<'lessonWrites'>;
   readonly writes: LessonWrites;
   readonly live: MemoryEntry[];
   readonly keys: Set<string>;
@@ -235,7 +235,7 @@ async function scanTenant(
 }
 
 async function writeLessons(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOptions & { readonly repoPath: string },
   config: HippoConfig,
@@ -276,7 +276,7 @@ interface OpenedLessonBatch {
 }
 
 async function openLessonBatch(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOptions,
 ): Promise<OpenedLessonBatch> {

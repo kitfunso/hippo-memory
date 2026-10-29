@@ -282,7 +282,7 @@ const REOPEN = Symbol('sqliteStore reopen');
 
 /** A store sqliteStore built, with how to build it again on one session's handles. */
 interface Reopenable {
-  readonly [REOPEN]: (session: RequestStores) => HippoStore & StoreGroups;
+  readonly [REOPEN]: (session: RequestStores) => HippoStore;
 }
 
 function isReopenable(store: HippoStore): store is HippoStore & Reopenable {

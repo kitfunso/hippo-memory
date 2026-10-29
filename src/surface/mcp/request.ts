@@ -121,7 +121,7 @@ const TOOL_ROWS: ReadonlyMap<string, ToolRow> = new Map<string, ToolRow>([
   ['hippo_outcome', anyStore(runOutcomeTool)],
   ['hippo_context', anyStore(runContextTool)],
   ['hippo_status', needing(['reports'], runStatusTool)],
-  ['hippo_learn', needing(['lessonWrites', 'vectors', 'vectorWrites'], runLearnTool)],
+  ['hippo_learn', needing(['lessonWrites'], runLearnTool)],
   ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
   ['hippo_resolve', needing(['conflicts'], runResolveTool)],
   ['hippo_share', localTool(runShareTool)],

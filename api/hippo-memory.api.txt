@@ -134,7 +134,6 @@ entry/sleep.d.ts: SleepStore re-export
 entry/sleep.d.ts: consolidate function
 entry/sleep.d.ts: sleep function
 entry/sleep.d.ts: strengthBucket re-export
-entry/store-conformance.d.ts: ConformanceRunner interface
 entry/store-conformance.d.ts: runStoreConformance function
 entry/store-kit.d.ts: ALL_TENANTS re-export
 entry/store-kit.d.ts: ActiveGoals re-export

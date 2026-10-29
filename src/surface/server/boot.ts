@@ -350,7 +350,9 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    ready: served.store.readiness && createReadyProbe(served.store.readiness),
+    ready: hasGroup(served.store, 'readiness')
+      ? createReadyProbe(served.store.readiness)
+      : undefined,
   };
 }
 

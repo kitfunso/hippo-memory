@@ -47,10 +47,7 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export async function runLearnTool({
-  args,
-  api,
-}: GroupToolCall<'lessonWrites' | 'vectors' | 'vectorWrites'>): Promise<string> {
+export async function runLearnTool({ args, api }: GroupToolCall<'lessonWrites'>): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
   // With no repoPath api learn reads the server's own folder, not a remote caller's, so it refuses

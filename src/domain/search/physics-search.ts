@@ -66,7 +66,7 @@ export interface PhysicsSearchOptions {
   /** Same as hybridSearch's: rows nearest the query join the pool before physics scoring. */
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors and particles are read; hippo.db under `hippoRoot` when unset. */
-  store?: StoreWith<never, 'vectors' | 'graphReads'>;
+  store?: StoreWith<never, 'graphReads'>;
   /** The root's environment settings, as hybridSearch takes them. */
   runtime?: RuntimeSettings;
   /** The strength model and rank switches the caller runs under; absent, production ranking. */

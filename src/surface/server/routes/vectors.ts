@@ -12,7 +12,7 @@ import {
 } from '../../../base/util/json.js';
 import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../../../base/util/limits.js';
 import type { VectorCandidateSpec } from '../../../base/ports/store/vectors.js';
-import type { GroupRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
 
 // Past the longest vector any configured provider returns (3072), so a real query always fits.
@@ -20,11 +20,7 @@ const MAX_VECTOR_DIM = 4096;
 // Origins name projects, and a recall names its own and a few aliases.
 const MAX_ORIGINS = 64;
 
-export async function handleNearestVectors({
-  req,
-  res,
-  ctx,
-}: GroupRequest<'vectors'>): Promise<void> {
+export async function handleNearestVectors({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const ids = await nearestMemoryIds(ctx, vectorOf(body['vector']), specOf(body['spec']));
   sendJson(res, 200, { ids });

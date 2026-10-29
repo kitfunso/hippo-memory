@@ -161,7 +161,6 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/vectors/nearest',
     auth: 'caller',
-    storeReady: 'vectors',
     handler: handleNearestVectors,
   },
   {

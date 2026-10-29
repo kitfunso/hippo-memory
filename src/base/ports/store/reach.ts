@@ -10,9 +10,7 @@ export type GlobalTargetGroup =
   | 'embeddingIndex'
   | 'captures'
   | 'lessonWrites'
-  | 'rejections'
-  | 'vectors'
-  | 'vectorWrites';
+  | 'rejections';
 
 /** The groups the operator's global store sets for a reader: churn's marks, the ledger, and the
  * session rows a folder with no store of its own ends its sessions in. */

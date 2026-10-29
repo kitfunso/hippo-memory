@@ -69,19 +69,17 @@ describe('UPGRADING-3.0 advice', () => {
     });
   });
 
-  it('builds a vector source from a store that keeps vectors (VectorSource)', () => {
+  it('builds a vector source from any store (VectorSource)', () => {
     typeOnly(async () => {
       const { store } = ctx;
-      if (hasGroup(store, 'vectors')) {
-        await hybridSearch(query, entries, {
-          source: {
-            store,
-            vectors: store.vectors,
-            graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
-            provider,
-          },
-        });
-      }
+      await hybridSearch(query, entries, {
+        source: {
+          store,
+          vectors: store.vectors,
+          graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
+          provider,
+        },
+      });
       await hybridSearch(query, entries, { store });
       await physicsSearch(query, entries, { store });
     });
@@ -105,11 +103,11 @@ describe('UPGRADING-3.0 advice', () => {
     expectTypeOf<VectorWrites['indexKey']>().toEqualTypeOf<() => Promise<string>>();
   });
 
-  it('sleeps only on a store that sets vectors and graphReads (SleepStore)', () => {
+  it('sleeps only on a store that sets graphReads (SleepStore)', () => {
     typeOnly(() => {
       const sleeper: SleepStore = { ...sqliteStore(hippoRoot), consolidation };
-      const twoX: Omit<SleepStore, 'vectors' | 'graphReads'> = sleeper;
-      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without vectors and graphReads
+      const twoX: Omit<SleepStore, 'graphReads'> = sleeper;
+      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without graphReads
       const refused: SleepStore = twoX;
       expectTypeOf(refused).toEqualTypeOf<SleepStore>();
     });

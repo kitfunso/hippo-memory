@@ -10,7 +10,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const HEALTH_VERBS = {
   status: verb(() => import('../status.js'), 'handleStatus', {
-    needs: ['reports', 'vectors'],
+    needs: ['reports'],
     repairsCodexWrapper: true,
     flags: {},
     usage: [

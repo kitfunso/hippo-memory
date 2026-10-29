@@ -78,7 +78,7 @@ export async function autoSleepAfterWrite(
  * that ran it. */
 export async function autoSleepConsolidate(
   ctx: Pick<
-    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance' | 'vectors'>,
+    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,
     'store' | 'config' | 'tenantId' | 'infra'
   >,
 ): Promise<ConsolidationResult> {

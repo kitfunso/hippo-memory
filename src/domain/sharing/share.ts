@@ -156,7 +156,7 @@ export function transferScore(entry: MemoryEntry): number {
  *  Returns the new entry, or null if the transfer score is too low. */
 export async function shareMemory(
   local: { readonly store: StoreWith<'folderFiles'> },
-  global: ConfiguredFolder<SharingStore & StoreWith<'vectors' | 'vectorWrites'>>,
+  global: ConfiguredFolder<SharingStore>,
   id: string,
   options: { force?: boolean; tenantId: string; skipEmbed?: boolean; embed: EmbedRun },
 ): Promise<MemoryEntry | null> {

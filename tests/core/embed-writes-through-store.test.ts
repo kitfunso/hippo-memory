@@ -17,10 +17,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, type PhysicsParticle } from '../../src/entry/store-kit.js';
-import type { StoreWith } from '../../src/base/ports/store.js';
-
-// The vector groups an add-on store keeps so its embeds go through vectorWrites.
-const VECTOR_GROUPS = ['vectors', 'vectorWrites'] as const;
+import type { HippoStore } from '../../src/base/ports/store.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -76,7 +73,7 @@ interface HippoDbIndex {
 
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
-function on(hippoRoot: string, store: StoreWith<'vectors' | 'vectorWrites'>): EmbedTarget {
+function on(hippoRoot: string, store: HippoStore): EmbedTarget {
   return {
     groups: { vectors: store.vectors, vectorWrites: store.vectorWrites },
     embeddings: loadConfig(hippoRoot).embeddings,
@@ -155,7 +152,7 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
+    const side = portOnlySide(copyOf());
     const run = (): Promise<number> => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a'));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -237,9 +234,9 @@ describe('embedAll with a store', () => {
       }
       return vectorsFor('fake-a', texts);
     });
-    const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
+    const older = embedAll(on(markedFolder(), portOnlySide(root).store), undefined, held);
     await atSecondPage;
-    const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
+    const newerStore = portOnlySide(root).store;
     // The newer run is behind the older one once it asks the turn queue for its turn; that, not a pause, orders them.
     const queued = new Promise<void>((resolve) => {
       const run = embedTurns.run.bind(embedTurns);
@@ -296,7 +293,7 @@ describe('embedAll with a store', () => {
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
+    const side = portOnlySide(copyOf());
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
@@ -324,7 +321,7 @@ describe('embedAll with a store', () => {
 describe('embedMemory with a store', () => {
   it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const side = portOnlySide(copyOf(), VECTOR_GROUPS);
+    const side = portOnlySide(copyOf());
     const entry = seeded[1];
     await embedMemoryInto(on(hippoRoot, side.store), entry);
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
@@ -344,7 +341,7 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const side = portOnlySide(copyOf(oldIndexed), VECTOR_GROUPS);
+      const side = portOnlySide(copyOf(oldIndexed));
       const staleVectors = {
         ...side.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),

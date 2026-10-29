@@ -54,10 +54,6 @@ interface OptionalGroups
     ConnectorGroups,
     RecordGroups,
     ReviewGroups {
-  /** Without it recall ranks by BM25 alone and nearest answers 501. */
-  readonly vectors: VectorReads;
-  /** embedMemory and embedAll with a store need it and `vectors`. */
-  readonly vectorWrites: VectorWrites;
   /** Without it drill and assemble answer 501. */
   readonly dagReads: DagReads;
   /** Without it recall expands no graph and the graph view answers 501. */
@@ -102,8 +98,6 @@ export const OPTIONAL_GROUPS = [
   'cards',
   'conflicts',
   'rejections',
-  'vectors',
-  'vectorWrites',
   'dagReads',
   'graphReads',
   'sessions',
@@ -111,9 +105,8 @@ export const OPTIONAL_GROUPS = [
   'reports',
 ] as const satisfies readonly OptionalGroup[];
 
-/** The groups a sleep runs on: its own, the objects and graph its graph pass reads, and the
- * vectors its physics pass moves. */
-export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads' | 'vectors';
+/** The groups a sleep runs on: its own, and the objects and graph its graph pass reads. */
+export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads';
 
 /** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
  * context writes no last recall for the CLI's no-ids outcome to read. */
@@ -172,13 +165,16 @@ export interface MaintenanceGroups {
   readonly agentImport: AgentImport;
 }
 
-/** What remember, recall and context write and read, and the key writes auth makes: every store
- * sets these whole. */
+/** What remember, recall and context write and read, the vectors recall ranks by, and the key
+ * writes auth makes: every store sets these whole. */
 interface RequiredGroups {
   readonly keyWrites: KeyWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
   readonly auditLog: AuditLog;
+  readonly vectors: VectorReads;
+  /** embedMemory and embedAll write through it. */
+  readonly vectorWrites: VectorWrites;
 }
 
 /** A store a sleep can run on. */
@@ -194,16 +190,20 @@ export function hasGroup<G extends OptionalGroup>(
 ): store is StoreWith<G>;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
-  return group === 'base' || store[group] !== undefined;
+  return group === 'base' || groupsOf(store)[group] !== undefined;
 }
 
 /** The optional group's methods; a store without them throws
  * StoreNotPortedError, which answers 501 as any unported path does. */
 export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: G): StoreGroups[G] {
-  const groups: Partial<StoreGroups> = store;
-  const methods = groups[group];
+  const methods = groupsOf(store)[group];
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
+}
+
+/** The store's groups as it set them; HippoStore names only the required ones. */
+function groupsOf(store: HippoStore): Partial<StoreGroups> {
+  return store;
 }
 
 /** True when the store sets every group `needs` names; a surface asks once, as it binds a verb,
@@ -212,7 +212,8 @@ export function hasGroups<G extends OptionalGroup>(
   store: HippoStore,
   needs: readonly G[],
 ): store is StoreWith<G> {
-  return needs.every((group) => store[group] !== undefined);
+  const groups = groupsOf(store);
+  return needs.every((group) => groups[group] !== undefined);
 }
 
 /** `store` narrowed to every group `needs` names; a store without one throws StoreNotPortedError
@@ -222,7 +223,8 @@ export function requireGroups<G extends OptionalGroup>(
   needs: readonly G[],
 ): StoreWith<G> {
   if (hasGroups(store, needs)) return store;
-  const missing = needs.find((group) => store[group] === undefined);
+  const groups = groupsOf(store);
+  const missing = needs.find((group) => groups[group] === undefined);
   throw new StoreNotPortedError(store.kind, missing ?? needs.join(', '));
 }
 
@@ -239,10 +241,8 @@ export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-b
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since a lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore
-  extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
-  /** A name for logs and errors; what a store can do beyond the required groups is the optional
-   * ones it sets. */
+export interface HippoStore extends RequiredGroups {
+  /** A name for logs and errors. */
   readonly kind: string;
   /** The API key record for `keyId` with its scope grants, revoked or not; null when none
    * matches. */

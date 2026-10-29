@@ -50,10 +50,10 @@ describe('verb groups', () => {
     }
   });
 
-  it('every verb whose code reaches one of the seven groups that left the required store names it', () => {
+  it('every verb whose code reaches one of the five groups that left the required store names it', () => {
     // The feature groups each verb's code under src/surface/cli reads, found by grep, so a verb that reads one names it.
     const reached = {
-      status: ['reports', 'vectors'],
+      status: ['reports'],
       provenance: ['reports'],
       drill: ['dagReads'],
       assemble: ['dagReads'],
@@ -62,7 +62,7 @@ describe('verb groups', () => {
       failures: ['reports'],
       'daily-runner': ['reports'],
       dedup: ['reports'],
-      sleep: ['graphReads', 'vectors'],
+      sleep: ['graphReads'],
       graph: ['graphReads'],
       wm: ['sessions'],
       snapshot: ['sessions'],
@@ -71,9 +71,6 @@ describe('verb groups', () => {
       current: ['sessions'],
       'compact-resume': ['sessions'],
       goal: ['goals'],
-      embed: ['vectors'],
-      learn: ['vectors', 'vectorWrites'],
-      share: ['vectors', 'vectorWrites'],
       '__session-end-worker': ['sessions', 'reports'],
     } as const;
     const rows = new Map(Object.entries(COMMANDS));

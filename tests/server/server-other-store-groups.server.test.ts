@@ -332,15 +332,14 @@ describe('serve() under a store without the feature groups', () => {
     expect((await call('GET', '/v1/predictions', revokedA)).status).toBe(401);
   });
 
-  it('answers 501 on graph, nearest, drill and assemble after the key check, and serves remember, recall and context', async () => {
+  it('answers 501 on graph, drill and assemble after the key check, and serves remember, recall and context', async () => {
     const { adminA, revokedA } = fixture.tokens;
     expect(await call('GET', '/v1/graph?entity=Shared', adminA)).toEqual(refused);
-    expect(await call('POST', '/v1/vectors/nearest', adminA, JSON.stringify({ ids: ['mem_x'] }))).toEqual(refused);
     expect(await call('GET', '/v1/recall/drill/sum_x', adminA)).toEqual(refused);
     expect(await call('GET', '/v1/sessions/sess-x/assemble', adminA)).toEqual(refused);
     expect((await call('GET', '/v1/graph?entity=Shared', revokedA)).status).toBe(401);
 
-    const content = 'the four required groups serve the core paths';
+    const content = 'the required groups serve the core paths';
     expect((await call('POST', '/v1/memories', adminA, JSON.stringify({ content }))).status).toBe(200);
     const recalled = await call('GET', '/v1/memories?q=required%20groups', adminA);
     expect(recalled.status).toBe(200);

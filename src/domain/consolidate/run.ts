@@ -66,7 +66,7 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 /** The store a consolidation runs on: its own group, the learning group extraction writes
  * through, the lesson and audit writes its passes make, and the particles physics moves. */
 export type ConsolidationStore = StoreWith<
-  'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance' | 'vectors'
+  'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'
 >;
 
 /**

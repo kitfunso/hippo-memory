@@ -22,7 +22,7 @@ beforeAll(async () => {
     { id: 'near', tenantId: 'default', vector: [1, 0.2, 0] },
     { id: 'elsewhere', tenantId: 'other', vector: [1, 0, 0] },
   ]);
-  handle = await serveAsAdmin({ hippoRoot: root, port: 0, keep: ['vectors'] });
+  handle = await serveAsAdmin({ hippoRoot: root, port: 0 });
 });
 
 afterAll(async () => {

@@ -129,7 +129,7 @@ export interface HybridFolder {
   /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
   embeddings?: EmbeddingsConfig;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: StoreWith<never, 'vectors' | 'graphReads'>;
+  store?: StoreWith<never, 'graphReads'>;
 }
 
 /** Every ranking field, flat because the published hybridSearch and the frozen eval scripts pass
@@ -236,20 +236,19 @@ async function orderAndFit(
 }
 
 /** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from
- * `config`; a store that keeps no vectors has none, so its search ranks by BM25. */
+ * `config`. */
 export function vectorSourceOf({
   store,
   config,
   onHippoDb,
   embedderFor,
 }: {
-  store: StoreWith<never, 'vectors' | 'graphReads'>;
+  store: StoreWith<never, 'graphReads'>;
   config: Pick<HippoConfig, 'embeddings'>;
   onHippoDb?: boolean;
   embedderFor: EmbedderFor;
-}): VectorSource | undefined {
+}): VectorSource {
   const { vectors, graphReads } = store;
-  if (vectors === undefined) return undefined;
   const provider = (): EmbeddingProvider => embedderFor(config.embeddings);
   return { store, vectors, graphReads, provider, onHippoDb };
 }

@@ -275,7 +275,7 @@ beforeAll(async () => {
     hippoRoot: store,
     host: '127.0.0.1',
     port: 0,
-    keep: ['conflicts', 'dagReads', 'vectors', 'graphReads'],
+    keep: ['conflicts', 'dagReads', 'graphReads'],
   });
 });
 

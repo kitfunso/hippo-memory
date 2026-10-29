@@ -4,6 +4,7 @@ import { closeHippoDb, openHippoDb, type RequestStores } from '../../src/db/inde
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { auditRowsOn } from './audit-rows.js';
 import {
+  hasGroup,
   OPTIONAL_GROUPS,
   type HippoStore,
   type OptionalGroup,
@@ -82,7 +83,8 @@ function logged<S extends HippoStore>(store: S, calls: string[]): S {
       calls.push(name);
       return fn(...args);
     };
-  const { contextReads: c, vectors: v, sessions } = store;
+  const { contextReads: c, vectors: v } = store;
+  const sessions = hasGroup(store, 'sessions') ? store.sessions : undefined;
   return {
     ...store,
     continuity: log('continuity', store.continuity),
@@ -97,16 +99,14 @@ function logged<S extends HippoStore>(store: S, calls: string[]): S {
       ambientTallies: log('ambientTallies', c.ambientTallies),
       schemaFit: log('schemaFit', c.schemaFit),
     },
-    ...(v && {
-      vectors: {
-        embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
-        stored: (part, ids) => {
-          calls.push(`stored:${part}`);
-          return v.stored(part, ids);
-        },
-        nearestEntries: log('nearestEntries', v.nearestEntries),
-      } satisfies StoreGroups['vectors'],
-    }),
+    vectors: {
+      embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
+      stored: (part, ids) => {
+        calls.push(`stored:${part}`);
+        return v.stored(part, ids);
+      },
+      nearestEntries: log('nearestEntries', v.nearestEntries),
+    } satisfies StoreGroups['vectors'],
   };
 }
 

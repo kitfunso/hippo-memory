@@ -299,7 +299,7 @@ export const MEMORY_VERBS = {
     ],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
-    needs: ['graphReads', 'vectors'],
+    needs: ['graphReads'],
     repairsCodexWrapper: true,
     destructive: true,
     scoped: true,

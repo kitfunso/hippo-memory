@@ -175,7 +175,6 @@ export const SESSION_VERBS = {
     ],
   }),
   embed: verb(() => import('../maintenance.js'), 'handleEmbed', {
-    needs: ['vectors'],
     flags: { switches: ['global', 'reset-physics', 'status'] },
     usage: [
       `
@@ -194,7 +193,7 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../learn.js'), 'handleLearn', {
-    needs: ['lessonWrites', 'vectors', 'vectorWrites'],
+    needs: ['lessonWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
     usage: [
@@ -214,7 +213,6 @@ export const SESSION_VERBS = {
     ],
   }),
   share: verb(() => import('../transfer.js'), 'handleShare', {
-    needs: ['vectors', 'vectorWrites'],
     dryRun: {
       form: '--auto',
       honoured: (args, flags) => args[0] === '--auto' || boolFlag(flags, 'auto'),

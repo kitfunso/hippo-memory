@@ -21,7 +21,7 @@ import { type RankState, rankStages } from './rank-stages.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
-  readonly store: StoreWith<never, 'vectors' | 'graphReads'>;
+  readonly store: StoreWith<never, 'graphReads'>;
   readonly config: HippoConfig;
   readonly onHippoDb?: boolean;
 }

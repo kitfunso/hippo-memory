@@ -54,13 +54,13 @@ describe('fallback reads of optional groups', () => {
     expect(fallbackReads()).toEqual(
       [
         // 1-2. vectorSourceOf and graphStoresOf: the searched store is picked per call.
-        "src/domain/search/hybrid.ts: StoreWith<never, 'vectors' | 'graphReads'>",
         "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
-        "src/domain/search/hybrid.ts: StoreWith<never, 'vectors' | 'graphReads'>",
-        "src/domain/search/physics-search.ts: StoreWith<never, 'vectors' | 'graphReads'>",
+        "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
+        "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
+        "src/domain/search/physics-search.ts: StoreWith<never, 'graphReads'>",
         'src/domain/search/vector.ts: graphReads?: GraphReads',
         // 3. Graph expansion walks ctx.store and ctx.global.store.
-        "src/api/recall/pipeline.ts: StoreWith<never, 'vectors' | 'graphReads'>",
+        "src/api/recall/pipeline.ts: StoreWith<never, 'graphReads'>",
         "src/domain/graph/recall.ts: StoreWith<never, 'graphReads'>",
         // 4. The unfinished-handoff read on plan.local.store.
         "src/api/context/context-plan.ts: StoreWith<never, 'sessions'>",
@@ -68,7 +68,7 @@ describe('fallback reads of optional groups', () => {
         // 5. lastRecall: published entries hand in any store.
         "src/api/context/context.ts: ContextWith<never, 'lastRecall'>",
         // 6. embeddingIndex: published entries hand in any store or folder.
-        "src/domain/search/embed-memories.ts: StoreWith<never, 'embeddingIndex' | 'vectors' | 'vectorWrites'>",
+        "src/domain/search/embed-memories.ts: StoreWith<never, 'embeddingIndex'>",
         // 7. sharing and folderFiles: the published sleep entry takes any folder.
         "src/api/sleep/sleep-run.ts: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>",
       ].sort(),

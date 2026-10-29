@@ -76,7 +76,8 @@ export {
   type VectorRow,
   OTHER_STORE_MARKER,
 } from '../surface/open-store.js';
-export { runStoreConformance, type ConformanceRunner } from './store-conformance.js';
+export { runStoreConformance } from './store-conformance.js';
+export type { ConformanceRunner } from './conformance/kit.js';
 export {
   hasGroup,
   OPTIONAL_GROUPS,

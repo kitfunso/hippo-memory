@@ -72,8 +72,6 @@ describe('hippo-memory/store-kit entry types', () => {
       | 'cards'
       | 'conflicts'
       | 'rejections'
-      | 'vectors'
-      | 'vectorWrites'
       | 'dagReads'
       | 'graphReads'
       | 'sessions'
