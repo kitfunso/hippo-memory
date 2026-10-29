@@ -73,6 +73,7 @@ const LOCAL_GROUP_NAMES = [
   'connectorWrites',
   'connectorEvents',
   'rejections',
+  'lastRecall',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

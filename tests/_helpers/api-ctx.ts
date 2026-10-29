@@ -1,6 +1,6 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
 import { contextReach, type ContextReach, type ContextWith } from '../../src/api/types.js';
-import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
+import { coreEnrichment, type HippoDbContext } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
@@ -29,14 +29,15 @@ export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = a
   const store = sqliteStore(hippoRoot, evalStoreRules(undefined));
   const reach = testReach(hippoRoot, store);
   const config = loadConfig(hippoRoot);
-  return { hippoRoot, tenantId, actor, store, reach, config, infra: testInfra() };
+  return { hippoRoot, tenantId, actor, store, reach, config, infra: testInfra(), enrich: coreEnrichment(store) };
 }
 
 /** `ctx` with its store, and the local tier it carries, on `session`, so a run of calls shares one handle per store,
  * as a CLI command's do. */
 export function onSession<C extends { readonly store: HippoStore }>(ctx: C, session: RequestStores): C {
   const store = inSqliteSession(ctx.store, session);
-  return { ...ctx, store };
+  const enrich = coreEnrichment(store);
+  return { ...ctx, store, ...(enrich && { enrich }) };
 }
 
 /** The project this test process runs in, which contextGet read for itself before the surface named it. */

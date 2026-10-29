@@ -18,6 +18,7 @@ import type {
 } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
+import type { CoreEnrichment } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
@@ -95,6 +96,8 @@ export interface Context {
   /** The machine, model, embedder and rerankers this context reaches past the store, set by its
    * composition root. */
   readonly infra: InfraPorts;
+  /** What a core path reads from hippo.db's local tier, filled by a root whose store has it. */
+  readonly enrich?: CoreEnrichment;
   /** Aborts when the request passes its deadline, so a call stops starting work nobody waits
    * for. Set by a server or stdio root; the deadline itself rides in the store, whose worker
    * calls wait on it. */

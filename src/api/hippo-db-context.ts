@@ -2,6 +2,7 @@
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
 import type { HippoDbTier } from '../store/sqlite/hippo-db.js';
 import type { Context } from './types.js';
+import type { CoreEnrichment } from './enrichment.js';
 
 export type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
 
@@ -15,4 +16,12 @@ export interface HippoDbContext extends Context {
 export function hasHippoDb<S extends Context['store']>(store: S): store is S & HippoDbTier {
   // An unset tier counts as absent, as hasGroup counts an unset group.
   return 'hippoDb' in store && store.hippoDb !== undefined;
+}
+
+/** What a core path reads from `store`'s local tier; unset on a store without one. A root passes
+ * the request's own store, so each call runs under that request's deadline and session. */
+export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
+  if (!hasHippoDb(store)) return undefined;
+  const { lastRecall, sessions } = store.hippoDb;
+  return { lastRecall, handoff: sessions };
 }

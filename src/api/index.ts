@@ -93,8 +93,10 @@ export type {
   DrillDownResult,
   DrillDownSummary,
 } from './objects/drill-down.js';
-export { outcome, outcomeForLastRecall } from './memories/outcome.js';
-export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
+export { outcome } from './memories/outcome.js';
+export type { OutcomeResult } from './memories/outcome.js';
+export { outcomeForLastRecall } from './hippo-db/outcome-last-recall.js';
+export type { OutcomeForLastRecallResult } from './hippo-db/outcome-last-recall.js';
 export { forget, removalTarget } from './memories/forget.js';
 export {
   liftRejection,

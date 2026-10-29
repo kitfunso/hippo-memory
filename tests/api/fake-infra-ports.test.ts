@@ -158,7 +158,7 @@ describe('the api on fake infra ports', () => {
           explain: false,
         },
         show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
-        lastRecall: ctx.store.lastRecall,
+        lastRecall: ctx.store.hippoDb.lastRecall,
       },
     );
     expect(recalled.results.length).toBeGreaterThan(0);

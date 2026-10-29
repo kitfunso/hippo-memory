@@ -50,6 +50,7 @@ import {
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */
@@ -191,6 +192,7 @@ function contextOn(
     config,
     callers,
     infra,
+    enrich: coreEnrichment(store),
   };
 }
 

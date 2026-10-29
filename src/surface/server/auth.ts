@@ -15,6 +15,7 @@ import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types
 import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
@@ -393,7 +394,19 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const callers = opts.callers;
   const actor = bearerActor(id);
   const { store, signal } = opts;
-  return { tenantId: id.tenantId, actor, store, reach, config, callers, clientKey, infra, signal };
+  const enrich = coreEnrichment(store);
+  return {
+    tenantId: id.tenantId,
+    actor,
+    store,
+    reach,
+    config,
+    callers,
+    clientKey,
+    infra,
+    signal,
+    enrich,
+  };
 }
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its

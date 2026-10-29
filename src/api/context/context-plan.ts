@@ -1,7 +1,7 @@
 // Which stores a context call reaches and what it may spend.
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import type { ContextReads, RequiredStore, StoreWith } from '../../base/ports/store.js';
+import type { ContextReads, RequiredStore } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { ProjectRef } from '../../base/scope/project-identity.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
@@ -23,8 +23,7 @@ import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
-  /** Sessions is read only for the unfinished handoff, where its absence means none. */
-  readonly store: StoreWith<never, 'sessions'>;
+  readonly store: RequiredStore;
   readonly reads: ContextReads;
 }
 
@@ -74,7 +73,7 @@ export function globalInReach(ctx: Context): GlobalInReach {
 export const NO_QUERY = '*';
 
 /** A store's base search and context reads, both required on the port. */
-export function sourceOf(store: StoreWith<never, 'sessions'>): ContextSource {
+export function sourceOf(store: RequiredStore): ContextSource {
   return { store, reads: store.contextReads };
 }
 

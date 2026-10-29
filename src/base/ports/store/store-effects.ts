@@ -18,7 +18,6 @@ import { LEARNING_EFFECTS } from './learning.js';
 import { LEDGER_EFFECTS } from './ledger.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
-import { LAST_RECALL_EFFECTS } from './recall-writes.js';
 import { FAILURE_LOG_EFFECTS } from './rejections.js';
 import { REPORTS_EFFECTS } from './reports.js';
 import { PROMOTION_EFFECTS, SHARING_EFFECTS } from './sharing.js';
@@ -55,7 +54,6 @@ export const STORE_EFFECTS = {
   graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
   readiness: READINESS_EFFECTS,
-  lastRecall: LAST_RECALL_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,

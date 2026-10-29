@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
+import { coreEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
@@ -374,6 +375,7 @@ async function runPass(
     reach,
     config: loadConfig(root),
     infra: testInfra(),
+    enrich: coreEnrichment(served),
   };
   const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
   const result = await contextGet(ctx, opts);

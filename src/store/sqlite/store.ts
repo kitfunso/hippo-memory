@@ -35,7 +35,7 @@ import { sqliteFolderFiles } from './folder-files/folder-files.js';
 import { sqliteDagReads } from './graph/dag-reads.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
 import { sqliteLessonWrites } from './learning/lesson-writes.js';
-import { finishRecall, sqliteLastRecall } from './recall/last-recall.js';
+import { finishRecall } from './recall/last-recall.js';
 import { sqliteGraphReads } from './graph/graph-reads.js';
 import { sqliteObjects } from './records/objects.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
@@ -117,7 +117,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     objects: sqliteObjects(handles),
     readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),
-    lastRecall: sqliteLastRecall(handles),
     cards: sqliteCards(on),
     goals: sqliteGoals(on),
     conflicts: sqliteConflicts(handles),

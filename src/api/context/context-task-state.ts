@@ -64,7 +64,7 @@ async function loadRawTaskState(
     scopeFilter: 'default-deny',
   } as const;
   // A store that keeps no session rows has no handoff to offer.
-  const sessions = store.hippoDb?.sessions;
+  const sessions = ctx.enrich?.handoff;
   const handoff = sessions && (await sessions.read(ctx.tenantId, 'handoff', unfinished, key));
   return { snapshot, handoff: handoff ?? null, events: [] };
 }

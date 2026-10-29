@@ -28,6 +28,7 @@ import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are
  * the test seam. */
@@ -163,6 +164,7 @@ export function mcpApiContext(ctx: McpCaller): ApiContext {
     clientKey: mcpClientKey(ctx),
     infra: ctx.infra,
     signal: ctx.signal,
+    enrich: coreEnrichment(ctx.store),
   };
 }
 
