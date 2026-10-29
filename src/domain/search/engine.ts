@@ -4,7 +4,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RankTime, SearchResult } from '../../base/rank/search-types.js';
-import { hybridSearch, type HybridSearchOptions } from './hybrid.js';
+import { rankHybrid, type HybridSearchOptions } from './hybrid.js';
 import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
 
@@ -31,5 +31,5 @@ export function searchByEngine({
 }: SearchByEngineOptions): Promise<SearchResult[]> {
   return physics
     ? rankPhysics(query, pool, { ...options, physicsConfig: physics, source })
-    : hybridSearch(query, pool, { ...options, source });
+    : rankHybrid(query, pool, { ...options, source });
 }

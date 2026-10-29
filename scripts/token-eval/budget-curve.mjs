@@ -42,7 +42,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createMemory, Layer } from '../../dist/entry/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
-import { hybridSearch } from '../../dist/domain/search/hybrid.js';
+import { rankHybrid as hybridSearch } from '../../dist/domain/search/hybrid.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';
 import { estimateTokens } from '../../dist/base/util/token-text.js';
 import { pairedBootstrap } from '../../dist/domain/eval/eval-stats.js';

@@ -25,7 +25,7 @@ import {
 } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
-import { hybridSearch } from './hybrid.js';
+import { rankHybrid } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import {
   embedQueryBy,
@@ -109,11 +109,11 @@ export async function rankPhysics(
   const { source } = options;
   if (entries.length === 0) return [];
   // A store that keeps no vectors has no particles either, so it ranks as hybrid does on BM25.
-  if (!source) return hybridSearch(query, entries, options);
+  if (!source) return rankHybrid(query, entries, options);
   const hybrid = { ...options, source };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without
   // them.
-  if (options.asOf) return hybridSearch(query, entries, hybrid);
+  if (options.asOf) return rankHybrid(query, entries, hybrid);
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a
   // second time.
@@ -124,13 +124,13 @@ export async function rankPhysics(
     queryEmbedDeadline,
     options.queryEmbedding,
   );
-  if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
+  if (!queryVector) return rankHybrid(query, entries, { ...hybrid, queryEmbedDeadline });
   const pool = currentEntries(
     await withVectorCandidates(source.vectors, entries, queryVector, options.vectorCandidates),
     options,
   );
   const physicsMap = await loadCandidateParticles(source.vectors, pool);
-  if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
+  if (!physicsMap) return rankHybrid(query, pool, { ...hybrid, queryEmbedDeadline });
   return rankByParticles(query, pool, physicsMap, {
     queryVector,
     hybrid: { ...hybrid, queryEmbedDeadline },
@@ -164,7 +164,7 @@ async function rankByParticles(
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults =
     pools.classic.length > 0
-      ? await hybridSearch(query, pools.classic, {
+      ? await rankHybrid(query, pools.classic, {
           ...hybrid,
           vectorCandidates: undefined,
           budget: Infinity,

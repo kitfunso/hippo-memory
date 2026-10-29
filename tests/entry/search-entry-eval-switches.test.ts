@@ -7,7 +7,7 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch, search } from '../../src/entry/search.js';
 import { hybridSearchWire } from '../../src/entry/testing.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
-import { hybridSearch as rankHybrid } from '../../src/domain/search/hybrid.js';
+import { rankHybrid } from '../../src/domain/search/hybrid.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
 

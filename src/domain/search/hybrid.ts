@@ -146,7 +146,7 @@ type HybridRanking = HybridBlend &
  * names no store. */
 export type HybridSearchOptions = HybridRanking & HybridFolder;
 
-/** hybridSearch's options once the caller names its stores; the folder fields belong to the
+/** rankHybrid's options once the caller names its stores; the folder fields belong to the
  * published wrapper. */
 export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from
@@ -158,7 +158,7 @@ export type HybridRankOptions = HybridRanking & {
  * BM25 blended with cosine similarity when `source` holds vectors and a provider is available, BM25
  * * strength * recency otherwise.
  */
-export async function hybridSearch(
+export async function rankHybrid(
   query: string,
   entries: MemoryEntry[],
   options: HybridRankOptions & RankTime,

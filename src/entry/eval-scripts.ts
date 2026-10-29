@@ -1,7 +1,7 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and
 // ports wired in: a frozen script re-points its import line here and keeps every call as written.
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
-import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
+import { rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
 import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
 // Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the
@@ -44,9 +44,9 @@ export function folderIndex(
   return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, entryInfra());
 }
 
-/** The domain hybridSearch under the environment's eval switches and clock, with no folder
+/** rankHybrid under the environment's eval switches and clock, with no folder
  * defaults filled. */
-export function hybridSearch(
+export function rankHybridWithEvalSwitches(
   query: string,
   entries: MemoryEntry[],
   options: HybridRankOptions = {},

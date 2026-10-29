@@ -11,7 +11,7 @@ import {
 import { currentEntries } from '../../domain/search/as-of.js';
 import { rankStrength } from '../../domain/search/boosts.js';
 import {
-  hybridSearch,
+  rankHybrid,
   vectorSourceOf,
   type HybridRankOptions,
 } from '../../domain/search/hybrid.js';
@@ -145,7 +145,7 @@ function graphStreamSearch(
   noteGraphStreamLimits(ctx, pool);
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list
   // fusion.
-  return hybridSearch(opts.query, pool.local, {
+  return rankHybrid(opts.query, pool.local, {
     ...engineOptions(ctx, opts),
     source: vectorSourceOf(ctx),
     mmr,
@@ -163,7 +163,7 @@ function graphStreamSearch(
 
 /** Says why the graph stream will not run as asked, rather than no-op. */
 function noteGraphStreamLimits(ctx: RankRecallCtx, pool: RecallPool): void {
-  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert.
+  // Without embeddings rankHybrid falls back to BM25-only and the stream is inert.
   if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
     ctx.note?.(
       '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +

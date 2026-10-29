@@ -9,7 +9,7 @@ import {
   passesCliRecallScopeFilter,
   recallScopeFilter,
 } from '../../base/scope/recall-scope.js';
-import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
+import { rankHybrid, vectorSourceOf } from '../search/hybrid.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { fitBudget } from '../search/finalize.js';
 import {
@@ -71,7 +71,7 @@ export interface HybridSearchOptions extends SearchOptions {
   asOf?: string;
   /** Budget cost per result, spent the same way in each store and in the merged list. */
   cost?: ResultCost;
-  /** Propagated to underlying hybridSearch calls.
+  /** Propagated to underlying rankHybrid calls.
    *  Per-call > the root's HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
   /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
@@ -94,7 +94,7 @@ export type BothStoresSearch = HybridSearchOptions &
   RankTime & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
 
 /** Hybrid search across both local and global stores, using embeddings when available.
- *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
+ *  Each store ranks through rankHybrid, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
   local: ConfiguredFolder<SharingStore>,
@@ -251,11 +251,11 @@ export async function rankBothStores({
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   const shared = sharedRanking(options, vectorCandidates);
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await hybridSearch(query, entries.local, {
+  const localResults = await rankHybrid(query, entries.local, {
     ...side(false),
     source: sources.local,
   });
-  const globalResults = await hybridSearch(query, entries.global, {
+  const globalResults = await rankHybrid(query, entries.global, {
     ...side(true),
     source: sources.global,
   });

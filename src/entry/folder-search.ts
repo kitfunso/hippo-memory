@@ -14,7 +14,7 @@ import {
   type EmbedOutcome,
 } from '../domain/search/embed-memories.js';
 import {
-  hybridSearch as rankHybrid,
+  rankHybrid,
   vectorSourceOf,
   type HybridSearchOptions,
 } from '../domain/search/hybrid.js';
