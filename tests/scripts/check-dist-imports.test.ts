@@ -2,9 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { checkDistImports, distImports } from '../../scripts/checks/check-dist-imports.mjs';
+import { checkDistImports } from '../../scripts/checks/check-dist-imports.mjs';
+import { readFacts } from '../../scripts/lib/ts-facts.mjs';
 
-describe('distImports', () => {
+describe('readFacts distImports', () => {
   it('reads static, dynamic and distImport forms, skips erased types, and ignores code inside strings', () => {
     const text = [
       "import { a, type T, b as c } from '../dist/x.js';",
@@ -18,7 +19,7 @@ describe('distImports', () => {
       "const { i } = await distImport('base/t.js');",
       "const fixture = `import { zz } from '../dist/none.js'`;",
     ].join('\n');
-    expect(distImports(text, 'probe.ts')).toEqual([
+    expect(readFacts(text, 'probe.ts', ['distImports']).distImports).toEqual([
       { line: 1, spec: '../dist/x.js', fromRepo: false, names: ['a', 'b'] },
       { line: 3, spec: '../dist/y.js', fromRepo: false, names: ['default'] },
       { line: 4, spec: '../dist/z.js', fromRepo: false, names: ['d'] },

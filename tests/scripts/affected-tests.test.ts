@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { affectedTests } from '../../scripts/affected-tests.mjs';
+import { affectedTests, readArgs } from '../../scripts/affected-tests.mjs';
 
 const TREE = {
   'src/a.ts': 'export const a = 1;\n',
@@ -81,5 +81,17 @@ describe('affected-tests', () => {
     const { tests, excluded } = affectedTests(repo, ['src/a.ts']);
     expect(excluded).toEqual(['tests/eval/token-eval-ab-run.test.ts']);
     expect(tests).not.toContain('tests/eval/token-eval-ab-run.test.ts');
+  });
+});
+
+describe('affected-tests flags', () => {
+  it('reads --base <ref> and --base=<ref>, and throws on --base with no ref or a flag it does not know', () => {
+    expect(readArgs(['--base', 'main', 'src/a.ts'])).toEqual({ json: false, base: 'main', files: ['src/a.ts'] });
+    expect(readArgs(['--json', '--base=main'])).toEqual({ json: true, base: 'main', files: [] });
+    expect(readArgs([]).base).toBe('origin/next/3.0');
+    expect(() => readArgs(['--base'])).toThrow(/--base/);
+    expect(() => readArgs(['--base', '--json'])).toThrow(/--base/);
+    expect(() => readArgs(['--base='])).toThrow(/needs a ref/);
+    expect(() => readArgs(['--bogus'])).toThrow(/Unknown option '--bogus'/);
   });
 });

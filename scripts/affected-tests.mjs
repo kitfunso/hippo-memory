@@ -3,16 +3,16 @@
 // Usage: node scripts/affected-tests.mjs [--json] [--base <ref>] [changed file ...]; files default to the diff from <ref>.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, posix, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
 import ts from 'typescript';
-import { distImports } from './checks/check-dist-imports.mjs';
+import { listSources, SOURCE } from './lib/source-files.mjs';
 import { EVAL_TESTS } from './lib/test-classes.mjs';
 import { readFacts } from './lib/ts-facts.mjs';
 
 const SCANNED = ['src', 'tests', 'scripts', 'benchmarks', 'evals', 'bin'];
-const SOURCE = /\.(?:ts|mts|cts|js|mjs|cjs)$/;
 const TEST = /^tests\/.*\.test\.(?:ts|mjs)$/;
 const PACKAGE = /^hippo-memory(?:\/|$)/;
 const LOADERS = /^(?:require|vi\.(?:mock|doMock|importActual|importMock))$/;
@@ -20,15 +20,6 @@ const LOADERS = /^(?:require|vi\.(?:mock|doMock|importActual|importMock))$/;
 const TEXT = { dist: '#dist', docs: '#docs', src: '#src' };
 const BY_NAME = '#package';
 const TEXT_SEGMENT = /(?:^|[/\\])(dist|docs|src)(?:[/\\]|$)/;
-
-function listSources(root, dir) {
-  if (!existsSync(join(root, dir))) return [];
-  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
-    const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : listSources(root, rel);
-    return SOURCE.test(entry.name) ? [rel] : [];
-  });
-}
 
 /** The repo file at `target`: dist/<x>.js is src/<x>.ts, and a .js name is its .ts source. */
 function fileAt(files, target) {
@@ -54,9 +45,9 @@ const literalPath = (args) =>
 const isText = (node) =>
   ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
 
-/** The specifiers a source loads at run time (imports tsc keeps, `import()`, require, vi.mock) and its other strings. */
+/** What a source loads at run time (imports tsc keeps, `import()`, require, vi.mock, dist/ files) and its other strings. */
 function readSource(text, file) {
-  const { sourceFile, imports } = readFacts(text, file, ['imports']);
+  const { sourceFile, imports, distImports } = readFacts(text, file, ['imports', 'distImports']);
   const specs = imports.filter((i) => !i.typeOnly).map((i) => i.spec);
   const specNodes = new Set();
   const strings = [];
@@ -75,7 +66,7 @@ function readSource(text, file) {
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return { specs, strings };
+  return { specs, strings, distImports };
 }
 
 /** The source file a string names from `dir` or the repo root, with a dist/ path read as its src source. */
@@ -91,14 +82,14 @@ function namedSource(files, dir, s) {
 /** The files and virtual nodes `file` reaches; only files outside src count as reading the tree as text. */
 function edgesOf(root, files, file) {
   const text = readFileSync(join(root, file), 'utf8');
-  const { specs, strings } = readSource(text, file);
+  const { specs, strings, distImports } = readSource(text, file);
   const dir = posix.dirname(file);
   const to = new Set();
   for (const spec of specs) {
     if (PACKAGE.test(spec)) to.add(BY_NAME);
     else if (spec.startsWith('.')) to.add(fileAt(files, posix.join(dir, spec)));
   }
-  for (const imp of distImports(text, file)) to.add(fileAt(files, imp.fromRepo ? imp.spec : posix.join(dir, imp.spec)));
+  for (const imp of distImports) to.add(fileAt(files, imp.fromRepo ? imp.spec : posix.join(dir, imp.spec)));
   // A module a file starts by path (a worker, a child, `new URL(path, import.meta.url)`) is reached as an import is.
   for (const s of strings) {
     const named = namedSource(files, dir, s);
@@ -159,25 +150,61 @@ export function affectedTests(root, changed) {
   };
 }
 
-function changedSince(base) {
-  try {
-    const out = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8', timeout: 30_000 });
-    return out.split('\n').filter(Boolean);
-  } catch (err) {
-    console.error(`affected-tests: git diff against ${base} failed (${err.message.split('\n')[0]}).`);
-    console.error('Fix: fetch the base (git fetch origin), pass --base <ref>, or name the changed files as arguments.');
-    process.exit(2);
-  }
+/** The files changed from `base` in the repo at `root`, whatever folder the command runs from. */
+export function changedSince(root, base) {
+  const out = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  return out.split('\n').filter(Boolean);
+}
+
+const USAGE = 'node scripts/affected-tests.mjs [--json] [--base <ref> | --base=<ref>] [changed file ...]';
+
+/**
+ * The command's flags and named files; a flag it does not know, or `--base` with no ref, throws.
+ * @param {readonly string[]} args
+ * @returns {{ json: boolean, base: string, files: string[] }}
+ */
+export function readArgs(args) {
+  const { values, positionals } = parseArgs({
+    args: [...args],
+    options: { json: { type: 'boolean', default: false }, base: { type: 'string', default: 'origin/next/3.0' } },
+    allowPositionals: true,
+  });
+  if (values.base === '') throw new Error("Option '--base' needs a ref, as in --base=origin/next/3.0");
+  return { json: values.json, base: values.base, files: positionals };
+}
+
+function fail(problem, fix) {
+  console.error(`affected-tests: ${problem}`);
+  console.error(`Fix: ${fix}`);
+  process.exit(2);
 }
 
 // Guarded so the test can import affectedTests without running the command.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const args = process.argv.slice(2);
-  const at = args.indexOf('--base');
-  const named = args.filter((a, i) => !a.startsWith('--') && (at < 0 || i !== at + 1));
-  const changed = named.length > 0 ? named : changedSince(at >= 0 ? args[at + 1] : 'origin/next/3.0');
-  const { tests, excluded } = affectedTests(resolve(import.meta.dirname, '..'), changed);
-  if (args.includes('--json')) {
+  let args;
+  try {
+    args = readArgs(process.argv.slice(2));
+  } catch (err) {
+    fail(err.message, `run ${USAGE}`);
+  }
+  const root = resolve(import.meta.dirname, '..');
+  let changed = args.files;
+  if (changed.length === 0) {
+    try {
+      changed = changedSince(root, args.base);
+    } catch (err) {
+      fail(
+        `git diff against ${args.base} failed (${err.message.split('\n')[0]}).`,
+        'fetch the base (git fetch origin), pass --base <ref>, or name the changed files as arguments.',
+      );
+    }
+  }
+  const { tests, excluded } = affectedTests(root, changed);
+  if (args.json) {
     console.log(JSON.stringify({ changed, tests, excluded }, null, 2));
   } else {
     for (const test of tests) console.log(test);
