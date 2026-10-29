@@ -68,7 +68,7 @@ describe('first-party hook command lines', () => {
     expect(ignored).toEqual([]);
     expect([...verbs].sort()).toEqual([
       'capture', 'capture-error', 'compact-resume', 'context', 'last-sleep', 'post-compact', 'pre-compact', 'recall', 'remember',
-      'session-end',
+      'session-end', 'status',
     ]);
   });
 });

@@ -5,6 +5,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "hippo status >/dev/null 2>&1 || echo 'No hippo store found. Run: hippo init'",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "hippo last-sleep || true",
             "timeout": 5
           }

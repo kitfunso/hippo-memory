@@ -85,7 +85,7 @@ claude-code-plugin/
 | Memory model | Decay + retrieval strengthening | Save everything |
 | API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
 | Cross-tool | Works across Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| Token cost | No session-start call; the per-prompt block, sent again only when it changes | Variable |
+| Token cost | No session-start context call; the per-prompt block, sent again only when it changes | Variable |
 | Outcome feedback | Yes (strengthens/weakens memories) | No |
 | Error priority | 2x half-life for errors | No distinction |
 | Memecoin | No | Yes ($CMEM on Solana) |

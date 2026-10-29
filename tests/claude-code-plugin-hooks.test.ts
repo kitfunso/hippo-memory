@@ -23,6 +23,10 @@ describe('Claude Code plugin hook manifest', () => {
   it('delivers memories through the per-prompt hook alone, with no context call at session start', () => {
     expect(commands('SessionStart').filter((c) => c.startsWith('hippo context'))).toEqual([]);
     expect(commands('SessionStart').some((c) => c.startsWith('hippo last-sleep'))).toBe(true);
+    // The hint costs no tokens with a store: `hippo status` exits 0 and its output goes to /dev/null.
+    expect(commands('SessionStart').filter((c) => c.includes('hippo init'))).toEqual([
+      "hippo status >/dev/null 2>&1 || echo 'No hippo store found. Run: hippo init'",
+    ]);
     expect(commands('UserPromptSubmit').some((c) => c.startsWith('hippo context --pinned-only --include-recent 5 --format additional-context'))).toBe(true);
   });
 
