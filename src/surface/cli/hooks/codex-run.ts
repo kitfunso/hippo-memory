@@ -11,6 +11,7 @@ import { exitAfterFlush } from '../../../base/util/crash-handlers.js';
 import { ignoringCodes } from '../../../base/util/expected-errors.js';
 import { cmdShimArgs, npmShimEntry } from '../../../host/spawn-argv.js';
 import { printError } from '../output.js';
+import { CliExit } from '../exit.js';
 import { handleLastSleep } from '../last-sleep.js';
 import type { CommandContext } from '../flag-values.js';
 import { handleCodexSessionEndWorker } from './codex-session-end-worker.js';
@@ -51,7 +52,12 @@ function spawnRealCodex(
   return spawn(realCodexPath, forwardArgs, { cwd, stdio: 'inherit', windowsHide: false });
 }
 
-export function handleCodexRun({ cli, hippoRoot, tenantId, args }: CommandContext): void {
+export async function handleCodexRun({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+}: CommandContext): Promise<void> {
   const realCodexPath = installedRealCodexPath();
   const startedAtMs = Date.now();
   // Codex reads CODEX_HOME at each launch, so resolve it now; the log path is the installer's own,
@@ -74,18 +80,24 @@ export function handleCodexRun({ cli, hippoRoot, tenantId, args }: CommandContex
     exitAfterFlush(1);
   });
 
-  child.on('exit', async (code, signal) => {
-    await launchCodexSessionEndWorker({
-      cli,
-      hippoRoot,
-      tenantId,
-      historyPath,
-      startOffsetBytes,
-      startedAtMs,
-      logFile,
-    });
-    exitLikeChild(code, signal);
+  const end = await new Promise<ChildEnd>((resolve) =>
+    child.on('exit', (code, signal) => resolve({ code, signal })),
+  );
+  await launchCodexSessionEndWorker({
+    cli,
+    hippoRoot,
+    tenantId,
+    historyPath,
+    startOffsetBytes,
+    startedAtMs,
+    logFile,
   });
+  endLikeChild(end);
+}
+
+interface ChildEnd {
+  readonly code: number | null;
+  readonly signal: NodeJS.Signals | null;
 }
 
 interface CodexSessionEndWorkerOptions {
@@ -169,15 +181,17 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
   });
 }
 
-function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void {
-  if (signal) {
-    // Cannot re-raise the child's signal on this platform; a non-zero exit still reports the
-    // failure.
-    const raised = ignoringCodes(['ESRCH', 'EPERM', 'ENOSYS', 'ERR_UNKNOWN_SIGNAL'], () =>
-      process.kill(process.pid, signal),
-    );
-    if (raised === undefined) process.exit(1);
-    return;
-  }
-  process.exit(code ?? 0);
+/** Ends the command as Codex ended, through the CLI root, which runs this command's held writes
+ * first; a signal is raised again at exit, after them. */
+function endLikeChild({ code, signal }: ChildEnd): void {
+  if (signal) process.once('exit', () => raiseAgain(signal));
+  const exitCode = signal ? 1 : (code ?? 0);
+  if (exitCode !== 0) throw new CliExit(exitCode);
+}
+
+function raiseAgain(signal: NodeJS.Signals): void {
+  // Cannot re-raise the child's signal on this platform; the exit code 1 still reports the failure.
+  ignoringCodes(['ESRCH', 'EPERM', 'ENOSYS', 'ERR_UNKNOWN_SIGNAL'], () =>
+    process.kill(process.pid, signal),
+  );
 }
