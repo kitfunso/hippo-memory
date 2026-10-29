@@ -26,9 +26,14 @@ export function withEntryInfra<C extends { readonly infra?: EntryInfraPorts }>(
   return { ...ctx, infra: { ...infra, failureNotices: infra.failureNotices ?? entryNotices } };
 }
 
-/** `fn` with the entry's real ports filled into a Context its caller built without them. */
+/** `fn` with the entry's real ports filled into a Context its caller built without them. It keeps
+ * `fn`'s name and length, since a published entry built here reads as the function it wraps. */
 export function filled<A extends unknown[], R>(
   fn: (ctx: Context, ...args: A) => R,
 ): (ctx: EntryContext, ...args: A) => R {
-  return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
+  const entry = (ctx: EntryContext, ...args: A): R => fn(withEntryInfra(ctx), ...args);
+  return Object.defineProperties(entry, {
+    name: { value: fn.name },
+    length: { value: fn.length },
+  });
 }
