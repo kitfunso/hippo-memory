@@ -223,11 +223,11 @@ hippo context --auto --budget 1500
 hippo snapshot clear
 ```
 
-`hippo context --auto` includes the active task snapshot before long-term memories, so agents get both the immediate thread and the deeper lessons.
+`hippo context --auto` prints the active task snapshot before long-term memories when the calling session saved it, so agents get both the immediate thread and the deeper lessons. A snapshot from another session prints as one line that names the command that shows it.
 
 ### Session event trails
 
-Manual snapshots are useful, but real work also needs a breadcrumb trail. Hippo can now store short session events and link them to the active snapshot so context output shows the latest steps, not just the last summary.
+Manual snapshots are useful, but real work also needs a breadcrumb trail. Hippo can now store short session events and link them to the active snapshot so context output shows the latest steps, not just the last summary. The trail prints for the calling session's own snapshot; for another session's, the command in the pointer line prints it.
 
 ```bash
 hippo session log \
@@ -825,7 +825,7 @@ hippo hook install opencode      # patches AGENTS.md + installs the opencode TS 
 ```
 
 This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the agent to:
-1. Run `hippo context --auto --budget 1500` at session start
+1. Run `hippo context --auto --budget 1500` at the start of a task. In Claude Code and Codex, whose prompt hook already injects pinned rules and matching memories, only if no hippo memory block has appeared in the session
 2. Run `hippo remember "<what went wrong and why>" --error` the moment it finds out why something failed, never as a closing step
 3. Everywhere but Claude Code, whose own auto memory does this job: run a plain `hippo remember` the moment it learns something that should outlive the session, leaving out secrets and personal details
 4. Capture a short summary with `hippo capture --stdin` when the session ends, but only where no hook captures the session: Cursor, OpenClaw, OpenCode, Pi, and Codex without its wrapper
@@ -858,11 +858,9 @@ For GitHub Copilot, when `$COPILOT_HOME` (else `~/.copilot`) or a VS Code User f
 ````markdown
 ## Project Memory (Hippo)
 
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 ```bash
 hippo context --auto --budget 1500
 ```
@@ -1103,7 +1101,7 @@ node run.mjs --adapter all
 
 ### How do I give Claude Code memory between sessions?
 
-Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
+Run `npm install -g hippo-memory`, then `hippo init` in the project. If the project has a `CLAUDE.md`, init adds a short block saying the prompt hook injects pinned rules and matching memories, and asking Claude to run `hippo context --auto` at the start of a task only if no hippo memory block has appeared. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. `hippo init --scan ~` gives every git repo under your home folder a store and installs the same hooks, but adds no block to any `CLAUDE.md`. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
 
 ### How do I give Cursor memory between sessions?
 

@@ -17,7 +17,8 @@ import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import { type SessionTurn } from '../capture/transcript.js';
-import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
+import { copilotTranscriptFor } from '../capture/copilot-transcript.js';
+import { SESSION_ID_RE } from '../util/session-id.js';
 import {
   loadTurnPosition,
   runSessionWorker,

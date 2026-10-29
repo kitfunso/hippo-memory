@@ -97,8 +97,10 @@ const cards = [
       <p>
         The import skips hippo's own block and any duplicates. After that, <code>hippo sleep</code> at the end of each
         session also imports new entries from Claude Code's <code>MEMORY.md</code> files, so auto memory notes reach the
-        store your other agents read. <code>hippo init</code> adds a short block to <code>CLAUDE.md</code> telling Claude
-        to run <code>hippo context --auto</code> when a session starts, and leaves the rest of the file alone. The
+        store your other agents read. <code>hippo init</code> adds a short block to <code>CLAUDE.md</code> saying the
+        prompt hook injects pinned rules and matching memories, and asking Claude to run
+        <code>hippo context --auto</code> at the start of a task only if no hippo memory block has appeared. It leaves
+        the rest of the file alone. The
         <a class="link" href="/claude-code/">Claude Code page</a> covers the hooks.
       </p>
     </Section>

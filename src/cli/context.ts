@@ -12,7 +12,9 @@ import * as api from '../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../api/context.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
-import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
+import {
+  contextBlockLines, contextCost, crossProjectLines, handoffSectionText, settleTokens, snapshotSectionText,
+} from '../api/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
@@ -33,7 +35,7 @@ import {
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { printSessionEvents, captureConsole } from './print.js';
 import {
   hostSessionId,
   hookStoreRoot,
@@ -228,6 +230,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     crossProject,
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
+    // JSON stays whole for the programs that parse it; every text format points to another session's state.
+    continuity: input.format === 'json' ? 'full' : 'pointer',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
@@ -277,10 +281,10 @@ function renderContextMarkdown(view: ContextView): void {
   const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
   const text = settleTokens((t) => captureConsole(() => {
     if (result.activeSnapshot) {
-      printActiveTaskSnapshot(result.activeSnapshot);
+      console.log(snapshotSectionText(result.activeSnapshot, result.snapshotMode ?? 'full'));
     }
     if (result.sessionHandoff) {
-      printHandoff(result.sessionHandoff);
+      console.log(handoffSectionText(result.sessionHandoff, result.handoffMode ?? 'full'));
     }
     if (result.recentEvents && result.recentEvents.length > 0) {
       printSessionEvents(result.recentEvents);
