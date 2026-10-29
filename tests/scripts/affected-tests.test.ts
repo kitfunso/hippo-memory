@@ -10,6 +10,8 @@ const TREE = {
   'src/b.ts': "import { a } from './a.js';\nexport const b = a;\n",
   'src/c.ts': 'export const c = 3;\n',
   'src/types.ts': 'export type T = number;\n',
+  'src/runner.ts': "export const ENTRY = new URL('../dist/worker-entry.js', import.meta.url);\n",
+  'src/worker-entry.ts': 'export {};\n',
   'bin/hippo.js': "import '../dist/c.js';\n",
   'docs/guide.md': '# Guide\n',
   'scripts/reads-a.mjs': "import { a } from '../src/a.js';\n",
@@ -26,6 +28,7 @@ const TREE = {
   'tests/reads-src.test.ts': "const text = readFileSync(join(root, 'src', 'c.ts'), 'utf8');\n",
   'tests/runs-bin.process.test.ts': "spawnSync(process.execPath, [join(root, 'bin', 'hippo.js')]);\n",
   'tests/unrelated.test.ts': 'export {};\n',
+  'tests/runs-worker.server.test.ts': "import { ENTRY } from '../src/runner.js';\n",
   'tests/eval/token-eval-ab-run.test.ts': "import { a } from '../../src/a.js';\n",
 } satisfies Readonly<Record<string, string>>;
 
@@ -50,6 +53,11 @@ describe('affected-tests', () => {
       expect.arrayContaining(['tests/through-dist.test.ts', 'tests/through-helper.test.ts']),
     );
     expect(testsFor('src/types.ts')).not.toContain('tests/type-only.test.ts');
+  });
+
+  it('follows a module src starts by path, as new URL(dist path, import.meta.url) names it', () => {
+    expect(testsFor('src/worker-entry.ts')).toContain('tests/runs-worker.server.test.ts');
+    expect(testsFor('src/worker-entry.ts')).not.toContain('tests/unrelated.test.ts');
   });
 
   it('picks a test that imports the package by name when src changed, and only then', () => {

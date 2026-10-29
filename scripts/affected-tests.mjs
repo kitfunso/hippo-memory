@@ -78,6 +78,16 @@ function readSource(text, file) {
   return { specs, strings };
 }
 
+/** The source file a string names from `dir` or the repo root, with a dist/ path read as its src source. */
+function namedSource(files, dir, s) {
+  if (!SOURCE.test(s)) return undefined;
+  for (const target of [posix.join(dir, s), posix.normalize(s)]) {
+    const at = target.startsWith('dist/') ? fileAt(files, target) : target;
+    if (files.has(at)) return at;
+  }
+  return undefined;
+}
+
 /** The files and virtual nodes `file` reaches; only files outside src count as reading the tree as text. */
 function edgesOf(root, files, file) {
   const text = readFileSync(join(root, file), 'utf8');
@@ -89,15 +99,17 @@ function edgesOf(root, files, file) {
     else if (spec.startsWith('.')) to.add(fileAt(files, posix.join(dir, spec)));
   }
   for (const imp of distImports(text, file)) to.add(fileAt(files, imp.fromRepo ? imp.spec : posix.join(dir, imp.spec)));
+  // A module a file starts by path (a worker, a child, `new URL(path, import.meta.url)`) is reached as an import is.
+  for (const s of strings) {
+    const named = namedSource(files, dir, s);
+    if (named) to.add(named);
+  }
   if (!file.startsWith('src/')) {
     for (const s of strings) {
       const folder = TEXT_SEGMENT.exec(s)?.[1];
       if (folder) to.add(TEXT[folder]);
       // bin/hippo.js loads dist/cli.js, so a file that runs it reads the build.
       if (s.includes('bin/hippo.js')) to.add(TEXT.dist);
-      // A helper a test starts by path (a child process or a worker) is reached as an import is.
-      const named = SOURCE.test(s) ? [posix.join(dir, s), posix.normalize(s)].find((f) => files.has(f)) : undefined;
-      if (named) to.add(named);
     }
   }
   to.delete(null);
