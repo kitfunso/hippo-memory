@@ -8,11 +8,11 @@ import { writeEntriesTogether } from './root-forms.js';
 const PAGE = { limit: 500 };
 
 export const rawProvenanceAt = (root: string): Promise<RawProvenancePage> =>
-  sqliteStore(root).reports.rawProvenance(PAGE);
+  sqliteStore(root).hippoDb.reports.rawProvenance(PAGE);
 
 /** The links a fresh store gives for `rows`, written as they are, and read back through the join. */
 export async function correctionLinksOfRows(rows: readonly MemoryEntry[]): Promise<CorrectionLink[]> {
   const root = makeRoot('report-links');
   writeEntriesTogether(root, rows);
-  return (await sqliteStore(root).reports.correctionLinks(PAGE)).links;
+  return (await sqliteStore(root).hippoDb.reports.correctionLinks(PAGE)).links;
 }

@@ -178,8 +178,8 @@ describe('reports group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'x', score: 0.9 }]);
-    const sync = sqliteStore(r).reports;
-    const served = sqliteStore(r).reports;
+    const sync = sqliteStore(r).hippoDb.reports;
+    const served = sqliteStore(r).hippoDb.reports;
     const status = await served.memoryStatus(T, new Date(), 0.1);
     expect(status).toMatchObject({ total: 2, openConflicts: 1 });
     expect((await sync.memoryStatus(T, new Date(), 0.1)).total).toBe(2);

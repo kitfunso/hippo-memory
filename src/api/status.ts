@@ -36,7 +36,7 @@ export async function storeStatus(
   atRiskBelow: number,
 ): Promise<StoreStatus> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  const { reports } = ctx.store;
+  const { reports } = ctx.store.hippoDb;
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
 }
 
@@ -51,7 +51,7 @@ export async function tenantStatus(
   now: Date,
   atRiskBelow: number,
 ): Promise<TenantStatus> {
-  const tallies = await ctx.store.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
+  const tallies = await ctx.store.hippoDb.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
   const avgStrength = tallies.total > 0 ? tallies.strengthSum / tallies.total : 0;
   return { ...tallies, avgStrength };
 }
@@ -87,7 +87,7 @@ export async function memoryDetail(
  * admin only. */
 export async function lastSleepAt(ctx: ContextWith<'reports'>): Promise<string | undefined> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  const runs = (await ctx.store.reports.stats()).consolidation_runs;
+  const runs = (await ctx.store.hippoDb.reports.stats()).consolidation_runs;
   const last = Array.isArray(runs) ? runs[runs.length - 1] : undefined;
   const at = isJsonObject(last) ? last['timestamp'] : undefined;
   return isJsonString(at) ? at : undefined;
@@ -141,7 +141,7 @@ export async function correctionLatencyReport(
   ctx: ContextWith<'reports'>,
 ): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildCorrectionLatency(await allCorrectionLinks(ctx.store.reports));
+  return buildCorrectionLatency(await allCorrectionLinks(ctx.store.hippoDb.reports));
 }
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin
@@ -150,5 +150,5 @@ export async function provenanceCoverageReport(
   ctx: ContextWith<'reports'>,
 ): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildProvenanceCoverage(await allRawProvenance(ctx.store.reports));
+  return buildProvenanceCoverage(await allRawProvenance(ctx.store.hippoDb.reports));
 }

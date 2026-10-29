@@ -41,17 +41,21 @@ interface CountingStore<S extends HippoStore> {
 
 function counting<S extends Needed>(store: S): CountingStore<S> {
   let reads = 0;
-  const counted = { ...store };
-  for (const group of NEEDED) {
-    const value = store[group];
-    Object.defineProperty(counted, group, {
+  const countedReads = <H, K extends keyof H>(holder: H, group: K): void => {
+    const value = holder[group];
+    Object.defineProperty(holder, group, {
       enumerable: true,
       get: () => {
         reads += 1;
         return value;
       },
     });
-  }
+  };
+  // A group on hippo.db's local tier is read through `hippoDb`, so its count sits on the tier's copy.
+  const tier = { ...store.hippoDb };
+  const counted = { ...store, hippoDb: tier };
+  countedReads(counted, 'dagReads');
+  countedReads(tier, 'reports');
   return { store: counted, reads: () => reads };
 }
 

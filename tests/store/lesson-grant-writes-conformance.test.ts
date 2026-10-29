@@ -93,7 +93,7 @@ describe('LessonWrites', () => {
             TENANT_A,
           )
           .then((rows) => rows.map((e) => [e.content, e.scope])),
-      (_g, s) => s.reports.stats().then((stats) => stats.total_remembered),
+      (_g, s) => s.hippoDb.reports.stats().then((stats) => stats.total_remembered),
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((held: { content: string }) => held.content) : o;

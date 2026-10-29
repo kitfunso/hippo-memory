@@ -24,7 +24,7 @@ export type AutoSleepStart = Omit<AutoSleepHost, 'latch'>;
 
 /** The count a host binds on a store that keeps the report reads. */
 export function newRowsOn(store: StoreWith<'reports'>): AutoSleepHost['newSince'] {
-  return (tenantId, now) => store.reports.createdSinceLastSleep(tenantId, now);
+  return (tenantId, now) => store.hippoDb.reports.createdSinceLastSleep(tenantId, now);
 }
 
 /** A host for one folder's auto-sleep, its latch free. */

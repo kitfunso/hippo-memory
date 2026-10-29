@@ -5,7 +5,7 @@ import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { embedCoverage, memoryEmbedMissing, storedVectorCount } from '../../api/embeddings.js';
-import { memoryCountAll } from '../../api/memories/memories.js';
+import { memoryCountAll } from '../../api/hippo-db/memory-count.js';
 import { type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';

@@ -4,7 +4,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { RequiredStore } from '../../base/ports/store.js';
-import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
+import { requireHostAdmin, type Context } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 
@@ -65,12 +65,6 @@ export async function memoryList(
     all.push(...page);
   }
   return all;
-}
-
-/** How many memory rows the whole store holds, counted in SQL. */
-export async function memoryCountAll(ctx: ContextWith<'reports'>): Promise<number> {
-  requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.reports.countEntries();
 }
 
 /** The rows in reach among `ids`; a missing id or one out of reach is absent. */

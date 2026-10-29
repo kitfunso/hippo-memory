@@ -221,7 +221,7 @@ describe('Dormant', () => {
       (g) => g.forget(TENANT_A, ALICE, rows.mine!.id, 'me'),
       (g) => g.list(TENANT_A, ALICE, {}),
       (_g, s) => s.entriesByIds([rows.d1!.id], TENANT_A),
-      (_g, s) => s.reports.stats().then((stats) => stats.total_forgotten),
+      (_g, s) => s.hippoDb.reports.stats().then((stats) => stats.total_forgotten),
     ]);
     const listed = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((m: { content: string }) => m.content) : o;

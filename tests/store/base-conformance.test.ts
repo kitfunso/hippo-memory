@@ -222,7 +222,7 @@ describe('HippoStore base writes', () => {
           .then((found) => found.map((e) => [e.retrievalCount, e.strength, e.lastRetrieved])),
       (s) => s.entriesByIds([id('b')], TENANT_B).then((found) => found.map((e) => e.retrievalCount)),
       (s) => s.bumpRecallStats(2),
-      (s) => s.reports.stats().then((stats) => stats.total_recalled),
+      (s) => s.hippoDb.reports.stats().then((stats) => stats.total_recalled),
       (s) =>
         s.recordTokens({
           tenantId: TENANT_A,
@@ -242,8 +242,8 @@ describe('HippoStore base writes', () => {
           tokens: 80,
           hash: 'h1',
         }),
-      (s) => s.reports.tokenUse(TENANT_A, new Date(START).toISOString()),
-      (s) => s.reports.tokenUse(TENANT_B, new Date(START).toISOString()),
+      (s) => s.hippoDb.reports.tokenUse(TENANT_A, new Date(START).toISOString()),
+      (s) => s.hippoDb.reports.tokenUse(TENANT_B, new Date(START).toISOString()),
     ]);
     expect(outcomes[5]).toMatchObject({
       value: { classTag: 'deploy-work', tiebreak: false, baserate: { nClosed: 2 } },

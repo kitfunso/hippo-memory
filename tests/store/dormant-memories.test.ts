@@ -582,7 +582,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       [ids[0], 'test', { dormant: true }],
     ]);
     // Counted like forget and archiveRaw (review finding on PR #227).
-    expect(Number((await sqliteStore(home).reports.stats()).total_forgotten)).toBe(1);
+    expect(Number((await sqliteStore(home).hippoDb.reports.stats()).total_forgotten)).toBe(1);
   });
 });
 

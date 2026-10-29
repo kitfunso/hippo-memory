@@ -43,7 +43,10 @@ export function tokenSummary(
   ctx: ContextWith<'reports'>,
   opts: { days?: number } = {},
 ): Promise<TokenSummary> {
-  return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
+  return ctx.store.hippoDb.reports.tokenUse(
+    ctx.tenantId,
+    reportWindowStart(opts.days, ctx.infra.clock()),
+  );
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default
@@ -52,7 +55,10 @@ export function failureSummary(
   ctx: ContextWith<'reports'>,
   opts: { days?: number } = {},
 ): Promise<FailureSummary> {
-  return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
+  return ctx.store.hippoDb.reports.failures(
+    ctx.tenantId,
+    reportWindowStart(opts.days, ctx.infra.clock()),
+  );
 }
 
 function reportWindowStart(days: number | undefined, now: Date): string {
