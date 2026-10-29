@@ -120,8 +120,8 @@ export async function handleForget(cmd: CommandContext): Promise<void> {
   }
 }
 
-async function invalidateChurn(cmd: CommandContext, flags: CommandContext['flags']): Promise<void> {
-  const { args } = cmd;
+async function invalidateChurn(cmd: CommandContext): Promise<void> {
+  const { args, flags } = cmd;
   if (args[0] || hasFlag(flags, 'id')) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     fail('--churn takes no pattern or --id.');
@@ -163,7 +163,7 @@ async function invalidateChurn(cmd: CommandContext, flags: CommandContext['flags
 export async function handleInvalidate(cmd: CommandContext): Promise<void> {
   const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
-  if (boolFlag(flags, 'churn')) return invalidateChurn(cmd, flags);
+  if (boolFlag(flags, 'churn')) return invalidateChurn(cmd);
   const target = args[0];
   if (flagValueless(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode (pattern mode writes
