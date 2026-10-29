@@ -15,7 +15,6 @@ import {
   vectorSourceOf,
   type HybridRankOptions,
 } from '../../domain/search/hybrid.js';
-import { searchByEngine } from '../../domain/search/engine.js';
 import {
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
   type RankTime,
@@ -233,12 +232,6 @@ export async function searchPool(
   }));
 }
 
-/** Physics takes no MMR. An explain run under it also drops the result floor and superseded
- * rows, so its output stays steady; asOf always stays, or later rows leak. */
-function physicsOptions(engine: EngineOptions, explain: boolean): EngineOptions {
-  return explain ? { ...engine, minResults: undefined, includeSuperseded: undefined } : engine;
-}
-
 async function engineSearch(
   ctx: RankRecallCtx,
   opts: SettledOptions,
@@ -264,14 +257,14 @@ async function engineSearch(
       options: { ...engine, explain, scope, mmr, mmrLambda, localBump: opts.localBump },
     });
   }
-  const physics = opts.usePhysics ? opts.physicsConfig : null;
-  const tuned = physics ? physicsOptions(engine, explain) : { ...engine, mmr, mmrLambda };
-  return searchByEngine({
+  return hybridSearch(query, pool.local, {
+    ...engine,
     source: vectorSourceOf(ctx),
-    query,
-    pool: pool.local,
-    physics,
-    options: { ...tuned, explain, scope, vectorCandidates },
+    mmr,
+    mmrLambda,
+    explain,
+    scope,
+    vectorCandidates,
   });
 }
 

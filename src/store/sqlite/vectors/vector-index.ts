@@ -1,21 +1,7 @@
-// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows:
-// every read and write of the three.
-import {
-  getMeta,
-  setMeta,
-  withReadSnapshot,
-  withWriteScope,
-  type DatabaseSyncLike,
-} from '../../../db/index.js';
-import {
-  physicsSpeedSum,
-  loadAllPhysicsState,
-  loadPhysicsState,
-  resetPhysicsFromSeeds,
-  savePhysicsState,
-  type ParticleSeed,
-} from '../../../db/physics-state.js';
-import type { OnHandle, StoreModel } from '../runtime/open.js';
+// Owns hippo.db's stored vectors and the identity of the model that built them: every read and
+// write of the two.
+import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import type { OnHandle } from '../runtime/open.js';
 import {
   embeddingIndexIdentity,
   indexedModel,
@@ -23,15 +9,9 @@ import {
   replacesIndex,
 } from '../../../base/embeddings/index-identity.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
-import type { PhysicsParticle } from '../../../base/rank/physics.js';
-import { initializeParticle } from '../../../base/rank/physics.js';
-import { float32ToBuffer } from '../../../base/util/vector-codec.js';
-import { ALL_TENANTS } from '../../../base/util/tenant.js';
-import type { RecallCursor, RecallPage } from '../../../base/ports/store/consolidation.js';
 import { tenantAnd } from '../runtime/tenant.js';
 import type {
   VectorBackfillQuery,
-  VectorRowWrite,
   VectorWrite,
   VectorWriteResult,
 } from '../../../base/ports/store.js';
@@ -49,11 +29,7 @@ import {
   storedVectorDims,
   upsertVectors,
 } from '../../../db/vector-store.js';
-import {
-  countAllEntries,
-  listEveryTenantEntryIds,
-  readEntriesByIds,
-} from '../entries/entry-reads.js';
+import { countAllEntries } from '../entries/entry-reads.js';
 import { afterIdAnd, idPageOf } from '../runtime/keyset.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { chunked } from '../../../base/util/chunked.js';
@@ -61,7 +37,6 @@ import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../runtime/ro
 import type {
   IdPage,
   IdPageRequest,
-  ParticleStats,
   StoredVectorSummary,
   VectorCoverage,
 } from '../../../base/ports/store/vectors.js';
@@ -218,29 +193,6 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   return owned;
 }
 
-// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is
-// inserted here instead.
-function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[]): void {
-  const stmt = cachedStatement(
-    db,
-    `INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation)
-    VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO NOTHING`,
-  );
-  for (const { memoryId, particle: p } of rows) {
-    if (p) {
-      stmt.run(
-        memoryId,
-        float32ToBuffer(p.position),
-        float32ToBuffer(p.velocity),
-        p.mass,
-        p.charge,
-        p.temperature,
-        p.lastSimulation,
-      );
-    }
-  }
-}
-
 export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWriteResult {
   return withWriteScope(db, 'write_vectors', () => {
     const replaces = replacesIndex(storedIndexState(db), write.model);
@@ -254,113 +206,13 @@ export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWr
       (r) => owned.has(r.memoryId) && r.vector.length > 0 && r.vector.every(Number.isFinite),
     );
     if (rows.length === 0) return { written: 0, modelMismatch: false };
-    if (replaces) db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;');
+    if (replaces) db.exec('DELETE FROM memory_vectors');
     const written = upsertVectors(
       db,
       rows.map((r): [string, readonly number[]] => [r.memoryId, r.vector]),
       write.model,
     );
-    insertNewParticles(db, rows);
     setMeta(db, EMBEDDING_MODEL_META_KEY, write.model);
     return { written, modelMismatch: false };
   });
-}
-
-/** Every particle stored under `hippoRoot`. */
-function listStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
-  return Array.from(loadAllPhysicsState(db).values());
-}
-
-/** The particle count and mean speed from the velocity column alone, and every particle while at
- * most `fullUpTo` are stored, on one snapshot. */
-export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
-  return withReadSnapshot(db, () => {
-    const { count, speedSum } = physicsSpeedSum(db);
-    const particles = count > 0 && count <= fullUpTo ? listStoredParticles(db) : null;
-    return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
-  });
-}
-
-/** Up to `page.limit` memories that have a stored particle, in recall order. The index holds
- * rowid after last_retrieved, so it supplies the whole order and a page seeks past ties. */
-export function storedParticlesByRecall(
-  db: DatabaseSyncLike,
-  page: { readonly limit: number; readonly after?: RecallCursor },
-): RecallPage {
-  const { after } = page;
-  const seek = after ? ' AND last_retrieved <= ? AND (last_retrieved < ? OR rowid < ?)' : '';
-  const rows = cachedStatement(
-    db,
-    `SELECT rowid AS seq, id, last_retrieved FROM memories INDEXED BY idx_memories_last_retrieved ` +
-      `WHERE id IN (SELECT memory_id FROM memory_physics)${seek} ` +
-      `ORDER BY last_retrieved DESC, rowid DESC LIMIT ?`,
-  ).all(
-    ...(after ? [after.lastRetrieved, after.lastRetrieved, after.rowid] : []),
-    page.limit + 1,
-  ) as Array<{ seq: number; id: string; last_retrieved: string }>;
-  const kept = rows.slice(0, page.limit);
-  const last = kept.at(-1);
-  return {
-    memories: kept.map((row) => ({ id: row.id, lastRetrieved: row.last_retrieved })),
-    next:
-      rows.length > page.limit && last
-        ? { lastRetrieved: last.last_retrieved, rowid: Number(last.seq) }
-        : null,
-  };
-}
-
-/** The memory id of every stored particle in listStoredParticles's order, so a caller reads only
- * the particles it keeps. */
-export function storedParticleIds(db: DatabaseSyncLike): string[] {
-  const rows = cachedStatement(
-    db,
-    'SELECT memory_id FROM memory_physics ORDER BY rowid',
-  ).all() as Array<{
-    memory_id: string;
-  }>;
-  return rows.map((row) => row.memory_id);
-}
-
-/** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
-export function saveStoredParticles(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
-  savePhysicsState(db, particles);
-}
-
-const PARTICLE_PAGE = 64;
-const RESET_ID_PAGE = 1000;
-
-/** Every memory with a stored vector, paired with it, in id order, since a reset seeds each
- * once; only one page of each is held. */
-function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
-  let afterId: string | undefined;
-  do {
-    const page = listEveryTenantEntryIds(db, { limit: RESET_ID_PAGE, afterId });
-    for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
-      const vectors = loadVectors(db, ids);
-      const rows = readEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
-      for (const id of ids) {
-        const entry = rows.get(id);
-        const vector = vectors.get(id);
-        if (entry && vector) yield [entry, vector];
-      }
-    }
-    afterId = page.next ?? undefined;
-  } while (afterId !== undefined);
-}
-
-/** Replaces every particle with a fresh one per memory that has a stored vector; returns how
- * many. */
-export function resetStoredParticles(db: DatabaseSyncLike, rules: StoreModel): number {
-  return resetPhysicsFromSeeds(db, storedSeeds(db), rules.strength, rules.clock());
-}
-
-/** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
-export function seedStoredParticle(
-  db: DatabaseSyncLike,
-  rules: StoreModel,
-  entry: MemoryEntry,
-  vector: number[],
-): void {
-  if (loadPhysicsState(db, [entry.id]).has(entry.id)) return;
-  savePhysicsState(db, [initializeParticle(entry, vector, rules.strength, rules.clock())]);
 }

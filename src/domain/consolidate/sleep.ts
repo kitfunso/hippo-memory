@@ -27,7 +27,6 @@ import {
 } from './run.js';
 import { promoteSessionTraces, replayPass, traceWindow } from './traces.js';
 import { llmPasses } from './llm-passes.js';
-import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type {
@@ -82,8 +81,8 @@ export async function runConsolidation(
   );
   reportFtsDrift(start.fts, result);
 
-  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read
-  // a page at a time.
+  // One run for every tenant: the run log and the sleep count are host-wide; rows are read a page
+  // at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
   const run = newSleepRun(store, options, { start, result, rows });
@@ -168,7 +167,6 @@ async function runPassesAfterDecay(
   await promoteSessionTraces(run, sessions);
   await replayPass(run);
   await llmPasses(run, llm);
-  await physicsPass(run);
   await retireHeldTexts(run);
   const mergesSkippedRejected = await mergePass(run);
 

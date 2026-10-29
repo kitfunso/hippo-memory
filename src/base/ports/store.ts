@@ -111,9 +111,8 @@ export const OPTIONAL_GROUPS = [
   'reports',
 ] as const satisfies readonly OptionalGroup[];
 
-/** The groups a sleep runs on: its own, the objects and graph its graph pass reads, and the
- * vectors its physics pass moves. */
-export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads' | 'vectors';
+/** The groups a sleep runs on: its own, and the objects and graph its graph pass reads. */
+export type SleepGroup = keyof SleepGroups | 'objects' | 'graphReads';
 
 /** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
  * context writes no last recall for the CLI's no-ids outcome to read. */
@@ -348,7 +347,6 @@ export type {
   IndexStepKind,
   IdPage,
   IdPageRequest,
-  ParticleStats,
   StoredVectorSummary,
   VectorCoverage,
   VectorRow,

@@ -10,8 +10,6 @@ import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/e
 import type { StoreGroups } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
-import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -32,8 +30,6 @@ describe('embedMemoryDetached', () => {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),
-      strength: PRODUCTION_STRENGTH,
-      clock: evalNow,
       get groups(): StoreGroups {
         throw new Error('store is unreachable');
       },

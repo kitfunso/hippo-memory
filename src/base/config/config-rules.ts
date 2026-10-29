@@ -108,8 +108,6 @@ export const count = (fallback: number): Reader<number> =>
   check('a number, 0 or more', isCount, fallback);
 export const fraction = (fallback: number): Reader<number> =>
   check('a number from 0 to 1', isFraction, fallback);
-export const finite = (fallback: number): Reader<number> =>
-  check('a finite number', isNumber, fallback);
 export const textList = (fallback: string[]): Reader<string[]> =>
   check('a list of strings', isTextList, fallback);
 export const basisPoints = (fallback: number): Reader<number> =>

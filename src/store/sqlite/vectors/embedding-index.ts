@@ -14,12 +14,9 @@ import {
   type VectorRebuild,
   beginVectorRebuild,
   embeddingModelRequiresReindex,
-  particleStats,
   pendingVectorIds,
   pruneOrphanVectors,
-  resetStoredParticles,
   saveStoredEmbeddingModel,
-  seedStoredParticle,
   storedVectorSummary,
   vectorCoverage,
 } from './vector-index.js';
@@ -100,8 +97,6 @@ function rebuildSteps(
   };
 }
 
-// A particle's start strength is scored, so seed and reset score by the store's loss-aversion
-// rules.
 function indexSteps({ on, open, files }: Handles): Steps {
   return {
     ...rebuildSteps(open, files.hippoRoot),
@@ -111,11 +106,8 @@ function indexSteps({ on, open, files }: Handles): Steps {
     pending: (_, { page }) => on((db) => pendingVectorIds(db, page)),
     save: (_, { rows, model }) => on((db) => upsertVectors(db, rows, model)),
     prune: () => on(pruneOrphanVectors),
-    seed: (_, { entry, vector }) => on((db) => seedStoredParticle(db, files, entry, vector)),
-    reset: () => on((db) => resetStoredParticles(db, files)),
     summary: () => on(storedVectorSummary),
     coverage: () => on(vectorCoverage, openStore),
-    particles: (_, { fullUpTo }) => on((db) => particleStats(db, fullUpTo)),
   };
 }
 

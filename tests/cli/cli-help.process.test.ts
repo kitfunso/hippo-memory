@@ -47,7 +47,7 @@ const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalid
 const UNDOCUMENTED = new Map(
   Object.entries({
     remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
-    recall: ['classic', 'equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'physics', 'scope'],
+    recall: ['equal-sources', 'layer', 'limit', 'local-bump', 'outcome', 'scope'],
     drill: ['depth'],
     explain: ['as-of', 'equal-sources', 'include-superseded', 'local-bump', 'scope'],
     eval: ['baseline', 'save-baseline', 'suite'],
@@ -61,7 +61,7 @@ const UNDOCUMENTED = new Map(
     handoff: ['id'],
     forget: ['dry-run'],
     context: ['cross-project', 'limit', 'runtime', 'scope'],
-    embed: ['global', 'reset-physics'],
+    embed: ['global'],
     sync: ['cross-project'],
     peers: ['all-tenants'],
     graph: ['entity', 'format', 'json', 'open', 'out'],

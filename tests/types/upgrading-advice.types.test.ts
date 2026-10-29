@@ -6,14 +6,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { typeOnly } from './_type-only.js';
 import type { SleepStore } from '../../dist/index.js';
 import { bindSessionOwner, captureSessionTexts, sessionEndHandoffForCaller, type Context } from '../../dist/server.js';
-import {
-  hasGroup,
-  loadConfig,
-  physicsSearch,
-  requireGroup,
-  sqliteStore,
-  type VectorWrites,
-} from '../../dist/entry/store-kit.js';
+import { hasGroup, loadConfig, requireGroup, sqliteStore, type VectorWrites } from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
 import { goalPush } from '../../dist/entry/eval-scripts.js';
 import { transcriptWorkingState } from '../../dist/entry/session-text.js';
@@ -83,7 +76,6 @@ describe('UPGRADING-3.0 advice', () => {
         });
       }
       await hybridSearch(query, entries, { store });
-      await physicsSearch(query, entries, { store });
     });
   });
 
@@ -105,11 +97,11 @@ describe('UPGRADING-3.0 advice', () => {
     expectTypeOf<VectorWrites['indexKey']>().toEqualTypeOf<() => Promise<string>>();
   });
 
-  it('sleeps only on a store that sets vectors and graphReads (SleepStore)', () => {
+  it('sleeps only on a store that sets graphReads (SleepStore)', () => {
     typeOnly(() => {
       const sleeper: SleepStore = { ...sqliteStore(hippoRoot), consolidation };
-      const twoX: Omit<SleepStore, 'vectors' | 'graphReads'> = sleeper;
-      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without vectors and graphReads
+      const twoX: Omit<SleepStore, 'graphReads'> = sleeper;
+      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without graphReads
       const refused: SleepStore = twoX;
       expectTypeOf(refused).toEqualTypeOf<SleepStore>();
     });

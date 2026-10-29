@@ -7,11 +7,8 @@ import { createMemory } from '../../src/entry/memory.js';
 import { CHURN_STALE_TAG } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
-import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
+import { hybridSearch } from '../../src/entry/folder-search.js';
 import { churnStaleFactor } from '../../src/domain/search/boosts.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { savePhysicsState } from '../../src/db/physics-state.js';
-import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -116,81 +113,6 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     });
     const results = await hybridSearch('sprocket calibration', [stale, plain]);
     expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
-  });
-
-  it('ranks a churn-stale entry below an identical untagged one in physicsSearch', async () => {
-    const hippoRoot = makeRoot('churn-physics');
-    try {
-      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-      const stale = createMemory('flywheel torque limits', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: [CHURN_STALE_TAG],
-      });
-      writeEntry(hippoRoot, plain);
-      writeEntry(hippoRoot, stale);
-      const particle = (id: string): PhysicsParticle => ({
-        memoryId: id,
-        position: [1, 0, 0, 0],
-        velocity: [0, 0, 0, 0],
-        mass: 1.0,
-        charge: 0,
-        temperature: 0.5,
-        lastSimulation: new Date().toISOString(),
-      });
-      const db = openHippoDb(hippoRoot);
-      try {
-        savePhysicsState(db, [particle(plain.id), particle(stale.id)]);
-      } finally {
-        closeHippoDb(db);
-      }
-      const results = await physicsSearch('flywheel torque', [stale, plain], {
-        hippoRoot,
-        queryEmbedding: [1, 0, 0, 0],
-        explain: true,
-      });
-      expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
-      expect(results[1].breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
-    } finally {
-      removeDir(hippoRoot);
-    }
-  });
-
-  it('keeps the penalty when a churn-stale hit is alone in the physics pool (pool normalisation)', async () => {
-    const hippoRoot = makeRoot('churn-pool');
-    try {
-      const plain = createMemory('flywheel torque limits', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
-      const stale = createMemory('flywheel torque limits', {
-        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        tags: [CHURN_STALE_TAG],
-      });
-      writeEntry(hippoRoot, plain);
-      writeEntry(hippoRoot, stale);
-      const db = openHippoDb(hippoRoot);
-      try {
-        savePhysicsState(db, [
-          {
-            memoryId: stale.id,
-            position: [1, 0, 0, 0],
-            velocity: [0, 0, 0, 0],
-            mass: 1.0,
-            charge: 0,
-            temperature: 0.5,
-            lastSimulation: new Date().toISOString(),
-          },
-        ]);
-      } finally {
-        closeHippoDb(db);
-      }
-      const results = await physicsSearch('flywheel torque', [stale, plain], {
-        hippoRoot,
-        queryEmbedding: [1, 0, 0, 0],
-      });
-      const staleScore = results.find((r) => r.entry.id === stale.id)!.score;
-      expect(staleScore).toBeCloseTo(STALE_FACTOR, 5);
-      expect(results[0].entry.id).toBe(plain.id);
-    } finally {
-      removeDir(hippoRoot);
-    }
   });
 
   it('penalises a churn-stale child injected by DAG drill-down (sync and hybrid)', async () => {

@@ -35,15 +35,6 @@ const CASES: ReadonlyArray<[SleepEvent, string]> = [
   [{ kind: 'retiredText', id: 'a', successorId: null }, '  ✂️  a held a retired text'],
   [{ kind: 'merged', count: 3, preview: 'caching' }, '  🔀 merged 3 episodic entries into semantic: "caching..."'],
   [
-    { kind: 'physics', particles: 3, shown: 3, stored: 3, avgVelocity: 0.123456 },
-    '  ⚛️  physics: 3 particles, avg vel 0.1235',
-  ],
-  [
-    { kind: 'physics', particles: 2, shown: 2, stored: 9, avgVelocity: 1 },
-    '  ⚛️  physics: 2 particles (the 2 most recently recalled of 9), avg vel 1.0000',
-  ],
-  [{ kind: 'phaseSkipped', phase: 'physics', message: 'boom' }, '  ⚠️ physics simulation skipped: boom'],
-  [
     { kind: 'halfLifeRescaled', count: 1, from: 7, to: 365 },
     '  ⏳ moved 1 memories from the 7-day to the 365-day half-life',
   ],

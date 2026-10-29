@@ -2,7 +2,7 @@
 // docs/recall-surface-differences.md names the surface behind each profile.
 
 export interface RecallProfile {
-  /** 'engine' ranks with the engine (physics or hybrid) and keeps its list and scores;
+  /** 'engine' ranks with the hybrid engine and keeps its list and scores;
    * 'position' keeps every loaded row in load order, reordered only by an engine the request
    * names, and scores each row by its place. */
   readonly scoreForm: 'engine' | 'position';

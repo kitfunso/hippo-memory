@@ -81,7 +81,7 @@
       {
         "memory_id": "mem_p_scoped",
         "result_rank": 1,
-        "score": 1,
+        "score": 0.7587900008624143,
         "trace_id": 1,
       },
     ],

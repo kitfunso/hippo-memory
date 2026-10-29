@@ -62,7 +62,7 @@ describe('verb groups', () => {
       failures: ['reports'],
       'daily-runner': ['reports'],
       dedup: ['reports'],
-      sleep: ['graphReads', 'vectors'],
+      sleep: ['graphReads'],
       graph: ['graphReads'],
       wm: ['sessions'],
       snapshot: ['sessions'],

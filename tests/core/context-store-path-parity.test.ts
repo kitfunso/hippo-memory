@@ -8,7 +8,6 @@ import { contextGet, type Actor, type ContextOptions, type ContextResult } from 
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
-import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/runtime/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
@@ -56,9 +55,6 @@ interface Case {
   readonly actor?: Actor;
   readonly tenantId?: string;
   readonly shared?: true;
-  readonly physicsOff?: true;
-  /** Physics on in the embedded passes only: with no provider it ranks as hybrid. */
-  readonly physicsOn?: true;
   /** Shows the case reached the branch it names, on the hippo.db pass that reads the global store too. */
   readonly reaches?: (pass: Pass) => void;
   /** Reads the port-only store must have answered, so the case cannot pass on hippo.db's copy. */
@@ -132,12 +128,11 @@ const CASES: readonly Case[] = [
       recalled: 13,
       globalRetrieved: ['mem_g_note', 'mem_g_pin'],
     },
-    physicsOn: true,
     reaches: (p) => expect(p.result.entries).toHaveLength(13),
-    storeReads: ['searchRecallEntries', 'stored:particles'],
+    storeReads: ['searchRecallEntries', 'nearestEntries'],
   },
   {
-    name: 'query without physics',
+    name: 'one-term query',
     opts: { q: 'rollout' },
     expected: {
       ids: [
@@ -156,7 +151,6 @@ const CASES: readonly Case[] = [
       recalled: 13,
       globalRetrieved: ['mem_g_note', 'mem_g_pin'],
     },
-    physicsOff: true,
     reaches: (p) => expect(p.result.entries).toHaveLength(13),
     storeReads: ['searchRecallEntries', 'nearestEntries'],
   },
@@ -271,7 +265,7 @@ function lastRecallMeta(root: string): unknown[] {
   }
 }
 
-/** Every memory row's hashed vector and its particle, so the search's vector arm and physics have rows to read. */
+/** Every memory row's hashed vector, so the search's vector arm has rows to read. */
 function seedVectors(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -283,7 +277,6 @@ function seedVectors(dir: string): void {
     const identity = embeddingIndexIdentity(`openai:${MODEL}`);
     upsertVectors(db, Object.entries(index), identity);
     setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-    resetAllPhysicsState(db, entries, index, { now: new Date(CONTEXT_NOW) });
   } finally {
     closeHippoDb(db);
   }
@@ -344,7 +337,6 @@ interface PassOptions {
 /** The config.json a pass writes, when it sets anything. */
 interface PassConfig {
   embeddings?: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
-  physics?: { readonly enabled: boolean };
   sharedStore?: true;
 }
 
@@ -362,8 +354,6 @@ async function runPass(
   vi.stubEnv('HIPPO_HOME', globalRoot);
   const config: PassConfig = {};
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
-  if (c.physicsOff) config.physics = { enabled: false };
-  else if (c.physicsOn && embedded) config.physics = { enabled: true };
   // The store's own flag, which the hippo.db reach and a port-only store's ctx.config both read.
   if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
@@ -492,7 +482,7 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.
     expect(onPort.lastRecall).toEqual(seededLastRecall);
     expect(port?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));
-    if (c.storeReads?.includes('stored:particles') || c.storeReads?.includes('nearestEntries')) {
+    if (c.storeReads?.includes('nearestEntries')) {
       expect(embeddings.requests()).toBeGreaterThan(before);
     }
   });

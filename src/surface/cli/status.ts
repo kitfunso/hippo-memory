@@ -14,7 +14,6 @@ import {
 import { strengthOf } from '../../api/types.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
-import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -28,11 +27,10 @@ import {
   embeddingReindexNeeded,
   provenanceCoverageReport,
   storeStatus,
-  storedParticleStats,
   vectorSummary,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
-import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
+import type { StoredVectorSummary } from '../../base/ports/store.js';
 import { cliApiContext, type CliContext } from './api-context.js';
 import { defaultDiagnostics } from '../open-store.js';
 
@@ -89,7 +87,6 @@ export async function handleStatus(
   }
 
   await printEmbeddingStatus(ctx, counts);
-  await printPhysicsStatus(ctx);
 }
 
 async function printEmbeddingStatus(
@@ -150,34 +147,6 @@ function embeddedLine(
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   return line;
-}
-
-// The all-pairs energy sum is quadratic, so a large particle set skips it.
-const PHYSICS_ENERGY_STATUS_MAX = 2000;
-
-async function printPhysicsStatus(ctx: CliContext): Promise<void> {
-  try {
-    const stats = await storedParticleStats(ctx, PHYSICS_ENERGY_STATUS_MAX);
-    if (stats.count > 0) {
-      console.log('');
-      console.log(
-        `Physics: ${stats.count} particles, ` +
-          `${physicsEnergyText(stats, ctx.config.physics.gMemory)}, avg vel: ${fmt(stats.meanSpeed, 4)}`,
-      );
-    }
-  } catch (err) {
-    // The physics table may not exist yet, so status prints without that line.
-    log.debug(`physics status skipped: ${errorMessage(err)}`, errorFields(err));
-  }
-}
-
-export function physicsEnergyText(
-  stats: Pick<ParticleStats, 'count' | 'particles'>,
-  gMemory: number,
-): string {
-  if (stats.particles === null) return `energy: skipped (${stats.count} particles)`;
-  const energy = computeSystemEnergy(stats.particles, gMemory);
-  return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
 }
 
 interface InspectMemoryOptions {
