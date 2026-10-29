@@ -64,7 +64,7 @@ Flags (set to `1` or `true`):
   - CAVEAT: half_life increments persisted by prior unflagged runs are NOT reconstructed (consolidation legitimately writes half_life too), so ablation arms run on FRESH stores, as the experiment protocol mandates.
 - `HIPPO_ABLATE_OUTCOME`: both outcome channels become neutral (`_SLOW` and `_FAST` together). The slow side also silences replay's outcome reward bias (`replayPriority`). NOT gated: the opt-in `recall --value-aware` rerank (an explicit CLI flag that also reads outcome counts); ablated arms must not pass it.
 - `HIPPO_ABLATE_OUTCOME_SLOW`: `rewardFactor` becomes 1 (no half-life modulation).
-- `HIPPO_ABLATE_OUTCOME_FAST`: `hybridSearch` `outcomeBoost` becomes 1.
+- `HIPPO_ABLATE_OUTCOME_FAST`: `rankHybrid` `outcomeBoost` becomes 1.
 - `HIPPO_ABLATE_RECENCY`: the search recency factor becomes 1 (the creation-age multiplier `0.8 + 0.2*exp(-age/30d)`); decay, strengthening and outcomes stay live.
 - `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
 - `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
@@ -873,8 +873,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RerankerFn`: Determinism is required for paired A/B and for the workload-validity gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
 
 ### src/domain/search/rrf.ts
-- `module header`: the value already in use across hippo's `hybridSearch` since v1.0.
-- `module header`: Generic over the candidate id type so this helper can be shared by `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
+- `module header`: the value already in use across hippo's `rankHybrid` since v1.0.
+- `module header`: Generic over the candidate id type so this helper can be shared by `src/domain/search/hybrid.ts::rankHybrid` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
 
 ### src/base/util/secret-detect.ts
 - `module header`: Secret detection for memory content (v39 memory scope isolation, S4; docs/plans/2026-07-01-memory-scope-isolation.md).
@@ -963,7 +963,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
-- `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
+- `HybridSearchOptions.summaryDeboost`: v0.30 / E4: propagated to underlying rankHybrid calls.
 - `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
 - `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
@@ -1015,7 +1015,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
 ### src/store/entry-writes.ts
-- `writeEntryOn`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
+- `writeEntryInOwnTx`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
 - `writeEntryDbOnly`: v0.30 / E2 — DAG live-coupling: child write under a level-2 summary marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on null dag_parent_id (vast majority of writes); cost is one null check on the hot path.
 
 ### src/store/handoffs.ts

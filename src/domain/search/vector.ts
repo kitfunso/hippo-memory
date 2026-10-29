@@ -13,7 +13,7 @@ import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
 /**
- * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact
+ * rankHybrid's vector arm: which rows it may add, plus the caller's JS admission rules (exact
  * private regex, entry filters).
  */
 export type HybridVectorCandidates = VectorCandidateSpec & {
