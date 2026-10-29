@@ -15,20 +15,8 @@ export interface MemoryConflict {
   updatedAt: string;
 }
 
-/** A conflict as files and wire formats name it. */
-export interface ConflictWire {
-  id: number;
-  memory_a_id: string;
-  memory_b_id: string;
-  reason: string;
-  score: number;
-  status: string;
-  detected_at: string;
-  updated_at: string;
-}
-
 /** Keys in the order 2.x printed them, so `hippo conflicts --json` keeps its bytes. */
-export function conflictToWire(c: MemoryConflict): ConflictWire {
+export function conflictToWire(c: MemoryConflict) {
   return {
     id: c.id,
     memory_a_id: c.memoryAId,
@@ -40,3 +28,7 @@ export function conflictToWire(c: MemoryConflict): ConflictWire {
     updated_at: c.updatedAt,
   };
 }
+
+// SAFETY: a memory_conflicts row in hippo.db carries these keys; scripts/checks/check-row-casts.mjs
+// proves each read cast to this type selects them.
+export type ConflictWire = ReturnType<typeof conflictToWire>;

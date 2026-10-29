@@ -7,17 +7,13 @@ import {
   normalizeValueForRejection,
 } from '../../../base/records/rejection-digest.js';
 import { archiveRawMemory } from '../entries/raw-archive.js';
-import {
-  MEMORY_CONFLICT_COLUMNS,
-  type MemoryConflictRow,
-  parseJsonArray,
-  rowToMemoryConflict,
-} from '../runtime/rows.js';
+import { MEMORY_CONFLICT_COLUMNS, parseJsonArray, rowToMemoryConflict } from '../runtime/rows.js';
 import { audit } from '../audit/audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from '../folder-files/mirrors.js';
 import { readEntriesByIds } from '../entries/entry-reads.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { ownScopeTouches } from '../../../base/scope/recall-scope.js';
+import type { ConflictWire } from '../../../base/memory/conflict-wire.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { deleteEntryCore } from '../entries/delete-and-batch.js';
 import { keysetPage } from '../../../base/util/keyset.js';
@@ -56,7 +52,7 @@ const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memb
 
 // SAFETY: every read cast to this row selects CONFLICT_ROW_COLS; scripts/checks/check-row-casts.mjs proves
 // it.
-interface ConflictJoinRow extends MemoryConflictRow {
+interface ConflictJoinRow extends ConflictWire {
   a_id: string | null;
   a_scope: string | null;
   a_kind: string | null;

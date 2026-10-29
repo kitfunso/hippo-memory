@@ -6,7 +6,8 @@ import { originInSql } from '../runtime/rule-sql.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { redactSecretsStrict } from '../../../base/util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../../../base/util/version.js';
-import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from '../runtime/rows.js';
+import { TASK_SNAPSHOT_COLUMNS, rowToTaskSnapshot } from '../runtime/rows.js';
+import type { TaskSnapshotJson } from '../../../base/session/continuity-json.js';
 import type { TaskSnapshot, SnapshotInput } from '../../../base/ports/store/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './session-mirrors.js';
 import type { StoreFiles } from '../runtime/open.js';
@@ -119,7 +120,7 @@ export function saveActiveTaskSnapshot(
     FROM task_snapshots
     WHERE id = ?
   `,
-  ).get(id) as TaskSnapshotRow | undefined;
+  ).get(id) as TaskSnapshotJson | undefined;
 
   if (!row) {
     throw new Error('Failed to reload saved active task snapshot');
@@ -148,7 +149,7 @@ export function readActiveTaskSnapshot(
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
   `,
-  ).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotRow | undefined;
+  ).get(tenantId, ...(owned?.params ?? [])) as TaskSnapshotJson | undefined;
 
   if (!row) {
     if (!key) removeActiveTaskMirror(hippoRoot, tenantId);

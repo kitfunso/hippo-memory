@@ -17,7 +17,8 @@ import {
   type StoredJsonSite,
 } from '../../../base/util/stored-json.js';
 import type { SessionEvent, TaskSnapshot } from '../../../base/ports/store/sessions.js';
-import type { MemoryConflict } from '../../../base/ports/store/conflicts.js';
+import type { ConflictWire, MemoryConflict } from '../../../base/memory/conflict-wire.js';
+import type { TaskSnapshotJson } from '../../../base/session/continuity-json.js';
 
 // The memories columns' defaults, once: hippo.db applies them reading a row back.
 
@@ -199,35 +200,9 @@ export interface ConsolidationRunRow {
   removed: number;
 }
 
-// SAFETY: every read cast to this row selects TASK_SNAPSHOT_COLUMNS; scripts/checks/check-row-casts.mjs
-// proves it.
-export interface TaskSnapshotRow {
-  id: number;
-  task: string;
-  summary: string;
-  next_step: string;
-  status: string;
-  source: string;
-  session_id: string | null;
-  scope: string | null;
-  created_at: string;
-  updated_at: string;
-}
 export const TASK_SNAPSHOT_COLUMNS =
   'id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at';
 
-// SAFETY: every read cast to this row selects MEMORY_CONFLICT_COLUMNS; scripts/checks/check-row-casts.mjs
-// proves it.
-export interface MemoryConflictRow {
-  id: number;
-  memory_a_id: string;
-  memory_b_id: string;
-  reason: string;
-  score: number;
-  status: string;
-  detected_at: string;
-  updated_at: string;
-}
 export const MEMORY_CONFLICT_COLUMNS =
   'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
 
@@ -398,7 +373,7 @@ function parseJsonObject(
   return parseStoredObject(site, raw) ?? {};
 }
 
-export function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
+export function rowToTaskSnapshot(row: TaskSnapshotJson): TaskSnapshot {
   return {
     id: Number(row.id),
     task: row.task,
@@ -413,7 +388,7 @@ export function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
   };
 }
 
-export function rowToMemoryConflict(row: MemoryConflictRow): MemoryConflict {
+export function rowToMemoryConflict(row: ConflictWire): MemoryConflict {
   return {
     id: Number(row.id),
     memoryAId: row.memory_a_id,

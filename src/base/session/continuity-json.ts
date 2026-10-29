@@ -1,42 +1,9 @@
 // HTTP replies and the CLI's --json keep snake_case keys, as clients read them; the port's rows are
-// camelCase.
-import type { JsonValue } from '../util/json.js';
-import type { SessionHandoff } from './handoff.js';
+// camelCase. Each wire type is its serializer's return, so the keys are written once.
 import type { ContinuityBlock } from '../ports/store.js';
 import type { SessionEvent, TaskSnapshot } from '../ports/store/sessions.js';
 
-export interface TaskSnapshotJson {
-  id: number;
-  task: string;
-  summary: string;
-  next_step: string;
-  status: string;
-  source: string;
-  session_id: string | null;
-  scope: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SessionEventJson {
-  id: number;
-  session_id: string;
-  task: string | null;
-  event_type: string;
-  content: string;
-  source: string;
-  scope: string | null;
-  metadata: Record<string, JsonValue>;
-  created_at: string;
-}
-
-export interface ContinuityBlockJson {
-  activeSnapshot: TaskSnapshotJson | null;
-  sessionHandoff: SessionHandoff | null;
-  recentSessionEvents: SessionEventJson[];
-}
-
-export function snapshotJson(s: TaskSnapshot): TaskSnapshotJson {
+export function snapshotJson(s: TaskSnapshot) {
   return {
     id: s.id,
     task: s.task,
@@ -51,7 +18,11 @@ export function snapshotJson(s: TaskSnapshot): TaskSnapshotJson {
   };
 }
 
-export function sessionEventJson(e: SessionEvent): SessionEventJson {
+// SAFETY: hippo.db's task_snapshots rows carry these keys; scripts/checks/check-row-casts.mjs proves
+// each read cast to this type selects them.
+export type TaskSnapshotJson = ReturnType<typeof snapshotJson>;
+
+export function sessionEventJson(e: SessionEvent) {
   return {
     id: e.id,
     session_id: e.sessionId,
@@ -65,10 +36,12 @@ export function sessionEventJson(e: SessionEvent): SessionEventJson {
   };
 }
 
-export function continuityJson(block: ContinuityBlock): ContinuityBlockJson {
+export function continuityJson(block: ContinuityBlock) {
   return {
     activeSnapshot: block.activeSnapshot === null ? null : snapshotJson(block.activeSnapshot),
     sessionHandoff: block.sessionHandoff,
     recentSessionEvents: block.recentSessionEvents.map(sessionEventJson),
   };
 }
+
+export type ContinuityBlockJson = ReturnType<typeof continuityJson>;
