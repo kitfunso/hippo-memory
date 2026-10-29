@@ -1,10 +1,11 @@
 // A compaction's PreCompact on the store: the twin-fire skip, the boundary record and the merged
-// working-state snapshot. The hook verb keeps stdin, the transcript, stdout and the log file.
+// working-state snapshot, for the local hook and for a caller the server answers.
 
 import type { CaptureInput } from '../base/session/capture-contract.js';
 import { mergeWorkingState, type WorkingState } from '../base/session/working-state.js';
 import type { CompactionStart } from '../base/ports/store/capture.js';
 import type { TaskSnapshot } from '../base/ports/store/sessions.js';
+import type { ContinuityKey } from '../base/ports/store/types.js';
 import { errorFields, errorMessage, log, type LineLog } from '../base/util/log.js';
 import type { ContextWith } from './types.js';
 
@@ -33,6 +34,32 @@ export interface PreCompactRun {
   readonly log: LineLog;
 }
 
+/** A caller's compaction: its record names the caller's project, and its snapshot is the owner's
+ * under `key`. */
+export interface CallerCompaction {
+  readonly start: CompactionStart;
+  readonly key: ContinuityKey;
+  /** What the caller read off its transcript; null when nothing was derivable. */
+  readonly derived: WorkingState | null;
+}
+
+export type CallerPreCompactContext = Pick<
+  ContextWith<'compactions' | 'sessions'>,
+  'tenantId' | 'store'
+>;
+
+/** Where a PreCompact's steps report: its progress, and the failures it carries on past. */
+interface StepLog {
+  readonly note: LineLog;
+  readonly failed: LineLog;
+}
+
+// A server answers many callers, so only a failure is a warning.
+const CALLER_LOG: StepLog = {
+  note: (line, opts) => log.debug(`pre-compact: ${line}`, opts?.fields),
+  failed: (line, opts) => log.warn(`pre-compact: ${line}`, opts?.fields),
+};
+
 /** Records the compaction, asks the summarizer for memories, saves a working-state snapshot.
  * Never extracts memories itself; SessionEnd capture owns that. */
 export async function preCompact(ctx: PreCompactContext, run: PreCompactRun): Promise<void> {
@@ -48,7 +75,37 @@ export async function preCompact(ctx: PreCompactContext, run: PreCompactRun): Pr
   // Nothing derivable skips the write, so junk never replaces a user-authored active snapshot.
   const derived = run.workingState();
   if (!derived) return;
-  await saveDerivedSnapshot(ctx, { sessionId, recordId, derived, log: run.log });
+  const { compactionHooks } = ctx.store;
+  await saveDerivedSnapshot(ctx, {
+    sessionId,
+    key: null,
+    derived,
+    log: { note: run.log, failed: run.log },
+    markSaved:
+      recordId === null ? null : () => compactionHooks.markSnapshotSaved(ctx.tenantId, recordId),
+  });
+}
+
+/** A caller's PreCompact: the record, then the owner's snapshot noted on it, as the local hook
+ * takes them. Never throws. */
+export async function callerPreCompact(
+  ctx: CallerPreCompactContext,
+  { start, key, derived }: CallerCompaction,
+): Promise<void> {
+  const { compactions } = ctx.store;
+  const recordId = await startRecord(
+    () => compactions.start(ctx.tenantId, start),
+    CALLER_LOG.failed,
+  );
+  if (derived === null) return;
+  await saveDerivedSnapshot(ctx, {
+    sessionId: start.sessionId,
+    key,
+    derived,
+    log: CALLER_LOG,
+    markSaved:
+      recordId === null ? null : () => compactions.markSnapshotSaved(ctx.tenantId, recordId),
+  });
 }
 
 async function snapshotJustSaved(
@@ -73,7 +130,16 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
   let recordId: string | null = null;
   let printed: string | null = null;
   if (run.closable && sessionId !== null && sessionId !== '') {
-    recordId = await startRecord(ctx, { sessionId, trigger, cwd, transcriptPath }, run.log);
+    const start: Omit<CompactionStart, 'originProject'> = {
+      sessionId,
+      trigger,
+      cwd,
+      transcriptPath,
+    };
+    recordId = await startRecord(
+      () => ctx.store.compactionHooks.start(ctx.tenantId, start),
+      run.log,
+    );
     printed = run.printInstruction();
   }
   // Its own guard, so a throwing callback can never skip the snapshot work that follows.
@@ -87,34 +153,33 @@ async function markBoundary(ctx: PreCompactContext, run: PreCompactRun): Promise
 
 /** Best effort, never throws: a compaction must not fail because its record could not be
  * written. */
-async function startRecord(
-  ctx: PreCompactContext,
-  start: Omit<CompactionStart, 'originProject'>,
-  logLine: LineLog,
-): Promise<string | null> {
+async function startRecord(begin: () => Promise<string>, failed: LineLog): Promise<string | null> {
   try {
-    return await ctx.store.compactionHooks.start(ctx.tenantId, start);
+    return await begin();
   } catch (err) {
-    logLine(`compaction record not started: ${errorMessage(err)}`, { fields: errorFields(err) });
+    failed(`compaction record not started: ${errorMessage(err)}`, { fields: errorFields(err) });
     return null;
   }
 }
 
 interface DerivedSnapshot {
   readonly sessionId: string | null;
-  readonly recordId: string | null;
+  /** The owner's continuity key a caller's snapshot goes under; null for the local hook's. */
+  readonly key: ContinuityKey | null;
   readonly derived: WorkingState;
-  readonly log: LineLog;
+  readonly log: StepLog;
+  /** Notes the saved snapshot on the compaction record; null without a record. */
+  readonly markSaved: (() => Promise<void>) | null;
 }
 
 async function saveDerivedSnapshot(
-  ctx: PreCompactContext,
-  { sessionId, recordId, derived, log: logLine }: DerivedSnapshot,
+  ctx: Pick<ContextWith<'sessions'>, 'tenantId' | 'store'>,
+  { sessionId, key, derived, log: steps, markSaved }: DerivedSnapshot,
 ): Promise<void> {
   const { tenantId, store } = ctx;
   let existing: TaskSnapshot | null = null;
   try {
-    existing = await store.sessions.loadSnapshot(tenantId, {}, null);
+    existing = await store.sessions.loadSnapshot(tenantId, {}, key);
   } catch (err) {
     log.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -126,7 +191,7 @@ async function saveDerivedSnapshot(
   // saveActiveTaskSnapshot scrubs every field.
   const merged = mergeWorkingState(derived, existing, sessionId);
   if (merged === null) {
-    logLine(
+    steps.note(
       'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)',
     );
     return;
@@ -136,25 +201,24 @@ async function saveDerivedSnapshot(
       tenantId,
       'snapshot',
       { ...merged, source: 'pre-compact', sessionId },
-      null,
+      key,
     );
-    logLine('snapshot saved');
-    if (recordId !== null) await markSnapshotOnRecord(ctx, recordId, logLine);
+    steps.note('snapshot saved');
+    if (markSaved !== null) await markSnapshotOnRecord(markSaved, steps.failed);
   } catch (err) {
-    logLine(`snapshot save failed: ${errorMessage(err)}`, { fields: errorFields(err) });
+    steps.failed(`snapshot save failed: ${errorMessage(err)}`, { fields: errorFields(err) });
   }
 }
 
 /** Never throws: the snapshot is saved already, and the record only notes it. */
 async function markSnapshotOnRecord(
-  ctx: PreCompactContext,
-  recordId: string,
-  logLine: LineLog,
+  markSaved: () => Promise<void>,
+  failed: LineLog,
 ): Promise<void> {
   try {
-    await ctx.store.compactionHooks.markSnapshotSaved(ctx.tenantId, recordId);
+    await markSaved();
   } catch (err) {
-    logLine(`compaction record not marked with its snapshot: ${errorMessage(err)}`, {
+    failed(`compaction record not marked with its snapshot: ${errorMessage(err)}`, {
       fields: errorFields(err),
     });
   }
