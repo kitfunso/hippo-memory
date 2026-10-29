@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI store-port shape gate: the two port rules that follow type aliases and interfaces across files, which no lint rule
-// can do. The store's import and name rules live in .dependency-cruiser.cjs and .oxlintrc.json.
+// can do. The store's import and name rules live in .dependency-cruiser.cjs and oxlint.config.ts.
 
 import { existsSync, readdirSync } from 'node:fs';
 import { join, sep } from 'node:path';

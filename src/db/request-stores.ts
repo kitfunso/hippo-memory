@@ -20,7 +20,7 @@ export interface RequestStoresOptions {
   readonly setupDoneFor?: string;
 }
 
-/** The session's open, which only a DbGrant (src/db/grant.ts) calls; .oxlintrc.json bans its import
+/** The session's open, which only a DbGrant (src/db/grant.ts) calls; oxlint.config.ts bans its import
  * elsewhere, so every hippo.db open on a session goes through a grant. */
 export const SESSION_OPEN = Symbol('request session open');
 
