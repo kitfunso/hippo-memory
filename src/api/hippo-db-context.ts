@@ -1,8 +1,11 @@
 // The context a local feature's api module takes: a store that carries hippo.db's local tier.
 // Only a surface that proved the tier at composition builds one, so no core path reaches it.
 import type { HippoDbTier } from '../store/sqlite/hippo-db.js';
-import type { Context } from './types.js';
-import type { CoreEnrichment } from './enrichment.js';
+import type { HippoConfig } from '../base/config/config.js';
+import type { EmbedderFor } from '../base/ports/embedder.js';
+import type { StoreReach } from '../base/ports/store.js';
+import type { Context, ContextReach, LedgerHome } from './types.js';
+import type { CoreEnrichment, GlobalEnrichment } from './enrichment.js';
 
 export type { HippoDbStore, HippoDbTier } from '../store/sqlite/hippo-db.js';
 
@@ -22,6 +25,40 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
  * the request's own store, so each call runs under that request's deadline and session. */
 export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;
-  const { lastRecall, sessions, readiness } = store.hippoDb;
-  return { lastRecall, handoff: sessions, readiness };
+  const { lastRecall, sessions, readiness, graphReads } = store.hippoDb;
+  return { lastRecall, handoff: sessions, readiness, graph: graphReads };
+}
+
+/** What a core path reads from the global store's local tier; unset on a store without one. */
+export function globalEnrichment(store: Context['store']): GlobalEnrichment | undefined {
+  return hasHippoDb(store) ? { graph: store.hippoDb.graphReads } : undefined;
+}
+
+/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own
+ * loader, and a promote embeds its copy with `embedderFor`. */
+export function contextReach(
+  reach: StoreReach,
+  configAt: (root: string) => HippoConfig,
+  embedderFor: EmbedderFor,
+  ledger?: LedgerHome,
+): ContextReach {
+  const { global, globalTarget, ...rest } = reach;
+  // Both name the operator's global store, so one load serves both.
+  let last: { readonly root: string; readonly config: HippoConfig } | undefined;
+  const at = (root: string): HippoConfig => {
+    if (last?.root !== root) last = { root, config: configAt(root) };
+    return last.config;
+  };
+  let withConfig: ContextReach = ledger === undefined ? rest : { ...rest, ledger };
+  if (global !== undefined) {
+    const enrich = globalEnrichment(global.store);
+    withConfig = { ...withConfig, global: { ...global, config: at(global.root), enrich } };
+  }
+  if (globalTarget !== undefined) {
+    withConfig = {
+      ...withConfig,
+      globalTarget: { store: globalTarget.store, config: at(globalTarget.root), embedderFor },
+    };
+  }
+  return withConfig;
 }

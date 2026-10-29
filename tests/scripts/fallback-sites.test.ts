@@ -1,4 +1,4 @@
-// An api or domain read of an optional group with a fallback (an F group) sits at one of five pinned
+// An api or domain read of an optional group with a fallback (an F group) sits at one of two pinned
 // sites, each with the reason no root binds it (beside each pin below); a new one fails here until it is named.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -50,20 +50,12 @@ function fallbackReads(): string[] {
 }
 
 describe('fallback reads of optional groups', () => {
-  it('sit at the five pinned sites and nowhere else', () => {
+  it('sit at the two pinned sites and nowhere else', () => {
     expect(fallbackReads()).toEqual(
       [
-        // 1-2. vectorSourceOf and graphStoresOf: the searched store is picked per call.
-        "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
-        "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
-        "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
-        'src/domain/search/vector.ts: graphReads?: GraphReads',
-        // 3. Graph expansion walks ctx.store and ctx.global.store.
-        "src/api/recall/pipeline.ts: StoreWith<never, 'graphReads'>",
-        "src/domain/graph/recall.ts: StoreWith<never, 'graphReads'>",
-        // 4. embeddingIndex: published entries hand in any store or folder.
+        // 1. embeddingIndex: published entries hand in any store or folder.
         "src/domain/search/embed-memories.ts: StoreWith<never, 'embeddingIndex'>",
-        // 5. sharing and folderFiles: the published sleep entry takes any folder.
+        // 2. sharing and folderFiles: the published sleep entry takes any folder.
         "src/api/sleep/sleep-run.ts: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>",
       ].sort(),
     );

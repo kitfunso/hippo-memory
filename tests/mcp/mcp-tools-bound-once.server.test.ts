@@ -54,7 +54,7 @@ function counting<S extends Needed>(store: S): CountingStore<S> {
   // A group on hippo.db's local tier is read through `hippoDb`, so its count sits on the tier's copy.
   const tier = { ...store.hippoDb };
   const counted = { ...store, hippoDb: tier };
-  countedReads(counted, 'dagReads');
+  countedReads(tier, 'dagReads');
   countedReads(tier, 'reports');
   return { store: counted, reads: () => reads };
 }

@@ -76,7 +76,8 @@ export async function loadEntitiesByMemoryId(
   tenantId: string,
   memoryIds: readonly string[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds })).entities;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds }))
+    .entities;
 }
 
 export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
@@ -149,7 +150,7 @@ export async function loadEntitiesByIds(
   tenantId: string,
   ids: readonly number[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
 }
 
 export async function loadNeighborRelations(
@@ -159,7 +160,7 @@ export async function loadNeighborRelations(
   opts: { limit?: number } = {},
 ): Promise<Relation[]> {
   const query = { by: 'neighbor', ids: entityIds, limit: opts.limit ?? 1000 } as const;
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, query)).relations;
+  return (await sqliteStore(hippoRoot).hippoDb.graphReads.graphRows(tenantId, query)).relations;
 }
 
 export function loadVectorCandidateEntries(

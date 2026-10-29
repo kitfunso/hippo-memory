@@ -5,13 +5,12 @@ import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
 import { CONSOLIDATION_EFFECTS } from './consolidation.js';
-import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './context-reads.js';
+import { CONTEXT_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
 import { DORMANT_EFFECTS } from './dormant.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { FOLDER_FILES_EFFECTS } from './folder-files.js';
 import { GOALS_EFFECTS } from './goals.js';
-import { GRAPH_READS_EFFECTS, GRAPH_REBUILD_EFFECTS } from './graph.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { LEARNING_EFFECTS } from './learning.js';
 import { LEDGER_EFFECTS } from './ledger.js';
@@ -47,9 +46,7 @@ export const STORE_EFFECTS = {
   vectorWrites: VECTOR_WRITES_EFFECTS,
   entryWrites: ENTRY_WRITES_EFFECTS,
   contextReads: CONTEXT_READS_EFFECTS,
-  dagReads: DAG_READS_EFFECTS,
   auditLog: AUDIT_LOG_EFFECTS,
-  graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
@@ -66,7 +63,6 @@ export const STORE_EFFECTS = {
   compactionHooks: COMPACTION_HOOKS_EFFECTS,
   projectTags: PROJECT_TAGS_EFFECTS,
   diagnostics: DIAGNOSTICS_EFFECTS,
-  graphRebuild: GRAPH_REBUILD_EFFECTS,
   agentImport: AGENT_IMPORT_EFFECTS,
 } as const satisfies { readonly [G in keyof StoreGroups]: MethodEffects<StoreGroups[G]> } & {
   readonly base: MethodEffects<BaseMethods>;

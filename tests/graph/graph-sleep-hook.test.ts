@@ -299,7 +299,7 @@ describe('sleep enqueue-hook', () => {
       decisionText: 'Adopt Redis as a cache',
     });
     await expect(
-      sqliteStore(tc.hippoRoot).graphRebuild.applyOps(
+      sqliteStore(tc.hippoRoot).hippoDb.graphRebuild.applyOps(
         T,
         [
           { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
@@ -343,7 +343,7 @@ describe('sleep enqueue-hook', () => {
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
-    expect(await sqliteStore(tc.hippoRoot).graphReads.graphDelta(T, desired)).toEqual([]);
+    expect(await sqliteStore(tc.hippoRoot).hippoDb.graphReads.graphDelta(T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 

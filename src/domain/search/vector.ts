@@ -6,7 +6,8 @@ import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { VectorReads } from '../../base/ports/store-index.js';
-import type { GraphReads, RequiredStore } from '../../base/ports/store.js';
+import type { RequiredStore } from '../../base/ports/store.js';
+import type { GraphWalk } from '../graph/recall.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -35,7 +36,7 @@ export interface VectorSource {
   readonly store: RequiredStore;
   readonly vectors: VectorReads;
   /** The store's graph, which the graph list walks; unset on a store that keeps none. */
-  readonly graphReads?: GraphReads;
+  readonly graphReads?: GraphWalk;
   /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than
    * failing the search. */
   readonly provider: () => EmbeddingProvider;

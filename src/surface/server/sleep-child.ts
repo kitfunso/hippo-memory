@@ -19,7 +19,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
 import { failureReply } from './failure-reply.js';
 import type { SleepResult } from '../../api/sleep/sleep.js';
-import { contextReach } from '../../api/types.js';
+import { contextReach } from '../../api/hippo-db-context.js';
 
 type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 

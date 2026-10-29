@@ -401,13 +401,13 @@ async function rebuildGraph(
   budget: WriteBudget,
 ): Promise<ExtractResult> {
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
-  const ops = await store.graphReads.graphDelta(tenantId, derived);
+  const ops = await store.hippoDb.graphReads.graphDelta(tenantId, derived);
   let next = 0;
   let skipped = 0;
   let committedAt = 0;
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
-    const chunk = await store.graphRebuild.applyOps(tenantId, ops, {
+    const chunk = await store.hippoDb.graphRebuild.applyOps(tenantId, ops, {
       from: next,
       holdMs: budget.holdMs,
     });

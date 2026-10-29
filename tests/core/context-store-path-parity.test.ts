@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
-import { coreEnrichment } from '../../src/api/hippo-db-context.js';
+import { contextReach, coreEnrichment } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
@@ -27,7 +27,6 @@ import { seedTwoTenants, TENANT_A, TENANT_B } from '../_helpers/store-conformanc
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
-import { contextReach } from '../../src/api/types.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from '../_helpers/infra.js';
 import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';

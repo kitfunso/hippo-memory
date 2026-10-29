@@ -21,6 +21,7 @@ import { rrfFuse } from '../../src/domain/search/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../../src/domain/graph/stream.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
+import { walkable } from '../_helpers/graph-walk.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -82,7 +83,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // from strong(0). seedCount=3 keeps weak a non-seed.
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
     expect(seeds.map((s) => s.index)).not.toContain(7); // weak is NOT a seed
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: walkable(sqliteStore(home)), tenantId: T });
     expect(graphRanked).toContain(7); // the graph stream surfaces weak
 
     // 3-list fusion lifts weak into top-5.
@@ -101,7 +102,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const cosineRanked = [0, 1, 2, 3, 4];
 
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: walkable(sqliteStore(home)), tenantId: T });
     expect(graphRanked).toEqual([]); // no graph -> empty -> wiring skips the 3rd list
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
@@ -125,7 +126,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const bm25Ranked = [0, 1, 2, 3, 4, 5]; // answer rank1, adjacent rank6 (tail)
     const cosineRanked = [0, 1, 2, 3, 4, 5];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: walkable(sqliteStore(home)), tenantId: T });
     expect(graphRanked).toEqual([5]); // the graph IS populated and boosts the distractor, its only reach
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
@@ -140,7 +141,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const bm25Ranked = [0, 1, 2, 3];
     const cosineRanked = [3, 2, 1, 0];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 2);
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: walkable(sqliteStore(home)), tenantId: T });
     expect(graphRanked).toEqual([]);
 
     // The wiring's skip branch: rrfFuse over the 2 lists. Identical scores either way.

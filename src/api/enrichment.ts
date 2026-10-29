@@ -4,6 +4,7 @@ import type { LastRecallWrites } from '../base/ports/store/recall-writes.js';
 import type { HandoffFilter } from '../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import type { ContinuityKey } from '../base/ports/store/types.js';
+import type { GraphWalk } from '../domain/graph/recall.js';
 
 /** Where context keeps its pick as the last recall, for a later `hippo outcome` with no ids. */
 export interface LastRecallFinish {
@@ -31,4 +32,13 @@ export interface CoreEnrichment {
   readonly lastRecall?: LastRecallFinish;
   readonly handoff?: HandoffRead;
   readonly readiness?: ReadinessPing;
+  /** The graph recall's expansion and graph list walk. */
+  readonly graph?: GraphWalk;
+}
+
+/** What a core path reads from the operator's global store's local tier, filled by the root that
+ * opened it. */
+export interface GlobalEnrichment {
+  /** The global graph CLI recall and the published hybridSearch also walk. */
+  readonly graph?: GraphWalk;
 }

@@ -1,6 +1,6 @@
 // hippo.db's local tier on the worker store: each local method is sent to a worker as
 // `hippoDb.<repo>.<method>`, the worker runs it, and a request-bound call carries that request's limits.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { META_KEY } from '../../src/db/meta.js';
@@ -8,6 +8,9 @@ import { RequestDeadline } from '../../src/base/util/request-scope.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
 import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { HIPPO_DB_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
+import { remember } from '../../src/api/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordingExecutor } from '../_helpers/recording-executor.js';
 
@@ -23,6 +26,7 @@ const SHORT_DEADLINE_MS = 400;
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const undo of cleanups.splice(0).reverse()) await undo();
+  vi.unstubAllEnvs();
 });
 
 /** A worker store on a fresh root, closed after the test. */
@@ -120,4 +124,21 @@ describe("hippo.db's local tier on the worker store", () => {
     await dropped;
     expect(remembered(root)).toBe(2);
   }, 20_000);
+
+  it("runs a call through ctx.enrich under its request's deadline and signal, as the request's core calls", async () => {
+    const root = makeRoot('hippo-db-workers');
+    await remember(apiCtx(root), { content: 'the context route keeps this as the last recall' });
+    vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '60000');
+    const { executor, sent } = recordingExecutor(createSqliteExecutor(root));
+    const server = await serveKeyed({ hippoRoot: root, port: 0, store: storeOn(root, executor) });
+    cleanups.push(() => server.stop());
+    expect((await fetch(`${server.url}/v1/context?budget=1500`)).status).toBe(200);
+    const [enriched, core] = ['hippoDb.lastRecall.finishRecall', 'base.bumpRecallStats'].map((op) =>
+      sent.find((call) => call.op === op),
+    );
+    expect(enriched?.deadlineAt).toEqual(expect.any(Number));
+    expect(enriched?.signal).toBeInstanceOf(AbortSignal);
+    expect(enriched?.deadlineAt).toBe(core?.deadlineAt);
+    expect(enriched?.signal).toBe(core?.signal);
+  });
 });

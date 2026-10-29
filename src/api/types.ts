@@ -18,12 +18,11 @@ import type {
 } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
-import type { CoreEnrichment } from './enrichment.js';
+import type { CoreEnrichment, GlobalEnrichment } from './enrichment.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { StrengthModel } from '../base/memory/strength.js';
-import type { EmbedderFor } from '../base/ports/embedder.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -49,6 +48,7 @@ export interface GlobalInReach {
   readonly root: string;
   readonly store: StoreWith<GlobalGroup>;
   readonly config: HippoConfig;
+  readonly enrich?: GlobalEnrichment;
 }
 
 /** A store a ledger can sit in, with the config that turns its delivery rows and pilot arm on. */
@@ -120,34 +120,6 @@ export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & {
 export type EntryInfraPorts = Omit<InfraPorts, 'failureNotices'> & {
   readonly failureNotices?: FailureNotices;
 };
-
-/** A root's reach with the global store's config loaded beside it; `configAt` is the root's own
- * loader, and a promote embeds its copy with `embedderFor`. */
-export function contextReach(
-  reach: StoreReach,
-  configAt: (root: string) => HippoConfig,
-  embedderFor: EmbedderFor,
-  ledger?: LedgerHome,
-): ContextReach {
-  const { global, globalTarget, ...rest } = reach;
-  // Both name the operator's global store, so one load serves both.
-  let last: { readonly root: string; readonly config: HippoConfig } | undefined;
-  const at = (root: string): HippoConfig => {
-    if (last?.root !== root) last = { root, config: configAt(root) };
-    return last.config;
-  };
-  let withConfig: ContextReach = ledger === undefined ? rest : { ...rest, ledger };
-  if (global !== undefined) {
-    withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
-  }
-  if (globalTarget !== undefined) {
-    withConfig = {
-      ...withConfig,
-      globalTarget: { store: globalTarget.store, config: at(globalTarget.root), embedderFor },
-    };
-  }
-  return withConfig;
-}
 
 /** Whether the store serves many people: the root's reach says, else the store's config for an
  * integrator's store. */

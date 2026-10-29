@@ -79,7 +79,7 @@ describe('UPGRADING-3.0 advice', () => {
         source: {
           store,
           vectors: store.vectors,
-          graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
+          graphReads: hasGroup(store, 'graphReads') ? store.hippoDb.graphReads : undefined,
           provider,
         },
       });
@@ -87,10 +87,10 @@ describe('UPGRADING-3.0 advice', () => {
     });
   });
 
-  it('expands recall on a store narrowed to graphReads (graphExpandRecall)', () => {
+  it('expands recall on any store, walking the graph its local tier keeps (graphExpandRecall)', () => {
     typeOnly(async () => {
       const { store } = ctx;
-      if (hasGroup(store, 'graphReads')) await graphExpandRecall(results, { store, hops: 1, tenantId });
+      await graphExpandRecall(results, { store, hops: 1, tenantId });
     });
   });
 
@@ -115,12 +115,12 @@ describe('UPGRADING-3.0 advice', () => {
     });
   });
 
-  it('sleeps only on a store that sets graphReads (SleepStore)', () => {
+  it("sleeps only on a store with hippo.db's local tier, where graphReads lives (SleepStore)", () => {
     typeOnly(() => {
       const sleeper: SleepStore = { ...sqliteStore(hippoRoot), consolidation };
-      const twoX: Omit<SleepStore, 'graphReads'> = sleeper;
-      // @ts-expect-error the 2.x sleep groups on a 3.0 store, without graphReads
-      const refused: SleepStore = twoX;
+      const noTier: Omit<SleepStore, 'hippoDb'> = sleeper;
+      // @ts-expect-error the sleep groups without the local tier the graph rebuild reads
+      const refused: SleepStore = noTier;
       expectTypeOf(refused).toEqualTypeOf<SleepStore>();
     });
   });

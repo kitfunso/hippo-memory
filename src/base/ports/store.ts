@@ -79,6 +79,9 @@ const LOCAL_GROUP_NAMES = [
   'promotion',
   'lessonWrites',
   'readiness',
+  'dagReads',
+  'graphReads',
+  'graphRebuild',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

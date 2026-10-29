@@ -150,7 +150,8 @@ async function withContent(
   items: AssembledContextItem[],
 ): Promise<AssembledContextItem[]> {
   const ids = items.filter((it) => !it.isSummary).map((it) => it.id);
-  const read = ids.length > 0 ? await ctx.store.dagReads.sessionRawRows({ ...query, ids }) : [];
+  const read =
+    ids.length > 0 ? await ctx.store.hippoDb.dagReads.sessionRawRows({ ...query, ids }) : [];
   const rows = new Map(read.map((r) => [r.id, r]));
   return items.flatMap((it) => {
     if (it.isSummary) return [it];
@@ -181,7 +182,7 @@ async function loadScopedKeys(
   own: string | undefined,
 ): Promise<ScopedKeys> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
-  const dag = ctx.store.dagReads;
+  const dag = ctx.store.hippoDb.dagReads;
   const query: SessionRawCount = {
     tenantId: ctx.tenantId,
     sessionId,

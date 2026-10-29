@@ -52,7 +52,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('1. maps entities -> nodes and relations -> edges', async () => {
     await seedGraph(home);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T);
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T);
     expect(m.nodes).toHaveLength(2);
     expect(m.nodes.some((n) => n.type === 'policy' && n.name === 'RetryPolicy')).toBe(true);
     expect(m.nodes.some((n) => n.type === 'decision')).toBe(true);
@@ -63,7 +63,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('2. --entity focus returns the match + its 1-hop neighbours + edges among them', async () => {
     await seedGraph(home);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'RetryPolicy' });
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'RetryPolicy' });
     // RetryPolicy + the decision that references it.
     expect(m.nodes).toHaveLength(2);
     expect(m.nodes.some((n) => n.name === 'RetryPolicy')).toBe(true);
@@ -72,19 +72,19 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('3. unknown --entity yields an empty model', async () => {
     await seedGraph(home);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'NoSuchThing' });
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'NoSuchThing' });
     expect(m.nodes).toHaveLength(0);
     expect(m.edges).toHaveLength(0);
   });
 
   it('4. empty store -> empty model, truncated false', async () => {
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T);
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T);
     expect(m).toEqual({ nodes: [], edges: [], truncated: false });
   });
 
   it('5. truncated flag set when a loader hits its limit', async () => {
     await seedGraph(home);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { limit: 1 }); // 2 entities, limit 1 -> truncated
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { limit: 1 }); // 2 entities, limit 1 -> truncated
     expect(m.truncated).toBe(true);
     expect(m.nodes.length).toBeLessThanOrEqual(1);
   });
@@ -92,7 +92,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   it('6. dangling edges (endpoint outside the node set) are dropped', async () => {
     await seedGraph(home);
     // limit 1 keeps 1 entity; the references edge's other endpoint is excluded -> dropped.
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { limit: 1 });
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { limit: 1 });
     for (const e of m.edges) {
       const ids = new Set(m.nodes.map((n) => n.id));
       expect(ids.has(e.from) && ids.has(e.to)).toBe(true);
@@ -117,7 +117,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
       decisionText: 'We adopt FocusPol across every service now',
     });
     await extractGraph(sqliteStore(home), T);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'FocusPol', limit: 2 });
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'FocusPol', limit: 2 });
     expect(m.nodes.some((n) => n.name === 'FocusPol')).toBe(true); // found despite limit 2
     expect(m.edges.length).toBeGreaterThanOrEqual(1); // its references edge is present
     const ids = new Set(m.nodes.map((n) => n.id));
@@ -137,7 +137,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
       decisionText: 'Adopt PolA and PolB across the org now',
     });
     await extractGraph(sqliteStore(home), T);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, {
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, {
       entity: 'Adopt PolA and PolB across the org now',
     });
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
@@ -155,7 +155,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
       });
     }
     await extractGraph(sqliteStore(home), T);
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Acme', limit: 3 });
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, { entity: 'Acme', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3); // 8 same-name entities capped to 3
     expect(m.truncated).toBe(true);
   });
@@ -170,7 +170,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     await extractGraph(sqliteStore(home), T);
     // limit 3: the decision references 4 policies; one 1-hop neighbor cannot fit,
     // so the model must report truncated (not silently omit a neighbor).
-    const m = await buildGraphModel(sqliteStore(home).graphReads, T, {
+    const m = await buildGraphModel(sqliteStore(home).hippoDb.graphReads, T, {
       entity: 'Adopt PolA and PolB and PolC and PolD now',
       limit: 3,
     });

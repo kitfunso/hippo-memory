@@ -28,13 +28,8 @@ export type { FailureSummary } from '../base/ports/store/rejections.js';
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../base/scope/project-identity.js';
 
-export {
-  RecallContractError,
-  adminActor,
-  contextReach,
-  ownerOrSubject,
-  requireHostAdmin,
-} from './types.js';
+export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
+export { contextReach } from './hippo-db-context.js';
 export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
 export { remember } from './memories/remember.js';
 export { rawArchiveForEvent, rememberUntrusted } from './hippo-db/connector-writes.js';

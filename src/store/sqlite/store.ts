@@ -25,13 +25,10 @@ import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteSharing } from './sharing/sharing.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
 import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
-import { sqliteGraphRebuild } from './graph/graph-rebuild.js';
 import { sqliteLedger } from './ledger/ledger.js';
 import { sqliteFolderFiles } from './folder-files/folder-files.js';
-import { sqliteDagReads } from './graph/dag-reads.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
 import { finishRecall } from './recall/last-recall.js';
-import { sqliteGraphReads } from './graph/graph-reads.js';
 import { sqliteObjects } from './records/objects.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';
@@ -81,7 +78,6 @@ function sqliteLocalGroups(
     compactionHooks: sqliteCompactionHooks(handles),
     projectTags: sqliteProjectTags(handles),
     diagnostics: sqliteDiagnostics(on),
-    graphRebuild: sqliteGraphRebuild(on),
     agentImport: sqliteAgentImport(handles),
     dormant: sqliteDormant(handles),
     compactions: sqliteCompactions(handles),
@@ -104,9 +100,7 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     vectorWrites: sqliteVectorWrites(on, files.hippoRoot),
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
-    dagReads: sqliteDagReads(on),
     auditLog: sqliteAuditLog(on),
-    graphReads: sqliteGraphReads(on),
     objects: sqliteObjects(handles),
     vectors: sqliteVectorReads(handles),
     cards: sqliteCards(on),

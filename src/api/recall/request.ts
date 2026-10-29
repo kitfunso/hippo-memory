@@ -368,9 +368,14 @@ function finishSecond(
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
   if (ctx.reach?.isGlobal === true) {
-    return { store: ctx.store, config: ctx.config, onHippoDb: true };
+    return { store: ctx.store, graph: ctx.enrich?.graph, config: ctx.config, onHippoDb: true };
   }
-  return { store: sources.store, config: sources.config, onHippoDb: true };
+  return {
+    store: sources.store,
+    graph: sources.enrich?.graph,
+    config: sources.config,
+    onHippoDb: true,
+  };
 }
 
 /** The second store takes its own recall rows, unless the caller's store is the global one

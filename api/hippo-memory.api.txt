@@ -97,14 +97,14 @@ entry/project-identity.d.ts: ProjectIdentity re-export
 entry/project-identity.d.ts: ResolveProjectIdentityOptions re-export
 entry/project-identity.d.ts: resolveProjectIdentity re-export
 entry/search.d.ts: DEFAULT_MAX_NEIGHBORS re-export
-entry/search.d.ts: GraphExpandOptions re-export
+entry/search.d.ts: GraphExpandOptions type
 entry/search.d.ts: MAX_HOPS re-export
 entry/search.d.ts: MatchExplanation re-export
 entry/search.d.ts: SearchResult re-export
 entry/search.d.ts: computeTemporalRange re-export
 entry/search.d.ts: detectTemporalDirection re-export
 entry/search.d.ts: explainMatch re-export
-entry/search.d.ts: graphExpandRecall re-export
+entry/search.d.ts: graphExpandRecall function
 entry/search.d.ts: hybridSearch re-export
 entry/search.d.ts: multihopSearch function
 entry/search.d.ts: search function

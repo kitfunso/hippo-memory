@@ -33,7 +33,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 const NOW = new Date(FAKE_NOW);
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
 
-const graphEntities = async (s: HippoDbStore) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
+const graphEntities = async (s: HippoDbStore) => (await s.hippoDb.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
@@ -362,21 +362,25 @@ const READS: readonly Read[] = [
     (s) => s.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
     'deploy-duration',
   ),
-  read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
   read(
-    'dagReads.sessionRawKeys',
-    (s) => s.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
+    'hippoDb.dagReads.sessionRawCount',
+    (s) => s.hippoDb.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }),
+    /^1$/,
+  ),
+  read(
+    'hippoDb.dagReads.sessionRawKeys',
+    (s) => s.hippoDb.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
     /contentLength: \d+/,
   ),
   read(
-    'dagReads.sessionRawRows',
-    (s) => s.dagReads.sessionRawRows({ tenantId: TENANT, sessionId: SESSION, ids: ['mem_x_raw'] }),
+    'hippoDb.dagReads.sessionRawRows',
+    (s) => s.hippoDb.dagReads.sessionRawRows({ tenantId: TENANT, sessionId: SESSION, ids: ['mem_x_raw'] }),
     'mem_x_raw',
   ),
   read(
-    'dagReads.summaryWithDescendants',
+    'hippoDb.dagReads.summaryWithDescendants',
     (s) =>
-      s.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', {
+      s.hippoDb.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', {
         depth: 2,
         admit: {},
         page: { rows: 1 },
@@ -393,31 +397,35 @@ const READS: readonly Read[] = [
     (s) => s.hippoDb.quarantine.list(TENANT, { status: 'all' }),
     'scripts/wipe.sh before every deploy',
   ),
-  read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
+  read('hippoDb.graphReads.graphRows', (s) => s.hippoDb.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
   read(
-    'graphReads.graphRows by memory',
+    'hippoDb.graphReads.graphRows by memory',
     async (s) =>
-      s.graphReads.graphRows(TENANT, {
+      s.hippoDb.graphReads.graphRows(TENANT, {
         by: 'memory',
         ids: (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
       }),
     /memoryId: '[^']+'/,
   ),
   read(
-    'graphReads.graphRows by entity',
-    (s) => s.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
+    'hippoDb.graphReads.graphRows by entity',
+    (s) => s.hippoDb.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
     'RetryPolicy',
   ),
   read(
-    'graphReads.graphRows by neighbor',
+    'hippoDb.graphReads.graphRows by neighbor',
     async (s) =>
-      s.graphReads.graphRows(TENANT, { by: 'neighbor', ids: (await graphEntities(s)).map((e) => e.id), limit: 50 }),
+      s.hippoDb.graphReads.graphRows(TENANT, {
+        by: 'neighbor',
+        ids: (await graphEntities(s)).map((e) => e.id),
+        limit: 50,
+      }),
     /relType: '[^']+'/,
   ),
   read(
-    'graphReads.graphDelta',
+    'hippoDb.graphReads.graphDelta',
     (s) =>
-      s.graphReads.graphDelta(TENANT, {
+      s.hippoDb.graphReads.graphDelta(TENANT, {
         entities: [
           {
             entityType: 'policy',

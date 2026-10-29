@@ -1,11 +1,6 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
-import {
-  contextReach,
-  type ContextReach,
-  type ContextWith,
-  type GlobalInReach,
-} from '../../api/types.js';
+import type { ContextReach, ContextWith, GlobalInReach } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -50,7 +45,7 @@ import {
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
-import { coreEnrichment } from '../../api/hippo-db-context.js';
+import { contextReach, coreEnrichment, globalEnrichment } from '../../api/hippo-db-context.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */
@@ -210,7 +205,10 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
     }),
     apiContext: (root, tenantId, callers = createCallerState()) =>
       contextOn(scope, root, tenantId, callers),
-    secondStore: (root) => ({ root, store: storeOn(scope, root), config: cliConfig(root) }),
+    secondStore: (root) => {
+      const store = storeOn(scope, root);
+      return { root, store, config: cliConfig(root), enrich: globalEnrichment(store) };
+    },
     ledgerReach: (root) =>
       ledgerReachOf({ reach: reachOn(scope, root, storeOn(scope, root), cliInfra().embedderFor) }),
     importBatch: (root) => (run) =>

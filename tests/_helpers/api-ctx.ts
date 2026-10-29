@@ -1,6 +1,6 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
-import { contextReach, type ContextReach, type ContextWith } from '../../src/api/types.js';
-import { coreEnrichment, type HippoDbContext } from '../../src/api/hippo-db-context.js';
+import type { ContextReach, ContextWith } from '../../src/api/types.js';
+import { contextReach, coreEnrichment, type HippoDbContext } from '../../src/api/hippo-db-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';

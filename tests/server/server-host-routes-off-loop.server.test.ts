@@ -340,7 +340,7 @@ describe('the server-thread block of the routes this file covers', () => {
   const ROUTES: ReadonlyArray<
     readonly [route: string, swapped: (inProcess: InProcess) => Swap, send: Send, status: number]
   > = [
-    ['GET /v1/recall/drill/:id', (p) => ({ dagReads: p.dagReads }), drill('mem_x_summary'), 501],
+    ['GET /v1/recall/drill/:id', (p) => ({ hippoDb: { dagReads: p.hippoDb.dagReads } }), drill('mem_x_summary'), 501],
     [
       'POST /v1/outcome with ids',
       (p) => ({ entryWrites: p.entryWrites }),

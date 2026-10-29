@@ -28,7 +28,7 @@ export function graphView(
   query: { entity?: string; limit: number },
 ): Promise<GraphModel> {
   const { role, scopes, owner } = ctx.actor;
-  return buildGraphModel(ctx.store.graphReads, ctx.tenantId, {
+  return buildGraphModel(ctx.store.hippoDb.graphReads, ctx.tenantId, {
     ...query,
     reader: { role, scopes, owner },
   });
@@ -41,7 +41,7 @@ export async function graphViewOnHost(
   query: { entity?: string; limit: number },
 ): Promise<GraphModel> {
   requireHostAdmin(ctx, 'Reading every scope of the graph');
-  return buildGraphModel(ctx.store.graphReads, ctx.tenantId, query);
+  return buildGraphModel(ctx.store.hippoDb.graphReads, ctx.tenantId, query);
 }
 
 /** Rebuilds the caller's tenant's graph from its consolidated objects; safe to re-run. */

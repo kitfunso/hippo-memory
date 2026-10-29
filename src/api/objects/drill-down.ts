@@ -81,7 +81,7 @@ export async function drillDown(
     project: opts.project,
   };
   const pastLimit = Math.floor(limit) + 1;
-  const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
+  const walked = await ctx.store.hippoDb.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     admit,
     // A leaf answers not_drillable, so nothing under it is read.

@@ -1,5 +1,10 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteGraphRebuild } from './graph/graph-rebuild.js';
+import { sqliteGraphReads } from './graph/graph-reads.js';
+import { GRAPH_READS_EFFECTS, GRAPH_REBUILD_EFFECTS } from '../../base/ports/store/graph.js';
+import { sqliteDagReads } from './graph/dag-reads.js';
+import { DAG_READS_EFFECTS } from '../../base/ports/store/context-reads.js';
 import { sqliteReadiness } from './maintenance/readiness.js';
 import { READINESS_EFFECTS } from '../../base/ports/store/diagnostics.js';
 import { sqliteLessonWrites } from './learning/lesson-writes.js';
@@ -46,6 +51,9 @@ export function hippoDbRepos(handles: Handles) {
     promotion: sqlitePromotion(handles),
     lessonWrites: sqliteLessonWrites(handles),
     readiness: sqliteReadiness(handles),
+    dagReads: sqliteDagReads(handles.on),
+    graphReads: sqliteGraphReads(handles.on),
+    graphRebuild: sqliteGraphRebuild(handles.on),
   };
 }
 
@@ -75,4 +83,7 @@ export const HIPPO_DB_EFFECTS = {
   promotion: PROMOTION_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
   readiness: READINESS_EFFECTS,
+  dagReads: DAG_READS_EFFECTS,
+  graphReads: GRAPH_READS_EFFECTS,
+  graphRebuild: GRAPH_REBUILD_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };
