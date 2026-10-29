@@ -3,7 +3,7 @@
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
 import { preCompactHook } from '../../capture/compact.js';
 import { readHookStdin } from '../stdin.js';
-import { cliApiContext, cliHookRequest, cliStore } from '../api-context.js';
+import { cliApiContext, cliHookRequest } from '../api-context.js';
 import { type CommandContext, stringFlag } from '../flag-values.js';
 import {
   hookRuntime,
@@ -24,9 +24,10 @@ export async function handlePreCompact({
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const storeRoot = hookStoreRoot(root);
   await cliHookRequest(async () => {
+    const ctx = cliApiContext(storeRoot, tenantId);
     // Started before any store wait, so two fires of one hook carry timestamps close enough to
     // match as duplicates.
-    const rec = await startDeliveryRecorder(cliApiContext(storeRoot, tenantId), {
+    const rec = await startDeliveryRecorder(ctx, {
       stdinText,
       runtime,
       eventType: 'pre-compact',
@@ -37,8 +38,7 @@ export async function handlePreCompact({
     // cannot wait.
     let flushed: Promise<void> | undefined;
     try {
-      await preCompactHook(storeRoot, cliStore(storeRoot), {
-        tenantId,
+      await preCompactHook(storeRoot, ctx, {
         stdinText,
         stdinTimedOut,
         logFile: stringFlag(flags, 'log-file'),
