@@ -4,11 +4,11 @@
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
+import type { InfraPorts } from '../base/ports/infra.js';
 import {
   embedAll,
   embedMemoryDetached,
   folderEmbedTarget,
-  type EmbedRun,
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
@@ -19,7 +19,7 @@ import { requireHostAdmin, type Context, type ContextWith } from './types.js';
  * as `run`. */
 export function detachedEmbedder(
   folder: ConfiguredFolder<RequiredStore>,
-  run: EmbedRun,
+  run: Pick<InfraPorts, 'failureNotices'>,
 ): (entry: MemoryEntry) => void {
   const target = folderEmbedTarget(folder, run);
   return (entry) => embedMemoryDetached(target, entry);

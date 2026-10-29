@@ -1,4 +1,4 @@
-// 3.0 removed the physics engine: its flags fail by name, --classic only warns, and a physics config block is ignored.
+// 3.0 removed the physics engine: its flags and --classic fail by name, and a physics config block is ignored.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,23 +28,22 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
+// A flag before the query is the case that matters: an undeclared flag there swallows the query as its value.
 describe('the physics flags', () => {
   it.each([
-    ['recall --physics', ['recall', 'deploy', '--physics'], '--physics was removed in 3.0'],
-    ['explain --physics', ['explain', 'deploy', '--physics'], '--physics was removed in 3.0'],
-    ['embed --reset-physics', ['embed', '--reset-physics'], '--reset-physics was removed in 3.0'],
-  ])('%s exits 1 naming the removal', async (_name, args, removal) => {
-    const res = await hippoRun(...args);
+    ['recall', 'physics', ['deploy', '--physics']],
+    ['recall', 'classic', ['deploy', '--classic']],
+    ['recall', 'physics', ['--physics', 'deploy']],
+    ['recall', 'classic', ['--classic', 'deploy']],
+    ['explain', 'physics', ['deploy', '--physics']],
+    ['explain', 'physics', ['--physics', 'deploy']],
+    ['explain', 'classic', ['--classic', 'deploy']],
+    ['embed', 'reset-physics', ['--reset-physics']],
+  ])('%s --%s exits 1 naming the removal (%j)', async (verb, flag, args) => {
+    const res = await hippoRun(verb, ...args);
 
     expect(res.status).toBe(1);
-    expect(res.stderr).toContain(removal);
-  });
-
-  it('recall --classic warns that the flag is unknown and still recalls', async () => {
-    const res = await hippoRun('recall', 'deploy', '--classic');
-
-    expect(res.status).toBe(0);
-    expect(res.stderr).toContain('ignoring unknown flag --classic');
+    expect(res.stderr).toContain(`--${flag} was removed in 3.0`);
   });
 });
 

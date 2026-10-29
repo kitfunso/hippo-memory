@@ -304,4 +304,12 @@ describe('hybrid with a store', () => {
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), vectorCandidates });
     expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'], false);
   });
+
+  it('under asOf the vector arm still adds a row from before the cut, but none written after it', async () => {
+    const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
+    // v1 was written 7 days ago and v2 8 days ago, so the cut falls between them.
+    const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), vectorCandidates, asOf: ago(7.5) });
+    expect(ids(res)).toContain('v2');
+    expect(ids(res)).not.toContain('v1');
+  });
 });

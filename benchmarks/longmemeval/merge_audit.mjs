@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // How sleep's merged memories meet the session-hit rule; round 2 declares its text/ output as lane R-L4's input.
-// Prints store facts, then writes header-only and text-credit copies of the four retrieval files for
+// Prints store facts, then writes header-only and text-credit copies of the two retrieval files for
 // paired_hits.mjs to score unchanged. Usage: merge_audit.mjs --data <oracle.json> --run <dir> --out <dir>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,8 +21,6 @@ for (const q of questions) for (const s of q.answer_session_ids ?? []) owners.se
 
 const open = (store) => new DatabaseSync(join(run, store, '.hippo', 'hippo.db'), { readOnly: true });
 const rows = (store) => open(store).prepare('SELECT id, layer, tags_json, content FROM memories').all();
-const bareIds = (store) => new Set(open(store)
-  .prepare('SELECT id FROM memories WHERE id NOT IN (SELECT memory_id FROM memory_physics)').all().map((r) => r.id));
 const sessionTags = (r) => JSON.parse(r.tags_json || '[]').filter((t) => t.startsWith('answer_'));
 const never = rows('nosleep'), slept = rows('sleep');
 
@@ -52,9 +50,6 @@ console.log(`rows: never-slept ${never.length}, slept ${slept.length} (${merged.
 console.log(`text snippets: ${snippet.size} unique, ${ambiguous.length} dropped as shared by more than one never-slept row`);
 console.log(`session tags on a merged row without that session's header: ${inRow + elsewhere + missing}; ` +
   `its text is in the row ${inRow}, elsewhere in the slept store ${elsewhere}, not found ${missing}`);
-const bareSlept = bareIds('sleep');
-console.log(`memories without a physics particle: never-slept ${bareIds('nosleep').size}, ` +
-  `slept ${bareSlept.size} (${merged.filter((r) => bareSlept.has(r.id)).length} of them merged by sleep)`);
 
 const load = (f) => new Map(readFileSync(join(run, `ret-${f}.jsonl`), 'utf8').trim().split('\n')
   .map((l) => JSON.parse(l)).map((r) => [r.question_id, r.retrieved_memories ?? []]));
@@ -71,7 +66,7 @@ for (const [q, sids] of answers) {
   if (!hit(top.filter((m) => !mergedIds.has(m.id)), sids)) viaMerged++;
 }
 console.log(`L4 hit@5 A-only questions ${aOnly}, of which a merged row is the only hit in ${viaMerged}`);
-for (const f of ['sleep-hybrid', 'sleep-physics', 'nosleep-hybrid', 'nosleep-physics']) {
+for (const f of ['sleep-hybrid', 'nosleep-hybrid']) {
   const ids = new Set((f.startsWith('sleep') ? slept : never).map((r) => r.id));
   const all = [...load(f).values()].flat();
   console.log(`ret-${f}: ${all.length} retrieved, ${all.filter((m) => !ids.has(m.id)).length} missing from its store, ` +
@@ -80,7 +75,7 @@ for (const f of ['sleep-hybrid', 'sleep-physics', 'nosleep-hybrid', 'nosleep-phy
 
 for (const [mode, withSnippet] of [['header', false], ['text', true]]) {
   mkdirSync(join(out, mode), { recursive: true });
-  for (const f of ['sleep-hybrid', 'sleep-physics', 'nosleep-hybrid', 'nosleep-physics']) {
+  for (const f of ['sleep-hybrid', 'nosleep-hybrid']) {
     const lines = readFileSync(join(run, `ret-${f}.jsonl`), 'utf8').trim().split('\n').map((line) => {
       const r = JSON.parse(line);
       const sids = answers.get(r.question_id) ?? [];
