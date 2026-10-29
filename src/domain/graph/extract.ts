@@ -21,8 +21,8 @@ import type { Objects, StoreWith } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { escapeRegex } from '../../base/util/escape.js';
 
-/** Per-type load cap (the loaders default to 100); a type over it is truncated and `ExtractResult.truncated` records
- *  that. */
+/** Per-type load cap (the loaders default to DEFAULT_LIST_LIMIT); a type over it is truncated and
+ *  `ExtractResult.truncated` records that. */
 export const MAX_EXTRACT_PER_TYPE = 10000;
 
 /** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose (a
