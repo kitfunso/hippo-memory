@@ -54,6 +54,7 @@ const SERVER_TYPES = [
   'CallerSessionEndResult',
   'CaptureContext',
   'Context',
+  'DetachedWork',
   'HippoStore',
   'JsonValue',
   'RateLimitSpec',

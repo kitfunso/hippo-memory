@@ -36,8 +36,8 @@ beforeEach(() => {
   home = makeRoot('project-merge', { init: false });
   initTestStore(home);
 });
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   closeHippoDb(db);
 });
 

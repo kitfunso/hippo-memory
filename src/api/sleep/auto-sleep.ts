@@ -6,6 +6,7 @@ import type { HippoConfig } from '../../base/config/config.js';
 import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
+import { withDetached } from '../detached.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes
@@ -39,7 +40,7 @@ export async function autoSleepDue(
  * follows has landed.
  */
 export async function autoSleepAfterWrite(
-  ctx: Pick<Context, 'tenantId' | 'config' | 'callers' | 'infra'>,
+  ctx: Pick<Context, 'tenantId' | 'config' | 'callers' | 'infra' | 'detached'>,
 ): Promise<void> {
   const host = ctx.callers?.autoSleep;
   const { tenantId, config } = ctx;
@@ -59,9 +60,9 @@ export async function autoSleepAfterWrite(
     if (!due) host.latch.held = false;
   }
   if (!due) return;
-  // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so
-  // log it.
-  host
+  // The root's keeper holds the sleep so its stores outlast it; a context with no keeper waits for
+  // it. A failure is logged here once, with the tenant.
+  const sleep = host
     .run()
     .catch((err) => {
       log.error(
@@ -72,6 +73,7 @@ export async function autoSleepAfterWrite(
     .finally(() => {
       host.latch.held = false;
     });
+  await withDetached(ctx, (detached) => detached.detach(sleep));
 }
 
 /** What one auto-sleep runs: the consolidation alone. */

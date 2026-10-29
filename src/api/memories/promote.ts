@@ -16,6 +16,7 @@ import {
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
+import { withDetached } from '../detached.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
   assertWriteRight,
@@ -62,7 +63,9 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists.
-  embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry);
+  await withDetached(ctx, (detached) =>
+    embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry, detached),
+  );
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

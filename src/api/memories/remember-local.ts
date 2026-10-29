@@ -1,7 +1,7 @@
 // The local remember pipeline for a caller in this process (`hippo remember`, `hippo watch`):
 // schema fit, the salience gate, the write, the read-back, the `remembered` counter and the
-// embedding kick-off, in that order. Fact extraction is a second step, which the caller runs after
-// it has reported the write. Nothing here prints; the caller reports from what comes back.
+// embedding, which the Context's keeper owns, in that order. Fact extraction is a second step,
+// which the caller runs after it has reported the write. Nothing here prints.
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
 import {
@@ -12,6 +12,7 @@ import {
 import { captureError, type FailedCommand } from '../../domain/learn/autolearn.js';
 import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { withDetached } from '../detached.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
@@ -48,8 +49,9 @@ export interface StartedWeak {
 }
 
 /** `stored` carries the row as the store holds it after the write, and `embedding`, which
- * settles with whether the row reached the vector index (a caller may ignore it; a failure is
- * also logged). `skipped` is the gate dropping the write, with nothing stored or counted. */
+ * settles with whether the row reached the vector index (the Context's keeper also holds it, so a
+ * caller may drop it; a failure is logged). `skipped` is the gate dropping the write, with nothing
+ * stored or counted. */
 export type LocalRememberOutcome =
   | {
       readonly status: 'stored';
@@ -71,8 +73,7 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
   return entry;
 }
 
-/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a
- * row left out of the index is logged. */
+/** Best-effort and slow (a model load or a network call); a row left out of the index is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
   const folder = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
   const target = folderEmbedTarget(folder, ctx.infra);
@@ -86,8 +87,8 @@ function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutco
   });
 }
 
-/** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and
- * never awaited. A refused value throws as `remember` does. */
+/** One local write on hippo.db: gate, write, read-back, counter, then the embedding, which the
+ * Context's keeper owns; with none, the call waits for it. A refused value throws as `remember` does. */
 export async function rememberLocally(
   ctx: HippoDbContext,
   input: LocalRememberInput,
@@ -117,10 +118,13 @@ export async function rememberLocally(
   const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
   await ctx.store.hippoDb.stats.bumpRemembered(1);
-  const embedding = indexInBackground(ctx, entry);
-  return startedWeak
-    ? { status: 'stored', entry, embedding, warnings, startedWeak }
-    : { status: 'stored', entry, embedding, warnings };
+  return withDetached(ctx, (detached): LocalRememberOutcome => {
+    const embedding = indexInBackground(ctx, entry);
+    detached.detach(embedding);
+    return startedWeak
+      ? { status: 'stored', entry, embedding, warnings, startedWeak }
+      : { status: 'stored', entry, embedding, warnings };
+  });
 }
 
 /** What a caller asks of fact extraction; the model is the one its Context carries. */

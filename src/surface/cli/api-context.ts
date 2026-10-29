@@ -50,6 +50,7 @@ import {
 import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { serverNearestAsk } from './server-nearest.js';
+import type { DetachedWork } from '../../domain/search/detached-work.js';
 
 /** The CLI process's config reader: the stdio MCP server lives as long as its host, so each call
  * parses an unchanged config.json once. */
@@ -111,6 +112,9 @@ export interface CliCommand {
   hookRequest<T>(run: (cli: CliCommand) => T | Promise<T>): Promise<T | undefined>;
   /** The stdio MCP loop's host, which runs as this one command. */
   stdioHost(): McpHost<CliStore>;
+  /** Keeps the work a verb starts and does not wait on, such as an embed, until the command's
+   * runtime settles it as the command ends. */
+  readonly detached: DetachedWork;
 }
 
 /** What a CLI helper takes of its command: the stores, the folder it works on and the tenant. */
@@ -191,6 +195,7 @@ function contextOn(
     config,
     callers,
     infra,
+    detached: scope.runtime,
   };
 }
 
@@ -229,6 +234,7 @@ export function cliCommand(runtime: StoreRuntime, session?: RequestStores): CliC
     request: (run) => runSqliteRequest((own) => run(inSession(own)), 'cli', runtime),
     hookRequest: (run) => runSqliteHookRequest((own) => run(inSession(own)), runtime),
     stdioHost: () => stdioHostOn(runtime),
+    detached: runtime,
   };
 }
 
@@ -297,6 +303,7 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
         callers: callersOn(hippoRoot, store),
         infra,
         signal,
+        detached: runtime,
       };
     };
   // Frames interleave, so each takes a session of its own and hands it to every store its context
@@ -304,5 +311,6 @@ function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   return {
     runFrame: (signal, run) =>
       runSqliteRequest((session) => run(contextIn(session, signal)), 'cli', runtime),
+    settle: (withinMs) => runtime.settle(withinMs),
   };
 }

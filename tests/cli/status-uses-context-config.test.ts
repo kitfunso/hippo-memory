@@ -7,8 +7,8 @@ import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.restoreAllMocks();
 });
 

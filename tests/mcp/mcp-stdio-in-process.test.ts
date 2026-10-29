@@ -1,12 +1,17 @@
 // The stdio loop in process: stdin's listeners are captured and fed frames, stdout is read, and exit is stubbed.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
+import type { McpHost } from '../../src/surface/mcp/protocol.js';
+import type { CliStore } from '../../src/surface/cli/api-context.js';
+import { log } from '../../src/base/util/log.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
+import { startHashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import { loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -14,7 +19,10 @@ afterEach(() => {
 
 interface Reply {
   readonly id: number | string | null;
-  readonly result?: { readonly tools?: ReadonlyArray<{ readonly name: string }> };
+  readonly result?: {
+    readonly tools?: ReadonlyArray<{ readonly name: string }>;
+    readonly content?: ReadonlyArray<{ readonly text: string }>;
+  };
   readonly error?: { readonly code: number; readonly message: string };
 }
 
@@ -37,8 +45,8 @@ beforeEach(() => {
   exit = stubExit();
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.restoreAllMocks();
   process.exitCode = undefined;
 });
@@ -49,6 +57,19 @@ function feed(...frames: string[]): void {
 
 function replies(): Reply[] {
   return written.map((line): Reply => JSON.parse(line));
+}
+
+function toolCall(id: number, name: string, args: Record<string, string | boolean>): string {
+  return JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
+}
+
+/** The id in brackets in the text of the reply to call `id`. */
+async function bracketedId(id: number): Promise<string> {
+  await vi.waitFor(() => expect(replies().map((r) => r.id)).toContain(id), { timeout: 15_000 });
+  const text = replies().find((r) => r.id === id)?.result?.content?.[0]?.text ?? '';
+  const found = /\[([^\]]+)\]/.exec(text)?.[1];
+  if (found === undefined) throw new Error(`no id in the reply to ${id}: ${text}`);
+  return found;
 }
 
 describe('startStdioLoop, in process', () => {
@@ -110,5 +131,41 @@ describe('startStdioLoop, in process', () => {
     dribble(`${list(3)}\n${list(4)}\n`, 17);
     await vi.waitFor(() => expect(ids()).toContain(4), { timeout: 15_000 });
     expect(ids().filter((id) => id === 3 || id === 4)).toEqual([3, 4]);
+  });
+
+  it("lands the embed of the last call's global copy before it exits once stdin ends", async () => {
+    const embeddings = await startHashedEmbeddings();
+    try {
+      mkdirSync(join(dir, 'project', '.hippo'));
+      mkdirSync(join(dir, 'global'));
+      const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
+      writeFileSync(join(dir, 'global', 'config.json'), JSON.stringify(config));
+      vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+      startStdioLoop(lastingCommand().stdioHost());
+      feed(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      const local = await bracketedId(1);
+      // The share answers before its embed does, so the vector is there at exit only if the drain waits for it.
+      embeddings.setFault(500);
+      feed(toolCall(2, 'hippo_share', { id: local, force: true }));
+      const shared = await bracketedId(2);
+      fire(stdin, 'end');
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 15_000 });
+      expect(Object.keys(loadEmbeddingIndex(join(dir, 'global')))).toEqual([shared]);
+    } finally {
+      await embeddings.close();
+    }
+  });
+
+  it('names how many handed-off tasks were still running when the drain bound ended', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const real = lastingCommand().stdioHost();
+    const host: McpHost<CliStore> = { runFrame: (signal, run) => real.runFrame(signal, run), settle: async () => 2 };
+    startStdioLoop(host);
+    fire(stdin, 'end');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+    expect(warn).toHaveBeenCalledWith(
+      'mcp: 2 handed-off task(s), such as an embed, still running 5000 ms after stdin closed',
+      { left: 2 },
+    );
   });
 });

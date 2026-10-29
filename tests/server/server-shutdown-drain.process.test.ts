@@ -1,13 +1,23 @@
-// stop() stops accepting, lets an in-flight request finish within the drain window, and closes a stuck one when it ends.
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+// stop() stops accepting, lets an in-flight request finish within the drain window, closes a stuck one when it ends,
+// and gives work a request handed off a bounded wait before the stores close.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import type { AuthResolver, ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { HeldWrites } from '../../src/db/held-writes.js';
+import { DETACHED_SETTLE_MS } from '../../src/surface/server/lifecycle.js';
+import { readLocalKey } from '../../src/surface/server/local-key.js';
+import {
+  startHashedEmbeddings,
+  type EmbeddingFault,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
+import { loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const homes: string[] = [];
 
@@ -48,8 +58,44 @@ function slowRecall(handle: ServerHandle): Promise<Response> {
   return fetch(`${handle.url}/v1/memories?q=anything`, { headers: { authorization: 'Bearer slow-idp-token' } });
 }
 
+interface Promoted {
+  readonly handle: ServerHandle;
+  readonly global: string;
+  readonly globalId: string;
+}
+
+/** A server whose global store embeds on `embeddings`, after a promote it answered: the embed of the global copy then
+ * runs under `fault`. */
+async function promotedOnServer(embeddings: HashedEmbeddings, fault: EmbeddingFault): Promise<Promoted> {
+  const home = trackedRoot();
+  // Only the global store embeds, so the promote's copy is the one embed in flight.
+  writeFileSync(join(home, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+  const global = join(home, '.global');
+  mkdirSync(global);
+  const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
+  writeFileSync(join(global, 'config.json'), JSON.stringify(config));
+  vi.stubEnv('HIPPO_HOME', global);
+  vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+  const handle = await serve({ hippoRoot: home, port: 0 });
+  const headers = { authorization: `Bearer ${readLocalKey(home)}`, 'content-type': 'application/json' };
+  const made = await fetch(`${handle.url}/v1/memories`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content: 'the release checklist lives in the wiki' }),
+  });
+  // SAFETY: a remember on /v1/memories answers with the stored row's id.
+  const { id } = (await made.json()) as { id: string };
+  embeddings.setFault(fault);
+  const promoted = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST', headers, body: '{}' });
+  expect(promoted.status).toBe(200);
+  // SAFETY: a promote answers with the id of the global copy it wrote.
+  const { globalId } = (await promoted.json()) as { globalId: string };
+  return { handle, global, globalId };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 
@@ -153,4 +199,35 @@ describe('serve() graceful stop', () => {
     expect(await closed).toBe(1);
     expect(stderr).toMatch(/serve uncaught exception: boom-serve .*errorClass=Error stack=/);
   });
+});
+
+describe.skipIf(needsHippoDb('team'))('serve() stop() and the work a request handed off', () => {
+  let embeddings: HashedEmbeddings;
+
+  beforeEach(async () => {
+    embeddings = await startHashedEmbeddings();
+  });
+
+  afterEach(async () => {
+    await embeddings.close();
+  });
+
+  it('waits for an embed that lands, so the global copy has its vector once stop() returns', async () => {
+    const { handle, global, globalId } = await promotedOnServer(embeddings, 300);
+    await handle.stop();
+    expect(loadEmbeddingIndex(global)[globalId]).toHaveLength(16);
+  });
+
+  it('waits at most DETACHED_SETTLE_MS for an embed that never answers, then flushes the held writes and closes', async () => {
+    const { handle } = await promotedOnServer(embeddings, 'stall');
+    const warn = vi.spyOn(log, 'warn');
+    const flush = vi.spyOn(HeldWrites.prototype, 'flush');
+    // An unbounded settle never resolves, so the test timeout, not a clock read, catches it.
+    await handle.stop();
+    expect(warn.mock.calls.map(([line]) => line)).toContain(
+      `shutdown: 1 handed-off task(s) still running after ${DETACHED_SETTLE_MS} ms; closing the stores`,
+    );
+    // The runtime's own flush takes no root; a held write's timer names its root.
+    expect(flush).toHaveBeenCalledWith();
+  }, 20_000);
 });

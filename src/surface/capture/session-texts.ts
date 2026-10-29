@@ -10,6 +10,7 @@ import { captureExtractedItems, type CaptureTally } from './command.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
+import { withDetached } from '../../api/detached.js';
 
 /** A context whose store has the captures group, which a session's capture reads and writes. */
 export type CaptureContext = EntryContext<ContextWith<'captures'>>;
@@ -70,23 +71,22 @@ export async function captureSessionTexts(
     { project: dedup.project },
   );
   const { store, config } = ctx;
-  const tally = await captureExtractedItems(
-    {
-      store,
-      config,
-      embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }, ctx.infra),
-    },
-    {
-      tenantId: ctx.tenantId,
-      originProject: req.project,
-      sessionId: req.sessionId,
-      actor: ctx.actor.subject,
-      lean: true,
-      dedup,
-      now: ctx.infra.clock(),
-    },
-    items,
-    storedTextKeys(held),
+  const folder = { store, config, embedderFor: ctx.infra.embedderFor };
+  const tally = await withDetached(ctx, (detached) =>
+    captureExtractedItems(
+      { store, config, embed: detachedEmbedder(folder, ctx.infra, detached) },
+      {
+        tenantId: ctx.tenantId,
+        originProject: req.project,
+        sessionId: req.sessionId,
+        actor: ctx.actor.subject,
+        lean: true,
+        dedup,
+        now: ctx.infra.clock(),
+      },
+      items,
+      storedTextKeys(held),
+    ),
   );
   return { ...tally, skipped: tally.skipped + extracted.length - items.length };
 }

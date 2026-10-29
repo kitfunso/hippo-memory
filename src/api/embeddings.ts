@@ -11,18 +11,19 @@ import {
   folderEmbedTarget,
 } from '../domain/search/embed-memories.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
+import type { DetachedWork } from '../domain/search/detached-work.js';
 import type { RequiredStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a
- * failure is a warning. A capture runs outside any Context, so its root hands its warned failures
- * as `run`. */
+ * failure is a warning. A capture has no Context: its root hands `run` and the embeds' keeper. */
 export function detachedEmbedder(
   folder: ConfiguredFolder<RequiredStore>,
   run: Pick<InfraPorts, 'failureNotices'>,
+  detached: DetachedWork,
 ): (entry: MemoryEntry) => void {
   const target = folderEmbedTarget(folder, run);
-  return (entry) => embedMemoryDetached(target, entry);
+  return (entry) => embedMemoryDetached(target, entry, detached);
 }
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */

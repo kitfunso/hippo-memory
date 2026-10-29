@@ -16,6 +16,7 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
+import type { DetachedWork } from '../../domain/search/detached-work.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {
@@ -70,16 +71,16 @@ export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
-  /** Deadline for one authResolver call; defaults to DEFAULT_RESOLVER_DEADLINE_MS. */
+  /** Deadline for one authResolver call; defaults to 5000 ms, as does a value that is not a
+   * positive number. */
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
-   * unhandled rejection. A stop still running STORE_CLOSE_GRACE_MS past `shutdownDrainMs` ends the
-   * process with a failure exit. Only `hippo serve` sets this. */
+  /** Only `hippo serve` sets this: stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an
+   * uncaught exception or rejection. A stop 10000 ms past `shutdownDrainMs` exits as a failure. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to
-   * DEFAULT_SHUTDOWN_DRAIN_MS. */
+   * 5000 ms. */
   shutdownDrainMs?: number;
   /** How long a request may stay unanswered before one warn names it; the request itself is left
    * alone. Defaults to 60000 ms. */
@@ -89,9 +90,9 @@ export interface ServeOptions {
   store?: HippoStore;
   autoSleep?: false;
   routes?: readonly AddonRoute[];
+  /** Tests only: shortens the wait for a key-mint body, which defaults to 10000 ms. */
   mintBodyDeadlineMs?: number;
-  /** Tests only: shortens the wait for a signed webhook's body, which defaults to
-   * WEBHOOK_BODY_DEADLINE_MS. */
+  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10000 ms. */
   webhookBodyDeadlineMs?: number;
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
@@ -102,9 +103,8 @@ export interface ServeOptions {
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so
    * it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
-  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else DEFAULT_CALLER_RPS
-   * per second, burst twice that); perAddress replaces HIPPO_V1_RPS when set; 'off' disables
-   * either; failedAuthPerAddress guards scrypt. */
+  /** Request limits, each disabled by 'off': perCaller after auth, on by default (HIPPO_CALLER_RPS,
+   * else 20/s, burst 2x); perAddress replaces HIPPO_V1_RPS; failedAuthPerAddress guards scrypt. */
   rateLimits?: {
     perCaller?: RateLimitSpec | 'off';
     perAddress?: RateLimitSpec | 'off';
@@ -158,6 +158,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;
+  /** Keeps the work a request starts and does not wait on; the server's stop settles it. */
+  detached: DetachedWork;
   sleeps: SleepQueue;
   counts: ServerCounts;
 };

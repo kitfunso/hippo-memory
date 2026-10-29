@@ -30,8 +30,8 @@ beforeEach(() => {
   root = makeStore('targeted-loads').root;
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   removeDir(join(root, '..'));
 });
 

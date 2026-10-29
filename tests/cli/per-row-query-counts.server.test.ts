@@ -315,7 +315,7 @@ describe('an id-list read of one tenant', () => {
       const listed = await ctx.store.entriesByIds(ids, 'default');
       return { held: listed.some((e) => e.id === ids[0]), listed: listed.length };
     });
-    runtime.dispose();
+    await runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
