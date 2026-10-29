@@ -23,7 +23,7 @@ import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../../base/scope
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 import { writeEntryMirrors } from '../entries/entry-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -284,15 +284,17 @@ function decide(
 
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   const quarantine: QuarantineCalls = {
-    ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
+    ...bound(on, { listQuarantined: listQuarantined } satisfies Bodies<
+      Pick<QuarantineCalls, 'listQuarantined'>
+    >),
     // An approval rewrites the memory's mirror, so the decision opens the store with its mirror
     // folders.
-    ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
+    ...bound(
       on,
       {
         decideQuarantined: (db, tenantId, id, decision, actor) =>
           decide(db, files, { tenantId, id, decision, actor }),
-      },
+      } satisfies Bodies<Pick<QuarantineCalls, 'decideQuarantined'>>,
       openStore,
     ),
   };

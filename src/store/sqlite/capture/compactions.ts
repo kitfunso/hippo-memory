@@ -85,8 +85,8 @@ const compactionsBodies: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
 export function sqliteCompactions({ on, files }: Handles): Compactions {
   return {
     ...bound(on, compactionsBodies),
-    ...bound<Pick<Compactions, 'saveCallerItems'>>(on, {
+    ...bound(on, {
       saveCallerItems: (db, ...args) => saveCallerItems(db, files, ...args),
-    }),
+    } satisfies Bodies<Pick<Compactions, 'saveCallerItems'>>),
   };
 }

@@ -3,12 +3,14 @@ import { writePromotedEntry } from '../entries/entry-writes.js';
 import type { Promotion } from '../../../base/ports/store/sharing.js';
 import type { Handles } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 
 export function sqlitePromotion({ on, files }: Handles): Promotion {
-  return bound<Promotion>(
+  return bound(
     on,
-    { writeCopy: (db, ...args) => writePromotedEntry(db, files, ...args) },
+    {
+      writeCopy: (db, ...args) => writePromotedEntry(db, files, ...args),
+    } satisfies Bodies<Promotion>,
     openStore,
   );
 }

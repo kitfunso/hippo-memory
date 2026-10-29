@@ -12,7 +12,7 @@ import { saveIndex } from '../entries/index-and-stats.js';
 import { readLastRecall } from '../folder-files/mirrors.js';
 import type { Handles, StoreFiles, StoreModel } from '../runtime/open.js';
 import type { EntryTarget } from '../../../base/ports/store/entry-writes.js';
-import { answered, bound } from '../runtime/bound.js';
+import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { openStore } from '../runtime/handles.js';
 import type { LastRecall, RecallWrites } from '../../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
@@ -67,9 +67,11 @@ function applyOutcomeToLast(
 
 export function sqliteLastRecall({ on, files }: Handles): LastRecall {
   return {
-    ...bound<Pick<LastRecall, 'applyOutcomeToLast'>>(
+    ...bound(
       on,
-      { applyOutcomeToLast: (db, ...args) => applyOutcomeToLast(db, files, ...args) },
+      {
+        applyOutcomeToLast: (db, ...args) => applyOutcomeToLast(db, files, ...args),
+      } satisfies Bodies<Pick<LastRecall, 'applyOutcomeToLast'>>,
       openStore,
     ),
     finishRecall: (writes, globalRoot) =>

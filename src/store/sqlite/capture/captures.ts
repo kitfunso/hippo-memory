@@ -66,9 +66,11 @@ const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {
-  const { write } = bound<Pick<Captures, 'write'>>(
+  const { write } = bound(
     on,
-    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) },
+    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) } satisfies Bodies<
+      Pick<Captures, 'write'>
+    >,
     openStore,
   );
   return {

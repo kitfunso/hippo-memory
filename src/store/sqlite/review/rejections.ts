@@ -40,7 +40,7 @@ import { mergedSuccessor } from '../../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
@@ -346,16 +346,20 @@ export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionChe
 
 export function sqliteRejections({ on, files }: Handles): Rejections {
   return {
-    ...bound<Pick<Rejections, 'apply'>>(
+    ...bound(
       on,
-      { apply: (db, ...args) => applyRejection(db, files, ...args) },
+      { apply: (db, ...args) => applyRejection(db, files, ...args) } satisfies Bodies<
+        Pick<Rejections, 'apply'>
+      >,
       openStore,
     ),
-    ...bound<Pick<Rejections, 'lift' | 'list'>>(
+    ...bound(
       on,
-      { lift: liftRejection, list: listRejectedValues },
+      { lift: liftRejection, list: listRejectedValues } satisfies Bodies<
+        Pick<Rejections, 'lift' | 'list'>
+      >,
       openStore,
     ),
-    ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
+    ...bound(on, { refusedAmong: refusedAmong } satisfies Bodies<Pick<Rejections, 'refusedAmong'>>),
   };
 }

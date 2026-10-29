@@ -189,10 +189,10 @@ const dormantReadsBodies: Bodies<Pick<Dormant, 'list'>> = {
 export function sqliteDormant({ on, files }: Handles): Dormant {
   return {
     ...bound(on, dormantReadsBodies),
-    ...bound<Pick<Dormant, 'restore'>>(on, {
+    ...bound(on, {
       restore: (db, ...args) => restoreDormantMemory(db, files, ...args),
-    }),
-    ...bound<Pick<Dormant, 'forget'>>(
+    } satisfies Bodies<Pick<Dormant, 'restore'>>),
+    ...bound(
       on,
       {
         forget: (db, tenantId, ownScope, id, actor) => {
@@ -210,7 +210,7 @@ export function sqliteDormant({ on, files }: Handles): Dormant {
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
           return true;
         },
-      },
+      } satisfies Bodies<Pick<Dormant, 'forget'>>,
       openStore,
     ),
   };

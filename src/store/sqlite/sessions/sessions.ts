@@ -546,7 +546,9 @@ function sessionBodies(files: StoreFiles): Bodies<Omit<SessionCalls, 'bindSessio
 export function sqliteSessions({ on, files }: Handles): Sessions {
   const sessions: SessionCalls = {
     ...bound(on, sessionBodies(files), openStore),
-    ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
+    ...bound(on, { bindSessionOwner: sessionOwnerOrBind } satisfies Bodies<
+      Pick<Sessions, 'bindSessionOwner'>
+    >),
   };
   // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the
   // port's overloads name, so every overload gets the answer its kind declares.

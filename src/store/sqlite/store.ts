@@ -186,25 +186,27 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
     // It strengthens, so it scores by the store's strength model.
-    ...bound<Pick<BaseMethods, 'finishRecall'>>(on, {
+    ...bound(on, {
       finishRecall: (db, recall) => {
         finishRecall(db, files, recall);
       },
-    }),
+    } satisfies Bodies<Pick<BaseMethods, 'finishRecall'>>),
   };
 }
 
 // The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
 function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
   return {
-    ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
+    ...bound(on, { entriesWithoutVector, writeVectors } satisfies Bodies<
+      Omit<VectorWrites, 'indexKey'>
+    >),
     // Resolved at use, as the handle is: building a store reads no path.
     indexKey: async () => embedLockKey(hippoRoot),
   };
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
-  return bound<AuditLog>(on, { listAuditEvents });
+  return bound(on, { listAuditEvents } satisfies Bodies<AuditLog>);
 }
 
 function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
@@ -268,12 +270,16 @@ export function sqliteDiagnosticsStore(
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, readOnly),
-    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
+    ...bound(
       on,
-      { entriesWhere: listEntriesWhere },
+      { entriesWhere: listEntriesWhere } satisfies Bodies<Pick<ProjectTagReads, 'entriesWhere'>>,
       readOnly,
     ),
-    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, readOnly),
+    auditLog: bound(
+      on,
+      { listAuditEvents } satisfies Bodies<ProjectTagReads['auditLog']>,
+      readOnly,
+    ),
   };
 }
 
@@ -319,12 +325,12 @@ const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextC
 function sqliteContextReads({ on, files }: Handles): ContextReads {
   return {
     ...bound(on, contextReadsBodies, openStore),
-    ...bound<Pick<ContextReads, 'ambientTallies' | 'contextCandidates'>>(
+    ...bound(
       on,
       {
         ambientTallies: (db, ...args) => countAmbient(db, files, ...args),
         contextCandidates: (db, ...args) => listContextCandidates(db, files.strength, ...args),
-      },
+      } satisfies Bodies<Pick<ContextReads, 'ambientTallies' | 'contextCandidates'>>,
       openStore,
     ),
   };

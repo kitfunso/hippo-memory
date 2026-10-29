@@ -21,7 +21,7 @@ import {
   updateEntityRow,
 } from './graph-writes.js';
 import { type OnHandle, waitingOpener } from '../runtime/open.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 
 function insertDesiredRelation(
   db: DatabaseSyncLike,
@@ -113,5 +113,5 @@ function applyGraphOps(
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
 export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
-  return bound<GraphRebuild>(on, { applyOps: applyGraphOps }, openForChunk);
+  return bound(on, { applyOps: applyGraphOps } satisfies Bodies<GraphRebuild>, openForChunk);
 }
