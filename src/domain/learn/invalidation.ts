@@ -157,8 +157,14 @@ export function invalidationMatcher(
   return (entry) => patterns.some((p) => referencesPattern(entry, p.tokens, p.tag));
 }
 
+/** What a row must mention to match a target: enough of its tokens, or its exact tag. */
+interface Mention {
+  readonly tokens: string[];
+  readonly tag: string;
+}
+
 /** The tokens and the exact tag a row must mention to match `target`. */
-function mentionOf(target: InvalidationTarget): { tokens: string[]; tag: string } {
+function mentionOf(target: InvalidationTarget): Mention {
   return { tokens: invalidationTokenize(target.from), tag: target.from.toLowerCase().trim() };
 }
 
