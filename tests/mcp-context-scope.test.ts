@@ -73,6 +73,25 @@ describe('mcp hippo_context scope filter', () => {
     }
   });
 
+  it("prints another session's snapshot and handoff whole, never as a pointer", async () => {
+    // hippo_recall reads continuity by a different rule, so a pointer here could name a row it cannot return.
+    saveActiveTaskSnapshot(home, 'default', { task: 'Other session task', summary: 'other snapshot summary', next_step: 'other next step', session_id: 'sess-other', source: 'test' });
+    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sess-other', summary: 'other handoff summary', nextAction: 'other handoff next action' });
+
+    const cwd = process.cwd();
+    process.chdir(home);
+    try {
+      const text = extractText(await callTool(6, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }));
+      expect(text).toContain('other snapshot summary');
+      expect(text).toContain('other handoff summary');
+      expect(text).toContain('other handoff next action');
+      expect(text).not.toContain('hippo session latest');
+      expect(text).not.toContain('hippo handoff latest');
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it('budget=0 returns no context without marking memories retrieved', async () => {
     const memory = createMemory('zero budget canary memory');
     writeEntry(home, memory);

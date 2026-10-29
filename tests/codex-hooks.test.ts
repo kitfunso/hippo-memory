@@ -389,8 +389,10 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     const context = JSON.parse(first).hookSpecificOutput.additionalContext;
     expect(context).toContain('projectless hook remembers the staging flag');
     expect(context).toContain('[global]');
+    // A projectless cwd reads no task state, so neither the text nor a pointer to it appears.
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
+    expect(context).not.toContain('other-project-session');
     expect(runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
     fs.writeFileSync(path.join(globalStore, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
     expect(runCodexHook(m, command, { ...base, session_id: 'projectless-disabled', turn_id: 't1' })).toBe('');

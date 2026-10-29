@@ -45,7 +45,7 @@ import {
   type ContextPools,
   type ContextSource,
 } from './context-select.js';
-import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import type { ContextOpts, ContextResult, ContextResultEntry, ContinuityMode } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { tokenPurse } from './recall/render.js';
 import { type Context, type ContextWith, type StoreContext, ownerOrSubject } from './types.js';
@@ -164,7 +164,9 @@ async function loadAmbientEntries(
 interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
+  snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
 }
@@ -218,6 +220,7 @@ export async function getContext(
     tokens,
     activeSnapshot: sections.shownSnapshot ?? undefined,
     sessionHandoff: sections.shownHandoff ?? undefined,
+    ...pointerModes(sections),
     recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
     ambientState: recorded.ambientState,
   };
@@ -417,9 +420,17 @@ async function loadTaskSections(
     raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
   const sessionHandoff =
     raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
-  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id);
+  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId);
+  // Events are the raw snapshot's session's; the pointer's command prints them, so they never reach the purse.
+  const trailMode = continuityModeFor(opts, plan, raw.snapshot?.session_id);
+  const recentSessionEvents = trailMode === 'pointer'
+    ? []
+    : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
+  const shownSnapshot =
+    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode))) ? activeSnapshot : null;
+  const shownHandoff =
+    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
   const shownEvents =
     recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
@@ -428,13 +439,30 @@ async function loadTaskSections(
       Number(sessionHandoff !== shownHandoff) +
       Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
+  return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left: left() };
+}
+
+// The caller's own state prints whole; a shared store's follows its owner, whom a local command cannot reach.
+function continuityModeFor(
+  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined,
+): ContinuityMode {
+  if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
+  const own = !!sessionId && sessionId === opts.currentSessionId;
+  return own ? 'full' : 'pointer';
+}
+
+// The mode is left out of a full print, so every reader's result reads as before.
+function pointerModes(s: TaskSections): Pick<ContextResult, 'snapshotMode' | 'handoffMode'> {
+  const modes: Pick<ContextResult, 'snapshotMode' | 'handoffMode'> = {};
+  if (s.shownSnapshot && s.snapshotMode === 'pointer') modes.snapshotMode = 'pointer';
+  if (s.shownHandoff && s.handoffMode === 'pointer') modes.handoffMode = 'pointer';
+  return modes;
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    // A printed handoff already carries the session's closing message, which its digest would print a second time.
+    // A shown handoff, whole or as a pointer, stands for the session's closing message; its command prints it.
     if (
       transcriptHandoffSession !== null &&
       e.source_session_id === transcriptHandoffSession &&

@@ -165,8 +165,10 @@ describe('a folder with only the global store', SLOW, () => {
 });
 
 describe('context prints the handoff or the digest, never both', SLOW, () => {
-  const context = (format: 'additional-context' | 'json'): string => {
-    const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], '');
+  // No session id means an unknown caller, who gets the handoff as a pointer; JSON stays whole.
+  const context = (format: 'additional-context' | 'json', sessionId?: string): string => {
+    const input = sessionId === undefined ? '' : JSON.stringify({ session_id: sessionId });
+    const result = hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], input);
     expect(result.status).toBe(0);
     return result.stdout;
   };
@@ -176,11 +178,22 @@ describe('context prints the handoff or the digest, never both', SLOW, () => {
     claudeWorker('S1', claudeTranscript('s1'));
     expect(loadAllEntries(path.join(repo, '.hippo')).map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = context('additional-context');
-    expect(text).toContain('## Session Handoff');
+    expect(text).toContain('run `hippo handoff latest --session S1`');
     expect(text).not.toContain('Changed:');
+    expect(text).not.toContain('upload timeout');
     const json = JSON.parse(context('json'));
     expect(json.sessionHandoff.sessionId).toBe('S1');
+    expect(json.sessionHandoff.summary).toContain('upload timeout');
     expect(json.memories.map((m: { id: string }) => m.id)).not.toContain(sessionDigestId('default', 'S1'));
+  });
+
+  it('prints the whole handoff to the session that left it, and still not its digest', () => {
+    claudeWorker('S1', claudeTranscript('s1'));
+    const text = JSON.parse(context('additional-context', 'S1')).hookSpecificOutput.additionalContext;
+    expect(text).toContain('- Session: S1');
+    expect(text).toContain('upload timeout');
+    expect(text).not.toContain('hippo handoff latest');
+    expect(text).not.toContain('Changed:');
   });
 
   it("shows an earlier session's digest under a later session's handoff", () => {

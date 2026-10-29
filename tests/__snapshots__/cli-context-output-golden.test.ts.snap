@@ -5,19 +5,9 @@ exports[`hippo context output (in process) > prints the same bytes and exit code
 --- stdout
 ## Active Task Snapshot
 
-- Task: ship the context split
-- Status: active
-- Updated: <ts>
-- Source: cli
-- Session: sess-golden
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
 
-### Summary
-renderContext split by stage
-
-### Next step
-run the goldens
-
-## Project Memory (2 entries, 134 tokens)
+## Project Memory (2 entries, 121 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 - **[verified] always run the migration dry run before deploying** [deploy] (100%)
@@ -30,19 +20,9 @@ $ context markdown --framing assert -> 0
 --- stdout
 ## Active Task Snapshot
 
-- Task: ship the context split
-- Status: active
-- Updated: <ts>
-- Source: cli
-- Session: sess-golden
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
 
-### Summary
-renderContext split by stage
-
-### Next step
-run the goldens
-
-## Project Memory (1 entries, 113 tokens)
+## Project Memory (1 entries, 100 tokens)
 
 - **[verified] the deploy pipeline uses blue green rollout for the api** [deploy] (100%)
 
@@ -58,7 +38,7 @@ $ context json -> 0
 
 $ context additional-context -> 0
 --- stdout
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Task: ship the context split\\n- Status: active\\n- Updated: <ts>\\n- Source: cli\\n- Session: sess-golden\\n\\n### Summary\\nrenderContext split by stage\\n\\n### Next step\\nrun the goldens\\n\\n## Project Memory (2 entries, 105 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]\\n- **[verified] always run the migration dry run before deploying** [deploy]"}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.\\n\\n## Project Memory (2 entries, 92 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]\\n- **[verified] always run the migration dry run before deploying** [deploy]"}}
 --- stderr
 
 $ context no match -> 0
@@ -74,7 +54,7 @@ $ context budget 0 -> 0
 
 $ context pinned-only hook -> 0
 --- stdout
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Task: ship the context split\\n- Status: active\\n- Updated: <ts>\\n- Source: cli\\n- Session: sess-golden\\n\\n### Summary\\nrenderContext split by stage\\n\\n### Next step\\nrun the goldens\\n\\n## Project Memory (1 entries, 85 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.\\n\\n## Project Memory (1 entries, 71 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
 --- stderr
 
 $ context pinned-only hook (unchanged) -> 0
@@ -86,22 +66,17 @@ $ context pinned-only markdown -> 0
 --- stdout
 ## Active Task Snapshot
 
-- Task: ship the context split
-- Status: active
-- Updated: <ts>
-- Source: cli
-- Session: sess-golden
+- Session sess-golden saved a task snapshot at <ts> UTC. If this task continues it, run \`hippo session latest --id sess-golden\`.
 
-### Summary
-renderContext split by stage
-
-### Next step
-run the goldens
-
-## Project Memory (1 entries, 86 tokens)
+## Project Memory (1 entries, 73 tokens)
 
 - **[verified] always run the migration dry run before deploying** [deploy] (100%)
 
+--- stderr
+
+$ context pinned-only hook (own session) -> 0
+--- stdout
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Active Task Snapshot\\n\\n- Task: ship the context split\\n- Status: active\\n- Updated: <ts>\\n- Source: cli\\n- Session: sess-golden\\n\\n### Summary\\nrenderContext split by stage\\n\\n### Next step\\nrun the goldens\\n\\n## Project Memory (1 entries, 85 tokens)\\n\\n- **[verified] always run the migration dry run before deploying** [deploy]\\n\\n## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
 --- stderr
 
 $ context malformed stdin -> 0

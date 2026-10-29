@@ -7,8 +7,8 @@ import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type {
-  AssembleCost, AssembleResult, AssembledContextItem, ContextCost, ContextResultEntry, DrillDownChild, DrillDownCost,
-  DrillDownResult, DrillDownSummary,
+  AssembleCost, AssembleResult, AssembledContextItem, ContextCost, ContextResultEntry, ContinuityMode, DrillDownChild,
+  DrillDownCost, DrillDownResult, DrillDownSummary,
 } from './index.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -40,6 +40,35 @@ export function handoffText(h: SessionHandoff): string {
   if (h.evidence) lines.push('', '### Evidence', formatHandoffEvidenceLine(h.evidence));
   lines.push('');
   return lines.join('\n');
+}
+
+// Another session's state rarely bears on this prompt, so a text reader prints where to read it, not the text.
+const pointerTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
+
+function snapshotPointerText(s: TaskSnapshot): string {
+  const at = pointerTime(s.updated_at);
+  const line = s.session_id
+    ? `- Session ${s.session_id} saved a task snapshot at ${at} UTC. ` +
+      `If this task continues it, run \`hippo session latest --id ${s.session_id}\`.`
+    : `- A task snapshot from ${at} UTC names no session. If this task continues it, run \`hippo snapshot show\`.`;
+  return ['## Active Task Snapshot\n', line, ''].join('\n');
+}
+
+function handoffPointerText(h: SessionHandoff): string {
+  return [
+    '## Session Handoff\n',
+    `- Session ${h.sessionId} left a handoff at ${pointerTime(h.updatedAt)} UTC. ` +
+      `If this task continues it, run \`hippo handoff latest --session ${h.sessionId}\`.`,
+    '',
+  ].join('\n');
+}
+
+export function snapshotSectionText(s: TaskSnapshot, mode: ContinuityMode): string {
+  return mode === 'pointer' ? snapshotPointerText(s) : snapshotText(s);
+}
+
+export function handoffSectionText(h: SessionHandoff, mode: ContinuityMode): string {
+  return mode === 'pointer' ? handoffPointerText(h) : handoffText(h);
 }
 
 /** Needs at least one event; the header reads the latest. */
@@ -232,8 +261,8 @@ export function contextCost(format: 'markdown' | 'additional-context', framing: 
       + (can.cross ? price(crossProjectHeading(budget)) : 0)
       + (hook && can.promptRecall ? price(contextHeading('Prompt-Relevant Memory', budget, budget)) : 0)
       + (!hook && can.ambient ? price(`\n${renderAmbientSummary(WIDEST_AMBIENT)}`) : 0),
-    snapshot: (s) => price(snapshotText(s)),
-    handoff: (h) => price(handoffText(h)),
+    snapshot: (s, mode) => price(snapshotSectionText(s, mode)),
+    handoff: (h, mode) => price(handoffSectionText(h, mode)),
     trail: (events) => price(sessionTrailText(events)),
   };
 }
