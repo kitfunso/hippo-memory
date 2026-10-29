@@ -17,7 +17,8 @@ interface StatementSyncLike {
   iterate(...params: unknown[]): IterableIterator<unknown>;
 }
 
-/** The rows a write statement changed; node:sqlite leaves `changes` optional in its type. */
+/** The rows a write statement changed. node:sqlite always sets `changes`, as a number or a bigint;
+ * StatementSyncLike types it optional, so a missing count reads 0. */
 export function changedRows(result: ReturnType<StatementSyncLike['run']>): number {
   return Number(result.changes ?? 0);
 }
