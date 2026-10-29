@@ -320,8 +320,8 @@ function batchWriteAndDeleteOn(
   return { next, removedIds: out.removedIds };
 }
 
-// A transaction's first window is 16 ops and each next one doubles, so it reads the rows of at most
-// twice the ops it applies, plus 16, however early its hold closes it.
+// A transaction's first window is this many ops and each next one doubles, so it reads the rows of
+// at most twice the ops it applies, plus this many, however early its hold closes it.
 const FIRST_WINDOW_OPS = 16;
 
 interface ApplyUntilHoldOptions {

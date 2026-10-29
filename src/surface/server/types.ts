@@ -69,16 +69,16 @@ export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
-  /** Deadline for one authResolver call; defaults to 5000 ms. */
+  /** Deadline for one authResolver call; defaults to DEFAULT_RESOLVER_DEADLINE_MS. */
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
-   * unhandled rejection. A stop still running 10 s past `shutdownDrainMs` ends the process with
-   * a failure exit. Only `hippo serve` sets this. */
+   * unhandled rejection. A stop still running STORE_CLOSE_GRACE_MS past `shutdownDrainMs` ends the
+   * process with a failure exit. Only `hippo serve` sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to
-   * 5000 ms. */
+   * DEFAULT_SHUTDOWN_DRAIN_MS. */
   shutdownDrainMs?: number;
   /** How long a request may stay unanswered before one warn names it; the request itself is left
    * alone. Defaults to 60000 ms. */
@@ -89,7 +89,8 @@ export interface ServeOptions {
   autoSleep?: false;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
-  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
+  /** Tests only: shortens the wait for a signed webhook's body, which defaults to
+   * WEBHOOK_BODY_DEADLINE_MS. */
   webhookBodyDeadlineMs?: number;
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
@@ -100,9 +101,9 @@ export interface ServeOptions {
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so
    * it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
-  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second,
-   * burst 40); perAddress replaces HIPPO_V1_RPS when set; 'off' disables either;
-   * failedAuthPerAddress guards scrypt. */
+  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else DEFAULT_CALLER_RPS
+   * per second, burst twice that); perAddress replaces HIPPO_V1_RPS when set; 'off' disables
+   * either; failedAuthPerAddress guards scrypt. */
   rateLimits?: {
     perCaller?: RateLimitSpec | 'off';
     perAddress?: RateLimitSpec | 'off';

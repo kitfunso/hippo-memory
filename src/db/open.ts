@@ -11,8 +11,8 @@ import { OtherStoreFolderError } from './sqlite-blocked.js';
 
 export { getHippoDbPath };
 
-/** Lock wait for hook commands: under the 5 s prompt-hook budget even after a few skipped
- * writes, and far above a normal write's hold. */
+/** Lock wait for hook commands: under the prompt hook's HOOK_SHORT_TIMEOUT_SECONDS budget even
+ * after a few skipped writes, and far above a normal write's hold. */
 export const HOOK_DB_WAIT_MS = 1000;
 
 /** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall

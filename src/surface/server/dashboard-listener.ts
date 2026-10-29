@@ -46,7 +46,7 @@ export interface DashboardOptions {
   readonly cacheClock?: () => number;
   /** Stop and exit on SIGINT or SIGTERM; only `hippo dashboard` sets it. */
   readonly handleSignals?: boolean;
-  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
+  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; DEFAULT_BODY_DEADLINE_MS when unset. */
   readonly bodyDeadlineMs?: number;
 }
 

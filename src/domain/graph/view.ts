@@ -103,8 +103,8 @@ function seedCircle(nodes: GraphNode[], width: number, height: number): Map<numb
   return pos;
 }
 
-/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid
- * leaves it out. */
+/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/REPULSION_REACH_K,
+ * so the grid leaves it out. */
 const REPULSION_REACH_K = 2;
 const CELL_KEY_STRIDE = 1 << 20;
 
@@ -217,10 +217,10 @@ function applyDisplacement(options: DisplacementOptions): void {
 
 /**
  * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations,
- * no `Math.random`, so one model gives the same positions. Repulsion reaches 2k and runs on a
- * grid, so a pass costs the nodes near each node, not every pair; `opts.visits` counts the pairs
- * looked at. Non-finite coordinates are clamped to the viewport centre and all positions to the
- * bounds. */
+ * no `Math.random`, so one model gives the same positions. Repulsion reaches REPULSION_REACH_K * k
+ * and runs on a grid, so a pass costs the nodes near each node, not every pair; `opts.visits`
+ * counts the pairs looked at. Non-finite coordinates are clamped to the viewport centre and all
+ * positions to the bounds. */
 export function layoutGraph(
   model: GraphModel,
   opts: {

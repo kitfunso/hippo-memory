@@ -16,13 +16,13 @@ export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>
   'closed',
 ]);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a larger cap than the 4096 short-field
- *  convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a larger cap than
+ *  the MAX_SHORT_FIELD_LEN short-field convention. */
 export const MAX_SKILL_NAME_LEN = 256;
 export const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
 export const MAX_SKILL_TRIGGER_LEN = 1024;
 /** Aggregate bound on a single export render so the export body is never unbounded.
- *  Realistic active-skill counts are tens; 1000 is a generous bound. */
+ *  Realistic active-skill counts are tens; this is a generous bound. */
 export const MAX_EXPORT_SKILLS = 1000;
 
 export interface SaveSkillOptions {

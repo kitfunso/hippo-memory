@@ -6,7 +6,7 @@ import { bodyDeadlineMs } from '../http/http-util.js';
 import { log } from '../../base/util/log.js';
 
 // Node's own default, named so the three socket deadlines read together. It times the request
-// arriving, never the handler, so a 10 minute sleep is not cut.
+// arriving, never the handler, so a sleep up to DEFAULT_SLEEP_DEADLINE_MS is not cut.
 const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
 
 export function setKeepAliveTimeouts(server: Server): void {

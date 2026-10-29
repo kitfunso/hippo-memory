@@ -16,7 +16,7 @@ import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 import type { DoctorCheck, DoctorStore } from './doctor.js';
 
-// Migration 46 creates failure_log; a read-only open no longer creates it on an older store.
+// The migration that creates failure_log; a read-only open no longer creates it on an older store.
 const FAILURE_LOG_SCHEMA = 46;
 
 /** The failed-tool-call count over the last 7 days, or why it could not be read. */

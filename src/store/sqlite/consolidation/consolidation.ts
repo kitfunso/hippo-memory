@@ -121,7 +121,7 @@ function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
   return { from, outcome, fts, ...readSleepHistory(db), sessions };
 }
 
-// The wait is sleep's own, not a server request's 250 ms.
+// The wait is sleep's own, not a server request's SERVER_DB_WAIT_MS.
 const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
 const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
 

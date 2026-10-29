@@ -18,7 +18,7 @@ import { isObjectLike } from '../../base/session/capture-contract.js';
 const SERVER_TIMEOUT_MS = 30_000;
 
 /**
- * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the
+ * This many tries at the server's 1 s Retry-After keep the roughly 5 s wait the CLI had before the
  * server answered busy with 503.
  */
 const STORE_BUSY_ATTEMPTS = 5;

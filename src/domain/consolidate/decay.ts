@@ -189,7 +189,7 @@ async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
 }
 
 // --- Phase 2b: commit in run order --- Rescued entries appended at the tail would be starved by
-// order-sensitive passes like extraction's slice(0,20).
+// order-sensitive passes like extraction's slice(0, EXTRACTION_BATCH_LIMIT).
 async function commitVerdicts(
   run: SleepRun,
   verdicts: readonly Verdict[],

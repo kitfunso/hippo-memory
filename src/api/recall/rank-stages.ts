@@ -191,8 +191,8 @@ const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
-// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at
-// least 9.
+// The near-duplicate check looks at this many top hits; the re-ordered pool is that many times
+// the hits it checked, at least NEAR_DUPLICATE_POOL_MIN.
 const NEAR_DUPLICATE_WINDOW = 3;
 const NEAR_DUPLICATE_POOL_MIN = 9;
 
@@ -299,7 +299,8 @@ async function applyGoalBoosts(
   }
 }
 
-/** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
+/** Soft-demotes rarely recalled rows to max(SALIENCE_MIN_MULTIPLIER, retrieval_count / T) of
+ * their score; never drops one. */
 function applySalience(
   opts: RankRecallOptions,
   threshold: number,

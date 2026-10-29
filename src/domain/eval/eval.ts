@@ -255,8 +255,8 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
 }
 
 /**
- * For each memory, use its first 8 content words as a trivial query and expect that memory back: a
- * smoke test for recall.
+ * For each memory, use its first QUERY_WORDS content words as a trivial query and expect that
+ * memory back: a smoke test for recall.
  */
 export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase[] {
   const cases: EvalCase[] = [];

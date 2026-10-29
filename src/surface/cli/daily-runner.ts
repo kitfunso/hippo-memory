@@ -1,6 +1,7 @@
 // `hippo daily-runner`: the machine-level daily sleep across every registered workspace.
 
-import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
+import { HOUR_MS } from '../../base/util/time.js';
+import { DEFAULT_SLEEP_DEADLINE_MS } from '../server/sleep-offload.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
 import type { Log } from '../../infra/spool-files.js';
 import { execFileSync } from 'node:child_process';
@@ -19,9 +20,9 @@ import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { plural } from '../../base/util/format.js';
 
-// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a
-// hung child cannot stall every later workspace.
-const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
+// Three times the DEFAULT_SLEEP_DEADLINE_MS POST /v1/sleep allows a consolidation, so a slow real
+// sleep fits and a hung child cannot stall every later workspace.
+const DAILY_STEP_TIMEOUT_MS = 3 * DEFAULT_SLEEP_DEADLINE_MS;
 
 /**
  * Why a child step failed; a child killed at the deadline says so, since its own message is only

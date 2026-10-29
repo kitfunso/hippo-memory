@@ -26,8 +26,8 @@ import {
 export const MAX_HOPS = 3;
 /** Default per-hop fanout cap (bounds blow-up on a future dense graph). */
 export const DEFAULT_MAX_NEIGHBORS = 25;
-/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down 1% per hop, so it ranks just
- *  below its seed and orders by hop-distance. */
+/** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down by this
+ *  fraction per hop, so it ranks just below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
 type GraphStore = Pick<StoreGroups, 'graphReads'> & Pick<RequiredStore, 'entriesByIds'>;
@@ -62,7 +62,7 @@ export interface GraphExpandOptions {
   /** Budget cost per result; defaults to the memory text. */
   cost?: ResultCost;
   /** The recall --min-results floor: this many top base rows are kept regardless of budget, so graph expansion never
-   *  violates the floor. Defaults to 1. */
+   *  violates the floor. Defaults to DEFAULT_MIN_RESULTS. */
   minResults?: number;
   /**
    * Recall-side scope rule applied to graph-REACHED memories only (base results already passed the

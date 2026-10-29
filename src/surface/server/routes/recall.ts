@@ -26,6 +26,7 @@ import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
+import { MAX_DRILL_DOWN_DEPTH } from '../../../api/objects/drill-down.js';
 import {
   parseIntParam,
   parseLimitParam,
@@ -96,8 +97,8 @@ export async function handleDrillRecall(
   // gives.
   if (limit !== undefined && limit > MAX_LIST_LIMIT) parseLimitParam(limitRaw);
   const budget = parseNumberParam(query.get('budget'), 'budget');
-  // depth walks N levels (default 1, hard cap 10).
-  const depth = parseIntParam(query.get('depth'), 'depth', 1, 10);
+  // depth walks N levels (default 1, hard cap MAX_DRILL_DOWN_DEPTH).
+  const depth = parseIntParam(query.get('depth'), 'depth', 1, MAX_DRILL_DOWN_DEPTH);
   const drillExtra: Pick<DrillDownOptions, 'limit' | 'budget' | 'depth'> = {};
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;

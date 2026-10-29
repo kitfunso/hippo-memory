@@ -133,8 +133,8 @@ const SAMPLE_EVERY = 100;
 const repeatCounts = new Map<string, number>();
 
 /** Warn the first time `key` is seen, then count repeats at debug and warn again with the
- * running count on every 100th, so a failure that keeps happening stays visible without flooding
- * stderr. */
+ * running count every SAMPLE_EVERY repeats, so a failure that keeps happening stays visible without
+ * flooding stderr. */
 function warnThenSample(key: string, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') {
     write('warn', message, fields);

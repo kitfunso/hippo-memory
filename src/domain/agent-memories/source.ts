@@ -13,8 +13,8 @@ export const MIN_ITEM_CHARS = 10;
 export type ContainerMachine = Pick<Machine, 'platform' | 'files'>;
 
 /**
- * `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects
- * sharing a folder in the global store.
+ * `p-`/`u-` and ID_SUFFIX_CHARS hex of the real path, so no user path reaches a row; `origin` parts
+ * projects sharing a folder in the global store.
  */
 export function containerId(
   dir: string,

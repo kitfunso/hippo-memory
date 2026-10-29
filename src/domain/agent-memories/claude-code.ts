@@ -45,8 +45,8 @@ function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayou
 }
 
 /**
- * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters
- * cut to 200 plus a base-36 hash of the whole path.
+ * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over
+ * NAME_SLUG_MAX_CHARS characters cut to that plus a base-36 hash of the whole path.
  */
 export function claudeFolderName(root: string): string {
   const full = path.resolve(root);
@@ -120,8 +120,8 @@ export function transcriptNotesProject(
   return null;
 }
 
-// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with
-// room to spare.
+// Claude writes the cwd on each message line after a few header lines; this many bytes hold the
+// first with room to spare.
 const START_SCAN_BYTES = 64 * 1024;
 
 /**

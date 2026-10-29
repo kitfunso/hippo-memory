@@ -18,8 +18,8 @@ export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
   'closed',
 ]);
 
-/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the 4096 short-field
- *  convention. */
+/** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap than the
+ *  MAX_SHORT_FIELD_LEN short-field convention. */
 export const MAX_CUSTOMER_LEN = 256;
 export const MAX_NOTE_LEN = 8192;
 

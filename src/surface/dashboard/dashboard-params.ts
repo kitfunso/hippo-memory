@@ -101,8 +101,8 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   };
 }
 
-/** Search text for `GET /api/search`: 2 to 200 characters after trim, returned as typed
- * (trimmed). */
+/** Search text for `GET /api/search`: SEARCH_MIN to SEARCH_MAX characters after trim, returned as
+ * typed (trimmed). */
 export function parseSearchText(params: URLSearchParams): string {
   const q = (params.get('q') ?? '').trim();
   if (q.length < SEARCH_MIN || q.length > SEARCH_MAX) {

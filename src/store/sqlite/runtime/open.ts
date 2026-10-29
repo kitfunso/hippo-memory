@@ -99,7 +99,7 @@ export function holdsMemory(db: DatabaseSyncLike): boolean {
 
 /** A store with no memories starts on the current default half-life base so `hippo sleep` never
  * migrates it; one that holds memories but no recorded base predates the record and keeps the
- * legacy 7-day base until sleep migrates it. */
+ * legacy base of LEGACY_HALF_LIFE_BASE days until sleep migrates it. */
 export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, META_KEY.halfLifeBase, '') !== '') return;
   if (holdsMemory(db)) return;
