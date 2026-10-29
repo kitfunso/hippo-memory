@@ -79,7 +79,7 @@ describe('LessonWrites', () => {
       (g) => g.writeSkippingRejected([], 'git-learn'),
       (g) => g.writeTogether(together),
       (g) => g.writeTogether([]),
-      (_g, s) => s.bumpRemembered(3),
+      (_g, s) => s.hippoDb.stats.bumpRemembered(3),
       (_g, s) =>
         s
           .entriesByIds(

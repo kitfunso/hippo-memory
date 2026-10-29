@@ -42,7 +42,6 @@ export const BASE_EFFECTS = {
   appendAuditEvents: 'write',
   finishRecall: 'write',
   bumpRecallStats: 'write',
-  bumpRemembered: 'write',
   recordTokens: 'write',
 } as const satisfies MethodEffects<BaseMethods>;
 

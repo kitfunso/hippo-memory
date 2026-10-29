@@ -39,7 +39,7 @@
   "adapter": {
     "folder": "store/sqlite",
     "root": "surface/open-store.ts",
-    "doors": ["store/sqlite/index.ts"],
+    "doors": ["store/sqlite/index.ts", "store/sqlite/hippo-db.ts"],
     "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" }
   }
 }

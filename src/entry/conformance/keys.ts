@@ -62,11 +62,11 @@ const fencesTenants: Check = async (store, expect) => {
 };
 
 const capsSelfService: Check = async (store, expect) => {
-  const first = await mintSelf(store, 'sso:alice');
-  const second = await mintSelf(store, 'sso:alice');
+  const first = await mintSelf(store, 'user:alice');
+  const second = await mintSelf(store, 'user:alice');
   expect([first.revoked, second.revoked]).toEqual([[], [first.keyId]]);
   expect((await store.findApiKey(first.keyId))?.revokedAt === null).toBe(false);
-  expect((await store.findApiKey(second.keyId))?.ownerSubject).toBe('sso:alice');
+  expect((await store.findApiKey(second.keyId))?.ownerSubject).toBe('user:alice');
 };
 
 const grantsScopes: Check = async (store, expect) => {

@@ -7,7 +7,7 @@ import {
   MCP_LEARN,
 } from '../../api/index.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
-import { mcpApiContext, type GroupToolCall, type ToolCall } from './protocol.js';
+import { mcpApiContext, type HippoDbToolCall, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
@@ -47,7 +47,10 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export async function runLearnTool({ args, api }: GroupToolCall<'lessonWrites'>): Promise<string> {
+export async function runLearnTool({
+  args,
+  api,
+}: HippoDbToolCall<'lessonWrites'>): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
   // With no repoPath api learn reads the server's own folder, not a remote caller's, so it refuses

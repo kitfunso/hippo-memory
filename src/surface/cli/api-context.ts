@@ -10,6 +10,7 @@ import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
@@ -83,8 +84,8 @@ function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
   };
 }
 
-/** The store kind the CLI opens: hippo.db, with every group. */
-export type CliStore = HippoStore & StoreGroups;
+/** The store kind the CLI opens: hippo.db, with every group and its local tier. */
+export type CliStore = HippoStore & StoreGroups & Pick<HippoDbContext, 'hippoDb'>;
 
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never
  * names the adapter. A `hippo serve` on the same store answers its nearest-row reads from the
@@ -177,7 +178,8 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
-export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: string };
+export type CliContext = ContextWith<OptionalGroup> &
+  HippoDbContext & { readonly hippoRoot: string };
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config and on the
  * call's session. */
@@ -219,6 +221,7 @@ export function cliApiContext(
     tenantId,
     actor: adminActor(CLI_ACTOR),
     store,
+    hippoDb: store.hippoDb,
     reach,
     config,
     callers,

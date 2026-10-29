@@ -1,6 +1,7 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each
 // store method.
 import { type HippoStore, STORE_EFFECTS } from '../../../base/ports/store.js';
+import { HIPPO_DB_EFFECTS } from '../hippo-db.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 import type { StoreRules } from '../../../base/ports/infra.js';
@@ -29,9 +30,8 @@ const ON_WRITER: Placement = {
 
 type Placement = { readonly [G in keyof StoreEffects]?: readonly (keyof StoreEffects[G])[] };
 type StoreEffects = typeof STORE_EFFECTS;
-type WorkerOps = {
-  readonly [G in keyof StoreEffects]: { readonly [M in keyof StoreEffects[G]]: OpRoute };
-};
+type EffectTable = Readonly<Record<string, Readonly<Record<string, OpMode>>>>;
+type PlacedOps<E> = { readonly [G in keyof E]: { readonly [M in keyof E[G]]: OpRoute } };
 
 function routeOf(group: string, method: string, effect: OpMode): OpRoute {
   const named = (placement: Placement): boolean =>
@@ -42,30 +42,40 @@ function routeOf(group: string, method: string, effect: OpMode): OpRoute {
   return named(ON_WRITER) ? 'write' : effect;
 }
 
-function placedOps(): WorkerOps {
-  // SAFETY: the map keeps every group and method key of STORE_EFFECTS and gives each an OpRoute.
+// `prefix` starts each group's op name, so a local repository never takes a port group's placement.
+function placedOps<E extends EffectTable>(effects: E, prefix = ''): PlacedOps<E> {
+  // SAFETY: the map keeps every group and method key of `effects` and gives each an OpRoute.
   return Object.fromEntries(
-    Object.entries(STORE_EFFECTS).map(([group, effects]) => [
+    Object.entries(effects).map(([group, methods]) => [
       group,
       Object.fromEntries(
-        Object.entries<OpMode>(effects).map(([method, effect]) => [
+        Object.entries(methods).map(([method, effect]) => [
           method,
-          routeOf(group, method, effect),
+          routeOf(`${prefix}${group}`, method, effect),
         ]),
       ),
     ]),
-  ) as WorkerOps;
+  ) as PlacedOps<E>;
 }
 
 /** Each store method but the local files, placed by its port effect, PINNED_READS and ON_WRITER, so
  * the server thread runs no SQLite; finishRecall writes the global rows from this writer too. */
-export const WORKER_OPS = placedOps();
+export const WORKER_OPS = placedOps(STORE_EFFECTS);
+
+/** Each method of hippo.db's local tier, placed by its effect; its op is
+ * `hippoDb.<repo>.<method>`. */
+export const HIPPO_DB_OPS = placedOps(HIPPO_DB_EFFECTS, 'hippoDb.');
 
 /** Sent by the executor itself and by no store method: the writer runs the store's open-time
  * setup once, before any reader is sent a job. */
 export const STORE_SETUP_OP = 'setup';
 
 export type WorkerGroup = keyof typeof WORKER_OPS;
+
+export type HippoDbRepo = keyof typeof HIPPO_DB_OPS;
+
+/** The group part of an op's name. */
+export type OpGroup = WorkerGroup | `hippoDb.${HippoDbRepo}`;
 
 /** The base methods the op table names. */
 export type WorkerBase = Pick<HippoStore, keyof typeof WORKER_OPS.base>;
@@ -94,7 +104,8 @@ export interface WorkerInit {
 
 export interface Job {
   readonly id: number;
-  /** `<group>.<method>` of the synchronous store, `base.<method>` for a base one. */
+  /** `<group>.<method>` of the synchronous store, `base.<method>` for a base one,
+   * `hippoDb.<repo>.<method>` for a local one. */
   readonly op: string;
   readonly args: readonly unknown[];
   /** Where ALL_TENANTS sat in the arguments, since a symbol cannot be copied to the thread. */

@@ -24,6 +24,7 @@ import type {
   StoreWith,
 } from '../../base/ports/store.js';
 import type { ContextWith } from '../../api/types.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
@@ -215,6 +216,15 @@ export interface GroupToolCall<G extends OptionalGroup> extends ToolCall {
 
 export type GroupToolHandler<G extends OptionalGroup> = (
   call: GroupToolCall<G>,
+) => string | Promise<string>;
+
+/** A local tool's call: its groups' store, and an api Context that carries hippo.db's local tier. */
+export interface HippoDbToolCall<G extends OptionalGroup> extends GroupToolCall<G> {
+  api: ContextWith<G> & HippoDbContext;
+}
+
+export type HippoDbToolHandler<G extends OptionalGroup> = (
+  call: HippoDbToolCall<G>,
 ) => string | Promise<string>;
 
 /** A share or peers call: a folder store and the global store its reach names, both checked by

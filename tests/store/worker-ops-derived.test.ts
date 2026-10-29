@@ -1,7 +1,8 @@
 // WORKER_OPS comes from the effect tables beside the port's signatures, and names exactly what hippo.db's store sets.
 import { describe, expect, it } from 'vitest';
 import { STORE_EFFECTS } from '../../src/base/ports/store.js';
-import { WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
+import { HIPPO_DB_OPS, WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
+import { HIPPO_DB_EFFECTS } from '../../src/store/sqlite/hippo-db.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -34,5 +35,13 @@ describe('WORKER_OPS', () => {
       if (group === 'base') continue;
       expect([group, Object.keys(store.get(group) ?? {}).sort()]).toEqual([group, Object.keys(places).sort()]);
     }
+  });
+
+  it("places each method of hippo.db's local tier by its effect, repository by repository", () => {
+    const local = sqliteStore(makeRoot('worker-ops', { init: false })).hippoDb;
+    const methods = (repos: typeof HIPPO_DB_OPS | typeof local) =>
+      Object.entries(repos).map(([repo, group]) => [repo, Object.keys(group).sort()]);
+    expect(methods(HIPPO_DB_OPS)).toEqual(methods(local));
+    expect(HIPPO_DB_OPS).toEqual(HIPPO_DB_EFFECTS);
   });
 });

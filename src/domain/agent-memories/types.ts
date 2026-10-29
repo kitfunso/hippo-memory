@@ -48,8 +48,15 @@ export interface Adapter {
   list(ctx: AdapterContext, scope: Scope): Listing;
 }
 
+/** The one counter a sync moves outside its groups: the rows it remembered, which hippo.db keeps
+ * in its local tier. */
+interface RememberedCounter {
+  readonly hippoDb: { readonly stats: { bumpRemembered(count: number): Promise<void> } };
+}
+
 /** One store a sync reads and writes; the sync closes it. */
-export type ImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'>;
+export type ImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'> &
+  RememberedCounter;
 
 /** How a sync reaches each store it targets: the caller's, so the sync never names a store
  * adapter. */

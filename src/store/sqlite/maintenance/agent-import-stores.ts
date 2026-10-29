@@ -10,9 +10,12 @@ import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { sqliteStore } from '../store.js';
+import type { HippoDbRepos } from '../hippo-db.js';
 import type { SqliteStoreOptions } from '../runtime/grant.js';
 
-type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'>;
+type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'> & {
+  readonly hippoDb: HippoDbRepos;
+};
 
 interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;

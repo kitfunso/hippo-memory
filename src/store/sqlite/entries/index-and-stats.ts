@@ -8,7 +8,9 @@ import {
 import { errorFields, log } from '../../../base/util/log.js';
 import type { HippoIndex } from '../runtime/rows.js';
 import { writeStatsMirror, buildStatsFromDb } from '../folder-files/mirrors.js';
-import type { StoreFiles } from '../runtime/open.js';
+import type { Handles, StoreFiles } from '../runtime/open.js';
+import { openStore } from '../runtime/handles.js';
+import { bound } from '../runtime/bound.js';
 import type { StoreAt } from '../../../db/connect.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -37,6 +39,19 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
     recalled: (a.recalled ?? 0) + (b.recalled ?? 0),
     forgotten: (a.forgotten ?? 0) + (b.forgotten ?? 0),
   };
+}
+
+/** The store-wide counters a local write moves, beside the rows it wrote. */
+export function sqliteStats({ on, files }: Handles) {
+  return bound(
+    on,
+    {
+      /** Adds `count` to the one store-wide remembered counter, no tenant. */
+      bumpRemembered: (db: DatabaseSyncLike, count: number) =>
+        updateStats(db, files, { remembered: count }),
+    },
+    openStore,
+  );
 }
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */

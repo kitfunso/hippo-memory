@@ -64,7 +64,6 @@ export function portOnlyStore<G extends OptionalGroup = never>(
     appendAuditEvents: inner.appendAuditEvents,
     finishRecall: inner.finishRecall,
     bumpRecallStats: inner.bumpRecallStats,
-    bumpRemembered: inner.bumpRemembered,
     recordTokens: inner.recordTokens,
     close: inner.close,
   };

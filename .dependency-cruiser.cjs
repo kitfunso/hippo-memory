@@ -46,7 +46,9 @@ function mapProblems() {
 
 const problems = mapProblems();
 if (problems.length > 0) {
-  throw new Error(`layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`);
+  throw new Error(
+    `layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`,
+  );
 }
 
 /** One rule per layer: its files import nothing from a higher layer, type-only imports included. */
@@ -77,14 +79,31 @@ const barrels = Object.entries(layers.barrels).map(([file, folder]) => ({
 const { adapter, dbReach } = layers;
 const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
+// hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
+const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
+const outsideAdapter = [adapterPath, srcPaths([], entrances)];
 
 const adapterRules = [
   {
     name: 'adapter-entrances',
     comment: `only src/${adapter.root} and the test kit import src/${adapter.folder}; others take the store from the Context`,
     severity: 'error',
-    from: { pathNot: [adapterPath, srcPaths([], entrances)] },
-    to: { path: adapterPath },
+    from: { pathNot: outsideAdapter },
+    to: { path: adapterPath, pathNot: tierDoor },
+  },
+  {
+    name: 'tier-door-types',
+    comment: 'outside the adapter, src/store/sqlite/hippo-db.ts is imported for its types only',
+    severity: 'error',
+    from: { pathNot: outsideAdapter },
+    to: { path: tierDoor, dependencyTypesNot: ['type-only', 'type-import'] },
+  },
+  {
+    name: 'tier-door-api',
+    comment: 'outside the adapter, only src/api imports src/store/sqlite/hippo-db.ts',
+    severity: 'error',
+    from: { pathNot: [...outsideAdapter, '^src/api/'] },
+    to: { path: tierDoor },
   },
   {
     name: 'adapter-root-doors',
@@ -130,7 +149,7 @@ const storeReach = [
     comment: 'the api reads the store through the port in src/base/ports and takes shared rules from src/base',
     severity: 'error',
     from: { path: '^src/api/' },
-    to: { path: '^src/store/' },
+    to: { path: '^src/store/', pathNot: tierDoor },
   },
   {
     name: 'cli-store-runtime',
@@ -169,7 +188,8 @@ const strayStore = {
 // One rule per depth, for the file's own folder, its parent and its grandparent: $1 is that folder.
 const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
   name: `no-own-barrel-${up}`,
-  comment: 'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
+  comment:
+    'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
   severity: 'error',
   from: { path: `^(src/.+/)${below}[^/]+$`, pathNot: up === 0 ? '/index\\.ts$' : '^$' },
   to: { path: '^$1index\\.ts$' },
@@ -178,7 +198,8 @@ const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
 const reachRules = [
   {
     name: 'no-io-below-host',
-    comment: 'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
+    comment:
+      'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
     severity: 'error',
     from: { path: '^src/(base|domain|api)/' },
     to: { path: IO_MODULES },
@@ -192,7 +213,8 @@ const reachRules = [
   },
   {
     name: 'sqlite-in-data-layer',
-    comment: 'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
+    comment:
+      'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
     severity: 'error',
     from: { pathNot: ['^src/db/sqlite\\.ts$', '^src/host/file-lock\\.ts$'] },
     to: { path: SQLITE_MODULE },
@@ -217,7 +239,8 @@ const reachRules = [
   { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },
   {
     name: 'config-file-in-surface',
-    comment: 'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
+    comment:
+      'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
     severity: 'error',
     from: { path: '^src/', pathNot: [layerPaths('surface'), layerPaths('host')] },
     to: { path: '^src/host/config-file\\.ts$', dependencyTypesNot: notType },

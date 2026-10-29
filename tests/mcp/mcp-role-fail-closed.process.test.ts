@@ -156,7 +156,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
       config: loadConfig(hippoRoot),
       tenantId: 'default',
       store,
-      api: { ...mcpApiContext(ctx), store },
+      api: { ...mcpApiContext(ctx), store, hippoDb: store.hippoDb },
     });
     expect(text).toMatch(/^Git learn: 1 new/);
     expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);

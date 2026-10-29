@@ -15,6 +15,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 // The tags a caller in this process adds from the folder it runs in.
 export { extractPathTags } from '../../domain/search/path-context.js';
@@ -88,7 +89,7 @@ function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutco
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and
  * never awaited. A refused value throws as `remember` does. */
 export async function rememberLocally(
-  ctx: Context,
+  ctx: HippoDbContext,
   input: LocalRememberInput,
 ): Promise<LocalRememberOutcome> {
   const schemaFit = await ctx.store.contextReads.schemaFit(
@@ -115,7 +116,7 @@ export async function rememberLocally(
   if ('skipped' in written) return { status: 'skipped', ...written.skipped };
   const { id, warnings = [], startedWeak } = written;
   const entry = await storedEntry(ctx, id);
-  await ctx.store.bumpRemembered(1);
+  await ctx.hippoDb.stats.bumpRemembered(1);
   const embedding = indexInBackground(ctx, entry);
   return startedWeak
     ? { status: 'stored', entry, embedding, warnings, startedWeak }
@@ -177,7 +178,7 @@ export async function extractRememberedFacts(
 /** What `hippo watch` keeps of a command that failed: its redacted stderr as an episodic row,
  * stored every time, since watch has never put a failure to the salience gate. */
 export async function rememberFailedCommand(
-  ctx: Context,
+  ctx: HippoDbContext,
   failed: FailedCommand,
 ): Promise<LocalRememberOutcome> {
   const { content, tags, layer, source, confidence } = captureError(

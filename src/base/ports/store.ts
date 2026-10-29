@@ -294,8 +294,6 @@ export interface HippoStore extends RequiredGroups {
   finishRecall(writes: RecallWrites): Promise<void>;
   /** Adds `recalled` to the one store-wide total_recalled counter, no tenant. */
   bumpRecallStats(recalled: number): Promise<void>;
-  /** Adds `count` to the one store-wide remembered counter, no tenant. */
-  bumpRemembered(count: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */
