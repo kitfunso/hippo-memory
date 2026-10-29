@@ -75,9 +75,8 @@ export interface ServeOptions {
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
-   * unhandled rejection. A stop still running 10000 ms past `shutdownDrainMs` ends the process
-   * with a failure exit. Only `hippo serve` sets this. */
+  /** Only `hippo serve` sets this: stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an
+   * uncaught exception or rejection. A stop 10000 ms past `shutdownDrainMs` exits as a failure. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to
    * 5000 ms. */
@@ -103,9 +102,8 @@ export interface ServeOptions {
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so
    * it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
-  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second,
-   * burst twice that); perAddress replaces HIPPO_V1_RPS when set; 'off' disables either;
-   * failedAuthPerAddress guards scrypt. */
+  /** Request limits, each disabled by 'off': perCaller after auth, on by default (HIPPO_CALLER_RPS,
+   * else 20/s, burst 2x); perAddress replaces HIPPO_V1_RPS; failedAuthPerAddress guards scrypt. */
   rateLimits?: {
     perCaller?: RateLimitSpec | 'off';
     perAddress?: RateLimitSpec | 'off';
