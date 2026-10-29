@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// CI lint gate. The repo carries hundreds of older oxlint hits, so a plain `oxlint` exit code would fail
-// every PR; instead each rule's hit count may fall but never rise above .oxlint-baseline.json.
+// CI lint gate: each rule's oxlint hit count may fall but never rise above .oxlint-baseline.json, so a
+// rule can be turned on before its older hits are fixed, which a plain `oxlint` exit code would not allow.
 // After fixing hits, `node scripts/checks/check-lint-ratchet.mjs --update` lowers the baseline.
 
 import { spawnSync } from 'node:child_process';
