@@ -47,7 +47,7 @@ export interface SearchOptions {
   minResults?: number;
 }
 
-export interface HybridSearchOptions extends SearchOptions {
+export interface SearchBothHybridOptions extends SearchOptions {
   embeddingWeight?: number;
   explain?: boolean;
   mmr?: boolean;
@@ -88,9 +88,9 @@ export interface HybridSearchOptions extends SearchOptions {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/** `HybridSearchOptions` with the tenant both stores are read as (the eval harness reads every
+/** `SearchBothHybridOptions` with the tenant both stores are read as (the eval harness reads every
  * tenant's) and the embedder each store's vector arm uses. */
-export type BothStoresSearch = HybridSearchOptions &
+export type BothStoresSearch = SearchBothHybridOptions &
   RankTime & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
 
 /** Hybrid search across both local and global stores, using embeddings when available.
@@ -230,7 +230,7 @@ export interface RankBothStoresOptions {
   readonly sources: { local: VectorSource | undefined; global: VectorSource | undefined };
   readonly entries: { local: MemoryEntry[]; global: MemoryEntry[] };
   readonly vectorCandidates: HybridVectorCandidates;
-  readonly options: HybridSearchOptions & RankTime;
+  readonly options: SearchBothHybridOptions & RankTime;
 }
 
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text,
@@ -270,7 +270,7 @@ export async function rankBothStores({
 // One deadline for both stores, so a provider that stalls on the first is not waited on again for
 // the second.
 function sharedRanking(
-  options: HybridSearchOptions & RankTime,
+  options: SearchBothHybridOptions & RankTime,
   vectorCandidates: HybridVectorCandidates,
 ) {
   const {

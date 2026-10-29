@@ -963,9 +963,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
-- `HybridSearchOptions.summaryDeboost`: v0.30 / E4: propagated to underlying rankHybrid calls.
-- `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
-- `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
+- `SearchBothHybridOptions.summaryDeboost`: v0.30 / E4: propagated to underlying rankHybrid calls.
+- `SearchBothHybridOptions.summaryFreshness`: v0.30 / E4: propagated.
+- `SearchBothHybridOptions.recallScope`: v1.25.0: recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
 - `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered, so stability holds and an exact tie keeps the LOCAL result ahead of the global one.
 
