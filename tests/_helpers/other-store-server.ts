@@ -11,14 +11,10 @@ export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 // The folder groups, none of which the stub holds.
 const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 
-/** The entries that need hippo.db's folder groups, its local tier or hippo.db itself, which no store but hippo.db's
- * has. */
+/** The entries that need hippo.db's folder groups or its local tier, which no store but hippo.db's has. */
 export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
-    ({ route }) =>
-      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) ||
-      route.needsHippoDbMark !== undefined ||
-      route.hippoDb === true,
+    ({ route }) => (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.hippoDb === true,
   ).map(({ key }) => requestLine(key));
 }
 

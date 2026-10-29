@@ -32,12 +32,11 @@ export async function notPorted(): Promise<void> {
 
 /** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
  * request checks a group. */
-export function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
+export function boundRoute(route: Route, store: HippoStore): BoundRoute {
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
   if (route.storeReady !== undefined) return boundGroupRoute(route, store);
   if (route.hippoDb === true) return boundHippoDbRoute(route, store);
-  // A needsHippoDbMark row needs hippo.db; a row naming no group runs on any store.
-  return route.needsHippoDbMark === undefined || onHippoDb ? route : { ...route, unported: true };
+  return route;
 }
 
 /** A group row's handler gets the request's context on the store boot proved, bound to the

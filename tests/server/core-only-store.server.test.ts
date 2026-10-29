@@ -15,11 +15,7 @@ import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conform
 const CORE_TOOLS = new Set(['hippo_recall', 'hippo_remember', 'hippo_outcome', 'hippo_context']);
 
 const LOCAL_ROWS = V1_ROWS.filter(
-  ({ route }) =>
-    route.auth === 'webhook-signature' ||
-    route.storeReady !== undefined ||
-    route.needsHippoDbMark !== undefined ||
-    route.hippoDb === true,
+  ({ route }) => route.auth === 'webhook-signature' || route.storeReady !== undefined || route.hippoDb === true,
 ).map(({ key }) => requestLine(key));
 
 describe('serve() on a store with only the core members', () => {

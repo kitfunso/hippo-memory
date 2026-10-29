@@ -295,9 +295,9 @@ export function routeLabel(route: RouteEndpoint<never>): string {
 
 /** The /v1 lookup for one store: each row's store need is settled here, once, so a request
  * checks no group. */
-export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup<BoundRoute> {
+export function bindV1Routes(store: HippoStore): RouteLookup<BoundRoute> {
   return routeLookup(
-    V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb)),
+    V1_ROUTES.map((route) => boundRoute(route, store)),
     routeMatches,
   );
 }

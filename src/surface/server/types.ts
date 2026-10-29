@@ -220,13 +220,11 @@ export type BoundRoute = { method: string; unported?: true } & (
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
-/** A route that runs on any store, or with a `needsHippoDbMark` reason on hippo.db alone. */
+/** A route that runs on any store. */
 type AnyStoreRoute = {
   method: string;
   auth: GatedAuth;
   storeReady?: never;
-  /** Why the row needs the store marked as hippo.db itself, which `onHippoDb` reports, not the tier. */
-  needsHippoDbMark?: string;
   hippoDb?: never;
 } & PathEndpoint<AuthedRouteRequest>;
 
@@ -236,7 +234,6 @@ export type GroupRouteOf<G extends OptionalGroup> = {
   method: string;
   auth: GatedAuth;
   storeReady: G;
-  needsHippoDbMark?: never;
   hippoDb?: never;
 } & PathEndpoint<GroupRequest<G>>;
 
@@ -249,7 +246,6 @@ export type WebhookRoute = {
   method: string;
   auth: 'webhook-signature';
   storeReady?: never;
-  needsHippoDbMark?: never;
   hippoDb?: never;
 } & PathEndpoint<WebhookRouteRequest>;
 
@@ -259,7 +255,6 @@ export type HippoDbRoute = {
   method: string;
   auth: GatedAuth;
   storeReady?: never;
-  needsHippoDbMark?: never;
   /** The handler calls the local tier, so the row binds only on a store that carries `hippoDb`. */
   hippoDb: true;
 } & PathEndpoint<HippoDbRequest>;
