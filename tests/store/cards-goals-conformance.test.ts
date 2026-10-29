@@ -195,7 +195,7 @@ describe('Cards', () => {
       (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => detail?.card ?? null),
       (g, s) => g.detail(TENANT_B, idOf(s, 2)).then((detail) => detail?.card ?? null),
       (_g, s) =>
-        s.sessions.save(
+        s.hippoDb.sessions.save(
           TENANT_A,
           'handoff',
           { handoff: { version: 1, sessionId: 's1', summary: 'over to you', cardId: idOf(s, 1) } },

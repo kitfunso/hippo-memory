@@ -7,7 +7,7 @@ import { META_KEY } from '../../src/db/meta.js';
 import { RequestDeadline } from '../../src/base/util/request-scope.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
 import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
-import { HIPPO_DB_EFFECTS } from '../../src/store/sqlite/hippo-db.js';
+import { HIPPO_DB_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordingExecutor } from '../_helpers/recording-executor.js';
 
@@ -54,18 +54,20 @@ function remembered(root: string): number {
   }
 }
 
-const effectOf = (repo: string, method: string): string | undefined =>
-  new Map(Object.entries(new Map(Object.entries(HIPPO_DB_EFFECTS)).get(repo) ?? {})).get(method);
+const placeOf = (repo: string, method: string): string | undefined =>
+  new Map(Object.entries(new Map(Object.entries(HIPPO_DB_OPS)).get(repo) ?? {})).get(method);
 
 describe("hippo.db's local tier on the worker store", () => {
-  it('sends every local method to a worker as hippoDb.<repo>.<method>, placed by its effect', async () => {
+  it('sends every local method to a worker as hippoDb.<repo>.<method>, where HIPPO_DB_OPS places it', async () => {
     const { executor, sent } = recordingExecutor();
     const store = storeOn(makeRoot('hippo-db-workers'), executor);
     const walked: string[] = [];
     for (const [repo, methods] of Object.entries(store.hippoDb)) {
-      for (const [method, run] of Object.entries<Function>(methods)) {
+      // Every member of a repository is a method.
+      const members: [string, () => Promise<void>][] = Object.entries(methods);
+      for (const [method, run] of members) {
         await run();
-        walked.push(`hippoDb.${repo}.${method} ${effectOf(repo, method)}`);
+        walked.push(`hippoDb.${repo}.${method} ${placeOf(repo, method)}`);
       }
     }
     expect(walked.length).toBeGreaterThan(0);

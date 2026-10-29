@@ -57,7 +57,7 @@ export async function sessionEndHandoffForCaller(
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   const sessionEnd = {
     sessionId: req.sessionId,
     evidence,

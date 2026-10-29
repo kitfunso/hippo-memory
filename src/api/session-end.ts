@@ -56,7 +56,7 @@ async function writeEndHandoff(
   sessionId: string,
   close: SessionClose,
 ): Promise<void> {
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   try {
     const ownSnapshot =
       (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
@@ -91,7 +91,7 @@ async function closeSnapshot(
   try {
     if (sessionId) {
       const close = { status: 'session-ended', sessionId };
-      const closed = await ctx.store.sessions.clear(ctx.tenantId, 'snapshot', close, null);
+      const closed = await ctx.store.hippoDb.sessions.clear(ctx.tenantId, 'snapshot', close, null);
       logLine(`closed ${closed} active snapshot(s) for session ${sessionId}`);
     } else {
       logLine('skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -153,7 +153,7 @@ export async function compactResumeBlock(
   ctx: ContextWith<'sessions'>,
   payloadSessionId: string | null,
 ): Promise<string | null> {
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a

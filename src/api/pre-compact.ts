@@ -113,7 +113,7 @@ async function snapshotJustSaved(
   sessionId: string | null,
 ): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
-  const active = await ctx.store.sessions.loadSnapshot(ctx.tenantId, {}, null);
+  const active = await ctx.store.hippoDb.sessions.loadSnapshot(ctx.tenantId, {}, null);
   return (
     active?.sessionId === sessionId &&
     active.source === 'pre-compact' &&
@@ -179,7 +179,7 @@ async function saveDerivedSnapshot(
   const { tenantId, store } = ctx;
   let existing: TaskSnapshot | null = null;
   try {
-    existing = await store.sessions.loadSnapshot(tenantId, {}, key);
+    existing = await store.hippoDb.sessions.loadSnapshot(tenantId, {}, key);
   } catch (err) {
     log.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -197,7 +197,7 @@ async function saveDerivedSnapshot(
     return;
   }
   try {
-    await store.sessions.save(
+    await store.hippoDb.sessions.save(
       tenantId,
       'snapshot',
       { ...merged, source: 'pre-compact', sessionId },

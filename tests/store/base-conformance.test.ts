@@ -132,25 +132,31 @@ describe('HippoStore continuity', () => {
   it('reads the keyed snapshot with its session handoff and newest events, oldest first', async () => {
     const { outcomes } = await conforms([
       (s) =>
-        s.sessions.save(
+        s.hippoDb.sessions.save(
           TENANT_A,
           'snapshot',
           { task: 'ship', summary: 'half', nextStep: 'merge', sessionId: 's1' },
           KEY,
         ),
       (s) =>
-        s.sessions.save(TENANT_A, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } }, KEY),
+        s.hippoDb.sessions.save(
+          TENANT_A,
+          'handoff',
+          { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } },
+          KEY,
+        ),
       (s) =>
-        s.sessions.save(
+        s.hippoDb.sessions.save(
           TENANT_A,
           'handoff',
           { handoff: { version: 1, sessionId: 's1', summary: 'carry on again' } },
           KEY,
         ),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
-      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
+      (s) => s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
+      (s) =>
+        s.hippoDb.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
       (s) => s.continuity(TENANT_A, 2, KEY),
       (s) => s.continuity(TENANT_A, 8, null),
       (s) => s.continuity(TENANT_A, 8, { owner: 'bob', project: ['proj'] }),

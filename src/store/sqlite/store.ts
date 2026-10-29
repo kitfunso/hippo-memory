@@ -22,7 +22,7 @@ import { sqliteRejections } from './review/rejections.js';
 import { sqliteFailureLog } from './capture/failure-log.js';
 import { sqliteCompactions } from './capture/compactions.js';
 import { sqliteReports } from './reports/reports.js';
-import { sqliteSessions, listSessionEvents } from './sessions/sessions.js';
+import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteConnectorEvents } from './connectors/connector-events.js';
 import { sqliteConnectorWrites } from './connectors/connector-writes.js';
 import { sqliteConsolidation } from './consolidation/consolidation.js';
@@ -122,7 +122,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),
     lastRecall: sqliteLastRecall(handles),
-    sessions: sqliteSessions(handles),
     cards: sqliteCards(on),
     goals: sqliteGoals(on),
     conflicts: sqliteConflicts(handles),
@@ -226,7 +225,7 @@ export interface SqliteReachOptions {
   readonly hippoRoot: string;
   readonly store: HippoStore;
   readonly shared?: boolean;
-  readonly openGlobal?: (root: string) => HippoStore & StoreGroups;
+  readonly openGlobal?: (root: string) => HippoDbStore;
   readonly host?: Host;
 }
 

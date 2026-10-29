@@ -236,7 +236,7 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
 
 /** The operator's global stores a server opens beside its own, closed with it. */
 interface GlobalStores {
-  readonly open: (root: string) => HippoStore & StoreGroups;
+  readonly open: (root: string) => HippoDbStore;
   readonly close: () => Promise<void>;
 }
 
@@ -255,7 +255,7 @@ export function globalStoresFor(
       close: async () => {},
     };
   }
-  const opened = new Map<string, HippoStore & StoreGroups>();
+  const opened = new Map<string, HippoDbStore>();
   return {
     open(root) {
       const known = opened.get(root);

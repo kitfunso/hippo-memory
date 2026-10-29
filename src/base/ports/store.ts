@@ -58,15 +58,24 @@ interface OptionalGroups
   readonly dagReads: DagReads;
   /** Without it recall expands no graph and the graph view answers 501. */
   readonly graphReads: GraphReads;
-  /** The continuity, session-end and working-memory paths. */
-  readonly sessions: Sessions;
   readonly goals: Goals;
   /** Status, tokens, failures and the memory listings. */
   readonly reports: Reports;
 }
 
+/** The groups hippo.db keeps in its local tier, `store.hippoDb`, off the port. Surfaces still
+ * prove them by name, so StoreWith and the group probes look for each one in the tier. */
+export interface LocalGroups {
+  /** The continuity, session-end and working-memory paths. */
+  readonly sessions: Sessions;
+}
+
+export type LocalGroup = keyof LocalGroups;
+
+const LOCAL_GROUPS: ReadonlySet<string> = new Set<LocalGroup>(['sessions']);
+
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = keyof OptionalGroups;
+export type OptionalGroup = keyof OptionalGroups | LocalGroup;
 
 /** Each optional group once, for a surface or a test to walk;
  * tests/types/store-kit.types.test.ts proves it whole. */
@@ -179,7 +188,7 @@ interface RequiredGroups {
 /** A store a sleep can run on. */
 export type SleepStore = StoreWith<SleepGroup>;
 
-export type StoreGroup = 'base' | keyof StoreGroups;
+export type StoreGroup = 'base' | keyof GroupMethods;
 
 /** True when the store sets `group`; for an optional group the store is narrowed to one that
  * does. */
@@ -189,20 +198,32 @@ export function hasGroup<G extends OptionalGroup>(
 ): store is StoreWith<G>;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
-  return group === 'base' || groupsOf(store)[group] !== undefined;
+  return group === 'base' || groupOf(store, group) !== undefined;
 }
 
 /** The optional group's methods; a store without them throws
  * StoreNotPortedError, which answers 501 as any unported path does. */
-export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: G): StoreGroups[G] {
-  const methods = groupsOf(store)[group];
+export function requireGroup<G extends OptionalGroup>(
+  store: HippoStore,
+  group: G,
+): GroupMethods[G] {
+  const methods = groupOf(store, group);
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
 }
 
-/** The store's groups as it set them; HippoStore names only the required ones. */
-function groupsOf(store: HippoStore): Partial<StoreGroups> {
-  return store;
+/** Every optional group's methods, wherever the store keeps them. */
+type GroupMethods = StoreGroups & LocalGroups;
+
+/** `group`'s methods as `store` set them: a local group's in its tier, any other's on the store
+ * itself, which HippoStore names only for the required groups. */
+function groupOf<G extends keyof GroupMethods>(
+  store: HippoStore,
+  group: G,
+): Partial<GroupMethods>[G] {
+  const own: Partial<GroupMethods> & { readonly hippoDb?: Partial<LocalGroups> } = store;
+  const holder: Partial<GroupMethods> = LOCAL_GROUPS.has(group) ? (own.hippoDb ?? {}) : own;
+  return holder[group];
 }
 
 /** True when the store sets every group `needs` names; a surface asks once, as it binds a verb,
@@ -211,8 +232,7 @@ export function hasGroups<G extends OptionalGroup>(
   store: HippoStore,
   needs: readonly G[],
 ): store is StoreWith<G> {
-  const groups = groupsOf(store);
-  return needs.every((group) => groups[group] !== undefined);
+  return needs.every((group) => groupOf(store, group) !== undefined);
 }
 
 /** `store` narrowed to every group `needs` names; a store without one throws StoreNotPortedError
@@ -222,8 +242,7 @@ export function requireGroups<G extends OptionalGroup>(
   needs: readonly G[],
 ): StoreWith<G> {
   if (hasGroups(store, needs)) return store;
-  const groups = groupsOf(store);
-  const missing = needs.find((group) => groups[group] === undefined);
+  const missing = needs.find((group) => groupOf(store, group) === undefined);
   throw new StoreNotPortedError(store.kind, missing ?? needs.join(', '));
 }
 
@@ -233,8 +252,16 @@ export type RequiredStore = Omit<HippoStore, OptionalGroup>;
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in; `F`
  * are the groups a feature reads where it states its fallback, so they may be unset. */
 export type StoreWith<G extends OptionalGroup, F extends OptionalGroup = never> = RequiredStore &
-  Pick<StoreGroups, G> &
-  Partial<Pick<StoreGroups, F>>;
+  Pick<StoreGroups, Extract<G, keyof StoreGroups>> &
+  Partial<Pick<StoreGroups, Extract<F, keyof StoreGroups>>> &
+  TierWith<Extract<G, LocalGroup>, Extract<F, LocalGroup>>;
+
+/** The local tier StoreWith asks for: `G`'s groups set, `F`'s perhaps; nothing when both are
+ * empty, so a store with no tier still meets a StoreWith of port groups alone. */
+type TierWith<G extends LocalGroup, F extends LocalGroup> = ([G] extends [never]
+  ? unknown
+  : { readonly hippoDb: Pick<LocalGroups, G> }) &
+  ([F] extends [never] ? unknown : { readonly hippoDb?: Partial<Pick<LocalGroups, F>> });
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 

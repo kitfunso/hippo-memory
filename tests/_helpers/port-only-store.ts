@@ -10,6 +10,7 @@ import {
   type OptionalGroup,
   type StoreGroups,
   type StoreWith,
+  type Sessions,
 } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
@@ -73,9 +74,11 @@ export function portOnlyStore<G extends OptionalGroup = never>(
     close: inner.close,
   };
   const groups = Object.entries(inner).filter(([key]) => !(key in base) && !leftOut.has(key));
-  // SAFETY: what is left of sqliteStore's own string keys is its required groups and the kept ones.
-  const kept = Object.fromEntries(groups) as Omit<StoreGroups, OptionalGroup> & Pick<StoreGroups, G>;
-  return { ...base, ...kept };
+  const local = Object.entries(inner.hippoDb).filter(([key]) => keep.some((k) => k === key));
+  const kept = Object.fromEntries(groups);
+  // SAFETY: sqliteStore's own string keys less the left-out groups are its required groups and the kept ones,
+  // and the kept groups hippo.db serves from its local tier sit under `hippoDb`, as StoreWith<G> asks.
+  return { ...base, ...kept, ...(local.length > 0 && { hippoDb: Object.fromEntries(local) }) } as StoreWith<G>;
 }
 
 /** The store with the name of each recall and context read it answers pushed onto `calls`: the two base reads,
@@ -88,14 +91,17 @@ function logged<S extends HippoStore>(store: S, calls: string[]): S {
       return fn(...args);
     };
   const { contextReads: c, vectors: v } = store;
-  const sessions = hasGroup(store, 'sessions') ? store.sessions : undefined;
+  const tier = hasGroup(store, 'sessions') ? store.hippoDb : undefined;
   return {
     ...store,
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
-    ...(sessions && {
-      // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
-      sessions: { ...sessions, read: log('sessions.read', sessions.read) as StoreGroups['sessions']['read'] },
+    ...(tier && {
+      hippoDb: {
+        ...tier,
+        // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
+        sessions: { ...tier.sessions, read: log('sessions.read', tier.sessions.read) as Sessions['read'] },
+      },
     }),
     contextReads: {
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),

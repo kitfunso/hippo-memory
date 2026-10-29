@@ -11,7 +11,7 @@ import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { Context } from '../types.js';
 
 /** The repo store's reads and the digest's write. */
-export type DigestStore = Pick<StoreWith<'sessions'>, 'entriesWhere' | 'sessions' | 'entryWrites'>;
+export type DigestStore = Pick<StoreWith<'sessions'>, 'entriesWhere' | 'hippoDb' | 'entryWrites'>;
 
 /** Where a digest writes: the repo's own store, its tenant and config, and the actor its audit
  * names. */
@@ -74,7 +74,7 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
   const digests = entries
     .filter((e) => !e.extractedFrom && e.sourceSessionId !== key)
     .map((e) => e.content);
-  const handoff = await ctx.store.sessions.read(
+  const handoff = await ctx.store.hippoDb.sessions.read(
     ctx.tenantId,
     'handoff',
     {

@@ -17,7 +17,7 @@ export async function continuityLatest(
   ctx: ContextWith<'sessions'>,
   opts: { sessionId?: string; limit: number },
 ): Promise<LatestContinuity> {
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, {}, null);
   const events = await sessions.read(ctx.tenantId, 'event', {
     sessionId: opts.sessionId || snapshot?.sessionId || undefined,

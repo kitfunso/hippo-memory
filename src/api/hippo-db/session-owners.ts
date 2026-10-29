@@ -18,7 +18,7 @@ export async function bindSessionOwner(
   assertTenantId('bindSessionOwner', ctx.tenantId);
   const owner = ownerOrSubject(ctx.actor);
   const retentionMs = BINDING_RETENTION_DAYS * DAY_MS;
-  const bound = await ctx.store.sessions.bindSessionOwner(
+  const bound = await ctx.store.hippoDb.sessions.bindSessionOwner(
     ctx.tenantId,
     sessionId,
     owner,

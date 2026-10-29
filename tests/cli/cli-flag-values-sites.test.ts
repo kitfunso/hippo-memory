@@ -38,7 +38,7 @@ const c = (cli: CliCommand, args: string[], flags: CliFlags): CommandContext => 
 async function stored() {
   return asCommand(async (cli) => {
     const ctx = cli.apiContext(root, 'default');
-    const { sessions } = ctx.store;
+    const { sessions } = ctx.store.hippoDb;
     return {
       snapshot: Boolean(await sessions.loadSnapshot('default', {}, null)),
       events: (await sessions.read('default', 'event', { limit: 50 })).length,
@@ -48,7 +48,7 @@ async function stored() {
     };
   });
 }
-const sessionsOf = (hippoRoot: string) => lastingCommand().apiContext(hippoRoot, 'default').store.sessions;
+const sessionsOf = (hippoRoot: string) => lastingCommand().apiContext(hippoRoot, 'default').store.hippoDb.sessions;
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
 
 beforeEach(() => {

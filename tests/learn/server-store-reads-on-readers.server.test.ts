@@ -66,7 +66,7 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
   });
   await s.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
   await s.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
-  await s.sessions.save(TENANT, 'working_memory', {
+  await s.hippoDb.sessions.save(TENANT, 'working_memory', {
     scope: 'deploy',
     content: 'watch the canary error rate',
     sessionId: SESSION,
@@ -185,23 +185,23 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     'migrate the rollout scripts',
   ),
   read(
-    'sessions.read events',
-    (s) => s.sessions.read(TENANT, 'event', { sessionId: SESSION, limit: 5 }),
+    'hippoDb.sessions.read events',
+    (s) => s.hippoDb.sessions.read(TENANT, 'event', { sessionId: SESSION, limit: 5 }),
     'canary passed',
   ),
   read(
-    'sessions.read latest handoff',
-    (s) => s.sessions.read(TENANT, 'handoff', { sessionId: SESSION }, null),
+    'hippoDb.sessions.read latest handoff',
+    (s) => s.hippoDb.sessions.read(TENANT, 'handoff', { sessionId: SESSION }, null),
     'handoff after the canary',
   ),
   read(
-    'sessions.read handoff by id',
-    (s) => s.sessions.read(TENANT, 'handoff', { id: made.handoffId }),
+    'hippoDb.sessions.read handoff by id',
+    (s) => s.hippoDb.sessions.read(TENANT, 'handoff', { id: made.handoffId }),
     'handoff after the canary',
   ),
   read(
-    'sessions.read working memory',
-    (s) => s.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
+    'hippoDb.sessions.read working memory',
+    (s) => s.hippoDb.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
     'watch the canary error rate',
   ),
   read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),

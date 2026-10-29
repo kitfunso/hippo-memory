@@ -38,7 +38,7 @@ declare const consolidation: SleepStore['consolidation'];
 declare const req: Parameters<typeof captureSessionTexts>[1];
 declare const end: Omit<Parameters<typeof sessionEndHandoffForCaller>[1], 'sessionId'>;
 declare const base: HippoStore;
-declare const sessions: StoreGroups['sessions'];
+declare const goals: StoreGroups['goals'];
 
 describe('UPGRADING-3.0 advice', () => {
   it('narrows the store and hands the entry a Context built around it (narrowStore, Context.store, session entries)', () => {
@@ -107,11 +107,11 @@ describe('UPGRADING-3.0 advice', () => {
 
   it('names the optional groups a store literal sets in its type (HippoStore)', () => {
     typeOnly(() => {
-      const store: HippoStore & Pick<StoreGroups, 'sessions'> = { ...base, sessions };
+      const store: HippoStore & Pick<StoreGroups, 'goals'> = { ...base, goals };
       // @ts-expect-error HippoStore names no optional group, so a literal typed HippoStore may not set one
-      const refused: HippoStore = { ...base, sessions };
-      expectTypeOf(store).toHaveProperty('sessions');
-      expectTypeOf(refused).not.toHaveProperty('sessions');
+      const refused: HippoStore = { ...base, goals };
+      expectTypeOf(store).toHaveProperty('goals');
+      expectTypeOf(refused).not.toHaveProperty('goals');
     });
   });
 

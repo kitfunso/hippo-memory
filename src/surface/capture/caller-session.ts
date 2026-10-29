@@ -8,7 +8,7 @@ import { ledgerReachOf } from '../../api/ledger-db.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { bindSessionOwner } from '../../api/auth/session-owners.js';
+import { bindSessionOwner } from '../../api/hippo-db/session-owners.js';
 import {
   fitWorkingState,
   WORKING_STATE_CAPS,

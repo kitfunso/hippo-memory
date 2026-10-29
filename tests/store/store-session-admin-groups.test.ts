@@ -31,8 +31,8 @@ const entry = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_H
 describe('sessions group', () => {
   it('keeps a snapshot, events and a handoff, in both forms', async () => {
     const r = root();
-    const sync = sqliteStore(r).sessions;
-    const served = sqliteStore(r).sessions;
+    const sync = sqliteStore(r).hippoDb.sessions;
+    const served = sqliteStore(r).hippoDb.sessions;
     const snap = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
     expect((await sync.save(T, 'snapshot', snap, null)).task).toBe('ship');
     expect((await served.loadSnapshot(T, {}, null))?.nextStep).toBe('merge');
@@ -52,7 +52,7 @@ describe('sessions group', () => {
 
   it('pushes, reads and clears working memory', async () => {
     const r = root();
-    const served = sqliteStore(r).sessions;
+    const served = sqliteStore(r).hippoDb.sessions;
     await served.save(T, 'working_memory', { scope: 'task', content: 'note one' });
     expect((await served.read(T, 'working_memory', { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
       'note one',

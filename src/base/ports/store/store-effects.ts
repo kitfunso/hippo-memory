@@ -22,7 +22,6 @@ import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { LAST_RECALL_EFFECTS } from './recall-writes.js';
 import { FAILURE_LOG_EFFECTS, REJECTIONS_EFFECTS } from './rejections.js';
 import { REPORTS_EFFECTS } from './reports.js';
-import { SESSIONS_EFFECTS } from './sessions.js';
 import { PROMOTION_EFFECTS, SHARING_EFFECTS } from './sharing.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
@@ -62,7 +61,6 @@ export const STORE_EFFECTS = {
   lastRecall: LAST_RECALL_EFFECTS,
   auditMaintenance: AUDIT_MAINTENANCE_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
-  sessions: SESSIONS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
   conflicts: CONFLICTS_EFFECTS,

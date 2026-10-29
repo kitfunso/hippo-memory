@@ -32,7 +32,7 @@ export async function compactResumeForCaller(
   if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) {
     return { stdout: '' };
   }
-  const { sessions } = ctx.store;
+  const { sessions } = ctx.store.hippoDb;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
   // One owner's concurrent sessions must not cross-restore; a snapshot with no session still
