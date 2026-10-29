@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 // A flag before the query is the case that matters: an undeclared flag there swallows the query as its value.
-describe('the physics flags', () => {
+describe('the removed ranker flags', () => {
   it.each([
     ['recall', 'physics', ['deploy', '--physics']],
     ['recall', 'classic', ['deploy', '--classic']],

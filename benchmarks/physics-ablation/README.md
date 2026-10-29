@@ -34,6 +34,9 @@ Physics loses by -13.19 pp NDCG@5 (95% CI -22.21..-4.44 pp, excludes 0). No quer
 
 ## Methodology
 
+3.0 removed the physics engine and `physicsSearch`, so the production paths below describe 2.x and
+these results are a record.
+
 - **Corpus:** 102 memories, each representing one conversation session from LongMemEval oracle. Each memory tagged with its `session:<id>`.
 - **Queries:** 60 natural-language questions from LongMemEval. Ground truth = the set of sessions that actually contain the answer.
 - **Classic path:** `hybridSearch` — BM25 + cosine + MMR re-ranking + path/scope/outcome/recency boosts. Calls the exact production code path used when `config.physics.enabled === false`.

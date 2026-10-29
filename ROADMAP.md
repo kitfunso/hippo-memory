@@ -2480,7 +2480,7 @@ Carry owner, tenant, origin project, scope, pin, source evidence, effective time
 
 Freeze the representation and candidate construction. Compare the shipping lexical rank path, that same path with recency/strength removed and other factors fixed, plain JavaScript BM25, and plain BM25 plus evidence-based outcome feedback. Ablate recency and strength separately before their combined removal. Register exact score equations and settings: decision, path, scope-tag, extraction, churn, temporal and DAG boosts, local/global source weighting and any other configured factor must be explicitly retained, removed or disabled per arm. Removing age/strength alone is not a pure-BM25 baseline. Mandatory tenant/project/scope/temporal admission and invalidation stay in every arm. Keep optional hybrid/graph/MMR/reranker changes out of these component comparisons or register them separately.
 
-The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics remains an explicit experimental arm. No pure-BM25 or physics-off default is established by this plan.
+The current JavaScript BM25 and SQLite FTS5's native BM25 have different scoring contracts; switching between them is a separate comparison. Physics was an explicit experimental arm until 3.0 removed the physics engine. No pure-BM25 or physics-off default is established by this plan.
 
 Apply tenant/project/scope and temporal eligibility before candidate limits and ranking, and recheck admission before injection. Report all-evidence coverage, stale intrusion, per-category regressions and latency alongside paired R@5. Draft: [S1 ranking](docs/evals/2026-09-30-s1-ranking-ablation-prereg.md).
 
