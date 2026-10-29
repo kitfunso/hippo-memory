@@ -133,18 +133,18 @@ const storeReach = [
     to: { path: '^src/store/' },
   },
   {
-    name: 'cli-store-runtime',
-    comment: 'the CLI calls a src/api function; a type import from the store is fine',
+    name: 'surface-through-api',
+    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one`,
     severity: 'error',
-    from: { path: '^src/(cli\\.ts$|surface/cli/)' },
-    to: { path: '^src/(store|db)/', dependencyTypesNot: ['type-only', 'type-import'] },
+    from: { path: srcPaths(['surface'], keysOf(layers.rootFiles, 'surface')), pathNot: srcPaths([], entrances) },
+    to: { path: srcPaths([dbReach.layer, dbReach.through]) },
   },
   {
-    name: 'dashboard-through-api',
-    comment: 'the dashboard reads and writes through src/api, never the store, the db or the CLI',
+    name: 'dashboard-not-cli',
+    comment: 'the dashboard reads and writes through src/api, never through the CLI',
     severity: 'error',
     from: { path: '^src/surface/dashboard/' },
-    to: { path: '^src/(store/|db/|surface/cli/|cli\\.ts$)' },
+    to: { path: '^src/(surface/cli/|cli\\.ts$)' },
   },
 ];
 
