@@ -17,7 +17,6 @@ import { httpOver } from '../infra/http.js';
 import { realRerankers } from '../infra/rerankers/index.js';
 import * as api from '../api/index.js';
 import type {
-  Context,
   EntryContext,
   GatedRememberOptions,
   RememberOptions,
@@ -27,7 +26,7 @@ import type {
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
 import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
-import { entryInfra, withEntryInfra } from '../surface/entry-infra.js';
+import { entryInfra, filled, withEntryInfra } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
@@ -77,13 +76,6 @@ export function judgeAll(
 ): Promise<(Judgment | null)[]> {
   const { fetcher, ...rest } = opts;
   return judgeOver(contents, { ...rest, http: httpOver(fetcher) });
-}
-
-/** `fn` with the entry's real ports filled into a Context its script built without them. */
-function filled<A extends unknown[], R>(
-  fn: (ctx: Context, ...args: A) => R,
-): (ctx: EntryContext, ...args: A) => R {
-  return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
 }
 
 export function remember(

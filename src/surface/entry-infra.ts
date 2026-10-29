@@ -2,7 +2,7 @@
 // for every entry, so the process builds one reranker registry however many entries it calls.
 import type { InfraPorts } from '../base/ports/infra.js';
 import { FailureNotices } from '../base/util/failure-notices.js';
-import type { EntryInfraPorts } from '../api/types.js';
+import type { Context, EntryContext, EntryInfraPorts } from '../api/types.js';
 import { createHost } from '../host/host.js';
 import { rootInfra } from '../infra/ports.js';
 
@@ -24,4 +24,11 @@ export function withEntryInfra<C extends { readonly infra?: EntryInfraPorts }>(
   const { infra } = ctx;
   if (infra === undefined) return { ...ctx, infra: entryInfra() };
   return { ...ctx, infra: { ...infra, failureNotices: infra.failureNotices ?? entryNotices } };
+}
+
+/** `fn` with the entry's real ports filled into a Context its caller built without them. */
+export function filled<A extends unknown[], R>(
+  fn: (ctx: Context, ...args: A) => R,
+): (ctx: EntryContext, ...args: A) => R {
+  return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
 }
