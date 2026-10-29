@@ -94,6 +94,7 @@ export const SESSION_VERBS = {
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
     needs: ['cards'],
+    checksOwnFlags: true,
     // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
     // read.
     flags: {
@@ -186,7 +187,10 @@ export const SESSION_VERBS = {
   watch: verb(() => import('../learn.js'), 'handleWatch', {
     flags: {},
     removedFlags: {
-      shell: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
+      shell: {
+        removedIn: '3.0',
+        advice: 'To run a shell line, name the shell: `hippo watch -- sh -c "<command line>"`.',
+      },
     },
     usage: [
       `
