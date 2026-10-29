@@ -10,6 +10,7 @@ import {
   ambientStateFromTallies,
   foldAmbientRows,
   tallyAmbientEntries,
+  type AmbientState,
 } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -17,6 +18,7 @@ import { strengthOf, type Context, type ContextWith, type SleepContext } from '.
 import { auditRemoveErrors } from '../auth/audit.js';
 import { globalTargetOf } from '../infra.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
+import type { SleepEvent } from './events.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
@@ -107,12 +109,18 @@ async function runSleepPhases(
   if (dryRun) return result;
 
   // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) await shareOnSleep(ctx, phases, result);
+  if (!opts.noShare) Object.assign(result, await shareOnSleep(ctx, phases));
 
   // Phase 5: Post-sleep ambient state summary.
-  counts.ambient = await summarizeAmbient(ctx, phases, result, pages);
+  const ambient = await summarizeAmbient(ctx, phases, pages);
+  if (ambient) {
+    result.ambient = ambient;
+    counts.ambient = ambient.totalMemories;
+  }
 
-  await drainGraphQueue(ctx, phases, snapshot, result);
+  const drained = await drainGraphQueue(ctx, phases, snapshot);
+  if (drained.events.length > 0) result.events = [...(result.events ?? []), ...drained.events];
+  if (drained.graph) result.graph = drained.graph;
   return result;
 }
 
@@ -154,8 +162,10 @@ async function runCorePhases(
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would
   // remove).
-  const auditOptions = { dryRun, consolidateResult, dedupResult, result, pages };
-  counts.auditDeleted = await runQualityAudit(ctx, phases, auditOptions);
+  const auditOptions = { dryRun, consolidateResult, dedupResult, pages };
+  const audit = await runQualityAudit(ctx, phases, auditOptions);
+  counts.auditDeleted = audit.errorsRemoved;
+  if (audit.errorsRemoved > 0 || audit.warningCount > 0) result.audit = audit;
   return { result, pages };
 }
 
@@ -229,18 +239,19 @@ interface QualityAuditOptions {
   readonly dryRun: boolean;
   readonly consolidateResult: ConsolidateOutcome;
   readonly dedupResult: DedupOutcome;
-  readonly result: SleepResult;
   readonly pages: () => AsyncIterable<MemoryEntry[]>;
 }
 
-/** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so
- * pages need no shared state beyond the issues found. */
+type AuditSummary = NonNullable<SleepResult['audit']>;
+
+/** The audit errors deleted (or that would be under dryRun) and the warnings; each row is judged
+ * alone, so pages need no shared state beyond the issues found. */
 async function runQualityAudit(
   ctx: SleepContext,
   phases: SleepPhases,
   options: QualityAuditOptions,
-): Promise<number> {
-  const { dryRun, consolidateResult, dedupResult, result, pages } = options;
+): Promise<AuditSummary> {
+  const { dryRun, consolidateResult, dedupResult, pages } = options;
   // The pages follow consolidation and dedup, so only a dry run still holds the rows they would
   // remove.
   const wouldGo = dryRun
@@ -253,26 +264,21 @@ async function runQualityAudit(
     const backing = await ctx.store.auditMaintenance.objectBackedAmong(rows.map((e) => e.id));
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
-  if (issues.length === 0) return 0;
+  if (issues.length === 0) return { errorsRemoved: 0, warningCount: 0 };
   const errors = issues.filter((i) => i.severity === 'error');
   const warnings = issues.filter((i) => i.severity === 'warning');
   const gone = dryRun
     ? errors.map((issue) => issue.memoryId)
     : await auditRemoveErrors(ctx, 'sleep-audit', errors);
-  if (gone.length > 0 || warnings.length > 0) {
-    result.audit = {
-      errorsRemoved: gone.length,
-      warningCount: warnings.length,
-    };
-  }
-  return gone.length;
+  return { errorsRemoved: gone.length, warningCount: warnings.length };
 }
 
+/** The auto-share counts, each set only when non-zero so an idle share leaves the result as it
+ * was. */
 async function shareOnSleep(
   ctx: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>,
   phases: SleepPhases,
-  result: SleepResult,
-): Promise<void> {
+): Promise<Pick<SleepResult, 'shared' | 'secretSkipped' | 'rejectedSkipped'>> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
   const { store } = ctx;
@@ -283,7 +289,7 @@ async function shareOnSleep(
     sharing === undefined ||
     folderFiles === undefined
   ) {
-    return;
+    return {};
   }
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable,
   // not silent.
@@ -304,26 +310,21 @@ async function shareOnSleep(
       embed: ctx.infra,
     },
   );
-  if (shared.length > 0) {
-    result.shared = shared.length;
-  }
-  if (autoShareStats.secretSkipped > 0) {
-    result.secretSkipped = autoShareStats.secretSkipped;
-  }
-  if (autoShareStats.rejectedSkipped > 0) {
-    result.rejectedSkipped = autoShareStats.rejectedSkipped;
-  }
+  const { secretSkipped, rejectedSkipped } = autoShareStats;
+  return {
+    ...(shared.length > 0 && { shared: shared.length }),
+    ...(secretSkipped > 0 && { secretSkipped }),
+    ...(rejectedSkipped > 0 && { rejectedSkipped }),
+  };
 }
 
-/** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is
- * left. */
+/** The ambient state after sleep: null when ambient is off or no current row is left. */
 async function summarizeAmbient(
   ctx: Context,
   phases: SleepPhases,
-  result: SleepResult,
   pages: () => AsyncIterable<MemoryEntry[]>,
-): Promise<number> {
-  if (!ctx.config.ambient.enabled) return 0;
+): Promise<AmbientState | null> {
+  if (!ctx.config.ambient.enabled) return null;
   // One running tally at one `now`, so the float sums match one whole read row for row.
   const now = ctx.infra.clock();
   const rules = strengthOf(ctx);
@@ -336,9 +337,7 @@ async function summarizeAmbient(
       rules,
     );
   }
-  if (tallies.total === 0) return 0;
-  result.ambient = phases.computeAmbientState(tallies);
-  return result.ambient.totalMemories;
+  return tallies.total === 0 ? null : phases.computeAmbientState(tallies);
 }
 
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall
@@ -348,47 +347,46 @@ async function drainGraphQueue(
   ctx: SleepContext,
   phases: SleepPhases,
   snapshot: DirtyTenantSnapshot,
-  result: SleepResult,
-): Promise<void> {
+): Promise<GraphDrain> {
+  const events: SleepEvent[] = [];
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as an event.
-      result.events = [
-        ...(result.events ?? []),
-        { kind: 'graphSnapshotFailed', message: snapshot.error },
-      ];
+      events.push({ kind: 'graphSnapshotFailed', message: snapshot.error });
     }
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
     for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
-      await rebuildDirtyTenant(ctx, { phases, dirty: { tenantId, maxPendingId }, rebuilt, result });
+      await rebuildDirtyTenant(ctx, { phases, dirty: { tenantId, maxPendingId }, rebuilt, events });
     }
-    if (rebuilt.tenants > 0) {
-      result.graph = rebuilt;
-    }
+    return rebuilt.tenants > 0 ? { events, graph: rebuilt } : { events };
   } catch (graphErr) {
     log.warn(`sleep: graph drain phase failed: ${errorMessage(graphErr)}`, errorFields(graphErr));
-    result.events = [
-      ...(result.events ?? []),
-      { kind: 'graphDrainFailed', message: errorMessage(graphErr) },
-    ];
+    events.push({ kind: 'graphDrainFailed', message: errorMessage(graphErr) });
+    return { events };
   }
 }
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
+/** The graph phase's events in order, and its totals when a tenant was rebuilt and none threw. */
+interface GraphDrain {
+  readonly events: readonly SleepEvent[];
+  readonly graph?: GraphTotals;
+}
+
 interface RebuildDirtyTenantOptions {
   readonly phases: SleepPhases;
   readonly dirty: DirtyTenantSnapshot['dirtyTenants'][number];
   readonly rebuilt: GraphTotals;
-  readonly result: SleepResult;
+  readonly events: SleepEvent[];
 }
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is an event
- * and the tenant stays pending. */
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure goes to
+ * `events` and the tenant stays pending. */
 async function rebuildDirtyTenant(
   ctx: SleepContext,
-  { phases, dirty, rebuilt, result }: RebuildDirtyTenantOptions,
+  { phases, dirty, rebuilt, events }: RebuildDirtyTenantOptions,
 ): Promise<void> {
   try {
     const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
@@ -396,12 +394,7 @@ async function rebuildDirtyTenant(
     rebuilt.tenants += 1;
     rebuilt.entities += ext.entities;
     rebuilt.relations += ext.relations;
-    if (ext.skipped) {
-      result.events = [
-        ...(result.events ?? []),
-        { kind: 'graphStaleOpsSkipped', count: ext.skipped },
-      ];
-    }
+    if (ext.skipped) events.push({ kind: 'graphStaleOpsSkipped', count: ext.skipped });
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals
     // stay pending. Marked only after the last chunk, so a run stopped between chunks leaves the
     // tenant for the next one.
@@ -411,10 +404,7 @@ async function rebuildDirtyTenant(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
       errorFields(tenantErr),
     );
-    result.events = [
-      ...(result.events ?? []),
-      { kind: 'graphExtractFailed', message: errorMessage(tenantErr) },
-    ];
+    events.push({ kind: 'graphExtractFailed', message: errorMessage(tenantErr) });
   }
 }
 
