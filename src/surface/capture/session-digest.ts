@@ -14,7 +14,7 @@ import {
   type DigestRepo,
   type DigestStore,
 } from '../../api/memories/session-digest.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorFields, errorMessage, log, type LineLog } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
@@ -307,10 +307,7 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
   };
 }
 
-export function readSessionTranscript(
-  transcriptPath: string,
-  log: (message: string) => void,
-): string {
+export function readSessionTranscript(transcriptPath: string, log: LineLog): string {
   const fd = fs.openSync(transcriptPath, 'r');
   try {
     const size = fs.fstatSync(fd).size;
@@ -323,14 +320,13 @@ export function readSessionTranscript(
 }
 
 /** The transcript, read once and scanned, or null with the reason logged. */
-export function readSessionScan(
-  transcriptPath: string,
-  log: (message: string) => void,
-): SessionScan | null {
+export function readSessionScan(transcriptPath: string, log: LineLog): SessionScan | null {
   try {
     return scanSessionTranscript(readSessionTranscript(transcriptPath, log));
   } catch (err) {
-    log(`digest: could not read the transcript: ${errorMessage(err)}`);
+    log(`digest: could not read the transcript: ${errorMessage(err)}`, {
+      fields: errorFields(err),
+    });
     return null;
   }
 }
@@ -436,7 +432,7 @@ function writeScanDigest(
 }
 
 export interface DigestRunOptions extends SessionDigestOptions {
-  log: (message: string) => void;
+  log: LineLog;
 }
 
 /** Never throws: a digest failure must not block the handoff or the snapshot close. Logs carry
@@ -465,6 +461,6 @@ export async function recordSessionDigest(
         : `digest: skip: ${outcome.reason}`,
     );
   } catch (err) {
-    opts.log(`digest failed: ${errorMessage(err)}`);
+    opts.log(`digest failed: ${errorMessage(err)}`, { fields: errorFields(err) });
   }
 }

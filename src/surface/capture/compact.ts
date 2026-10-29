@@ -18,7 +18,14 @@ import {
   type CaptureInput,
   type HookRuntime,
 } from '../../base/session/capture-contract.js';
-import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
+import {
+  errorCode,
+  errorMessage,
+  log as logger,
+  errorFields,
+  formatFields,
+  type LogFields,
+} from '../../base/util/log.js';
 import type { Log } from '../../infra/spool-files.js';
 import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
@@ -39,7 +46,7 @@ export function sanitizeLogMessage(message: string): string {
   return message.replace(/[\x00-\x1f]/g, '');
 }
 
-function appendPreCompactLog(logFile: string, message: string): void {
+function appendPreCompactLog(logFile: string, message: string, fields?: LogFields): void {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     // One handle, so the cap acts on the file it measured; two hooks writing in the same instant
@@ -49,7 +56,7 @@ function appendPreCompactLog(logFile: string, message: string): void {
       const size = fs.fstatSync(fd).size;
       const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES; // a dumb cap, no rotation
       if (startFresh) fs.ftruncateSync(fd, 0);
-      const line = `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`;
+      const line = `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(`${message}${formatFields(fields)}`)}\n`;
       fs.writeSync(fd, line, startFresh ? 0 : size, 'utf8');
     } finally {
       fs.closeSync(fd);
@@ -85,7 +92,7 @@ function printPreCompactInstruction(logFile: string): string | null {
     fs.writeSync(1, text);
     return text;
   } catch (err) {
-    appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
+    appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
@@ -142,8 +149,8 @@ async function runPreCompact(
 
   // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with
   // junk.
-  const derived = transcriptWorkingState(transcriptPath, (message) =>
-    appendPreCompactLog(logFile, message),
+  const derived = transcriptWorkingState(transcriptPath, (message, opts) =>
+    appendPreCompactLog(logFile, message, opts?.fields),
   );
   if (!derived) return;
 
@@ -244,7 +251,11 @@ async function markCompactionBoundary({
   try {
     options.onBoundary?.(printed);
   } catch (err) {
-    appendPreCompactLog(logFile, `boundary callback failed: ${errorMessage(err)}`);
+    appendPreCompactLog(
+      logFile,
+      `boundary callback failed: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
   return recordId;
 }
@@ -260,7 +271,11 @@ async function startRecord(
   try {
     return await hooks.start(tenantId, start);
   } catch (err) {
-    appendPreCompactLog(logFile, `compaction record not started: ${errorMessage(err)}`);
+    appendPreCompactLog(
+      logFile,
+      `compaction record not started: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 }
@@ -276,6 +291,7 @@ async function markSnapshotOnRecord(
     appendPreCompactLog(
       logFile,
       `compaction record not marked with its snapshot: ${errorMessage(err)}`,
+      errorFields(err),
     );
   }
 }
@@ -357,7 +373,7 @@ async function saveDerivedSnapshot(
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) await markSnapshotOnRecord(hooks, { tenantId, recordId, logFile });
     } catch (err) {
-      appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
+      appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`, errorFields(err));
     }
   }
 }
@@ -386,7 +402,7 @@ export async function preCompactHook(
   try {
     await runPreCompact(hippoRoot, store, options, logFile);
   } catch (err) {
-    appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
+    appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`, errorFields(err));
     logger.error(`pre-compact failed: ${errorMessage(err)}`, errorFields(err));
   }
 
@@ -418,7 +434,7 @@ export async function postCompactHook(
 ): Promise<string | null> {
   const logFile = options.logFile ?? defaultPreCompactLogPath(processHomes());
   const log: Log = (message, fields) => {
-    appendPreCompactLog(logFile, `post-compact: ${message}`);
+    appendPreCompactLog(logFile, `post-compact: ${message}`, fields);
     if (fields !== undefined) logger.error(`post-compact: ${message}`, fields);
   };
   const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;

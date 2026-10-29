@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-file count of log calls inside a catch block, a `.catch` callback, an 'error' event listener or a function taking
+// Per-file count of log calls and hook side-log writes inside a catch block, a `.catch` callback, an 'error' event listener or a function taking
 // the caught error as a parameter that omit errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
 // A call that reads one field of errorFields(...) fails anywhere in src, with no baseline: it drops the rest.
 // A catch that only pushes the error's text into a result array, with no log call carrying errorFields(...), fails the same way.
@@ -15,11 +15,28 @@ const BASELINE = '.caught-error-logs-baseline.json';
 const LOGGERS = new Set(['log', 'logger']);
 const LISTENER_METHODS = new Set(['on', 'once', 'addListener', 'prependListener', 'addEventListener']);
 
-const isLogCall = (n) =>
-  ts.isCallExpression(n) &&
+// A hook's own log file: its writers (append*Log) and the line writer a function is handed (`log`, `logLine`, `x.log`).
+const SIDE_LOG_NAME = /^(?:log|logLine|append\w*Log)$/;
+
+const isLoggerCall = (n) =>
   ts.isPropertyAccessExpression(n.expression) &&
   ts.isIdentifier(n.expression.expression) &&
   LOGGERS.has(n.expression.expression.text);
+
+const isNamed = (n, name) => ts.isIdentifier(n) && n.text === name;
+
+const isSideLogCall = (n) =>
+  ts.isCallExpression(n) &&
+  ((ts.isIdentifier(n.expression) && SIDE_LOG_NAME.test(n.expression.text)) ||
+    (ts.isPropertyAccessExpression(n.expression) &&
+      n.expression.name.text === 'log' &&
+      !isNamed(n.expression.expression, 'console')));
+
+const isLogCall = (n) => ts.isCallExpression(n) && (isLoggerCall(n) || isSideLogCall(n));
+
+// A side-log writer handed the caught error itself logs its fields (compactions-record.ts's Log).
+const handsOnError = (call) =>
+  isSideLogCall(call) && call.arguments.some((a) => ts.isIdentifier(a) && ERROR_PARAM.test(a.text));
 
 const isErrorFieldsCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
@@ -55,7 +72,7 @@ const carriesErrorFields = (call) =>
   contains(call, (n) => (isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n));
 
 /** True for a `debug` line carrying expectedErrorText(...): an expected error earns that one line with no stack. */
-const isExpectedDebugLine = (call) => call.expression.name.text === 'debug' && contains(call, isExpectedErrorTextCall);
+const isExpectedDebugLine = (call) => call.expression.name?.text === 'debug' && contains(call, isExpectedErrorTextCall);
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
 
@@ -116,7 +133,7 @@ export function unfieldedLogLines(text) {
   const hits = new Map();
   const functions = namedFunctions(sf);
   const collect = (node) => {
-    if (isLogCall(node) && !carriesErrorFields(node) && !isExpectedDebugLine(node)) {
+    if (isLogCall(node) && !carriesErrorFields(node) && !handsOnError(node) && !isExpectedDebugLine(node)) {
       hits.set(node.getStart(sf), sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1);
     }
     ts.forEachChild(node, collect);
@@ -149,8 +166,6 @@ export function partialPickLines(text) {
 }
 
 const APPEND_METHODS = new Set(['push', 'unshift', 'append']);
-
-const isNamed = (n, name) => ts.isIdentifier(n) && n.text === name;
 
 /** True when `root` turns the caught error into text: errorMessage(e), String(e), e.message or a `${e}` span. */
 const usesErrorText = (root, name) =>

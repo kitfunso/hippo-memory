@@ -2,7 +2,7 @@
 // with no store can derive it.
 import * as fs from 'node:fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
 import { workingStateOf, type WorkingState } from '../../base/session/working-state.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail } from '../../infra/transcript-tail.js';
@@ -64,10 +64,7 @@ function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
 /**
  * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped,
  * '' where none; null with a logged reason when nothing is derivable. */
-export function transcriptWorkingState(
-  transcriptPath: string,
-  log: (message: string) => void,
-): WorkingState | null {
+export function transcriptWorkingState(transcriptPath: string, log: LineLog): WorkingState | null {
   let tail = '';
   let rawTask = '';
   let rawNextStep = '';
@@ -91,7 +88,7 @@ export function transcriptWorkingState(
       if ((rawTask && rawNextStep) || size <= cap) break;
     }
   } catch (err) {
-    log(`skip: could not read transcript tail: ${errorMessage(err)}`);
+    log(`skip: could not read transcript tail: ${errorMessage(err)}`, { fields: errorFields(err) });
     return null;
   }
 

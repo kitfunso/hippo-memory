@@ -65,7 +65,7 @@ export function mcpErrorResponse<E>(
     return errorReply(id, INTERNAL_ERROR, message);
   }
   if (status !== 500) {
-    log.info(`mcp request${where} failed: ${errorMessage(err)}`, {
+    log.trail(`mcp request${where} failed: ${errorMessage(err)}`, {
       requestId,
       status,
       ...errorClassFields(err),

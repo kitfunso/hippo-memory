@@ -7,6 +7,7 @@ import { SESSION_OPEN } from '../../db/request-stores.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { errorFields, log } from '../../base/util/log.js';
+import { postReply } from '../../base/util/thread-reply.js';
 import { runWithRequestId } from '../../base/util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
@@ -157,22 +158,20 @@ async function answer(ops: Ops, { stores }: Thread, hippoRoot: string, job: Job)
   }
 }
 
-function post(port: MessagePort, reply: Reply): void {
-  try {
-    port.postMessage(
-      reply,
-      reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : [],
-    );
-  } catch (err) {
-    // A result that cannot be copied to the server thread must still answer, or its caller would
-    // wait for ever.
-    port.postMessage({
-      id: reply.id,
-      ok: false,
-      error: encodeError(err),
-      auditFailures: reply.auditFailures,
-    } satisfies Reply);
-  }
+function post(port: MessagePort, reply: Reply, end: () => void): void {
+  postReply(port, {
+    reply,
+    end,
+    transfer: reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : [],
+    failureOf: (err) =>
+      ({
+        id: reply.id,
+        ok: false,
+        error: encodeError(err),
+        auditFailures: reply.auditFailures,
+      }) satisfies Reply,
+    what: `store worker: the reply to job ${reply.id}`,
+  });
 }
 
 // Each step still closes what is left when the one before it throws, so a failed flush leaves no
@@ -208,18 +207,21 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and
   // it waits for that job's reply.
   let last: Promise<void> = Promise.resolve();
+  const stopThread = (): void => {
+    graphs?.close();
+    Promise.all([last, graphs?.idle()])
+      .finally(() => closeThread(thread, port))
+      .catch((err) => log.error('store worker: stopping the thread failed', errorFields(err)));
+  };
   port.on('message', (message: Job | 'stop') => {
     if (message === 'stop') {
-      graphs?.close();
-      Promise.all([last, graphs?.idle()])
-        .finally(() => closeThread(thread, port))
-        .catch((err) => log.error('store worker: stopping the thread failed', errorFields(err)));
+      stopThread();
       return;
     }
-    // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop
-    // above.
+    // Ends in a catch, so `last` never rejects and skips the stop; a reply that cannot be posted
+    // ends the thread, so the server rejects every call left.
     last = answer(ops, thread, init.hippoRoot, message)
-      .then((reply) => post(port, reply))
+      .then((reply) => post(port, reply, stopThread))
       .catch((err) =>
         log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)),
       );

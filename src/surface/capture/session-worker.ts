@@ -5,7 +5,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
 import { takeFileLock, type StatFn } from '../../host/file-lock.js';
-import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
+import {
+  errorCode,
+  errorMessage,
+  log as logger,
+  errorFields,
+  type LineLog,
+} from '../../base/util/log.js';
 import {
   isObjectLike,
   isStringValue,
@@ -36,15 +42,13 @@ function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   return { lock: `${base}.lock.db`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
-const warnedLocks = new Set<string>();
-
 // The lock is best-effort, so the work still runs; the line says why it ran without one.
 function warnUnusableLockOnce<E>(lock: string, cause: E): void {
-  if (warnedLocks.has(lock)) return;
-  warnedLocks.add(lock);
-  const why = `${errorCode(cause) || 'no errno'}: ${errorMessage(cause)}`;
-  logger.warn(
-    `session worker: lock ${lock} cannot be taken (${why}), so the work runs without it`,
+  const code = errorCode(cause) || 'no errno';
+  // Keyed by error class, not lock path: a key per session would crowd the capped once-only key set.
+  logger.warnThenDebug(
+    `session-worker-lock:${code}`,
+    `session worker: lock ${lock} cannot be taken (${code}: ${errorMessage(cause)}), so the work runs without it`,
     errorFields(cause),
   );
 }
@@ -190,7 +194,7 @@ export function saveTurnPosition(
   sessionId: string,
   transcriptPath: string,
   turns: readonly SessionTurn[],
-  log: (message: string) => void,
+  logLine: LineLog,
 ): void {
   const file = sessionStateFiles(sessionId)?.cursor;
   if (!file) return;
@@ -209,7 +213,7 @@ export function saveTurnPosition(
   } catch (err) {
     // Windows refuses the rename (EPERM) while another process has the cursor open; the next reply
     // re-reads these turns, which the dedupe keys absorb.
-    log(`cursor not saved: ${errorMessage(err)}`);
+    logLine(`cursor not saved: ${errorMessage(err)}`, { fields: errorFields(err) });
   }
 }
 

@@ -115,7 +115,7 @@ function logged(level: 'warn' | 'error', text: string): Promise<void> {
 const LATE = 'after its deadline reply';
 
 /** Settles with the fields of the first line holding `text` logged at `level`; set before the request that causes it. */
-function loggedFields(level: 'warn' | 'info', text: string): Promise<LogFields | undefined> {
+function loggedFields(level: 'warn' | 'trail', text: string): Promise<LogFields | undefined> {
   return new Promise((resolve) => {
     vi.spyOn(log, level).mockImplementation((message, fields) => {
       if (message.includes(text)) resolve(fields);
@@ -432,7 +432,7 @@ describe('the handler deadline', () => {
       const before = await counts(server);
       const errors = vi.spyOn(log, 'error').mockImplementation(() => {});
       const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
-      const finished = loggedFields('info', LATE);
+      const finished = loggedFields('trail', LATE);
 
       deadline(SHORT_DEADLINE_MS);
       const late = await post(server, '/v1/slow', {});
@@ -532,7 +532,7 @@ describe('the handler deadline', () => {
       ];
       const server = await start(root, { routes });
       vi.spyOn(log, 'error').mockImplementation(() => {});
-      const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
+      const infos = vi.spyOn(log, 'trail').mockImplementation(() => {});
       const warned = vi.spyOn(log, 'warn');
       const failed = new Promise<void>((resolve) => {
         warned.mockImplementation((message) => {
@@ -578,7 +578,7 @@ describe('the handler deadline', () => {
     // The in-process store, since the workers refuse a call that arrives past its request's deadline and the read would fail.
     const server = await start(root, { store: sqliteStore(root), authResolver, authResolverTimeoutMs: LONG_WAIT_MS });
     vi.spyOn(log, 'error').mockImplementation(() => {});
-    const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
+    const infos = vi.spyOn(log, 'trail').mockImplementation(() => {});
     const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
 
     deadline(SHORT_DEADLINE_MS);

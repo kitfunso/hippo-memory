@@ -24,7 +24,7 @@ import {
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
-import { errorFields, log } from '../../base/util/log.js';
+import { enableRequestTrail, errorFields, log } from '../../base/util/log.js';
 import { JSON_HEADERS, sendJson } from '../http/http-util.js';
 import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
@@ -247,6 +247,7 @@ export function resolveTenantId(opts: ResolveOptions): string {
  * HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES. Use port: 0 in tests for an ephemeral
  * port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOptions): Promise<ServerHandle> {
+  enableRequestTrail();
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
   const routes = frozenAddonRoutes(opts.routes);

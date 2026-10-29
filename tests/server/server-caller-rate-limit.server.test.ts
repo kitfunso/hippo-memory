@@ -569,7 +569,7 @@ describe('boot and the other Retry-After replies', () => {
     expect((await recall(bearer(a, { 'x-request-id': 'req-two' }))).status).toBe(429);
     expect((await recall(bearer(a, { 'x-request-id': 'req-three' }))).status).toBe(429);
     const written = stderr.mock.calls.map(([chunk]) => String(chunk));
-    expect(written.filter((line) => line.includes('rate limit'))).toEqual([
+    expect(written.filter((line) => line.includes('warn: caller over its rate limit'))).toEqual([
       expect.stringMatching(
         /^\[hippo\] warn: caller over its rate limit.* requestId=req-two tenant=default person=oid-log\n$/,
       ),

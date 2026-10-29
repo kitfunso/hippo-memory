@@ -40,7 +40,7 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
     // stamped from the request scope.
     log.warn(line, { status, ...errorClassFields(err) });
   } else {
-    log.info(line, { status, ...errorClassFields(err) });
+    log.trail(line, { status, ...errorClassFields(err) });
   }
 }
 
@@ -113,7 +113,7 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
   accessNotes.set(req, note);
   const startedAt = performance.now();
   res.once('finish', () => {
-    log.info('request', {
+    log.trail('request', {
       requestId,
       method: req.method ?? 'GET',
       route: note.route ?? UNMATCHED_ROUTE,

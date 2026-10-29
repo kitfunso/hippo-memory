@@ -112,6 +112,7 @@ function postMessage(
     {
       timeoutMs,
       totalMs: llmTotalMs(timeoutMs),
+      retryTransport: true,
       retryOn: (r) => isRetryableStatus(r.status),
       fetchFn: connection.fetcher ?? fetch,
     },

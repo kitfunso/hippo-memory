@@ -309,7 +309,7 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       );
       vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
       const before = left(root);
-      const info = vi.spyOn(log, 'info');
+      const info = vi.spyOn(log, 'trail');
       // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 

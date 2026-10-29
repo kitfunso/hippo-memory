@@ -8,7 +8,7 @@ import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SessionEvent } from '../base/ports/store/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
-import { errorMessage, log, errorFields } from '../base/util/log.js';
+import { errorMessage, log, errorFields, type LineLog, type LogFields } from '../base/util/log.js';
 import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
   COMPACT_RESUME_MAX_AGE_MS,
@@ -33,7 +33,7 @@ export interface SessionClose {
   workingState: () => WorkingState | null;
   evidence: () => HandoffEvidence;
   /** One line to the session-end log. */
-  log: (line: string) => void;
+  log: LineLog;
 }
 
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own
@@ -76,7 +76,7 @@ async function writeEndHandoff(
         : `skip: kept the existing handoff for session ${sessionId}`,
     );
   } catch (err) {
-    close.log(`handoff write failed: ${errorMessage(err)}`);
+    close.log(`handoff write failed: ${errorMessage(err)}`, { fields: errorFields(err) });
     log.error('session-end: handoff write failed', errorFields(err));
   }
 }
@@ -86,18 +86,18 @@ async function writeEndHandoff(
 async function closeSnapshot(
   ctx: ContextWith<'sessions'>,
   sessionId: string | null,
-  line: (message: string) => void,
+  logLine: LineLog,
 ): Promise<void> {
   try {
     if (sessionId) {
       const close = { status: 'session-ended', sessionId };
       const closed = await ctx.store.sessions.clear(ctx.tenantId, 'snapshot', close, null);
-      line(`closed ${closed} active snapshot(s) for session ${sessionId}`);
+      logLine(`closed ${closed} active snapshot(s) for session ${sessionId}`);
     } else {
-      line('skip: no session_id in SessionEnd payload, active snapshot left untouched');
+      logLine('skip: no session_id in SessionEnd payload, active snapshot left untouched');
     }
   } catch (err) {
-    line(`snapshot close failed: ${errorMessage(err)}`);
+    logLine(`snapshot close failed: ${errorMessage(err)}`, { fields: errorFields(err) });
     log.error('session-end: snapshot close failed', errorFields(err));
   }
 }
@@ -210,7 +210,7 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   sessionId: string | null;
   transcriptPath: string | undefined;
   /** One line to the session-end log; `startFresh` restarts the file. */
-  log: (line: string, opts?: { startFresh?: boolean }) => void;
+  log: (line: string, opts?: { startFresh?: boolean; fields?: LogFields }) => void;
   /** Where the re-read count's lines wait for sleep. */
   held: HeldLog;
   /** Sleeps the folder's own store; reports its own failure. */
@@ -218,7 +218,7 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   /** Imports the session's agent notes into the global store, for a folder that does not sleep
    * here. */
   importAgentNotes: () => Promise<void>;
-  readScan: (log: (line: string) => void) => Scan | null;
+  readScan: (log: LineLog) => Scan | null;
   /** This session's saved place in its transcript: the turns after it, and moving it past
    * `turns`. */
   cursor: {
@@ -234,8 +234,8 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
     turns: readonly Turn[] | undefined,
     originProject: ProjectRef | undefined,
   ) => Promise<boolean>;
-  digest: (scan: Scan | null, key: string, log: (line: string) => void) => Promise<void>;
-  workingState: (log: (line: string) => void) => ReturnType<SessionClose['workingState']>;
+  digest: (scan: Scan | null, key: string, log: LineLog) => Promise<void>;
+  workingState: (log: LineLog) => ReturnType<SessionClose['workingState']>;
   evidence: () => HandoffEvidence;
 }
 
@@ -290,7 +290,10 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
     await w.sleep();
     w.log(`${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
   } catch (err) {
-    w.log(`${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
+    w.log(`${prefix}: sleep check failed: ${errorMessage(err)}`, {
+      startFresh: true,
+      fields: errorFields(err),
+    });
   }
 }
 
@@ -351,13 +354,15 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
   } finally {
     w.held.flush();
   }
-  const scan = w.readScan((line) => w.log(line));
+  const scan = w.readScan((line, opts) => w.log(line, opts));
   await captureStep(ctx, into, scan, w);
-  await w.digest(scan, w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'), (line) =>
-    w.log(line),
+  await w.digest(
+    scan,
+    w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'),
+    (line, opts) => w.log(line, opts),
   );
   // Only this session's snapshot, and only after sleep and capture.
-  const closeLog = (line: string): void => w.log(line);
+  const closeLog: LineLog = (line, opts) => w.log(line, opts);
   await closeEndedSession(into, {
     sessionId: w.sessionId,
     turn: w.mode === 'turn',

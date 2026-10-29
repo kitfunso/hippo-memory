@@ -190,7 +190,7 @@ describe('runSessionWorker', () => {
     expect(runs).toEqual([]);
   });
 
-  it('runs unlocked and warns once per lock path when the lock cannot be made', async () => {
+  it('runs unlocked and warns once, naming the lock path, when the lock cannot be made', async () => {
     // A folder in the lock's place cannot be opened as a lock database.
     fs.mkdirSync(file('.lock.db'));
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

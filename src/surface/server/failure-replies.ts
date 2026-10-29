@@ -96,7 +96,7 @@ const isRead = (method: string): boolean => method === 'GET';
 function logLateFinish(req: IncomingMessage, requestId: string): void {
   const method = req.method ?? 'GET';
   if (isRead(method)) return;
-  log.info('request finished after its deadline reply; its own reply was dropped', {
+  log.trail('request finished after its deadline reply; its own reply was dropped', {
     requestId,
     method,
     route: accessRouteOf(req),

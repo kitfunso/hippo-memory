@@ -419,7 +419,7 @@ describe('the server-thread block of the object routes', () => {
   });
 
   it('answers every one of them from the workers with no open of hippo.db on the server thread', async () => {
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     const steps = routeSteps(objectRoutes());
 
     const { replies } = await runSteps(steps, false);
@@ -432,7 +432,7 @@ describe('the server-thread block of the object routes', () => {
     const root = newRoot('object-routes');
     const { keyIds, ...seeded } = seedStore(root);
     const before = [auditRows(root, keyIds), storedRows(root), mirrorFiles(root)];
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     const steps = routeSteps(objectRoutes());
     // The worker-backed store with the objects group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), { objects: serverThreadPart(root).objects });

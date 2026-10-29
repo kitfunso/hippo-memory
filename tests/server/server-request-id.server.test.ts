@@ -158,8 +158,24 @@ describe('the access line', () => {
     }
   });
 
-  it('is not written at the default log level', async () => {
+  it('is written by a server with HIPPO_LOG unset, as is its 4xx failure line', async () => {
     vi.stubEnv('HIPPO_LOG', undefined);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await send('/health', { 'x-request-id': 'acc-default' });
+      await send('/v1/memories/a%2Fb', { 'x-request-id': 'err-default' });
+      const lines = stderrSpy.mock.calls.map((c) => String(c[0]));
+      expect(accessLines(stderrSpy).filter((l) => l.includes('requestId=acc-default'))).toHaveLength(1);
+      expect(lines.filter((l) => l.includes('requestId=err-default') && l.includes(' failed: '))).toEqual([
+        expect.stringMatching(/^\[hippo\] info: GET unmatched failed: .* status=400 /),
+      ]);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('is not written when HIPPO_LOG names a threshold above info', async () => {
+    vi.stubEnv('HIPPO_LOG', 'warn');
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await send('/health');

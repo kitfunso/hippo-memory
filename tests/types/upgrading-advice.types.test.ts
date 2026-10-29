@@ -16,6 +16,7 @@ import {
 } from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
 import { goalPush } from '../../dist/entry/eval-scripts.js';
+import { transcriptWorkingState } from '../../dist/entry/session-text.js';
 
 type Source = NonNullable<NonNullable<Parameters<typeof hybridSearch>[2]>['source']>;
 type GlobalTarget = NonNullable<NonNullable<Context['reach']>['globalTarget']>;
@@ -25,6 +26,7 @@ type GlobalStore = GlobalInReach['store'];
 declare const ctx: Context;
 declare const sessionId: string;
 declare const hippoRoot: string;
+declare const transcriptPath: string;
 declare const globalRoot: string;
 declare const tenantId: string;
 declare const query: string;
@@ -89,6 +91,13 @@ describe('UPGRADING-3.0 advice', () => {
     typeOnly(async () => {
       const { store } = ctx;
       if (hasGroup(store, 'graphReads')) await graphExpandRecall(results, { store, hops: 1, tenantId });
+    });
+  });
+
+  it('passes the read error fields as an optional second log argument (transcriptWorkingState)', () => {
+    typeOnly(() => {
+      transcriptWorkingState(transcriptPath, (line) => expectTypeOf(line).toBeString());
+      transcriptWorkingState(transcriptPath, (line, { fields } = {}) => expectTypeOf(fields).not.toBeAny());
     });
   });
 

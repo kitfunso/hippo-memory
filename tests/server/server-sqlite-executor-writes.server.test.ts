@@ -534,7 +534,7 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     const caller = keyFor(root, 'default');
     const spare = keyFor(root, 'default');
     const before = [auditRows(root, []), storedRows(root, [])];
-    const info = vi.spyOn(log, 'info');
+    const info = vi.spyOn(log, 'trail');
     // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
     const server = await start(root, store);

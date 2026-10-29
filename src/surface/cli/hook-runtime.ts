@@ -22,7 +22,13 @@ import { summaryLine } from '../../base/memory/agent-memory-report.js';
 import { getHippoRoot, isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import {
+  errorMessage,
+  log,
+  errorFields,
+  formatFields,
+  type LogFields,
+} from '../../base/util/log.js';
 import { type CliFlags, stringFlag } from './flag-values.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
@@ -48,7 +54,9 @@ export async function logSessionEndImport(
       appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
     }
   } catch (err) {
-    appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
+    appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`, {
+      fields: errorFields(err),
+    });
   }
 }
 
@@ -59,7 +67,7 @@ export async function logSessionEndImport(
 export function appendSessionEndCloseLog(
   logFile: string | null,
   message: string,
-  opts: { startFresh?: boolean } = {},
+  opts: { startFresh?: boolean; fields?: LogFields } = {},
 ): void {
   if (!logFile) return;
   try {
@@ -67,7 +75,8 @@ export function appendSessionEndCloseLog(
     // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same
     // log-forgery guard appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
-    write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
+    const text = sanitizeLogMessage(`${message}${formatFields(opts.fields)}`);
+    write(logFile, `[hippo] ${new Date().toISOString()} ${text}\n`, 'utf8');
   } catch (err) {
     // A log-write failure must never fail the hook, but a log that never fills is told.
     log.warn(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
@@ -92,7 +101,7 @@ export async function flushingOnExit(held: HeldLog, run: () => Promise<void>): P
 export function reportSessionEndFailure<E>(logFile: string | null, step: string, err: E): void {
   const line = `${step} failed: ${errorMessage(err)}`;
   log.warn(line, errorFields(err));
-  appendSessionEndCloseLog(logFile, line);
+  appendSessionEndCloseLog(logFile, line, { fields: errorFields(err) });
 }
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace
