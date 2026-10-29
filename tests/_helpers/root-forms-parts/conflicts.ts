@@ -28,7 +28,7 @@ export async function listMemoryConflicts(
   status: string = 'open',
   tenantId: TenantId = ALL_TENANTS,
 ): Promise<MemoryConflict[]> {
-  const { conflicts } = sqliteStore(hippoRoot);
+  const { conflicts } = sqliteStore(hippoRoot).hippoDb;
   const out: MemoryConflict[] = [];
   let after: KeysetPosition | undefined;
   do {
@@ -50,7 +50,7 @@ export async function resolveConflictKeeping(
   conflictId: number,
   keepId: string,
 ): Promise<boolean> {
-  const conflicts = sqliteStore(hippoRoot).conflicts;
+  const conflicts = sqliteStore(hippoRoot).hippoDb.conflicts;
   const row = await conflicts.get(tenantId, conflictId);
   if (!row) return false;
   const a = { id: row.conflict.memoryAId, scope: row.a?.scope ?? null };

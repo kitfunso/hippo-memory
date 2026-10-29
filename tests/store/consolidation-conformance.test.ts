@@ -222,7 +222,7 @@ describe('Consolidation', () => {
       (g) => g.commit({ flush: null, expireBefore: '2030-01-01T00:00:00.000Z', dryRun: true, holdMs: 0 }),
       (g) => g.recordSleep({ conflicts: [conflict], at: AT, decayed: 1, merged: 0, removed: 1 }),
       (g) => g.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' }),
-      (_g, s) => s.conflicts.list({ tenantId: TENANT_A, status: 'open', limit: 10 }),
+      (_g, s) => s.hippoDb.conflicts.list({ tenantId: TENANT_A, status: 'open', limit: 10 }),
       (_g, s) => s.dormant.list(TENANT_A, null, {}),
       read(['kept', 'edited', 'gone', 'pinned', 'fading', 'twin1']),
     ]);

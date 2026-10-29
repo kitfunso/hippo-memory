@@ -10,13 +10,35 @@ import { isHandled, programFromConfig } from './check-floating-promises.mjs';
 /** The async api write functions, by the file that declares them. */
 export const API_WRITES = {
   'src/api/auth/auth.ts': ['authCreate', 'authCreateSelf', 'authListRows', 'authRevoke'],
+  'src/api/hippo-db/outcome-last-recall.ts': ['outcomeForLastRecall'],
+  'src/api/hippo-db/remember-untrusted.ts': ['rememberUntrusted'],
   'src/api/memories/forget.ts': ['forget'],
-  'src/api/memories/outcome.ts': ['outcome', 'outcomeForLastRecall'],
+  'src/api/memories/outcome.ts': ['outcome'],
   'src/api/memories/promote.ts': ['supersede', 'rawArchive', 'rawArchiveForEvent'],
-  'src/api/memories/remember.ts': ['remember', 'rememberUntrusted'],
+  'src/api/memories/remember.ts': ['remember'],
   'src/api/memories/remember-local.ts': ['rememberLocally'],
   'src/surface/importers/vault.ts': ['importVaultInto'],
 };
+
+/**
+ * Each `file: name` of `writes` that the program's file no longer exports, so a function moved
+ * to another file fails the check instead of leaving it unwatched.
+ * @param {ts.Program} program
+ * @param {string} rootDir
+ * @param {Record<string, string[]>} [writes]
+ * @returns {string[]}
+ */
+export function staleApiWrites(program, rootDir, writes = API_WRITES) {
+  const checker = program.getTypeChecker();
+  const stale = [];
+  for (const [file, names] of Object.entries(writes)) {
+    const sf = program.getSourceFile(resolve(rootDir, file).replace(/\\/g, '/'));
+    const module = sf && checker.getSymbolAtLocation(sf);
+    const exported = new Set(module ? checker.getExportsOfModule(module).map((s) => s.getName()) : []);
+    for (const name of names) if (!exported.has(name)) stale.push(`${file}: ${name}`);
+  }
+  return stale;
+}
 
 const CHAIN = new Set(['then', 'catch', 'finally']);
 
@@ -90,7 +112,15 @@ export function findFloatingApiCalls(program, rootDir) {
 
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const hits = findFloatingApiCalls(programFromConfig('tsconfig.tests.json'), '.');
+  const program = programFromConfig('tsconfig.tests.json');
+  const stale = staleApiWrites(program, '.');
+  if (stale.length > 0) {
+    console.error('\nAPI_WRITES names functions their file no longer exports:');
+    for (const s of stale) console.error(`  ${s}`);
+    console.error('\nFix: point each entry at the file that now declares the function.\n');
+    process.exit(1);
+  }
+  const hits = findFloatingApiCalls(program, '.');
   if (hits.length > 0) {
     console.error('\nApi write calls whose Promise nothing awaits:');
     for (const h of hits) console.error(`  ${h.file}:${h.line}  (${h.why})  ${h.text}`);

@@ -107,6 +107,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/auth/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
+
+### src/api/hippo-db/audit-maintenance.ts
 - `auditPrune`: Audit log retention pruning (v1.12.9), moved here from `src/surface/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
 - `auditPrune`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
 - `auditPrune` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
@@ -138,13 +140,15 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/sleep/dormant.ts
 - `dormantRestore`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
 
-### src/api/memories/forget.ts
+### src/api/hippo-db/rejections.ts
 - `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 
 ### src/api/memories/outcome.ts
 - `outcome`: the LC1 trace link (docs/plans/2026-08-02-lc1-recall-trace-persistence.md) is the store's `lastRecall.applyTracedOutcome`; the `opts.traceId` option no src caller sent was dropped in 3.0.
 - `outcome`: if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
 - `outcome`: LC1: link the outcome to its trace, recording only the ids actually credited (post tenant-filtering, matches appliedIds).
+
+### src/api/hippo-db/outcome-last-recall.ts
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
 ### src/api/memories/promote.ts
@@ -185,8 +189,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `recall`: **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract lock).
 - `retrieve`: Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock).
 
+### src/api/hippo-db/remember-untrusted.ts
+- `ConnectorRememberOptions.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
+
 ### src/api/memories/remember.ts
-- `RememberOpts.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
 
 ### src/api/sleep/sleep.ts

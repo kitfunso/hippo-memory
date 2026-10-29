@@ -4,7 +4,6 @@ import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
 import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
-import { CONFLICTS_EFFECTS } from './conflicts.js';
 import { CONSOLIDATION_EFFECTS } from './consolidation.js';
 import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS, READINESS_EFFECTS } from './diagnostics.js';
@@ -56,7 +55,6 @@ export const STORE_EFFECTS = {
   lessonWrites: LESSON_WRITES_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
-  conflicts: CONFLICTS_EFFECTS,
   dormant: DORMANT_EFFECTS,
   failureLog: FAILURE_LOG_EFFECTS,
   compactions: COMPACTIONS_EFFECTS,

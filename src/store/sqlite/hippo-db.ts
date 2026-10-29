@@ -1,5 +1,7 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteConflicts } from './review/conflicts.js';
+import { CONFLICTS_EFFECTS } from '../../base/ports/store/conflicts.js';
 import { sqliteReports } from './reports/reports.js';
 import { REPORTS_EFFECTS } from '../../base/ports/store/reports.js';
 import { sqliteLastRecall } from './recall/last-recall.js';
@@ -34,6 +36,7 @@ export function hippoDbRepos(handles: Handles) {
     rejections: sqliteRejections(handles),
     lastRecall: sqliteLastRecall(handles),
     reports: sqliteReports(handles),
+    conflicts: sqliteConflicts(handles),
   };
 }
 
@@ -59,4 +62,5 @@ export const HIPPO_DB_EFFECTS = {
   rejections: REJECTIONS_EFFECTS,
   lastRecall: LAST_RECALL_EFFECTS,
   reports: REPORTS_EFFECTS,
+  conflicts: CONFLICTS_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

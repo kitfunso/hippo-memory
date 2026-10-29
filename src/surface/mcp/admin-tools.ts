@@ -2,7 +2,7 @@
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
-import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
+import { conflictListOpen, conflictPages, conflictResolve } from '../../api/hippo-db/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';

@@ -23,7 +23,7 @@ import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type ContextWith } from '../types.js';
-import type { TenantReach } from './memories.js';
+import type { TenantReach } from '../memories/memories.js';
 
 /** A page of a conflict list: `limit` (default DEFAULT_LIST_LIMIT, at most MAX_LIST_LIMIT) and
  * the position the previous page ended on. */
@@ -74,7 +74,7 @@ async function touchableConflict(
   ctx: ContextWith<'conflicts'>,
   conflictId: number,
 ): Promise<ConflictRow | null> {
-  const row = await ctx.store.conflicts.get(ctx.tenantId, conflictId);
+  const row = await ctx.store.hippoDb.conflicts.get(ctx.tenantId, conflictId);
   return row !== null && touchable(ctx.actor, row) ? row : null;
 }
 
@@ -111,7 +111,7 @@ export async function conflictResolve(
   const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
   const fate = conflictLoserFate(opts, loser, personalScopeOf(ctx.actor));
   if (fate.kind !== 'weaken') await assertMayRemove(ctx, conflictId, loser.id);
-  const resolved = await ctx.store.conflicts.resolve(ctx.tenantId, {
+  const resolved = await ctx.store.hippoDb.conflicts.resolve(ctx.tenantId, {
     conflictId,
     keep,
     loser,
@@ -161,7 +161,7 @@ export async function conflictListOpen(
   opts: ConflictPageOptions & { project?: CallerProject } = {},
 ): Promise<ConflictPage> {
   const { project } = opts;
-  const page = await ctx.store.conflicts.list({
+  const page = await ctx.store.hippoDb.conflicts.list({
     tenantId: ctx.tenantId,
     status: 'open',
     limit: pageLimit(opts.limit),
@@ -187,7 +187,7 @@ export async function conflictList(
   opts: ConflictPageOptions = {},
 ): Promise<ConflictPage> {
   requireHostAdmin(ctx, 'Listing conflicts past the scope check');
-  const page = await ctx.store.conflicts.list({
+  const page = await ctx.store.hippoDb.conflicts.list({
     tenantId: reach.everyTenant ? ALL_TENANTS : ctx.tenantId,
     status,
     limit: pageLimit(opts.limit),

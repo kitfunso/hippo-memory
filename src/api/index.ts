@@ -123,13 +123,13 @@ export {
   conflictList,
   conflictListOpen,
   conflictResolve,
-} from './memories/conflicts.js';
+} from './hippo-db/conflicts.js';
 export type {
   ConflictPage,
   ConflictPageOptions,
   ResolveMemoryConflictOptions,
   ResolveMemoryConflictResult,
-} from './memories/conflicts.js';
+} from './hippo-db/conflicts.js';
 export {
   projectNameList,
   projectNameMerge,

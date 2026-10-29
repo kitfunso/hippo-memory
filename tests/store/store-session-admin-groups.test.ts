@@ -104,8 +104,8 @@ describe('conflicts group', () => {
     writeEntry(r, a);
     writeEntry(r, b);
     replaceDetectedConflicts(r, [{ memoryAId: a.id, memoryBId: b.id, reason: 'contradiction', score: 0.9 }]);
-    const sync = sqliteStore(r).conflicts;
-    const served = sqliteStore(r).conflicts;
+    const sync = sqliteStore(r).hippoDb.conflicts;
+    const served = sqliteStore(r).hippoDb.conflicts;
     const query = (tenantId: TenantId): ConflictListQuery => ({ tenantId, status: 'open', limit: 10 });
     const [open] = (await sync.list(query(T))).rows;
     expect(open?.a).not.toBeNull();

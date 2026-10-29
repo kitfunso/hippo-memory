@@ -370,7 +370,7 @@ describe('the server-thread block of the routes this file covers', () => {
     ],
     [
       'POST /mcp hippo_resolve',
-      (p) => ({ conflicts: p.conflicts }),
+      (p) => ({ hippoDb: { conflicts: p.hippoDb.conflicts } }),
       tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }),
       200,
     ],
