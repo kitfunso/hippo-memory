@@ -190,3 +190,24 @@ export function writeFileAtomic(
     writeInPlace(target, data);
   }
 }
+
+/** Restricts a new owner-only temp file while it is still empty, then fills it and renames it over
+ * `file`, so the secret never lands under an inherited or old ACL, or in another hard link's inode. */
+export function writeSecretFile(file: string, data: string, restrict: (tmp: string) => void): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.rmSync(tmp, { force: true });
+  try {
+    const fd = fs.openSync(tmp, 'wx', 0o600);
+    try {
+      restrict(tmp);
+      fs.writeFileSync(fd, data, 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    renameOnto(tmp, file);
+  } catch (err) {
+    removeTemp(tmp);
+    throw err;
+  }
+}

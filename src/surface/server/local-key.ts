@@ -2,18 +2,18 @@
 // secret next to the pidfile, in a file only the user can read; reading that file, never a socket
 // address, is what proves a caller local.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmodSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { envApiKey } from '../../base/util/env.js';
+import { envApiKey, envSystemRoot } from '../../base/util/env.js';
 import { errorCode, errorFields, log } from '../../base/util/log.js';
-import { writeFileAtomic } from '../../host/atomic-write.js';
+import { writeSecretFile } from '../../host/atomic-write.js';
+import { ensureKeyGitignored } from '../../host/key-gitignore.js';
+import { restrictToCurrentUser } from '../../host/windows-acl.js';
 
 const KEY_FILE = 'server.key';
 // Its own prefix, so the token never reaches an auth resolver or the API-key table.
 const KEY_PREFIX = 'hl_';
 const KEY_BYTES = 32;
-// Owner read and write only: any other account on the machine must send a key of its own.
-const KEY_FILE_MODE = 0o600;
 /** The audit actor of a request the local key signs, as the CLI on this machine has always been
  * named. */
 export const LOCAL_KEY_SUBJECT = 'localhost:cli';
@@ -58,10 +58,11 @@ export interface LocalKey {
  * working. */
 export function issueLocalKey(hippoRoot: string): LocalKey {
   const token = `${KEY_PREFIX}${randomBytes(KEY_BYTES).toString('base64url')}`;
-  const path = localKeyPath(hippoRoot);
-  writeFileAtomic(path, `${token}\n`, { mode: KEY_FILE_MODE });
-  // A file left by an older run keeps its own mode through the rename.
-  chmodSync(path, KEY_FILE_MODE);
+  writeSecretFile(localKeyPath(hippoRoot), `${token}\n`, (tmp) => {
+    // A file mode only toggles the read-only bit on Windows, so the ACL keeps other accounts out.
+    if (process.platform === 'win32') restrictToCurrentUser(tmp, envSystemRoot());
+  });
+  ensureKeyGitignored(hippoRoot);
   const held = digest(token);
   return {
     matches: (given) => given.startsWith(KEY_PREFIX) && timingSafeEqual(held, digest(given)),

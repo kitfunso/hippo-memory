@@ -201,6 +201,8 @@ export function envHomeDir(): string | undefined {
 export const envPath = text('PATH');
 /** The extensions win32 tries on a bare command name, in order. */
 export const envPathExt = text('PATHEXT');
+/** The Windows folder; its System32 holds the tools hippo starts by full path. */
+export const envSystemRoot = text('SystemRoot');
 export const envModelCache = trimmedText('HIPPO_MODEL_CACHE');
 
 // Session, scope and tenant.

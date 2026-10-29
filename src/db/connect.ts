@@ -13,6 +13,7 @@ import {
 import { autoCheckpointPages } from './wal-checkpointer.js';
 import { storeKey, type StoreRuntime } from './store-runtime.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
+import { ensureKeyGitignored } from '../host/key-gitignore.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
@@ -48,6 +49,7 @@ function createStoreFilesOwnerOnly(at: StoreAt): void {
     return;
   }
   fs.mkdirSync(hippoRoot, PRIVATE_DIR);
+  ensureKeyGitignored(hippoRoot);
   try {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
     at.runtime?.forget(storeKey(hippoRoot));

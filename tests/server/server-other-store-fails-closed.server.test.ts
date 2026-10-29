@@ -293,7 +293,7 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('leaves nothing under the served root but the pidfile and the local key: no hippo.db, no .hippo folder', () => {
-    expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER, 'server.key', 'server.pid']);
+    expect(readdirSync(root).sort()).toEqual(['.gitignore', OTHER_STORE_MARKER, 'server.key', 'server.pid'].sort());
     expect(existsSync(join(root, '.hippo'))).toBe(false);
   });
 });
