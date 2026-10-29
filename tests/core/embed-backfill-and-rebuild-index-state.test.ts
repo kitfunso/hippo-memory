@@ -13,12 +13,11 @@ import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embed
 import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
-import { cliStore } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { peakRowsRead, recordStatementsAsync, type StatementLog } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { localIndex } from '../_helpers/cli-stores.js';
+import { localIndex, storeAt } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -261,7 +260,7 @@ describe('a model identity change on hippo.db', () => {
   it('stages the rebuild one page of vectors at a time, and the live index changes only at the commit', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const index = cliStore(root).embeddingIndex;
+    const index = storeAt(root).embeddingIndex;
     const staged: number[] = [];
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {
@@ -276,7 +275,7 @@ describe('a model identity change on hippo.db', () => {
     };
     const target = {
       embeddingIndex: watched,
-      rows: cliStore(root),
+      rows: storeAt(root),
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
       failureNotices: new FailureNotices(),

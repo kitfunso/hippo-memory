@@ -4,7 +4,7 @@ import {
   type ConnectorDlq,
   type ReplayResult,
   type SignatureRefusal,
-} from '../dlq.js';
+} from '../../../api/dead-letters.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../../base/util/json.js';
@@ -59,6 +59,7 @@ export async function replayGithubDlqEntry(
 ): Promise<ReplayResult> {
   const { webhookSecret, previousSecret, ingestHook } = opts;
   return replayParked<'github', JsonValue & GitHubWebhookEnvelope>(
+    ctx,
     {
       dlq: githubDlq,
       // The secret in effect now, not the one in effect when the row was parked.
@@ -85,8 +86,7 @@ export async function replayGithubDlqEntry(
         return { ok: true, status: 'replayed', memoryId };
       },
     },
-    ctx.store,
-    { tenantId: ctx.tenantId, id, force: opts.force === true },
+    { id, force: opts.force === true },
   );
 }
 

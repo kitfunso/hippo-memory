@@ -6,7 +6,7 @@
 import { MemoryEntry, Layer } from '../../base/memory/entry.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
 import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
-import { cliApiContext, type CliContext } from './api-context.js';
+import { type CliContext, type CliCommand } from './api-context.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { log } from '../../base/util/log.js';
@@ -113,7 +113,11 @@ function isConsolidated(entry: MemoryEntry): boolean {
  * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so
  * reruns skip it (unless `all`).
  */
-export async function refineStore(hippoRoot: string, opts: RefineOptions): Promise<RefineResult> {
+export async function refineStore(
+  cli: CliCommand,
+  hippoRoot: string,
+  opts: RefineOptions,
+): Promise<RefineResult> {
   const result: RefineResult = {
     scanned: 0,
     refined: 0,
@@ -123,7 +127,7 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
   };
 
   // No tenant means every tenant, so the ctx's own tenant is never read.
-  const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
+  const ctx = cli.apiContext(hippoRoot, opts.tenantId ?? '');
   const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
   const entries = await memoryList(ctx, reach);
   let processed = 0;
@@ -141,13 +145,14 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
     if (opts.limit !== undefined && processed >= opts.limit) break;
     processed++;
 
-    await refineOneEntry(ctx, { reach, entry, opts, result });
+    await refineOneEntry(ctx, { cli, reach, entry, opts, result });
   }
 
   return result;
 }
 
 interface RefineOneEntryOptions {
+  readonly cli: CliCommand;
   readonly reach: TenantReach;
   readonly entry: MemoryEntry;
   readonly opts: RefineOptions;
@@ -156,7 +161,7 @@ interface RefineOneEntryOptions {
 
 async function refineOneEntry(
   ctx: CliContext,
-  { reach, entry, opts, result }: RefineOneEntryOptions,
+  { cli, reach, entry, opts, result }: RefineOneEntryOptions,
 ): Promise<void> {
   // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we
   // still refine using just the merged content.
@@ -183,7 +188,7 @@ async function refineOneEntry(
     return;
   }
 
-  await storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
+  await storeRefinement(cli.apiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

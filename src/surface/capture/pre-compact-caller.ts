@@ -1,8 +1,8 @@
 // PreCompact for a caller on another machine: the record and the owner's snapshot go under its
 // tenant and project; only a refused bind or the holdout arm withholds the instruction.
 import type { ContextWith, EntryContext } from '../../api/types.js';
+import { callerPreCompact } from '../../api/pre-compact.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import {
   assertTrigger,
@@ -10,8 +10,7 @@ import {
   callerInHoldout,
   checkedWorkingState,
 } from './caller-session.js';
-import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
-import type { ContinuityKey } from '../../base/ports/store/types.js';
+import type { WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
 
 export interface CallerPreCompactRequest {
@@ -27,24 +26,15 @@ export interface CallerHookOutput {
   readonly stdout: string;
 }
 
-/** A failed step is logged and the instruction still goes out, as the local hook prints it
+/** A failed store step is logged and the instruction still goes out, as the local hook prints it
  * before any store work. */
-async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (err) {
-    log.warn(`pre-compact: ${what}: ${errorMessage(err)}`, errorFields(err));
-    return null;
-  }
-}
-
 export async function preCompactForCaller(
   given: EntryContext<ContextWith<'compactions' | 'sessions'>>,
   req: CallerPreCompactRequest,
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
   assertTrigger(req.trigger);
-  const state = checkedWorkingState(req.workingState);
+  const derived = checkedWorkingState(req.workingState);
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (await callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
   const start = {
@@ -54,39 +44,6 @@ export async function preCompactForCaller(
     cwd: null,
     transcriptPath: null,
   };
-  const { compactions } = ctx.store;
-  const recordId = await logged('compaction record not started', () =>
-    compactions.start(ctx.tenantId, start),
-  );
-  if (
-    state !== null &&
-    (await saveOwnerSnapshot(ctx, req.sessionId, key, state)) &&
-    recordId !== null
-  ) {
-    // Marked under ctx.tenantId, which the environment's tenant may not be.
-    await logged('compaction record not marked with its snapshot', () =>
-      compactions.markSnapshotSaved(ctx.tenantId, recordId),
-    );
-  }
+  await callerPreCompact(ctx, { start, key, derived });
   return { stdout: PRE_COMPACT_INSTRUCTION };
-}
-
-/** True when the owner's snapshot was saved. */
-async function saveOwnerSnapshot(
-  ctx: ContextWith<'sessions'>,
-  sessionId: string,
-  key: ContinuityKey,
-  state: WorkingState,
-): Promise<boolean> {
-  const { sessions } = ctx.store;
-  const existing = await logged('snapshot not loaded', () =>
-    sessions.loadSnapshot(ctx.tenantId, {}, key),
-  );
-  const merged = mergeWorkingState(state, existing, sessionId);
-  if (merged === null) return false;
-  const snapshot = { ...merged, source: 'pre-compact', sessionId };
-  const saved = await logged('snapshot not saved', () =>
-    sessions.save(ctx.tenantId, 'snapshot', snapshot, key),
-  );
-  return saved !== null;
 }

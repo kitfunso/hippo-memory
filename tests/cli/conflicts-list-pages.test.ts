@@ -13,6 +13,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 const LIST_READ = /ORDER BY mc\.updated_at DESC, mc\.id DESC LIMIT \?$/;
 let root: string;
@@ -74,7 +75,7 @@ async function printed(flags: CliFlags) {
     lines.push(line);
   });
   const log = await recordStatementsAsync(() =>
-    handleConflicts({ hippoRoot: root, tenantId: 'default', args: [], flags }),
+    asCommand((cli) => handleConflicts({ cli, hippoRoot: root, tenantId: 'default', args: [], flags })),
   );
   vi.restoreAllMocks();
   return { lines, reads: countMatching(log.statements, LIST_READ), peak: peakRowsRead(log.reads, LIST_READ) };

@@ -13,7 +13,14 @@ import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
-import { requireHostAdmin, type ContextWith } from './types.js';
+import { requireHostAdmin, strengthOf, type Context, type ContextWith } from './types.js';
+import { memoryGet } from './memories/memories.js';
+import type { ConfidenceLevel, MemoryEntry } from '../base/memory/entry.js';
+import {
+  calculateRewardFactor,
+  calculateStrength,
+  resolveConfidence,
+} from '../base/memory/strength.js';
 import type { StoredVectorSummary } from '../base/ports/store.js';
 import { indexStep } from '../domain/search/embed-index-target.js';
 
@@ -31,6 +38,49 @@ export async function storeStatus(
   requireHostAdmin(ctx, 'Reading every tenant');
   const { reports } = ctx.store;
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
+}
+
+/** The store's tallies for one tenant, with their mean strength: 0 when the tenant has no rows. */
+export type TenantStatus = Readonly<
+  Awaited<ReturnType<Reports['memoryStatus']>> & { avgStrength: number }
+>;
+
+/** The caller's tenant at a glance, read on one snapshot; its own rows only, so any actor. */
+export async function tenantStatus(
+  ctx: ContextWith<'reports'>,
+  now: Date,
+  atRiskBelow: number,
+): Promise<TenantStatus> {
+  const tallies = await ctx.store.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
+  const avgStrength = tallies.total > 0 ? tallies.strengthSum / tallies.total : 0;
+  return { ...tallies, avgStrength };
+}
+
+/** One memory with the values it has at a given time beside the ones it stores. */
+export interface MemoryDetail {
+  readonly entry: MemoryEntry;
+  /** Under the context's strength model; `entry.strength` is the stored value. */
+  readonly liveStrength: number;
+  /** 'stale' once the row has aged out, else its stored confidence. */
+  readonly confidence: ConfidenceLevel;
+  readonly rewardFactor: number;
+}
+
+/** A memory in the caller's tenant read at `now`; null when the tenant holds no such row. */
+export async function memoryDetail(
+  ctx: Context,
+  id: string,
+  now: Date,
+): Promise<MemoryDetail | null> {
+  const entry = await memoryGet(ctx, id);
+  if (!entry) return null;
+  const model = strengthOf(ctx);
+  return {
+    entry,
+    liveStrength: calculateStrength(entry, now, model),
+    confidence: resolveConfidence(entry, now),
+    rewardFactor: calculateRewardFactor(entry, model),
+  };
 }
 
 /** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host

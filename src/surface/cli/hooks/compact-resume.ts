@@ -13,7 +13,6 @@ import {
 import type { DeliveryRecorder } from '../../../api/delivery/delivery-recorder.js';
 import { readHookStdin } from '../stdin.js';
 import { readCompactResumePayload } from '../compact-resume-payload.js';
-import { cliApiContext, cliHookRequest, cliLedgerReach } from '../api-context.js';
 import type { CommandContext } from '../flag-values.js';
 import {
   hookStoreRoot,
@@ -21,12 +20,21 @@ import {
   inPilotHoldout,
   resetHookInjection,
 } from '../hook-runtime.js';
+import type { CliScope } from '../api-context.js';
 
-export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
+export async function handleCompactResume({
+  hippoRoot,
+  tenantId,
+  cli,
+}: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
-  await cliHookRequest(async () => {
-    await resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
-    await resumeAfterCompact(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
+  await cli.hookRequest(async (hook) => {
+    await resetHookInjection({ cli: hook, hippoRoot, tenantId }, stdinText, 'compact');
+    await resumeAfterCompact(
+      { cli: hook, hippoRoot: hookStoreRoot(hippoRoot), tenantId },
+      stdinText,
+      stdinTimedOut,
+    );
   });
 }
 
@@ -34,8 +42,7 @@ export async function handleCompactResume({ hippoRoot, tenantId }: CommandContex
  * malformed payload or a store read failure degrades to empty stdout, never a failed
  * SessionStart. */
 async function resumeAfterCompact(
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   stdinText: string | undefined,
   stdinTimedOut: boolean,
 ): Promise<void> {
@@ -51,7 +58,7 @@ async function resumeAfterCompact(
     const payloadSessionId = payloadState.payloadSessionId;
 
     if (payloadState.boundary) {
-      rec = await startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+      rec = await startDeliveryRecorder(cli.apiContext(hippoRoot, tenantId), {
         stdinText,
         runtime: 'claude-code',
         eventType: 'compact-resume',
@@ -63,13 +70,15 @@ async function resumeAfterCompact(
     if (
       !suppressOutput &&
       payloadSessionId !== null &&
-      (await inPilotHoldout(hippoRoot, tenantId, payloadSessionId, { write: false }))
+      (await inPilotHoldout({ cli, hippoRoot, tenantId }, payloadSessionId, { write: false }))
     ) {
       suppressOutput = true;
       rec?.disabled();
     }
 
-    if (!suppressOutput) await restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
+    if (!suppressOutput) {
+      await restoreCompactSnapshot({ cli, hippoRoot, tenantId }, payloadSessionId, rec);
+    }
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr,
     // which the model never sees.
@@ -80,12 +89,11 @@ async function resumeAfterCompact(
 }
 
 async function restoreCompactSnapshot(
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   payloadSessionId: string | null,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
-  const text = await compactResumeBlock(cliApiContext(hippoRoot, tenantId), payloadSessionId);
+  const text = await compactResumeBlock(cli.apiContext(hippoRoot, tenantId), payloadSessionId);
   if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
@@ -104,6 +112,6 @@ async function restoreCompactSnapshot(
       ],
       delivery: takeDelivery(rec),
     },
-    cliLedgerReach(hippoRoot),
+    cli.ledgerReach(hippoRoot),
   );
 }

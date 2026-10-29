@@ -12,6 +12,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -72,9 +73,11 @@ describe('the local provider with a model that cannot load', () => {
 
 describe('hippo embed exit code', () => {
   it('is 1 with the reason printed when the model cannot load', async () => {
-    await handleEmbed(
-      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
-      localProvider({ loadError: 'model file missing from the cache' }),
+    await asCommand((cli) =>
+      handleEmbed(
+        { cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} },
+        localProvider({ loadError: 'model file missing from the cache' }),
+      ),
     );
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('did not load: model file missing');
@@ -82,21 +85,27 @@ describe('hippo embed exit code', () => {
   });
 
   it('is 0 when every memory is embedded', async () => {
-    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({}));
+    await asCommand((cli) =>
+      handleEmbed({ cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({})),
+    );
     expect(process.exitCode).toBeUndefined();
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
   });
 
   it('is 1 when a memory is left unembedded', async () => {
-    await handleEmbed({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({ vector: [] }));
+    await asCommand((cli) =>
+      handleEmbed({ cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} }, localProvider({ vector: [] })),
+    );
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('1 memories are still not embedded');
   });
 
   it('is 1 when no local embedding package is installed', async () => {
-    await handleEmbed(
-      { hippoRoot: root, tenantId: 'default', args: [], flags: {} },
-      localProvider({ available: false }),
+    await asCommand((cli) =>
+      handleEmbed(
+        { cli, hippoRoot: root, tenantId: 'default', args: [], flags: {} },
+        localProvider({ available: false }),
+      ),
     );
     expect(process.exitCode).toBe(1);
   });

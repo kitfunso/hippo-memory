@@ -46,9 +46,7 @@ function mapProblems() {
 
 const problems = mapProblems();
 if (problems.length > 0) {
-  throw new Error(
-    `layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`,
-  );
+  throw new Error(`layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`);
 }
 
 /** One rule per layer: its files import nothing from a higher layer, type-only imports included. */
@@ -79,6 +77,8 @@ const barrels = Object.entries(layers.barrels).map(([file, folder]) => ({
 const { adapter, dbReach } = layers;
 const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
+// The published store kit, the one surface file that names src/store: a pure rule it re-exports.
+const STORE_KIT = 'entry/store-kit.ts';
 // hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
 const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
 const outsideAdapter = [adapterPath, srcPaths([], entrances)];
@@ -152,18 +152,18 @@ const storeReach = [
     to: { path: '^src/store/', pathNot: tierDoor },
   },
   {
-    name: 'cli-store-runtime',
-    comment: 'the CLI calls a src/api function; a type import from the store is fine',
+    name: 'surface-through-api',
+    comment: `a surface calls src/api, never the store or the db; only ${entrances.map((f) => `src/${f}`).join(' and ')} open one, and src/${STORE_KIT} re-exports the pure graph diff from src/store/rules`,
     severity: 'error',
-    from: { path: '^src/(cli\\.ts$|surface/cli/)' },
-    to: { path: '^src/(store|db)/', dependencyTypesNot: ['type-only', 'type-import'] },
+    from: { path: layerPaths('surface'), pathNot: srcPaths([], [...entrances, STORE_KIT]) },
+    to: { path: [layerPaths(dbReach.layer), layerPaths(dbReach.through)] },
   },
   {
-    name: 'dashboard-through-api',
-    comment: 'the dashboard reads and writes through src/api, never the store, the db or the CLI',
+    name: 'dashboard-not-cli',
+    comment: 'the dashboard reads and writes through src/api, never through the CLI',
     severity: 'error',
     from: { path: '^src/surface/dashboard/' },
-    to: { path: '^src/(store/|db/|surface/cli/|cli\\.ts$)' },
+    to: { path: '^src/(surface/cli/|cli\\.ts$)' },
   },
 ];
 
@@ -188,8 +188,7 @@ const strayStore = {
 // One rule per depth, for the file's own folder, its parent and its grandparent: $1 is that folder.
 const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
   name: `no-own-barrel-${up}`,
-  comment:
-    'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
+  comment: 'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
   severity: 'error',
   from: { path: `^(src/.+/)${below}[^/]+$`, pathNot: up === 0 ? '/index\\.ts$' : '^$' },
   to: { path: '^$1index\\.ts$' },
@@ -198,8 +197,7 @@ const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
 const reachRules = [
   {
     name: 'no-io-below-host',
-    comment:
-      'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
+    comment: 'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
     severity: 'error',
     from: { path: '^src/(base|domain|api)/' },
     to: { path: IO_MODULES },
@@ -213,8 +211,7 @@ const reachRules = [
   },
   {
     name: 'sqlite-in-data-layer',
-    comment:
-      'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
+    comment: 'only src/db/sqlite.ts loads node:sqlite, and src/host/file-lock.ts for a data-free lock database; every other SQLite connection is made through src/db/sqlite.ts',
     severity: 'error',
     from: { pathNot: ['^src/db/sqlite\\.ts$', '^src/host/file-lock\\.ts$'] },
     to: { path: SQLITE_MODULE },
@@ -239,8 +236,7 @@ const reachRules = [
   { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },
   {
     name: 'config-file-in-surface',
-    comment:
-      'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
+    comment: 'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
     severity: 'error',
     from: { path: '^src/', pathNot: [layerPaths('surface'), layerPaths('host')] },
     to: { path: '^src/host/config-file\\.ts$', dependencyTypesNot: notType },

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq } from '../../src/api/dead-letters.js';
 import { githubDlq, replayGithubDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq, replaySlackDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -32,7 +32,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
     );
 
   it('unparseable payload', async () => {
-    const g = await parkInDlq(githubDlq, sqliteStore(root), {
+    const g = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: 'x{',
       error: 'e',
@@ -41,7 +41,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       installationId: null,
       repoFullName: null,
     });
-    const s = await parkInDlq(slackDlq, sqliteStore(root), {
+    const s = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
       tenantId: 'default',
       rawPayload: 'x{',
       error: 'e',
@@ -66,7 +66,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
   });
 
   it('signature that does not verify', async () => {
-    const g = await parkInDlq(githubDlq, sqliteStore(root), {
+    const g = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',
@@ -76,7 +76,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       installationId: null,
       repoFullName: null,
     });
-    const s = await parkInDlq(slackDlq, sqliteStore(root), {
+    const s = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'e',

@@ -83,7 +83,9 @@ function replyText(res: McpResponse | null): string {
 }
 
 function cliResolve(conflictId: number, flags: Record<string, string | boolean>): ReturnType<typeof runInProcess> {
-  return runInProcess(() => handleResolve({ hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }));
+  return runInProcess((cli) =>
+    handleResolve({ cli, hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }),
+  );
 }
 
 const openIds = async (): Promise<number[]> => (await listMemoryConflicts(root, 'open', TENANT)).map((c) => c.id);

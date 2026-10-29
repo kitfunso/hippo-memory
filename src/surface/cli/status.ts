@@ -5,14 +5,7 @@ import { envHomeDir } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  resolveConfidence,
-  type StrengthModel,
-} from '../../base/memory/strength.js';
-import { strengthOf } from '../../api/types.js';
-import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { Layer } from '../../base/memory/entry.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
@@ -21,17 +14,18 @@ import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-reten
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/tokens.js';
-import { memoryGet } from '../../api/memories/memories.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
   provenanceCoverageReport,
+  memoryDetail,
   storeStatus,
   vectorSummary,
+  type MemoryDetail,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { StoredVectorSummary } from '../../base/ports/store.js';
-import { cliApiContext, type CliContext } from './api-context.js';
+import { type CliContext, type CliCommand } from './api-context.js';
 import { defaultDiagnostics } from '../open-store.js';
 
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -46,11 +40,9 @@ import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { CliExit, fail } from './exit.js';
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 
-export async function handleStatus(
-  { hippoRoot, tenantId }: CommandContext,
-  ctx: CliContext = cliApiContext(hippoRoot, tenantId),
-): Promise<void> {
+export async function handleStatus({ cli, hippoRoot, tenantId }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
 
   const { stats, counts } = await storeStatus(ctx, ctx.infra.clock(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
@@ -150,30 +142,35 @@ function embeddedLine(
 }
 
 interface InspectMemoryOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly id: string;
 }
 
-async function inspectMemory({ hippoRoot, tenantId, id }: InspectMemoryOptions): Promise<void> {
+async function inspectMemory({
+  cli,
+  hippoRoot,
+  tenantId,
+  id,
+}: InspectMemoryOptions): Promise<void> {
   requireInit(hippoRoot);
 
-  const ctx = cliApiContext(hippoRoot, tenantId);
-  const entry = await memoryGet(ctx, id);
-  if (!entry) {
+  const ctx = cli.apiContext(hippoRoot, tenantId);
+  const now = ctx.infra.clock();
+  const detail = await memoryDetail(ctx, id, now);
+  if (!detail) {
     fail(`Memory not found: ${id}`);
   }
-  printMemoryDetail(entry, ctx.infra.clock(), strengthOf(ctx));
+  printMemoryDetail(detail, now);
 }
 
-function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel): void {
-  const currentStrength = calculateStrength(entry, now, rules);
+function printMemoryDetail(detail: MemoryDetail, now: Date): void {
+  const { entry, liveStrength, confidence: effectiveConfidence } = detail;
   const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
-
-  const effectiveConfidence = resolveConfidence(entry, now);
 
   console.log(`Memory: ${entry.id}`);
   console.log('---------------------------');
@@ -184,13 +181,13 @@ function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel):
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.lastRetrieved} (${fmt(daysSince, 1)}d ago)`);
   console.log(`Retrieval count:  ${entry.retrievalCount}`);
-  console.log(`Strength (live):  ${fmt(currentStrength)} (stored: ${fmt(entry.strength)})`);
+  console.log(`Strength (live):  ${fmt(liveStrength)} (stored: ${fmt(entry.strength)})`);
   console.log(`Half-life:        ${entry.halfLifeDays}d`);
   console.log(`Emotional:        ${entry.emotionalValence}`);
   console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  console.log(`Outcomes:         ${outcomeLabel(entry, rules)}`);
+  console.log(`Outcomes:         ${outcomeLabel(detail)}`);
   if (entry.conflictsWith.length > 0) {
     console.log(`Conflicts with:   ${entry.conflictsWith.join(', ')}`);
   }
@@ -200,8 +197,7 @@ function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel):
   console.log(entry.content);
 }
 
-function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {
-  const rewardFactor = calculateRewardFactor(entry, rules);
+function outcomeLabel({ entry, rewardFactor }: MemoryDetail): string {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   return pos === 0 && neg === 0
@@ -212,9 +208,14 @@ function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {
 /** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved
  * by skipped unchanged blocks, and re-read hook tokens. Counts are estimates (characters / 4),
  * the same estimate every budget uses. */
-export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleTokens({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const days = parseCountFlag(flags, 'days');
   const summary = await api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
   if (boolFlag(flags, 'json')) {
@@ -273,11 +274,12 @@ export async function handleFailures({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
-  const ctx = cliApiContext(root, tenantId);
+  const ctx = cli.apiContext(root, tenantId);
   const days = parseCountFlag(flags, 'days');
   const summary = await api.failureSummary(ctx, { days: days > 0 ? days : undefined });
   if (boolFlag(flags, 'json')) {
@@ -327,9 +329,10 @@ export async function handleCorrectionLatency({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const report = await correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
+  const report = await correctionLatencyReport(cli.apiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
@@ -363,9 +366,10 @@ export async function handleProvenance({
   hippoRoot,
   tenantId,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const coverage = await provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
+  const coverage = await provenanceCoverageReport(cli.apiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {
@@ -440,10 +444,15 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
   );
 }
 
-export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
+export async function handleInspect({
+  hippoRoot,
+  tenantId,
+  args,
+  cli,
+}: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  await inspectMemory({ hippoRoot, tenantId, id });
+  await inspectMemory({ cli, hippoRoot, tenantId, id });
 }

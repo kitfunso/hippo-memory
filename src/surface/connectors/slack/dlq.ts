@@ -6,7 +6,7 @@ import {
   type Reingest,
   type ReplayResult,
   type SignatureRefusal,
-} from '../dlq.js';
+} from '../../../api/dead-letters.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
@@ -59,6 +59,7 @@ export async function replaySlackDlqEntry(
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
   return replayParked<'slack', JsonValue & SlackEventEnvelope>(
+    ctx,
     {
       dlq: slackDlq,
       refuseSignature: (row) => refuseSignature(row, opts),
@@ -70,8 +71,7 @@ export async function replaySlackDlqEntry(
           allowUnknown: opts.allowUnknownTeamFallback === true,
         }),
     },
-    ctx.store,
-    { tenantId: ctx.tenantId, id, force: opts.force === true },
+    { id, force: opts.force === true },
   );
 }
 
