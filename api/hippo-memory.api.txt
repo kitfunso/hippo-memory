@@ -313,7 +313,7 @@ entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: runStoreConformance re-export
-entry/store-kit.d.ts: sqliteStore re-export
+entry/store-kit.d.ts: sqliteStore const
 entry/store-kit.d.ts: tallyAmbientEntries function
 entry/store-kit.d.ts: targetReader re-export
 entry/testing.d.ts: MemoryWire re-export

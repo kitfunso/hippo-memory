@@ -9,7 +9,7 @@ import { DASHBOARD_GROUPS } from './dashboard-types.js';
 import { configReader } from '../../host/config-file.js';
 import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
-import { defaultServerRuntime, type SqliteServerRuntime } from '../open-store.js';
+import { sqliteServerRuntimeWithExitHook, type SqliteServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
@@ -103,7 +103,10 @@ function servingFor(
 /** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never
  * claims the API server's pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
-  const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
+  const runtime = sqliteServerRuntimeWithExitHook(
+    opts.hippoRoot,
+    evalStoreRules(envLossAversionRatio()),
+  );
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   const server = dashboardListener(serving, runtime, inflight);

@@ -15,7 +15,7 @@ import { issueLocalKey, type LocalKey } from './local-key.js';
 import { KeyVerifier } from './api-key.js';
 import { hasGroup, hasGroups, type HippoStore, type StoreWith } from '../../base/ports/store.js';
 import {
-  defaultServerRuntime,
+  sqliteServerRuntimeWithExitHook,
   tenantOfApiKey,
   type ResolveOptions,
   type SqliteServerRuntime,
@@ -299,7 +299,7 @@ interface BootPlan {
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
   const { host, requestedPort, startedAt } = plan;
 
-  const runtime = defaultServerRuntime(opts.hippoRoot, {
+  const runtime = sqliteServerRuntimeWithExitHook(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
     ...evalStoreRules(envLossAversionRatio()),
