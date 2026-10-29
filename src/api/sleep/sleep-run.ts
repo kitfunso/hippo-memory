@@ -356,8 +356,13 @@ async function drainGraphQueue(
     }
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
-    for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
-      await rebuildDirtyTenant(ctx, { phases, dirty: { tenantId, maxPendingId }, rebuilt, events });
+    for (const dirty of snapshot.dirtyTenants) {
+      const tenant = await rebuildDirtyTenant(ctx, phases, dirty);
+      events.push(...tenant.events);
+      if (tenant.extracted === undefined) continue;
+      rebuilt.tenants += 1;
+      rebuilt.entities += tenant.extracted.entities;
+      rebuilt.relations += tenant.extracted.relations;
     }
     return rebuilt.tenants > 0 ? { events, graph: rebuilt } : { events };
   } catch (graphErr) {
@@ -375,25 +380,25 @@ interface GraphDrain {
   readonly graph?: GraphTotals;
 }
 
-interface RebuildDirtyTenantOptions {
-  readonly phases: SleepPhases;
-  readonly dirty: DirtyTenantSnapshot['dirtyTenants'][number];
-  readonly rebuilt: GraphTotals;
-  readonly events: SleepEvent[];
+/** One tenant's rebuild: its events in order, and its counts when the extract ran. */
+interface TenantRebuild {
+  readonly events: readonly SleepEvent[];
+  readonly extracted?: Pick<GraphTotals, 'entities' | 'relations'>;
 }
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure goes to
- * `events` and the tenant stays pending. */
+/** Rebuilds one dirty tenant's graph and drains its queue; on a failure the tenant stays
+ * pending. */
 async function rebuildDirtyTenant(
   ctx: SleepContext,
-  { phases, dirty, rebuilt, events }: RebuildDirtyTenantOptions,
-): Promise<void> {
+  phases: SleepPhases,
+  dirty: DirtyTenantSnapshot['dirtyTenants'][number],
+): Promise<TenantRebuild> {
+  const events: SleepEvent[] = [];
+  let extracted: TenantRebuild['extracted'];
   try {
     const ext = await phases.extractGraph(ctx.store, dirty.tenantId);
     // Count the rebuild as soon as it succeeds; it happened regardless of the drain-mark below.
-    rebuilt.tenants += 1;
-    rebuilt.entities += ext.entities;
-    rebuilt.relations += ext.relations;
+    extracted = { entities: ext.entities, relations: ext.relations };
     if (ext.skipped) events.push({ kind: 'graphStaleOpsSkipped', count: ext.skipped });
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals
     // stay pending. Marked only after the last chunk, so a run stopped between chunks leaves the
@@ -406,6 +411,7 @@ async function rebuildDirtyTenant(
     );
     events.push({ kind: 'graphExtractFailed', message: errorMessage(tenantErr) });
   }
+  return extracted === undefined ? { events } : { events, extracted };
 }
 
 interface SleepAuditMetadata {
