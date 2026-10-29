@@ -121,7 +121,7 @@ export interface CliScope {
 
 /** What a command's stores open on: its runtime, and inside a request that request's session. */
 interface Scope {
-  readonly runtime: StoreRuntime | undefined;
+  readonly runtime: StoreRuntime;
   readonly session?: StoreSession | undefined;
 }
 
@@ -193,9 +193,9 @@ function contextOn(
   };
 }
 
-/** The stores of one CLI command on `runtime`; a test outside any command passes none, so each
- * store opens on its own. */
-export function cliCommand(runtime?: StoreRuntime, session?: StoreSession): CliCommand {
+/** The stores of one CLI command: each opens on `runtime` and, inside a request, on that request's
+ * session. */
+export function cliCommand(runtime: StoreRuntime, session?: StoreSession): CliCommand {
   const scope: Scope = { runtime, session };
   const inSession = (own: StoreSession): CliCommand => cliCommand(runtime, own);
   return {
@@ -240,7 +240,7 @@ export function cliInitGlobal(): void {
 /** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
  * it. */
 function rootAutoSleep(
-  runtime: StoreRuntime | undefined,
+  runtime: StoreRuntime,
   root: string,
   hostTenantId: string,
 ): () => Promise<void> {
@@ -260,7 +260,7 @@ function rootAutoSleep(
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep
  * that runs in process. One host per stdio loop, so its callers live as long as the loop. */
-function stdioHostOn(runtime: StoreRuntime | undefined): McpHost<CliStore> {
+function stdioHostOn(runtime: StoreRuntime): McpHost<CliStore> {
   const hostTenantId = envTenant();
   const shared = createCallerState();
   const tools = allMcpTools();

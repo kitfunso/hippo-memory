@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import {
@@ -20,6 +19,7 @@ import {
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
@@ -45,9 +45,11 @@ async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
 
 async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<string[]> {
   const s = freshStore(templates, 'local');
-  host = cliCommand().stdioHost();
   try {
-    return normalize(await run(s), s);
+    return await asCommand(async (cli) => {
+      host = cli.stdioHost();
+      return normalize(await run(s), s);
+    });
   } finally {
     removeDir(s.home);
   }

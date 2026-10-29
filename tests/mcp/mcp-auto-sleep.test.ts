@@ -6,14 +6,15 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { RequestStores } from '../../src/db/index.js';
 import { SESSION_OPEN } from '../../src/db/request-stores.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 const roots: string[] = [];
 
 afterEach(() => {
+  endLastingCommands();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
@@ -50,7 +51,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    const host = cliCommand().stdioHost();
+    const host = lastingCommand().stdioHost();
     await remember(host, root, 'the deploy moved to friday');
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     await remember(host, root, 'alice owns the billing service');
@@ -87,7 +88,7 @@ describe('MCP auto-sleep', () => {
       }),
     );
 
-    await remember(cliCommand().stdioHost(), root, 'the deploy moved to friday');
+    await remember(lastingCommand().stdioHost(), root, 'the deploy moved to friday');
     const frame = sessions[0];
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     opens.mockRestore();

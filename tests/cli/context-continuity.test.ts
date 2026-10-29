@@ -6,7 +6,6 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -23,10 +22,8 @@ afterEach(() => {
 
 /** `hippo context` run in this process against the temp store; a non-zero exit fails the test as a spawn would. */
 async function runHippo(flags: Record<string, string>): Promise<string> {
-  const r = await runInProcess(() =>
-    withHookStdin(undefined, () =>
-      handleContext({ cli: cliCommand(), hippoRoot: hippoDir, tenantId: 'default', args: [], flags }),
-    ),
+  const r = await runInProcess((cli) =>
+    withHookStdin(undefined, () => handleContext({ cli, hippoRoot: hippoDir, tenantId: 'default', args: [], flags })),
   );
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;

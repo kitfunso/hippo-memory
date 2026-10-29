@@ -8,7 +8,6 @@ import { numberFlag } from '../../src/surface/cli/flag-values.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let root = '';
 let store = '';
@@ -38,9 +37,9 @@ describe('numeric CLI flags', () => {
   it('hippo eval --min-mrr abc exits 1 with the message', async () => {
     const corpus = join(root, 'corpus.json');
     writeFileSync(corpus, JSON.stringify({ cases: [{ id: 'a', query: 'deploy', expectedIds: ['x'] }] }));
-    const bad = await runInProcess(() =>
+    const bad = await runInProcess((cli) =>
       handleEval({
-        cli: cliCommand(),
+        cli,
         hippoRoot: store,
         tenantId: 'default',
         args: [corpus],
@@ -49,9 +48,9 @@ describe('numeric CLI flags', () => {
     );
     expect(bad.status).toBe(1);
     expect(bad.stderr).toContain('Invalid --min-mrr: "abc". Must be a number.');
-    const ok = await runInProcess(() =>
+    const ok = await runInProcess((cli) =>
       handleEval({
-        cli: cliCommand(),
+        cli,
         hippoRoot: store,
         tenantId: 'default',
         args: [corpus],
@@ -62,9 +61,9 @@ describe('numeric CLI flags', () => {
   });
 
   it('hippo share --auto --min-score abc exits 1 with the message', async () => {
-    const bad = await runInProcess(() =>
+    const bad = await runInProcess((cli) =>
       handleShare({
-        cli: cliCommand(),
+        cli,
         hippoRoot: store,
         tenantId: 'default',
         args: [],

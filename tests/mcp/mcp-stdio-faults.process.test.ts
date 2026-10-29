@@ -128,7 +128,9 @@ function crashScript(failure: string): string {
     [
       `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
       `const { cliCommand } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/cli/api-context.js')).href)});`,
-      'startStdioLoop(cliCommand().stdioHost());',
+      `const { withStoreRuntime } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/open-store.js')).href)});`,
+      // One command for the life of the loop, as `hippo mcp` runs it.
+      'void withStoreRuntime((runtime) => { startStdioLoop(cliCommand(runtime).stdioHost()); return new Promise(() => {}); });',
       // A later turn, so the failure reaches the crash handlers rather than the module's own evaluation.
       `setImmediate(() => { ${failure} });`,
     ].join('\n'),

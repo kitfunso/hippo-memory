@@ -11,7 +11,6 @@ import {
 } from '../../src/entry/eval.js';
 import { handleEval } from '../../src/surface/cli/eval.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 describe('eval-suite scoring', () => {
   it('scores the synthetic corpus deterministically with every category present', async () => {
@@ -54,9 +53,9 @@ describe('hippo eval --suite', () => {
   });
 
   const run = (extra: Record<string, boolean> = {}) =>
-    runInProcess(() =>
+    runInProcess((cli) =>
       handleEval({
-        cli: cliCommand(),
+        cli,
         hippoRoot: join(dir, '.hippo'),
         tenantId: 'default',
         args: [],

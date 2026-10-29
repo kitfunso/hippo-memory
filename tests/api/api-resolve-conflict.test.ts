@@ -13,7 +13,6 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const { writeEntry, sqliteStore } = sessionPerTest();
 
@@ -84,8 +83,8 @@ function replyText(res: McpResponse | null): string {
 }
 
 function cliResolve(conflictId: number, flags: Record<string, string | boolean>): ReturnType<typeof runInProcess> {
-  return runInProcess(() =>
-    handleResolve({ cli: cliCommand(), hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }),
+  return runInProcess((cli) =>
+    handleResolve({ cli, hippoRoot: root, tenantId: TENANT, args: [String(conflictId)], flags }),
   );
 }
 

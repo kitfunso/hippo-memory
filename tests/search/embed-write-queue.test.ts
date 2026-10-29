@@ -5,7 +5,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
+import { storeAt } from '../_helpers/cli-stores.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -34,8 +34,8 @@ function countingProvider(hold: (seen: { active: number; peak: number }) => Prom
 
 function targetOn(root: string, provider: EmbeddingProvider) {
   return {
-    embeddingIndex: cliCommand().store(root).embeddingIndex,
-    rows: cliCommand().store(root),
+    embeddingIndex: storeAt(root).embeddingIndex,
+    rows: storeAt(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: () => provider,
     failureNotices: new FailureNotices(),

@@ -24,7 +24,6 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 // One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
@@ -262,16 +261,16 @@ describe('key lists', () => {
 
   it('hippo auth list prints each expiry and leaves out expired keys unless --all', async () => {
     const keys = threeKeys();
-    const active = await runInProcess(() =>
-      handleAuth({ cli: cliCommand(), hippoRoot: home, tenantId: 'default', args: ['list'], flags: {} }),
+    const active = await runInProcess((cli) =>
+      handleAuth({ cli, hippoRoot: home, tenantId: 'default', args: ['list'], flags: {} }),
     );
     expect(active.stdout).toContain('created  expires  revoked');
     expect(active.stdout).toContain(keys.liveExpiry);
     expect(active.stdout).not.toContain(keys.expired);
     expect(
       (
-        await runInProcess(() =>
-          handleAuth({ cli: cliCommand(), hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }),
+        await runInProcess((cli) =>
+          handleAuth({ cli, hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }),
         )
       ).stdout,
     ).toContain(keys.expired);

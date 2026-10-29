@@ -11,7 +11,6 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 let root: string;
 const cli = (tenantId = 'default'): FullContext => apiCtx(root, tenantId, adminActor('cli'));
@@ -24,9 +23,9 @@ afterEach(() => removeDir(root));
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {
     const id = (await remember(cli(), { content: 'the backup job runs on tuesdays at noon' })).id;
-    const run = await runInProcess(() =>
+    const run = await runInProcess((cli) =>
       handleReject({
-        cli: cliCommand(),
+        cli,
         hippoRoot: root,
         tenantId: 'default',
         args: [id],
@@ -42,9 +41,9 @@ describe('the CLI curate verbs go through src/api', () => {
 
   it('hippo invalidate weakens the matching row through the api', async () => {
     const id = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
-    const run = await runInProcess(() =>
+    const run = await runInProcess((cli) =>
       handleInvalidate({
-        cli: cliCommand(),
+        cli,
         hippoRoot: root,
         tenantId: 'default',
         args: ['jenkins'],

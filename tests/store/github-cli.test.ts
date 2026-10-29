@@ -18,7 +18,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
   return runCliAs(args, {
@@ -83,13 +83,15 @@ describe('hippo github CLI', () => {
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
-      await handleGitHub({
-        cli: cliCommand(),
-        hippoRoot,
-        tenantId: 'default',
-        args: ['backfill'],
-        flags: { repo: 'acme/widgets' },
-      });
+      await asCommand((cli) =>
+        handleGitHub({
+          cli,
+          hippoRoot,
+          tenantId: 'default',
+          args: ['backfill'],
+          flags: { repo: 'acme/widgets' },
+        }),
+      );
     } finally {
       console.log = origLog;
     }
@@ -295,13 +297,15 @@ describe('hippo github CLI', () => {
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await handleGitHub({
-        cli: cliCommand(),
-        hippoRoot,
-        tenantId: 'default',
-        args: ['backfill'],
-        flags: { repo, max },
-      });
+      await asCommand((cli) =>
+        handleGitHub({
+          cli,
+          hippoRoot,
+          tenantId: 'default',
+          args: ['backfill'],
+          flags: { repo, max },
+        }),
+      );
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();

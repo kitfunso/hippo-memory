@@ -27,7 +27,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 const { writeEntry } = sessionPerTest();
 
@@ -177,9 +176,9 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
-    const res = await runInProcess(() =>
+    const res = await runInProcess((cli) =>
       handleExplain({
-        cli: cliCommand(),
+        cli,
         hippoRoot: join(home, '.hippo'),
         tenantId: 'default',
         args: ['deploykey'],

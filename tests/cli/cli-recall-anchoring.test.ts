@@ -3,7 +3,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { handleRecall } from '../../src/surface/cli/recall.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { sessionRing, snapshotRing } from '../../src/api/recall/session-rings.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
@@ -45,8 +44,8 @@ function seed(tenantId: string): string {
 
 async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Promise<string> {
   // Dispatch resolves the tenant per call, so a test that switches HIPPO_TENANT midway sees the switch.
-  const run = await runInProcess(() =>
-    cliCommand().request((cli) =>
+  const run = await runInProcess((cmd) =>
+    cmd.request((cli) =>
       handleRecall({ cli, hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags, callers }),
     ),
   );

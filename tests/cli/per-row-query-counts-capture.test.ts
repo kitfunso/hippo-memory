@@ -3,7 +3,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 import { handleRemember } from '../../src/surface/cli/remember.js';
 import { handleTrace } from '../../src/surface/cli/trace.js';
 import { runCapture } from '../../src/surface/capture/command.js';
@@ -21,6 +20,7 @@ import {
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 useQueryCountRoots();
 
@@ -29,13 +29,15 @@ describe('writeMemory', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
       const { statements } = await recordStatementsAsync(() =>
-        handleRemember({
-          cli: cliCommand(),
-          hippoRoot: root,
-          tenantId: 'default',
-          args: [text],
-          flags: { tag: ['topic:cache'] },
-        }),
+        asCommand((cli) =>
+          handleRemember({
+            cli,
+            hippoRoot: root,
+            tenantId: 'default',
+            args: [text],
+            flags: { tag: ['topic:cache'] },
+          }),
+        ),
       );
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
@@ -92,8 +94,10 @@ describe('trace lineage', () => {
       const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
         const { statements } = await recordStatementsAsync(() =>
-          cliCommand().request((cli) =>
-            handleTrace({ cli, hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} }),
+          asCommand((cmd) =>
+            cmd.request((cli) =>
+              handleTrace({ cli, hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} }),
+            ),
           ),
         );
         expect(log.mock.calls.map((call) => String(call[0])).join(' ')).toContain('parent memory number 0');

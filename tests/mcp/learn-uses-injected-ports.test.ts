@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
 import { runContextTool } from '../../src/surface/mcp/recall-tools.js';
 import { learnFromRepo } from '../../src/surface/cli/shared.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
+import { asCommand } from '../_helpers/test-cli.js';
 import { mcpApiContext } from '../../src/surface/mcp/protocol.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -80,8 +80,10 @@ describe('learn', () => {
   it('runs the CLI learn through the git runner on its context', async () => {
     const hippoRoot = makeRoot('learn-ports-cli');
     const { git, calls } = stubGit();
-    const ctx = { ...cliCommand().apiContext(hippoRoot, 'default'), infra: withMachine(git, INJECTED) };
-    await learnFromRepo({ repoPath: '/some/repo', days: 5, ctx });
+    await asCommand((cli) => {
+      const ctx = { ...cli.apiContext(hippoRoot, 'default'), infra: withMachine(git, INJECTED) };
+      return learnFromRepo({ repoPath: '/some/repo', days: 5, ctx });
+    });
     expect(calls.map((c) => c.cwd)).toEqual(['/some/repo']);
   });
 });

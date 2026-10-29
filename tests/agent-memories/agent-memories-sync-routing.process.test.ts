@@ -17,7 +17,6 @@ import {
   importSessionFolder,
 } from '../../src/api/agent-memories.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -49,6 +48,7 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';
@@ -207,7 +207,8 @@ describe('agent memory sync: routing and sharing', () => {
         )
         .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()),
     );
-    const repair = (dryRun: boolean) => projectNameRepair(cliCommand().apiContext(w.global, 'default'), { dryRun });
+    const repair = (dryRun: boolean) =>
+      asCommand((cli) => projectNameRepair(cli.apiContext(w.global, 'default'), { dryRun }));
 
     expect((await repair(true)).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);

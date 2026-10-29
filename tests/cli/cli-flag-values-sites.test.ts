@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { memoryList } from '../../src/api/memories/memories.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
+import type { CliCommand } from '../../src/surface/cli/api-context.js';
 import { handleHandoff } from '../../src/surface/cli/handoff.js';
 import { handleSession } from '../../src/surface/cli/session.js';
 import { handleSnapshot, handleWm } from '../../src/surface/cli/continuity.js';
@@ -22,12 +22,13 @@ import { handleImport } from '../../src/surface/cli/memory-import.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { asCommand, endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed' }]);
 
 let root = '';
-const c = (args: string[], flags: CliFlags): CommandContext => ({
-  cli: cliCommand(),
+const c = (cli: CliCommand, args: string[], flags: CliFlags): CommandContext => ({
+  cli,
   hippoRoot: root,
   tenantId: 'default',
   args,
@@ -35,17 +36,19 @@ const c = (args: string[], flags: CliFlags): CommandContext => ({
 });
 
 async function stored() {
-  const ctx = cliCommand().apiContext(root, 'default');
-  const { sessions } = ctx.store;
-  return {
-    snapshot: Boolean(await sessions.loadSnapshot('default', {}, null)),
-    events: (await sessions.read('default', 'event', { limit: 50 })).length,
-    handoff: Boolean(await sessions.read('default', 'handoff', { sessionId: null }, null)),
-    working: (await sessions.read('default', 'working_memory', { limit: 50 })).length,
-    memories: (await memoryList(ctx)).length,
-  };
+  return asCommand(async (cli) => {
+    const ctx = cli.apiContext(root, 'default');
+    const { sessions } = ctx.store;
+    return {
+      snapshot: Boolean(await sessions.loadSnapshot('default', {}, null)),
+      events: (await sessions.read('default', 'event', { limit: 50 })).length,
+      handoff: Boolean(await sessions.read('default', 'handoff', { sessionId: null }, null)),
+      working: (await sessions.read('default', 'working_memory', { limit: 50 })).length,
+      memories: (await memoryList(ctx)).length,
+    };
+  });
 }
-const sessionsOf = (hippoRoot: string) => cliCommand().apiContext(hippoRoot, 'default').store.sessions;
+const sessionsOf = (hippoRoot: string) => lastingCommand().apiContext(hippoRoot, 'default').store.sessions;
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
 
 beforeEach(() => {
@@ -55,55 +58,64 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  endLastingCommands();
   vi.unstubAllEnvs();
   removeDir(root);
 });
 
-type Row = readonly [label: string, flag: string, run: () => void | Promise<void>];
+type Row = readonly [label: string, flag: string, run: (cli: CliCommand) => void | Promise<void>];
 
 const VALUE_LESS: readonly Row[] = [
-  ['snapshot save', 'task', () => handleSnapshot(c(['save'], { task: true, summary: 's', 'next-step': 'n' }))],
-  ['snapshot save', 'summary', () => handleSnapshot(c(['save'], { task: 't', summary: true, 'next-step': 'n' }))],
-  ['snapshot save', 'next-step', () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': true }))],
+  ['snapshot save', 'task', (cli) => handleSnapshot(c(cli, ['save'], { task: true, summary: 's', 'next-step': 'n' }))],
+  [
+    'snapshot save',
+    'summary',
+    (cli) => handleSnapshot(c(cli, ['save'], { task: 't', summary: true, 'next-step': 'n' })),
+  ],
+  [
+    'snapshot save',
+    'next-step',
+    (cli) => handleSnapshot(c(cli, ['save'], { task: 't', summary: 's', 'next-step': true })),
+  ],
   [
     'snapshot save',
     'source',
-    () => handleSnapshot(c(['save'], { task: 't', summary: 's', 'next-step': 'n', source: true })),
+    (cli) => handleSnapshot(c(cli, ['save'], { task: 't', summary: 's', 'next-step': 'n', source: true })),
   ],
-  ['session log', 'content', () => handleSession(c(['log'], { id: 's1', content: true }))],
-  ['session log', 'type', () => handleSession(c(['log'], { id: 's1', content: 'c', type: true }))],
+  ['session log', 'content', (cli) => handleSession(c(cli, ['log'], { id: 's1', content: true }))],
+  ['session log', 'type', (cli) => handleSession(c(cli, ['log'], { id: 's1', content: 'c', type: true }))],
   [
     'session complete',
     'summary',
-    () => handleSession(c(['complete'], { session: 's1', outcome: 'success', summary: true })),
+    (cli) => handleSession(c(cli, ['complete'], { session: 's1', outcome: 'success', summary: true })),
   ],
-  ['handoff create', 'summary', () => handleHandoff(c(['create'], { summary: true }))],
-  ['handoff create', 'next', () => handleHandoff(c(['create'], { summary: 'x', next: true }))],
-  ['handoff create', 'session', () => handleHandoff(c(['create'], { summary: 'x', session: true }))],
-  ['wm push', 'content', () => handleWm(c(['push'], { content: true }))],
-  ['wm push', 'scope', () => handleWm(c(['push'], { content: 'c', scope: true }))],
-  ['wm clear', 'session', () => handleWm(c(['clear'], { session: true }))],
-  ['trace record', 'task', () => handleTrace(c(['record'], { task: true, steps: STEPS, outcome: 'success' }))],
+  ['handoff create', 'summary', (cli) => handleHandoff(c(cli, ['create'], { summary: true }))],
+  ['handoff create', 'next', (cli) => handleHandoff(c(cli, ['create'], { summary: 'x', next: true }))],
+  ['handoff create', 'session', (cli) => handleHandoff(c(cli, ['create'], { summary: 'x', session: true }))],
+  ['wm push', 'content', (cli) => handleWm(c(cli, ['push'], { content: true }))],
+  ['wm push', 'scope', (cli) => handleWm(c(cli, ['push'], { content: 'c', scope: true }))],
+  ['wm clear', 'session', (cli) => handleWm(c(cli, ['clear'], { session: true }))],
+  ['trace record', 'task', (cli) => handleTrace(c(cli, ['record'], { task: true, steps: STEPS, outcome: 'success' }))],
   [
     'trace record',
     'source',
-    () => handleTrace(c(['record'], { task: 't', steps: STEPS, outcome: 'success', source: true })),
+    (cli) => handleTrace(c(cli, ['record'], { task: 't', steps: STEPS, outcome: 'success', source: true })),
   ],
-  ['remember', 'scope', () => handleRemember(c(['the deploy runs at noon'], { scope: true }))],
-  ['export', 'format', () => handleExport(c([], { format: true }))],
-  ['import', 'file', () => handleImport(c([], { file: true }))],
-  ['import', 'chatgpt', () => handleImport(c([], { chatgpt: true }))],
-  ['import', 'vault', () => handleImport(c([], { vault: true }))],
-  ['recall', 'goal', () => handleRecall(c(['deploy'], { goal: true }))],
-  ['recall', 'reranker', () => handleRecall(c(['deploy'], { reranker: true }))],
-  ['recall', 'outcome', () => handleRecall(c(['deploy'], { outcome: true }))],
-  ['context', 'format', () => handleContext(c([], { format: true }))],
-  ['conflicts', 'status', () => handleConflicts(c([], { status: true }))],
-  ['outcome', 'id', () => handleOutcome(c([], { good: true, id: true }))],
-  ['resolve', 'keep', () => handleResolve(c(['1'], { keep: true }))],
-  ['eval', 'compare', () => handleEval(c(['corpus.json'], { compare: true }))],
-  ['goal push', 'session-id', () => handleGoal(c(['push', 'ship it'], { 'session-id': true }))],
-  ['capture', 'file', () => handleCapture(c([], { file: true }))],
+  ['remember', 'scope', (cli) => handleRemember(c(cli, ['the deploy runs at noon'], { scope: true }))],
+  ['export', 'format', (cli) => handleExport(c(cli, [], { format: true }))],
+  ['import', 'file', (cli) => handleImport(c(cli, [], { file: true }))],
+  ['import', 'chatgpt', (cli) => handleImport(c(cli, [], { chatgpt: true }))],
+  ['import', 'vault', (cli) => handleImport(c(cli, [], { vault: true }))],
+  ['recall', 'goal', (cli) => handleRecall(c(cli, ['deploy'], { goal: true }))],
+  ['recall', 'reranker', (cli) => handleRecall(c(cli, ['deploy'], { reranker: true }))],
+  ['recall', 'outcome', (cli) => handleRecall(c(cli, ['deploy'], { outcome: true }))],
+  ['context', 'format', (cli) => handleContext(c(cli, [], { format: true }))],
+  ['conflicts', 'status', (cli) => handleConflicts(c(cli, [], { status: true }))],
+  ['outcome', 'id', (cli) => handleOutcome(c(cli, [], { good: true, id: true }))],
+  ['resolve', 'keep', (cli) => handleResolve(c(cli, ['1'], { keep: true }))],
+  ['eval', 'compare', (cli) => handleEval(c(cli, ['corpus.json'], { compare: true }))],
+  ['goal push', 'session-id', (cli) => handleGoal(c(cli, ['push', 'ship it'], { 'session-id': true }))],
+  ['capture', 'file', (cli) => handleCapture(c(cli, [], { file: true }))],
 ];
 
 describe('a text flag with no value', () => {
@@ -117,8 +129,8 @@ describe('a text flag with no value', () => {
 
 describe('a text flag with a value', () => {
   it('snapshot save keeps the task, summary and next step it was given', async () => {
-    const result = await runInProcess(() =>
-      handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
+    const result = await runInProcess((cli) =>
+      handleSnapshot(c(cli, ['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
     );
     expect(result.status).toBe(0);
     expect(await sessionsOf(root).loadSnapshot('default', {}, null)).toMatchObject({
@@ -130,15 +142,15 @@ describe('a text flag with a value', () => {
   });
 
   it('session log and handoff create store the text they were given', async () => {
-    const log = await runInProcess(() =>
-      handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })),
+    const log = await runInProcess((cli) =>
+      handleSession(c(cli, ['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })),
     );
     expect(log.status).toBe(0);
     expect(await sessionsOf(root).read('default', 'event', { limit: 5 })).toMatchObject([
       { sessionId: 's1', content: 'tried the fix', eventType: 'attempt' },
     ]);
-    const made = await runInProcess(() =>
-      handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
+    const made = await runInProcess((cli) =>
+      handleHandoff(c(cli, ['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
     );
     expect(made.status).toBe(0);
     expect(await sessionsOf(root).read('default', 'handoff', { sessionId: 's1' }, null)).toMatchObject({
@@ -148,7 +160,9 @@ describe('a text flag with a value', () => {
   });
 
   it('wm push stores the scope and content it was given', async () => {
-    const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
+    const result = await runInProcess((cli) =>
+      handleWm(c(cli, ['push'], { scope: 'plan', content: 'check the lease' })),
+    );
     expect(result.status).toBe(0);
     expect(await sessionsOf(root).read('default', 'working_memory', { limit: 5 })).toMatchObject([
       { scope: 'plan', content: 'check the lease' },
@@ -156,34 +170,36 @@ describe('a text flag with a value', () => {
   });
 
   it('trace record and remember store a row from their text flags', async () => {
-    const trace = await runInProcess(() =>
-      handleTrace(c(['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' })),
+    const trace = await runInProcess((cli) =>
+      handleTrace(c(cli, ['record'], { task: 'build', steps: STEPS, outcome: 'success', session: 's1' })),
     );
     expect(trace.status).toBe(0);
     expect(trace.stdout).toContain('Recorded trace');
-    const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
+    const remembered = await runInProcess((cli) =>
+      handleRemember(c(cli, ['the deploy runs at noon'], { scope: 'team' })),
+    );
     expect(remembered.status).toBe(0);
-    expect(await memoryList(cliCommand().apiContext(root, 'default'))).toHaveLength(2);
+    expect(await asCommand((cli) => memoryList(cli.apiContext(root, 'default')))).toHaveLength(2);
   });
 
   it('export and import read their format and file flags', async () => {
-    await runInProcess(() => handleRemember(c(['the deploy runs at noon'], {})));
-    const md = await runInProcess(() => handleExport(c([], { format: 'markdown' })));
+    await runInProcess((cli) => handleRemember(c(cli, ['the deploy runs at noon'], {})));
+    const md = await runInProcess((cli) => handleExport(c(cli, [], { format: 'markdown' })));
     expect(md.status).toBe(0);
     expect(md.stdout).toContain('the deploy runs at noon');
     const notes = join(root, 'notes');
     mkdirSync(notes);
     const file = join(notes, 'facts.md');
     writeFileSync(file, '- The cache is cleared every night\n- Rollbacks need two approvals\n');
-    const imported = await runInProcess(() => handleImport(c([], { file, 'dry-run': true })));
+    const imported = await runInProcess((cli) => handleImport(c(cli, [], { file, 'dry-run': true })));
     expect(imported.status).toBe(0);
   });
 
   it('recall, conflicts and context read their text flags', async () => {
-    expect((await runInProcess(() => handleRecall(c(['deploy'], { goal: 'ship', outcome: 'success' })))).status).toBe(
-      0,
-    );
-    expect((await runInProcess(() => handleConflicts(c([], { status: 'resolved' })))).status).toBe(0);
-    expect((await runInProcess(() => handleContext(c([], { format: 'json' })))).status).toBe(0);
+    expect(
+      (await runInProcess((cli) => handleRecall(c(cli, ['deploy'], { goal: 'ship', outcome: 'success' })))).status,
+    ).toBe(0);
+    expect((await runInProcess((cli) => handleConflicts(c(cli, [], { status: 'resolved' })))).status).toBe(0);
+    expect((await runInProcess((cli) => handleContext(c(cli, [], { format: 'json' })))).status).toBe(0);
   });
 });
