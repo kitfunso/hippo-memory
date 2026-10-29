@@ -1,7 +1,7 @@
 ### Fixed
 
-- **`hippo import` finishes embedding the rows it imported, or warns that it could not, before it exits.** The backfill used to run on after the command had closed its store, so its vectors or its warning could be lost.
-- **`hippo promote`, `hippo share`, `hippo sync`, `hippo learn` and capture embed the rows they copy before the command's store runtime closes.** Each embed used to run on after the command returned. The runtime now keeps that work and settles it as the command ends, and `serve()` settles a request's embeds in `stop()` before it closes the store.
+- **`hippo import` waits for its embedding backfill, and reports a failed one, before it returns.** The command, and a caller that runs it in process through `runCli`, used to get control back while the backfill still ran, and the command's store runtime closed under it.
+- **`hippo promote`, `hippo share`, `hippo sync`, `hippo learn` and capture wait for the embeds of the rows they copy before they return.** The command's store runtime now keeps that work and settles it before it closes, so it no longer closes under a running embed, and `serve()` settles a request's embeds in `stop()` before it closes the store.
 
 ### Changed
 
