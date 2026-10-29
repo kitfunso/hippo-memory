@@ -20,6 +20,7 @@ import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
 import { dashboardTickets } from './dashboard-session.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
+  DETACHED_SETTLE_MS,
   drainAndClose,
   setKeepAliveTimeouts,
   shutdownBoundMs,
@@ -115,7 +116,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
   // close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
-    await runtime.close();
+    await runtime.close(DETACHED_SETTLE_MS);
   };
   try {
     await listenOn(server, opts.port, DASHBOARD_HOST);

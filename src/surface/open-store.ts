@@ -66,9 +66,9 @@ export function sqliteServerRuntimeWithExitHook(
   process.once('exit', onExit);
   return {
     ...runtime,
-    close: async () => {
+    close: async (settleWithinMs) => {
       process.off('exit', onExit);
-      await runtime.close();
+      await runtime.close(settleWithinMs);
     },
   };
 }
