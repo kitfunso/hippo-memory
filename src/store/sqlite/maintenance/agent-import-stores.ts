@@ -28,10 +28,11 @@ interface SqliteImportStores {
  * session, which every store it opens takes. */
 export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores {
   return {
-    open: (root, { busyWaitMs }) => ({
-      ...sqliteStore(root, opts),
-      agentImport: sqliteAgentImport(handlesOf(root, opts), busyWaitMs),
-    }),
+    open: (root, { busyWaitMs }) => {
+      const store = sqliteStore(root, opts);
+      const agentImport = sqliteAgentImport(handlesOf(root, opts), busyWaitMs);
+      return { ...store, hippoDb: { ...store.hippoDb, agentImport } };
+    },
     exists: isInitialized,
     create: async (root) => inPortTerms(() => initStore(root, opts)),
     // Its folder is deleted at close, so no session of the caller's may keep one of its handles

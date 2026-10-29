@@ -43,9 +43,16 @@ async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
   return { isGlobal: false, shared: sharedStoreOf(ctx), project };
 }
 
+/** The reads a project-name plan takes: the tier's project tags, and rows and audit from the
+ * port. */
+function tagReads(store: ContextWith<'projectTags'>['store']): ProjectTagReads {
+  const { entriesWhere, auditLog } = store;
+  return { projectTags: store.hippoDb.projectTags, entriesWhere, auditLog };
+}
+
 /** Live rows per project name in the caller's tenant, newest write first. */
 export function projectNameList(ctx: ContextWith<'projectTags'>): Promise<ProjectSummary[]> {
-  return listProjects(ctx.store, ctx.tenantId);
+  return listProjects(tagReads(ctx.store), ctx.tenantId);
 }
 
 /** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on
@@ -54,7 +61,7 @@ export function projectNameMerge(
   ctx: ContextWith<'projectTags'>,
   opts: MergeProjectNamesOptions,
 ): Promise<MergeResult> {
-  return mergeProjects(ctx.store.projectTags, scopeOf(ctx), opts);
+  return mergeProjects(ctx.store.hippoDb.projectTags, scopeOf(ctx), opts);
 }
 
 /** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a
@@ -63,12 +70,12 @@ export async function projectNameRepair(
   ctx: RepairContext,
   opts: { dryRun: boolean },
 ): Promise<RepairResult> {
-  return repairProjects(ctx.store, scopeOf(ctx), await folderOf(ctx), opts);
+  return repairProjects(tagReads(ctx.store), scopeOf(ctx), await folderOf(ctx), opts);
 }
 
 /** The repair sleep runs once per store; null when it already ran. */
 export async function projectNameRepairOnce(ctx: RepairContext): Promise<RepairResult | null> {
-  return repairOnceOnSleep(ctx.store, scopeOf(ctx), await folderOf(ctx));
+  return repairOnceOnSleep(tagReads(ctx.store), scopeOf(ctx), await folderOf(ctx));
 }
 
 /** What a repair of the global store would change, read only so doctor takes no write lock. */

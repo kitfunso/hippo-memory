@@ -49,7 +49,7 @@ export async function syncContainer(
 ): Promise<ContainerOutcome | null> {
   for (let round = 0; round < 2; round++) {
     const planned = await planWrites(s, work);
-    const applied = await s.store.agentImport.applyContainer(planned.apply);
+    const applied = await s.store.hippoDb.agentImport.applyContainer(planned.apply);
     if (applied.kind === 'applied') {
       addOutcomes(planned.tally, planned.apply.steps, applied.outcomes);
       return { tally: planned.tally, unpurged: applied.unpurged };
@@ -165,7 +165,7 @@ async function dormantSnapshots(
     (item) => !refusals.has(item.key) && !liveKeys.has(item.key),
   );
   if (!needed) return [];
-  const under = await s.store.projectTags.dormantWhere({
+  const under = await s.store.hippoDb.projectTags.dormantWhere({
     tenantId: s.tenantId,
     sourcePrefix: w.prefix,
   });

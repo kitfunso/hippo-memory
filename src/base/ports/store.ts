@@ -92,6 +92,9 @@ const LOCAL_GROUP_NAMES = [
   'compactionHooks',
   'compactions',
   'failureLog',
+  'projectTags',
+  'diagnostics',
+  'agentImport',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

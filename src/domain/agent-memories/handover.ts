@@ -71,7 +71,7 @@ async function handOverContainer(
     ),
   );
   for (let round = 0; round < 2; round++) {
-    const applied = await store.agentImport.applyContainer(
+    const applied = await store.hippoDb.agentImport.applyContainer(
       await handOverPlan(store, work, at.tenantId, prefixes),
     );
     if (applied.kind === 'changed') continue;

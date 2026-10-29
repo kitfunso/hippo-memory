@@ -11,7 +11,6 @@ import { recordTokenUse } from './ledger/token-ledger.js';
 import { listAmbientCandidates, listContextCandidates, schemaFit } from './recall/candidates.js';
 import { readEntriesInIdOrder, listFreshRawMemories } from './entries/entry-reads.js';
 import { listEntriesWhere } from './entries/entry-filter.js';
-import { sqliteAgentImport } from './maintenance/agent-import.js';
 import { sqliteCards } from './records/cards.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
@@ -32,15 +31,12 @@ import { answered, bound, skipEmpty, type Bodies } from './runtime/bound.js';
 import type {
   AuditLog,
   BaseMethods,
-  CaptureGroups,
   ContextReads,
   ContinuityBlock,
   FolderGroups,
   HippoStore,
   LocalGroup,
-  MaintenanceGroups,
-  SleepGroups,
-  StoreGroups,
+  LocalGroups,
   StoreReach,
   VectorWrites,
 } from '../../base/ports/store.js';
@@ -55,19 +51,6 @@ import { embedLockKey } from './vectors/embed-lock.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 
-/** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
- * and capture's. */
-function sqliteLocalGroups(
-  handles: Handles,
-): Omit<SleepGroups & CaptureGroups & MaintenanceGroups, LocalGroup> {
-  const { on } = handles;
-  return {
-    projectTags: sqliteProjectTags(handles),
-    diagnostics: sqliteDiagnostics(on),
-    agentImport: sqliteAgentImport(handles),
-  };
-}
-
 /** The built-in store on `handles`: hippo.db under the port's own method names, each call run to
  * its end on its own short-lived handle before its Promise settles, so no write scope spans an
  * await. The caller passes the handles, so a store built over this one opens a single set, and a
@@ -77,7 +60,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
   return {
     kind: 'sqlite',
     hippoDb: hippoDbRepos(handles),
-    ...sqliteLocalGroups(handles),
     ...sqliteBaseMethods(handles),
     keyWrites: sqliteKeyWrites(on),
     vectorWrites: sqliteVectorWrites(on, files.hippoRoot),
@@ -205,7 +187,7 @@ export function sqliteReach({
  * inspects. */
 export function sqliteDiagnosticsStore(
   hippoRoot: string,
-): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
+): Pick<LocalGroups, 'diagnostics'> & ProjectTagReads {
   const handles = handlesOf(hippoRoot);
   const { on } = handles;
   return {

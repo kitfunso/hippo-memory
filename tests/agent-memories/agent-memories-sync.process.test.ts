@@ -71,14 +71,15 @@ const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 function gatedStores(gate: (plan: ContainerApply) => Promise<void>): ImportStores {
   const real = sqliteImportStores({});
   const apply = gateFirstWrite(
-    (plan: ContainerApply, store: ImportStore) => store.agentImport.applyContainer(plan),
+    (plan: ContainerApply, store: ImportStore) => store.hippoDb.agentImport.applyContainer(plan),
     gate,
   );
   return {
     ...real,
     open: (root, opts) => {
       const store = real.open(root, opts);
-      return { ...store, agentImport: { applyContainer: (plan) => apply(plan, store) } };
+      const agentImport = { applyContainer: (plan: ContainerApply) => apply(plan, store) };
+      return { ...store, hippoDb: { ...store.hippoDb, agentImport } };
     },
   };
 }

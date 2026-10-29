@@ -1,15 +1,12 @@
 // The effect of every store method, by group, assembled from the port files; WORKER_OPS derives
 // from it.
-import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
 import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CARDS_EFFECTS } from './cards.js';
 import { CONTEXT_READS_EFFECTS } from './context-reads.js';
-import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { GOALS_EFFECTS } from './goals.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
 import { OBJECTS_EFFECTS } from './objects.js';
-import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
 import type { BaseMethods, StoreGroups } from '../store.js';
@@ -43,9 +40,6 @@ export const STORE_EFFECTS = {
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
   embeddingIndex: EMBEDDING_INDEX_EFFECTS,
-  projectTags: PROJECT_TAGS_EFFECTS,
-  diagnostics: DIAGNOSTICS_EFFECTS,
-  agentImport: AGENT_IMPORT_EFFECTS,
 } as const satisfies { readonly [G in keyof StoreGroups]: MethodEffects<StoreGroups[G]> } & {
   readonly base: MethodEffects<BaseMethods>;
 };

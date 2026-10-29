@@ -86,11 +86,11 @@ export async function seedLocalGroups(root: string): Promise<void> {
   const s = sqliteStore(root);
   await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
   // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
-  await s.projectTags.merge(
+  await s.hippoDb.projectTags.merge(
     { tenantId: TENANT, actor: ACTOR },
     { from: 'stale-project', into: PROJECT, dryRun: false },
   );
-  await s.projectTags.markRepairedOnce();
+  await s.hippoDb.projectTags.markRepairedOnce();
   await s.close();
 }
 
@@ -125,8 +125,8 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.hippoDb.consolidation.unprofiledTopicSummaries({ limit: 10 }),
     'mem_x_summary',
   ),
-  read('diagnostics.health', (s) => s.diagnostics.health(CUTOFFS), /started: 2/),
-  read('diagnostics.inventory', (s) => s.diagnostics.inventory(), /compactions: 2/),
+  read('hippoDb.diagnostics.health', (s) => s.hippoDb.diagnostics.health(CUTOFFS), /started: 2/),
+  read('hippoDb.diagnostics.inventory', (s) => s.hippoDb.diagnostics.inventory(), /compactions: 2/),
   read(
     'hippoDb.learning.entriesMentioning',
     (s) => s.hippoDb.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
@@ -138,25 +138,25 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     'the rollout runbook lives in the team wiki',
   ),
   read(
-    'projectTags.originTallies',
-    (s) => s.projectTags.originTallies(TENANT, IMPORTED),
+    'hippoDb.projectTags.originTallies',
+    (s) => s.hippoDb.projectTags.originTallies(TENANT, IMPORTED),
     /origin: 'seeded-project', prefixed: 1/,
   ),
   read(
-    'projectTags.dormantWhere',
+    'hippoDb.projectTags.dormantWhere',
     async (s) => [
-      await s.projectTags.dormantWhere({ tenantId: TENANT, sourcePrefix: IMPORTED }),
-      await s.projectTags.dormantWhere({ tenantId: TENANT, origins: [PROJECT] }),
-      await s.projectTags.dormantWhere({ tenantId: TENANT, ids: ['mem_d_agent', 'mem_missing'] }),
+      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, sourcePrefix: IMPORTED }),
+      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, origins: [PROJECT] }),
+      await s.hippoDb.projectTags.dormantWhere({ tenantId: TENANT, ids: ['mem_d_agent', 'mem_missing'] }),
     ],
     /mem_d_agent[\s\S]*mem_d_agent[\s\S]*mem_d_agent/,
   ),
   read(
-    'projectTags.compactionOrigins',
-    (s) => s.projectTags.compactionOrigins(TENANT),
+    'hippoDb.projectTags.compactionOrigins',
+    (s) => s.hippoDb.projectTags.compactionOrigins(TENANT),
     `cwd: '${CWD}', origin: '${PROJECT}', transcript: '${TRANSCRIPT}'`,
   ),
-  read('projectTags.repairedOnce', (s) => s.projectTags.repairedOnce(), /^true$/),
+  read('hippoDb.projectTags.repairedOnce', (s) => s.hippoDb.projectTags.repairedOnce(), /^true$/),
   read(
     'hippoDb.learning.confirmedOutcomeTimes',
     (s) => s.hippoDb.learning.confirmedOutcomeTimes(TENANT, EVER),

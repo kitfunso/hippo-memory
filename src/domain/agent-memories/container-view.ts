@@ -140,7 +140,7 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.projectTags.dormantWhere({
+  for (const snap of await s.store.hippoDb.projectTags.dormantWhere({
     tenantId: s.tenantId,
     sourcePrefix: old,
   })) {
