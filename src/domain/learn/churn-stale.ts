@@ -230,7 +230,7 @@ export async function detectChurnStale(
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
-  const { learning } = store;
+  const { learning } = store.hippoDb;
   const { candidates, skippedPinned } = await readChurnCandidates(store, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 

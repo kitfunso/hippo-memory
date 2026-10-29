@@ -217,7 +217,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     'seeded contradiction',
   ),
   read('hippoDb.conflicts.get', (s) => s.hippoDb.conflicts.get(TENANT, 1), 'seeded contradiction'),
-  read('dormant.list', (s) => s.dormant.list(TENANT, null, {}), 'stg-1'),
+  read('hippoDb.dormant.list', (s) => s.hippoDb.dormant.list(TENANT, null, {}), 'stg-1'),
   read('hippoDb.reports.tokenUse', (s) => s.hippoDb.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
   read('hippoDb.reports.failures', (s) => s.hippoDb.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('hippoDb.reports.memoryStatus', (s) => s.hippoDb.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),

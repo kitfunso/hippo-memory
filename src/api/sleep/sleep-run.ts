@@ -50,7 +50,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   computeAmbientState: ambientStateFromTallies,
-  loadPendingExtractionTenants: (store) => store.consolidation.dirtyGraphTenants(),
+  loadPendingExtractionTenants: (store) => store.hippoDb.consolidation.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
   pageSize: 1000,
 };
@@ -404,7 +404,7 @@ async function rebuildDirtyTenant(
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals
     // stay pending. Marked only after the last chunk, so a run stopped between chunks leaves the
     // tenant for the next one.
-    await ctx.store.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
+    await ctx.store.hippoDb.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
     log.warn(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,

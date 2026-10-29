@@ -323,7 +323,7 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number; now: Date },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
+  const { summaries: queue, more } = await store.hippoDb.consolidation.dirtySummaries(cap);
 
   const result: DagRebuildResult = {
     attempted: queue.length,

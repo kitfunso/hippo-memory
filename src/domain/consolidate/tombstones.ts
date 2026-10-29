@@ -28,11 +28,11 @@ export function tombstoneChecks(
   };
   return {
     find: async (tenantId, digest) =>
-      dryRun ? null : ((await store.consolidation.rejected(tenantId, [digest]))[0] ?? null),
+      dryRun ? null : ((await store.hippoDb.consolidation.rejected(tenantId, [digest]))[0] ?? null),
     async rejectedAmong(tenantId, digests) {
       if (dryRun || digests.length === 0) return new Set();
       return new Set(
-        (await store.consolidation.rejected(tenantId, digests)).map((row) => row.digest),
+        (await store.hippoDb.consolidation.rejected(tenantId, digests)).map((row) => row.digest),
       );
     },
     audit,

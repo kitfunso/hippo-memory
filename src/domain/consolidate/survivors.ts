@@ -18,7 +18,7 @@ export class SleepRows {
   constructor(
     private readonly store: Pick<
       StoreWith<'consolidation' | 'auditMaintenance'>,
-      'entriesByIds' | 'consolidation' | 'hippoDb'
+      'entriesByIds' | 'hippoDb'
     >,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
@@ -56,7 +56,10 @@ export class SleepRows {
   async *pages(): AsyncGenerator<MemoryEntry[]> {
     let after: EntryCursor | undefined;
     do {
-      const page = await this.store.consolidation.entryIdsPage({ limit: this.idPage, after });
+      const page = await this.store.hippoDb.consolidation.entryIdsPage({
+        limit: this.idPage,
+        after,
+      });
       yield await this.read(page.ids);
       after = page.next ?? undefined;
     } while (after);

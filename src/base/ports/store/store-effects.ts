@@ -4,14 +4,11 @@ import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
 import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
-import { CONSOLIDATION_EFFECTS } from './consolidation.js';
 import { CONTEXT_READS_EFFECTS } from './context-reads.js';
 import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
-import { DORMANT_EFFECTS } from './dormant.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { GOALS_EFFECTS } from './goals.js';
 import { KEY_WRITES_EFFECTS } from './keys.js';
-import { LEARNING_EFFECTS } from './learning.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { FAILURE_LOG_EFFECTS } from './rejections.js';
@@ -47,12 +44,9 @@ export const STORE_EFFECTS = {
   objects: OBJECTS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
-  dormant: DORMANT_EFFECTS,
   failureLog: FAILURE_LOG_EFFECTS,
   compactions: COMPACTIONS_EFFECTS,
   embeddingIndex: EMBEDDING_INDEX_EFFECTS,
-  consolidation: CONSOLIDATION_EFFECTS,
-  learning: LEARNING_EFFECTS,
   captures: CAPTURES_EFFECTS,
   compactionHooks: COMPACTION_HOOKS_EFFECTS,
   projectTags: PROJECT_TAGS_EFFECTS,

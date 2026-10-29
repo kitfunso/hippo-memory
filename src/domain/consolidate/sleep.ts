@@ -232,7 +232,12 @@ async function commitPending(run: SleepRun, holdMs: number): Promise<void> {
   // The snapshot keeps what the DAG passes and other writers changed while sleep ran.
   const flush = dryRun ? null : { components: flushComponents(run), snapshot: run.survivors.bases };
   const expireBefore = dormantCutoff(run);
-  const committed = await run.store.consolidation.commit({ flush, expireBefore, dryRun, holdMs });
+  const committed = await run.store.hippoDb.consolidation.commit({
+    flush,
+    expireBefore,
+    dryRun,
+    holdMs,
+  });
   if (flush) reportFlush(run, new Set(committed.removedIds));
   if (expireBefore !== null) reportExpiry(run, committed.expired);
 }
@@ -272,7 +277,7 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
     result.events.push({ kind: 'conflictsDetected', count: detectedConflicts.length });
   }
 
-  await run.store.consolidation.recordSleep({
+  await run.store.hippoDb.consolidation.recordSleep({
     conflicts: detectedConflicts,
     at: now.toISOString(),
     decayed: result.decayed,
@@ -308,7 +313,7 @@ async function auditRescues(
   };
   try {
     // Row by row: one failed audit write must not silently drop every remaining row.
-    const auditFailures = await run.store.consolidation.auditEachRow(
+    const auditFailures = await run.store.hippoDb.consolidation.auditEachRow(
       rescuedEntries.map(rescueEvent),
     );
     if (auditFailures > 0) {

@@ -34,7 +34,7 @@ declare const query: string;
 declare const entries: Parameters<typeof hybridSearch>[1];
 declare const results: Parameters<typeof graphExpandRecall>[0];
 declare const provider: Source['provider'];
-declare const consolidation: SleepStore['consolidation'];
+declare const consolidation: SleepStore['hippoDb']['consolidation'];
 declare const req: Parameters<typeof captureSessionTexts>[1];
 declare const end: Omit<Parameters<typeof sessionEndHandoffForCaller>[1], 'sessionId'>;
 declare const base: HippoStore;
@@ -117,7 +117,8 @@ describe('UPGRADING-3.0 advice', () => {
 
   it("sleeps only on a store with hippo.db's local tier, where graphReads lives (SleepStore)", () => {
     typeOnly(() => {
-      const sleeper: SleepStore = { ...sqliteStore(hippoRoot), consolidation };
+      const store = sqliteStore(hippoRoot);
+      const sleeper: SleepStore = { ...store, hippoDb: { ...store.hippoDb, consolidation } };
       const noTier: Omit<SleepStore, 'hippoDb'> = sleeper;
       // @ts-expect-error the sleep groups without the local tier the graph rebuild reads
       const refused: SleepStore = noTier;

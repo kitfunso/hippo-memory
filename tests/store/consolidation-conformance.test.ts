@@ -6,7 +6,8 @@ import { DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { LocalGroups } from '../../src/base/ports/store.js';
 import type { SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
@@ -119,7 +120,7 @@ async function conforms(calls: readonly GroupCall<'consolidation', unknown>[]) {
 
 const id = (name: string): string => rows[name]!.id;
 const named = (...names: string[]): string[] => names.map(id);
-const read = (names: string[]) => (_g: StoreGroups['consolidation'], s: HippoStore) =>
+const read = (names: string[]) => (_g: LocalGroups['consolidation'], s: HippoStore) =>
   s.entriesByIds(named(...names), TENANT_A);
 
 function rebuilt(name: string, text: string): SummarySettle {
@@ -223,7 +224,7 @@ describe('Consolidation', () => {
       (g) => g.recordSleep({ conflicts: [conflict], at: AT, decayed: 1, merged: 0, removed: 1 }),
       (g) => g.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' }),
       (_g, s) => s.hippoDb.conflicts.list({ tenantId: TENANT_A, status: 'open', limit: 10 }),
-      (_g, s) => s.dormant.list(TENANT_A, null, {}),
+      (_g, s) => s.hippoDb.dormant.list(TENANT_A, null, {}),
       read(['kept', 'edited', 'gone', 'pinned', 'fading', 'twin1']),
     ]);
     expect(sqlite.outcomes.slice(0, 2)).toEqual([

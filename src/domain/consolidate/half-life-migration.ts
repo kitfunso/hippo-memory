@@ -30,7 +30,7 @@ export async function migrateDefaultHalfLife(
 ): Promise<HalfLifeMigrationResult> {
   const dryRun = opts.dryRun ?? false;
   const actor = opts.actor ?? 'system';
-  const start = await store.consolidation.begin(to, { dryRun, actor, traces: opts.traces });
+  const start = await store.hippoDb.consolidation.begin(to, { dryRun, actor, traces: opts.traces });
   const { from, outcome } = start;
   const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };
   return {

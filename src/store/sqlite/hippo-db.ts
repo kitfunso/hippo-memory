@@ -1,5 +1,11 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteDormant } from './dormant/dormant.js';
+import { DORMANT_EFFECTS } from '../../base/ports/store/dormant.js';
+import { sqliteLearning } from './learning/learning.js';
+import { LEARNING_EFFECTS } from '../../base/ports/store/learning.js';
+import { sqliteConsolidation } from './consolidation/consolidation.js';
+import { CONSOLIDATION_EFFECTS } from '../../base/ports/store/consolidation.js';
 import { sqliteSharing } from './sharing/sharing.js';
 import { sqliteFolderFiles } from './folder-files/folder-files.js';
 import { FOLDER_FILES_EFFECTS } from '../../base/ports/store/folder-files.js';
@@ -62,6 +68,9 @@ export function hippoDbRepos(handles: Handles) {
     ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     folderFiles: sqliteFolderFiles(handles),
     sharing: sqliteSharing(handles.on),
+    consolidation: sqliteConsolidation(handles),
+    learning: sqliteLearning(handles),
+    dormant: sqliteDormant(handles),
   };
 }
 
@@ -97,4 +106,7 @@ export const HIPPO_DB_EFFECTS = {
   ledger: LEDGER_EFFECTS,
   folderFiles: FOLDER_FILES_EFFECTS,
   sharing: SHARING_EFFECTS,
+  consolidation: CONSOLIDATION_EFFECTS,
+  learning: LEARNING_EFFECTS,
+  dormant: DORMANT_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

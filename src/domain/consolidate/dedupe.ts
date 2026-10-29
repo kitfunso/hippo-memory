@@ -155,7 +155,7 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
 
 /** The candidates' partitions in the order a read of every current row first meets them. */
 async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<Partitions> {
-  const { rows, firstSeen } = await store.consolidation.duplicateCandidates();
+  const { rows, firstSeen } = await store.hippoDb.consolidation.duplicateCandidates();
   const rank = new Map<string, number>();
   firstSeen.forEach((seen, i) => {
     const key = derivationPartitionKey(seen.tenantId, seen.scope, seen.originProject);

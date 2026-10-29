@@ -33,7 +33,7 @@ export async function applyRebuild(
   const content = patch.bumpRebuildCount
     ? { text: patch.content, rebuiltAt: patch.now.toISOString() }
     : undefined;
-  const settled = await store.consolidation.settleSummary({
+  const settled = await store.hippoDb.consolidation.settleSummary({
     id,
     tenantId,
     actor: patch.actor,
@@ -79,7 +79,7 @@ export async function settleFreshSummary(
   source: string,
 ): Promise<void> {
   const { id, tenantId } = summary;
-  await store.consolidation.settleSummary({
+  await store.hippoDb.consolidation.settleSummary({
     id,
     tenantId,
     actor,

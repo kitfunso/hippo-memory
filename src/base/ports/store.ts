@@ -85,6 +85,9 @@ const LOCAL_GROUP_NAMES = [
   'ledger',
   'folderFiles',
   'sharing',
+  'consolidation',
+  'learning',
+  'dormant',
 ] as const;
 
 export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];

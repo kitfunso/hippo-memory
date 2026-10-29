@@ -146,8 +146,8 @@ describe('dormant group', () => {
   it('lists, restores and forgets, and keeps another tenant out', async () => {
     const r = root();
     const row = seed(r);
-    const sync = sqliteStore(r).dormant;
-    const served = sqliteStore(r).dormant;
+    const sync = sqliteStore(r).hippoDb.dormant;
+    const served = sqliteStore(r).hippoDb.dormant;
     expect((await sync.list(T, null, {})).map((m) => m.id)).toEqual([row.id]);
     expect((await served.list(T, null, { id: row.id })).map((m) => m.id)).toEqual([row.id]);
     expect(await served.list('other', null, { id: row.id })).toEqual([]);
@@ -164,7 +164,7 @@ describe('dormant group', () => {
   it('forget deletes the row and answers false for a missing id', async () => {
     const r = root();
     const row = seed(r);
-    const served = sqliteStore(r).dormant;
+    const served = sqliteStore(r).hippoDb.dormant;
     expect(await served.forget(T, null, row.id, 'me')).toBe(true);
     expect(await served.forget(T, null, row.id, 'me')).toBe(false);
   });

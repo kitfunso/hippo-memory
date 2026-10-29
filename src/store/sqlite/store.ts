@@ -15,12 +15,9 @@ import { sqliteAgentImport } from './maintenance/agent-import.js';
 import { sqliteCaptures } from './capture/captures.js';
 import { sqliteCompactionHooks } from './capture/compaction-hooks.js';
 import { sqliteCards } from './records/cards.js';
-import { sqliteDormant } from './dormant/dormant.js';
 import { sqliteFailureLog } from './capture/failure-log.js';
 import { sqliteCompactions } from './capture/compactions.js';
 import { listSessionEvents } from './sessions/sessions.js';
-import { sqliteConsolidation } from './consolidation/consolidation.js';
-import { sqliteLearning } from './learning/learning.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
 import { sqliteEmbeddingIndex } from './vectors/embedding-index.js';
@@ -69,14 +66,11 @@ function sqliteLocalGroups(
 ): Omit<SleepGroups & CaptureGroups & MaintenanceGroups, LocalGroup> {
   const { on } = handles;
   return {
-    consolidation: sqliteConsolidation(handles),
-    learning: sqliteLearning(handles),
     captures: sqliteCaptures(handles),
     compactionHooks: sqliteCompactionHooks(handles),
     projectTags: sqliteProjectTags(handles),
     diagnostics: sqliteDiagnostics(on),
     agentImport: sqliteAgentImport(handles),
-    dormant: sqliteDormant(handles),
     compactions: sqliteCompactions(handles),
     failureLog: sqliteFailureLog(on),
   };

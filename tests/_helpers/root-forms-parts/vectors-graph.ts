@@ -81,7 +81,7 @@ export async function loadEntitiesByMemoryId(
 }
 
 export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
-  const { consolidation } = sqliteStore(hippoRoot);
+  const { consolidation } = sqliteStore(hippoRoot).hippoDb;
   const out: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
@@ -93,7 +93,7 @@ export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry
 }
 
 export async function loadAllDirtySummaries(hippoRoot: string, limit?: number): Promise<MemoryEntry[]> {
-  const dirty = await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  const dirty = await sqliteStore(hippoRoot).hippoDb.consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
   return dirty.summaries.map((s) => s.summary);
 }
 

@@ -99,28 +99,44 @@ const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
 export const LOCAL_GROUP_READS: readonly Read[] = [
   read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
-  read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
   read(
-    'consolidation.rejected',
-    (s) => s.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
+    'hippoDb.consolidation.entryIdsPage',
+    (s) => s.hippoDb.consolidation.entryIdsPage({ limit: 3 }),
+    /ids: \[ 'mem_/,
+  ),
+  read(
+    'hippoDb.consolidation.rejected',
+    (s) => s.hippoDb.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
     "reason: 'wrong'",
   ),
-  read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
-  read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
-  read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),
   read(
-    'consolidation.unprofiledTopicSummaries',
-    (s) => s.consolidation.unprofiledTopicSummaries({ limit: 10 }),
+    'hippoDb.consolidation.duplicateCandidates',
+    (s) => s.hippoDb.consolidation.duplicateCandidates(),
+    'mem_z_twin2',
+  ),
+  read(
+    'hippoDb.consolidation.dirtyGraphTenants',
+    (s) => s.hippoDb.consolidation.dirtyGraphTenants(),
+    /maxPendingId: [1-9]/,
+  ),
+  read('hippoDb.consolidation.dirtySummaries', (s) => s.hippoDb.consolidation.dirtySummaries(10), 'mem_x_child1'),
+  read(
+    'hippoDb.consolidation.unprofiledTopicSummaries',
+    (s) => s.hippoDb.consolidation.unprofiledTopicSummaries({ limit: 10 }),
     'mem_x_summary',
   ),
   read('diagnostics.health', (s) => s.diagnostics.health(CUTOFFS), /started: 2/),
   read('diagnostics.inventory', (s) => s.diagnostics.inventory(), /compactions: 2/),
   read(
-    'learning.entriesMentioning',
-    (s) => s.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
+    'hippoDb.learning.entriesMentioning',
+    (s) => s.hippoDb.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
     'mem_p_plain',
   ),
-  read('learning.readEntry', (s) => s.learning.readEntry(NOTE, TENANT), 'the rollout runbook lives in the team wiki'),
+  read(
+    'hippoDb.learning.readEntry',
+    (s) => s.hippoDb.learning.readEntry(NOTE, TENANT),
+    'the rollout runbook lives in the team wiki',
+  ),
   read(
     'projectTags.originTallies',
     (s) => s.projectTags.originTallies(TENANT, IMPORTED),
@@ -141,5 +157,9 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     `cwd: '${CWD}', origin: '${PROJECT}', transcript: '${TRANSCRIPT}'`,
   ),
   read('projectTags.repairedOnce', (s) => s.projectTags.repairedOnce(), /^true$/),
-  read('learning.confirmedOutcomeTimes', (s) => s.learning.confirmedOutcomeTimes(TENANT, EVER), `'${NOTE}' =>`),
+  read(
+    'hippoDb.learning.confirmedOutcomeTimes',
+    (s) => s.hippoDb.learning.confirmedOutcomeTimes(TENANT, EVER),
+    `'${NOTE}' =>`,
+  ),
 ];

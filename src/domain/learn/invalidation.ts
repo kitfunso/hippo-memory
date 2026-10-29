@@ -96,7 +96,7 @@ export async function invalidateMatching(
   // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's
   // id is invisible.
   if (options?.onlyId !== undefined) {
-    const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter(
+    const entries = [await store.hippoDb.learning.readEntry(options.onlyId, tenantId)].filter(
       (entry) => entry !== null,
     );
     const { result, weakened } = weakenMatches(entries, target, options);
@@ -108,7 +108,7 @@ export async function invalidateMatching(
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, {
+    const page = await store.hippoDb.learning.entriesMentioning(tokens, tag, tenantId, {
       limit: READ_PAGE_ROWS,
       after,
     });
