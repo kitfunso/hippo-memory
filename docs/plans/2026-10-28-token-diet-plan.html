@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Hippo Token Diet</title>
+<link rel="stylesheet" href="C:/Users/skf_s/.claude-alt/plugins/cache/claude-community/html-plan/1.0.0/skills/html-plan/runtime/htmlplan.css">
+<script src="C:/Users/skf_s/.claude-alt/plugins/cache/claude-community/html-plan/1.0.0/skills/html-plan/runtime/htmlplan.js" defer></script>
+<body>
+
+<header>
+  <h1>Cutting Injected Tokens in Hippo</h1>
+  <doc-changes new="3" changed="24"></doc-changes>
+  <details class="thread"><summary>Why · 3 requests</summary>
+    <doc-quote via="prompt" from="the user">well, we have to optimise hippo-memory until we get great results. /dev-framework-rl and improve hippo-memory so that it will help reduce token usage</doc-quote>
+    <doc-quote via="doc" from="Z0 round 2 report" at="2026-10-28">H4 FAIL: set N cost ratio 1.119 [1.065, 1.175]</doc-quote>
+    <doc-quote via="prompt" from="the user" at="2026-10-28">Which readers print another session's handoff as the pointer? → The hook, hippo context and MCP · Does the Codex block also drop the call? → Yes</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 ═════ -->
+<doc-claim>
+  <p>A reader sees one line about another session's state, not its text.</p>
+  <doc-mock frame="terminal" title="prompt hook · additionalContext" w="470" caption="In Z0 the full handoff was 2,407 of the 3,708 characters the hook sent."><template><span class="g">## Active Task Snapshot</span>
+
+- Session 3f2c9a1e saved a task snapshot at 2026-10-28
+  14:02 UTC. If this task continues it, run
+  `hippo session latest --id 3f2c9a1e`.
+
+<span class="g">## Session Handoff</span>
+
+- Session 3f2c9a1e left a handoff at 2026-10-28 14:02
+  UTC. If this task continues it, run
+  `hippo handoff latest --session 3f2c9a1e`.
+
+<span class="dim">## Project Memory</span>
+<span class="dim">- [pinned] run the linter before each commit …</span></template></doc-mock>
+
+  <doc-claim>
+    <p>The hook and <code>hippo context</code> ask for the pointer form.</p>
+    <doc-calls title="Pointer path" caption="JSON, HTTP, MCP and the remote hook route keep the full text.">
+<script type="text/plain">
+~ buildContextOpts(flags, input)               @ src/cli/context.ts:215   -- pointer for every text format; JSON stays full
+~ renderContextMarkdown(result)                @ src/cli/context.ts:273   -- markdown prints the section texts
+~ renderStaticBlock(view, items, cross)        @ src/api/prompt-hook.ts:169   -- hook, Copilot, VS Code: modes from the result
+~ promptHookContext(ctx, req, opts)            @ src/api/prompt-hook.ts:360   -- remote route; full unless opts.continuity
+~ TaskSections                                 @ src/api/context.ts:164   -- carries snapshotMode / handoffMode
+~ getContext(ctx, opts)                        @ src/api/context.ts:216   -- result gets the modes when 'pointer'
+~ loadTaskSections(ctx, opts, plan, left)      @ src/api/context.ts:405
++   **continuityModeFor**(opts, plan, sessionId)  @ src/api/context.ts:420
++   **snapshotSectionText**(snapshot, mode)    @ src/api/context-render.ts:15
++   **handoffSectionText**(handoff, mode)      @ src/api/context-render.ts:27
+</script>
+    </doc-calls>
+    <doc-claim at="src/api/context.ts:420">
+      <p><b>context.ts:420</b> · continuityModeFor()</p>
+      <doc-code title="context.ts · sketch" lang="ts" wrap>
+<script type="text/plain">
+// The caller's own state prints whole; a shared store's state follows its owner, whom a local command cannot reach.
+function continuityModeFor(
+  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined,
+): ContinuityMode {
+  if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
+  const own = !!sessionId && sessionId === opts.currentSessionId;
+  return own ? 'full' : 'pointer';
+}
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The budget pays for the pointers, and another session's trail drops first.</p>
+    <doc-code diff file="src/api/context.ts" start="420" lang="ts" wrap>
+<script type="text/plain">
+-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
+-  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
+-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
++  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id);
++  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId);
++  // Events are the raw snapshot's session's; the pointer's command prints them, so they never reach the purse.
++  const trailMode = continuityModeFor(opts, plan, raw.snapshot?.session_id);
++  const recentSessionEvents = trailMode === 'pointer'
++    ? [] : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
++  const shownSnapshot =
++    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode))) ? activeSnapshot : null;
++  const shownHandoff =
++    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
+</script>
+      <doc-pin line="424" tone="ok" title="Keyed on the raw snapshot">A scope-hidden own snapshot keeps its own trail. Another session's trail goes even when its snapshot is scope-hidden. obs.sections never counts it as dropped.</doc-pin>
+      <doc-pin line="427" tone="info" title="Priced as printed">A pointer costs approximately 40 tokens.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The own session, a shared store, JSON and the pointer commands keep the full text.</p>
+    <doc-code title="tests/continuity-pointer.test.ts · sketch; 3 cases from PR #893" lang="ts" wrap>
+<script type="text/plain">
+it("prints another session's handoff as a pointer: hook and context")
+it("keeps another session's handoff whole in MCP hippo_context")  // mcp-context-scope.test.ts
+it("prints the session's own handoff and snapshot in full")
+it("prints another session's snapshot as a pointer, no trail")  // obs dropped count 0
+it('keeps the own trail when the own snapshot is scope-hidden')
+it('prints the pointer when the caller session is unknown')      // wording names no "other"
+it('names no session for a snapshot with session_id null')
+it('prints both pointers when one session left both')
+it("charges the budget each pointer's size")                    // budget 150
+it('keeps the full text on a shared store')                     // beside context-task-state-owner.test.ts:84
+it('keeps the full text in JSON and in promptHookContext unless opted in')
+it('hides the digest of a pointed-at session')                  // digest content absent
+it('prints the full text from both pointer commands')           // session latest, handoff latest
+// Re-keyed: each negative also asserts the session id is absent; each positive asserts
+// the pointer or passes the own session id. context-continuity.test.ts:90-94, codex-hooks.test.ts:392-393,
+// prompt-hook-context parity, session-digest-worker 'handoff or digest', cli-context-output-golden + .snap.
+</script>
+    </doc-code>
+    <doc-ask id="reach">
+      <p>Which readers print another session's state as the pointer?</p>
+      <label><input type="radio" name="reach" value="hook"> The local hook only <small>CLI, MCP and session start keep the full text</small></label>
+      <label><input type="radio" name="reach" value="cli" checked> The hook and <code>hippo context</code> <small>changed from your pick: hippo_recall cannot reach every pointed row</small></label>
+      <label><input type="radio" name="reach" value="all"> The hook, <code>hippo context</code> and MCP <small>needs one continuity read shared with hippo_recall first</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Another session's task snapshot prints as one line too.</p>
+    <doc-code title="context-render.ts · sketch" lang="ts" wrap caption="The text names the session and never says another, so it stays true for an unknown caller.">
+<script type="text/plain">
+function snapshotPointerText(s: TaskSnapshot): string {
+  const at = s.updated_at.slice(0, 16).replace('T', ' ');
+  const cmd = s.session_id ? `hippo session latest --id ${s.session_id}` : 'hippo snapshot show';
+  const who = s.session_id ? `Session ${s.session_id} saved a task snapshot at ${at} UTC` :
+    `A task snapshot from ${at} UTC names no session`;
+  return ['## Active Task Snapshot\n', `- ${who}. If this task continues it, run \`${cmd}\`.`, ''].join('\n');
+}
+</script>
+    </doc-code>
+    <doc-ask id="snapshot">
+      <p>Does another session's task snapshot also shrink to a pointer?</p>
+      <label><input type="radio" name="snapshot" value="yes" checked> Yes <small>a parallel session's snapshot now prints whole in each new session</small></label>
+      <label><input type="radio" name="snapshot" value="no"> No, the handoff only <small>as PR #893; claim 1.4 goes</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The digest of a pointed-at session stays hidden.</p>
+    <doc-code diff file="src/api/context.ts" start="437" lang="ts" wrap>
+<script type="text/plain">
+-    // A printed handoff already carries the session's closing message, which its digest would print a second time.
++    // A shown handoff, whole or as a pointer, stands for the session's closing message; its command prints it.
+     if (
+       transcriptHandoffSession !== null &&
+</script>
+      <doc-pin line="437" tone="info" title="Same rule, new reason">The digest is the same other-session state that the pointer names.</doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 ═════ -->
+<doc-claim>
+  <p>Claude Code and Codex agents call <code>hippo context</code> only when no hippo block appeared this session.</p>
+  <doc-code diff file="src/hooks/hook-blocks.ts" start="68" lang="md" wrap caption="The Codex block (line 92) gets the same first paragraph; it keeps its other sections.">
+<script type="text/plain">
+ ## Project Memory (Hippo)
+
+-Pinned rules and recent writes auto-inject at every prompt via the installed
+-UserPromptSubmit hook; never re-run that part manually. At the START of a
+-task (not per prompt), additionally load task-specific context: git-aware
+-recall over the full store that per-prompt injection does not cover. Also
+-run it if the hook is not installed:
++The installed UserPromptSubmit hook injects pinned rules and the memories
++that match each prompt, so never load them yourself. If no hippo memory
++block has appeared in this session, run this at the start of a task:
+ ```bash
+ hippo context --auto --budget 1500
+ ```
+</script>
+    <doc-pin line="73" tone="ok" title="Per session, not per prompt">A skipped or empty turn later in the session does not trigger the call.</doc-pin>
+  </doc-code>
+  <doc-ask id="codex">
+    <p>Does the Codex block also drop the call?</p>
+    <label><input type="radio" name="codex" value="no"> No, Claude Code only <small>Z0 measured only Claude Code</small></label>
+    <label><input type="radio" name="codex" value="yes" checked> Yes <small>Codex installs the same prompt hook</small></label>
+  </doc-ask>
+
+  <doc-claim>
+    <p><code>hippo init</code> replaces both old blocks, because their hashes join the shipped list.</p>
+    <doc-code diff file="src/hooks/hook-blocks.ts" start="129" lang="ts" wrap caption="sha256 of the runtime HOOKS[k].content, as hippoBlock hashes it. The lean-block and codex-hooks tests assert hippoBlock(old fixture).owner for both. README.md 858-868 gets the new text.">
+<script type="text/plain">
+ const SHIPPED_HOOK_HASHES = new Map([
++  ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
++  ['f1e5815a4b7205c43e2db792215df1943e7853635a1e0f4561b150a41b756451', 'codex'],
+   ['c04e48f2896a4fee9ae98f8f832e2d26a3910269df3beb5bcd6baee3cd9db68e', 'claude-code'],
+</script>
+      <doc-pin line="130" tone="warn" title="The current blocks' sha256">Without them, init treats the old blocks as hand edits and keeps them.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Round 2 shows no lesson that only the context call gave.</p>
+    <doc-code title="z0-lesson-route.mjs · 213 A2 apply lessons, round 2" lang="text">
+<script type="text/plain">
+route                 lessons  first check passed
+hook + files              138                 135
+hook + CLI + files         61                  57
+files only                  3                   3
+CLI + files                 1                   1
+none                       10                   9
+CLI only                    0                   0
+</script>
+    </doc-code>
+    <doc-note tone="warn"><strong>Earlier decision</strong> The October cost plan kept this call: 2 of 26 round 1 lessons came only through it. Round 2 is 8 times larger and shows 0 of 213.</doc-note>
+    <doc-ask id="drop">
+      <p>Drop the per-task context call from the Claude Code block?</p>
+      <label><input type="radio" name="drop" value="yes" checked> Yes <small>round 2 found no lesson that needs it</small></label>
+      <label><input type="radio" name="drop" value="no"> No, keep the block <small>claims 2, 2.1 and 2.3 go</small></label>
+    </doc-ask>
+    <doc-note tone="info"><strong>Pilot holdout</strong> A holdout session gets no hook output, so its agent runs the call, as before. The hippo arm loses the call. The holdout rate is 0 by default (config.ts:245).</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The Claude Code plugin drops its session-start context call too.</p>
+    <doc-code diff file="extensions/claude-code-plugin/hooks/hooks.json" start="3" lang="json" wrap caption="SKILL.md (start section and frontmatter) and the plugin README:47 lose the call; both manifests go to 0.6.2; a test asserts the call is gone.">
+<script type="text/plain">
+     "SessionStart": [
+-      {
+-        "hooks": [
+-          {
+-            "type": "command",
+-            "command": "hippo context --auto --budget 1500 2>/dev/null || echo 'No hippo store found. Run: hippo init'"
+-          }
+-        ]
+-      },
+       {
+</script>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 3 ═════ -->
+<doc-claim>
+  <p>A <code>hippo</code> command prints no Node SQLite warning.</p>
+  <doc-code diff file="bin/hippo.js" start="1" lang="js" wrap>
+<script type="text/plain">
+ #!/usr/bin/env node
+-import { runCli } from '../dist/cli.js';
++// node:sqlite warns once per process, and an agent reads the lines on each hippo call.
++const emit = process.emitWarning;
++process.emitWarning = (w, ...rest) =>
++  rest[0] === 'ExperimentalWarning' && /SQLite/.test(String(w)) ? undefined : emit.call(process, w, ...rest);
++const { runCli } = await import('../dist/cli.js');
+
+ runCli();
+</script>
+    <doc-pin line="6" tone="info" title="Dynamic import">node:sqlite warns while the module graph links, so a static import is too late.</doc-pin>
+  </doc-code>
+  <doc-claim>
+    <p>A spawn test proves the filter on Node 22.16 and on Node 24.</p>
+    <doc-code title="tests/bin-sqlite-warning.test.ts · sketch" lang="ts" wrap caption="CI's node-floor job runs it on 22.16.0.">
+<script type="text/plain">
+// A store must exist, or the CLI exits before node:sqlite loads and the test proves nothing.
+// HOME and HIPPO_HOME point at temp dirs, as cli-help.test.ts:24,84 does.
+it('prints no SQLite warning from bin/hippo.js', () => {
+  const r = runBin(['remember', 'x', '--error'], { cwd: initedStore }); // no --no-warnings
+  expect(r.status).toBe(0);
+  expect(r.stderr).not.toMatch(/ExperimentalWarning: SQLite/);
+});
+it('control: node dist/cli.js prints it on this Node')         // skips if this Node no longer warns
+it('still prints a non-SQLite ExperimentalWarning raised after the filter') // --import probe
+</script>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 4 ═════ -->
+<doc-claim>
+  <p>A drive of the built hippo shows both pointers and the full text behind them.</p>
+  <doc-mock frame="terminal" title="verify drive · temp HIPPO_HOME" w="470"><template><span class="dim">$</span> hippo snapshot save --task billing --session A …
+<span class="dim">$</span> hippo session log --id A --content "ran the sweep"
+<span class="dim">$</span> hippo handoff create --summary … --session A
+<span class="dim">$</span> echo '{"session_id":"B",…}' | hippo context --pinned-only …
+<span class="g">✓</span> two pointer lines; no summary, no "ran the sweep"
+<span class="dim">$</span> hippo context --auto
+<span class="g">✓</span> the same two pointer lines
+<span class="dim">$</span> hippo session latest --id A
+<span class="g">✓</span> full snapshot and "ran the sweep"
+<span class="dim">$</span> hippo handoff latest --session A
+<span class="g">✓</span> full handoff
+<span class="dim">$</span> echo '{"session_id":"A",…}' | hippo context --pinned-only …
+<span class="g">✓</span> full snapshot and handoff
+<span class="dim">$</span> hippo remember "x" --error 2&gt;err; grep -c SQLite err
+<span class="g">0</span></template></doc-mock>
+</doc-claim>
+
+<!-- ═════ 5 ═════ -->
+<doc-claim>
+  <p>The offline estimate puts the cost ratio at 1.02 to 1.06, under 1.10.</p>
+  <doc-mock frame="terminal" title="z0-diet-estimate.mjs · set N, 281 A1/A2 pairs" w="470" caption="Cost = 4 input + 8 cache write + 0.2 cache read + 20 output, USD per MTok. No row counts an agent that follows a pointer; no Z0 task continues another session."><template>ratio of sums now 1.124 <span class="dim">(analyzer H4 1.119)</span>
+<span class="dim">rows below are scaled to the analyzer (x 1.119 / 1.124)</span>
+<span class="dim">handoff → one 170-char pointer; context call and result</span>
+<span class="dim">removed; its turn removed when it was the turn's only tool</span>
+chars/token 3    1.020
+chars/token 3.5  1.030   <span class="dim">handoff 1.8%, context call 6.1%</span>
+chars/token 4    1.038
+<b>no turn removed, 4 chars/token   1.064</b>   <span class="dim">conservative</span></template></doc-mock>
+  <doc-ask id="rerun">
+    <p>What follows the estimate?</p>
+    <label><input type="radio" name="rerun" value="ask" checked> Ask Keith for a paid A1/A2 rerun <small>only a rerun proves H4; pass line 1.10</small></label>
+    <label><input type="radio" name="rerun" value="none"> No rerun <small>ship on the estimate alone</small></label>
+  </doc-ask>
+</doc-claim>
+
+<!-- ═════ shared ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: one option, two cost arguments and three glossary terms.</p>
+  <doc-schema id="types" lang="ts" diff title="src/api/context-types.ts">
+<script type="text/plain">
++/** How another session's task snapshot and handoff print: whole, or as a continuity pointer. */
++export type ContinuityMode = 'full' | 'pointer';
+ export interface ContextOpts {
+   currentSessionId?: string | null;
++  /** Default 'full'; the caller's own session and a shared store still print whole. */
++  continuity?: ContinuityMode;
+ }
+ export interface PromptHookOpts {  // src/api/prompt-hook.ts, published by ./server
++  /** The remote route keeps the full text unless its caller opts in. */
++  continuity?: ContinuityMode;
+ }
+ export interface ContextCost {
+-  snapshot: (s: TaskSnapshot) => number;
+-  handoff: (h: SessionHandoff) => number;
++  snapshot: (s: TaskSnapshot, mode: ContinuityMode) => number;
++  handoff: (h: SessionHandoff, mode: ContinuityMode) => number;
+ }
+ export interface ContextResult {
+   sessionHandoff?: SessionHandoff | null;
++  /** Set only when a section prints as the pointer. */
++  snapshotMode?: ContinuityMode;
++  handoffMode?: ContinuityMode;
+ }
+</script>
+  </doc-schema>
+  <doc-note tone="info"><strong>Implementers</strong> context-render.ts contextCost prices the mode. mcp/format.ts:127 takes the mode and prices the full piece whatever mode it gets. A changelog.d fragment names both new options. CONTEXT.md gets Task snapshot, Session handoff and Continuity pointer.</doc-note>
+</doc-claim>
+
+<!-- ═════ scope ═════ -->
+<doc-claim aux="scope">
+  <p>Not changing: send-once, the schema, recall and the other blocks.</p>
+  <ul>
+    <li>PR #893's send-once ledger and its v57 migration. They help long sessions, not a first session.</li>
+    <li>The handoff's <code>Next action</code>, which repeats the last reply. Only full prints show it after this change.</li>
+    <li>JSON output, the HTTP /v1/context route and the remote hook route keep the full text. Session-start replies (Copilot, VS Code) print pointers, as every text format does. The remote route's pointer would name a command that cannot reach its store.</li>
+    <li>MCP <code>hippo_context</code> keeps the full text. Its follow-up, <code>hippo_recall</code>, reads continuity only for the active snapshot's session (store.ts:423), not the unfinished-handoff fallback (context.ts:394). One shared read is a separate change.</li>
+    <li>A hooked session no longer runs the per-task <code>hippo context</code>, so its rows get no retrieval strength and <code>hippo outcome</code> scores an older recall (context.ts:210, :571). Follow-up: measure decay, or let the hook record its prompt-recall rows.</li>
+    <li><code>hippo session latest --id</code> prints the store's one active snapshot, and its trail with no scope filter, as any explicit read does. A save after the pointer can change it. The digest echo filter (session-digest.ts:567) stays: the handoff stays in the store.</li>
+    <li><code>node dist/cli.js</code> still warns, but only into server logs. Recall ranking and budgets stay.</li>
+    <li>The AGENTS.md blocks for Cursor, OpenClaw, OpenCode and Pi, and hand-edited blocks such as Keith's own CLAUDE.md. The OpenClaw and Pi adapters call <code>hippo context</code> markdown, so they get pointers.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body></html>

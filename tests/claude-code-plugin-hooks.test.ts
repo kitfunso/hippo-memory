@@ -20,6 +20,12 @@ const commands = (event: string, matcher?: string): string[] =>
   (manifest.hooks[event] ?? []).filter((g) => matcher === undefined || g.matcher === matcher).flatMap((g) => g.hooks.map((h) => h.command));
 
 describe('Claude Code plugin hook manifest', () => {
+  it('delivers memories through the per-prompt hook alone, with no context call at session start', () => {
+    expect(commands('SessionStart').filter((c) => c.startsWith('hippo context'))).toEqual([]);
+    expect(commands('SessionStart').some((c) => c.startsWith('hippo last-sleep'))).toBe(true);
+    expect(commands('UserPromptSubmit').some((c) => c.startsWith('hippo context --pinned-only --include-recent 5 --format additional-context'))).toBe(true);
+  });
+
   it('saves a checkpoint before compaction with no matcher, so manual and automatic compaction both fire', () => {
     const groups = manifest.hooks.PreCompact ?? [];
     expect(groups.some((g) => g.matcher === undefined && g.hooks.some((h) => h.command.startsWith('hippo pre-compact')))).toBe(true);

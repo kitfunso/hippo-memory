@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { hippoBlock } from '../src/hooks/hook-blocks.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
@@ -70,8 +71,8 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The Claude Code block as it stands: Claude Code's own auto memory saves what it learns, so it has no plain remember line.
-const CLAUDE_CURRENT = `
+// The Claude Code block hippo 2.1.0 wrote, which told the agent to load context at the start of every task.
+const CLAUDE_BEFORE_ONE_CHANNEL = `
 ## Project Memory (Hippo)
 
 Pinned rules and recent writes auto-inject at every prompt via the installed
@@ -79,6 +80,57 @@ UserPromptSubmit hook; never re-run that part manually. At the START of a
 task (not per prompt), additionally load task-specific context: git-aware
 recall over the full store that per-prompt injection does not cover. Also
 run it if the hook is not installed:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+
+When you find out why something failed, record it right then, while you
+work, never as a closing step:
+\`\`\`bash
+hippo remember "<what went wrong and why>" --error
+\`\`\`
+
+The installed hooks store failed tool calls and capture the session when it
+ends, so there is nothing to run before you finish.
+`.trim();
+
+// The AGENTS.md block hippo 2.1.0 wrote for Codex, which told the agent to load context at the start of every task.
+const CODEX_BEFORE_ONE_CHANNEL = `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
+When Hippo's Codex wrapper is installed, session-end capture runs automatically.
+If the wrapper is not installed, capture a brief summary manually:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim();
+
+// The Claude Code block as it stands: Claude Code's own auto memory saves what it learns, so it has no plain remember line.
+const CLAUDE_CURRENT = `
+## Project Memory (Hippo)
+
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
@@ -241,8 +293,12 @@ describe('the instruction block', () => {
     expect(claude).not.toContain(REMEMBER_LINE);
     expect(claude).not.toContain('hippo outcome');
     expect(claude).not.toContain('hippo capture');
+    expect(claude).toContain('If no hippo memory\nblock has appeared in this session, run this at the start of a task:');
+    expect(claude).not.toContain('additionally load');
     const codex = inner(read('AGENTS.md'));
     expect(codex).toContain('hippo context --auto --budget 1500');
+    expect(codex).toContain("When Hippo's prompt hook is installed, it injects pinned rules and the");
+    expect(codex).not.toContain('At the start of every task, run:');
     expect(codex).not.toContain('hippo outcome');
     expect(codex).toContain('hippo capture --stdin');
     expect(codex).toContain(REMEMBER_LINE);
@@ -329,6 +385,31 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(inner(after)).not.toContain('<lesson>');
     const out = init();
     expect(read('AGENTS.md')).toBe(after);
+    expect(out).not.toMatch(/Refreshed|Left the edited/);
+  });
+
+  it.each([
+    ['claude-code', 'CLAUDE.md', '# Rules\n', CLAUDE_BEFORE_ONE_CHANNEL],
+    ['codex', 'AGENTS.md', '# Agents\n', CODEX_BEFORE_ONE_CHANNEL],
+  ])('refreshes the %s block that told the agent to load context every task to the one-channel block', (agent, file, empty, previous) => {
+    expect(hippoBlock(`${START}\n${previous}\n${END}`)?.owner).toBe(agent);
+    const before = `${empty}\nKeep this line.\n\n${START}\n${previous}\n${END}\n\nAnd this one.\n`;
+    write(file, before);
+    expect(init()).toContain(`Refreshed the ${agent} hippo block in ${file}`);
+
+    const fresh = path.join(home, 'fresh');
+    fs.mkdirSync(fresh);
+    fs.writeFileSync(path.join(fresh, file), empty);
+    init(fresh);
+
+    const after = read(file);
+    expect(outside(after)).toEqual(outside(before));
+    expect(inner(after)).toBe(inner(read(file, fresh)));
+    expect(inner(after)).not.toBe(previous);
+    expect(inner(after)).toContain('hippo context --auto --budget 1500');
+    expect(inner(after)).toContain('run this at the start of a task');
+    const out = init();
+    expect(read(file)).toBe(after);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 

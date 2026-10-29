@@ -1,5 +1,7 @@
 // Pins `hippo context` stdout, stderr and exit code across its three formats and the per-prompt hook path,
 // in process, so a split of renderContext that changes a byte fails here. Ids and timestamps are masked.
+// The seeded snapshot belongs to sess-golden: every text step for another or an unknown session prints it as a
+// pointer, the json steps and the sess-golden step print it whole.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,6 +61,7 @@ describe('hippo context output (in process)', () => {
       transcript.push(`$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`);
     };
     const hook = JSON.stringify({ session_id: 'sess-hook', prompt: 'how does the deploy pipeline roll out' });
+    const ownHook = JSON.stringify({ session_id: 'sess-golden', prompt: 'how does the deploy pipeline roll out' });
 
     await step('markdown', ['deploy'], {});
     await step('markdown --framing assert', ['deploy'], { framing: 'assert', limit: '1' });
@@ -69,6 +72,7 @@ describe('hippo context output (in process)', () => {
     await step('pinned-only hook', [], { 'pinned-only': true, format: 'additional-context' }, hook);
     await step('pinned-only hook (unchanged)', [], { 'pinned-only': true, format: 'additional-context' }, hook);
     await step('pinned-only markdown', [], { 'pinned-only': true }, '{"session_id":"sess-md"}');
+    await step('pinned-only hook (own session)', [], { 'pinned-only': true, format: 'additional-context' }, ownHook);
     await step('malformed stdin', ['deploy'], { format: 'json' }, 'not json');
 
     expect(transcript.join('\n')).toMatchSnapshot();

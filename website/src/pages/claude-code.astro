@@ -46,9 +46,10 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     <Section title="Set it up in two commands">
       <Cmd lines={[site.installCmd, 'hippo init', '# optional: register every git repo under ~ at once', site.initCmd]} />
       <p>
-        If the project has a <code>CLAUDE.md</code>, <code>hippo init</code> adds a short block telling Claude to run
-        <code>hippo context --auto</code> when a session starts, and adds the hooks below to Claude Code's settings. It
-        also installs one daily run at 6:15am that learns from the day's commits in every registered project.
+        If the project has a <code>CLAUDE.md</code>, <code>hippo init</code> adds a short block saying the prompt hook
+        injects pinned rules and matching memories. The block asks Claude to run <code>hippo context --auto</code> at
+        the start of a task only if no hippo memory block has appeared. Init also adds the hooks below to Claude Code's
+        settings and installs one daily run at 6:15am that learns from the day's commits in every registered project.
         <code>hippo init --no-hooks --no-schedule</code> skips both, and <code>hippo doctor</code> checks the install.
       </p>
     </Section>

@@ -1,7 +1,7 @@
 {
   "name": "hippo-memory",
   "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "author": {
     "name": "Keith So",
     "url": "https://github.com/kitfunso/hippo-memory"

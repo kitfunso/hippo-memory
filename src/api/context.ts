@@ -11,6 +11,7 @@ import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } 
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
+import { isPointerSafeId } from '../util/session-id.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
@@ -40,7 +41,7 @@ import {
   type ContextPools,
   type ContextSource,
 } from './context-select.js';
-import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import type { ContextOpts, ContextResult, ContextResultEntry, ContinuityMode } from './context-types.js';
 import { andThen, onStore } from './on-store.js';
 import { strengthenOf } from './recall-record.js';
 import { type Context, ownerOrSubject } from './types.js';
@@ -143,7 +144,9 @@ async function loadAmbientEntries(source: ContextSource, tenantId: string, optio
 interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
+  snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
+  handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
   left: number;
 }
@@ -191,14 +194,7 @@ export async function getContext(
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, opts, plan, items, sections.activeSnapshot);
 
-  return {
-    entries: recorded.items,
-    tokens,
-    activeSnapshot: sections.shownSnapshot ?? undefined,
-    sessionHandoff: sections.shownHandoff ?? undefined,
-    recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
-    ambientState: recorded.ambientState,
-  };
+  return contextResult(recorded, tokens, sections);
 }
 
 const isolationWarned = new Set<string>();
@@ -345,21 +341,55 @@ async function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPl
   // The same envelope rule ambientAdmitEntry applies to memory rows.
   const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
   const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
-  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+  const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id, 'pointer');
+  const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
+  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode))) ? activeSnapshot : null;
+  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
+  // The pointer's command prints the snapshot session's events, so they drop only when that pointer is shown.
+  const recentSessionEvents = shownSnapshot !== null && snapshotMode === 'pointer'
+    ? []
+    : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
     Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
     Number(activeSnapshot !== shownSnapshot) + Number(sessionHandoff !== shownHandoff) + Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left };
+  return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left };
+}
+
+// The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.
+function continuityModeFor(
+  opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined, noIdMode: ContinuityMode,
+): ContinuityMode {
+  if (opts.continuity !== 'pointer' || plan.sharedStore) return 'full';
+  if (!sessionId) return noIdMode;
+  return sessionId === opts.currentSessionId || !isPointerSafeId(sessionId) ? 'full' : 'pointer';
+}
+
+// The mode is left out of a full print, so every reader's result reads as before.
+function pointerModes(s: TaskSections): Pick<ContextResult, 'snapshotMode' | 'handoffMode'> {
+  const modes: Pick<ContextResult, 'snapshotMode' | 'handoffMode'> = {};
+  if (s.shownSnapshot && s.snapshotMode === 'pointer') modes.snapshotMode = 'pointer';
+  if (s.shownHandoff && s.handoffMode === 'pointer') modes.handoffMode = 'pointer';
+  return modes;
+}
+
+function contextResult(recorded: RecordedRetrieval, tokens: number, s: TaskSections): ContextResult {
+  return {
+    entries: recorded.items,
+    tokens,
+    activeSnapshot: s.shownSnapshot ?? undefined,
+    sessionHandoff: s.shownHandoff ?? undefined,
+    ...pointerModes(s),
+    recentEvents: s.shownEvents.length > 0 ? s.shownEvents : undefined,
+    ambientState: recorded.ambientState,
+  };
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    // A printed handoff already carries the session's closing message, which its digest would print a second time.
+    // A shown handoff, whole or as a pointer, stands for the session's closing message; its command prints it.
     if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) return false;
     return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope, plan.ownScope);
   };
