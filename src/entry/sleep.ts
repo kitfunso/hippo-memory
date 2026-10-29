@@ -25,6 +25,7 @@ export type { RescueRank } from '../domain/consolidate/events.js';
 // Named in the signatures of sleep and consolidate, so a caller needs them to type its own
 // variable.
 export type { SleepContext, SleepStore };
+export type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
 export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {

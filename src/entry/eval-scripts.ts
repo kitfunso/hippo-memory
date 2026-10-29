@@ -106,3 +106,4 @@ export const ingestEvent = connector(ingestGithubEvent);
 export const ingestMessage = connector(ingestSlackMessage);
 export { adminActor, goalPush, outcome } from '../api/index.js';
 export type { EntryContext as Context } from '../api/index.js';
+export type { DetachedWork } from '../domain/search/detached-work.js';
