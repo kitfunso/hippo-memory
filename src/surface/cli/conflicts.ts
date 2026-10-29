@@ -15,7 +15,7 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { printJsonList } from './json-list.js';
 import { fail } from './exit.js';
-import type { CliCommand } from './api-context.js';
+import type { CliScope } from './api-context.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 
@@ -75,10 +75,8 @@ function printConflictLines(conflicts: api.ConflictPage['conflicts']): void {
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(
-  cli: CliCommand,
-  hippoRoot: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   conflictId: number,
-  tenantId: string,
 ): Promise<void> {
   const ctx = cli.apiContext(hippoRoot, tenantId);
   const conflict = await api.conflictGet(ctx, conflictId);
@@ -107,13 +105,8 @@ async function showConflictForResolve(
   );
 }
 
-export async function handleResolve({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleResolve(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
 
   // Accept "42" or "conflict_42"
@@ -125,7 +118,7 @@ export async function handleResolve({
 
   const keepId = stringFlagOrExit(flags, 'keep') ?? '';
   if (!keepId) {
-    await showConflictForResolve(cli, hippoRoot, conflictId, tenantId);
+    await showConflictForResolve(cmd, conflictId);
     return;
   }
 

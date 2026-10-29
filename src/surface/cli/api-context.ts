@@ -112,6 +112,13 @@ export interface CliCommand {
   stdioHost(): McpHost<CliStore>;
 }
 
+/** What a CLI helper takes of its command: the stores, the folder it works on and the tenant. */
+export interface CliScope {
+  readonly cli: CliCommand;
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+}
+
 /** What a command's stores open on: its runtime, and inside a request that request's session. */
 interface Scope {
   readonly runtime: StoreRuntime | undefined;

@@ -132,7 +132,7 @@ async function contextGate({
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no
   // budget or content branch.
   if (
-    await inPilotHoldout(cli, hippoRoot, resolvedTenant, currentSessionId, {
+    await inPilotHoldout({ cli, hippoRoot, tenantId: resolvedTenant }, currentSessionId, {
       write: payloadSessionId !== undefined,
     })
   ) {

@@ -34,24 +34,17 @@ import {
 } from '../hook-runtime.js';
 import type { CliCommand } from '../api-context.js';
 
-export async function handleSessionEndWorker({
-  cli,
-  hippoRoot,
-  tenantId,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleSessionEndWorker(cmd: CommandContext): Promise<void> {
+  const { flags } = cmd;
   await runSessionWorker(
     stringFlag(flags, 'session-id') ?? null,
     boolFlag(flags, 'turn') ? 'turn' : 'full',
-    (mode) => sessionEndWork(cli, hippoRoot, tenantId, flags, mode),
+    (mode) => sessionEndWork(cmd, mode),
   );
 }
 
 async function sessionEndWork(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   mode: WorkerMode,
 ): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
@@ -89,7 +82,7 @@ function runSessionEndWork({
     transcriptPath,
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
     held,
-    sleep: () => sleepFolderStore(cli, hippoRoot, tenantId, flags, logFile),
+    sleep: () => sleepFolderStore({ cli, hippoRoot, tenantId, args: [], flags }, logFile),
     importAgentNotes: () => logSessionEndImport(cli, logFile, tenantId, transcriptPath),
     readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
     cursor: {
@@ -119,15 +112,9 @@ function runSessionEndWork({
 
 /** Sleeps the folder's own store; a failure goes to the session log, and capture runs
  * regardless. */
-async function sleepFolderStore(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-  closeLogFile: string | null,
-): Promise<void> {
+async function sleepFolderStore(cmd: CommandContext, closeLogFile: string | null): Promise<void> {
   try {
-    await (await import('../sleep.js')).sleepStore({ cli, hippoRoot, tenantId, args: [], flags });
+    await (await import('../sleep.js')).sleepStore(cmd);
   } catch (err) {
     // sleepStore writes its own failure line only once its log tee is open.
     reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);

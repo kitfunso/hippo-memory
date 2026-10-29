@@ -17,7 +17,7 @@ import { normalizeHookPayload, readStdinBounded, type BoundedStdin } from '../st
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 import { handleSessionEndWorker } from './session-end-worker.js';
-import type { CliCommand } from '../api-context.js';
+import type { CliCommand, CliScope } from '../api-context.js';
 
 /** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would
  * need escaping for each shell. Copilot's log goes where its hook table used to point,
@@ -55,7 +55,7 @@ export async function handleSessionEnd({
   // boundaries.
   const rec =
     !turn && input !== null && !input.manual
-      ? await startSessionEndRecorder(cli, root, tenantId, stdinText, runtime)
+      ? await startSessionEndRecorder({ cli, hippoRoot: root, tenantId }, stdinText, runtime)
       : null;
   const sessionId = input?.sessionId ?? null;
   const transcriptPath = workerTranscriptPath(input, runtime);
@@ -105,21 +105,19 @@ async function runSessionEndWorker(
         flags: inlineWorkerFlags(flags, worker),
       });
     } finally {
-      await flushOnHook(cli, rec, root, tenantId);
+      await flushOnHook({ cli, hippoRoot: root, tenantId }, rec);
     }
     return;
   }
   // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
-  await flushOnHook(cli, rec, root, tenantId);
+  await flushOnHook({ cli, hippoRoot: root, tenantId }, rec);
 }
 
 /** Flushes on the hook's own request, started after the spawn, so its short lock wait bounds the
  * row's write. */
 async function flushOnHook(
-  cli: CliCommand,
+  { cli, hippoRoot: root, tenantId }: CliScope,
   rec: DeliveryRecorder | null,
-  root: string,
-  tenantId: string,
 ): Promise<void> {
   await cli.hookRequest((hook) =>
     flushDeliveryRecorder(rec, hook.apiContext(hookStoreRoot(root), tenantId)),
@@ -127,9 +125,7 @@ async function flushOnHook(
 }
 
 async function startSessionEndRecorder(
-  cli: CliCommand,
-  root: string,
-  tenantId: string,
+  { cli, hippoRoot: root, tenantId }: CliScope,
   stdinText: string | undefined,
   runtime: HookRuntime,
 ): Promise<DeliveryRecorder | null> {

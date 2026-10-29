@@ -7,7 +7,7 @@ import { readSessionScan, recordSessionDigest } from '../../capture/session-dige
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import type { LineLog } from '../../../base/util/log.js';
 import { isInitialized, resolveProjectIdentity } from '../../../host/project-identity.js';
-import { cliConfig, type CliCommand } from '../api-context.js';
+import { cliConfig, type CliCommand, type CliScope } from '../api-context.js';
 import { type CliFlags, type CommandContext, parseCountFlag, stringFlag } from '../flag-values.js';
 import {
   appendSessionEndCloseLog,
@@ -17,12 +17,8 @@ import {
   reportSessionEndFailure,
 } from '../hook-runtime.js';
 
-export async function handleCodexSessionEndWorker({
-  cli,
-  hippoRoot,
-  tenantId,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleCodexSessionEndWorker(cmd: CommandContext): Promise<void> {
+  const { cli, hippoRoot, tenantId, flags } = cmd;
   const logFile = stringFlag(flags, 'log-file') ?? null;
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
@@ -33,14 +29,12 @@ export async function handleCodexSessionEndWorker({
     return;
   }
 
-  await sleepCodexProjectStore(cli, hippoRoot, tenantId, logFile);
+  await sleepCodexProjectStore(cmd, logFile);
   await captureCodexTranscript({ cli, hippoRoot, tenantId, store, flags, logFile });
 }
 
 async function sleepCodexProjectStore(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   logFile: string | null,
 ): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its

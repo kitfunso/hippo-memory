@@ -9,17 +9,10 @@ import { memoryGet, memoryList } from '../../api/memories/memories.js';
 import { pickWrites } from './memory-writes.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
-import {
-  type CliFlags,
-  type CommandContext,
-  boolFlag,
-  numberFlag,
-  stringFlagOrExit,
-} from './flag-values.js';
+import { type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import type { CliCommand } from './api-context.js';
 
 export async function handleSync({
   hippoRoot,
@@ -46,31 +39,22 @@ export async function handleSync({
   console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
-export async function handlePromote({
-  hippoRoot,
-  tenantId,
-  args,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handlePromote(cmd: CommandContext): Promise<void> {
+  const { args } = cmd;
   const id = args[0];
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  const { globalId, globalStore } = await (await pickWrites(cli, hippoRoot, tenantId)).promote(id);
+  const { globalId, globalStore } = await (await pickWrites(cmd)).promote(id);
   console.log(`Promoted ${id} to global store as ${globalId}`);
   if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }
 
-export async function handleShare({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleShare(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const shareId = args[0];
   if (shareId === '--auto' || boolFlag(flags, 'auto')) {
-    await shareAuto(cli, hippoRoot, tenantId, flags);
+    await shareAuto(cmd);
   } else if (shareId) {
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
@@ -95,12 +79,7 @@ export async function handleShare({
 }
 
 /** `hippo share --auto`: shares every memory at or above the transfer threshold. */
-async function shareAuto(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function shareAuto({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
   const dryRun = boolFlag(flags, 'dry-run');

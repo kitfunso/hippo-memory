@@ -34,12 +34,12 @@ function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
 
-async function createApiKey(
-  cli: CliCommand,
-  hippoRoot: string,
-  defaultTenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function createApiKey({
+  cli,
+  hippoRoot,
+  tenantId: defaultTenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
@@ -112,12 +112,7 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-async function listApiKeys(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function listApiKeys({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
@@ -220,13 +215,8 @@ async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
   );
 }
 
-export async function handleAuth({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleAuth(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const sub = args[0];
   if (!sub) {
     fail('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
@@ -234,10 +224,10 @@ export async function handleAuth({
   const subArgs = args.slice(1);
   switch (sub) {
     case 'create':
-      await createApiKey(cli, hippoRoot, tenantId, flags);
+      await createApiKey(cmd);
       return;
     case 'list':
-      await listApiKeys(cli, hippoRoot, tenantId, flags);
+      await listApiKeys(cmd);
       return;
     case 'revoke': {
       const keyId = subArgs[0];

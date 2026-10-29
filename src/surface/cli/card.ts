@@ -20,7 +20,7 @@ import {
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { CliExit, fail } from './exit.js';
-import type { CliCommand } from './api-context.js';
+import type { CliCommand, CliScope } from './api-context.js';
 
 // Each subcommand's usage line, written once so the repeated checks cannot drift.
 const CARD_USAGE = {
@@ -136,23 +136,12 @@ const CARD_SUBCOMMAND_FLAGS = {
   comment: ['body', 'author'],
 } satisfies Record<CardSubcommand, string[]>;
 
-type CardHandler = (
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-) => Promise<void>;
+type CardHandler = (cmd: CommandContext) => Promise<void>;
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to
  * its handler. */
-export function handleCard({
-  cli,
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export function handleCard(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, args, flags } = cmd;
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
 
@@ -172,16 +161,10 @@ export function handleCard({
       fail(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
     }
   }
-  return CARD_HANDLERS[known](cli, hippoRoot, tenantId, args, flags);
+  return CARD_HANDLERS[known](cmd);
 }
 
-async function cardCreate(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  _args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardCreate({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const title = stringFlagOrExit(flags, 'title') ?? '';
   if (!title) {
     throw usageError('create');
@@ -216,13 +199,7 @@ async function cardCreate(
   console.log(`Created card ${card.id} (status: ${card.status})`);
 }
 
-async function cardShow(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardShow({ cli, hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('show');
@@ -241,9 +218,7 @@ async function cardShow(
 /** Every page of the tenant's cards in list order, the largest page at a time, so the list
  * prints as it reads. */
 async function* cardPages(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   status?: CardStatus,
 ): AsyncGenerator<Card[]> {
   const read = (after?: KeysetPosition) =>
@@ -251,18 +226,13 @@ async function* cardPages(
   for await (const page of keysetPages(read)) yield page.cards;
 }
 
-async function cardList(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  _args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardList(cmd: CommandContext): Promise<void> {
+  const { flags } = cmd;
   const status = stringFlagOrExit(flags, 'status');
   if (status !== undefined && !isCardStatus(status)) {
     fail(`Invalid status: "${status}".`);
   }
-  const pages = cardPages(cli, hippoRoot, tenantId, status);
+  const pages = cardPages(cmd, status);
   if (boolFlag(flags, 'json')) {
     await printJsonList('cards', pages);
     return;
@@ -278,13 +248,7 @@ async function cardList(
   if (none) console.log('No cards found.');
 }
 
-async function cardClaim(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardClaim({ cli, hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const id = args[1];
   const runtime = stringFlagOrExit(flags, 'runtime') ?? '';
   if (!id || !runtime) {
@@ -305,13 +269,13 @@ async function cardClaim(
   );
 }
 
-async function cardHeartbeat(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardHeartbeat({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const id = args[1];
   const runId = cardRunFlag(flags);
   if (!id || runId === undefined) {
@@ -331,13 +295,7 @@ async function cardHeartbeat(
   console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
 }
 
-async function cardBlock(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardBlock({ cli, hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const id = args[1];
   const reason = stringFlagOrExit(flags, 'reason') ?? '';
   if (!id || !reason) {
@@ -358,13 +316,13 @@ async function cardBlock(
   console.log(`Blocked card ${card.id}`);
 }
 
-async function cardReview(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardReview({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('review');
@@ -384,13 +342,13 @@ async function cardReview(
   console.log(`Card ${card.id} moved to review`);
 }
 
-async function cardComplete(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardComplete({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const id = args[1];
   const outcomeRaw = stringFlag(flags, 'outcome');
   if (!id || !isHandoffOutcome(outcomeRaw)) {
@@ -414,12 +372,7 @@ async function cardComplete(
   }
 }
 
-async function cardReclaim(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-): Promise<void> {
+async function cardReclaim({ cli, hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   if (args.length > 1) {
     throw usageError('reclaim');
   }
@@ -433,13 +386,13 @@ async function cardReclaim(
   }
 }
 
-async function cardComment(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function cardComment({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('comment');

@@ -13,7 +13,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
 import * as client from './client.js';
-import { type CliContext, type CliCommand } from './api-context.js';
+import { type CliContext, type CliScope } from './api-context.js';
 import { fail } from './exit.js';
 import { requireInit } from './shared.js';
 
@@ -110,7 +110,7 @@ function promoteRefusal(reason: string): string {
 }
 
 /** The writes on the store at `root`, which must exist by the time one runs. */
-export function localWrites(cli: CliCommand, root: string, tenantId: string): MemoryWrites {
+export function localWrites({ cli, hippoRoot: root, tenantId }: CliScope): MemoryWrites {
   const context = (): CliContext => {
     requireInit(root);
     return cli.apiContext(root, tenantId);
@@ -179,12 +179,8 @@ function failIfServerRequired(reason: string): void {
 
 /** The writes for this command: to the `hippo serve` that answers for `hippoRoot`, else on its
  * store. */
-export async function pickWrites(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-): Promise<MemoryWrites> {
-  const local = localWrites(cli, hippoRoot, tenantId);
+export async function pickWrites({ cli, hippoRoot, tenantId }: CliScope): Promise<MemoryWrites> {
+  const local = localWrites({ cli, hippoRoot, tenantId });
   const server = await detectServer(hippoRoot);
   if (server) return serverWrites(hippoRoot, server, local);
   failIfServerRequired('no running server was detected for this hippoRoot');

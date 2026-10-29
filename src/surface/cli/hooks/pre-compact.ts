@@ -33,7 +33,7 @@ export async function handlePreCompact({
       eventType: 'pre-compact',
       envSessionId: hostSessionId(),
     });
-    await resetHookInjection(hook, root, tenantId, stdinText, null);
+    await resetHookInjection({ cli: hook, hippoRoot: root, tenantId }, stdinText, null);
     // Started at the boundary, so the row lands then; awaited after, as the boundary callback
     // cannot wait.
     let flushed: Promise<void> | undefined;

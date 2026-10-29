@@ -16,7 +16,13 @@ import {
 import { importMarkdownInto } from '../importers/markdown.js';
 import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
-import { cliInitGlobal, cliInfra, type CliContext, type CliCommand } from './api-context.js';
+import {
+  cliInitGlobal,
+  cliInfra,
+  type CliContext,
+  type CliCommand,
+  type CliScope,
+} from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requireInit } from './shared.js';
@@ -68,13 +74,8 @@ function warnRedacted(count: number | undefined): void {
   }
 }
 
-export async function handleImport({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleImport(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags = stringListFlag(flags, 'tag') ?? [];
@@ -82,7 +83,7 @@ export async function handleImport({
   const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
   if (boolFlag(flags, 'agents')) {
-    return await importAgentMemories(cli, hippoRoot, tenantId, { useGlobal, dryRun });
+    return await importAgentMemories(cmd, { useGlobal, dryRun });
   }
 
   if (useGlobal) {
@@ -274,9 +275,7 @@ function printFileImportSummary(
 }
 
 async function importAgentMemories(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
   const opts = cli.syncOptions(tenantId, currentMachine(), { dryRun });

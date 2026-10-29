@@ -9,13 +9,7 @@ import {
 import { sessionEventJson, snapshotJson } from '../../api/continuity/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents } from './print.js';
-import {
-  type CliFlags,
-  boolFlag,
-  numberFlag,
-  stringFlagOrExit,
-  type CommandContext,
-} from './flag-values.js';
+import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { fail } from './exit.js';
 import { SESSION_EVENT_LIMIT } from '../../base/util/limits.js';
 import type { CliCommand } from './api-context.js';
@@ -28,11 +22,8 @@ interface SessionArgs {
 }
 
 async function sessionLog(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
-  flags: CliFlags,
 ): Promise<void> {
   const eventType = stringFlagOrExit(flags, 'type') ?? 'note';
   const content = stringFlagOrExit(flags, 'content') ?? '';
@@ -58,11 +49,8 @@ async function sessionLog(
 }
 
 async function sessionShow(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
-  flags: CliFlags,
 ): Promise<void> {
   const events = await cli.store(hippoRoot).sessions.read(tenantId, 'event', {
     sessionId: s.sessionId || undefined,
@@ -79,11 +67,8 @@ async function sessionShow(
 }
 
 async function sessionLatest(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
-  flags: CliFlags,
 ): Promise<void> {
   const { snapshot, events } = await continuityLatest(cli.apiContext(hippoRoot, tenantId), {
     sessionId: s.sessionId,
@@ -119,11 +104,8 @@ type SessionCompleteMetadata = {
 };
 
 async function sessionComplete(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   s: SessionArgs,
-  flags: CliFlags,
 ): Promise<void> {
   const { sessionId, task } = s;
   const outcomeRaw = stringFlagOrExit(flags, 'outcome') ?? '';
@@ -162,13 +144,8 @@ async function sessionComplete(
   }
 }
 
-export async function handleSession({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleSession(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -177,10 +154,10 @@ export async function handleSession({
   const limit = Math.max(1, numberFlag(flags, 'limit') || SESSION_EVENT_LIMIT);
   const s: SessionArgs = { sessionId, task, limit };
 
-  if (subcommand === 'log') return sessionLog(cli, hippoRoot, tenantId, s, flags);
-  if (subcommand === 'show') return sessionShow(cli, hippoRoot, tenantId, s, flags);
-  if (subcommand === 'latest') return sessionLatest(cli, hippoRoot, tenantId, s, flags);
-  if (subcommand === 'complete') return sessionComplete(cli, hippoRoot, tenantId, s, flags);
+  if (subcommand === 'log') return sessionLog(cmd, s);
+  if (subcommand === 'show') return sessionShow(cmd, s);
+  if (subcommand === 'latest') return sessionLatest(cmd, s);
+  if (subcommand === 'complete') return sessionComplete(cmd, s);
   if (subcommand === 'resume') return sessionResume({ cli, hippoRoot, tenantId, sessionId });
 
   fail('Usage: hippo session <log|show|latest|resume|complete>');

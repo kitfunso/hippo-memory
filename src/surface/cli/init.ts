@@ -8,7 +8,7 @@ import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliInitGlobal, type CliCommand } from './api-context.js';
+import { cliInitGlobal, type CliCommand, type CliScope } from './api-context.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import {
@@ -19,13 +19,7 @@ import {
 import { currentMachine } from '../../infra/machine.js';
 import { emptyReport, mergeReports } from '../../base/memory/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
-import {
-  type CliFlags,
-  numberFlag,
-  stringFlag,
-  type CommandContext,
-  boolFlag,
-} from './flag-values.js';
+import { numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { setupDailySchedule } from './install-steps.js';
@@ -210,10 +204,8 @@ async function initEachScannedRepo(
 }
 
 async function initScannedRepos(
-  cli: CliCommand,
+  { cli, tenantId, flags }: CommandContext,
   scanDir: string,
-  tenantId: string,
-  flags: CliFlags,
 ): Promise<void> {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
@@ -250,7 +242,7 @@ async function initScannedRepos(
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-async function initGlobalOnly(cli: CliCommand, tenantId: string, flags: CliFlags): Promise<void> {
+async function initGlobalOnly({ cli, tenantId, flags }: CommandContext): Promise<void> {
   const globalRoot = hippoHomeDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
@@ -265,11 +257,7 @@ async function initGlobalOnly(cli: CliCommand, tenantId: string, flags: CliFlags
   }
 }
 
-async function seedFromGitHistory(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-): Promise<void> {
+async function seedFromGitHistory({ cli, hippoRoot, tenantId }: CliScope): Promise<void> {
   if (!isGitRepo(processGit, process.cwd())) return;
   const seedDays = SEED_DAYS_SINGLE;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
@@ -285,20 +273,16 @@ async function seedFromGitHistory(
   }
 }
 
-export async function handleInit({
-  hippoRoot,
-  tenantId,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleInit(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, flags, cli } = cmd;
   if (boolFlag(flags, 'scan')) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    await initScannedRepos(cli, scanDir, tenantId, flags);
+    await initScannedRepos(cmd, scanDir);
     return;
   }
 
   if (boolFlag(flags, 'global')) {
-    await initGlobalOnly(cli, tenantId, flags);
+    await initGlobalOnly(cmd);
     return;
   }
 
@@ -327,7 +311,7 @@ export async function handleInit({
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
   if (!alreadyExists && learn && !boolFlag(flags, 'global')) {
-    await seedFromGitHistory(cli, hippoRoot, tenantId);
+    await seedFromGitHistory(cmd);
   }
 
   // Every run, not only the first: an agent's notes change between inits.

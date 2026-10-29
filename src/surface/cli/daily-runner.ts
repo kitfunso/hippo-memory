@@ -17,7 +17,7 @@ import { type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { plural } from '../../base/util/format.js';
-import type { CliCommand } from './api-context.js';
+import type { CliScope } from './api-context.js';
 
 // Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a
 // hung child cannot stall every later workspace.
@@ -38,7 +38,9 @@ export async function handleDailyRunner({ tenantId, cli }: CommandContext): Prom
   const globalRoot = hippoHomeDir();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact
   // into it.
-  if (isInitialized(globalRoot)) await finishGlobalCompactions(cli, globalRoot, tenantId);
+  if (isInitialized(globalRoot)) {
+    await finishGlobalCompactions({ cli, hippoRoot: globalRoot, tenantId });
+  }
   printAgentImport(
     await importUserMemories(globalRoot, cli.syncOptions(tenantId, currentMachine())),
     '',
@@ -48,7 +50,9 @@ export async function handleDailyRunner({ tenantId, cli }: CommandContext): Prom
   const { runStep, counts } = dailyStepRunner(envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS);
   // Before the no-workspace return: a box with no workspaces still has a global store that hooks
   // write to.
-  if (isInitialized(globalRoot)) await sleepGlobalStore(cli, globalRoot, tenantId, runStep);
+  if (isInitialized(globalRoot)) {
+    await sleepGlobalStore({ cli, hippoRoot: globalRoot, tenantId }, runStep);
+  }
 
   if (workspaces.length === 0) {
     console.log('No registered Hippo workspaces found. Run `hippo init` inside a project first.');
@@ -61,11 +65,11 @@ export async function handleDailyRunner({ tenantId, cli }: CommandContext): Prom
   reportDailyRun(counts.processed, counts.failed);
 }
 
-async function finishGlobalCompactions(
-  cli: CliCommand,
-  globalRoot: string,
-  tenantId: string,
-): Promise<void> {
+async function finishGlobalCompactions({
+  cli,
+  hippoRoot: globalRoot,
+  tenantId,
+}: CliScope): Promise<void> {
   const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
   const finished = await replayCompactions(
     { root: globalRoot, store: cli.store(globalRoot), tenantId },
@@ -75,7 +79,7 @@ async function finishGlobalCompactions(
     console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
   }
   pruneSessionFiles(Date.now());
-  await repairQualityOnce(cli, globalRoot, tenantId);
+  await repairQualityOnce({ cli, hippoRoot: globalRoot, tenantId });
 }
 
 interface DailyStepRunner {
@@ -115,9 +119,7 @@ const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;
 /** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history
  * sleeps it anyway. */
 async function sleepGlobalStore(
-  cli: CliCommand,
-  globalRoot: string,
-  tenantId: string,
+  { cli, hippoRoot: globalRoot, tenantId }: CliScope,
   runStep: (cwd: string, args: string[]) => void,
 ): Promise<void> {
   let last: string | undefined;

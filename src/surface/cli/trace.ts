@@ -37,12 +37,7 @@ function traceTags(flags: CliFlags): string[] {
   return stringListFlag(flags, 'tag') ?? [];
 }
 
-async function recordTrace(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function recordTrace({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const task = stringFlagOrExit(flags, 'task') ?? '';
@@ -267,16 +262,11 @@ function printTraceLineage({ id, parentPreviews, myConflicts }: TraceView): void
   }
 }
 
-export async function handleTrace({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleTrace(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    await recordTrace(cli, hippoRoot, tenantId, flags);
+    await recordTrace(cmd);
     return;
   }
   if (!sub) {

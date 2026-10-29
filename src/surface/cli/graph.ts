@@ -5,17 +5,13 @@ import * as fs from 'node:fs';
 import { DEFAULT_VIEW_LIMIT, graphExtract, graphViewOnHost } from '../../api/objects/graph.js';
 import { renderGraphHtml, renderGraphCanvas } from './graph-page.js';
 import { printError } from './output.js';
-import { type CliFlags, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
+import { stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
 import { openInBrowser } from './open-browser.js';
-import type { CliCommand } from './api-context.js';
+import type { CliScope } from './api-context.js';
 
-async function extractAndReport(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-): Promise<void> {
+async function extractAndReport({ cli, hippoRoot, tenantId }: CliScope): Promise<void> {
   const result = await graphExtract(cli.apiContext(hippoRoot, tenantId));
   const byType = Object.entries(result.byType)
     .map(([t, n]) => `${t} ${n}`)
@@ -32,11 +28,8 @@ async function extractAndReport(
 }
 
 async function graphShow(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   entity: string | undefined,
-  flags: CliFlags,
 ): Promise<void> {
   const model = await graphViewOnHost(cli.apiContext(hippoRoot, tenantId), {
     entity,
@@ -75,11 +68,8 @@ async function graphShow(
 }
 
 async function graphView(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   entity: string | undefined,
-  flags: CliFlags,
 ): Promise<void> {
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
@@ -100,19 +90,14 @@ async function graphView(
   if (boolFlag(flags, 'open') && format === 'html') openInBrowser(out);
 }
 
-export async function handleGraph({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleGraph(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, args, flags } = cmd;
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'extract') return extractAndReport(cli, hippoRoot, tenantId);
+  if (subcommand === 'extract') return extractAndReport(cmd);
   const entity = stringFlag(flags, 'entity');
-  if (subcommand === 'show') return graphShow(cli, hippoRoot, tenantId, entity, flags);
-  if (subcommand === 'view') return graphView(cli, hippoRoot, tenantId, entity, flags);
+  if (subcommand === 'show') return graphShow(cmd, entity);
+  if (subcommand === 'view') return graphView(cmd, entity);
 
   fail(
     'Usage:\n' +

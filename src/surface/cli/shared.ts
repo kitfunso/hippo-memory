@@ -6,7 +6,7 @@ import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/ch
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
-import { cliInitGlobal, type CliContext, type CliCommand } from './api-context.js';
+import { cliInitGlobal, type CliContext, type CliScope } from './api-context.js';
 import { fail } from './exit.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
@@ -29,9 +29,7 @@ export function workingFolder({ infra }: Pick<CliContext, 'infra'>): string {
 /** Runs churn staleness for the repo this process runs in, against every store its memories can
  * live in. */
 export async function runChurnStaleForRepo(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
   const ctx = cli.apiContext(hippoRoot, tenantId);

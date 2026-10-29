@@ -95,13 +95,8 @@ async function previewForget({
   );
 }
 
-export async function handleForget({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleForget(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const id = args[0];
   if (!id) {
     fail('Please provide a memory ID.');
@@ -115,7 +110,7 @@ export async function handleForget({
     await previewForget({ cli, hippoRoot, tenantId, id, archive });
     return;
   }
-  const writes = await pickWrites(cli, hippoRoot, tenantId);
+  const writes = await pickWrites(cmd);
   if (archive) {
     await writes.archive(id, reason);
     console.log(`Archived ${id}`);
@@ -125,13 +120,8 @@ export async function handleForget({
   }
 }
 
-async function invalidateChurn(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CommandContext['flags'],
-): Promise<void> {
+async function invalidateChurn(cmd: CommandContext, flags: CommandContext['flags']): Promise<void> {
+  const { args } = cmd;
   if (args[0] || hasFlag(flags, 'id')) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     fail('--churn takes no pattern or --id.');
@@ -141,12 +131,7 @@ async function invalidateChurn(
   }
   const churnDryRun = boolFlag(flags, 'dry-run');
   let churnFailed = false;
-  for (const { root, result } of await runChurnStaleForRepo(
-    cli,
-    hippoRoot,
-    tenantId,
-    churnDryRun,
-  )) {
+  for (const { root, result } of await runChurnStaleForRepo(cmd, churnDryRun)) {
     if (result.error) {
       printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       churnFailed = true;
@@ -175,15 +160,10 @@ async function invalidateChurn(
   if (churnFailed) throw new CliExit(1);
 }
 
-export async function handleInvalidate({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleInvalidate(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
-  if (boolFlag(flags, 'churn')) return invalidateChurn(cli, hippoRoot, tenantId, args, flags);
+  if (boolFlag(flags, 'churn')) return invalidateChurn(cmd, flags);
   const target = args[0];
   if (flagValueless(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode (pattern mode writes

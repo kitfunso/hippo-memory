@@ -21,7 +21,6 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { AUDIT_OPS } from '../../base/records/audit-ops.js';
 import type { AuditEvent } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { CliCommand } from './api-context.js';
 
 // Audit log subcommands (`hippo audit list`)
 
@@ -54,12 +53,7 @@ function readAuditLimit(flags: CliFlags): number {
   return limit;
 }
 
-async function listAuditEvents(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function listAuditEvents({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const asJson = boolFlag(flags, 'json');
 
@@ -96,12 +90,12 @@ async function listAuditEvents(
   }
 }
 
-async function pruneAuditLog(
-  cli: CliCommand,
-  hippoRoot: string,
-  ctxTenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function pruneAuditLog({
+  cli,
+  hippoRoot,
+  tenantId: ctxTenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     fail('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -134,31 +128,21 @@ async function pruneAuditLog(
   }
 }
 
-async function printAuditLog(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function printAuditLog(cmd: CommandContext): Promise<void> {
+  const { args } = cmd;
   const sub = args[0];
   if (sub === 'list') {
-    await listAuditEvents(cli, hippoRoot, tenantId, flags);
+    await listAuditEvents(cmd);
     return;
   }
   if (sub === 'prune') {
-    await pruneAuditLog(cli, hippoRoot, tenantId, flags);
+    await pruneAuditLog(cmd);
     return;
   }
   fail(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
 }
 
-async function auditRepair(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function auditRepair({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const apply = boolFlag(flags, 'apply') && !boolFlag(flags, 'dry-run');
   const result = await api.memoryQualityRepair(
     cli.apiContext(boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot, tenantId),
@@ -198,11 +182,8 @@ async function auditRepair(
 }
 
 async function fixAuditErrors(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId, flags }: CommandContext,
   result: AuditResult,
-  flags: CliFlags,
 ): Promise<void> {
   const errors = result.issues.filter((i) => i.severity === 'error');
   if (errors.length > 0 && boolFlag(flags, 'dry-run')) {
@@ -220,21 +201,16 @@ async function fixAuditErrors(
   }
 }
 
-export async function handleAudit({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleAudit(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   if (args[0] === 'repair') {
-    await auditRepair(cli, hippoRoot, tenantId, flags);
+    await auditRepair(cmd);
     return;
   }
   // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep
   // the memory-quality auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
-    await printAuditLog(cli, hippoRoot, tenantId, args, flags);
+    await printAuditLog(cmd);
     return;
   }
   requireInit(hippoRoot);
@@ -253,7 +229,7 @@ export async function handleAudit({
       console.log(`         "${truncateWithEllipsis(issue.content, 80)}"`);
     }
     if (shouldFix) {
-      await fixAuditErrors(cli, hippoRoot, tenantId, result, flags);
+      await fixAuditErrors(cmd, result);
     } else {
       console.log(`\nRun with --fix to auto-remove error-severity issues.`);
     }

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
-import { cliInfra, type CliCommand } from './api-context.js';
+import { cliInfra, type CliCommand, type CliScope } from './api-context.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import {
@@ -116,9 +116,7 @@ export function hostSessionId(): string | undefined {
  * payload's session and the next prompt injects again. `requiredSource` limits it to payloads
  * with that `source`; best-effort and silent on a malformed payload. */
 export async function resetHookInjection(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   stdinText: string | undefined,
   requiredSource: string | null,
 ): Promise<void> {
@@ -185,9 +183,7 @@ export function payloadCwdRoot(
 
 /** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
 export async function inPilotHoldout(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   sessionId: string | undefined,
   opts: { write: boolean },
 ): Promise<boolean> {

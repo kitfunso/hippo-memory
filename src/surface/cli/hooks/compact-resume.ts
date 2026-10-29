@@ -20,7 +20,7 @@ import {
   inPilotHoldout,
   resetHookInjection,
 } from '../hook-runtime.js';
-import type { CliCommand } from '../api-context.js';
+import type { CliScope } from '../api-context.js';
 
 export async function handleCompactResume({
   hippoRoot,
@@ -29,8 +29,12 @@ export async function handleCompactResume({
 }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await cli.hookRequest(async (hook) => {
-    await resetHookInjection(hook, hippoRoot, tenantId, stdinText, 'compact');
-    await resumeAfterCompact(hook, hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
+    await resetHookInjection({ cli: hook, hippoRoot, tenantId }, stdinText, 'compact');
+    await resumeAfterCompact(
+      { cli: hook, hippoRoot: hookStoreRoot(hippoRoot), tenantId },
+      stdinText,
+      stdinTimedOut,
+    );
   });
 }
 
@@ -38,9 +42,7 @@ export async function handleCompactResume({
  * malformed payload or a store read failure degrades to empty stdout, never a failed
  * SessionStart. */
 async function resumeAfterCompact(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   stdinText: string | undefined,
   stdinTimedOut: boolean,
 ): Promise<void> {
@@ -68,14 +70,14 @@ async function resumeAfterCompact(
     if (
       !suppressOutput &&
       payloadSessionId !== null &&
-      (await inPilotHoldout(cli, hippoRoot, tenantId, payloadSessionId, { write: false }))
+      (await inPilotHoldout({ cli, hippoRoot, tenantId }, payloadSessionId, { write: false }))
     ) {
       suppressOutput = true;
       rec?.disabled();
     }
 
     if (!suppressOutput) {
-      await restoreCompactSnapshot(cli, hippoRoot, tenantId, payloadSessionId, rec);
+      await restoreCompactSnapshot({ cli, hippoRoot, tenantId }, payloadSessionId, rec);
     }
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr,
@@ -87,9 +89,7 @@ async function resumeAfterCompact(
 }
 
 async function restoreCompactSnapshot(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
+  { cli, hippoRoot, tenantId }: CliScope,
   payloadSessionId: string | null,
   rec: DeliveryRecorder | null,
 ): Promise<void> {

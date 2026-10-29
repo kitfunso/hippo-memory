@@ -132,20 +132,16 @@ const STORE_ONLY_SWITCHES = [
   'verified',
 ] as const;
 
-async function rememberWrites(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<MemoryWrites> {
+async function rememberWrites(cmd: CommandContext): Promise<MemoryWrites> {
+  const { flags } = cmd;
   if (boolFlag(flags, 'global')) {
     cliInitGlobal();
-    return localWrites(cli, hippoHomeDir(), tenantId);
+    return localWrites({ ...cmd, hippoRoot: hippoHomeDir() });
   }
   if (STORE_ONLY_SWITCHES.some((name) => boolFlag(flags, name)) || hasFlag(flags, 'layer')) {
-    return localWrites(cli, hippoRoot, tenantId);
+    return localWrites(cmd);
   }
-  return pickWrites(cli, hippoRoot, tenantId);
+  return pickWrites(cmd);
 }
 
 async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise<void> {
@@ -261,13 +257,8 @@ async function supersedeMemory({
   console.log(`Superseded ${oldId} → ${newId}`);
 }
 
-export async function handleRemember({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleRemember(cmd: CommandContext): Promise<void> {
+  const { args, flags } = cmd;
   const text =
     args.length === 1 && args[0] === '-'
       ? fs.readFileSync(0, 'utf-8').trim()
@@ -277,7 +268,7 @@ export async function handleRemember({
   }
   const useGlobal = boolFlag(flags, 'global');
   const request = rememberRequest(text, flags, useGlobal);
-  const writes = await rememberWrites(cli, hippoRoot, tenantId, flags);
+  const writes = await rememberWrites(cmd);
   await printRemembered(await writes.remember(request), useGlobal);
 }
 

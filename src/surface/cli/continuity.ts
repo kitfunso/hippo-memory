@@ -5,26 +5,14 @@ import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions
 import { snapshotJson } from '../../api/continuity/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot } from './print.js';
-import {
-  type CliFlags,
-  boolFlag,
-  numberFlag,
-  stringFlagOrExit,
-  type CommandContext,
-} from './flag-values.js';
+import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { fail } from './exit.js';
 import { WM_DEFAULT_IMPORTANCE } from './flag-defaults.js';
 import { WM_MAX_ENTRIES } from '../../base/util/limits.js';
-import type { CliCommand } from './api-context.js';
 
 const ISO_DATETIME_CHARS = 19;
 
-async function snapshotSave(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function snapshotSave({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const task = stringFlagOrExit(flags, 'task') ?? '';
   const summary = stringFlagOrExit(flags, 'summary') ?? '';
   const nextStep = stringFlagOrExit(flags, 'next-step') ?? '';
@@ -58,12 +46,7 @@ async function snapshotSave(
   }
 }
 
-async function snapshotClear(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function snapshotClear({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const status = stringFlagOrExit(flags, 'status') ?? 'cleared';
   const cleared = await cli.store(hippoRoot).sessions.clear(tenantId, 'snapshot', { status });
   if (cleared === 0) {
@@ -73,12 +56,7 @@ async function snapshotClear(
   console.log('Cleared active task snapshot.');
 }
 
-async function snapshotShow(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function snapshotShow({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const snapshot = await cli.store(hippoRoot).sessions.loadSnapshot(tenantId, {}, null);
   if (!snapshot) {
     if (boolFlag(flags, 'json')) {
@@ -97,20 +75,15 @@ async function snapshotShow(
   printActiveTaskSnapshot(snapshot);
 }
 
-export async function handleSnapshot({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleSnapshot(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, args } = cmd;
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
 
-  if (subcommand === 'save') return snapshotSave(cli, hippoRoot, tenantId, flags);
-  if (subcommand === 'clear') return snapshotClear(cli, hippoRoot, tenantId, flags);
-  if (subcommand === 'show') return snapshotShow(cli, hippoRoot, tenantId, flags);
+  if (subcommand === 'save') return snapshotSave(cmd);
+  if (subcommand === 'clear') return snapshotClear(cmd);
+  if (subcommand === 'show') return snapshotShow(cmd);
 
   fail('Usage: hippo snapshot <save|show|clear>');
 }
@@ -142,12 +115,7 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
   }
 }
 
-async function currentShow(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function currentShow({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const { snapshot, events } = await continuityLatest(cli.apiContext(hippoRoot, tenantId), {
     limit: CONTINUITY_EVENT_LIMIT,
@@ -177,34 +145,24 @@ async function currentShow(
   printCurrentState(snapshot, events);
 }
 
-export async function handleCurrent({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleCurrent(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, args } = cmd;
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
 
-  if (subcommand === 'show') return currentShow(cli, hippoRoot, tenantId, flags);
+  if (subcommand === 'show') return currentShow(cmd);
 
   fail('Usage: hippo current <show>');
 }
 
-export async function handleWm({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-  cli,
-}: CommandContext): Promise<void> {
+export async function handleWm(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? '';
-  if (subcommand === 'push') return wmPushCmd(cli, hippoRoot, tenantId, flags);
-  if (subcommand === 'read') return wmReadCmd(cli, hippoRoot, tenantId, flags);
+  if (subcommand === 'push') return wmPushCmd(cmd);
+  if (subcommand === 'read') return wmReadCmd(cmd);
 
   if (subcommand === 'clear') {
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
@@ -233,12 +191,7 @@ export async function handleWm({
   fail('Usage: hippo wm <push|read|clear|flush>');
 }
 
-async function wmPushCmd(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function wmPushCmd({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') ?? 'default';
   const content = stringFlagOrExit(flags, 'content') ?? '';
   const importance = numberFlag(flags, 'importance') ?? WM_DEFAULT_IMPORTANCE;
@@ -262,12 +215,7 @@ async function wmPushCmd(
   console.log(`Pushed working memory #${id} (scope=${scope}, importance=${importance})`);
 }
 
-async function wmReadCmd(
-  cli: CliCommand,
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function wmReadCmd({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') || undefined;
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   const limit = numberFlag(flags, 'limit') || WM_MAX_ENTRIES;
