@@ -146,7 +146,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   }
   counts.added += landed.length;
   if (!batch.full) return;
-  if (landed.length > 0) await ctx.hippoDb.stats.bumpRemembered(landed.length);
+  if (landed.length > 0) await ctx.store.hippoDb.stats.bumpRemembered(landed.length);
   const { embedderFor, clock, failureNotices } = ctx.infra;
   const { store, config } = ctx;
   const target = {

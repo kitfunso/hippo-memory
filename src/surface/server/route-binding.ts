@@ -36,8 +36,8 @@ export function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean):
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
   if (route.storeReady !== undefined) return boundGroupRoute(route, store);
   if (route.hippoDb === true) return boundHippoDbRoute(route, store);
-  // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
-  return route.hippoDbOnly === undefined || onHippoDb ? route : { ...route, unported: true };
+  // A needsHippoDbMark row needs hippo.db; a row naming no group runs on any store.
+  return route.needsHippoDbMark === undefined || onHippoDb ? route : { ...route, unported: true };
 }
 
 /** A group row's handler gets the request's context on the store boot proved, bound to the
@@ -57,8 +57,8 @@ function boundGroupRoute<G extends OptionalGroup>(
   }));
 }
 
-/** A local row's handler gets the request's context with hippo.db's local tier, bound to the
- * request's session and deadline; on a store without the tier it answers 501. */
+/** A local row's handler gets the request's context on the store with hippo.db's local tier,
+ * bound to the request's session and deadline; on a store without the tier it answers 501. */
 function boundHippoDbRoute(route: HippoDbRoute, store: HippoStore): BoundRoute {
   const { method, auth } = route;
   if (!hasHippoDb(store)) {
@@ -66,7 +66,7 @@ function boundHippoDbRoute(route: HippoDbRoute, store: HippoStore): BoundRoute {
   }
   return boundOn(route, (r): HippoDbRequest => ({
     ...r,
-    ctx: { ...r.ctx, hippoDb: r.opts.storeFor(store).hippoDb },
+    ctx: { ...r.ctx, store: r.opts.storeFor(store) },
   }));
 }
 

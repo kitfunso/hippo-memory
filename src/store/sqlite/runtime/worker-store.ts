@@ -26,7 +26,7 @@ import {
   type WorkerGroup,
   WORKER_OPS,
 } from './worker-ops.js';
-import type { HippoDbRepos } from '../hippo-db.js';
+import type { HippoDbRepos, HippoDbStore } from '../hippo-db.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 
@@ -181,12 +181,12 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   { runtime, ...rules }: WorkerStoreOptions = {},
-): HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos } {
+): HippoDbStore {
   // A method the op table missed would run here, on the server thread, where every open of this
   // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
-  const store: HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos } = {
+  const store: HippoDbStore = {
     ...inProcess,
     ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(sender, inProcess.vectors),

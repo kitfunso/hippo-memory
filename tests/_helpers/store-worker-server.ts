@@ -8,7 +8,7 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServeOptions, ServerHandle } from '../../src/server.js';
 import { serveKeyed } from './keyed-server.js';
-import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, OptionalGroup } from '../../src/base/ports/store-index.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -17,7 +17,7 @@ import {
 } from '../../src/store/sqlite/runtime/executor.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { sqliteStoreOn } from '../../src/store/sqlite/store.js';
-import type { HippoDbRepos } from '../../src/store/sqlite/hippo-db.js';
+import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { makeRoot } from './make-root.js';
 
@@ -34,7 +34,7 @@ export const cleanups: Cleanup[] = [];
 
 /** A worker store's server-thread part on `root`, whose every open refuses: where a method the op table missed
  * runs. */
-export function serverThreadPart(root: string): HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos } {
+export function serverThreadPart(root: string): HippoDbStore {
   return sqliteStoreOn(handlesOf(root, { workerOnly: true }));
 }
 

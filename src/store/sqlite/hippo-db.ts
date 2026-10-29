@@ -1,5 +1,6 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import type { HippoStore, StoreGroups } from '../../base/ports/store.js';
 import type { MethodEffects } from '../../base/ports/store/effects.js';
 import { sqliteQuarantine } from './connectors/quarantine.js';
 import { sqliteStats } from './entries/index-and-stats.js';
@@ -11,6 +12,14 @@ export function hippoDbRepos(handles: Handles) {
 }
 
 export type HippoDbRepos = ReturnType<typeof hippoDbRepos>;
+
+/** A store that carries the local tier. */
+export interface HippoDbTier {
+  readonly hippoDb: HippoDbRepos;
+}
+
+/** hippo.db's own store: the port with every optional group, and the local tier. */
+export type HippoDbStore = HippoStore & StoreGroups & HippoDbTier;
 
 /** What each local method does to the store, which places it on a worker; a method missing here
  * fails to compile. */

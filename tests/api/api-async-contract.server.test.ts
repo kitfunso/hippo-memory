@@ -132,7 +132,6 @@ describe('every api write function answers through a Promise', () => {
         tenantId: ACME,
         actor: HOST,
         store,
-        hippoDb: store.hippoDb,
         config: loadConfig(root),
         infra: testInfra(),
       });

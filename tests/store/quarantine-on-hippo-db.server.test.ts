@@ -9,6 +9,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { serve } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
 import { HELD, heldAt, heldContent, seedQuarantineRecords } from '../_helpers/quarantine-seed.js';
@@ -210,8 +211,12 @@ describe("quarantine on hippo.db's local tier", () => {
     expect(listedIds(pending.text)).not.toContain(HELD.a2);
   }, 20_000);
 
-  it('answers the one refusal on every quarantine route of a store without the tier', async () => {
-    const send = await served(portOnlyStore(fixture.dir));
+  it.each([
+    ['without the tier', portOnlyStore],
+    // A copy keeps hippo.db's mark, so only the tier's own check can refuse it.
+    ['whose tier is unset', (dir: string) => ({ ...sqliteStore(dir), hippoDb: undefined })],
+  ])('answers the one refusal on every quarantine route of a store %s', async (_label, open) => {
+    const send = await served(open(fixture.dir));
     const admin = fixture.tokens.adminA;
     for (const [method, path] of [
       ['GET', '/v1/quarantine'],

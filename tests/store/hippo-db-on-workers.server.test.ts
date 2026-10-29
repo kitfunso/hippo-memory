@@ -102,4 +102,20 @@ describe("hippo.db's local tier on the worker store", () => {
     });
     expect(remembered(root)).toBe(2);
   }, 20_000);
+
+  it('drops a local write still queued when its request is aborted', async () => {
+    const root = makeRoot('hippo-db-workers');
+    const store = storeOn(root, createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS }));
+    await store.hippoDb.stats.bumpRemembered(1);
+    const lock = holdWriteLock(root);
+    const ahead = store.hippoDb.stats.bumpRemembered(1);
+    const request = new AbortController();
+    const queued = storeForRequest(store, { signal: request.signal }).hippoDb.stats.bumpRemembered(5);
+    const dropped = expect(queued).rejects.toThrow('so it never ran');
+    request.abort();
+    lock.release();
+    await ahead;
+    await dropped;
+    expect(remembered(root)).toBe(2);
+  }, 20_000);
 });

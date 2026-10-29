@@ -17,7 +17,7 @@ export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
     ({ route }) =>
       (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) ||
-      route.hippoDbOnly !== undefined ||
+      route.needsHippoDbMark !== undefined ||
       route.hippoDb === true,
   ).map(({ key }) => requestLine(key));
 }

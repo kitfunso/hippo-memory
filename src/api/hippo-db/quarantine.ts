@@ -24,7 +24,7 @@ export async function quarantineList(
   ctx: HippoDbContext,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
 ): Promise<QuarantineListItem[]> {
-  const rows = await ctx.hippoDb.quarantine.list(ctx.tenantId, {
+  const rows = await ctx.store.hippoDb.quarantine.list(ctx.tenantId, {
     status: opts.status ?? 'pending',
     limit: opts.limit,
     after: opts.after,
@@ -52,7 +52,7 @@ export async function quarantineApprove(ctx: HippoDbContext, id: string): Promis
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
-  const result = await ctx.hippoDb.quarantine.approve(ctx.tenantId, id, ctx.actor.subject);
+  const result = await ctx.store.hippoDb.quarantine.approve(ctx.tenantId, id, ctx.actor.subject);
   if (result.outcome === 'approved') return;
   if (result.outcome === 'scope_moved') {
     throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
@@ -66,6 +66,6 @@ export async function quarantineReject(ctx: HippoDbContext, id: string): Promise
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }
-  const result = await ctx.hippoDb.quarantine.reject(ctx.tenantId, id, ctx.actor.subject);
+  const result = await ctx.store.hippoDb.quarantine.reject(ctx.tenantId, id, ctx.actor.subject);
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }

@@ -18,7 +18,7 @@ const LOCAL_ROWS = V1_ROWS.filter(
   ({ route }) =>
     route.auth === 'webhook-signature' ||
     route.storeReady !== undefined ||
-    route.hippoDbOnly !== undefined ||
+    route.needsHippoDbMark !== undefined ||
     route.hippoDb === true,
 ).map(({ key }) => requestLine(key));
 

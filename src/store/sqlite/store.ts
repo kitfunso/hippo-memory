@@ -47,7 +47,7 @@ import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys/keys.js';
-import { hippoDbRepos, type HippoDbRepos } from './hippo-db.js';
+import { hippoDbRepos, type HippoDbStore } from './hippo-db.js';
 import { type Handles, type OnHandle, readOnly, type StoreFiles } from './runtime/open.js';
 import { handlesOf, openStore } from './runtime/handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './runtime/bound.js';
@@ -102,9 +102,7 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
  * its end on its own short-lived handle before its Promise settles, so no write scope spans an
  * await. The caller passes the handles, so a store built over this one opens a single set, and a
  * store worker's opens all reach its thread's one connection. */
-export function sqliteStoreOn(
-  handles: Handles,
-): HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos } {
+export function sqliteStoreOn(handles: Handles): HippoDbStore {
   const { on, files } = handles;
   return {
     kind: 'sqlite',
@@ -298,10 +296,7 @@ function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its
  * runtime and session. */
-export function sqliteStore(
-  hippoRoot: string,
-  opts: SqliteStoreOptions = {},
-): HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos } {
+export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): HippoDbStore {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
   const reopen: Reopenable[typeof REOPEN] = (session) =>
     sqliteStore(hippoRoot, { ...opts, session });

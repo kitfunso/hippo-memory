@@ -25,15 +25,15 @@ import {
   type Read,
   REFUSED,
   seedLocalGroups,
-  type Served,
   shown,
 } from '../_helpers/local-group-reads.js';
+import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 const NOW = new Date(FAKE_NOW);
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
 
-const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
+const graphEntities = async (s: HippoDbStore) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
@@ -602,8 +602,8 @@ afterAll(() => {
 afterEach(undoAll);
 
 describe('a read the op table places on a reader thread', () => {
-  let onWorkers: Served;
-  let inProcess: Served;
+  let onWorkers: HippoDbStore;
+  let inProcess: HippoDbStore;
 
   // Reads write nothing, so both stores serve one copy for the whole table.
   beforeAll(async () => {

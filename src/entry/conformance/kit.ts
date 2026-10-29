@@ -79,7 +79,6 @@ export function rowOf(
   return { ...createMemory(content, { tenantId }), originProject: 'proj', created, ...over };
 }
 
-/** Writes each row through entryWrites, in order. */
 export async function writeRows(store: HippoStore, rows: readonly MemoryEntry[]): Promise<void> {
   for (const entry of rows) await store.entryWrites.writeEntry({ entry, actor: ACTOR });
 }

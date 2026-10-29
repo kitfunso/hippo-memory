@@ -1,7 +1,7 @@
 // What a store can do is the groups it sets: audit and learn run on hippo.db's stores, and a store without local files
 // gets neither sleep nor an unfenced hippo.db.
 import type { ContextWith } from '../../src/api/types.js';
-import type { HippoDbContext } from '../../src/api/hippo-db-context.js';
+import type { HippoDbContext, HippoDbStore } from '../../src/api/hippo-db-context.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -18,7 +18,7 @@ import {
 } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb, OTHER_STORE_MARKER, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
-import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoStore, OptionalGroup } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -54,14 +54,10 @@ function rootWithConfig(label: string): string {
   return root;
 }
 
-const ctxOn = (
-  root: string,
-  store: HippoStore & StoreGroups & Pick<HippoDbContext, 'hippoDb'>,
-): ContextWith<OptionalGroup> & HippoDbContext => ({
+const ctxOn = (root: string, store: HippoDbStore): ContextWith<OptionalGroup> & HippoDbContext => ({
   tenantId: 'default',
   actor: adminActor('capability-test'),
   store,
-  hippoDb: store.hippoDb,
   config: loadConfig(root),
   infra: testInfra(),
 });

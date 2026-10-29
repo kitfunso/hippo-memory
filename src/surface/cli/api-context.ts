@@ -10,7 +10,7 @@ import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
-import type { HippoDbContext } from '../../api/hippo-db-context.js';
+import type { HippoDbContext, HippoDbStore } from '../../api/hippo-db-context.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
@@ -18,7 +18,6 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpContext, McpHost } from '../mcp/protocol.js';
 import { allMcpTools } from '../mcp/request.js';
 import type { ImportFiles } from '../importers/core.js';
-import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup, StoreWith } from '../../base/ports/store.js';
 import {
   askingNearestFirst,
@@ -71,7 +70,7 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 }
 
 /** The store kind the CLI opens: hippo.db, with every group and its local tier. */
-export type CliStore = HippoStore & StoreGroups & Pick<HippoDbContext, 'hippoDb'>;
+export type CliStore = HippoDbStore;
 
 /** The CLI's store is hippo.db, which sets every optional group, so its verbs call the api
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
@@ -188,7 +187,6 @@ function contextOn(
     tenantId,
     actor: adminActor(CLI_ACTOR),
     store,
-    hippoDb: store.hippoDb,
     reach,
     config,
     callers,

@@ -8,7 +8,6 @@ import {
   type HippoStore,
   type OptionalGroup,
   type RequiredStore,
-  type StoreGroups,
   type StoreWith,
 } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -17,7 +16,7 @@ import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../../api/recall/request.js';
 import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
-import { hasHippoDb, type HippoDbContext } from '../../api/hippo-db-context.js';
+import { hasHippoDb, type HippoDbStore, type HippoDbTier } from '../../api/hippo-db-context.js';
 import {
   mcpApiContext,
   type GroupToolHandler,
@@ -69,15 +68,11 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
 
 // ── Tool execution ──
 
-/** A store whose type holds every optional group and hippo.db's local tier, as the stdio host's
- * cliStore does. */
-type AllGroupsStore = HippoStore & StoreGroups & Pick<HippoDbContext, 'hippoDb'>;
-
 /** One tool: its run on a store a host proved once, checked here, and its run on a store whose
  * type holds every group, checked nowhere. */
 interface ToolRow {
   readonly bind: (proved: HippoStore) => StoreTool<RequiredStore> | undefined;
-  readonly onAll: StoreTool<AllGroupsStore>;
+  readonly onAll: StoreTool<HippoDbStore>;
 }
 
 /** A tool that runs under any store. */
@@ -107,9 +102,9 @@ function onHippoDb<G extends OptionalGroup>(
   run: HippoDbToolHandler<G>,
 ): ToolRow {
   const on =
-    (ctx: McpCaller, store: StoreWith<G> & Pick<HippoDbContext, 'hippoDb'>): ToolRun =>
+    (ctx: McpCaller, store: StoreWith<G> & HippoDbTier): ToolRun =>
     (args) => {
-      const api = { ...mcpApiContext(ctx), store, hippoDb: store.hippoDb };
+      const api = { ...mcpApiContext(ctx), store };
       return run({ ...toolCall(ctx), args, store, api });
     };
   return {
@@ -164,7 +159,7 @@ export function bindMcpTools(proved: HippoStore): McpTools<RequiredStore> {
 }
 
 /** Every tool, each run on the call's own store, whose type proves every group. */
-export function allMcpTools(): McpTools<AllGroupsStore> {
+export function allMcpTools(): McpTools<HippoDbStore> {
   return new Map([...TOOL_ROWS].map(([name, row]) => [name, row.onAll]));
 }
 
