@@ -169,10 +169,10 @@ describe('one process', () => {
     // The thread drops its FileLock and collects garbage before it reports, then idles until terminated.
     const code = `const { parentPort } = require('node:worker_threads');
       require('node:v8').setFlagsFromString('--expose-gc');
-      const gc = require('node:vm').runInNewContext('gc');
+      const collect = require('node:vm').runInNewContext('gc');
       import(${JSON.stringify(pathToFileURL(DIST_LOCK).href)}).then((m) => {
         const kind = m.takeFileLock(${JSON.stringify(path)}).kind;
-        gc();
+        collect();
         parentPort.postMessage(kind);
         setInterval(() => {}, 1 << 30);
       });`;
