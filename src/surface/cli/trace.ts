@@ -7,7 +7,6 @@ import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
-import { cliApiContext } from './api-context.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import {
@@ -20,6 +19,7 @@ import {
 } from './flag-values.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
+import type { CliCommand } from './api-context.js';
 
 const PARENT_PREVIEW_CHARS = 70;
 
@@ -37,7 +37,7 @@ function traceTags(flags: CliFlags): string[] {
   return stringListFlag(flags, 'tag') ?? [];
 }
 
-async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function recordTrace({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const task = stringFlagOrExit(flags, 'task') ?? '';
@@ -60,7 +60,7 @@ async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags)
   const sessionId = stringFlagOrExit(flags, 'session') || null;
   const tags = traceTags(flags);
 
-  const { id } = await traceRecord(cliApiContext(hippoRoot, tenantId), {
+  const { id } = await traceRecord(cli.apiContext(hippoRoot, tenantId), {
     task,
     steps,
     outcome,
@@ -73,23 +73,30 @@ async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags)
 }
 
 interface PrintTraceOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly id: string;
   readonly flags: CliFlags;
 }
 
-async function printTrace({ hippoRoot, tenantId, id, flags }: PrintTraceOptions): Promise<void> {
+async function printTrace({
+  cli,
+  hippoRoot,
+  tenantId,
+  id,
+  flags,
+}: PrintTraceOptions): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
   // Look in local store first, then global.
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = cli.apiContext(hippoRoot, tenantId);
   let entry = await memoryGet(ctx, id);
   let sourceLabel: 'local' | 'global' = 'local';
   const globalRoot = hippoHomeDir();
   if (!entry && isInitialized(globalRoot)) {
-    entry = await memoryGet(cliApiContext(globalRoot, tenantId), id);
+    entry = await memoryGet(cli.apiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';
   }
   if (!entry) {
@@ -101,7 +108,7 @@ async function printTrace({ hippoRoot, tenantId, id, flags }: PrintTraceOptions)
     id,
     sourceLabel,
     ...traceStats(entry, ctx),
-    ...(await traceLineage({ hippoRoot, globalRoot, entry, id, tenantId })),
+    ...(await traceLineage({ cli, hippoRoot, globalRoot, entry, id, tenantId })),
   };
   if (asJson) {
     printTraceJson(t);
@@ -118,6 +125,7 @@ type TraceView = ReturnType<typeof traceStats> &
   };
 
 interface TraceLineageOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly globalRoot: string;
   readonly entry: MemoryEntry;
@@ -125,15 +133,22 @@ interface TraceLineageOptions {
   readonly tenantId: string;
 }
 
-async function traceLineage({ hippoRoot, globalRoot, entry, id, tenantId }: TraceLineageOptions) {
+async function traceLineage({
+  cli,
+  hippoRoot,
+  globalRoot,
+  entry,
+  id,
+  tenantId,
+}: TraceLineageOptions) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const local =
-    parents.length === 0 ? [] : await memoryListByIds(cliApiContext(hippoRoot, tenantId), parents);
+    parents.length === 0 ? [] : await memoryListByIds(cli.apiContext(hippoRoot, tenantId), parents);
   const found = new Map(local.map((p) => [p.id, p]));
   const missing = parents.filter((pid) => !found.has(pid));
   if (missing.length > 0 && isInitialized(globalRoot)) {
-    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing)) {
+    for (const p of await memoryListByIds(cli.apiContext(globalRoot, tenantId), missing)) {
       found.set(p.id, p);
     }
   }
@@ -147,7 +162,7 @@ async function traceLineage({ hippoRoot, globalRoot, entry, id, tenantId }: Trac
 
   const openIn = async (root: string): Promise<api.ConflictPage['conflicts']> => {
     const mine: api.ConflictPage['conflicts'] = [];
-    const ctx = cliApiContext(root, tenantId);
+    const ctx = cli.apiContext(root, tenantId);
     for await (const page of api.conflictPages((p) => api.conflictList(ctx, 'open', {}, p))) {
       mine.push(...page.conflicts.filter((c) => c.memoryAId === id || c.memoryBId === id));
     }
@@ -247,15 +262,11 @@ function printTraceLineage({ id, parentPreviews, myConflicts }: TraceView): void
   }
 }
 
-export async function handleTrace({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleTrace(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    await recordTrace(hippoRoot, tenantId, flags);
+    await recordTrace(cmd);
     return;
   }
   if (!sub) {
@@ -263,5 +274,5 @@ export async function handleTrace({
       'Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>',
     );
   }
-  await printTrace({ hippoRoot, tenantId, id: sub, flags });
+  await printTrace({ cli, hippoRoot, tenantId, id: sub, flags });
 }

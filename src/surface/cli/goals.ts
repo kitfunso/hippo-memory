@@ -3,7 +3,6 @@
 import { envHippoSessionId } from '../../base/util/env.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as api from '../../api/index.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -69,12 +68,13 @@ function readGoalLevel(flags: CliFlags): number | undefined {
   return parsed;
 }
 
-async function pushGoal(
-  hippoRoot: string,
-  defaultTenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function pushGoal({
+  cli,
+  hippoRoot,
+  tenantId: defaultTenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const rawName = args.join(' ').trim();
   if (!rawName) {
     fail(
@@ -102,7 +102,7 @@ async function pushGoal(
   }
   const parentGoalId = stringFlag(flags, 'parent');
 
-  const goal = await api.goalPush(cliApiContext(hippoRoot, tenantId), {
+  const goal = await api.goalPush(cli.apiContext(hippoRoot, tenantId), {
     sessionId,
     goalName: name,
     level,
@@ -113,14 +113,18 @@ async function pushGoal(
   console.log(goal.id);
 }
 
-async function listGoals(
-  hippoRoot: string,
-  defaultTenantId: string,
-  flags: CliFlags,
-): Promise<void> {
+async function listGoals({
+  cli,
+  hippoRoot,
+  tenantId: defaultTenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const { sessionId, tenantId } = resolveGoalSession(flags, defaultTenantId);
   const showAll = boolFlag(flags, 'all');
-  const goals = await api.goalList(cliApiContext(hippoRoot, tenantId), { sessionId, all: showAll });
+  const goals = await api.goalList(cli.apiContext(hippoRoot, tenantId), {
+    sessionId,
+    all: showAll,
+  });
 
   if (goals.length === 0) {
     console.log('(no goals)');
@@ -154,12 +158,13 @@ async function listGoals(
   }
 }
 
-async function completeGoal(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function completeGoal({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
@@ -177,34 +182,30 @@ async function completeGoal(
     outcomeScore = parsed;
   }
   const noPropagate = boolFlag(flags, 'no-propagate');
-  await api.goalComplete(cliApiContext(hippoRoot, tenantId), id, { outcomeScore, noPropagate });
+  await api.goalComplete(cli.apiContext(hippoRoot, tenantId), id, { outcomeScore, noPropagate });
   console.log('ok');
 }
 
-async function suspendGoal(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
+async function suspendGoal({ cli, hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal suspend <id>');
   }
-  await api.goalSuspend(cliApiContext(hippoRoot, tenantId), id);
+  await api.goalSuspend(cli.apiContext(hippoRoot, tenantId), id);
   console.log('ok');
 }
 
-async function resumeGoal(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
+async function resumeGoal({ cli, hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     fail('Usage: hippo goal resume <id>');
   }
-  await api.goalResume(cliApiContext(hippoRoot, tenantId), id);
+  await api.goalResume(cli.apiContext(hippoRoot, tenantId), id);
   console.log('ok');
 }
 
-export async function handleGoal({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleGoal(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, tenantId, args, flags, cli } = cmd;
   const sub = args[0];
   if (!sub) {
     fail('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
@@ -212,19 +213,19 @@ export async function handleGoal({
   const subArgs = args.slice(1);
   switch (sub) {
     case 'push':
-      await pushGoal(hippoRoot, tenantId, subArgs, flags);
+      await pushGoal({ cli, hippoRoot, tenantId, args: subArgs, flags });
       return;
     case 'list':
-      await listGoals(hippoRoot, tenantId, flags);
+      await listGoals(cmd);
       return;
     case 'complete':
-      await completeGoal(hippoRoot, tenantId, subArgs, flags);
+      await completeGoal({ cli, hippoRoot, tenantId, args: subArgs, flags });
       return;
     case 'suspend':
-      await suspendGoal(hippoRoot, tenantId, subArgs);
+      await suspendGoal({ cli, hippoRoot, tenantId, args: subArgs, flags });
       return;
     case 'resume':
-      await resumeGoal(hippoRoot, tenantId, subArgs);
+      await resumeGoal({ cli, hippoRoot, tenantId, args: subArgs, flags });
       return;
     default:
       fail(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);

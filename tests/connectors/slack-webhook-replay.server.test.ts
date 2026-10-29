@@ -2,7 +2,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { listDlq } from '../../src/surface/connectors/dlq.js';
+import { listDlq } from '../../src/api/dead-letters.js';
 import { slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -47,7 +47,7 @@ describe('POST /v1/connectors/slack/events replay', () => {
     const ts = String(Math.floor(Date.now() / 1000));
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'duplicate' } });
-    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
+    expect(await listDlq({ tenantId: 'default', store: sqliteStore(root) }, slackDlq)).toHaveLength(1);
   });
 
   it('refuses the second copy after the server restarts, since the hold lives in the store', async () => {
@@ -56,7 +56,7 @@ describe('POST /v1/connectors/slack/events replay', () => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     expect(await post(ts)).toEqual({ status: 200, body: { ok: true, status: 'duplicate' } });
-    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(1);
+    expect(await listDlq({ tenantId: 'default', store: sqliteStore(root) }, slackDlq)).toHaveLength(1);
   });
 
   it('frees the hold when routing fails, so the retry is tried again and not answered as a duplicate', async () => {
@@ -79,6 +79,6 @@ describe('POST /v1/connectors/slack/events replay', () => {
     const now = Math.floor(Date.now() / 1000);
     expect(await post(String(now - 1))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await post(String(now))).toEqual({ status: 200, body: { ok: true, status: 'dlq' } });
-    expect(await listDlq(slackDlq, sqliteStore(root), { tenantId: 'default' })).toHaveLength(2);
+    expect(await listDlq({ tenantId: 'default', store: sqliteStore(root) }, slackDlq)).toHaveLength(2);
   });
 });

@@ -9,7 +9,7 @@ import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/
 import { ingestMessage, type IngestInput } from '../../src/surface/connectors/slack/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
-import { parkInDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq } from '../../src/api/dead-letters.js';
 import { replaySlackDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../../src/store/sqlite/entries/raw-archive.js';
 import { verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
@@ -380,7 +380,7 @@ describe('Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
+    const dlqId = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
       tenantId: 'default',
       teamId: 'TREPLAY',
       rawPayload: body,

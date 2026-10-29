@@ -299,8 +299,8 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
   const refine = (s: Store, fetcher: typeof fetch, opts: Omit<RefineOptions, 'llm' | 'tenantId'> = {}) =>
-    s.call(() =>
-      refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
+    s.call((cli) =>
+      refineStore(cli, s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
     );
 
   /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */

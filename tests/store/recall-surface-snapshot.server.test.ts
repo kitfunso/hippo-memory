@@ -149,7 +149,9 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
 
 function viaCli(s: Store, c: SnapshotCase): Promise<InProcessResult> {
   const flags: CliFlags = { json: true, ...c.cli };
-  return runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }));
+  return runInProcess((cli) =>
+    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
 }
 
 const SURFACES = { http: viaHttp, mcp: viaMcp, cli: viaCli };

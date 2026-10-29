@@ -75,8 +75,8 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess(() =>
-    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  const out = await runInProcess((cli) =>
+    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
   );
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };

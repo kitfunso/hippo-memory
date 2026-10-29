@@ -3,10 +3,10 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -38,6 +38,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  endLastingCommands();
   vi.restoreAllMocks();
   process.exitCode = undefined;
 });
@@ -52,7 +53,7 @@ function replies(): Reply[] {
 
 describe('startStdioLoop, in process', () => {
   it('answers bad frames, lists tools, saves a remembered row in a new global store, and exits 0 once stdin ends', async () => {
-    startStdioLoop(cliStdioHost());
+    startStdioLoop(lastingCommand().stdioHost());
     feed(
       'not json',
       JSON.stringify({ jsonrpc: '2.0', id: 1 }),
@@ -90,7 +91,7 @@ describe('startStdioLoop, in process', () => {
   });
 
   it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
-    startStdioLoop(cliStdioHost());
+    startStdioLoop(lastingCommand().stdioHost());
     const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
     const dribble = (text: string, size: number): void => {
       const bytes = Buffer.from(text);

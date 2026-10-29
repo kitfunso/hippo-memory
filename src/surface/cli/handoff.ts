@@ -1,6 +1,5 @@
 // `hippo handoff`: write and read the note one session leaves for the next.
 
-import { cliStore } from './api-context.js';
 import {
   isHandoffOutcome,
   formatHandoffEvidenceLine,
@@ -27,7 +26,7 @@ const HANDOFF_CREATE_USAGE =
   '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
   '[--tests <pass|fail|unknown>]';
 
-async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function handoffCreate({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const summary = stringFlagOrExit(flags, 'summary') ?? '';
   if (!summary) {
     fail(HANDOFF_CREATE_USAGE);
@@ -35,7 +34,7 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
 
   const handoff = handoffFromFlags(flags, summary, handoffOutcomeFlag(flags));
   printCreatedHandoff(
-    await cliStore(hippoRoot).sessions.save(tenantId, 'handoff', { handoff }, null),
+    await cli.store(hippoRoot).sessions.save(tenantId, 'handoff', { handoff }, null),
   );
 }
 
@@ -101,11 +100,11 @@ function printCreatedHandoff(handoff: SessionHandoff): void {
   if (handoff.evidence) console.log(`   Evidence: ${formatHandoffEvidenceLine(handoff.evidence)}`);
 }
 
-async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function handoffLatest({ cli, hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const sessionId =
     (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || undefined;
   const query = { sessionId: sessionId ?? null };
-  const handoff = await cliStore(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
+  const handoff = await cli.store(hippoRoot).sessions.read(tenantId, 'handoff', query, null);
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {
@@ -124,12 +123,13 @@ async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlag
   printHandoff(handoff);
 }
 
-async function handoffShow(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+async function handoffShow({
+  cli,
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const idArg = args[1];
   if (!idArg) {
     fail('Usage: hippo handoff show <id> [--json]');
@@ -137,7 +137,7 @@ async function handoffShow(
 
   const handoffId = parsePositiveId(idArg, 'handoff');
 
-  const handoff = await cliStore(hippoRoot).sessions.read(tenantId, 'handoff', { id: handoffId });
+  const handoff = await cli.store(hippoRoot).sessions.read(tenantId, 'handoff', { id: handoffId });
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {
@@ -156,18 +156,14 @@ async function handoffShow(
   printHandoff(handoff);
 }
 
-export async function handleHandoff({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleHandoff(cmd: CommandContext): Promise<void> {
+  const { hippoRoot, args } = cmd;
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'latest';
-  if (subcommand === 'create') return handoffCreate(hippoRoot, tenantId, flags);
-  if (subcommand === 'latest') return handoffLatest(hippoRoot, tenantId, flags);
-  if (subcommand === 'show') return handoffShow(hippoRoot, tenantId, args, flags);
+  if (subcommand === 'create') return handoffCreate(cmd);
+  if (subcommand === 'latest') return handoffLatest(cmd);
+  if (subcommand === 'show') return handoffShow(cmd);
 
   fail('Usage: hippo handoff <create|latest|show>');
 }

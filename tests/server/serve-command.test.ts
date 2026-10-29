@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { handleServe } from '../../src/surface/cli/serve.js';
 import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 interface Pidfile {
   readonly url: string;
@@ -32,7 +33,7 @@ afterEach(() => {
 
 describe('hippo serve, in process', () => {
   it('prints its start lines, answers /health, writes the pidfile, and on SIGTERM closes and removes it', async () => {
-    void handleServe({ hippoRoot: dir, tenantId: 'default', args: [], flags: { port: '0' } });
+    void asCommand((cli) => handleServe({ cli, hippoRoot: dir, tenantId: 'default', args: [], flags: { port: '0' } }));
     await vi.waitFor(() => expect(printed).toContain('press Ctrl+C to stop'), { timeout: 15_000 });
 
     const started = /listening on (\S+) \(pid (\d+)\)/.exec(printed[0]);

@@ -16,7 +16,7 @@ import {
   localWrites,
   pickWrites,
 } from './memory-writes.js';
-import { cliApiContext, cliInitGlobal } from './api-context.js';
+import { cliInitGlobal, type CliCommand } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
@@ -132,19 +132,16 @@ const STORE_ONLY_SWITCHES = [
   'verified',
 ] as const;
 
-async function rememberWrites(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): Promise<MemoryWrites> {
+async function rememberWrites(cmd: CommandContext): Promise<MemoryWrites> {
+  const { flags } = cmd;
   if (boolFlag(flags, 'global')) {
     cliInitGlobal();
-    return localWrites(hippoHomeDir(), tenantId);
+    return localWrites({ ...cmd, hippoRoot: hippoHomeDir() });
   }
   if (STORE_ONLY_SWITCHES.some((name) => boolFlag(flags, name)) || hasFlag(flags, 'layer')) {
-    return localWrites(hippoRoot, tenantId);
+    return localWrites(cmd);
   }
-  return pickWrites(hippoRoot, tenantId);
+  return pickWrites(cmd);
 }
 
 async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise<void> {
@@ -191,6 +188,7 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
 }
 
 interface SupersedeTarget {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly oldId: string;
@@ -199,10 +197,10 @@ interface SupersedeTarget {
 /** The api's conflict text differs by which writer lost; the row itself names its successor
  * either way. */
 async function alreadySupersededLine(
-  { hippoRoot, tenantId, oldId }: SupersedeTarget,
+  { cli, hippoRoot, tenantId, oldId }: SupersedeTarget,
   conflict: ConflictError,
 ): Promise<string> {
-  const by = (await memoryGet(cliApiContext(hippoRoot, tenantId), oldId))?.supersededBy;
+  const by = (await memoryGet(cli.apiContext(hippoRoot, tenantId), oldId))?.supersededBy;
   return by
     ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.`
     : `Error: ${conflict.message}`;
@@ -224,6 +222,7 @@ interface SupersedeMemoryOptions extends SupersedeTarget {
 }
 
 async function supersedeMemory({
+  cli,
   hippoRoot,
   tenantId,
   oldId,
@@ -242,7 +241,7 @@ async function supersedeMemory({
   let newId: string;
   try {
     ({ newId } = await api.supersede(
-      cliApiContext(hippoRoot, tenantId),
+      cli.apiContext(hippoRoot, tenantId),
       oldId,
       newContent,
       overrides,
@@ -251,19 +250,15 @@ async function supersedeMemory({
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
     else if (err instanceof ConflictError) {
-      printError(await alreadySupersededLine({ hippoRoot, tenantId, oldId }, err));
+      printError(await alreadySupersededLine({ cli, hippoRoot, tenantId, oldId }, err));
     } else throw err;
     throw new CliExit(1);
   }
   console.log(`Superseded ${oldId} → ${newId}`);
 }
 
-export async function handleRemember({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function handleRemember(cmd: CommandContext): Promise<void> {
+  const { args, flags } = cmd;
   const text =
     args.length === 1 && args[0] === '-'
       ? fs.readFileSync(0, 'utf-8').trim()
@@ -273,7 +268,7 @@ export async function handleRemember({
   }
   const useGlobal = boolFlag(flags, 'global');
   const request = rememberRequest(text, flags, useGlobal);
-  const writes = await rememberWrites(hippoRoot, tenantId, flags);
+  const writes = await rememberWrites(cmd);
   await printRemembered(await writes.remember(request), useGlobal);
 }
 
@@ -282,11 +277,12 @@ export async function handleSupersede({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
     fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
-  await supersedeMemory({ hippoRoot, tenantId, oldId, newContent, flags });
+  await supersedeMemory({ cli, hippoRoot, tenantId, oldId, newContent, flags });
 }

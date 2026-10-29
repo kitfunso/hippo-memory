@@ -26,6 +26,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -105,25 +106,29 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
     // tenant-a scope: only tenant-a entries are returned by loadAllEntries,
     // and the tenant-a entry is not consolidated → scanned=0.
-    const result = await refineStore(hippoRoot, {
-      llm: anthropicLlm({
-        apiKey: 'test',
-        fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+    const result = await asCommand((cli) =>
+      refineStore(cli, hippoRoot, {
+        llm: anthropicLlm({
+          apiKey: 'test',
+          fetcher: async () =>
+            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+        }),
+        tenantId: 'tenant-a',
       }),
-      tenantId: 'tenant-a',
-    });
+    );
     expect(result.scanned).toBe(0); // tenant-b's consolidated entry not visible
 
     // Positive control: host-wide scan does see the consolidated entry
-    const hostWide = await refineStore(hippoRoot, {
-      llm: anthropicLlm({
-        apiKey: 'test',
-        fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+    const hostWide = await asCommand((cli) =>
+      refineStore(cli, hippoRoot, {
+        llm: anthropicLlm({
+          apiKey: 'test',
+          fetcher: async () =>
+            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+        }),
+        dryRun: true,
       }),
-      dryRun: true,
-    });
+    );
     expect(hostWide.scanned).toBe(1);
   });
 
@@ -155,10 +160,12 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       return new Response(JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }), { status: 200 });
     };
 
-    const result = await refineStore(hippoRoot, {
-      llm: anthropicLlm({ apiKey: 'test', fetcher }),
-      tenantId: 'tenant-a',
-    });
+    const result = await asCommand((cli) =>
+      refineStore(cli, hippoRoot, {
+        llm: anthropicLlm({ apiKey: 'test', fetcher }),
+        tenantId: 'tenant-a',
+      }),
+    );
     // L9 contract: the consolidated entry was scanned (scope=tenant-a hit),
     // and the parent lookup for the cross-tenant bParentId returned null →
     // refineSemanticMemory was called with 0 sources. The refined/failed
@@ -318,14 +325,16 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     expect(allHostWide.length).toBe(2);
     expect(allHostWide.every((e) => e.content.startsWith('[Consolidated from'))).toBe(true);
 
-    const result = await refineStore(hippoRoot, {
-      llm: anthropicLlm({
-        apiKey: 'test',
-        fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+    const result = await asCommand((cli) =>
+      refineStore(cli, hippoRoot, {
+        llm: anthropicLlm({
+          apiKey: 'test',
+          fetcher: async () =>
+            new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+        }),
+        dryRun: true,
       }),
-      dryRun: true,
-    });
+    );
     // Both tenants' consolidated entries are scanned (host-wide). The
     // exact refined/failed split depends on refineSemanticMemory's response
     // parsing; the host-wide assertion is on `scanned`.

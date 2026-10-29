@@ -21,7 +21,6 @@ import {
   type CommandContext,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { cliApiContext } from './api-context.js';
 import {
   closeObjectVerb,
   foundOrExit,
@@ -81,9 +80,9 @@ export function requiredText(flags: CliFlags, name: string): string | undefined 
 export function versionedVerbs<K extends VersionedKindName, B>(
   kind: VersionedKind<K, B>,
 ): (cc: CommandContext) => Promise<void> {
-  return async ({ hippoRoot, tenantId, args, flags }) => {
+  return async ({ cli, hippoRoot, tenantId, args, flags }) => {
     requireInit(hippoRoot);
-    const ctx = cliApiContext(hippoRoot, tenantId);
+    const ctx = cli.apiContext(hippoRoot, tenantId);
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(ctx, args, flags);
     if (sub === 'list') {

@@ -12,7 +12,12 @@ import {
 import { captureTarget } from '../hook-runtime.js';
 import { fail } from '../exit.js';
 
-export async function handleCapture({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleCapture({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   const { captureSource, captureFile, transcriptPath } = captureSourceFlags(flags);
 
   // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own
@@ -23,7 +28,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
       : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot), {
+  await runCapture(captureTarget(cli, useGlobal ? hippoHomeDir() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

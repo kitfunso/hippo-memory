@@ -2,17 +2,20 @@
 // from a fresh read of the folder.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleStatus } from '../../src/surface/cli/status.js';
-import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import type { HippoConfig } from '../../src/base/config/config.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  endLastingCommands();
+  vi.restoreAllMocks();
+});
 
 describe('status', () => {
   it('takes the embedder and its enabled flag from the context', async () => {
     const root = makeRoot('status-ctx-embed');
-    const base = cliApiContext(root, 'default');
+    const base = lastingCommand().apiContext(root, 'default');
     const asked: HippoConfig['embeddings'][] = [];
     const provider = {
       kind: 'local',
@@ -33,7 +36,13 @@ describe('status', () => {
       },
     };
     const out = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }, ctx);
+    await handleStatus({
+      cli: { ...lastingCommand(), apiContext: () => ctx },
+      hippoRoot: root,
+      tenantId: 'default',
+      args: [],
+      flags: {},
+    });
     const lines = out.mock.calls.map((c) => String(c[0]));
     expect(asked).toEqual([ctx.config.embeddings]);
     expect(lines.some((l) => l.includes('disabled in config'))).toBe(true);

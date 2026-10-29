@@ -10,6 +10,7 @@ import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/ent
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { ownStderr } from './own-stderr.js';
 import { runInProcess } from './run-in-process.js';
+import type { CliCommand } from '../../src/surface/cli/api-context.js';
 import { runCliAs } from './run-cli-as.js';
 import { hippoRunAsync } from './spawn-hippo.js';
 import { writeEntry } from './root-forms.js';
@@ -186,10 +187,10 @@ export class Store {
   }
 
   /** A verb function with no flag for its test seam (the refine fetcher), run in this process with its output captured. */
-  async call<T>(fn: () => Promise<T>): Promise<Ran & { result: T | undefined }> {
+  async call<T>(fn: (cli: CliCommand) => Promise<T>): Promise<Ran & { result: T | undefined }> {
     let result: T | undefined;
-    const r = await runInProcess(async () => {
-      result = await fn();
+    const r = await runInProcess(async (cli) => {
+      result = await fn(cli);
     });
     return { status: r.status, stdout: this.mask(r.stdout), stderr: this.mask(r.stderr), result };
   }

@@ -4,7 +4,7 @@
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import * as api from '../../api/index.js';
-import { cliApiContext, type CliContext } from './api-context.js';
+import { type CliContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
@@ -147,8 +147,9 @@ export async function handleProjects({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
-  const ctx = cliApiContext(resolveAuthRoot(hippoRoot, flags), tenantId);
+  const ctx = cli.apiContext(resolveAuthRoot(hippoRoot, flags), tenantId);
   const sub = args[0] ?? 'list';
   try {
     if (sub === 'list') return await projectsList(ctx, flags);

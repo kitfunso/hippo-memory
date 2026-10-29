@@ -8,7 +8,6 @@ import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
-import { cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
 import { lastSleepAt } from '../../api/status.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';
@@ -18,6 +17,7 @@ import { type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { plural } from '../../base/util/format.js';
+import type { CliScope } from './api-context.js';
 
 // Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a
 // hung child cannot stall every later workspace.
@@ -34,13 +34,15 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
+export async function handleDailyRunner({ tenantId, cli }: CommandContext): Promise<void> {
   const globalRoot = hippoHomeDir();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact
   // into it.
-  if (isInitialized(globalRoot)) await finishGlobalCompactions(globalRoot, tenantId);
+  if (isInitialized(globalRoot)) {
+    await finishGlobalCompactions({ cli, hippoRoot: globalRoot, tenantId });
+  }
   printAgentImport(
-    await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
+    await importUserMemories(globalRoot, cli.syncOptions(tenantId, currentMachine())),
     '',
   );
   const workspaces = listRegisteredWorkspaces(globalRoot);
@@ -48,7 +50,9 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   const { runStep, counts } = dailyStepRunner(envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS);
   // Before the no-workspace return: a box with no workspaces still has a global store that hooks
   // write to.
-  if (isInitialized(globalRoot)) await sleepGlobalStore(globalRoot, tenantId, runStep);
+  if (isInitialized(globalRoot)) {
+    await sleepGlobalStore({ cli, hippoRoot: globalRoot, tenantId }, runStep);
+  }
 
   if (workspaces.length === 0) {
     console.log('No registered Hippo workspaces found. Run `hippo init` inside a project first.');
@@ -61,17 +65,21 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   reportDailyRun(counts.processed, counts.failed);
 }
 
-async function finishGlobalCompactions(globalRoot: string, tenantId: string): Promise<void> {
+async function finishGlobalCompactions({
+  cli,
+  hippoRoot: globalRoot,
+  tenantId,
+}: CliScope): Promise<void> {
   const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
   const finished = await replayCompactions(
-    { root: globalRoot, store: cliStore(globalRoot), tenantId },
+    { root: globalRoot, store: cli.store(globalRoot), tenantId },
     warn,
   );
   if (finished > 0) {
     console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
   }
   pruneSessionFiles(Date.now());
-  await repairQualityOnce(globalRoot, tenantId);
+  await repairQualityOnce({ cli, hippoRoot: globalRoot, tenantId });
 }
 
 interface DailyStepRunner {
@@ -111,13 +119,12 @@ const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;
 /** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history
  * sleeps it anyway. */
 async function sleepGlobalStore(
-  globalRoot: string,
-  tenantId: string,
+  { cli, hippoRoot: globalRoot, tenantId }: CliScope,
   runStep: (cwd: string, args: string[]) => void,
 ): Promise<void> {
   let last: string | undefined;
   try {
-    last = await lastSleepAt(cliApiContext(globalRoot, tenantId));
+    last = await lastSleepAt(cli.apiContext(globalRoot, tenantId));
   } catch (err) {
     log.warn(
       `could not read the global store's last sleep: ${errorMessage(err)}`,

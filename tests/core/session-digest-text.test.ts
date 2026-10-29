@@ -8,10 +8,10 @@ import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js
 import { recordSessionDigest, type DigestEdit } from '../../src/surface/capture/session-digest.js';
 import { digestSentences } from '../../src/domain/learn/session-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { hookStore } from '../_helpers/cli-stores.js';
-import { cliRequest } from '../../src/surface/cli/api-context.js';
+import type { CliCommand } from '../../src/surface/cli/api-context.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { asCommand } from '../_helpers/test-cli.js';
 
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
@@ -41,16 +41,20 @@ afterEach(() => {
  *  One request, as the session-end hook runs it, so its store calls share one handle that closes before the next rm. */
 async function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] } = {}): Promise<string> {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
-  return cliRequest(() => digestInOneRequest(finalText, opts));
+  return asCommand((cmd) => cmd.request((cli) => digestInOneRequest(cli, finalText, opts)));
 }
 
-async function digestInOneRequest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] }): Promise<string> {
+async function digestInOneRequest(
+  cli: CliCommand,
+  finalText: string,
+  opts: { echo?: string[]; edits?: DigestEdit[] },
+): Promise<string> {
   initTestStore(hippoRoot);
   const turns = (opts.echo ?? ['go']).map((text) => ({ role: 'user' as const, text }));
   const log: string[] = [];
   await recordSessionDigest(
     hippoRoot,
-    hookStore(hippoRoot),
+    cli.store(hippoRoot),
     { turns, finalText, cwd: repo, edits: opts.edits ?? [] },
     {
       key: 's1',

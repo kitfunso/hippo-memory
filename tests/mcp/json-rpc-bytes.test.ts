@@ -10,7 +10,6 @@ import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import type { CliStore } from '../../src/surface/cli/api-context.js';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
-import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
@@ -18,6 +17,7 @@ import { captureWrites, fire, recordListeners, stubExit, type Listener } from '.
 import { testInfra } from '../_helpers/infra.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
+import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 let root: string;
 
@@ -29,6 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  endLastingCommands();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
@@ -154,13 +155,13 @@ describe('replies the stdio loop writes', () => {
   const feed = (data: string | Buffer): void => fire(stdin, 'data', Buffer.from(data));
 
   it('a frame that is not JSON, with -32700', () => {
-    startStdioLoop(cliStdioHost());
+    startStdioLoop(lastingCommand().stdioHost());
     feed('not json\n');
     expect(written).toEqual(['{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}\n']);
   });
 
   it('a frame with an id and no method, with -32600', () => {
-    startStdioLoop(cliStdioHost());
+    startStdioLoop(lastingCommand().stdioHost());
     feed('{"jsonrpc":"2.0","id":12}\n');
     expect(written).toEqual([
       '{"jsonrpc":"2.0","id":12,"error":{"code":-32600,"message":"Invalid Request: method must be a string"}}\n',
@@ -168,7 +169,7 @@ describe('replies the stdio loop writes', () => {
   });
 
   it('a frame over 1 MB, with -32700', () => {
-    startStdioLoop(cliStdioHost());
+    startStdioLoop(lastingCommand().stdioHost());
     const declared = 2 * 1024 * 1024;
     feed(`Content-Length: ${declared}\r\n\r\n`);
     // The refused body is dropped as it arrives, so the loop reads the next frame as itself.
@@ -182,7 +183,7 @@ describe('replies the stdio loop writes', () => {
     // The call is held until the reply is out, so no timer race decides the order. The deadline stays real: a faked
     // timer fires outside the request's async scope and drops the request id.
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '40');
-    const real = cliStdioHost();
+    const real = lastingCommand().stdioHost();
     let release = (): void => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;

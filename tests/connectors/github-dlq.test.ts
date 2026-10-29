@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
+import { parkInDlq, listDlq } from '../../src/api/dead-letters.js';
 import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -20,7 +20,7 @@ describe('github DLQ', () => {
   });
 
   it('parkInDlq round-trips all rich metadata fields', async () => {
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{"action":"opened"}',
       error: 'parse fail',
@@ -53,7 +53,7 @@ describe('github DLQ', () => {
   });
 
   it('parkInDlq stores tenantId null as the __unroutable__ sentinel', async () => {
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: null,
       rawPayload: '{}',
       error: 'no tenant',
@@ -62,25 +62,21 @@ describe('github DLQ', () => {
     const item = (await sqliteStore(root).connectorEvents.deadLetters('github', '__unroutable__', { id }))[0];
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
-    const listed = await listDlq(githubDlq, sqliteStore(root), {
-      tenantId: '__unroutable__',
-    });
+    const listed = await listDlq({ tenantId: '__unroutable__', store: sqliteStore(root) }, githubDlq);
     expect(listed).toHaveLength(1);
   });
 
   it('parkInDlq round-trips every defined bucket value', async () => {
     const buckets: DlqBucket[] = ['parse_error', 'unroutable', 'signature_failed', 'unhandled'];
     for (const bucket of buckets) {
-      await parkInDlq(githubDlq, sqliteStore(root), {
+      await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
         tenantId: 'default',
         rawPayload: `{"b":"${bucket}"}`,
         error: bucket,
         bucket,
       });
     }
-    const items = await listDlq(githubDlq, sqliteStore(root), {
-      tenantId: 'default',
-    });
+    const items = await listDlq({ tenantId: 'default', store: sqliteStore(root) }, githubDlq);
     expect(items).toHaveLength(4);
     const observed = items.map((i) => i.bucket).sort();
     expect(observed).toEqual([...buckets].sort());
@@ -89,55 +85,48 @@ describe('github DLQ', () => {
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-    await parkInDlq(githubDlq, sqliteStore(root), {
+    await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{"i":1}',
       error: 'first',
     });
     // A later clock makes received_at differ without a sleep.
     vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
-    await parkInDlq(githubDlq, sqliteStore(root), {
+    await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{"i":2}',
       error: 'second',
     });
-    await parkInDlq(githubDlq, sqliteStore(root), {
+    await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'acme',
       rawPayload: '{"i":3}',
       error: 'other tenant',
     });
 
-    const defaults = await listDlq(githubDlq, sqliteStore(root), {
-      tenantId: 'default',
-    });
+    const defaults = await listDlq({ tenantId: 'default', store: sqliteStore(root) }, githubDlq);
     expect(defaults).toHaveLength(2);
     expect(defaults[0].error).toBe('first');
     expect(defaults[1].error).toBe('second');
 
-    const acme = await listDlq(githubDlq, sqliteStore(root), {
-      tenantId: 'acme',
-    });
+    const acme = await listDlq({ tenantId: 'acme', store: sqliteStore(root) }, githubDlq);
     expect(acme).toHaveLength(1);
     expect(acme[0].error).toBe('other tenant');
   });
 
   it('listDlq honors limit', async () => {
     for (let i = 0; i < 5; i += 1) {
-      await parkInDlq(githubDlq, sqliteStore(root), {
+      await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
         tenantId: 'default',
         rawPayload: `{"i":${i}}`,
         error: `e${i}`,
       });
     }
-    const items = await listDlq(githubDlq, sqliteStore(root), {
-      tenantId: 'default',
-      limit: 2,
-    });
+    const items = await listDlq({ tenantId: 'default', store: sqliteStore(root) }, githubDlq, { limit: 2 });
     expect(items).toHaveLength(2);
   });
 
   it('dlqEntry returns the row by id and null for unknown ids', async () => {
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'boom',
@@ -158,7 +147,7 @@ describe('github DLQ', () => {
 
   it("reads and counts a retry on the caller's own rows only, so another tenant's id answers absent and stays unmarked", async () => {
     const events = sqliteStore(root).connectorEvents;
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'boom',
@@ -177,7 +166,7 @@ describe('github DLQ', () => {
   });
 
   it('replayGithubDlqEntry on parse-error payload bumps retry_count and reports parse_error', async () => {
-    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+    const id = await parkInDlq({ store: sqliteStore(root) }, githubDlq, {
       tenantId: 'default',
       rawPayload: 'not-json{{{',
       error: 'original parse fail',
@@ -200,12 +189,12 @@ describe('github DLQ', () => {
 
   it("replayGithubDlqEntry finds an unroutable row and counts the retry on it, but answers not_found for another tenant's row", async () => {
     const store = sqliteStore(root);
-    const unroutable = await parkInDlq(githubDlq, store, {
+    const unroutable = await parkInDlq({ store: store }, githubDlq, {
       tenantId: null,
       rawPayload: 'x{',
       error: 'no tenant',
     });
-    const acmes = await parkInDlq(githubDlq, store, {
+    const acmes = await parkInDlq({ store: store }, githubDlq, {
       tenantId: 'acme',
       rawPayload: 'x{',
       error: 'acme row',

@@ -10,7 +10,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { closePrediction, loadAllEntries } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
-import { cliRequest } from '../../src/surface/cli/api-context.js';
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';
@@ -45,8 +44,8 @@ async function seedBaserateWithNoMemories(): Promise<void> {
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {
-  const run = await runInProcess(() =>
-    cliRequest(() => handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags })),
+  const run = await runInProcess((cmd) =>
+    cmd.request((cli) => handleRecall({ cli, hippoRoot: root, tenantId: 'default', args: [QUERY], flags })),
   );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;

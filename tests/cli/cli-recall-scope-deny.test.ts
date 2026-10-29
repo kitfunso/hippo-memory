@@ -176,8 +176,14 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
-    const res = await runInProcess(() =>
-      handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }),
+    const res = await runInProcess((cli) =>
+      handleExplain({
+        cli,
+        hippoRoot: join(home, '.hippo'),
+        tenantId: 'default',
+        args: ['deploykey'],
+        flags: {},
+      }),
     );
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);

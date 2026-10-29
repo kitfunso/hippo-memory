@@ -10,7 +10,6 @@ import {
   settleTokens,
 } from '../../api/context/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -23,6 +22,7 @@ import {
 import { requireInit } from './shared.js';
 import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
+import type { CliCommand } from './api-context.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;
 const TREE_LEAF_PREVIEW_CHARS = 60;
@@ -30,9 +30,14 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleDag({
+  hippoRoot,
+  tenantId,
+  flags,
+  cli,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const entries = await memoryList(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = await memoryList(cli.apiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = boolFlag(flags, 'stats');
 
   const byLevel = new Map<number, number>();
@@ -127,6 +132,7 @@ function printOrphanSummary(summary: MemoryEntry, children: readonly MemoryEntry
 }
 
 interface AssembleSessionOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly sessionId: string;
@@ -134,6 +140,7 @@ interface AssembleSessionOptions {
 }
 
 async function assembleSession({
+  cli,
   hippoRoot,
   tenantId,
   sessionId,
@@ -145,7 +152,7 @@ async function assembleSession({
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = !boolFlag(flags, 'no-summarize-older');
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
+  const ctx = { ...cli.apiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
   const opts: api.AssembleOptions = {};
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
@@ -181,6 +188,7 @@ function drillDepthFlag(flags: CliFlags): number | undefined {
 }
 
 interface DrillIntoSummaryOptions {
+  readonly cli: CliCommand;
   readonly hippoRoot: string;
   readonly tenantId: string;
   readonly summaryId: string;
@@ -188,6 +196,7 @@ interface DrillIntoSummaryOptions {
 }
 
 async function drillIntoSummary({
+  cli,
   hippoRoot,
   tenantId,
   summaryId,
@@ -195,7 +204,7 @@ async function drillIntoSummary({
 }: DrillIntoSummaryOptions): Promise<void> {
   requireInit(hippoRoot);
   const opts = drillDownOptions(flags);
-  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
+  const ctx = { ...cli.apiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
   const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) failDrill(r, summaryId);
   if (boolFlag(flags, 'json')) {
@@ -250,12 +259,13 @@ export async function handleDrill({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
     fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
-  await drillIntoSummary({ hippoRoot, tenantId, summaryId, flags });
+  await drillIntoSummary({ cli, hippoRoot, tenantId, summaryId, flags });
 }
 
 export async function handleAssemble({
@@ -263,6 +273,7 @@ export async function handleAssemble({
   tenantId,
   args,
   flags,
+  cli,
 }: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
@@ -270,5 +281,5 @@ export async function handleAssemble({
       'Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]',
     );
   }
-  await assembleSession({ hippoRoot, tenantId, sessionId, flags });
+  await assembleSession({ cli, hippoRoot, tenantId, sessionId, flags });
 }
