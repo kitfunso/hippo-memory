@@ -59,6 +59,36 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
+// The AGENTS.md block hippo 2.1.0 wrote for Codex, which told the agent to load context at the start of every task.
+const CODEX_BEFORE_ONE_CHANNEL = `
+## Project Memory (Hippo)
+
+At the start of every task, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+
+When Hippo's Codex wrapper is installed, session-end capture runs automatically.
+If the wrapper is not installed, capture a brief summary manually:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+`.trim();
+
 const readJson = (file: string): JsonValue => JSON.parse(fs.readFileSync(file, 'utf8'));
 const snapshot = (file: string): string | null => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
 function writeFile(file: string, text: string): void {
@@ -250,6 +280,17 @@ describe('hippo init and Codex', () => {
     expect(readJson(path.join(codexHome, 'hooks.json'))).toEqual(HIPPO_ONLY);
     expect(fs.existsSync(m.codexDir)).toBe(false);
     expect(out).toContain(CODEX_TRUST_LINE);
+  });
+
+  it('refreshes an AGENTS.md block that told Codex to load context every task, now that its prompt hook sends the memories', () => {
+    const m = machine();
+    fs.writeFileSync(agentsMd(m), `# Agents\n\n${START}\n${CODEX_BEFORE_ONE_CHANNEL}\n${END}\n`);
+    expect(init(m)).toContain('Refreshed the codex hippo block in AGENTS.md');
+    const after = fs.readFileSync(agentsMd(m), 'utf8');
+    expect(after).toContain("When Hippo's prompt hook is installed, it injects pinned rules and the");
+    expect(after).toContain('hippo context --auto --budget 1500');
+    expect(after).not.toContain('At the start of every task, run:');
+    expect(after).not.toContain('Read the output before writing any code.');
   });
 
   it('writes no Codex hook and creates no folder when CODEX_HOME names a folder that does not exist', () => {

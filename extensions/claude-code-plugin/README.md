@@ -42,9 +42,7 @@ hippo init
 
 ## What It Does
 
-### Auto-context at session start
-
-The `SessionStart` hook automatically runs `hippo context --auto --budget 1500` when you start a Claude Code session. Relevant memories from past sessions appear in context immediately.
+The per-prompt hook injects pinned rules and matching memories, so the plugin no longer runs a context call at session start.
 
 ### Pinned rules on every prompt
 
@@ -87,7 +85,7 @@ claude-code-plugin/
 | Memory model | Decay + retrieval strengthening | Save everything |
 | API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
 | Cross-tool | Works across Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| Token cost | About 1,500 tokens at session start (configurable), plus the pinned block when it changes | Variable |
+| Token cost | No session-start call; the per-prompt block, sent again only when it changes | Variable |
 | Outcome feedback | Yes (strengthens/weakens memories) | No |
 | Error priority | 2x half-life for errors | No distinction |
 | Memecoin | No | Yes ($CMEM on Solana) |

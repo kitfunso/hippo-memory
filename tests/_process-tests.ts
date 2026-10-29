@@ -30,6 +30,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'auto-capture.test.ts',
   'autolearn.test.ts',
   'bi-temporal-recall.test.ts',
+  'bin-sqlite-warning.test.ts',
   'budget-printed-block.test.ts',
   'bugfix-defaults.test.ts',
   'capture-cli.test.ts',

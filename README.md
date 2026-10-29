@@ -858,11 +858,9 @@ For GitHub Copilot, when `$COPILOT_HOME` (else `~/.copilot`) or a VS Code User f
 ````markdown
 ## Project Memory (Hippo)
 
-Pinned rules and recent writes auto-inject at every prompt via the installed
-UserPromptSubmit hook; never re-run that part manually. At the START of a
-task (not per prompt), additionally load task-specific context: git-aware
-recall over the full store that per-prompt injection does not cover. Also
-run it if the hook is not installed:
+The installed UserPromptSubmit hook injects pinned rules and the memories
+that match each prompt, so never load them yourself. If no hippo memory
+block has appeared in this session, run this at the start of a task:
 ```bash
 hippo context --auto --budget 1500
 ```
