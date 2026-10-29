@@ -153,7 +153,7 @@ async function parkAndAck(
     signature: d.signature,
     slackTimestamp: d.slackTimestamp,
   };
-  await parkInDlq(slackDlq, d.store, row);
+  await parkInDlq(d, slackDlq, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 

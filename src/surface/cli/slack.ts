@@ -72,7 +72,7 @@ async function listSlackDlq(
   tenantId: string,
   _flags: CliFlags,
 ): Promise<void> {
-  const items = await listDlq(slackDlq, cli.store(hippoRoot), { tenantId });
+  const items = await listDlq(cli.apiContext(hippoRoot, tenantId), slackDlq);
   for (const it of items) {
     console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }

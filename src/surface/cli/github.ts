@@ -107,7 +107,7 @@ export async function listGitHubDlq(
   tenantId: string,
   _flags: CliFlags,
 ): Promise<void> {
-  const items = await listDlq(githubDlq, cli.store(hippoRoot), { tenantId });
+  const items = await listDlq(cli.apiContext(hippoRoot, tenantId), githubDlq);
   if (items.length === 0) {
     console.log('no entries');
     return;

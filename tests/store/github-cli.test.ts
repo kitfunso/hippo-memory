@@ -115,7 +115,7 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', async () => {
-    await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
+    await parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad envelope',
@@ -131,7 +131,7 @@ describe('hippo github CLI', () => {
 
   it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
     for (const tenantId of ['default', 'acme']) {
-      await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
+      await parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
         tenantId,
         rawPayload: '{}',
         error: `err-${tenantId}`,
@@ -189,7 +189,7 @@ describe('hippo github CLI', () => {
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
   function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
-    return parkInDlq(githubDlq, sqliteStore(hippoRoot), {
+    return parkInDlq({ store: sqliteStore(hippoRoot) }, githubDlq, {
       tenantId: 'default',
       rawPayload: body,
       error: 'unroutable: installation_id=99 repo=acme/repo',

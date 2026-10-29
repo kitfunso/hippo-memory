@@ -206,7 +206,7 @@ async function parkAndAck(
     installationId: park.installationId,
     repoFullName: park.repoFullName,
   };
-  await parkInDlq(githubDlq, d.store, row);
+  await parkInDlq(d, githubDlq, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 

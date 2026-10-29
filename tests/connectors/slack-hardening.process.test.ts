@@ -380,7 +380,7 @@ describe('Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
+    const dlqId = await parkInDlq({ store: sqliteStore(root) }, slackDlq, {
       tenantId: 'default',
       teamId: 'TREPLAY',
       rawPayload: body,

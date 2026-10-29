@@ -24,7 +24,7 @@ describe('hippo slack CLI', () => {
   });
 
   it('hippo slack dlq list prints DLQ rows', async () => {
-    await parkInDlq(slackDlq, sqliteStore(join(root, '.hippo')), {
+    await parkInDlq({ store: sqliteStore(join(root, '.hippo')) }, slackDlq, {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad event',

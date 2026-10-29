@@ -59,6 +59,7 @@ export async function replaySlackDlqEntry(
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
   return replayParked<'slack', JsonValue & SlackEventEnvelope>(
+    ctx,
     {
       dlq: slackDlq,
       refuseSignature: (row) => refuseSignature(row, opts),
@@ -70,8 +71,7 @@ export async function replaySlackDlqEntry(
           allowUnknown: opts.allowUnknownTeamFallback === true,
         }),
     },
-    ctx.store,
-    { tenantId: ctx.tenantId, id, force: opts.force === true },
+    { id, force: opts.force === true },
   );
 }
 

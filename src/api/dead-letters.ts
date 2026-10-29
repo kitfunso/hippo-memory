@@ -7,17 +7,21 @@ import type {
   ConnectorDeadLetter,
   DeadLetterConnector,
   DeadLetterRows,
-  StoreWith,
 } from '../base/ports/store.js';
 import type { JsonValue } from '../base/util/json.js';
 import { errorMessage } from '../base/util/log.js';
+import type { ContextWith } from './types.js';
 
 /** The tenant stored on a row no tenant was resolved for; the column is NOT NULL. */
 const UNROUTABLE_TENANT = '__unroutable__';
 
 const DEFAULT_BUCKET = 'parse_error';
 
-type DeadLetterStore = StoreWith<'connectorEvents'>;
+/** The caller's tenant and the store its dead letters live in. */
+export type DeadLetterContext = Pick<ContextWith<'connectorEvents'>, 'tenantId' | 'store'>;
+
+/** A webhook parks before it has routed the payload, so the row's tenant comes with the row. */
+export type ParkContext = Pick<DeadLetterContext, 'store'>;
 
 /** What a caller hands over to park one payload, whatever the connector. */
 export interface ParkOptions<Bucket extends string> {
@@ -46,8 +50,8 @@ export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends
 }
 
 export async function parkInDlq<Own, Bucket extends string>(
+  ctx: ParkContext,
   dlq: ConnectorDlq<DeadLetterConnector, Own, Bucket>,
-  store: DeadLetterStore,
   opts: ParkOptions<Bucket> & NoInfer<Own>,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
@@ -61,15 +65,16 @@ export async function parkInDlq<Own, Bucket extends string>(
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : (opts.signature ?? null),
   });
-  return store.connectorEvents.parkDeadLetter(letter);
+  return ctx.store.connectorEvents.parkDeadLetter(letter);
 }
 
+/** The caller's tenant's parked rows on `dlq`. */
 export function listDlq<C extends DeadLetterConnector>(
+  ctx: DeadLetterContext,
   dlq: ConnectorDlq<C, never, never>,
-  store: DeadLetterStore,
-  opts: { tenantId: string; limit?: number },
+  opts: { limit?: number } = {},
 ): Promise<DeadLetterRows[C][]> {
-  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, {
+  return ctx.store.connectorEvents.deadLetters(dlq.connector, ctx.tenantId, {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
   });
 }
@@ -106,8 +111,8 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
 /** A replay that failed after the row was read: counts it exactly once, then reports the new
  * count. */
 async function failAndBump(
+  { store }: ParkContext,
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
-  store: DeadLetterStore,
   row: { id: number; tenantId: string; retryCount: number },
   failure: { status: ReplayStatus; reason: string },
 ): Promise<ReplayResult> {
@@ -118,9 +123,8 @@ async function failAndBump(
 /** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay
  * routes it. Another tenant's row reads as absent. */
 async function replayableRow<C extends DeadLetterConnector>(
-  store: DeadLetterStore,
+  { store, tenantId }: DeadLetterContext,
   connector: C,
-  tenantId: string,
   id: number,
 ): Promise<DeadLetterRows[C] | null> {
   const [own] = await store.connectorEvents.deadLetters(connector, tenantId, { id });
@@ -162,9 +166,8 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
   readonly reingest: (row: DeadLetterRows[C], envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Which parked row to replay; `force` skips the signature check. */
+/** Which of the caller's parked rows to replay; `force` skips the signature check. */
 export interface ReplayTarget {
-  readonly tenantId: string;
   readonly id: number;
   readonly force: boolean;
 }
@@ -172,35 +175,35 @@ export interface ReplayTarget {
 /** Re-runs a parked row under today's secret and routing; every attempt past the read is counted
  * once, except a missing signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
+  ctx: DeadLetterContext,
   steps: ReplaySteps<C, Envelope>,
-  store: DeadLetterStore,
-  { tenantId, id, force }: ReplayTarget,
+  { id, force }: ReplayTarget,
 ): Promise<ReplayResult> {
-  const row = await replayableRow(store, steps.dlq.connector, tenantId, id);
+  const row = await replayableRow(ctx, steps.dlq.connector, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   const refusal = force ? null : steps.refuseSignature(row);
   if (refusal?.status === 'sig_missing') {
     return replayFailed(refusal.status, row.retryCount, refusal.reason);
   }
-  if (refusal) return failAndBump(steps.dlq, store, row, refusal);
+  if (refusal) return failAndBump(ctx, steps.dlq, row, refusal);
 
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    return failAndBump(steps.dlq, store, row, {
+    return failAndBump(ctx, steps.dlq, row, {
       status: 'parse_error',
       reason: `still unparseable: ${errorMessage(e)}`,
     });
   }
   if (!steps.isEnvelope(parsed)) {
-    return failAndBump(steps.dlq, store, row, { status: 'unhandled', reason: steps.notEnvelope });
+    return failAndBump(ctx, steps.dlq, row, { status: 'unhandled', reason: steps.notEnvelope });
   }
 
   const outcome = await steps.reingest(row, parsed);
-  if (!outcome.ok) return failAndBump(steps.dlq, store, row, outcome);
-  await store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.tenantId, row.id);
+  if (!outcome.ok) return failAndBump(ctx, steps.dlq, row, outcome);
+  await ctx.store.connectorEvents.markDeadLetterRetried(steps.dlq.connector, row.tenantId, row.id);
   const result: ReplayResult = {
     ok: true,
     status: outcome.status,
