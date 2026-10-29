@@ -50,8 +50,11 @@ export async function withStoreRuntime<T>(fn: (runtime: StoreRuntime) => Promise
   try {
     return await fn(runtime);
   } finally {
-    await runtime.dispose();
-    process.off('exit', onExit);
+    try {
+      await runtime.dispose();
+    } finally {
+      process.off('exit', onExit);
+    }
   }
 }
 
