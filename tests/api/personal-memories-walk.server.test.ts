@@ -30,7 +30,6 @@ import {
   writeEntry,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -638,16 +637,9 @@ describe('personal memories walk (plan lane T)', () => {
     // Fresh rows, because the line 14 sleep may merge the earlier zircon rows into one consolidated row.
     const team = seedRow('the harrowfen pump note for the cli, team row', null, '');
     const mine = seedRow('the harrowfen pump note for the cli, kept by A', A_SCOPE, '');
+    const recall = { hippoRoot: store, tenantId: 'default', args: ['harrowfen'] };
     const run = (flags: Record<string, string | boolean>) =>
-      runInProcess(() =>
-        handleRecall({
-          cli: cliCommand(),
-          hippoRoot: store,
-          tenantId: 'default',
-          args: ['harrowfen'],
-          flags: { json: true, ...flags },
-        }),
-      );
+      runInProcess((cli) => handleRecall({ ...recall, cli, flags: { json: true, ...flags } }));
     expect((await run({})).stdout).toContain(team.id);
     const scoped = await run({ scope: A_SCOPE });
     expect(scoped.stdout).toContain(team.id);

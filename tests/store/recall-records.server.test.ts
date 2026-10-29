@@ -30,7 +30,6 @@ import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '
 import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
-import { cliCommand } from '../../src/surface/cli/api-context.js';
 
 // Each case is one process, so its CLI commands share one CallerState.
 let callers: CallerState;
@@ -90,8 +89,8 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<Reply> {
 async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   const flags: CliFlags = { ...c.cli };
   if (c.session) flags['session-id'] = c.session;
-  const out = await runInProcess(() =>
-    handleRecall({ cli: cliCommand(), hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  const out = await runInProcess((cli) =>
+    handleRecall({ cli, hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
   );
   return {
     status: out.status,

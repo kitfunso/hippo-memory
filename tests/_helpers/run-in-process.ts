@@ -3,6 +3,7 @@
 import { format } from 'node:util';
 import { vi } from 'vitest';
 import { CliExit } from '../../src/surface/cli/exit.js';
+import { cliCommand, type CliCommand } from '../../src/surface/cli/api-context.js';
 
 /** Thrown in place of process.exit so the verb stops where the real process would. */
 export class ExitCalled extends Error {
@@ -18,8 +19,9 @@ export interface InProcessResult {
 }
 
 /** Captures console and stream writes while `fn` runs; the first process.exit(n) or thrown CliExit(n) ends the run with
- * status n, and a run that sets process.exitCode and returns (as runCli does) ends with that, as a spawned hippo would. */
-export async function runInProcess(fn: () => void | Promise<void>): Promise<InProcessResult> {
+ * status n, and a run that sets process.exitCode and returns (as runCli does) ends with that, as a spawned hippo would.
+ * `fn` gets the stores a verb's command opens, as the CLI root hands them. */
+export async function runInProcess(fn: (cli: CliCommand) => void | Promise<void>): Promise<InProcessResult> {
   const out: string[] = [];
   const err: string[] = [];
   let exited: ExitCalled | undefined;
@@ -60,7 +62,7 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     }),
   ];
   try {
-    await fn();
+    await fn(cliCommand());
   } catch (error) {
     // A verb called without runCli stops by throwing; the entry would exit with that code.
     if (error instanceof CliExit) exited ??= new ExitCalled(error.code);
