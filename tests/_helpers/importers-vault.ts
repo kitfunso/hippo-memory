@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { type ImportOptions } from '../../src/surface/importers/core.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot } from './make-root.js';
 import { removeDir } from './remove-dir.js';
 
 export let tmpDir: string; // hippo root (the store)

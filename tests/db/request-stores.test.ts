@@ -11,7 +11,7 @@ import {
 } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 let root: string;
 

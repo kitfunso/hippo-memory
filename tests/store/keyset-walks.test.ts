@@ -5,16 +5,16 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { listEntriesMentioning } from '../../src/store/sqlite/entry-mentions.js';
+import { listEntriesMentioning } from '../../src/store/sqlite/entries/entry-mentions.js';
 import {
   listEntriesWithSignals,
   listEveryTenantEntryIds,
   listEntryIdsPage,
   listEntryTextKeysPage,
   listTenantTextsPage,
-} from '../../src/store/sqlite/entry-reads.js';
-import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
-import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vector-index.js';
+} from '../../src/store/sqlite/entries/entry-reads.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entries/entry-filter.js';
+import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vectors/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { recordStatements } from '../_helpers/count-statements.js';

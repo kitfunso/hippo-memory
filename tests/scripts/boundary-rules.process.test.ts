@@ -298,7 +298,7 @@ describe('.oxlintrc.json store-group and grant rules', () => {
       'src/db/grant.ts':
         open('connectWithFacts', './connect.js') + open('SESSION_OPEN', './request-stores.js').replace(' o ', ' p '),
       'src/db/request-stores.ts': open('connectWithFacts', './connect.js'),
-      'src/store/sqlite/worker-jobs.ts': open('SESSION_OPEN', '../../db/request-stores.js'),
+      'src/store/sqlite/runtime/worker-jobs.ts': open('SESSION_OPEN', '../../db/request-stores.js'),
       'src/store/sqlite/raw-connects.ts': open('DatabaseSync', '../../db/sqlite.js'),
       'src/db/raw-connects.ts': open('DatabaseSync', './sqlite.js'),
       'src/db/connect.ts': open('DatabaseSync', './sqlite.js'),
@@ -316,7 +316,7 @@ describe('.oxlintrc.json store-group and grant rules', () => {
     }
     expect(hits.get('src/db/grant.ts')).toBeUndefined();
     expect(hits.get('src/db/request-stores.ts')).toBeUndefined();
-    expect(hits.get('src/store/sqlite/worker-jobs.ts')).toBeUndefined();
+    expect(hits.get('src/store/sqlite/runtime/worker-jobs.ts')).toBeUndefined();
     expect(hits.get('src/db/connect.ts')).toBeUndefined();
     expect(hits.get('src/db/continuity-tables.ts')).toBeUndefined();
   });
@@ -355,7 +355,7 @@ describe('.dependency-cruiser.cjs grant rule', () => {
     const minted = cruise(
       {
         'src/db/grant.ts': grant,
-        'src/store/sqlite/grant.ts':
+        'src/store/sqlite/runtime/grant.ts':
           "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
         'src/store/sqlite/forged.ts':
           "import { mintDbGrant } from '../../db/grant.js';\nexport const g = mintDbGrant();\n",
@@ -392,7 +392,7 @@ describe('.dependency-cruiser.cjs grant rule', () => {
   });
 });
 
-/** The files scripts/check-sqlite-loads.mjs names over `files` in a fresh folder. */
+/** The files scripts/checks/check-sqlite-loads.mjs names over `files` in a fresh folder. */
 function sqliteLoads(files: Record<string, string>): string[] {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-sqlite-')));
   try {
@@ -400,7 +400,7 @@ function sqliteLoads(files: Record<string, string>): string[] {
       mkdirSync(dirname(join(root, p)), { recursive: true });
       writeFileSync(join(root, p), text);
     }
-    const script = join(REPO, 'scripts', 'check-sqlite-loads.mjs');
+    const script = join(REPO, 'scripts', 'checks', 'check-sqlite-loads.mjs');
     const r = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf-8' });
     return [...r.stderr.matchAll(/^ {2}(src\/\S+):\d+ /gm)].map(([, file]) => file);
   } finally {
@@ -408,7 +408,7 @@ function sqliteLoads(files: Record<string, string>): string[] {
   }
 }
 
-describe('scripts/check-sqlite-loads.mjs', () => {
+describe('scripts/checks/check-sqlite-loads.mjs', () => {
   it('fails node:sqlite through a renamed createRequire or getBuiltinModule, and a computed import in the data layer', () => {
     const loader = "const { DatabaseSync } = require('node:sqlite');\nexport { DatabaseSync };\n";
     const named = sqliteLoads({

@@ -13,7 +13,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { finishRecall } from '../../src/store/sqlite/last-recall.js';
+import { finishRecall } from '../../src/store/sqlite/recall/last-recall.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
   pushGoal,
@@ -23,7 +23,7 @@ import {
   writeEntriesTogether,
   updateStats,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';

@@ -11,7 +11,7 @@
  * checkout.
  */
 
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, onTestFinished } from 'vitest';
 import { statSync } from 'node:fs';
@@ -29,7 +29,7 @@ import { onSession } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeOutcome } from '../../src/store/sqlite/entry-writes.js';
+import { writeOutcome } from '../../src/store/sqlite/entries/entry-writes.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';

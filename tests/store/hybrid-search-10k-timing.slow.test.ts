@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -12,8 +12,8 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { SCAN_PAGE_ROWS } from '../_helpers/vector-rows.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

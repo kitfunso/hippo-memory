@@ -4,10 +4,10 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { assemble, retrieve } from '../../src/api/index.js';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vectors/vector-index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -25,7 +25,7 @@ import {
   saveSessionHandoff,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 

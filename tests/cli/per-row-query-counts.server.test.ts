@@ -8,7 +8,7 @@ import { outcome } from '../../src/api/memories/outcome.js';
 import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
-import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
+import { recordQuarantine } from '../../src/store/sqlite/connectors/quarantine.js';
 import { dashboardDetailAfterWrite } from '../../src/api/dashboard/detail.js';
 import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { dashboardOf } from '../_helpers/dashboard-fixture.js';
@@ -16,7 +16,7 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import {
   ROW_READ,
@@ -32,7 +32,7 @@ import { testInfra } from '../_helpers/infra.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 useQueryCountRoots();
 

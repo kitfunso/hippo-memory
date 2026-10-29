@@ -1,5 +1,5 @@
 // What one hippo.db open may use. Only the SQLite adapter mints a grant
-// (src/store/sqlite/grant.ts); openHippoDb without one is a plain connection of its own.
+// (src/store/sqlite/runtime/grant.ts); openHippoDb without one is a plain connection of its own.
 import { existsSync } from 'node:fs';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
@@ -92,7 +92,7 @@ export class DbGrant {
   }
 }
 
-/** The one way to make a grant; only src/store/sqlite/grant.ts may call it. */
+/** The one way to make a grant; only src/store/sqlite/runtime/grant.ts may call it. */
 export function mintDbGrant(scope: GrantScope): DbGrant {
   return new DbGrant(MINT, scope);
 }

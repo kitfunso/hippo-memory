@@ -17,7 +17,7 @@ import {
   sessionTrailText,
   settleTokens,
   snapshotText,
-} from '../../api/context-render.js';
+} from '../../api/context/context-render.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
 import {
   availabilityPool,

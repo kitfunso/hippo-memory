@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { HOOK_DB_WAIT_MS, SERVER_DB_WAIT_MS } from '../../src/db/index.js';
 import { runSqliteRequest } from '../../src/store/sqlite/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 const roots: string[] = [];
 afterEach(() => {

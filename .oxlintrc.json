@@ -139,7 +139,7 @@
       }
     },
     {
-      "files": ["src/store/sqlite/worker-jobs.ts"],
+      "files": ["src/store/sqlite/runtime/worker-jobs.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",

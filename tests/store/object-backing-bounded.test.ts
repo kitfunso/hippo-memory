@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { iterateRowsWithObjects } from '../../src/store/sqlite/sleep-scans.js';
+import { iterateRowsWithObjects } from '../../src/store/sqlite/consolidation/sleep-scans.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -1,6 +1,6 @@
 // A write to a hook's own log file in a failure path must carry the error's fields, as a shared log line must.
 import { describe, expect, it } from 'vitest';
-import { unfieldedLogLines } from '../../scripts/check-caught-error-logs.mjs';
+import { unfieldedLogLines } from '../../scripts/checks/check-caught-error-logs.mjs';
 
 describe('check-caught-error-logs on a hook side log', () => {
   it('counts each side-log writer in a catch that omits errorFields', () => {

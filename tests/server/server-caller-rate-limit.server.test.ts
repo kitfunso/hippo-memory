@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/keys/auth.js';
 import type { AddonRoute, ServeOptions } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';

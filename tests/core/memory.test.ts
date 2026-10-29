@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateStrength, applyOutcome } from '../../src/entry/memory.js';
 import { calculateRewardFactor } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry, type TraceOutcome } from '../../src/base/memory/entry.js';
-import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
+import { strengthSql } from '../../src/store/sqlite/runtime/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { rmSync } from 'node:fs';

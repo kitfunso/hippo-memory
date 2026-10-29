@@ -3,8 +3,8 @@
 // the CLI's contextGet flags (surface/cli/context.ts); only the CLI parity case in
 // tests/store/prompt-hook-context.process.test.ts ties the two.
 import type { Context } from './types.js';
-import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
-import { assembleContext } from './context.js';
+import type { ContextOptions, ContextResult, ContextResultEntry } from './context/context-types.js';
+import { assembleContext } from './context/context.js';
 import { sharedStoreOf, strengthOf } from './types.js';
 import type { StrengthModel } from '../base/memory/strength.js';
 import { BadRequestError } from '../base/errors/api-errors.js';
@@ -17,8 +17,8 @@ import {
   sessionTrailText,
   settleTokens,
   snapshotText,
-} from './context-render.js';
-import type { DeliveryRecorder } from './delivery-recorder.js';
+} from './context/context-render.js';
+import type { DeliveryRecorder } from './delivery/delivery-recorder.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
 import { isJsonString, type JsonValue } from '../base/util/json.js';
 import {
@@ -37,7 +37,7 @@ import { shouldSkipUnchanged } from '../base/session/skip-unchanged.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
-import { DEFAULT_CONTEXT_BUDGET } from './context.js';
+import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';
 
 /** What one render needs once api.contextGet has answered. */
 export interface ContextView {

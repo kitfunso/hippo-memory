@@ -50,7 +50,7 @@ import { consolidate } from '../../dist/index.js';
 import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
 import { writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
+import { storeFilesOf } from '../../dist/store/sqlite/runtime/handles.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/base/rank/physics-config.js';
 
 import { injectStream, writeLabelSidecar } from './inject.mjs';

@@ -122,7 +122,7 @@ const storeReach = [
     name: 'db-grant-mint',
     comment: 'only the SQLite adapter mints a hippo.db grant; other code imports the DbGrant type',
     severity: 'error',
-    from: { path: '^src/', pathNot: '^src/store/sqlite/grant\\.ts$' },
+    from: { path: '^src/', pathNot: '^src/store/sqlite/runtime/grant\\.ts$' },
     to: { path: '^src/db/grant\\.ts$', dependencyTypesNot: ['type-only', 'type-import'] },
   },
   {

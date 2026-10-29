@@ -45,61 +45,61 @@ jobs:
       - run: npm ci
       - name: Dependency security audit
         run: npm run audit:security
-      # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
+      # Hit counts per rule may fall but never rise; see scripts/checks/check-lint-ratchet.mjs.
       - name: Lint ratchet
-        run: node scripts/check-lint-ratchet.mjs
+        run: node scripts/checks/check-lint-ratchet.mjs
       - name: Format check
         run: npm run fmt:check
       # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
       - name: Comment history ratchet
-        run: node scripts/check-comment-history.mjs
+        run: node scripts/checks/check-comment-history.mjs
       # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
       - name: Error text ratchet
-        run: node scripts/check-error-text.mjs
+        run: node scripts/checks/check-error-text.mjs
       # A log call in a catch block may fall per file but never rise without errorFields(err), so the log keeps the error class and stack.
       - name: Caught-error log ratchet
-        run: node scripts/check-caught-error-logs.mjs
+        run: node scripts/checks/check-caught-error-logs.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
-      - run: node scripts/check-manifest-versions.mjs
-      - run: node scripts/check-graph-writes.mjs
+      - run: node scripts/checks/check-manifest-versions.mjs
+      - run: node scripts/checks/check-graph-writes.mjs
       # Layer order and reach from layers.json and runtime cycles between src folders (dependency-cruiser). Size limits
       # and the name, env, exit and CLI boundary rules are oxlint rules, so the lint ratchet above holds them.
       - name: Import rules
         run: npm run check:deps
       - name: No new src line over 120 characters
-        run: node scripts/check-long-lines.mjs
+        run: node scripts/checks/check-long-lines.mjs
       - name: Every promise call in src awaited or handled
-        run: node scripts/check-floating-promises.mjs
+        run: node scripts/checks/check-floating-promises.mjs
       - name: Every SQLite row cast in src proven by its SELECT
-        run: node scripts/check-row-casts.mjs
+        run: node scripts/checks/check-row-casts.mjs
       - name: Every api write call in src and tests awaited or returned
-        run: node scripts/check-floating-api.mjs
+        run: node scripts/checks/check-floating-api.mjs
       - name: Store port methods take data and require a tenant
-        run: node scripts/check-store-port.mjs
+        run: node scripts/checks/check-store-port.mjs
       - name: Only the SQLite loaders load node:sqlite, and the data layer imports by literal
-        run: node scripts/check-sqlite-loads.mjs
+        run: node scripts/checks/check-sqlite-loads.mjs
       - name: No test-only exports
-        run: node scripts/check-test-only-exports.mjs
+        run: node scripts/checks/check-test-only-exports.mjs
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
-        run: node scripts/check-test-stores.mjs
+        run: node scripts/checks/check-test-stores.mjs
       # A stub made once under an afterEach unstub is gone after the first test, and a misnamed test gets the wrong timeout.
       - name: Test env stubs and test file names
-        run: node scripts/check-test-env.mjs
-      - run: node scripts/check-roadmap.mjs
-      - run: node scripts/check-agent-inventory.mjs
+        run: node scripts/checks/check-test-env.mjs
+      - run: node scripts/checks/check-roadmap.mjs
+      - run: node scripts/checks/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
       # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
       - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
-        run: node scripts/check-dist-imports.mjs
+        run: node scripts/checks/check-dist-imports.mjs
       # The committed API report must match the built declarations.
       - run: npm run check:dts
       # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
-      - run: node scripts/check-openclaw-dist.mjs
+      - run: node scripts/checks/check-openclaw-dist.mjs
       - name: Perf regression gate
-        run: node scripts/check-request-path-timing.mjs
+        run: node scripts/checks/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
       # Gated on the fastest of 5 rounds, so one runner stall does not fail it; docs/ARCHITECTURE.md has the margin's numbers.
       - name: p99 recall at 1k memories
@@ -119,7 +119,7 @@ jobs:
       # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
       - name: Binary floors name a release that ships their schema
         if: always()
-        run: node scripts/check-expiring-keys-floor.mjs
+        run: node scripts/checks/check-expiring-keys-floor.mjs
 
   # The suite is about 9 minutes of test time summed over three shards, which run in parallel.
   test:
@@ -194,7 +194,7 @@ jobs:
         with:
           node-version: '24'
       - name: Open-core line
-        run: node scripts/check-open-core.mjs
+        run: node scripts/checks/check-open-core.mjs
 
   # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
   # not 'sqlite', with only the required groups and the optional ones each suite names, so the port holds for the

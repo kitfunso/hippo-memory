@@ -1,6 +1,6 @@
 /** The row-write column list is the base of the read list, and every name in either is a column of the memories table. */
 import { describe, expect, it } from 'vitest';
-import { MEMORY_ROW_COLUMNS, MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_ROW_COLUMNS, MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { makeRoot, openStoreAt } from '../_helpers/make-root.js';
 
 const root = makeRoot('memory-columns');

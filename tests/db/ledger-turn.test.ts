@@ -1,8 +1,8 @@
-// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger.ts).
+// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger/ledger.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import { createDeliveryRecorder, type DeliveryRecorder } from '../../src/api/delivery/delivery-recorder.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import type { TokenUse } from '../../src/base/ports/store/ledger.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';

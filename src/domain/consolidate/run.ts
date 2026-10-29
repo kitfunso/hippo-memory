@@ -19,8 +19,8 @@ export interface PhaseFailure {
 export interface ConsolidationResult {
   decayed: number;
   removed: number;
-  /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`; sqlite/dormant.ts).
-   *  Always 0 when that is off. */
+  /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`;
+   *  sqlite/dormant/dormant.ts). Always 0 when that is off. */
   dormant: number;
   /** Dormant memories deleted for good this sleep because they outlived `dormant.retentionDays`
    * without a restore. */

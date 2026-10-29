@@ -2,7 +2,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { withLossAversion } from '../../src/base/memory/strength.js';

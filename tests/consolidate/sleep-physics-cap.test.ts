@@ -19,7 +19,7 @@ import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import type { RecallCursor } from '../../src/base/ports/store/consolidation.js';
 
 const roots: string[] = [];

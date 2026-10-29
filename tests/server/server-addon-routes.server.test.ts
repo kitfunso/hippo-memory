@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../../src/store/sqlite/auth.js';
+import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { HttpError, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore, sqliteStoreOn } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';

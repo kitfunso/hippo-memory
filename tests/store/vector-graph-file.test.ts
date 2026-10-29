@@ -5,18 +5,18 @@ import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveVectorGraphFile } from '../../src/store/sqlite/vector-graph-file.js';
+import { saveVectorGraphFile } from '../../src/store/sqlite/vectors/vector-graph-file.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { type VectorIndex } from '../../src/db/vector-match.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
-import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
+import { listVectorCandidateEntries } from '../../src/store/sqlite/recall/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 // Each case builds a graph of 1,500 nodes, which can pass the unit budget on a busy runner.
 vi.setConfig({ testTimeout: 30_000 });

@@ -10,7 +10,7 @@ import {
   startDeliveryRecorder,
   takeDelivery,
 } from '../../../api/ledger-db.js';
-import type { DeliveryRecorder } from '../../../api/delivery-recorder.js';
+import type { DeliveryRecorder } from '../../../api/delivery/delivery-recorder.js';
 import { readHookStdin } from '../stdin.js';
 import { readCompactResumePayload } from '../compact-resume-payload.js';
 import { cliApiContext, cliHookRequest, cliLedgerReach } from '../api-context.js';

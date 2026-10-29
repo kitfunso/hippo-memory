@@ -6,7 +6,7 @@ import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import { type RecallJsonRow, recallJsonRow } from '../../api/recall/rows.js';
 import { type ImportReport, summaryLine } from '../../base/memory/agent-memory-report.js';
-import { snapshotText, sessionTrailText, handoffText } from '../../api/context-render.js';
+import { snapshotText, sessionTrailText, handoffText } from '../../api/context/context-render.js';
 import { printError } from './output.js';
 
 export function fmt(n: number, digits = 2): string {

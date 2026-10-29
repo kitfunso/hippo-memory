@@ -2,15 +2,15 @@
 // command table.
 
 import { envActiveScope } from '../../base/util/env.js';
-import type { DeliveryRecorder } from '../../api/delivery-recorder.js';
+import type { DeliveryRecorder } from '../../api/delivery/delivery-recorder.js';
 import { isSubagentPayload } from '../../base/util/hook-payload.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { autoDetectContext } from '../../api/context-auto.js';
+import { autoDetectContext } from '../../api/context/context-auto.js';
 import { bookLedgerTurn, ledgerReachOf } from '../../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import * as api from '../../api/index.js';
-import { DEFAULT_CONTEXT_BUDGET } from '../../api/context.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../../api/context/context.js';
 import { cliApiContext, cliHookRequest, type CliContext } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { strengthOf } from '../../api/types.js';
@@ -19,7 +19,7 @@ import {
   contextCost,
   crossProjectLines,
   settleTokens,
-} from '../../api/context-render.js';
+} from '../../api/context/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
@@ -41,7 +41,7 @@ import {
 import { requireInit, workingFolder } from './shared.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { continuityTexts } from './print.js';
-import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
+import { sessionEventJson, snapshotJson } from '../../api/continuity/continuity-json.js';
 import {
   hostSessionId,
   hookStoreRoot,

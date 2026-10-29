@@ -8,7 +8,7 @@ import { transcriptWorkingState } from '../../src/surface/capture/working-state.
 import { preCompactForCaller } from '../../src/server.js';
 import type { CallerContext } from '../_helpers/compaction-callers.js';
 import type { TaskSnapshot } from '../../src/base/ports/store/sessions.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context/context-render.js';
 import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';

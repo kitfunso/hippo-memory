@@ -1,5 +1,5 @@
 // What the engines rank: the pool a recall loads and the search over it.
-import { oneCopyPerMemory } from '../context-select.js';
+import { oneCopyPerMemory } from '../context/context-select.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rankMultihop } from '../../domain/search/multihop.js';

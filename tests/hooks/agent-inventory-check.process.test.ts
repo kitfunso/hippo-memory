@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 
 const REPO = fileURLToPath(new URL('../..', import.meta.url));
-const SCRIPT = path.join(REPO, 'scripts', 'check-agent-inventory.mjs');
+const SCRIPT = path.join(REPO, 'scripts', 'checks', 'check-agent-inventory.mjs');
 const FRAMEWORKS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot'];
 
 interface Mode {

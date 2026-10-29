@@ -12,7 +12,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
+import { archiveRawMemory } from '../../src/store/sqlite/entries/raw-archive.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { supersede } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -9,7 +9,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { withSharedStoreHandlesSync } from '../../src/db/index.js';
 import { writeEntryIn } from '../../src/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';

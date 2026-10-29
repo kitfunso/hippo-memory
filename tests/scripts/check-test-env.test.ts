@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { earlyUnstubs, misnamedTests, onceStubs, unscrubbedEnvReads } from '../../scripts/check-test-env.mjs';
+import { earlyUnstubs, misnamedTests, onceStubs, unscrubbedEnvReads } from '../../scripts/checks/check-test-env.mjs';
 
 describe('onceStubs', () => {
   it('flags a stub made once under an afterEach unstub, at module scope, in a describe body or in beforeAll', () => {

@@ -3,7 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
-import { createApiKey, grantScope, readApiKeyRecord } from '../../src/store/sqlite/auth.js';
+import { createApiKey, grantScope, readApiKeyRecord } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { canReadScope } from '../../src/base/scope/recall-scope.js';

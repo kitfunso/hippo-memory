@@ -7,7 +7,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { takeFileLock } from '../../src/host/file-lock.js';
-import { tryEmbedLock } from '../../src/store/sqlite/embed-lock.js';
+import { tryEmbedLock } from '../../src/store/sqlite/vectors/embed-lock.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 

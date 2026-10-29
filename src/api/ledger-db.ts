@@ -8,7 +8,7 @@ import {
   createDeliveryRecorder,
   type DeliveryFault,
   type DeliveryRecorder,
-} from './delivery-recorder.js';
+} from './delivery/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../base/session/delivery.js';
 import type { HookRuntime } from '../base/session/capture-contract.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';

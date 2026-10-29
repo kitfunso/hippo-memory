@@ -8,7 +8,7 @@ import {
   assembleHeading,
   drillCost,
   settleTokens,
-} from '../../api/context-render.js';
+} from '../../api/context/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';

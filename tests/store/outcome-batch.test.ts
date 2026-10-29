@@ -17,11 +17,11 @@ import {
   writeEntryMirrors,
   writeOutcome,
   auditingRefusal,
-} from '../../src/store/sqlite/entry-writes.js';
-import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
-import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
+} from '../../src/store/sqlite/entries/entry-writes.js';
+import { readEntriesByIds } from '../../src/store/sqlite/entries/entry-reads.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

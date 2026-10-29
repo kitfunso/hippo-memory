@@ -1,6 +1,6 @@
 // Variables vitest.config.ts blanks for every test so a developer's shell never reaches one: each secret, endpoint or path
 // src/base/util/env.ts reads outside the isolated homes, plus the provider keys read by configured name.
-// scripts/check-test-env.mjs fails a secret-looking read in env.ts that is missing here.
+// scripts/checks/check-test-env.mjs fails a secret-looking read in env.ts that is missing here.
 export const ENV_SCRUBBED_IN_TESTS = Object.freeze([
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',

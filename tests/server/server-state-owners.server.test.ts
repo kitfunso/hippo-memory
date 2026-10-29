@@ -1,14 +1,14 @@
 // No module holds state keyed by a store or a server: each server owns its key checks and local key,
 // the scrypt bound is the one process-wide limit, and a store's reopen rides on the store itself.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { insertApiKey } from '../../src/store/sqlite/auth.js';
+import { insertApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { KeyVerifier } from '../../src/surface/server/api-key.js';
 import { issueLocalKey, readLocalKey } from '../../src/surface/server/local-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { inSqliteSession, sqliteStore } from '../../src/store/sqlite/store.js';
-import { runSqliteRequest } from '../../src/store/sqlite/request-scope.js';
-import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
+import { runSqliteRequest } from '../../src/store/sqlite/runtime/request-scope.js';
+import { storeForRequest, workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { removeDir } from '../_helpers/remove-dir.js';

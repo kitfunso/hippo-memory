@@ -32,7 +32,7 @@ describe('api.remember', () => {
       content: 'audit-trail-canary',
     });
     const { openHippoDb, closeHippoDb } = await import('../../src/db/index.js');
-    const { listAuditEvents } = await import('../../src/store/sqlite/audit.js');
+    const { listAuditEvents } = await import('../../src/store/sqlite/audit/audit.js');
     const db = openHippoDb(home);
     const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
     // Task 4 dedupe: exactly one audit row, with the supplied actor.

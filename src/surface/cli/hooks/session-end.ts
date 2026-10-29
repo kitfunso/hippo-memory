@@ -12,7 +12,7 @@ import {
 } from '../../../base/session/capture-contract.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
-import type { DeliveryRecorder } from '../../../api/delivery-recorder.js';
+import type { DeliveryRecorder } from '../../../api/delivery/delivery-recorder.js';
 import { normalizeHookPayload, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { cliApiContext, cliHookRequest } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';

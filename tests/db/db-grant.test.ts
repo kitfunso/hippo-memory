@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DbGrant } from '../../src/db/grant.js';
 import { closeHippoDb } from '../../src/db/index.js';
 import { SqliteBlockedError } from '../../src/db/sqlite-blocked.js';
-import { grantFor } from '../../src/store/sqlite/grant.js';
+import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const NO_GRANT = 'hippo.db opens need a grant from the SQLite adapter';

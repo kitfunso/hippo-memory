@@ -13,7 +13,7 @@ import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
 import { cliApiContext, cliSecondStore, cliStore, type CliStore } from './api-context.js';
 import type { RankRecallResult } from '../../api/recall/pipeline.js';
-import { printedTokens } from '../../api/context-render.js';
+import { printedTokens } from '../../api/context/context-render.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,

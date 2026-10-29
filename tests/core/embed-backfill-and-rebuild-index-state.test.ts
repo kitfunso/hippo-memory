@@ -8,14 +8,14 @@ import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memo
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, getMeta, openHippoDb, withWriteScope } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';

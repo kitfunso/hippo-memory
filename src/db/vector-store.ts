@@ -115,7 +115,7 @@ export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): v
   });
 }
 
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 export interface VectorCounts {
   readonly vectors: number;
   /** Vectors whose memory row still exists. */

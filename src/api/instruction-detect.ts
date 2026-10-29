@@ -1,7 +1,7 @@
 /**
  * Prompt-injection detection for untrusted memory content: a heuristic that patterns can miss,
  * never the boundary. The boundary is the frame every untrusted row prints in
- * (api/context-render.ts). Leaf module, no store/api imports.
+ * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
 /** What a member's flagged row in a shared scope carries: it is kept, and prints framed as

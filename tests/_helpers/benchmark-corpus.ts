@@ -2,11 +2,11 @@
 import { beforeAll } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { makeRoot } from '../_helpers/make-root.js';
+import { makeRoot } from './make-root.js';
 import { withSharedStoreHandlesSync, type RequestStores } from '../../src/db/index.js';
 import { writeEntryIn } from '../../src/store/sqlite/fixtures.js';
-import { storeFilesOf } from '../../src/store/sqlite/handles.js';
-import type { StoreFiles } from '../../src/store/sqlite/open.js';
+import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import type { StoreFiles } from '../../src/store/sqlite/runtime/open.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 export const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>

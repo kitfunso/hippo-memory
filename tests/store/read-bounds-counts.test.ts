@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { assemble } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countMatching, peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-test-only-exports.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-test-only-exports.mjs');
 const PKG = JSON.stringify({ exports: { '.': './dist/index.js' } });
 const TEST = "import { seam } from '../src/a.js';\nseam();\n";
 

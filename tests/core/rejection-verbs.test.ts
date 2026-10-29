@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';

@@ -17,8 +17,8 @@ describe('process.exit inside a command store runtime', () => {
     const script = [
       `import * as fs from 'node:fs';`,
       `import { withStoreRuntime } from ${built('surface/open-store.js')};`,
-      `import { deferMirrorWrite } from ${built('store/sqlite/mirrors.js')};`,
-      `import { grantFor } from ${built('store/sqlite/grant.js')};`,
+      `import { deferMirrorWrite } from ${built('store/sqlite/folder-files/mirrors.js')};`,
+      `import { grantFor } from ${built('store/sqlite/runtime/grant.js')};`,
       `import { withSharedStoreHandles } from ${built('db/index.js')};`,
       `const root = ${JSON.stringify(root)};`,
       'await withStoreRuntime((runtime) => withSharedStoreHandles((session) => {',

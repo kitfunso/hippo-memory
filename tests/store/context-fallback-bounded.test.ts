@@ -2,7 +2,7 @@
 // the cap and no more, in the same three statements, whatever the store's size.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
