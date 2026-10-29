@@ -119,8 +119,8 @@ interface Position {
   readonly id: string;
 }
 
-/** Up to `limit` live rows `own` admits, newest first, after `after`. */
-type ReadNewest = (own: SqlFragment, limit: number, after?: Position) => MemoryEntry[];
+/** Up to `limit` live rows `scope` admits, newest first, after `after`. */
+type ReadNewest = (scope: SqlFragment, limit: number, after?: Position) => MemoryEntry[];
 
 // As contextGet sorts a row: a drifted stamp at the instant Date reads in it.
 const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created), id: e.id });
@@ -133,18 +133,18 @@ const afterParams = (after: Position | undefined): string[] =>
 /** Reads in `created` text order, which is time order while every live row of the tenant holds
  * toISOString text. */
 function readByText(run: RunSql): ReadNewest {
-  return (own, limit, after) =>
-    run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
-      ...own.params,
+  return (scope, limit, after) =>
+    run(`${scope.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
+      ...scope.params,
       ...afterParams(after),
       limit,
     ]);
 }
 
-/** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is
+/** Every live drifted row `scope` admits, newest first; the drift index holds only these, so it is
  * no tenant scan. */
-function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
-  return run(`${own.sql} AND ${CREATED_DRIFTED}`, [...own.params])
+function newestDrifted(run: RunSql, scope: SqlFragment): MemoryEntry[] {
+  return run(`${scope.sql} AND ${CREATED_DRIFTED}`, [...scope.params])
     .map((entry) => ({ entry, at: positionOf(entry) }))
     .sort((a, b) => positionsNewestFirst(a.at, b.at))
     .map(({ entry }) => entry);
@@ -152,16 +152,18 @@ function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
 
 /** The text-ordered rows merged with the drifted ones by instant: the rows and order a store
  * whose stamps were all written in toISOString form would read. */
-function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNewest {
-  return (own, limit, after) => {
-    let odd = drifted.get(own.sql);
-    if (!odd) drifted.set(own.sql, (odd = newestDrifted(run, own)));
-    const text = run(
-      `${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
-      [...own.params, ...afterParams(after), limit],
+function readByInstant(run: RunSql, driftedByScope: Map<string, MemoryEntry[]>): ReadNewest {
+  return (scope, limit, after) => {
+    let driftedRows = driftedByScope.get(scope.sql);
+    if (!driftedRows) driftedByScope.set(scope.sql, (driftedRows = newestDrifted(run, scope)));
+    const textRows = run(
+      `${scope.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
+      [...scope.params, ...afterParams(after), limit],
     );
-    const older = after ? odd.filter((e) => positionsNewestFirst(positionOf(e), after) > 0) : odd;
-    return [...text, ...older]
+    const older = after
+      ? driftedRows.filter((e) => positionsNewestFirst(positionOf(e), after) > 0)
+      : driftedRows;
+    return [...textRows, ...older]
       .map((entry) => ({ entry, at: positionOf(entry) }))
       .sort((a, b) => positionsNewestFirst(a.at, b.at))
       .slice(0, limit)
@@ -185,7 +187,7 @@ function listRecentRows(
     (origins.userGlobal
       ? `(origin_project = '' OR ${originInSql(origins.names)})`
       : originInSql(origins.names));
-  const own: SqlFragment = {
+  const scope: SqlFragment = {
     sql: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
     params: [tenantId, ...(origins?.names ?? [])],
   };
@@ -193,16 +195,16 @@ function listRecentRows(
   let kept = rows.filter(keep);
   if (kept.length >= needed || rows.length < window) return kept;
   if (origins) {
-    rows = read(own, window);
+    rows = read(scope, window);
     kept = rows.filter(keep);
     if (kept.length >= needed || rows.length < window) return kept;
   }
-  return [...kept, ...keptPastWindow({ read, own, rows, wanted: needed - kept.length, keep })];
+  return [...kept, ...keptPastWindow({ read, scope, rows, wanted: needed - kept.length, keep })];
 }
 
 interface KeptPastWindowOptions {
   readonly read: ReadNewest;
-  readonly own: SqlFragment;
+  readonly scope: SqlFragment;
   readonly rows: readonly MemoryEntry[];
   readonly wanted: number;
   readonly keep: (e: MemoryEntry) => boolean;
@@ -210,11 +212,11 @@ interface KeptPastWindowOptions {
 
 // A window of refused rows can hide older ones, so read on in keyset pages, each PAGE_GROWTH times
 // the last, until enough are kept.
-function keptPastWindow({ read, own, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
+function keptPastWindow({ read, scope, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
   const out: MemoryEntry[] = [];
   let last = rows[rows.length - 1];
   for (let size = rows.length * PAGE_GROWTH; out.length < wanted; size *= PAGE_GROWTH) {
-    const page = read(own, size, positionOf(last));
+    const page = read(scope, size, positionOf(last));
     out.push(...page.filter(keep));
     if (page.length < size) break;
     last = page[page.length - 1];
