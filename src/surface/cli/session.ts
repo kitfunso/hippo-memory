@@ -7,7 +7,7 @@ import {
   formatHandoffEvidenceLine,
   type HandoffOutcome,
 } from '../../base/session/handoff.js';
-import { sessionEventJson, snapshotJson } from '../../api/continuity/continuity-json.js';
+import { sessionEventJson, snapshotJson } from '../../base/session/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents } from './print.js';
 import {

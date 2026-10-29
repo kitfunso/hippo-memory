@@ -15,7 +15,7 @@ import {
   continuityJson,
   sessionEventJson,
   snapshotJson,
-} from '../../../api/continuity/continuity-json.js';
+} from '../../../base/session/continuity-json.js';
 import {
   httpParams,
   optionalFlagParam,
