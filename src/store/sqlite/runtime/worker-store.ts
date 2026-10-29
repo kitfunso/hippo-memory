@@ -132,12 +132,12 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
 }
 
 /** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
- * Map, readiness is probed. */
-type CustomGroup = 'base' | 'vectors' | 'readiness';
+ * Map. */
+type CustomGroup = 'base' | 'vectors';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
 const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
-  group !== 'base' && group !== 'vectors' && group !== 'readiness';
+  group !== 'base' && group !== 'vectors';
 
 // SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
 const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
@@ -186,16 +186,13 @@ export function workerSqliteStore(
   // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
+  const hippoDb = hippoDbOnWorkers(sender, inProcess.hippoDb);
   const store: HippoDbStore = {
     ...inProcess,
     ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(sender, inProcess.vectors),
     ...plainGroups(sender, inProcess),
-    hippoDb: hippoDbOnWorkers(sender, inProcess.hippoDb),
-    readiness: probing(
-      hippoRoot,
-      onWorkers(sender, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
-    ),
+    hippoDb: { ...hippoDb, readiness: probing(hippoRoot, hippoDb.readiness) },
     close: () => executor.close(),
   };
   return asHippoDb(markOffLoop(store));

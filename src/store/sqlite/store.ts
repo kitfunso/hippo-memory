@@ -3,9 +3,8 @@ import { countAmbient } from './recall/ambient.js';
 import type { SqliteStoreOptions } from './runtime/grant.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './keys/auth.js';
-import { existsSync } from 'node:fs';
 import { appendAuditEvents, listAuditEvents } from './audit/audit.js';
-import { getHippoDbPath, type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
+import { type DatabaseSyncLike, type RequestStores } from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './sessions/goals.js';
 import { planningFallacyEvidence } from './learning/planning-fallacy-evidence.js';
 import { recordTokenUse } from './ledger/token-ledger.js';
@@ -53,7 +52,6 @@ import type {
   HippoStore,
   LocalGroup,
   MaintenanceGroups,
-  Readiness,
   SleepGroups,
   StoreGroups,
   StoreReach,
@@ -110,7 +108,6 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
     auditLog: sqliteAuditLog(on),
     graphReads: sqliteGraphReads(on),
     objects: sqliteObjects(handles),
-    readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),
     cards: sqliteCards(on),
     goals: sqliteGoals(on),
@@ -191,20 +188,6 @@ function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
   return bound(on, { listAuditEvents } satisfies Bodies<AuditLog>);
-}
-
-function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
-  return {
-    ping: () =>
-      answered(() => {
-        // A probe must not create the store; the first write does, so a root with none yet is
-        // ready.
-        if (!existsSync(getHippoDbPath(hippoRoot))) return;
-        on((db) => {
-          db.prepare('SELECT 1').get();
-        });
-      }),
-  };
 }
 
 export interface SqliteReachOptions {

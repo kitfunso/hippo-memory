@@ -22,6 +22,6 @@ export function hasHippoDb<S extends Context['store']>(store: S): store is S & H
  * the request's own store, so each call runs under that request's deadline and session. */
 export function coreEnrichment(store: Context['store']): CoreEnrichment | undefined {
   if (!hasHippoDb(store)) return undefined;
-  const { lastRecall, sessions } = store.hippoDb;
-  return { lastRecall, handoff: sessions };
+  const { lastRecall, sessions, readiness } = store.hippoDb;
+  return { lastRecall, handoff: sessions, readiness };
 }

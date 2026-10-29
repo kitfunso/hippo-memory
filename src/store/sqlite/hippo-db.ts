@@ -1,5 +1,7 @@
 // hippo.db's local tier: the features only this store serves, as repositories typed by their SQL
 // bodies. No other store implements them, so none is part of the store port.
+import { sqliteReadiness } from './maintenance/readiness.js';
+import { READINESS_EFFECTS } from '../../base/ports/store/diagnostics.js';
 import { sqliteLessonWrites } from './learning/lesson-writes.js';
 import { LESSON_WRITES_EFFECTS } from '../../base/ports/store/entry-writes.js';
 import { sqlitePromotion } from './sharing/promotion.js';
@@ -43,6 +45,7 @@ export function hippoDbRepos(handles: Handles) {
     conflicts: sqliteConflicts(handles),
     promotion: sqlitePromotion(handles),
     lessonWrites: sqliteLessonWrites(handles),
+    readiness: sqliteReadiness(handles),
   };
 }
 
@@ -71,4 +74,5 @@ export const HIPPO_DB_EFFECTS = {
   conflicts: CONFLICTS_EFFECTS,
   promotion: PROMOTION_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
+  readiness: READINESS_EFFECTS,
 } as const satisfies { readonly [R in keyof HippoDbRepos]: MethodEffects<HippoDbRepos[R]> };

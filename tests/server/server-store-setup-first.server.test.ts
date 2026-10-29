@@ -112,7 +112,8 @@ describe('a setup still waiting for the write lock', () => {
     // A short wait ends the setup in its busy error. A read that was not held would answer from a reader meanwhile.
     const executor = createSqliteExecutor(root, { busyWaitMs: 100 });
     cleanups.push(() => executor.close());
-    const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
+    const read = (): Promise<void> =>
+      executor.call('hippoDb.readiness.ping', [], { mode: 'read', requestId: undefined });
     // Taken after the executor, so a failed run gives the lock up before it waits for the threads to exit.
     const lock = holdWriteLock(root);
 
@@ -134,7 +135,8 @@ describe('a setup that fails', () => {
     mkdirSync(getHippoDbPath(root));
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
-    const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
+    const read = (): Promise<void> =>
+      executor.call('hippoDb.readiness.ping', [], { mode: 'read', requestId: undefined });
 
     await expect(read()).rejects.toThrow(/unable to open database file/);
     rmdirSync(getHippoDbPath(root));

@@ -451,7 +451,7 @@ const READS: readonly Read[] = [
     'page the owner, then revert',
   ),
   read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
-  read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
+  read('hippoDb.readiness.ping', (s) => s.hippoDb.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
   ...FOLDER_GROUP_READS,
   ...LOCAL_GROUP_READS,
@@ -662,7 +662,7 @@ describe('a read the op table places on a reader thread', () => {
     const { store, sent } = patientStore(root);
     cleanups.push(() => store.close());
     await store.bumpRecallStats(1);
-    await Promise.all([store.readiness.ping(), store.readiness.ping()]);
+    await Promise.all([store.hippoDb.readiness.ping(), store.hippoDb.readiness.ping()]);
     const lock = holdWriteLock(root);
     const blocked = store.bumpRecallStats(1);
     await sent('base.bumpRecallStats', 2);

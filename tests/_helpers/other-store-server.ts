@@ -24,7 +24,6 @@ export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   const stub = {
     ...withoutFolderGroups(sqliteStore(root)),
     kind: 'stub',
-    readiness: undefined,
     ...base,
   };
   return stub;

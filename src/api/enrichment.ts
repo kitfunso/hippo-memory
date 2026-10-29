@@ -21,8 +21,14 @@ export interface HandoffRead {
   ): Promise<SessionHandoff | null>;
 }
 
+/** GET /ready's probe of the store. */
+export interface ReadinessPing {
+  ping(): Promise<void>;
+}
+
 /** Filled by a root from the request's own store, so each call runs under that request. */
 export interface CoreEnrichment {
   readonly lastRecall?: LastRecallFinish;
   readonly handoff?: HandoffRead;
+  readonly readiness?: ReadinessPing;
 }

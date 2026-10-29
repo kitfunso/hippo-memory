@@ -303,7 +303,7 @@ describe("a read still running at its request's deadline", () => {
     mkdirSync(join(root, '.hippo'), PRIVATE_DIR);
     initTestStore(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
-    await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
+    await executor.call('hippoDb.readiness.ping', [], { mode: 'write', requestId: undefined });
     executor.terminateWriter();
     while (executor.liveThreads() > 0) await new Promise((resolve) => setImmediate(resolve));
     const other = new DatabaseSync(getHippoDbPath(root));

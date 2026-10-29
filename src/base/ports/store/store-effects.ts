@@ -6,7 +6,7 @@ import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from 
 import { CARDS_EFFECTS } from './cards.js';
 import { CONSOLIDATION_EFFECTS } from './consolidation.js';
 import { CONTEXT_READS_EFFECTS, DAG_READS_EFFECTS } from './context-reads.js';
-import { DIAGNOSTICS_EFFECTS, READINESS_EFFECTS } from './diagnostics.js';
+import { DIAGNOSTICS_EFFECTS } from './diagnostics.js';
 import { DORMANT_EFFECTS } from './dormant.js';
 import { ENTRY_WRITES_EFFECTS } from './entry-writes.js';
 import { FOLDER_FILES_EFFECTS } from './folder-files.js';
@@ -51,7 +51,6 @@ export const STORE_EFFECTS = {
   auditLog: AUDIT_LOG_EFFECTS,
   graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
-  readiness: READINESS_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,
   dormant: DORMANT_EFFECTS,

@@ -30,6 +30,7 @@ import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
 import { createCallerState, newRowsOn, type CallerState } from '../../api/callers.js';
+import { coreEnrichment } from '../../api/hippo-db-context.js';
 import {
   DEFAULT_SHUTDOWN_DRAIN_MS,
   drainAndClose,
@@ -84,7 +85,7 @@ interface HandleRequestOptions {
   readonly counts: ServerCounts;
   readonly workerCounts: SqliteServerRuntime['workerCounts'];
   /** /ready's one probe for the server's life, on the store as booted; unset when the store has
-   * no readiness group. */
+   * no local tier. */
   readonly ready: ReadyProbe | undefined;
 }
 
@@ -343,6 +344,7 @@ function requestOptionsFor(
   served: ResolvedServeOptions,
   { workerCounts }: SqliteServerRuntime,
 ): HandleRequestOptions {
+  const readiness = coreEnrichment(served.store)?.readiness;
   return {
     startedAt,
     // Open /mcp/stream count per client key, so the cap is per server rather than per process.
@@ -350,9 +352,7 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    ready: hasGroup(served.store, 'readiness')
-      ? createReadyProbe(served.store.readiness)
-      : undefined,
+    ready: readiness ? createReadyProbe(readiness) : undefined,
   };
 }
 
