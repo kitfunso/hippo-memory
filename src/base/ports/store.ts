@@ -93,7 +93,6 @@ export const OPTIONAL_GROUPS = [
   'agentImport',
   'connectorWrites',
   'connectorEvents',
-  'quarantine',
   'objects',
   'cards',
   'conflicts',
@@ -394,14 +393,6 @@ export type {
 } from './store/objects.js';
 export type { AuditLog, AuditMaintenance } from './store/audit.js';
 export type { Readiness } from './store/diagnostics.js';
-export type {
-  QuarantineListQuery,
-  QuarantinedMemory,
-  QuarantineRefusal,
-  QuarantineApproval,
-  QuarantineRejection,
-  Quarantine,
-} from './store/quarantine.js';
 export type { GraphViewQuery, GraphWalkQuery, GraphRows, GraphReads } from './store/graph.js';
 export type { Ledger, LedgerTurn, PilotArmOptions } from './store/ledger.js';
 export type {

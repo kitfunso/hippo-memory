@@ -1,4 +1,4 @@
-// Under a store other than hippo.db, a route that needs hippo.db's local files answers 501 and no request opens or creates hippo.db.
+// Under a store other than hippo.db, a route that needs hippo.db's local files or tier answers 501 and no request opens or creates hippo.db.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -120,11 +120,22 @@ describe('serve() under a store that is not hippo.db', () => {
     vi.unstubAllEnvs();
   });
 
-  it('answers 501 on the /v1 routes that need local files, and never runs the handler', async () => {
+  it('answers 501 on the /v1 routes that need local files or the local tier, and never runs the handler', async () => {
     const routes = localFileRoutes();
-    expect(routes).toEqual(['POST /v1/memories/1/promote', 'POST /v1/sleep']);
+    expect(routes).toEqual([
+      'POST /v1/memories/1/promote',
+      'POST /v1/sleep',
+      'GET /v1/quarantine',
+      'POST /v1/quarantine/1/approve',
+      'POST /v1/quarantine/1/reject',
+    ]);
     for (const route of routes) {
-      const res = await post(route.split(' ')[1]!, valid);
+      const [method, path] = route.split(' ');
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers: { ...bearer(valid), 'content-type': 'application/json' },
+        body: method === 'GET' ? undefined : '{}',
+      });
       expect({ route, status: res.status, body: await res.json() }).toEqual({
         route,
         status: 501,
@@ -230,7 +241,7 @@ describe('serve() under a store that is not hippo.db', () => {
     });
   });
 
-  it('POST /mcp lists every tool but the two that need local files, and a call reaching hippo.db answers store_not_ported', async () => {
+  it('POST /mcp lists every tool but the three that need local files or the tier, and a call reaching hippo.db answers store_not_ported', async () => {
     const postMcp = async (body: string): Promise<{ status: number; body: unknown }> => {
       // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
       const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
@@ -239,7 +250,8 @@ describe('serve() under a store that is not hippo.db', () => {
     };
     const list = await postMcp(rpc('tools/list'));
     expect(list.status).toBe(200);
-    const listed = TOOLS.map((t) => t.name).filter((name) => name !== 'hippo_share' && name !== 'hippo_peers');
+    const unlisted = new Set(['hippo_share', 'hippo_peers', 'hippo_learn']);
+    const listed = TOOLS.map((t) => t.name).filter((name) => !unlisted.has(name));
     // SAFETY: a tools/list result carries a tools array of named definitions.
     expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(listed);
     const notPorted = {

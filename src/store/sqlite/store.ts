@@ -42,7 +42,6 @@ import { sqliteLessonWrites } from './learning/lesson-writes.js';
 import { finishRecall, sqliteLastRecall } from './recall/last-recall.js';
 import { sqliteGraphReads } from './graph/graph-reads.js';
 import { sqliteObjects } from './records/objects.js';
-import { sqliteQuarantine } from './connectors/quarantine.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
@@ -118,7 +117,6 @@ export function sqliteStoreOn(
     contextReads: sqliteContextReads(handles),
     dagReads: sqliteDagReads(on),
     auditLog: sqliteAuditLog(on),
-    quarantine: sqliteQuarantine(handles),
     graphReads: sqliteGraphReads(on),
     connectorWrites: sqliteConnectorWrites(handles),
     connectorEvents: sqliteConnectorEvents(on),

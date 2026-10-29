@@ -67,7 +67,6 @@ describe('hippo-memory/store-kit entry types', () => {
       | 'agentImport'
       | 'connectorWrites'
       | 'connectorEvents'
-      | 'quarantine'
       | 'objects'
       | 'cards'
       | 'conflicts'

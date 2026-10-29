@@ -19,7 +19,6 @@ import { LEARNING_EFFECTS } from './learning.js';
 import { LEDGER_EFFECTS } from './ledger.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
-import { QUARANTINE_EFFECTS } from './quarantine.js';
 import { LAST_RECALL_EFFECTS } from './recall-writes.js';
 import { FAILURE_LOG_EFFECTS, REJECTIONS_EFFECTS } from './rejections.js';
 import { REPORTS_EFFECTS } from './reports.js';
@@ -55,7 +54,6 @@ export const STORE_EFFECTS = {
   contextReads: CONTEXT_READS_EFFECTS,
   dagReads: DAG_READS_EFFECTS,
   auditLog: AUDIT_LOG_EFFECTS,
-  quarantine: QUARANTINE_EFFECTS,
   graphReads: GRAPH_READS_EFFECTS,
   objects: OBJECTS_EFFECTS,
   readiness: READINESS_EFFECTS,

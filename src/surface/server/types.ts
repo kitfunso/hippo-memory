@@ -2,6 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
@@ -176,6 +177,9 @@ export interface AuthedRouteRequest extends RouteRequest {
 /** A request past the gate whose store boot proved holds the optional groups `G`. */
 export type GroupRequest<G extends OptionalGroup> = AuthedRouteRequest & { ctx: ContextWith<G> };
 
+/** A request past the gate on a store boot proved holds hippo.db's local tier. */
+export type HippoDbRequest = AuthedRouteRequest & { ctx: HippoDbContext };
+
 /** A connector webhook's request, with the connector store boot proved; the handler checks the
  * sender itself. */
 export interface WebhookRouteRequest extends RouteRequest {
@@ -222,6 +226,7 @@ type AnyStoreRoute = {
   auth: GatedAuth;
   storeReady?: never;
   hippoDbOnly?: string;
+  hippoDb?: never;
 } & PathEndpoint<AuthedRouteRequest>;
 
 /** A route that needs the optional group `G`: boot hands its handler the store it proved, or
@@ -231,6 +236,7 @@ export type GroupRouteOf<G extends OptionalGroup> = {
   auth: GatedAuth;
   storeReady: G;
   hippoDbOnly?: never;
+  hippoDb?: never;
 } & PathEndpoint<GroupRequest<G>>;
 
 /** A route that needs any one optional group. */
@@ -243,9 +249,20 @@ export type WebhookRoute = {
   auth: 'webhook-signature';
   storeReady?: never;
   hippoDbOnly?: never;
+  hippoDb?: never;
 } & PathEndpoint<WebhookRouteRequest>;
 
+/** A route on hippo.db's local tier: boot hands its handler the request's tier, or marks the row
+ * 501 on a store without it. */
+export type HippoDbRoute = {
+  method: string;
+  auth: GatedAuth;
+  storeReady?: never;
+  hippoDbOnly?: never;
+  hippoDb: true;
+} & PathEndpoint<HippoDbRequest>;
+
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under
- * another store it runs only with its `storeReady` group; its hippo.db work runs on a worker
- * thread when the store has one. */
-export type Route = AnyStoreRoute | GroupRoute | WebhookRoute;
+ * another store it runs only with its `storeReady` group, and a `hippoDb` row not at all; its
+ * hippo.db work runs on a worker thread when the store has one. */
+export type Route = AnyStoreRoute | GroupRoute | WebhookRoute | HippoDbRoute;

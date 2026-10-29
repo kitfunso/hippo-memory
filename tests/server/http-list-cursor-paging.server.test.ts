@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listObjects } from '../../src/domain/objects/lifecycle.js';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -31,17 +31,20 @@ import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '..
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 7;
+const skipped = (route: ListRoute): boolean => route.onTier === true && needsHippoDb('tier');
 const PAGE = 3;
 
 interface ListRoute {
   path: string;
   /** Body key holding the list; null for routes whose body is a bare array (cursor rides X-Next-Cursor). */
   key: string | null;
+  /** Served by hippo.db's local tier, which the port-only run has none of. */
+  onTier?: true;
 }
 
 const ROUTES: readonly ListRoute[] = [
   { path: '/v1/auth/keys', key: null },
-  { path: '/v1/quarantine', key: 'quarantine' },
+  { path: '/v1/quarantine', key: 'quarantine', onTier: true },
   { path: '/v1/audit', key: null },
   { path: '/v1/predictions', key: 'predictions' },
   { path: '/v1/decisions', key: 'decisions' },
@@ -115,7 +118,7 @@ beforeAll(async () => {
   // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects', 'quarantine'] });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
   vi.unstubAllEnvs();
 });
 
@@ -159,7 +162,7 @@ async function pageThrough(route: ListRoute, limit: number): Promise<JsonValue[]
 }
 
 describe.each(ROUTES)('GET $path paging', (route) => {
-  it('pages of 3 return every row exactly once, in the single-request order', async () => {
+  it.skipIf(skipped(route))('pages of 3 return every row exactly once, in the single-request order', async () => {
     const whole = await getPage(route, { limit: '1000' });
     expect(whole.status).toBe(200);
     expect(whole.next).toBeNull();
@@ -173,7 +176,7 @@ describe.each(ROUTES)('GET $path paging', (route) => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('a malformed cursor is a 400 in the shared {error} shape', async () => {
+  it.skipIf(skipped(route))('a malformed cursor is a 400 in the shared {error} shape', async () => {
     const objectCursor = Buffer.from(JSON.stringify({ a: 1 })).toString('base64url');
     for (const cursor of ['not a cursor!', objectCursor, Buffer.from('[1]').toString('base64url'), '']) {
       const page = await getPage(route, { cursor });
@@ -200,7 +203,7 @@ describe('no paging params: the body a small store got before cursors existed', 
     ['/v1/customer-notes', async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 }))],
   ]);
 
-  it.each(ROUTES.filter((r) => r.key !== null))(
+  it.each(ROUTES.filter((r) => r.key !== null && !skipped(r)))(
     '$path keeps its list and adds next_cursor: null last',
     async (route) => {
       const page = await getPage(route);
@@ -244,7 +247,7 @@ describe('rows that share a sort key', () => {
     } finally {
       closeHippoDb(db);
     }
-    for (const route of [ROUTES[4]!, ROUTES[1]!]) {
+    for (const route of [ROUTES[4]!, ROUTES[1]!].filter((r) => !skipped(r))) {
       const whole = await getPage(route, { limit: '1000' });
       const pages = await pageThrough(route, 2);
       expect(pages.length).toBeGreaterThanOrEqual(4);
@@ -254,10 +257,13 @@ describe('rows that share a sort key', () => {
 });
 
 describe('limit on the routes that had none', () => {
-  it.each(['/v1/auth/keys', '/v1/quarantine'])('%s rejects a bad limit with a 400', async (path) => {
-    for (const limit of ['0', '1.5', '1001', 'abc']) {
-      const page = await getPage({ path, key: null }, { limit });
-      expect(page.status).toBe(400);
-    }
-  });
+  it.each([ROUTES[0]!, ROUTES[1]!].filter((r) => !skipped(r)).map((r) => r.path))(
+    '%s rejects a bad limit with a 400',
+    async (path) => {
+      for (const limit of ['0', '1.5', '1001', 'abc']) {
+        const page = await getPage({ path, key: null }, { limit });
+        expect(page.status).toBe(400);
+      }
+    },
+  );
 });

@@ -234,7 +234,6 @@ export const HEALTH_VERBS = {
     ],
   }),
   quarantine: verb(() => import('../curate-held.js'), 'handleQuarantine', {
-    needs: ['quarantine'],
     scoped: true,
     flags: { switches: ['all', 'global', 'json'] },
     usage: [

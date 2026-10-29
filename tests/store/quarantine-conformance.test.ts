@@ -11,7 +11,7 @@ import type {
   QuarantineListQuery,
   QuarantineRejection,
   QuarantinedMemory,
-} from '../../src/base/ports/store.js';
+} from '../../src/base/records/quarantine.js';
 import {
   runOnFixture,
   seedTwoTenants,
@@ -47,7 +47,7 @@ interface ScopeView {
 }
 
 type Value = QuarantinedMemory[] | string[] | string[][] | ScopeView[] | QuarantineApproval | QuarantineRejection;
-type Call = GroupCall<'quarantine', Value>;
+type Call = GroupCall<'base', Value>;
 type Side = SideResult<Value>;
 
 let fixture: TwoTenantFixture;
@@ -55,7 +55,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  return runOnFixture(fixture, 'quarantine', calls);
+  return runOnFixture(fixture, 'base', calls);
 }
 
 /** Sets the clock inside the call, so each step reads a time the test names. */
@@ -69,19 +69,19 @@ const all = (query: Partial<QuarantineListQuery> = {}): QuarantineListQuery => (
 const list =
   (query: QuarantineListQuery, tenantId = TENANT_A): Call =>
   (g) =>
-    g.listQuarantined(tenantId, query);
+    g.hippoDb.quarantine.list(tenantId, query);
 const ids =
   (query: QuarantineListQuery, tenantId = TENANT_A): Call =>
   async (g) =>
-    (await g.listQuarantined(tenantId, query)).map((r) => r.memoryId);
+    (await g.hippoDb.quarantine.list(tenantId, query)).map((r) => r.memoryId);
 const approve =
   (id: string, tenantId = TENANT_A): Call =>
   (g) =>
-    g.decideQuarantined(tenantId, id, 'approve', ACTOR);
+    g.hippoDb.quarantine.approve(tenantId, id, ACTOR);
 const reject =
   (id: string, tenantId = TENANT_A): Call =>
   (g) =>
-    g.decideQuarantined(tenantId, id, 'reject', ACTOR);
+    g.hippoDb.quarantine.reject(tenantId, id, ACTOR);
 const scopeOf =
   (id: string, tenantId = TENANT_A): Call =>
   async (_g, store) =>
@@ -95,7 +95,7 @@ const pages =
     const read: string[][] = [];
     let after: KeysetPosition | undefined;
     for (;;) {
-      const page = await g.listQuarantined(tenantId, all({ limit, after }));
+      const page = await g.hippoDb.quarantine.list(tenantId, all({ limit, after }));
       const last = page[page.length - 1];
       if (!last) return read;
       read.push(page.map((r) => r.memoryId));
@@ -160,7 +160,7 @@ beforeAll(async () => {
   fixture = seedTwoTenants();
   seedQuarantineRecords(fixture.dir);
   nextAuditId = auditHighId(fixture.dir) + 1;
-  baseline = await runOnFixture(fixture, 'quarantine', STATE);
+  baseline = await runOnFixture(fixture, 'base', STATE);
 });
 
 afterAll(() => {
@@ -176,7 +176,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('Quarantine.listQuarantined', () => {
+describe('hippoDb.quarantine.list', () => {
   it('reads nothing for a tenant with no record, and the whole record of a one-record tenant with its memory content', async () => {
     const side = await conforms([
       list({ status: 'pending' }, 'nobody'),
@@ -270,7 +270,7 @@ describe('Quarantine.listQuarantined', () => {
   });
 });
 
-describe('Quarantine.decideQuarantined approve', () => {
+describe('hippoDb.quarantine.approve', () => {
   it('puts the memory back under its original scope, a null one included, marks the record and appends one quarantine_approve row each', async () => {
     const side = await conforms([
       at(T1, approve(HELD.a1)),
@@ -355,7 +355,7 @@ describe('Quarantine.decideQuarantined approve', () => {
   });
 });
 
-describe('Quarantine.decideQuarantined reject', () => {
+describe('hippoDb.quarantine.reject', () => {
   it('marks the record, leaves the memory under its quarantine scope and appends one quarantine_reject row, with or without a memory row', async () => {
     const side = await conforms([
       at(T1, reject(HELD.a1)),
@@ -461,7 +461,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
       scope: ALPHA_HELD,
       auditId: nextAuditId - 1,
     });
-    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'approve', ACTOR)).rejects.toThrow(
+    await expect(sqliteStore(root).hippoDb.quarantine.approve(TENANT_A, HELD.a1, ACTOR)).rejects.toThrow(
       /audit table unwritable/,
     );
     expect(stored()).toEqual(before);
@@ -469,7 +469,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
 
   it('reject rejects and leaves the record pending', async () => {
     const before = stored();
-    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'reject', ACTOR)).rejects.toThrow(
+    await expect(sqliteStore(root).hippoDb.quarantine.reject(TENANT_A, HELD.a1, ACTOR)).rejects.toThrow(
       /audit table unwritable/,
     );
     expect(stored()).toEqual(before);

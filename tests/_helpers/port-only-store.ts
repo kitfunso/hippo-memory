@@ -31,12 +31,15 @@ export const FOLDER_GROUPS = [
 ] as const satisfies readonly OptionalGroup[];
 type FolderGroup = (typeof FOLDER_GROUPS)[number];
 
-/** `store` without its folder groups, as a store that is not hippo.db holds none; copying string keys alone drops the
- * symbol that marks a store as hippo.db. */
-export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, FolderGroup> {
-  const folder: ReadonlySet<string> = new Set(FOLDER_GROUPS);
-  // SAFETY: the string-keyed members of `store` minus exactly the folder groups.
-  return Object.fromEntries(Object.entries(store).filter(([key]) => !folder.has(key))) as Omit<S, FolderGroup>;
+/** `store` without its folder groups or hippo.db's local tier, as a store that is not hippo.db holds neither; copying
+ * string keys alone drops the symbol that marks a store as hippo.db. */
+export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, FolderGroup | 'hippoDb'> {
+  const folder: ReadonlySet<string> = new Set([...FOLDER_GROUPS, 'hippoDb']);
+  // SAFETY: the string-keyed members of `store` minus exactly the folder groups and the local tier.
+  return Object.fromEntries(Object.entries(store).filter(([key]) => !folder.has(key))) as Omit<
+    S,
+    FolderGroup | 'hippoDb'
+  >;
 }
 
 /** hippo.db's required groups and of the optional ones only `keep`: with none kept, an add-on store at its smallest.
@@ -48,9 +51,11 @@ export function portOnlyStore<G extends OptionalGroup = never>(
   session?: RequestStores,
 ): StoreWith<G> {
   const inner = sqliteStore(hippoRoot, { session });
-  const leftOut: ReadonlySet<string> = new Set<OptionalGroup>(
-    OPTIONAL_GROUPS.filter((group) => !keep.some((k) => k === group)),
-  );
+  // hippo.db's local tier is no port group, so a store outside hippo.db holds none of it.
+  const leftOut: ReadonlySet<string> = new Set<string>([
+    'hippoDb',
+    ...OPTIONAL_GROUPS.filter((group) => !keep.some((k) => k === group)),
+  ]);
   const base = {
     kind: 'port-only',
     findApiKey: inner.findApiKey,

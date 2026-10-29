@@ -22,6 +22,7 @@ const NEEDS_HIPPO_DB = {
   lock: { group: 'folder', reason: "tests hippo.db's write lock, worker threads or folder setup" },
   parity: { group: 'folder', reason: 'compares hippo.db with a port-only store itself' },
   sleep: { group: 'sleep', reason: 'sleep and auto-sleep need the consolidation group a port-only store leaves out' },
+  tier: { group: 'hippoDb', reason: "a route or tool on hippo.db's local tier runs only on hippo.db" },
 } as const;
 
 /** True on the port-only run, for `it.skipIf` / `describe.skipIf`; the key names the group and the reason. */

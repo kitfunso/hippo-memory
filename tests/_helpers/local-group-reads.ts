@@ -3,6 +3,7 @@ import { inspect } from 'node:util';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
+import type { HippoDbRepos } from '../../src/store/sqlite/hippo-db.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import { startCompaction } from '../../src/store/sqlite/capture/compactions-record.js';
 import { sqliteStore } from './test-session.js';
@@ -12,7 +13,7 @@ import { TENANT } from './recall-golden-seed.js';
 import { markGraphDirty, writeEntry } from './root-forms.js';
 import { onDb } from './store-worker-server.js';
 
-export type Served = HippoStore & StoreGroups;
+export type Served = HippoStore & StoreGroups & { readonly hippoDb: HippoDbRepos };
 export type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
 
 /** A value as text, so a Map, a typed array and an undefined field all take part in the comparison. */
