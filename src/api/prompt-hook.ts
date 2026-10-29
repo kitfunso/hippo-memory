@@ -1,6 +1,6 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
-// hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
-// CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+// hook route's call). promptHookContext copies the CLI's getContext flags (cli/context.ts) bar `continuity`: the CLI
+// points for text formats; this prints whole unless its caller opts in. Parity: tests/prompt-hook-context.test.ts.
 import {
   getContext, type Context, type ContextResult, type ContextResultEntry, type ContextWith, type ContinuityMode,
 } from './index.js';

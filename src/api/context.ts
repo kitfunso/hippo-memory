@@ -415,15 +415,14 @@ async function loadTaskSections(
     raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
   const snapshotMode = continuityModeFor(opts, plan, activeSnapshot?.session_id, 'pointer');
   const handoffMode = continuityModeFor(opts, plan, sessionHandoff?.sessionId, 'full');
-  // Events are the raw snapshot's session's; the pointer's command prints them, so they never reach the purse.
-  const trailMode = continuityModeFor(opts, plan, raw.snapshot?.session_id, 'pointer');
-  const recentSessionEvents = trailMode === 'pointer'
-    ? []
-    : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownSnapshot =
     activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot, snapshotMode))) ? activeSnapshot : null;
   const shownHandoff =
     sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
+  // The pointer's command prints the snapshot session's events, so they drop only when that pointer is shown.
+  const recentSessionEvents = shownSnapshot !== null && snapshotMode === 'pointer'
+    ? []
+    : raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownEvents =
     recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
@@ -435,8 +434,7 @@ async function loadTaskSections(
   return { activeSnapshot, shownSnapshot, snapshotMode, shownHandoff, handoffMode, shownEvents, left: left() };
 }
 
-// A pointer prints only when its command returns this reader's row; own, shared-store and unsafe-id state prints whole.
-// No id: a snapshot points at `hippo snapshot show`, the store's one active snapshot; no command names a handoff.
+// The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.
 function continuityModeFor(
   opts: ContextOpts, plan: ContextPlan, sessionId: string | null | undefined, noIdMode: ContinuityMode,
 ): ContinuityMode {

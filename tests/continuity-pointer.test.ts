@@ -96,8 +96,8 @@ describe('task state in a project store', () => {
       task: TASK, summary: SNAPSHOT_SUMMARY, next_step: 'run the sweep', session_id: sessionId, ...extra,
     });
 
-  const logEvent = (sessionId: string, content = TRAIL_EVENT): void => {
-    appendSessionEvent(store, 'default', { session_id: sessionId, event_type: 'note', content, source: 'test' });
+  const logEvent = (sessionId: string, content = TRAIL_EVENT, scope?: string): void => {
+    appendSessionEvent(store, 'default', { session_id: sessionId, event_type: 'note', content, source: 'test', scope });
   };
 
   /** `hippo context` in this process; no session id means no payload, so the caller is unknown. */
@@ -222,20 +222,41 @@ describe('task state in a project store', () => {
       expect(await hookText('now')).toContain(snapshotPointer(snapshot));
     });
 
-    it("prints nothing of another session's trail when its raw snapshot is scope-hidden", async () => {
+    // A pointer names a command, so a trail with no pointer printing it goes through the scope filter and the purse.
+    it("prints another session's trail in full when its snapshot is scope-hidden, as without the opt-in", async () => {
       saveSnapshot('earlier', { scope: PRIVATE_SCOPE });
       logEvent('earlier');
+      logEvent('earlier', 'Wrote the private sweep notes', PRIVATE_SCOPE);
 
-      const whole = await getContext(apiCtx(store), hookOpts(1500, 'full'));
-      expect(whole.activeSnapshot).toBeUndefined();
-      expect(whole.recentEvents).toHaveLength(1);
+      for (const continuity of ['full', 'pointer'] as const) {
+        const result = await getContext(apiCtx(store), hookOpts(1500, continuity));
+        expect(result.activeSnapshot, continuity).toBeUndefined();
+        expect(result.snapshotMode, continuity).toBeUndefined();
+        expect(result.recentEvents?.map((e) => e.content), continuity).toEqual([TRAIL_EVENT]);
+      }
+      const text = await hookText('now');
+      expect(text).toContain('Recent Session Trail');
+      expect(text).toContain(TRAIL_EVENT);
+      expect(text).not.toContain('private sweep notes');
+      expect(text).not.toContain(SNAPSHOT_SUMMARY);
+      expect(text).not.toContain('hippo session latest');
+    });
 
-      const pointer = await getContext(apiCtx(store), hookOpts(1500, 'pointer'));
-      expect(pointer.activeSnapshot).toBeUndefined();
-      expect(pointer.snapshotMode).toBeUndefined();
-      expect(pointer.recentEvents).toBeUndefined();
-      // Nothing else is left to print, so the hook sends nothing at all.
-      expect(await cli(HOOK_FLAGS, 'now')).toBe('');
+    it("prints another session's trail in full when the budget fits it but not the snapshot pointer", async () => {
+      saveSnapshot('earlier');
+      logEvent('earlier', 'Sweep timed out');
+
+      // At 49 tokens the 40-token pointer is dropped and the 37-token trail is paid; at 60 the pointer fits and hides it.
+      const unpaid = sectionsSpy();
+      const result = await getContext(apiCtx(store), { ...hookOpts(49, 'pointer'), deliveryObserver: unpaid.obs });
+      expect(result.activeSnapshot).toBeUndefined();
+      expect(result.snapshotMode).toBeUndefined();
+      expect(result.recentEvents?.map((e) => e.content)).toEqual(['Sweep timed out']);
+      expect(unpaid.calls).toEqual([[1, 1]]);
+
+      const paid = await getContext(apiCtx(store), hookOpts(60, 'pointer'));
+      expect(paid.snapshotMode).toBe('pointer');
+      expect(paid.recentEvents).toBeUndefined();
     });
   });
 
