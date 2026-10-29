@@ -29,7 +29,7 @@ import {
 import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
 import type { HeldText, EntryCursor } from '../../../base/ports/store/types.js';
 import type { TenantId } from '../../../base/util/tenant.js';
-import { oldestFirst } from '../../rules/order.js';
+import { newestFirst, oldestFirst } from '../../rules/order.js';
 import { tenantAnd } from '../runtime/tenant.js';
 import { rowsHoldingTexts } from '../sharing/copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../base/util/pages.js';
@@ -121,8 +121,7 @@ type ReadNewest = (own: SqlFragment, limit: number, after?: Position) => MemoryE
 // As contextGet sorts a row: a drifted stamp at the instant Date reads in it.
 const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created), id: e.id });
 
-const newestFirst = (a: Position, b: Position): number =>
-  a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
+const positionsNewestFirst = newestFirst<Position>({ key: (p) => p.at, textId: (p) => p.id });
 
 const afterParams = (after: Position | undefined): string[] =>
   after ? [after.at, after.at, after.id] : [];
@@ -143,7 +142,7 @@ function readByText(run: RunSql): ReadNewest {
 function newestDrifted(run: RunSql, own: SqlFragment): MemoryEntry[] {
   return run(`${own.sql} AND ${CREATED_DRIFTED}`, [...own.params])
     .map((entry) => ({ entry, at: positionOf(entry) }))
-    .sort((a, b) => newestFirst(a.at, b.at))
+    .sort((a, b) => positionsNewestFirst(a.at, b.at))
     .map(({ entry }) => entry);
 }
 
@@ -157,10 +156,10 @@ function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNe
       `${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
       [...own.params, ...afterParams(after), limit],
     );
-    const older = after ? odd.filter((e) => newestFirst(positionOf(e), after) > 0) : odd;
+    const older = after ? odd.filter((e) => positionsNewestFirst(positionOf(e), after) > 0) : odd;
     return [...text, ...older]
       .map((entry) => ({ entry, at: positionOf(entry) }))
-      .sort((a, b) => newestFirst(a.at, b.at))
+      .sort((a, b) => positionsNewestFirst(a.at, b.at))
       .slice(0, limit)
       .map(({ entry }) => entry);
   };
