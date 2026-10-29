@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { HeldWrites } from './held-writes.js';
+import { DetachedSet } from '../base/util/detached-set.js';
 
 /** The lifetime counter increments a store write adds. */
 export interface StatsCounts {
@@ -36,6 +37,7 @@ export class StoreRuntime {
   readonly #idle = new Map<string, DatabaseSyncLike[]>();
   readonly #background = new Set<string>();
   readonly #stats = new Map<string, StatsCounts>();
+  readonly #detached = new DetachedSet();
 
   /** Whether `step` has run to its end on the store at `key`. */
   hasRun(key: string, step: string): boolean {
@@ -115,9 +117,25 @@ export class StoreRuntime {
     this.#idle.clear();
   }
 
-  /** Runs the held writes, then closes the open sessions and the idle handles; each step runs if
-   * the one before throws. */
-  dispose(): void {
+  /** Keeps work nothing waits on, such as a command's embed, until dispose settles it. */
+  detach(work: Promise<unknown>): void {
+    this.#detached.detach(work);
+  }
+
+  /** Resolves once the detached work has settled, for a root that closes its stores itself. */
+  settle(): Promise<void> {
+    return this.#detached.settle();
+  }
+
+  /** Settles the detached work, which may still write through the stores, then runs closeNow. */
+  async dispose(): Promise<void> {
+    await this.settle();
+    this.closeNow();
+  }
+
+  /** Runs the held writes, then closes the open sessions and the idle handles, each step even if
+   * the one before throws; it skips detached work, so only a root that cannot wait calls it. */
+  closeNow(): void {
     try {
       this.held.flush();
     } finally {

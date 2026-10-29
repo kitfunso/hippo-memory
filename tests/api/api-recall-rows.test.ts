@@ -120,8 +120,8 @@ beforeEach(() => {
   }
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.unstubAllEnvs();
 });
 

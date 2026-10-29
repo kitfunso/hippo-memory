@@ -44,6 +44,8 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly runRequest: <T>(run: (session: RequestStores) => Promise<T>) => Promise<T>;
   /** What the store workers of this process refused, expired and replaced; /health reports them. */
   readonly workerCounts: Readonly<typeof workerCounts>;
+  /** Keeps the work a request starts and does not wait on, such as an embed; close() settles it. */
+  readonly detached: Pick<StoreRuntime, 'detach'>;
   readonly close: () => Promise<void>;
   /** What the root's exit hook runs when the process exits before close(): the held writes and
    * handles of the server's store runtime. */
@@ -91,16 +93,19 @@ export function sqliteServerRuntime(
       }),
     runRequest: (run) => runSqliteRequest(run, 'server', runtime),
     workerCounts,
+    detached: runtime,
     hold: holder.hold,
     afterResponse: holder.afterResponse,
     close: async () => {
+      // Detached work still writes through the stores, so it settles before they close.
+      await runtime.settle();
       // The store's worker threads and the pooled handles close first, so the held one is still
       // SQLite's last.
       if (given === undefined) await store.close();
       await globalStores.close();
-      runtime.dispose();
+      await runtime.dispose();
       await holder.release();
     },
-    closeOnExit: () => runtime.dispose(),
+    closeOnExit: () => runtime.closeNow(),
   };
 }

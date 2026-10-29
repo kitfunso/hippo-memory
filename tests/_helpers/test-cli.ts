@@ -19,7 +19,7 @@ export function lastingCommand(): CliCommand {
   return cliCommand(runtime);
 }
 
-/** Disposes every command lastingCommand made since the last call. */
-export function endLastingCommands(): void {
-  for (const runtime of lasting.splice(0)) runtime.dispose();
+/** Disposes every command lastingCommand made since the last call, its detached work settled first. */
+export async function endLastingCommands(): Promise<void> {
+  await Promise.all(lasting.splice(0).map((runtime) => runtime.dispose()));
 }

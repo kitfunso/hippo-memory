@@ -22,7 +22,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -112,6 +112,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 
     const shared = await shareMemory(...sharingStores(localRoot), entry.id, {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: 'default',
       force: true,
     });
@@ -130,6 +131,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 
     const shared = await autoShare(...sharingStores(localRoot), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0,
     });
@@ -146,7 +148,10 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(1);
 
     const index = loadEmbeddingIndex(localRoot);
@@ -179,7 +184,10 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(1);
 
     // syncGlobalToLocal already fired its own embedAll(localRoot); this call
@@ -201,6 +209,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
 
     const shared = await autoShare(...sharingStores(localRoot), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0,
     });

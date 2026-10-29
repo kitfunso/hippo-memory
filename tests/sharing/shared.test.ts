@@ -8,7 +8,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -126,7 +126,10 @@ describe('syncGlobalToLocal', () => {
     writeEntry(globalRoot, entry1);
     writeEntry(globalRoot, entry2);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(2);
 
     const localEntries = loadAllEntries(localRoot, 'default');
@@ -140,13 +143,19 @@ describe('syncGlobalToLocal', () => {
     writeEntry(globalRoot, entry);
     writeEntry(localRoot, entry); // already exists
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(0);
   });
 
   it('returns 0 when global store does not exist', async () => {
     const nonexistent = path.join(os.tmpdir(), 'hippo-no-global-' + Date.now());
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, nonexistent), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, nonexistent), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(0);
   });
 });

@@ -409,6 +409,7 @@ function servedOptsFor(
     callersFor: (storeFor) => callersOnRequest(callers, counted && storeFor(counted)),
     ledgerStore: hasGroups(store, ['ledger', 'folderFiles']) ? store : undefined,
     infra: rootInfra(runtime.host),
+    detached: runtime.detached,
     sleeps,
     counts,
   };

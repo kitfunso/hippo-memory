@@ -219,7 +219,7 @@ describe('routed writes under a busy store', () => {
       updateStatsUnlessBusy(storeFilesOf(home, { runtime }), { forgotten: 1 }, 'removed m4');
       expect(await forgottenTotal(home)).toBe(before + 4);
     } finally {
-      runtime.dispose();
+      await runtime.dispose();
     }
   });
 

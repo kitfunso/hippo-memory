@@ -11,7 +11,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
 import type { StoreGroups } from '../../src/base/ports/store.js';
-import { TEST_RUN } from './test-run.js';
+import { TEST_DETACHED, TEST_RUN } from './test-run.js';
 
 /** hippo.db under `root` with no runtime: a test holds it across its commands and reads its mirrors
  * at once. */
@@ -26,7 +26,7 @@ export function captureTarget(root: string): CaptureTarget {
     root,
     store,
     config,
-    embed: detachedEmbedder({ store, config, embedderFor: resolveEmbeddingProvider }, TEST_RUN),
+    embed: detachedEmbedder({ store, config, embedderFor: resolveEmbeddingProvider }, TEST_RUN, TEST_DETACHED),
   };
 }
 

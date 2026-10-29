@@ -28,6 +28,7 @@ import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
+import type { DetachedWork } from '../../domain/search/detached-work.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are
  * the test seam. */
@@ -117,6 +118,8 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   clientKey?: string;
   /** Aborts when the call passes its deadline, so a tool stops starting work nobody waits for. */
   signal?: AbortSignal;
+  /** The transport root's keeper of work a call does not wait on; unset, each call waits for it. */
+  detached?: DetachedWork;
 }
 
 /** A tool's run for one call's arguments. */
@@ -163,6 +166,7 @@ export function mcpApiContext(ctx: McpCaller): ApiContext {
     clientKey: mcpClientKey(ctx),
     infra: ctx.infra,
     signal: ctx.signal,
+    detached: ctx.detached,
   };
 }
 

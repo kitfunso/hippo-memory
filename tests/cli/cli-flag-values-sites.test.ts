@@ -57,8 +57,8 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_TENANT', '');
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.unstubAllEnvs();
   removeDir(root);
 });

@@ -103,7 +103,7 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra'> &
+  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra' | 'detached'> &
   Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
@@ -392,8 +392,19 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const reach = contextReach(opts.reachOf(team), opts.configAt, infra.embedderFor, ledger);
   const callers = opts.callers;
   const actor = bearerActor(id);
-  const { store, signal } = opts;
-  return { tenantId: id.tenantId, actor, store, reach, config, callers, clientKey, infra, signal };
+  const { store, signal, detached } = opts;
+  return {
+    tenantId: id.tenantId,
+    actor,
+    store,
+    reach,
+    config,
+    callers,
+    clientKey,
+    infra,
+    signal,
+    detached,
+  };
 }
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its

@@ -16,6 +16,7 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
+import type { DetachedWork } from '../../domain/search/detached-work.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {
@@ -157,6 +158,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** This server's outside services: one reranker registry for the server's life, the rest per
    * Context. */
   infra: () => InfraPorts;
+  /** Keeps the work a request starts and does not wait on; the server's stop settles it. */
+  detached: DetachedWork;
   sleeps: SleepQueue;
   counts: ServerCounts;
 };

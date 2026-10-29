@@ -42,7 +42,7 @@ import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } fro
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
-import { TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
 
@@ -174,7 +174,10 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
     // history, so every assertion against errorSpy must run BEFORE it —
     // restore happens last, after the spy has served its purpose.
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
     expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
     const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
@@ -690,6 +693,7 @@ describe('autoShare per-candidate rejection containment', () => {
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const shared = await autoShare(...sharingStores(localRoot), {
       embed: TEST_RUN,
+      detached: TEST_DETACHED,
       tenantId: ALL_TENANTS,
       minScore: 0,
       stats,
