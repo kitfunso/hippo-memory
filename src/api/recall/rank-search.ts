@@ -10,11 +10,7 @@ import {
 } from '../../base/scope/recall-scope.js';
 import { currentEntries } from '../../domain/search/as-of.js';
 import { rankStrength } from '../../domain/search/boosts.js';
-import {
-  rankHybrid,
-  vectorSourceOf,
-  type HybridRankOptions,
-} from '../../domain/search/hybrid.js';
+import { rankHybrid, vectorSourceOf, type HybridRankOptions } from '../../domain/search/hybrid.js';
 import { searchByEngine } from '../../domain/search/engine.js';
 import {
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
