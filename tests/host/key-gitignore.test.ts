@@ -35,10 +35,11 @@ describe('ensureKeyGitignored', () => {
     expect(readFileSync(ignoreFile(), 'utf8')).toBe('a\r\nserver.key\r\n');
   });
 
-  // Git takes the last rule that matches, and a leading space is part of the pattern.
+  // Git takes the last rule that matches, and a leading space or a trailing tab is part of the pattern.
   it.each([
     ['a later negation', 'server.key\n!*.key\n'],
     ['a leading space', ' server.key\n'],
+    ['a trailing tab', 'server.key\t\n'],
   ])('appends the key line when the file lists it but %s leaves it unignored', (_, text) => {
     writeFileSync(ignoreFile(), text);
     ensureKeyGitignored(root);

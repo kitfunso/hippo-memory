@@ -11,8 +11,8 @@ const KEY_LINE = 'server.key';
 function keyIgnored(text: string): boolean {
   const lines = text.split(/\r?\n/);
   for (let at = lines.length - 1; at >= 0; at--) {
-    // Git drops trailing spaces but keeps leading ones, so only the end is trimmed.
-    const line = (lines[at] ?? '').replace(/\s+$/, '');
+    // Git trims only trailing spaces; a leading space or a trailing tab stays part of the pattern.
+    const line = (lines[at] ?? '').replace(/ +$/, '');
     if (line === '' || line.startsWith('#')) continue;
     if (line.startsWith('!')) return false;
     if (line === KEY_LINE) return true;
@@ -24,9 +24,17 @@ function keyIgnored(text: string): boolean {
  * line when no later rule already settles it, and leaves every other line as it is. */
 export function ensureKeyGitignored(hippoRoot: string): void {
   const file = path.join(hippoRoot, IGNORE_FILE);
-  const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  if (keyIgnored(current)) return;
-  const joiner = current === '' || current.endsWith('\n') ? '' : '\n';
   fs.mkdirSync(hippoRoot, { recursive: true });
-  fs.appendFileSync(file, `${joiner}${KEY_LINE}\n`);
+  // One open serves the read and the append, so the file cannot be swapped between the two.
+  const fd = fs.openSync(file, 'a+');
+  try {
+    const bytes = Buffer.alloc(fs.fstatSync(fd).size);
+    const read = fs.readSync(fd, bytes, 0, bytes.length, 0);
+    const current = bytes.subarray(0, read).toString('utf8');
+    if (keyIgnored(current)) return;
+    const joiner = current === '' || current.endsWith('\n') ? '' : '\n';
+    fs.writeSync(fd, `${joiner}${KEY_LINE}\n`);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
