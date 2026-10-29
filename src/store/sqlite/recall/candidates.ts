@@ -108,6 +108,10 @@ interface RecentRowsOptions {
 // that would change what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
+// admit refuses some rows, so a read takes more rows than it keeps; these bound the reads it costs.
+const WINDOW_PER_WANTED = 4;
+const MIN_WINDOW = 32;
+const PAGE_GROWTH = 4;
 
 /** Where a row sorts in a recent read: the instant its `created` names, then its id. */
 interface Position {
@@ -175,7 +179,7 @@ function listRecentRows(
 ): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
-  const window = Math.max(needed * 4, 32);
+  const window = Math.max(needed * WINDOW_PER_WANTED, MIN_WINDOW);
   const originSql =
     origins &&
     (origins.userGlobal
@@ -204,12 +208,12 @@ interface KeptPastWindowOptions {
   readonly keep: (e: MemoryEntry) => boolean;
 }
 
-// A window of refused rows can hide older ones, so read on in keyset pages, each four times the
-// last, until enough are kept.
+// A window of refused rows can hide older ones, so read on in keyset pages, each PAGE_GROWTH times
+// the last, until enough are kept.
 function keptPastWindow({ read, own, rows, wanted, keep }: KeptPastWindowOptions): MemoryEntry[] {
   const out: MemoryEntry[] = [];
   let last = rows[rows.length - 1];
-  for (let size = rows.length * 4; out.length < wanted; size *= 4) {
+  for (let size = rows.length * PAGE_GROWTH; out.length < wanted; size *= PAGE_GROWTH) {
     const page = read(own, size, positionOf(last));
     out.push(...page.filter(keep));
     if (page.length < size) break;
