@@ -3,6 +3,7 @@
 import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
 import {
+  changedRows,
   closeHippoDb,
   type DatabaseSyncLike,
   type DbGrant,
@@ -431,7 +432,7 @@ export function renameEntrySource(
     db,
     `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
   ).run(to, id, tenantId, from);
-  return Number(moved.changes ?? 0);
+  return changedRows(moved);
 }
 
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the
@@ -448,7 +449,7 @@ export function renameEntrySourceAndOrigin(
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? ` +
       `AND source = ?`,
   ).run(to, origin, id, tenantId, from);
-  return Number(done.changes ?? 0);
+  return changedRows(done);
 }
 
 /** A tenant's row `id` and the row `newId` that supersedes it. */
@@ -467,7 +468,7 @@ export function supersedeEntry(
     db,
     `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
   ).run(newId, id, tenantId);
-  return Number(result.changes ?? 0) !== 0;
+  return changedRows(result) > 0;
 }
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a

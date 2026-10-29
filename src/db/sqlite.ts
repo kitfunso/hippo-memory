@@ -17,6 +17,11 @@ interface StatementSyncLike {
   iterate(...params: unknown[]): IterableIterator<unknown>;
 }
 
+/** The rows a write statement changed; node:sqlite leaves `changes` optional in its type. */
+export function changedRows(result: ReturnType<StatementSyncLike['run']>): number {
+  return Number(result.changes ?? 0);
+}
+
 export interface DatabaseSyncLike {
   exec(sql: string): void;
   prepare(sql: string): StatementSyncLike;

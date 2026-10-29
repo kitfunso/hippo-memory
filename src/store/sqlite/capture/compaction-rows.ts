@@ -1,6 +1,6 @@
 // The `compactions` table: one row per Claude Code compaction, and the reads project merge makes
 // over it.
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { CompactionOrigin } from '../../../base/ports/store/project-tags.js';
@@ -178,7 +178,7 @@ export function markCompactionSummarized(
       `'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
      WHERE tenant_id = ? AND id = ? AND status = 'started'`,
   ).run(summary, itemsJson, summarizedAt, ...stamp, tenantId, id);
-  return (result.changes ?? 0) > 0;
+  return changedRows(result) > 0;
 }
 
 export function insertSummarizedCompaction(
@@ -256,7 +256,7 @@ export function closeStartedWithoutSummary(
     db,
     `UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
   ).run(tenantId, id);
-  return Number(result.changes ?? 0);
+  return changedRows(result);
 }
 
 /** A session and the ISO start its next compaction must follow. */
@@ -296,11 +296,11 @@ export function restampCompactionOrigin(
   db: DatabaseSyncLike,
   { tenantId, from, into }: OriginMoveOptions,
 ): number {
-  return Number(
+  return changedRows(
     cachedStatement(
       db,
       `UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`,
-    ).run(into, tenantId, from).changes ?? 0,
+    ).run(into, tenantId, from),
   );
 }
 

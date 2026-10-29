@@ -1,7 +1,12 @@
 // The typed-object writes: audit rows, close, save with versions, the half-life mirror and incident open.
 
 import { appendAuditEvents } from '../audit/audit.js';
-import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
+import {
+  changedRows,
+  getMeta,
+  withWriteScopeOr,
+  type DatabaseSyncLike,
+} from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../../base/memory/strength.js';
@@ -133,7 +138,7 @@ function closeRow<K extends ObjectKind>(
       `UPDATE ${table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
         `(${marks})`,
     ).run(close.at, id, tenantId, ...close.from);
-    if (updated.changes === 0) {
+    if (changedRows(updated) === 0) {
       const existing = cachedStatement(
         db,
         `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
@@ -232,7 +237,7 @@ function supersedeRow<K extends SavableKind>(
     WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
   `,
   ).run(id, row.save.at, replaced, row.tenantId, id);
-  if (updated.changes === 0) return false;
+  if (changedRows(updated) === 0) return false;
   const ids = { replaced, id, version: row.version };
   const audit = supersedeAudit(row.kind, ids, row.save.fields);
   appendAuditEvents(db, [{ tenantId: row.tenantId, actor: row.save.actor, ...audit }]);
@@ -408,7 +413,7 @@ function resolveRow(
       WHERE id = ? AND tenant_id = ? AND status = 'open'
     `,
     ).run(resolve.text, resolve.at, id, tenantId);
-    if (updated.changes === 0) {
+    if (changedRows(updated) === 0) {
       const existing = cachedStatement(
         db,
         `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,

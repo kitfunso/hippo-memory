@@ -1,7 +1,7 @@
 // Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the
 // dead-letter queue and workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
-import type { DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, type DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
 import {
   eventMemory,
@@ -145,5 +145,5 @@ export function listSlackWorkspaces(db: DatabaseSyncLike): SlackWorkspace[] {
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
 export function removeSlackWorkspace(db: DatabaseSyncLike, teamId: string): boolean {
   const result = cachedStatement(db, `DELETE FROM slack_workspaces WHERE team_id = ?`).run(teamId);
-  return Number(result.changes) > 0;
+  return changedRows(result) > 0;
 }

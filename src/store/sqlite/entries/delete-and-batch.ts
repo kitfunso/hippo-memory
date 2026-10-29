@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../../base/errors/raw-append-only.js';
 import { AUTO_DELETABLE } from '../runtime/rule-sql.js';
 import type { SqlFragment } from '../../../db/sql.js';
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { introducesContent, rejectedValues } from '../review/rejection.js';
 import { rejectionDigest } from '../../../base/records/rejection-digest.js';
 import type { RejectedValueRow } from '../../../base/ports/store/rejections.js';
@@ -96,7 +96,7 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
  * RawAppendOnlyError. */
 function deleteMemoryRow(db: DatabaseSyncLike, sql: string, params: SqlFragment['params']): number {
   try {
-    return Number(cachedStatement(db, sql).run(...params).changes ?? 0);
+    return changedRows(cachedStatement(db, sql).run(...params));
   } catch (cause) {
     throw isRawTriggerAbort(cause) ? new RawAppendOnlyError(cause) : cause;
   }

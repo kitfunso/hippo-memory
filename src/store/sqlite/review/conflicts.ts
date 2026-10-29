@@ -1,6 +1,6 @@
 // hippo.db's Conflicts group: listing and resolving the memory_conflicts rows.
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../../base/util/tenant.js';
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
+import { changedRows, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import {
   rejectionDigest,
@@ -384,7 +384,7 @@ function rebuildConflictsWithJson(
     const stored = storedRefs.has(id) ? (storedRefs.get(id) ?? null) : '[]';
     const refsJson = JSON.stringify(Array.from(refMap.get(id) ?? []).sort());
     if (stored === refsJson) continue;
-    if (Number(update.run(refsJson, id, stored).changes ?? 0) > 0) changedIds.push(id);
+    if (changedRows(update.run(refsJson, id, stored)) > 0) changedIds.push(id);
   }
   return changedIds;
 }
@@ -422,7 +422,7 @@ function claimConflict(
       `((memory_a_id = ? AND memory_b_id = ?) OR (memory_a_id = ? AND memory_b_id = ?)) AND ${SIDE_HOLDS} AND ` +
       `${SIDE_HOLDS}`,
   ).run(resolution.at, conflictId, ...pair, ...sides);
-  return Number(claimed.changes ?? 0) > 0;
+  return changedRows(claimed) > 0;
 }
 
 /** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one
