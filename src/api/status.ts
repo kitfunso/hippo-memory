@@ -8,6 +8,7 @@ import type {
   RawProvenance,
   ReportPage,
   StatusCounts,
+  StrengthTallies,
 } from '../base/ports/store/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
@@ -31,6 +32,23 @@ export async function storeStatus(
   requireHostAdmin(ctx, 'Reading every tenant');
   const { reports } = ctx.store;
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
+}
+
+export interface TenantStatus extends StrengthTallies {
+  openConflicts: number;
+  /** 0 when the tenant has no rows. */
+  avgStrength: number;
+}
+
+/** The caller's tenant at a glance, read on one snapshot; its own rows only, so any actor. */
+export async function tenantStatus(
+  ctx: ContextWith<'reports'>,
+  now: Date,
+  atRiskBelow: number,
+): Promise<TenantStatus> {
+  const tallies = await ctx.store.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
+  const avgStrength = tallies.total > 0 ? tallies.strengthSum / tallies.total : 0;
+  return { ...tallies, avgStrength };
 }
 
 /** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host

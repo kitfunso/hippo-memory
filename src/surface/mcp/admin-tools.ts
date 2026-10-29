@@ -6,6 +6,7 @@ import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memo
 import { memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
+import { tenantStatus } from '../../api/status.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
@@ -55,17 +56,13 @@ export async function runPredictBaserateTool({
 }
 
 export async function runStatusTool({ config, api }: GroupToolCall<'reports'>): Promise<string> {
-  const tallies = await api.store.reports.memoryStatus(
-    api.tenantId,
-    api.infra.clock(),
-    AT_RISK_BELOW,
-  );
-  const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
+  const status = await tenantStatus(api, api.infra.clock(), AT_RISK_BELOW);
+  const avgStrength = status.total > 0 ? status.avgStrength.toFixed(2) : '0';
   return [
-    `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
+    `Memories: ${status.total} (${status.pinned} pinned, ${status.errors} errors)`,
     `Avg strength: ${avgStrength}`,
-    `At risk (<${AT_RISK_BELOW}): ${tallies.atRisk}`,
-    `Open conflicts: ${tallies.openConflicts}`,
+    `At risk (<${AT_RISK_BELOW}): ${status.atRisk}`,
+    `Open conflicts: ${status.openConflicts}`,
     `Half-life default: ${config.defaultHalfLifeDays}d`,
   ].join('\n');
 }
