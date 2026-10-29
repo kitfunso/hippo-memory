@@ -28,8 +28,8 @@ beforeEach(() => {
   vi.spyOn(log, 'error').mockImplementation(() => undefined);
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });

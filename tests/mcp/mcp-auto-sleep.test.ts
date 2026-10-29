@@ -13,8 +13,8 @@ import { endLastingCommands, lastingCommand } from '../_helpers/test-cli.js';
 
 const roots: string[] = [];
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });

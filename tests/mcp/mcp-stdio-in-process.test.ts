@@ -37,8 +37,8 @@ beforeEach(() => {
   exit = stubExit();
 });
 
-afterEach(() => {
-  endLastingCommands();
+afterEach(async () => {
+  await endLastingCommands();
   vi.restoreAllMocks();
   process.exitCode = undefined;
 });
