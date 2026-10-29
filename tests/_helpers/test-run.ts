@@ -6,6 +6,6 @@ import { DetachedSet } from '../../src/base/util/detached-set.js';
 
 export const TEST_RUN: EmbedRun = { clock: evalNow, failureNotices: new FailureNotices() };
 
-/** Takes the embeds a domain call detaches, as a root's runtime does. Nothing settles it, so it
- * serves only a test that reads no vector. */
+/** Takes the embeds a domain call detaches, as a root's runtime does. Nothing settles it, so a test
+ * that reads a vector reads one from an embed it awaited itself. */
 export const TEST_DETACHED = new DetachedSet();
