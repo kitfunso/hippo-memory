@@ -79,14 +79,31 @@ const adapterPath = srcPaths([adapter.folder]);
 const entrances = [adapter.root, adapter.testKit.file];
 // The published store kit, the one surface file that names src/store: a pure rule it re-exports.
 const STORE_KIT = 'entry/store-kit.ts';
+// hippo.db's local tier: src/api's local modules take its types, and its code stays in the adapter.
+const tierDoor = '^src/store/sqlite/hippo-db\\.ts$';
+const outsideAdapter = [adapterPath, srcPaths([], entrances)];
 
 const adapterRules = [
   {
     name: 'adapter-entrances',
     comment: `only src/${adapter.root} and the test kit import src/${adapter.folder}; others take the store from the Context`,
     severity: 'error',
-    from: { pathNot: [adapterPath, srcPaths([], entrances)] },
-    to: { path: adapterPath },
+    from: { pathNot: outsideAdapter },
+    to: { path: adapterPath, pathNot: tierDoor },
+  },
+  {
+    name: 'tier-door-types',
+    comment: 'outside the adapter, src/store/sqlite/hippo-db.ts is imported for its types only',
+    severity: 'error',
+    from: { pathNot: outsideAdapter },
+    to: { path: tierDoor, dependencyTypesNot: ['type-only', 'type-import'] },
+  },
+  {
+    name: 'tier-door-api',
+    comment: 'outside the adapter, only src/api imports src/store/sqlite/hippo-db.ts',
+    severity: 'error',
+    from: { pathNot: [...outsideAdapter, '^src/api/'] },
+    to: { path: tierDoor },
   },
   {
     name: 'adapter-root-doors',
@@ -132,7 +149,7 @@ const storeReach = [
     comment: 'the api reads the store through the port in src/base/ports and takes shared rules from src/base',
     severity: 'error',
     from: { path: '^src/api/' },
-    to: { path: '^src/store/' },
+    to: { path: '^src/store/', pathNot: tierDoor },
   },
   {
     name: 'surface-through-api',

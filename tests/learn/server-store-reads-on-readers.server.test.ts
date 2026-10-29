@@ -5,7 +5,7 @@ import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detecto
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { packVectors, vectorViewsOf } from '../../src/store/sqlite/runtime/vector-pack.js';
-import { WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
+import { HIPPO_DB_OPS, WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
 import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from '../_helpers/moved-reads-seed.js';
@@ -25,15 +25,15 @@ import {
   type Read,
   REFUSED,
   seedLocalGroups,
-  type Served,
   shown,
 } from '../_helpers/local-group-reads.js';
+import type { HippoDbStore } from '../../src/store/sqlite/hippo-db.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 const NOW = new Date(FAKE_NOW);
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
 
-const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
+const graphEntities = async (s: HippoDbStore) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
@@ -382,8 +382,8 @@ const READS: readonly Read[] = [
     "tenantId: 'default'",
   ),
   read(
-    'quarantine.listQuarantined',
-    (s) => s.quarantine.listQuarantined(TENANT, { status: 'all' }),
+    'hippoDb.quarantine.list',
+    (s) => s.hippoDb.quarantine.list(TENANT, { status: 'all' }),
     'scripts/wipe.sh before every deploy',
   ),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
@@ -553,16 +553,14 @@ const WRITES: readonly Write[] = [
       }),
     ['vectors {"memory_id":"mem_p_pinned"'],
   ),
-  write(
-    'quarantine.decideQuarantined approve',
-    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[0] ?? '', 'approve', ACTOR),
-    ['"status":"approved"', '"op":"quarantine_approve"'],
-  ),
-  write(
-    'quarantine.decideQuarantined reject',
-    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[1] ?? '', 'reject', ACTOR),
-    ['"status":"rejected"', '"op":"quarantine_reject"'],
-  ),
+  write('hippoDb.quarantine.approve', (s, seed) => s.hippoDb.quarantine.approve(TENANT, seed.held[0] ?? '', ACTOR), [
+    '"status":"approved"',
+    '"op":"quarantine_approve"',
+  ]),
+  write('hippoDb.quarantine.reject', (s, seed) => s.hippoDb.quarantine.reject(TENANT, seed.held[1] ?? '', ACTOR), [
+    '"status":"rejected"',
+    '"op":"quarantine_reject"',
+  ]),
   write(
     'promotion.writeCopy',
     (s) =>
@@ -604,8 +602,8 @@ afterAll(() => {
 afterEach(undoAll);
 
 describe('a read the op table places on a reader thread', () => {
-  let onWorkers: Served;
-  let inProcess: Served;
+  let onWorkers: HippoDbStore;
+  let inProcess: HippoDbStore;
 
   // Reads write nothing, so both stores serve one copy for the whole table.
   beforeAll(async () => {
@@ -634,7 +632,8 @@ describe('a read the op table places on a reader thread', () => {
   });
 
   it('has a row here for every method tagged read or pinned-read', () => {
-    const tagged = Object.entries(WORKER_OPS).flatMap(([group, places]) =>
+    const local = Object.entries(HIPPO_DB_OPS).map(([repo, places]) => [`hippoDb.${repo}`, places] as const);
+    const tagged = [...Object.entries(WORKER_OPS), ...local].flatMap(([group, places]) =>
       Object.entries(places)
         .filter(([, place]) => place === 'read' || place === 'pinned-read')
         .map(([method]) => (group === 'base' ? method : `${group}.${method}`)),

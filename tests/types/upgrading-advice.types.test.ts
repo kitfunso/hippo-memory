@@ -6,7 +6,15 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { typeOnly } from './_type-only.js';
 import type { SleepStore } from '../../dist/index.js';
 import { bindSessionOwner, captureSessionTexts, sessionEndHandoffForCaller, type Context } from '../../dist/server.js';
-import { hasGroup, loadConfig, requireGroup, sqliteStore, type VectorWrites } from '../../dist/entry/store-kit.js';
+import {
+  hasGroup,
+  loadConfig,
+  requireGroup,
+  sqliteStore,
+  type HippoStore,
+  type StoreGroups,
+  type VectorWrites,
+} from '../../dist/entry/store-kit.js';
 import { graphExpandRecall, hybridSearch } from '../../dist/entry/search.js';
 import { goalPush } from '../../dist/entry/eval-scripts.js';
 import { transcriptWorkingState } from '../../dist/entry/session-text.js';
@@ -29,6 +37,8 @@ declare const provider: Source['provider'];
 declare const consolidation: SleepStore['consolidation'];
 declare const req: Parameters<typeof captureSessionTexts>[1];
 declare const end: Omit<Parameters<typeof sessionEndHandoffForCaller>[1], 'sessionId'>;
+declare const base: HippoStore;
+declare const sessions: StoreGroups['sessions'];
 
 describe('UPGRADING-3.0 advice', () => {
   it('narrows the store and hands the entry a Context built around it (narrowStore, Context.store, session entries)', () => {
@@ -62,19 +72,17 @@ describe('UPGRADING-3.0 advice', () => {
     });
   });
 
-  it('builds a vector source from a store that keeps vectors (VectorSource)', () => {
+  it('builds a vector source from any store (VectorSource)', () => {
     typeOnly(async () => {
       const { store } = ctx;
-      if (hasGroup(store, 'vectors')) {
-        await hybridSearch(query, entries, {
-          source: {
-            store,
-            vectors: store.vectors,
-            graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
-            provider,
-          },
-        });
-      }
+      await hybridSearch(query, entries, {
+        source: {
+          store,
+          vectors: store.vectors,
+          graphReads: hasGroup(store, 'graphReads') ? store.graphReads : undefined,
+          provider,
+        },
+      });
       await hybridSearch(query, entries, { store });
     });
   });
@@ -95,6 +103,16 @@ describe('UPGRADING-3.0 advice', () => {
 
   it('asks a vector write group for the key of its index (VectorWrites.indexKey)', () => {
     expectTypeOf<VectorWrites['indexKey']>().toEqualTypeOf<() => Promise<string>>();
+  });
+
+  it('names the optional groups a store literal sets in its type (HippoStore)', () => {
+    typeOnly(() => {
+      const store: HippoStore & Pick<StoreGroups, 'sessions'> = { ...base, sessions };
+      // @ts-expect-error HippoStore names no optional group, so a literal typed HippoStore may not set one
+      const refused: HippoStore = { ...base, sessions };
+      expectTypeOf(store).toHaveProperty('sessions');
+      expectTypeOf(refused).not.toHaveProperty('sessions');
+    });
   });
 
   it('sleeps only on a store that sets graphReads (SleepStore)', () => {

@@ -350,7 +350,9 @@ function requestOptionsFor(
     limiter: limiters.perAddress,
     counts: served.counts,
     workerCounts,
-    ready: served.store.readiness && createReadyProbe(served.store.readiness),
+    ready: hasGroup(served.store, 'readiness')
+      ? createReadyProbe(served.store.readiness)
+      : undefined,
   };
 }
 
@@ -391,7 +393,7 @@ function servedOptsFor(
     ...opts,
     routes,
     publicJsonBodies,
-    v1Routes: bindV1Routes(store, runtime.onHippoDb),
+    v1Routes: bindV1Routes(store),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     mcpTools: bindMcpTools(store),
     store,

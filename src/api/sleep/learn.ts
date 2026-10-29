@@ -29,6 +29,10 @@ import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same
 import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
 import { strengthOf, type Context, type ContextWith } from '../types.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
+
+/** A learn writes its lessons through lessonWrites and counts them on hippo.db's local tier. */
+type LearnContext = ContextWith<'lessonWrites'> & HippoDbContext;
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -80,10 +84,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
-  opts: LearnOptions,
-): Promise<LearnResult> {
+export async function learn(ctx: LearnContext, opts: LearnOptions): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -113,7 +114,7 @@ interface QueuedLesson {
 /** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
  * a later lesson matches against them. */
 interface LessonBatch {
-  readonly ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>;
+  readonly ctx: LearnContext;
   readonly writes: LessonWrites;
   readonly live: MemoryEntry[];
   readonly keys: Set<string>;
@@ -145,7 +146,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   }
   counts.added += landed.length;
   if (!batch.full) return;
-  if (landed.length > 0) await ctx.store.bumpRemembered(landed.length);
+  if (landed.length > 0) await ctx.store.hippoDb.stats.bumpRemembered(landed.length);
   const { embedderFor, clock, failureNotices } = ctx.infra;
   const { store, config } = ctx;
   const target = {
@@ -235,7 +236,7 @@ async function scanTenant(
 }
 
 async function writeLessons(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  ctx: LearnContext,
   lessons: readonly string[],
   opts: LearnOptions & { readonly repoPath: string },
   config: HippoConfig,
@@ -276,7 +277,7 @@ interface OpenedLessonBatch {
 }
 
 async function openLessonBatch(
-  ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
+  ctx: LearnContext,
   lessons: readonly string[],
   opts: LearnOptions,
 ): Promise<OpenedLessonBatch> {

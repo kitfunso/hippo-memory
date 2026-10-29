@@ -39,7 +39,7 @@ interface CountingStore<S extends HippoStore> {
   readonly reads: () => number;
 }
 
-function counting<S extends HippoStore>(store: S): CountingStore<S> {
+function counting<S extends Needed>(store: S): CountingStore<S> {
   let reads = 0;
   const counted = { ...store };
   for (const group of NEEDED) {

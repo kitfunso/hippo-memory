@@ -197,11 +197,8 @@ describe('GET /ready', () => {
   it('answers 200 with store "unchecked" for a served store that has no readiness group', async () => {
     const root = makeRoot('srv-ready-unchecked');
     dirs.push(root);
-    const handle = await serveKeyed({
-      hippoRoot: root,
-      port: 0,
-      store: { ...sqliteStore(root), readiness: undefined },
-    });
+    const unchecked = { ...sqliteStore(root), readiness: undefined };
+    const handle = await serveKeyed({ hippoRoot: root, port: 0, store: unchecked });
     try {
       expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true,"store":"unchecked"}' });
     } finally {

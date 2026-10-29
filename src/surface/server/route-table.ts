@@ -1,24 +1,14 @@
 import type { Context } from '../../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { CONNECTOR_GROUPS, type WebhookPorts } from '../connectors/ingest.js';
-import {
-  hasGroup,
-  hasGroups,
-  type HippoStore,
-  type OptionalGroup,
-  type StoreWith,
-} from '../../base/ports/store.js';
+import type { WebhookPorts } from '../connectors/ingest.js';
+import { hasGroup, type HippoStore } from '../../base/ports/store.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
-import {
-  closeIfBodyUnread,
-  JSON_HEADERS,
-  sendJson,
-  type WebhookRequest,
-} from '../http/http-util.js';
+import { JSON_HEADERS, sendJson, type WebhookRequest } from '../http/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { INT_PARAM, matchPath, noteAccess } from './request.js';
 import { routeLookup, type RouteLookup } from './route-lookup.js';
+import { boundRoute, notPorted } from './route-binding.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
@@ -60,13 +50,9 @@ import type {
   AddonRoute,
   AuthedRouteRequest,
   BoundRoute,
-  GroupRequest,
-  GroupRouteOf,
-  PathEndpoint,
   Route,
   RouteEndpoint,
   RouteRequest,
-  WebhookRoute,
   WebhookRouteRequest,
 } from './types.js';
 
@@ -161,7 +147,6 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/vectors/nearest',
     auth: 'caller',
-    storeReady: 'vectors',
     handler: handleNearestVectors,
   },
   {
@@ -193,21 +178,21 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'GET',
     path: '/v1/quarantine',
     auth: 'admin',
-    storeReady: 'quarantine',
+    hippoDb: true,
     handler: handleListQuarantine,
   },
   {
     method: 'POST',
     pattern: '/v1/quarantine/:id/approve',
     auth: 'admin',
-    storeReady: 'quarantine',
+    hippoDb: true,
     handler: handleApproveQuarantine,
   },
   {
     method: 'POST',
     pattern: '/v1/quarantine/:id/reject',
     auth: 'admin',
-    storeReady: 'quarantine',
+    hippoDb: true,
     handler: handleRejectQuarantine,
   },
   {
@@ -308,86 +293,11 @@ export function routeLabel(route: RouteEndpoint<never>): string {
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/');
 }
 
-/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role
- * check. */
-async function notPorted(): Promise<void> {
-  throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
-}
-
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
- * request checks a group. */
-function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
-  if (route.auth === 'webhook-signature') return boundWebhook(route, store);
-  if (route.storeReady !== undefined) return boundGroupRoute(route, store);
-  // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
-  return route.hippoDbOnly === undefined || onHippoDb ? route : { ...route, unported: true };
-}
-
-/** A group row's handler gets the request's context on the store boot proved, bound to the
- * request's session and deadline; without the group it answers 501. */
-function boundGroupRoute<G extends OptionalGroup>(
-  route: GroupRouteOf<G>,
-  store: HippoStore,
-): BoundRoute {
-  const { method, auth } = route;
-  if (!hasGroup(store, route.storeReady)) {
-    return { method, auth, ...endpointOf(route), unported: true, handler: notPorted };
-  }
-  const proved: StoreWith<G> = store;
-  const onProved = (r: AuthedRouteRequest): GroupRequest<G> => ({
-    ...r,
-    ctx: { ...r.ctx, store: r.opts.storeFor(proved) },
-  });
-  if ('path' in route) {
-    const { path, handler } = route;
-    return { method, auth, path, handler: (r: AuthedRouteRequest) => handler(onProved(r)) };
-  }
-  const { pattern, handler } = route;
-  return { method, auth, pattern, handler: (r, params) => handler(onProved(r), params) };
-}
-
-/** A webhook is handed the connector store; it skips the gate, so without the groups its handler
- * is the 501 itself. */
-function boundWebhook(route: WebhookRoute, store: HippoStore): BoundRoute {
-  const { method, auth } = route;
-  if (!hasGroups(store, CONNECTOR_GROUPS)) {
-    return { method, auth, ...endpointOf(route), handler: webhookNotPorted };
-  }
-  if ('path' in route) {
-    const { path, handler } = route;
-    return {
-      method,
-      auth,
-      path,
-      handler: (r: RouteRequest) => handler({ ...r, store: r.opts.storeFor(store) }),
-    };
-  }
-  const { pattern, handler } = route;
-  return {
-    method,
-    auth,
-    pattern,
-    handler: (r, params) => handler({ ...r, store: r.opts.storeFor(store) }, params),
-  };
-}
-
-/** A webhook's 501 drops the body it never reads, as its 404 and 401 do, so no caller holds the
- * socket open. */
-async function webhookNotPorted(request: RouteRequest): Promise<void> {
-  closeIfBodyUnread(request);
-  await notPorted();
-}
-
-/** The row's path or pattern alone, for a row whose handler is replaced. */
-function endpointOf(route: PathEndpoint<never>): { path: string } | { pattern: string } {
-  return 'path' in route ? { path: route.path } : { pattern: route.pattern };
-}
-
 /** The /v1 lookup for one store: each row's store need is settled here, once, so a request
  * checks no group. */
-export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup<BoundRoute> {
+export function bindV1Routes(store: HippoStore): RouteLookup<BoundRoute> {
   return routeLookup(
-    V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb)),
+    V1_ROUTES.map((route) => boundRoute(route, store)),
     routeMatches,
   );
 }

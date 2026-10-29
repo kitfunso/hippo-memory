@@ -372,7 +372,6 @@ describe('HTTP input validation', () => {
       undefined,
       /include_recent must be a non-negative number/,
     ],
-    ['quarantine status', 'GET', '/v1/quarantine?status=maybe', undefined, /status must be one of: pending/],
     ['prediction list closed needs class', 'GET', '/v1/predictions?status=closed', undefined, /requires class param/],
     ['prediction stats class cap', 'GET', `/v1/predictions/stats?class=${long(256)}`, undefined, /class exceeds 256/],
   ];

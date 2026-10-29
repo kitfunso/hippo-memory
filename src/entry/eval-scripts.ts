@@ -39,7 +39,7 @@ export { scriptRerankers as getReranker };
 /** A folder's embedding target, embedding with the real provider its config names. */
 export function folderIndex(
   folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>,
-): EmbedTarget | undefined {
+): EmbedTarget {
   return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, entryInfra());
 }
 

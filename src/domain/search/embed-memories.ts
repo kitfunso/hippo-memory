@@ -32,25 +32,23 @@ export interface EmbedWith {
  * the failures its embeds already warned about. */
 export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock' | 'failureNotices'>;
 
-/** The store's own index when it keeps one, else its vector groups; undefined for a store with
- * neither. */
+/** The store's own index when it keeps one, else its vector groups. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<EmbedStore>,
   { failureNotices }: Pick<InfraPorts, 'failureNotices'>,
-): EmbedTarget | undefined {
+): EmbedTarget {
   const { embeddingIndex, vectors, vectorWrites } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor, failureNotices };
   }
-  if (vectors === undefined || vectorWrites === undefined) return undefined;
   const groups = { vectors, vectorWrites };
   return { groups, embeddings, embedderFor, failureNotices };
 }
 
-/** A store an embed reaches: its own index, else its vector groups; it may keep neither. */
-export type EmbedStore = StoreWith<never, 'embeddingIndex' | 'vectors' | 'vectorWrites'>;
+/** A store an embed reaches: its own index when it keeps one, else its vector groups. */
+export type EmbedStore = StoreWith<never, 'embeddingIndex'>;
 
 /** What embedding one memory and every memory does on a target: the folder index under its lock, or
  * a store's vector groups under the same per-index turn. */
@@ -67,11 +65,10 @@ function adapterFor(on: EmbedTarget): EmbedAdapter {
  * through its vectorWrites. Resolves whatever fails, so a caller that fires and forgets stays
  * safe; the outcome says whether the memory reached the index. */
 export async function embedMemoryInto(
-  on: EmbedTarget | undefined,
+  on: EmbedTarget,
   entry: MemoryEntry,
   model?: string,
 ): Promise<EmbedOutcome> {
-  if (on === undefined) return 'off';
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
@@ -89,7 +86,7 @@ export async function embedMemoryInto(
 /** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's
  * own handling is logged here, since nothing else holds it and an unhandled one ends the
  * process. */
-export function embedMemoryDetached(on: EmbedTarget | undefined, entry: MemoryEntry): void {
+export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
   embedMemoryInto(on, entry).catch((err) =>
     log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)),
   );
@@ -111,11 +108,10 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
  * many it embedded; `provider` defaults to the one the target's embedder builds. With a store,
  * every tenant's memories with no vector for the provider's model go through its `vectorWrites`. */
 export async function embedAll(
-  on: EmbedTarget | undefined,
+  on: EmbedTarget,
   model?: string,
   givenProvider?: EmbeddingProvider,
 ): Promise<number> {
-  if (on === undefined) return 0;
   const cfg = on.embeddings;
   const provider = givenProvider ?? on.embedderFor(cfg, { model });
   if (!provider.isAvailable()) {

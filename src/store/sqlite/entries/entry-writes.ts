@@ -61,7 +61,7 @@ import type { AppendAuditOptions } from '../../../base/ports/store/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 import { readMemoryReach } from '../runtime/tenant-lookup.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
@@ -476,7 +476,7 @@ export function supersedeEntry(
  * rolled-back write leaves neither. */
 export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
   return {
-    ...bound<Pick<EntryWrites, 'writeEntry' | 'applyOutcome' | 'setPinned' | 'forget'>>(
+    ...bound(
       on,
       {
         writeEntry: (db, write) => writeEntryRow(db, files, write),
@@ -496,17 +496,17 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
           purgeMirrorBestEffort(files.hippoRoot, purge);
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
         },
-      },
+      } satisfies Bodies<Pick<EntryWrites, 'writeEntry' | 'applyOutcome' | 'setPinned' | 'forget'>>,
       openStore,
     ),
-    ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>(on, {
+    ...bound(on, {
       archiveRaw: (db, ...args) => archiveRaw(db, files, ...args),
       supersede: (db, write) => {
         const successor = stampOriginProject(files, write.successor);
         commitSupersede(db, { ...write, successor });
         writeEntryMirrors(files.hippoRoot, successor);
       },
-    }),
+    } satisfies Bodies<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>),
   };
 }
 

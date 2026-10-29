@@ -46,7 +46,7 @@ import {
   supersededIn,
 } from './dashboard-sql.js';
 import { handlesOf, openStore } from '../runtime/handles.js';
-import { answered, bound } from '../runtime/bound.js';
+import { answered, bound, type Bodies } from '../runtime/bound.js';
 
 const EMBEDDED = 'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)';
 // First-seen order: the project whose first live row comes first by created, then id.
@@ -285,9 +285,9 @@ export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}):
   const { on, files } = handlesOf(hippoRoot, rules);
   const open = dashboardOpener(files);
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
-  const scans = bound<Scans>(
+  const scans = bound(
     on,
-    { totals, project, search, openConflictsOf: openConflictsNaming },
+    { totals, project, search, openConflictsOf: openConflictsNaming } satisfies Bodies<Scans>,
     open,
   );
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));

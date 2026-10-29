@@ -100,8 +100,8 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
-/** The store the calls run on: sqliteStore, which sets every group. */
-export type FixtureStore = HippoStore & StoreGroups;
+/** The store the calls run on: sqliteStore, which sets every group and its local tier. */
+export type FixtureStore = ReturnType<typeof sqliteStore>;
 
 /** A store group, or 'base' for the methods HippoStore declares itself. */
 export type ConformanceGroup = keyof StoreGroups | 'base';

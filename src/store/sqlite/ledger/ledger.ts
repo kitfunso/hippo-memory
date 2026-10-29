@@ -21,7 +21,7 @@ import {
 import type { Ledger, LedgerTurn, PilotArmOptions } from '../../../base/ports/store/ledger.js';
 import type { DeliveryEventInput } from '../../../base/session/delivery.js';
 import type { OnHandle } from '../runtime/open.js';
-import { answered, bound } from '../runtime/bound.js';
+import { answered, bound, type Bodies } from '../runtime/bound.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate
@@ -243,6 +243,8 @@ export function sqliteLedger(on: OnHandle, session?: RequestStores): Ledger {
           () => hashArm(sessionId, rateBp),
         ),
       ),
-    ...bound<Pick<Ledger, 'replaceRereads'>>(on, { replaceRereads: recordRereads }),
+    ...bound(on, { replaceRereads: recordRereads } satisfies Bodies<
+      Pick<Ledger, 'replaceRereads'>
+    >),
   };
 }

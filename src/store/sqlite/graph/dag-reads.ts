@@ -21,7 +21,7 @@ import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../runtime/ro
 import { descendantAdmits } from '../../../base/scope/read-admission.js';
 import type { OnHandle } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 interface PagedWalk {
@@ -203,14 +203,14 @@ function childrenInOrder(
 }
 
 export function sqliteDagReads(on: OnHandle): DagReads {
-  return bound<DagReads>(
+  return bound(
     on,
     {
       sessionRawCount: countSessionRawMemories,
       sessionRawKeys: listSessionRawKeys,
       sessionRawRows: readSessionRawRows,
       summaryWithDescendants: summaryWithDescendants,
-    },
+    } satisfies Bodies<DagReads>,
     openStore,
   );
 }

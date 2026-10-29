@@ -474,7 +474,7 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     const onPort = await runPass(
       c,
       { withGlobal: true, embedded: true },
-      (root) => (port = portOnlySide(root, ['vectors', 'graphReads', 'sessions'])),
+      (root) => (port = portOnlySide(root, ['graphReads', 'sessions'])),
     );
     expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
     expect(onPort.rows.local).toEqual(onHippoDb.rows.local);

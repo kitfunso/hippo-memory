@@ -16,13 +16,15 @@ const learningReadsBodies: Bodies<Pick<Learning, 'entriesMentioning' | 'readEntr
 export function sqliteLearning({ on, files }: Handles): Learning {
   return {
     ...bound(on, learningReadsBodies, openStore),
-    ...bound<Pick<Learning, 'addTagToEntries'>>(
+    ...bound(
       on,
-      { addTagToEntries: (db, ...args) => addTagToEntries(db, files, ...args) },
+      { addTagToEntries: (db, ...args) => addTagToEntries(db, files, ...args) } satisfies Bodies<
+        Pick<Learning, 'addTagToEntries'>
+      >,
       openStore,
     ),
-    ...bound<Pick<Learning, 'confirmedOutcomeTimes'>>(on, {
+    ...bound(on, {
       confirmedOutcomeTimes: confirmedOutcomeTimes,
-    }),
+    } satisfies Bodies<Pick<Learning, 'confirmedOutcomeTimes'>>),
   };
 }

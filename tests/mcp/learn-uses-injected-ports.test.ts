@@ -54,7 +54,8 @@ describe('learn', () => {
     const { git, calls } = stubGit();
     const { ctx, store, config } = stdioContext(hippoRoot, git, INJECTED);
     const call = { args: { days: 30 }, ctx, hippoRoot, config, tenantId: 'default', store };
-    const text = await runLearnTool({ ...call, api: { ...mcpApiContext(ctx), store } });
+    const api = { ...mcpApiContext(ctx), store };
+    const text = await runLearnTool({ ...call, api });
     expect(text).toBe('No git history found.');
     expect(calls.map((c) => c.cwd)).toEqual([INJECTED]);
   });
@@ -64,7 +65,8 @@ describe('learn', () => {
     const { git, calls } = stubGit();
     const { ctx, store, config } = stdioContext(hippoRoot, git, undefined);
     const call = { args: {}, ctx, hippoRoot, config, tenantId: 'default', store };
-    const text = await runLearnTool({ ...call, api: { ...mcpApiContext(ctx), store } });
+    const api = { ...mcpApiContext(ctx), store };
+    const text = await runLearnTool({ ...call, api });
     expect(text).toBe('No git history found.');
     expect(calls).toEqual([]);
   });

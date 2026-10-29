@@ -26,7 +26,7 @@ beforeEach(() => {
   root = makeRoot('mcp-ready', { init: false });
 });
 
-// The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
+// The stub wraps a hippo.db store that nothing blocks, without the local files or tier, so a tool that ran would leave hippo.db behind.
 function storeOfKind(kind: string): HippoStore {
   return kind === 'sqlite' ? sqliteStore(root) : { ...withoutFolderGroups(sqliteStore(root)), kind };
 }
@@ -52,7 +52,7 @@ function listedNames(res: McpResponse | null): string[] {
 
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-// The stub lacks only the local files, so every tool but the two that need them runs on it.
+// The stub lacks the local files and hippo.db's local tier, so every tool but the three that need them runs on it.
 const READY = [
   'hippo_recall',
   'hippo_assemble',
@@ -61,7 +61,6 @@ const READY = [
   'hippo_remember',
   'hippo_outcome',
   'hippo_context',
-  'hippo_learn',
   'hippo_status',
   'hippo_conflicts',
   'hippo_resolve',
@@ -86,7 +85,7 @@ describe('store-ready MCP tools', () => {
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
     const unready = declared.filter((name) => !ready.includes(name));
-    expect(unready).toEqual(['hippo_share', 'hippo_peers']);
+    expect(unready).toEqual(['hippo_learn', 'hippo_share', 'hippo_peers']);
     for (const name of unready) {
       const res = await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },

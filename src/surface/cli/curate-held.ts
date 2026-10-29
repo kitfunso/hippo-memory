@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import * as api from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
+import type { HippoDbContext } from '../../api/hippo-db-context.js';
 import { type CliContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag } from './flag-values.js';
@@ -148,7 +149,7 @@ export async function handleQuarantine({
 }
 
 async function decideQuarantined(
-  ctx: ContextWith<'quarantine'>,
+  ctx: HippoDbContext,
   sub: 'approve' | 'reject',
   id: string,
 ): Promise<void> {

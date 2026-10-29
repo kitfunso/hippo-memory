@@ -17,12 +17,16 @@ import type { StoreRules } from '../../../base/ports/infra.js';
 import type { StoreRuntime } from '../../../db/store-runtime.js';
 import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import {
+  HIPPO_DB_OPS,
+  type HippoDbRepo,
+  type OpGroup,
   type OpPlaces,
   type OpRoute,
   type WorkerBase,
   type WorkerGroup,
   WORKER_OPS,
 } from './worker-ops.js';
+import type { HippoDbRepos, HippoDbStore } from '../hippo-db.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 
@@ -81,7 +85,7 @@ function workerCall(sender: Sender, op: string, mode: OpRoute): Function {
 
 /** `inProcess` with each method the op table places on a worker answered from one, so a new
  * method of a group needs its tag and no body here. */
-function onWorkers<G>(sender: Sender, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
+function onWorkers<G>(sender: Sender, group: OpGroup, places: OpPlaces<G>, inProcess: G): G {
   const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
     method,
     workerCall(sender, `${group}.${method}`, place),
@@ -150,6 +154,20 @@ function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, 
   return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
 }
 
+// SAFETY: Object.keys of the HIPPO_DB_OPS literal lists exactly its repository keys.
+const HIPPO_DB_REPOS = Object.keys(HIPPO_DB_OPS) as HippoDbRepo[];
+
+/** hippo.db's local tier, each repository wrapped as a plain group is, under `hippoDb.<repo>`. */
+function hippoDbOnWorkers(sender: Sender, inProcess: HippoDbRepos): HippoDbRepos {
+  const wrapped = HIPPO_DB_REPOS.map((repo) => [
+    repo,
+    onWorkers(sender, `hippoDb.${repo}`, HIPPO_DB_OPS[repo], inProcess[repo]),
+  ]);
+  // SAFETY: each entry pairs a repository name with its own wrapped methods, so the object has
+  // every repository key.
+  return Object.fromEntries(wrapped) as HippoDbRepos;
+}
+
 /** The rules a worker store's threads open with, and the server's runtime its checkpoints run
  * under. */
 export interface WorkerStoreOptions extends StoreRules {
@@ -163,16 +181,17 @@ export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   { runtime, ...rules }: WorkerStoreOptions = {},
-): HippoStore & StoreGroups {
+): HippoDbStore {
   // A method the op table missed would run here, on the server thread, where every open of this
   // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
-  const store: HippoStore & StoreGroups = {
+  const store: HippoDbStore = {
     ...inProcess,
     ...onWorkers<WorkerBase>(sender, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(sender, inProcess.vectors),
     ...plainGroups(sender, inProcess),
+    hippoDb: hippoDbOnWorkers(sender, inProcess.hippoDb),
     readiness: probing(
       hippoRoot,
       onWorkers(sender, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
@@ -192,19 +211,23 @@ function isPlainObject<V>(value: V): value is V & object {
   return value instanceof Object && Object.getPrototypeOf(value) === Object.prototype;
 }
 
-/** `store` with each worker call, its groups' too, bound to one request's `limits`; any other
- * member stays as it is, so a store a caller patched keeps its patches. */
+// Down every level of plain objects, since hippo.db's local tier holds its methods two levels
+// down.
+function reboundAll<V>(value: V, limits: RequestLimits): V {
+  if (!isPlainObject(value)) return rebound(value, limits);
+  const members = Object.entries(value).map(([key, member]) => [key, reboundAll(member, limits)]);
+  // SAFETY: a group keeps its keys, each method rebound to the same signature.
+  return Object.fromEntries(members) as V;
+}
+
+/** `store` with each worker call, at any depth of its groups, bound to one request's `limits`;
+ * any other member stays as it is, so a store a caller patched keeps its patches. */
 export function storeForRequest<S extends HippoStore>(store: S, limits: RequestLimits): S {
   if (!runsOffLoop(store)) return store;
   const bound: Partial<S> = { ...store };
   // SAFETY: Object.keys lists the store's own string keys, which are keys of S.
   for (const key of Object.keys(store) as (keyof S)[]) {
-    const value = store[key];
-    const group = isPlainObject(value)
-      ? Object.fromEntries(Object.entries(value).map(([k, m]) => [k, rebound(m, limits)]))
-      : undefined;
-    // SAFETY: a group keeps its keys, each method rebound to the same signature.
-    bound[key] = (group ?? rebound(value, limits)) as S[keyof S];
+    bound[key] = reboundAll(store[key], limits);
   }
   // SAFETY: every own string key of `store` was copied above; its marks are non-enumerable, so
   // markOffLoop sets the off-loop mark again.

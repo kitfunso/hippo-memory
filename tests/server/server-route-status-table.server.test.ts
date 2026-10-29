@@ -273,9 +273,12 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
-  // A caller on this machine of these routes reaches the global store, the caller's project or sleep.
-  const onHippoDbOnly = (path: string): boolean =>
-    path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
+  // A caller on this machine of these routes reaches the global store, the caller's project, sleep or hippo.db's tier.
+  const onHippoDbOnly = (path: string): boolean => {
+    if (path.startsWith('/v1/quarantine')) return needsHippoDb('tier');
+    if (path.endsWith('/sleep')) return needsHippoDb('sleep');
+    return /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
+  };
   for (const [method, path, , [status, error]] of ROUTES) {
     it.skipIf(onHippoDbOnly(path))(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
@@ -321,16 +324,13 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.sleep, 200, { dryRun: true });
   });
 
-  it('auth, quarantine and audit routes with valid input', async () => {
+  it('auth and audit routes with valid input', async () => {
     const mint = await post('/v1/auth/keys', { label: 'parity', role: 'member' });
     const keyId = isJsonObject(mint.json) && isText(mint.json.keyId) ? mint.json.keyId : 'hk_missing';
     const out = {
       list: await get('/v1/auth/keys?active=false'),
       listBad: await get('/v1/auth/keys?active=maybe'),
       revoke: await call({ method: 'DELETE', path: `/v1/auth/keys/${keyId}` }),
-      quarantine: await get('/v1/quarantine?status=all'),
-      approve: await post(`/v1/quarantine/${seeded.recall}/approve`),
-      reject: await post(`/v1/quarantine/${seeded.recall}/reject`),
       audit: await get('/v1/audit?limit=5'),
       auditBadOp: await get('/v1/audit?op=nope'),
     };
@@ -338,9 +338,6 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.list, 200, expect.arrayContaining([expect.objectContaining({ keyId, label: 'parity' })]));
     shows(out.listBad, 400, { error: "active must be 'true' or 'false'" });
     shows(out.revoke, 200, { ok: true });
-    shows(out.quarantine, 200, { quarantine: [] });
-    shows(out.approve, 404, { error: `not quarantined: ${seeded.recall}` });
-    shows(out.reject, 404, { error: `not quarantined: ${seeded.recall}` });
     shows(out.audit, 200, expect.arrayContaining([expect.objectContaining({ op: 'auth_revoke', targetId: keyId })]));
     shows(out.auditBadOp, 400, { error: expect.stringMatching(/^op must be one of: remember \| /) });
   });

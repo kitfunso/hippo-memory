@@ -3,7 +3,7 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { logEvent, loggedMemory } from './events.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
-import { bound } from '../runtime/bound.js';
+import { bound, type Bodies } from '../runtime/bound.js';
 import { openStore } from '../runtime/handles.js';
 import type {
   ConnectorArchive,
@@ -66,7 +66,7 @@ function archiveConnectorEntry(
  * write leaves none. */
 export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
   return {
-    ...bound<Pick<ConnectorWrites, 'writeConnectorEntry'>>(
+    ...bound(
       on,
       {
         writeConnectorEntry: (db, write) => {
@@ -75,11 +75,11 @@ export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
           if (result.outcome === 'written') writeEntryMirrors(files.hippoRoot, entry);
           return result;
         },
-      },
+      } satisfies Bodies<Pick<ConnectorWrites, 'writeConnectorEntry'>>,
       openStore,
     ),
-    ...bound<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
+    ...bound(on, {
       archiveConnectorEntry: (db, ...args) => archiveConnectorEntry(db, files, ...args),
-    }),
+    } satisfies Bodies<Pick<ConnectorWrites, 'archiveConnectorEntry'>>),
   };
 }

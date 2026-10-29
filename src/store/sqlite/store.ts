@@ -42,12 +42,12 @@ import { sqliteLessonWrites } from './learning/lesson-writes.js';
 import { finishRecall, sqliteLastRecall } from './recall/last-recall.js';
 import { sqliteGraphReads } from './graph/graph-reads.js';
 import { sqliteObjects } from './records/objects.js';
-import { sqliteQuarantine } from './connectors/quarantine.js';
 import { sqliteVectorReads } from './vectors/vector-reads.js';
 import { readLatestHandoff } from './sessions/handoffs.js';
 import { updateStats } from './entries/index-and-stats.js';
 
 import { sqliteKeyWrites } from './keys/keys.js';
+import { hippoDbRepos, type HippoDbStore } from './hippo-db.js';
 import { type Handles, type OnHandle, readOnly, type StoreFiles } from './runtime/open.js';
 import { handlesOf, openStore } from './runtime/handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './runtime/bound.js';
@@ -102,10 +102,11 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
  * its end on its own short-lived handle before its Promise settles, so no write scope spans an
  * await. The caller passes the handles, so a store built over this one opens a single set, and a
  * store worker's opens all reach its thread's one connection. */
-export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
+export function sqliteStoreOn(handles: Handles): HippoDbStore {
   const { on, files } = handles;
   return {
     kind: 'sqlite',
+    hippoDb: hippoDbRepos(handles),
     ...sqliteLocalGroups(handles),
     ...sqliteBaseMethods(handles),
     keyWrites: sqliteKeyWrites(on),
@@ -114,7 +115,6 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     contextReads: sqliteContextReads(handles),
     dagReads: sqliteDagReads(on),
     auditLog: sqliteAuditLog(on),
-    quarantine: sqliteQuarantine(handles),
     graphReads: sqliteGraphReads(on),
     connectorWrites: sqliteConnectorWrites(handles),
     connectorEvents: sqliteConnectorEvents(on),
@@ -164,11 +164,10 @@ const entryReadsBodies: Bodies<
 
 function storeFilesBodies(
   files: StoreFiles,
-): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats' | 'bumpRemembered'>> {
+): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats'>> {
   return {
     continuity: (db, ...args) => continuity(db, files, ...args),
     bumpRecallStats: (db, recalled) => updateStats(db, files, { recalled }),
-    bumpRemembered: (db, count) => updateStats(db, files, { remembered: count }),
   };
 }
 
@@ -186,25 +185,27 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
     // It strengthens, so it scores by the store's strength model.
-    ...bound<Pick<BaseMethods, 'finishRecall'>>(on, {
+    ...bound(on, {
       finishRecall: (db, recall) => {
         finishRecall(db, files, recall);
       },
-    }),
+    } satisfies Bodies<Pick<BaseMethods, 'finishRecall'>>),
   };
 }
 
 // The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
 function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
   return {
-    ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
+    ...bound(on, { entriesWithoutVector, writeVectors } satisfies Bodies<
+      Omit<VectorWrites, 'indexKey'>
+    >),
     // Resolved at use, as the handle is: building a store reads no path.
     indexKey: async () => embedLockKey(hippoRoot),
   };
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
-  return bound<AuditLog>(on, { listAuditEvents });
+  return bound(on, { listAuditEvents } satisfies Bodies<AuditLog>);
 }
 
 function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
@@ -268,12 +269,16 @@ export function sqliteDiagnosticsStore(
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, readOnly),
-    ...bound<Pick<ProjectTagReads, 'entriesWhere'>>(
+    ...bound(
       on,
-      { entriesWhere: listEntriesWhere },
+      { entriesWhere: listEntriesWhere } satisfies Bodies<Pick<ProjectTagReads, 'entriesWhere'>>,
       readOnly,
     ),
-    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, readOnly),
+    auditLog: bound(
+      on,
+      { listAuditEvents } satisfies Bodies<ProjectTagReads['auditLog']>,
+      readOnly,
+    ),
   };
 }
 
@@ -282,7 +287,7 @@ const REOPEN = Symbol('sqliteStore reopen');
 
 /** A store sqliteStore built, with how to build it again on one session's handles. */
 interface Reopenable {
-  readonly [REOPEN]: (session: RequestStores) => HippoStore & StoreGroups;
+  readonly [REOPEN]: (session: RequestStores) => HippoStore;
 }
 
 function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
@@ -291,10 +296,7 @@ function isReopenable(store: HippoStore): store is HippoStore & Reopenable {
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its
  * runtime and session. */
-export function sqliteStore(
-  hippoRoot: string,
-  opts: SqliteStoreOptions = {},
-): HippoStore & StoreGroups {
+export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): HippoDbStore {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
   const reopen: Reopenable[typeof REOPEN] = (session) =>
     sqliteStore(hippoRoot, { ...opts, session });
@@ -319,12 +321,12 @@ const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextC
 function sqliteContextReads({ on, files }: Handles): ContextReads {
   return {
     ...bound(on, contextReadsBodies, openStore),
-    ...bound<Pick<ContextReads, 'ambientTallies' | 'contextCandidates'>>(
+    ...bound(
       on,
       {
         ambientTallies: (db, ...args) => countAmbient(db, files, ...args),
         contextCandidates: (db, ...args) => listContextCandidates(db, files.strength, ...args),
-      },
+      } satisfies Bodies<Pick<ContextReads, 'ambientTallies' | 'contextCandidates'>>,
       openStore,
     ),
   };

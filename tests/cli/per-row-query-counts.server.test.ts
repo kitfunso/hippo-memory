@@ -5,7 +5,7 @@ import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } fr
 import { closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { outcome } from '../../src/api/memories/outcome.js';
-import { quarantineList } from '../../src/api/auth/quarantine.js';
+import { quarantineList } from '../../src/api/hippo-db/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
 import { recordQuarantine } from '../../src/store/sqlite/connectors/quarantine.js';

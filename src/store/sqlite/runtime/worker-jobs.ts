@@ -20,6 +20,8 @@ import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from '../vectors/vector-reads.js';
 import type { StoredPart } from '../../../base/ports/store.js';
 import {
+  HIPPO_DB_OPS,
+  type HippoDbRepo,
   type Job,
   type OpRoute,
   type Reply,
@@ -93,36 +95,43 @@ class WorkerStores extends RequestStores {
   }
 }
 
-function isWorkerGroup(group: string): group is WorkerGroup {
-  return Object.hasOwn(WORKER_OPS, group);
-}
-
-function runsOnWorker(group: WorkerGroup, method: string): boolean {
-  const places: Readonly<Record<string, OpRoute>> = WORKER_OPS[group];
-  return Object.hasOwn(places, method);
+/** Whether `table` places `method` under `group`, so a name off the op table runs nothing. */
+function placed<T extends Readonly<Record<string, Readonly<Record<string, OpRoute>>>>>(
+  table: T,
+  group: string,
+  method: string,
+): group is keyof T & string {
+  return Object.hasOwn(table, group) && Object.hasOwn(table[group] ?? {}, method);
 }
 
 type MethodsOf<T> = T extends T ? T[keyof T] : never;
 
 /** What a method the op table names can return. */
 type Ran = ReturnType<
-  MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>
+  MethodsOf<
+    | Ops[Exclude<WorkerGroup, 'base'>]
+    | Pick<Ops, keyof typeof WORKER_OPS.base>
+    | Ops['hippoDb'][HippoDbRepo]
+  >
 >;
 
-function methodsOf(ops: Ops, group: WorkerGroup) {
+/** What holds the methods an op names: the store for a base op, else the op's group. */
+type OpOwner = Ops | Ops[Exclude<WorkerGroup, 'base'>] | Ops['hippoDb'][HippoDbRepo];
+
+function methodsOf(owner: OpOwner) {
   // SAFETY: every group is an object of methods, and the server thread sent the arguments the
   // port's own signature for the one called took.
-  return (group === 'base' ? ops : ops[group]) as Readonly<
-    Record<string, ((...sent: readonly unknown[]) => Ran) | undefined>
-  >;
+  return owner as Readonly<Record<string, ((...sent: readonly unknown[]) => Ran) | undefined>>;
 }
 
 /** Runs `op`; only a method the op table places on a worker can run. */
 function runOp(ops: Ops, op: string, args: readonly unknown[]) {
-  const [group = '', method = ''] = op.split('.');
+  const [group = '', method = '', local = ''] = op.split('.');
   const run =
-    isWorkerGroup(group) && runsOnWorker(group, method) ? methodsOf(ops, group)[method] : undefined;
-  if (run === undefined) throw new Error(`the store worker has no op '${op}'`);
+    group === 'hippoDb'
+      ? placed(HIPPO_DB_OPS, method, local) && methodsOf(ops.hippoDb[method])[local]
+      : placed(WORKER_OPS, group, method) && methodsOf(group === 'base' ? ops : ops[group])[method];
+  if (!run) throw new Error(`the store worker has no op '${op}'`);
   return run(...args);
 }
 

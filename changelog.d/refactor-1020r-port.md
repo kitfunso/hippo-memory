@@ -1,0 +1,3 @@
+### Changed
+
+- **Every store sets `vectors` and `vectorWrites`, no store keeps `bumpRemembered` or `quarantine`, and `runStoreConformance` checks every required group and base method.** A store-kit adapter must serve both vector groups, and can drop `bumpRemembered` and the `quarantine` group. `HippoStore` now names only the required groups and base methods, so a store literal that sets an optional group is typed `HippoStore & Pick<StoreGroups, G>` or left to inference. Quarantine and MCP `hippo_learn` run on hippo.db alone, because each takes hippo.db's local tier, and the tier's reads and writes run on the store workers. MCP `hippo_learn` still does not move the remembered counter. See `docs/UPGRADING-3.0.md`.

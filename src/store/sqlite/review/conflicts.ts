@@ -711,9 +711,11 @@ const conflictsBodies: Bodies<Omit<Conflicts, 'resolve'>> = {
 export function sqliteConflicts({ on, files }: Handles): Conflicts {
   return {
     ...bound(on, conflictsBodies, openStore),
-    ...bound<Pick<Conflicts, 'resolve'>>(
+    ...bound(
       on,
-      { resolve: (db, ...args) => resolveConflict(db, files, ...args) },
+      { resolve: (db, ...args) => resolveConflict(db, files, ...args) } satisfies Bodies<
+        Pick<Conflicts, 'resolve'>
+      >,
       openStore,
     ),
   };

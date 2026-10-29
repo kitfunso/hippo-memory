@@ -7,13 +7,7 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type {
-  HippoStore,
-  LastRecall,
-  LastRecallWrites,
-  RecallWrites,
-  StoreWith,
-} from '../../src/base/ports/store-index.js';
+import type { LastRecall, LastRecallWrites, RecallWrites, StoreWith } from '../../src/base/ports/store-index.js';
 import type { GlobalGroup } from '../../src/base/ports/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { adminActor } from '../../src/api/index.js';
@@ -91,7 +85,7 @@ describe('retrieve with the CLI ranking core', () => {
         return lastRecall.finishRecall(w, root);
       },
     };
-    const store: HippoStore = { ...inner, lastRecall: traced };
+    const store = { ...inner, lastRecall: traced };
     const ctx: Context = {
       tenantId: 'default',
       actor: adminActor('cli'),

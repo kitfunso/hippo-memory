@@ -1,10 +1,9 @@
-// Quarantine review: list, approve and reject held memories.
+// Quarantine review: list, approve and reject held memories, on hippo.db's local tier.
 
 import { ConflictError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { QuarantineRefusal } from '../../base/ports/store.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { ContextWith } from '../types.js';
-import type { QuarantineStatus } from '../../base/ports/store/quarantine.js';
+import type { QuarantineRefusal, QuarantineStatus } from '../../base/records/quarantine.js';
+import type { HippoDbContext } from '../hippo-db-context.js';
 
 export interface QuarantineListItem {
   id: string;
@@ -22,10 +21,10 @@ const QUARANTINE_PREVIEW_CHARS = 200;
 /** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review
  * queue). */
 export async function quarantineList(
-  ctx: ContextWith<'quarantine'>,
+  ctx: HippoDbContext,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
 ): Promise<QuarantineListItem[]> {
-  const rows = await ctx.store.quarantine.listQuarantined(ctx.tenantId, {
+  const rows = await ctx.store.hippoDb.quarantine.list(ctx.tenantId, {
     status: opts.status ?? 'pending',
     limit: opts.limit,
     after: opts.after,
@@ -49,16 +48,11 @@ function refusalError(id: string, refusal: QuarantineRefusal): Error {
 
 /** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row
  * moved since (mirrors dormantRestore). */
-export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
+export async function quarantineApprove(ctx: HippoDbContext, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(
-    ctx.tenantId,
-    id,
-    'approve',
-    ctx.actor.subject,
-  );
+  const result = await ctx.store.hippoDb.quarantine.approve(ctx.tenantId, id, ctx.actor.subject);
   if (result.outcome === 'approved') return;
   if (result.outcome === 'scope_moved') {
     throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
@@ -68,15 +62,10 @@ export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: stri
 
 /** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched
  * (append-only). */
-export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
+export async function quarantineReject(ctx: HippoDbContext, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(
-    ctx.tenantId,
-    id,
-    'reject',
-    ctx.actor.subject,
-  );
+  const result = await ctx.store.hippoDb.quarantine.reject(ctx.tenantId, id, ctx.actor.subject);
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }

@@ -182,7 +182,7 @@ function recallVectorCandidates(
 function folderVectorSource(
   { store, config }: ConfiguredFolder<SharingStore>,
   embedderFor: EmbedderFor,
-): VectorSource | undefined {
+): VectorSource {
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 
