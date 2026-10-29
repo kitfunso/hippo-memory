@@ -22,7 +22,6 @@ import { sqliteCompactions } from './capture/compactions.js';
 import { listSessionEvents } from './sessions/sessions.js';
 import { sqliteConsolidation } from './consolidation/consolidation.js';
 import { sqliteLearning } from './learning/learning.js';
-import { sqlitePromotion } from './sharing/promotion.js';
 import { sqliteProjectTags } from './maintenance/project-tags.js';
 import { sqliteSharing } from './sharing/sharing.js';
 import { sqliteDiagnostics } from './maintenance/diagnostics.js';
@@ -128,7 +127,6 @@ function sqliteFolderGroups(handles: Handles): Omit<FolderGroups, LocalGroup> {
   return {
     ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),
-    promotion: sqlitePromotion(handles),
     folderFiles: sqliteFolderFiles(handles),
     sharing: sqliteSharing(handles.on),
   };

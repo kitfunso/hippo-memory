@@ -10,11 +10,11 @@ import { isHandled, programFromConfig } from './check-floating-promises.mjs';
 /** The async api write functions, by the file that declares them. */
 export const API_WRITES = {
   'src/api/auth/auth.ts': ['authCreate', 'authCreateSelf', 'authListRows', 'authRevoke'],
+  'src/api/hippo-db/connector-writes.ts': ['rememberUntrusted', 'rawArchiveForEvent'],
   'src/api/hippo-db/outcome-last-recall.ts': ['outcomeForLastRecall'],
-  'src/api/hippo-db/remember-untrusted.ts': ['rememberUntrusted'],
   'src/api/memories/forget.ts': ['forget'],
   'src/api/memories/outcome.ts': ['outcome'],
-  'src/api/memories/promote.ts': ['supersede', 'rawArchive', 'rawArchiveForEvent'],
+  'src/api/memories/promote.ts': ['supersede', 'rawArchive'],
   'src/api/memories/remember.ts': ['remember'],
   'src/api/memories/remember-local.ts': ['rememberLocally'],
   'src/surface/importers/vault.ts': ['importVaultInto'],

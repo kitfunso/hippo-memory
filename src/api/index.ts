@@ -37,8 +37,8 @@ export {
 } from './types.js';
 export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
 export { remember } from './memories/remember.js';
-export { rememberUntrusted } from './hippo-db/remember-untrusted.js';
-export type { ConnectorRememberOptions } from './hippo-db/remember-untrusted.js';
+export { rawArchiveForEvent, rememberUntrusted } from './hippo-db/connector-writes.js';
+export type { ConnectorRememberOptions } from './hippo-db/connector-writes.js';
 export type {
   GatedRememberOptions,
   RememberLocal,
@@ -144,13 +144,10 @@ export type {
   ProjectSummary,
   RepairResult,
 } from './objects/projects.js';
-export { rawArchive, rawArchiveForEvent, promote, supersede } from './memories/promote.js';
-export type {
-  ArchiveRawResult,
-  PromoteResult,
-  SupersedeOverrides,
-  SupersedeResult,
-} from './memories/promote.js';
+export { rawArchive, supersede } from './memories/promote.js';
+export type { ArchiveRawResult, SupersedeOverrides, SupersedeResult } from './memories/promote.js';
+export { promote } from './hippo-db/promote.js';
+export type { PromoteResult } from './hippo-db/promote.js';
 export {
   DEFAULT_KEY_TTL_DAYS,
   MAX_TTL_DAYS,

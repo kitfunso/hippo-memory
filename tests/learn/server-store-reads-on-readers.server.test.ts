@@ -569,9 +569,9 @@ const WRITES: readonly Write[] = [
     '"op":"quarantine_reject"',
   ]),
   write(
-    'promotion.writeCopy',
+    'hippoDb.promotion.writeCopy',
     (s) =>
-      s.promotion.writeCopy(PROMOTED, {
+      s.hippoDb.promotion.writeCopy(PROMOTED, {
         actor: ACTOR,
         sourceId: 'mem_p_plain',
         auditAs: { tenantId: TENANT, actor: ACTOR },

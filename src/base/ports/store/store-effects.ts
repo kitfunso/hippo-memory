@@ -18,7 +18,7 @@ import { LEDGER_EFFECTS } from './ledger.js';
 import { OBJECTS_EFFECTS } from './objects.js';
 import { PROJECT_TAGS_EFFECTS } from './project-tags.js';
 import { FAILURE_LOG_EFFECTS } from './rejections.js';
-import { PROMOTION_EFFECTS, SHARING_EFFECTS } from './sharing.js';
+import { SHARING_EFFECTS } from './sharing.js';
 import { EMBEDDING_INDEX_EFFECTS, VECTORS_EFFECTS, VECTOR_WRITES_EFFECTS } from './vectors.js';
 import type { MethodEffects } from './effects.js';
 import type { BaseMethods, StoreGroups } from '../store.js';
@@ -60,7 +60,6 @@ export const STORE_EFFECTS = {
   compactions: COMPACTIONS_EFFECTS,
   ledger: LEDGER_EFFECTS,
   embeddingIndex: EMBEDDING_INDEX_EFFECTS,
-  promotion: PROMOTION_EFFECTS,
   folderFiles: FOLDER_FILES_EFFECTS,
   sharing: SHARING_EFFECTS,
   consolidation: CONSOLIDATION_EFFECTS,

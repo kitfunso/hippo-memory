@@ -3,7 +3,7 @@
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
-import { promote } from '../../../src/api/memories/promote.js';
+import { promote } from '../../../src/api/hippo-db/promote.js';
 import { apiCtx } from '../api-ctx.js';
 import { type StoreFiles } from '../../../src/store/sqlite/runtime/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';

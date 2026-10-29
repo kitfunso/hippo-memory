@@ -151,12 +151,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/hippo-db/outcome-last-recall.ts
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
-### src/api/memories/promote.ts
+### src/api/hippo-db/promote.ts
 - `PromoteResult`: `copyToGlobal` reads the local row in `opts.tenantId` (`promote` passes the caller's) and keeps the entry's tenantId on the global side.
 - `assertPromotable`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review. The quarantine, personal-scope and secret vetoes moved here from `src/store` in 3.0; the store keeps only `promotion.writeCopy`.
+
+### src/api/memories/promote.ts
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
-- `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
 
 ### src/api/recall/types.ts
 - `RecallOpts.scorerWindow`: F3 (v1.7.0): scorer-window opt-in. When set, `listSearchEntries` loads up to `scorerWindow` candidates. When undefined (default), the existing behaviour is preserved: store-internal 200-row default, which every release before v1.7.0 silently relied on.
@@ -189,8 +190,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `recall`: **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract lock).
 - `retrieve`: Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock).
 
-### src/api/hippo-db/remember-untrusted.ts
+### src/api/hippo-db/connector-writes.ts
 - `ConnectorRememberOptions.event`: Took the place of `afterWrite`, the hook ingestion connectors (E1.3+) used to stamp idempotency rows atomically with the memory row on its database handle. The store's `connectorWrites` group now writes the event log row and a flagged row's quarantine record in the memory's transaction.
+- `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
 
 ### src/api/memories/remember.ts
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
