@@ -171,9 +171,9 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   ),
   read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
   read(
-    'auditMaintenance.objectBackedAmong',
+    'hippoDb.auditMaintenance.objectBackedAmong',
     async (s) =>
-      s.auditMaintenance.objectBackedAmong(
+      s.hippoDb.auditMaintenance.objectBackedAmong(
         (await s.entriesWhere({ tenantId: TENANT }, { limit: 100 })).entries.map((e) => e.id),
       ),
     /'sem_/,

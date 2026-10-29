@@ -30,7 +30,7 @@ export async function repairAutomaticMemories(
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
 ): Promise<QualityRepairResult> {
-  return await sqliteStore(files.hippoRoot).auditMaintenance.repairQuality(
+  return await sqliteStore(files.hippoRoot).hippoDb.auditMaintenance.repairQuality(
     opts.tenantId,
     opts.apply ?? false,
     opts.protect,
@@ -42,5 +42,5 @@ export async function repairQualityOnce(
   tenantId: string,
   protect: RepairProtection,
 ): Promise<QualityRepairResult | null> {
-  return await sqliteStore(files.hippoRoot).auditMaintenance.repairQualityOnce(tenantId, protect);
+  return await sqliteStore(files.hippoRoot).hippoDb.auditMaintenance.repairQualityOnce(tenantId, protect);
 }

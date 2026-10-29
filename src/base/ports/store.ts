@@ -41,7 +41,7 @@ import type {
 /** Every group a store has: the required ones, then the optional capabilities, each a set of
  * groups a store sets or leaves unset together. `RequiredStore` is the smallest store, and
  * `runStoreConformance` from store-kit checks one. */
-export interface StoreGroups extends RequiredGroups, OptionalGroups {}
+export interface StoreGroups extends RequiredGroups, Omit<OptionalGroups, LocalGroup> {}
 
 /** Every capability a store may leave unset. */
 interface OptionalGroups
@@ -58,6 +58,8 @@ interface OptionalGroups
   readonly dagReads: DagReads;
   /** Without it recall expands no graph and the graph view answers 501. */
   readonly graphReads: GraphReads;
+  /** The continuity, session-end and working-memory paths. */
+  readonly sessions: Sessions;
   readonly goals: Goals;
   /** Status, tokens, failures and the memory listings. */
   readonly reports: Reports;
@@ -65,17 +67,16 @@ interface OptionalGroups
 
 /** The groups hippo.db keeps in its local tier, `store.hippoDb`, off the port. Surfaces still
  * prove them by name, so StoreWith and the group probes look for each one in the tier. */
-export interface LocalGroups {
-  /** The continuity, session-end and working-memory paths. */
-  readonly sessions: Sessions;
-}
+const LOCAL_GROUP_NAMES = ['sessions', 'auditMaintenance'] as const;
 
-export type LocalGroup = keyof LocalGroups;
+export type LocalGroup = (typeof LOCAL_GROUP_NAMES)[number];
 
-const LOCAL_GROUPS: ReadonlySet<string> = new Set<LocalGroup>(['sessions']);
+export type LocalGroups = Pick<OptionalGroups, LocalGroup>;
+
+const LOCAL_GROUPS: ReadonlySet<string> = new Set<string>(LOCAL_GROUP_NAMES);
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = keyof OptionalGroups | LocalGroup;
+export type OptionalGroup = keyof OptionalGroups;
 
 /** Each optional group once, for a surface or a test to walk;
  * tests/types/store-kit.types.test.ts proves it whole. */

@@ -168,21 +168,21 @@ export type {
   AuthGrantResult,
   AuthRevokeResult,
 } from './auth/auth.js';
+export { auditList } from './auth/audit.js';
+export type { AuditListOptions } from './auth/audit.js';
 export {
-  auditList,
   auditMemoryQuality,
   computeCutoff,
   auditPrune,
   auditRemoveErrors,
   memoryQualityRepair,
   memoryQualityRepairOnce,
-} from './auth/audit.js';
+} from './hippo-db/audit-maintenance.js';
 export type {
-  AuditListOptions,
   AuditPass,
   PruneAuditOptions,
   PruneAuditResult,
-} from './auth/audit.js';
+} from './hippo-db/audit-maintenance.js';
 export type {
   ContextCost,
   ContextOptions,

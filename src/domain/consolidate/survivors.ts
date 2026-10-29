@@ -18,7 +18,7 @@ export class SleepRows {
   constructor(
     private readonly store: Pick<
       StoreWith<'consolidation' | 'auditMaintenance'>,
-      'entriesByIds' | 'consolidation' | 'auditMaintenance'
+      'entriesByIds' | 'consolidation' | 'hippoDb'
     >,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
@@ -33,7 +33,9 @@ export class SleepRows {
       const byId = new Map(
         (await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]),
       );
-      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()])) {
+      for (const id of await this.store.hippoDb.auditMaintenance.objectBackedAmong([
+        ...byId.keys(),
+      ])) {
         this.backed.add(id);
       }
       for (const id of page) {

@@ -37,7 +37,6 @@ import { sqliteLedger } from './ledger/ledger.js';
 import { sqliteFolderFiles } from './folder-files/folder-files.js';
 import { sqliteDagReads } from './graph/dag-reads.js';
 import { sqliteEntryWrites } from './entries/entry-writes.js';
-import { sqliteAuditMaintenance } from './audit/audit-maintenance.js';
 import { sqliteLessonWrites } from './learning/lesson-writes.js';
 import { finishRecall, sqliteLastRecall } from './recall/last-recall.js';
 import { sqliteGraphReads } from './graph/graph-reads.js';
@@ -59,6 +58,7 @@ import type {
   ContinuityBlock,
   FolderGroups,
   HippoStore,
+  LocalGroup,
   MaintenanceGroups,
   Readiness,
   SleepGroups,
@@ -79,7 +79,9 @@ import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 
 /** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
  * and capture's. */
-function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
+function sqliteLocalGroups(
+  handles: Handles,
+): Omit<SleepGroups & CaptureGroups & MaintenanceGroups, LocalGroup> {
   const { on } = handles;
   return {
     consolidation: sqliteConsolidation(handles),
@@ -91,7 +93,6 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
     graphRebuild: sqliteGraphRebuild(on),
     agentImport: sqliteAgentImport(handles),
     lessonWrites: sqliteLessonWrites(handles),
-    auditMaintenance: sqliteAuditMaintenance(handles),
     dormant: sqliteDormant(handles),
     compactions: sqliteCompactions(handles),
     failureLog: sqliteFailureLog(on),
@@ -134,7 +135,7 @@ export function sqliteStoreOn(handles: Handles): HippoDbStore {
 
 /** The groups only a store kept as files in a folder serves: its ledger, own index, promote
  * copies and sharing. */
-function sqliteFolderGroups(handles: Handles): FolderGroups {
+function sqliteFolderGroups(handles: Handles): Omit<FolderGroups, LocalGroup> {
   return {
     ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
     embeddingIndex: sqliteEmbeddingIndex(handles),

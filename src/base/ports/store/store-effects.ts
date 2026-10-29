@@ -1,7 +1,7 @@
 // The effect of every store method, by group, assembled from the port files; WORKER_OPS derives
 // from it.
 import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
-import { AUDIT_LOG_EFFECTS, AUDIT_MAINTENANCE_EFFECTS } from './audit.js';
+import { AUDIT_LOG_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';
 import { CARDS_EFFECTS } from './cards.js';
 import { CONFLICTS_EFFECTS } from './conflicts.js';
@@ -59,7 +59,6 @@ export const STORE_EFFECTS = {
   connectorWrites: CONNECTOR_WRITES_EFFECTS,
   connectorEvents: CONNECTOR_EVENTS_EFFECTS,
   lastRecall: LAST_RECALL_EFFECTS,
-  auditMaintenance: AUDIT_MAINTENANCE_EFFECTS,
   lessonWrites: LESSON_WRITES_EFFECTS,
   cards: CARDS_EFFECTS,
   goals: GOALS_EFFECTS,

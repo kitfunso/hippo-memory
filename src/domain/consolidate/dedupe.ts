@@ -172,7 +172,9 @@ async function scanPairs(
   const losers = [...partitions.values()].flatMap((groups) =>
     [...groups.values()].flatMap((g) => g.losers),
   );
-  const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
+  const backing = await store.hippoDb.auditMaintenance.objectBackedAmong(
+    losers.map((loser) => loser.id),
+  );
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 
@@ -201,7 +203,7 @@ async function deletePairs(
 ): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
   const gone = new Set(
-    await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
+    await store.hippoDb.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
   );
   // A loser named twice went once, so only its first pair reports the delete.
   return pairs.filter((p) => gone.delete(p.removed));

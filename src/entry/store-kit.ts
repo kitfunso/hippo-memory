@@ -7,7 +7,7 @@ import {
 } from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import type { StoreRules } from '../base/ports/infra.js';
-import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
+import type { OptionalGroup, StoreWith } from '../base/ports/store-index.js';
 import * as openStore from '../surface/open-store.js';
 export type {
   ApiKeyListItem,
@@ -67,9 +67,9 @@ export type {
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
-/** hippo.db's store, which an add-on swaps for its own HippoStore in serve(). It takes only an
- * add-on's rules, since a runtime or a session belongs to a composition root. */
-export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups =
+/** hippo.db's store, which an add-on swaps for its own HippoStore in serve(); it takes only an
+ * add-on's rules. Its type finds each group moved to the local tier under `hippoDb`. */
+export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => StoreWith<OptionalGroup> =
   openStore.sqliteStore;
 export {
   decodeVector,

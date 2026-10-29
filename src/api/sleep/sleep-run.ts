@@ -15,7 +15,7 @@ import {
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { strengthOf, type Context, type ContextWith, type SleepContext } from '../types.js';
-import { auditRemoveErrors } from '../auth/audit.js';
+import { auditRemoveErrors } from '../hippo-db/audit-maintenance.js';
 import { globalTargetOf } from '../infra.js';
 import type { SleepOptions, SleepResult } from './sleep.js';
 import type { SleepEvent } from './events.js';
@@ -261,7 +261,9 @@ async function runQualityAudit(
   const issues: AuditIssue[] = [];
   for await (const page of pages()) {
     const rows = page.filter((e) => !planned.has(e.id));
-    const backing = await ctx.store.auditMaintenance.objectBackedAmong(rows.map((e) => e.id));
+    const backing = await ctx.store.hippoDb.auditMaintenance.objectBackedAmong(
+      rows.map((e) => e.id),
+    );
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
   if (issues.length === 0) return { errorsRemoved: 0, warningCount: 0 };
