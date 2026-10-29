@@ -11,6 +11,8 @@ import type {
   DrillDownCost, DrillDownResult, DrillDownSummary,
 } from './index.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { MAX_ID_LEN } from '../util/limits.js';
+import { SESSION_ID_RE } from '../util/session-id.js';
 
 export function snapshotText(s: TaskSnapshot): string {
   return [
@@ -45,22 +47,28 @@ export function handoffText(h: SessionHandoff): string {
 // Another session's state rarely bears on this prompt, so a text reader prints where to read it, not the text.
 const pointerTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
 
+// A stored id is free text and the pointer puts it in a command the agent runs, so an unsafe id is left out.
+const pointerSessionId = (id: string | null): string | null =>
+  id && id.length <= MAX_ID_LEN && SESSION_ID_RE.test(id) ? id : null;
+
 function snapshotPointerText(s: TaskSnapshot): string {
   const at = pointerTime(s.updated_at);
-  const line = s.session_id
-    ? `- Session ${s.session_id} saved a task snapshot at ${at} UTC. ` +
-      `If this task continues it, run \`hippo session latest --id ${s.session_id}\`.`
+  const id = pointerSessionId(s.session_id);
+  const line = id
+    ? `- Session ${id} saved a task snapshot at ${at} UTC. ` +
+      `If this task continues it, run \`hippo session latest --id ${id}\`.`
     : `- A task snapshot from ${at} UTC names no session. If this task continues it, run \`hippo snapshot show\`.`;
   return ['## Active Task Snapshot\n', line, ''].join('\n');
 }
 
 function handoffPointerText(h: SessionHandoff): string {
-  return [
-    '## Session Handoff\n',
-    `- Session ${h.sessionId} left a handoff at ${pointerTime(h.updatedAt)} UTC. ` +
-      `If this task continues it, run \`hippo handoff latest --session ${h.sessionId}\`.`,
-    '',
-  ].join('\n');
+  const at = pointerTime(h.updatedAt);
+  const id = pointerSessionId(h.sessionId);
+  const line = id
+    ? `- Session ${id} left a handoff at ${at} UTC. ` +
+      `If this task continues it, run \`hippo handoff latest --session ${id}\`.`
+    : `- A session left a handoff at ${at} UTC. If this task continues it, run \`hippo handoff latest\`.`;
+  return ['## Session Handoff\n', line, ''].join('\n');
 }
 
 export function snapshotSectionText(s: TaskSnapshot, mode: ContinuityMode): string {

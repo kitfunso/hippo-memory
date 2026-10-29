@@ -9,11 +9,12 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { appendSessionEvent, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
 import { getContext, type ContextOpts } from '../src/api/index.js';
-import { contextCost } from '../src/api/context-render.js';
+import { contextCost, handoffSectionText, snapshotSectionText } from '../src/api/context-render.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { sessionDigestId } from '../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG } from '../src/core/session-digest-row.js';
 import { Layer } from '../src/core/memory.js';
+import { MAX_ID_LEN } from '../src/util/limits.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { handleContext } from '../src/cli/context.js';
 import { handleHandoff, handleSession } from '../src/cli/continuity.js';
@@ -35,6 +36,7 @@ const TRAIL_EVENT = 'Ran the sweep against staging and it timed out after thirty
 const PROJECT = { name: 'p', legacyName: 'p' };
 const HOOK_FLAGS: CliFlags = { 'pinned-only': true, 'include-recent': '5', format: 'additional-context' };
 const PRIVATE_SCOPE = 'slack:private:Csecret';
+const UNSAFE_ID = 'a b; rm -rf x';
 
 const at = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
 
@@ -129,9 +131,31 @@ describe('task state in a project store', () => {
       expect(text).not.toContain('- Session: earlier');
     });
 
-    it("prints a pointer short enough to be worth sending", async () => {
-      const handoff = saveHandoff('earlier');
-      expect(handoffPointer(handoff).length).toBeLessThan(220);
+    it('prints a pointer short enough to be worth sending', () => {
+      expect(handoffSectionText(saveHandoff('earlier'), 'pointer').length).toBeLessThan(220);
+    });
+
+    it('leaves out a session id that is unsafe to paste into a command, and points at `hippo handoff latest`', async () => {
+      const handoff = saveHandoff(UNSAFE_ID);
+      const text = await hookText('now');
+      expect(text).toContain(
+        `## Session Handoff\n\n- A session left a handoff at ${at(handoff.updatedAt)} UTC. ` +
+          'If this task continues it, run `hippo handoff latest`.\n',
+      );
+      expect(text).not.toContain('rm -rf');
+      expect(text).not.toContain('a b');
+      expect(handoffSectionText(handoff, 'pointer')).not.toContain(UNSAFE_ID);
+    });
+
+    it('leaves out a session id longer than the id cap', () => {
+      const handoff = saveHandoff('x'.repeat(MAX_ID_LEN + 1));
+      expect(handoffSectionText(handoff, 'pointer')).not.toContain('xxx');
+      expect(handoffSectionText(handoff, 'pointer')).toContain('run `hippo handoff latest`.');
+    });
+
+    it('names a normal session id with letters, digits, hyphens and underscores', async () => {
+      const handoff = saveHandoff('sess-1_x');
+      expect(await hookText('now')).toContain(handoffPointer(handoff));
     });
   });
 
@@ -169,6 +193,33 @@ describe('task state in a project store', () => {
       );
       expect(text).not.toContain('hippo session latest');
       expect(text).not.toContain(SNAPSHOT_SUMMARY);
+    });
+
+    it('prints a pointer short enough to be worth sending', () => {
+      expect(snapshotSectionText(saveSnapshot('earlier'), 'pointer').length).toBeLessThan(220);
+    });
+
+    it('leaves out a session id that is unsafe to paste into a command, and points at `hippo snapshot show`', async () => {
+      const snapshot = saveSnapshot(UNSAFE_ID);
+      const text = await hookText('now');
+      expect(text).toContain(
+        `## Active Task Snapshot\n\n- A task snapshot from ${at(snapshot.updated_at)} UTC names no session. ` +
+          'If this task continues it, run `hippo snapshot show`.\n',
+      );
+      expect(text).not.toContain('rm -rf');
+      expect(text).not.toContain('a b');
+      expect(snapshotSectionText(snapshot, 'pointer')).not.toContain(UNSAFE_ID);
+    });
+
+    it('leaves out a session id longer than the id cap', () => {
+      const snapshot = saveSnapshot('x'.repeat(MAX_ID_LEN + 1));
+      expect(snapshotSectionText(snapshot, 'pointer')).not.toContain('xxx');
+      expect(snapshotSectionText(snapshot, 'pointer')).toContain('run `hippo snapshot show`.');
+    });
+
+    it('names a normal session id with letters, digits, hyphens and underscores', async () => {
+      const snapshot = saveSnapshot('sess-1_x');
+      expect(await hookText('now')).toContain(snapshotPointer(snapshot));
     });
 
     it("prints nothing of another session's trail when its raw snapshot is scope-hidden", async () => {
