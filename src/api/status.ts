@@ -8,7 +8,6 @@ import type {
   RawProvenance,
   ReportPage,
   StatusCounts,
-  StrengthTallies,
 } from '../base/ports/store/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
@@ -41,11 +40,10 @@ export async function storeStatus(
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
 }
 
-export interface TenantStatus extends StrengthTallies {
-  openConflicts: number;
-  /** 0 when the tenant has no rows. */
-  avgStrength: number;
-}
+/** The store's tallies for one tenant, with their mean strength: 0 when the tenant has no rows. */
+export type TenantStatus = Readonly<
+  Awaited<ReturnType<Reports['memoryStatus']>> & { avgStrength: number }
+>;
 
 /** The caller's tenant at a glance, read on one snapshot; its own rows only, so any actor. */
 export async function tenantStatus(
