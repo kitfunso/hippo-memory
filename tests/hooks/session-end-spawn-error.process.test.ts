@@ -20,7 +20,12 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */
-function runWithMissingNode(args: readonly string[], logLevel: string, input?: string): SpawnSyncReturns<string> {
+function runWithMissingNode(
+  args: readonly string[],
+  logLevel: string,
+  input?: string,
+  preloadLines: readonly string[] = [],
+): SpawnSyncReturns<string> {
   const preload = path.join(dir, 'missing-node.mjs');
   // The Windows Codex shim is started with Node too, so that one start (a script named codex.js) keeps the real Node.
   const lines = [
@@ -31,6 +36,7 @@ function runWithMissingNode(args: readonly string[], logLevel: string, input?: s
     'const spawn = cp.spawn;',
     "cp.spawn = (cmd, args, ...rest) => spawn(Array.isArray(args) && String(args[0]).endsWith('codex.js') ? real : cmd, args, ...rest);",
     'syncBuiltinESMExports();',
+    ...preloadLines,
   ];
   fs.writeFileSync(preload, `${lines.join('\n')}\n`);
   const env: NodeJS.ProcessEnv = {
@@ -49,6 +55,19 @@ function runWithMissingNode(args: readonly string[], logLevel: string, input?: s
     encoding: 'utf8',
   });
 }
+
+// Held writes stay held: an unref'd timer never fires, as when the process exits before it, and the clock runs a
+// thousand times slow, so every stats write after the first lands inside the hold window. Only a flush lands one.
+const HELD_UNTIL_FLUSHED = [
+  'const probe = setTimeout(() => undefined, 0);',
+  'const timeout = Object.getPrototypeOf(probe);',
+  'clearTimeout(probe);',
+  'const unref = timeout.unref;',
+  'timeout.unref = function () { clearTimeout(this); return unref.call(this); };',
+  'const realNow = Date.now;',
+  'const startedAt = realNow();',
+  'Date.now = () => startedAt + Math.floor((realNow() - startedAt) / 1000);',
+];
 
 describe('hippo session-end worker spawn', () => {
   it('logs a worker that fails to start and still exits 0', () => {
@@ -107,7 +126,7 @@ describe('hippo codex-run worker spawn', () => {
   });
 
   it('writes the inline capture to disk before it exits', () => {
-    // A project store: its sleep writes stats.json first, so the capture's stats write is held.
+    // A project store under the cwd, where the inline capture writes.
     const projectRoot = path.join(dir, '.hippo');
     initTestStore(projectRoot);
     const rule =
@@ -138,12 +157,12 @@ describe('hippo codex-run worker spawn', () => {
     );
     installNodeAsCodex(path.join(dir, 'real-bin'));
 
-    const run = runWithMissingNode(['codex-run', '--', fakeCodex], 'debug');
+    const run = runWithMissingNode(['codex-run', '--', fakeCodex], 'debug', undefined, HELD_UNTIL_FLUSHED);
 
     expect(run.status, run.stderr).toBe(0);
     expect(run.stderr).toContain('the session-end worker did not spawn, running inline');
     expect(loadAllEntries(projectRoot, 'default').some((e) => e.content.includes('zeta'))).toBe(true);
-    // stats.json is a held mirror write, so it counts the capture only if the command flushed before it exited.
+    // The capture's stats write is held, so stats.json counts it only if the command flushed before it exited.
     // SAFETY: the store writes stats.json from LegacyStats, where total_remembered is a count.
     const stats = JSON.parse(fs.readFileSync(path.join(projectRoot, 'stats.json'), 'utf8')) as {
       total_remembered: number;
