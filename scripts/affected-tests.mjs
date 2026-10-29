@@ -8,7 +8,7 @@ import { join, posix, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import ts from 'typescript';
-import { listSources, SOURCE } from './lib/source-files.mjs';
+import { listSources } from './lib/source-files.mjs';
 import { EVAL_TESTS } from './lib/test-classes.mjs';
 import { readFacts } from './lib/ts-facts.mjs';
 
@@ -21,18 +21,28 @@ const TEXT = { dist: '#dist', docs: '#docs', src: '#src' };
 const BY_NAME = '#package';
 const TEXT_SEGMENT = /(?:^|[/\\])(dist|docs|src)(?:[/\\]|$)/;
 
-/** The repo file at `target`: dist/<x>.js is src/<x>.ts, and a .js name is its .ts source. */
-function fileAt(files, target) {
-  if (target.startsWith('..')) return null;
+/** The repo files `target` names: dist/<x>.js is src/<x>.ts, and a .js name is its .ts source. */
+function keysAt(files, target) {
+  if (target.startsWith('..')) return [];
   const built = /^dist\/(.+?)(?:\.d)?\.(?:js|mjs|cjs|ts)$/.exec(target);
-  if (built) return `src/${built[1]}.ts`;
+  if (built) return [`src/${built[1]}.ts`];
   const typed = target
     .replace(/\.js$/, '.ts')
     .replace(/\.mjs$/, '.mts')
     .replace(/\.cjs$/, '.cts');
   const found = [target, typed, `${target}.ts`, `${target}.js`, `${target}/index.ts`].find((f) => files.has(f));
-  // A file that is gone keeps its key, so a deleted module still reaches its old importers.
-  return found ?? typed;
+  // A file that is gone keeps both names, so a deleted module still reaches its old importers.
+  return found ? [found] : [typed, target];
+}
+
+// A file name with an extension: a bare `.` or folder would resolve to an index.ts the string never loads.
+const PATH_LIKE = /^[/\\]?[\w@.+-]+(?:[/\\][\w@.+-]+)*\.\w+$/;
+
+/** Every repo file a string can name from `dir` or the root, source or not, there or deleted. */
+function namedPaths(files, dir, s) {
+  if (!PATH_LIKE.test(s)) return [];
+  const rel = s.replace(/\\/g, '/').replace(/^\//, '');
+  return [posix.join(dir, rel), posix.normalize(rel)].flatMap((target) => keysAt(files, target));
 }
 
 // `join(root, 'bin', 'hippo.js')` names one path, so a call's literal arguments are read together too.
@@ -69,32 +79,20 @@ function readSource(text, file) {
   return { specs, strings, distImports };
 }
 
-/** The source file a string names from `dir` or the repo root, with a dist/ path read as its src source. */
-function namedSource(files, dir, s) {
-  if (!SOURCE.test(s)) return undefined;
-  for (const target of [posix.join(dir, s), posix.normalize(s)]) {
-    const at = target.startsWith('dist/') ? fileAt(files, target) : target;
-    if (files.has(at)) return at;
-  }
-  return undefined;
-}
-
 /** The files and virtual nodes `file` reaches; only files outside src count as reading the tree as text. */
 function edgesOf(root, files, file) {
   const text = readFileSync(join(root, file), 'utf8');
   const { specs, strings, distImports } = readSource(text, file);
   const dir = posix.dirname(file);
   const to = new Set();
+  const add = (keys) => keys.forEach((key) => to.add(key));
   for (const spec of specs) {
     if (PACKAGE.test(spec)) to.add(BY_NAME);
-    else if (spec.startsWith('.')) to.add(fileAt(files, posix.join(dir, spec)));
+    else if (spec.startsWith('.')) add(keysAt(files, posix.join(dir, spec)));
   }
-  for (const imp of distImports) to.add(fileAt(files, imp.fromRepo ? imp.spec : posix.join(dir, imp.spec)));
-  // A module a file starts by path (a worker, a child, `new URL(path, import.meta.url)`) is reached as an import is.
-  for (const s of strings) {
-    const named = namedSource(files, dir, s);
-    if (named) to.add(named);
-  }
+  for (const imp of distImports) add(keysAt(files, imp.fromRepo ? imp.spec : posix.join(dir, imp.spec)));
+  // A file read or started by path (package.json, a worker, `new URL(x, import.meta.url)`) is reached as imports are.
+  for (const s of strings) add(namedPaths(files, dir, s));
   if (!file.startsWith('src/')) {
     for (const s of strings) {
       const folder = TEXT_SEGMENT.exec(s)?.[1];
@@ -103,7 +101,6 @@ function edgesOf(root, files, file) {
       if (s.includes('bin/hippo.js')) to.add(TEXT.dist);
     }
   }
-  to.delete(null);
   return to;
 }
 

@@ -29,6 +29,11 @@ const TREE = {
   'tests/runs-bin.process.test.ts': "spawnSync(process.execPath, [join(root, 'bin', 'hippo.js')]);\n",
   'tests/unrelated.test.ts': 'export {};\n',
   'tests/runs-worker.server.test.ts': "import { ENTRY } from '../src/runner.js';\n",
+  'package.json': '{ "name": "fixture" }\n',
+  'tests/reads-package.test.ts': "const pkg = readFileSync(join(root, 'package.json'), 'utf8');\n",
+  'tests/starts-gone.process.test.ts':
+    "spawn(process.execPath, [join(import.meta.dirname, '_helpers', 'gone-child.mjs')]);\n",
+  'tests/imports-gone.test.ts': "import { g } from './_helpers/gone.mjs';\n",
   'tests/eval/token-eval-ab-run.test.ts': "import { a } from '../../src/a.js';\n",
 } satisfies Readonly<Record<string, string>>;
 
@@ -71,6 +76,15 @@ describe('affected-tests', () => {
     expect(forSrc).toEqual(expect.arrayContaining(['tests/reads-src.test.ts', 'tests/runs-bin.process.test.ts']));
     expect(forSrc).not.toContain('tests/reads-docs.test.ts');
     expect(testsFor('bin/hippo.js')).toEqual(['tests/runs-bin.process.test.ts']);
+  });
+
+  it('picks a test that reads a file that is not a source, such as package.json', () => {
+    expect(testsFor('package.json')).toEqual(['tests/reads-package.test.ts']);
+  });
+
+  it('picks the test that starts or imports a helper the change deleted', () => {
+    expect(testsFor('tests/_helpers/gone-child.mjs')).toEqual(['tests/starts-gone.process.test.ts']);
+    expect(testsFor('tests/_helpers/gone.mjs')).toEqual(['tests/imports-gone.test.ts']);
   });
 
   it('picks a changed test, and not one that is gone', () => {

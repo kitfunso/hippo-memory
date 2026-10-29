@@ -3,9 +3,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const SOURCE = /\.(?:ts|mts|cts|js|mjs|cjs)$/;
+const SOURCE = /\.(?:ts|mts|cts|js|mjs|cjs)$/;
 
-/** The sources under `dir` of `root` as `dir/...` paths; node_modules and declaration files load nothing, so are left out. */
+/** The sources under `dir` of `root` as `dir/...` paths; node_modules and .d.ts files load nothing, so are left out. */
 export function listSources(root, dir) {
   if (!existsSync(join(root, dir))) return [];
   return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
