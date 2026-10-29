@@ -5,14 +5,7 @@ import { envHomeDir } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  resolveConfidence,
-  type StrengthModel,
-} from '../../base/memory/strength.js';
-import { strengthOf } from '../../api/types.js';
-import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { Layer } from '../../base/memory/entry.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor } from './doctor.js';
@@ -22,14 +15,15 @@ import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-reten
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/tokens.js';
-import { memoryGet } from '../../api/memories/memories.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
   provenanceCoverageReport,
+  memoryDetail,
   storeStatus,
   storedParticleStats,
   vectorSummary,
+  type MemoryDetail,
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { ParticleStats, StoredVectorSummary } from '../../base/ports/store.js';
@@ -194,21 +188,20 @@ async function inspectMemory({
   requireInit(hippoRoot);
 
   const ctx = cli.apiContext(hippoRoot, tenantId);
-  const entry = await memoryGet(ctx, id);
-  if (!entry) {
+  const now = ctx.infra.clock();
+  const detail = await memoryDetail(ctx, id, now);
+  if (!detail) {
     fail(`Memory not found: ${id}`);
   }
-  printMemoryDetail(entry, ctx.infra.clock(), strengthOf(ctx));
+  printMemoryDetail(detail, now);
 }
 
-function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel): void {
-  const currentStrength = calculateStrength(entry, now, rules);
+function printMemoryDetail(detail: MemoryDetail, now: Date): void {
+  const { entry, liveStrength, confidence: effectiveConfidence } = detail;
   const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
-
-  const effectiveConfidence = resolveConfidence(entry, now);
 
   console.log(`Memory: ${entry.id}`);
   console.log('---------------------------');
@@ -219,13 +212,13 @@ function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel):
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.lastRetrieved} (${fmt(daysSince, 1)}d ago)`);
   console.log(`Retrieval count:  ${entry.retrievalCount}`);
-  console.log(`Strength (live):  ${fmt(currentStrength)} (stored: ${fmt(entry.strength)})`);
+  console.log(`Strength (live):  ${fmt(liveStrength)} (stored: ${fmt(entry.strength)})`);
   console.log(`Half-life:        ${entry.halfLifeDays}d`);
   console.log(`Emotional:        ${entry.emotionalValence}`);
   console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  console.log(`Outcomes:         ${outcomeLabel(entry, rules)}`);
+  console.log(`Outcomes:         ${outcomeLabel(detail)}`);
   if (entry.conflictsWith.length > 0) {
     console.log(`Conflicts with:   ${entry.conflictsWith.join(', ')}`);
   }
@@ -235,8 +228,7 @@ function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel):
   console.log(entry.content);
 }
 
-function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {
-  const rewardFactor = calculateRewardFactor(entry, rules);
+function outcomeLabel({ entry, rewardFactor }: MemoryDetail): string {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   return pos === 0 && neg === 0
