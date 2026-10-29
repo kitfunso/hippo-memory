@@ -241,7 +241,7 @@ describe('serve() under a store that is not hippo.db', () => {
     });
   });
 
-  it('POST /mcp lists every tool but the three that need local files or the tier, and a call reaching hippo.db answers store_not_ported', async () => {
+  it('POST /mcp lists every tool but the six that need local files or the tier, and a call reaching hippo.db answers store_not_ported', async () => {
     const postMcp = async (body: string): Promise<{ status: number; body: unknown }> => {
       // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
       const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
@@ -250,7 +250,14 @@ describe('serve() under a store that is not hippo.db', () => {
     };
     const list = await postMcp(rpc('tools/list'));
     expect(list.status).toBe(200);
-    const unlisted = new Set(['hippo_share', 'hippo_peers', 'hippo_learn']);
+    const unlisted = new Set([
+      'hippo_share',
+      'hippo_peers',
+      'hippo_learn',
+      'hippo_status',
+      'hippo_conflicts',
+      'hippo_resolve',
+    ]);
     const listed = TOOLS.map((t) => t.name).filter((name) => !unlisted.has(name));
     // SAFETY: a tools/list result carries a tools array of named definitions.
     expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(listed);

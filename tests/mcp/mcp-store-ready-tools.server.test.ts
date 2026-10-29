@@ -52,7 +52,7 @@ function listedNames(res: McpResponse | null): string[] {
 
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-// The stub lacks the local files and hippo.db's local tier, so every tool but the three that need them runs on it.
+// The stub lacks the local files and hippo.db's local tier, so every tool but the six that need them runs on it.
 const READY = [
   'hippo_recall',
   'hippo_assemble',
@@ -61,9 +61,6 @@ const READY = [
   'hippo_remember',
   'hippo_outcome',
   'hippo_context',
-  'hippo_status',
-  'hippo_conflicts',
-  'hippo_resolve',
 ];
 const ready = declared.filter((name) => READY.includes(name));
 
@@ -85,7 +82,14 @@ describe('store-ready MCP tools', () => {
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
     const unready = declared.filter((name) => !ready.includes(name));
-    expect(unready).toEqual(['hippo_learn', 'hippo_share', 'hippo_peers']);
+    expect(unready).toEqual([
+      'hippo_status',
+      'hippo_learn',
+      'hippo_conflicts',
+      'hippo_resolve',
+      'hippo_share',
+      'hippo_peers',
+    ]);
     for (const name of unready) {
       const res = await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } },
