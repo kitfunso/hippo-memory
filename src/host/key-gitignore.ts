@@ -2,6 +2,7 @@
 // committable.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { errorCode } from '../base/util/log.js';
 
 const IGNORE_FILE = '.gitignore';
 const KEY_LINE = 'server.key';
@@ -20,11 +21,23 @@ function keyIgnored(text: string): boolean {
   return false;
 }
 
+/** The file's text, or '' when it does not exist yet. */
+function readIfPresent(file: string): string {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return '';
+    throw err;
+  }
+}
+
 /** Makes `<hippoRoot>/.gitignore` end up ignoring `server.key`: creates the file, or appends the
  * line when no later rule already settles it, and leaves every other line as it is. */
 export function ensureKeyGitignored(hippoRoot: string): void {
   const file = path.join(hippoRoot, IGNORE_FILE);
   fs.mkdirSync(hippoRoot, { recursive: true });
+  // A file that already ignores the key needs only read access, so a read-only one still serves.
+  if (keyIgnored(readIfPresent(file))) return;
   // One open serves the read and the append, so the file cannot be swapped between the two.
   const fd = fs.openSync(file, 'a+');
   try {

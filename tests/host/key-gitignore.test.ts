@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -27,6 +27,17 @@ describe('ensureKeyGitignored', () => {
     ensureKeyGitignored(root);
     ensureKeyGitignored(root);
     expect(readFileSync(ignoreFile(), 'utf8')).toBe('server.key\n');
+  });
+
+  it('leaves a read-only file that already lists the key as it is', () => {
+    writeFileSync(ignoreFile(), 'server.key\n');
+    chmodSync(ignoreFile(), 0o444);
+    try {
+      expect(() => ensureKeyGitignored(root)).not.toThrow();
+      expect(readFileSync(ignoreFile(), 'utf8')).toBe('server.key\n');
+    } finally {
+      chmodSync(ignoreFile(), 0o644);
+    }
   });
 
   it('adds nothing when a CRLF file already lists the key', () => {
