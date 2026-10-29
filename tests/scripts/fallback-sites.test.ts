@@ -57,7 +57,6 @@ describe('fallback reads of optional groups', () => {
         "src/domain/search/hybrid.ts: StoreWith<never, 'vectors' | 'graphReads'>",
         "src/domain/search/hybrid.ts: StoreWith<never, 'graphReads'>",
         "src/domain/search/hybrid.ts: StoreWith<never, 'vectors' | 'graphReads'>",
-        "src/domain/search/physics-search.ts: StoreWith<never, 'vectors' | 'graphReads'>",
         'src/domain/search/vector.ts: graphReads?: GraphReads',
         // 3. Graph expansion walks ctx.store and ctx.global.store.
         "src/api/recall/pipeline.ts: StoreWith<never, 'vectors' | 'graphReads'>",

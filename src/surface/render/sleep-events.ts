@@ -4,12 +4,9 @@ import type { SleepEvent } from '../../api/sleep/events.js';
 import { plural } from '../../base/util/format.js';
 
 const STRENGTH_DECIMALS = 4;
-const STATS_DECIMALS = 4;
 
 type EventOf<K extends SleepEvent['kind']> = Extract<SleepEvent, { kind: K }>;
 
-const phaseSkipped = (phase: string): string =>
-  phase === 'physics' ? 'physics simulation skipped' : `${phase} skipped`;
 const strengthNote = (e: { strength: number; threshold: number }): string =>
   `(strength ${e.strength.toFixed(STRENGTH_DECIMALS)} < ${e.threshold})`;
 
@@ -29,12 +26,6 @@ function dagRebuildLine(e: EventOf<'dagRebuild'>): string {
   if (e.failed > 0) parts.push(`${e.failed} failed`);
   if (e.cappedAt !== null) parts.push(`CAPPED@${e.cappedAt}`);
   return `  🌳 DAG rebuild: ${parts.join(', ')}`;
-}
-
-function physicsLine(e: EventOf<'physics'>): string {
-  const capped =
-    e.shown < e.stored ? ` (the ${e.shown} most recently recalled of ${e.stored})` : '';
-  return `  ⚛️  physics: ${e.particles} particles${capped}, avg vel ${e.avgVelocity.toFixed(STATS_DECIMALS)}`;
 }
 
 type DecayEvent = EventOf<
@@ -86,13 +77,11 @@ function decayLine(event: DecayEvent, dryRun: boolean): string {
 
 type PassEvent = EventOf<
   | 'passFailed'
-  | 'phaseSkipped'
   | 'dagSummaries'
   | 'dagRebuild'
   | 'dagProfiles'
   | 'retiredText'
   | 'merged'
-  | 'physics'
   | 'ftsResynced'
   | 'halfLifeRescaled'
   | 'halfLifeTyped'
@@ -103,8 +92,6 @@ function passLine(event: PassEvent, dryRun: boolean): string {
   switch (event.kind) {
     case 'passFailed':
       return `  ⚠️ ${event.phase}: ${event.message}`;
-    case 'phaseSkipped':
-      return `  ⚠️ ${phaseSkipped(event.phase)}: ${event.message}`;
     case 'dagSummaries':
       return `  🌳 DAG: ${event.created} summaries created, ${event.factsLinked} facts linked`;
     case 'dagRebuild':
@@ -117,8 +104,6 @@ function passLine(event: PassEvent, dryRun: boolean): string {
     }
     case 'merged':
       return `  🔀 merged ${event.count} episodic entries into semantic: "${event.preview}..."`;
-    case 'physics':
-      return physicsLine(event);
     case 'ftsResynced':
       return (
         `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${event.indexedRows} indexed rows for ` +
@@ -180,13 +165,11 @@ export function sleepEventLine(event: SleepEvent, dryRun: boolean): string {
     case 'rescueAuditUnavailable':
       return decayLine(event, dryRun);
     case 'passFailed':
-    case 'phaseSkipped':
     case 'dagSummaries':
     case 'dagRebuild':
     case 'dagProfiles':
     case 'retiredText':
     case 'merged':
-    case 'physics':
     case 'ftsResynced':
     case 'halfLifeRescaled':
     case 'halfLifeTyped':

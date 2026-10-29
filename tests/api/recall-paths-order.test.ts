@@ -7,7 +7,6 @@ import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { RECALL_RECORDING, type ShownHints } from '../../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
-import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { isJsonNumber } from '../../src/base/util/json.js';
@@ -64,7 +63,6 @@ function ctx(): FullContext {
 }
 
 function cliCore(): Pick<CliCoreRecall, 'rank'> {
-  const config = loadConfig(root);
   return {
     rank: {
       budget: 4000,
@@ -73,8 +71,6 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
       includeSuperseded: false,
       explicitScope: null,
       activeScope: null,
-      usePhysics: false,
-      physicsConfig: config.physics,
       multihop: false,
       mmr: false,
       mmrLambda: 0.7,

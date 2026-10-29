@@ -4,12 +4,7 @@ import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
-import {
-  embedCoverage,
-  memoryEmbedMissing,
-  resetPhysicsFromVectors,
-  storedVectorCount,
-} from '../../api/embeddings.js';
+import { embedCoverage, memoryEmbedMissing, storedVectorCount } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
 import { type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
@@ -161,14 +156,8 @@ export async function handleEmbed(
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cli.apiContext(root, tenantId);
 
-  // --status and --reset-physics only read cached state, so they must work with no provider key
-  // (e.g. removed after an earlier embed); the provider-availability gate is deferred to the embed
-  // path.
-  if (boolFlag(flags, 'reset-physics')) {
-    await resetPhysics(ctx);
-    return;
-  }
-
+  // --status only reads cached state, so it must work with no provider key (e.g. removed after an
+  // earlier embed); the provider-availability gate waits for the embed path.
   if (boolFlag(flags, 'status')) {
     await printEmbedStatus(ctx);
     return;
@@ -202,11 +191,6 @@ async function embedMissing(ctx: CliContext, provider: EmbeddingProvider): Promi
     );
     process.exitCode = 1;
   }
-}
-
-async function resetPhysics(ctx: CliContext): Promise<void> {
-  const count = await resetPhysicsFromVectors(ctx);
-  console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
 async function printEmbedStatus(ctx: CliContext): Promise<void> {

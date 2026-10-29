@@ -1,8 +1,8 @@
 /**
  * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and
  * age, then apply the `markRetrieved` strengthening. A lightweight deterministic analog of
- * hippocampal replay, so important memories stay strong without being queried; distinct from decay,
- * physics and merge.
+ * hippocampal replay, so important memories stay strong without being queried; distinct from decay
+ * and merge.
  */
 
 import { HOUR_MS } from '../../base/util/time.js';

@@ -112,8 +112,6 @@ const CASES: Case[] = [
   { name: 'recall --scope tag', args: ['recall', 'deploy', '--scope', 'team-alpha'] },
   { name: 'recall --limit 2', args: ['recall', 'deploy', '--limit', '2'] },
   { name: 'recall --budget 120', args: ['recall', 'deploy', '--budget', '120', '--why'] },
-  { name: 'recall --physics', args: ['recall', 'deploy', '--physics', '--json'] },
-  { name: 'recall --classic', args: ['recall', 'deploy', '--classic', '--json'] },
   { name: 'recall --multihop', args: ['recall', 'deploy', '--multihop', '--json'] },
   {
     name: 'recall --graph-stream',
@@ -164,8 +162,8 @@ const CASES: Case[] = [
   { name: 'explain --json', args: ['explain', 'deploy', '--json'] },
   { name: 'explain --scope private --json', args: ['explain', 'deploy', '--scope', 'slack:private:C1', '--json'] },
   {
-    name: 'explain --include-superseded --classic',
-    args: ['explain', 'deploy', '--include-superseded', '--classic', '--limit', '3'],
+    name: 'explain --include-superseded --limit 3',
+    args: ['explain', 'deploy', '--include-superseded', '--limit', '3'],
   },
   { name: 'explain global store', args: ['explain', 'deploy'], global: true },
   { name: 'explain no match', args: ['explain', 'zzqqxx'] },

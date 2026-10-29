@@ -93,7 +93,6 @@ async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
 
 /** Arm C: the options the MCP recall tool passes, with the ranked list cut to the shown rows in place of its rendering. */
 async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
-  const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];
   const [, retrieveMs] = await timed(() => retrieveRanking(
     ctx,
@@ -101,7 +100,7 @@ async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
       query: q.text,
       boost: session(q),
       window: { limit: 50 },
-      mode,
+      mode: 'hybrid',
       hints: { suppressAvailabilityHint: true },
       filter: { keepHeldCopies: true },
     },

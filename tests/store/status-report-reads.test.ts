@@ -1,16 +1,12 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { indexStep } from '../../src/domain/search/embed-index-target.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
-import { physicsEnergyText } from '../../src/surface/cli/status.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, writeEntriesTogether, loadStoredParticles } from '../_helpers/root-forms.js';
-import { norm } from '../../src/base/rank/cosine.js';
+import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 
 let root: string;
@@ -111,57 +107,5 @@ describe('status report pages', () => {
       ...first.gaps,
       ...(first.next ? (await reports.rawProvenance({ limit: 1, after: first.next })).gaps : []),
     ]).toEqual(bigGaps.gaps);
-  });
-});
-
-describe('physics status stats', () => {
-  const particles = (ids: readonly string[]): PhysicsParticle[] =>
-    ids.map((memoryId, i) => ({
-      memoryId,
-      position: [1, 0],
-      velocity: [i * 0.5, 0.25],
-      mass: 1,
-      charge: 0,
-      temperature: 1,
-      lastSimulation: '2026-01-01T00:00:00.000Z',
-    }));
-
-  async function seedParticles(n: number): Promise<PhysicsParticle[]> {
-    const entries = Array.from({ length: n }, (_, i) => createMemory(`particle memory ${i}`));
-    writeEntriesTogether(root, entries);
-    const saved = particles(entries.map((e) => e.id));
-    await sqliteStore(root).consolidation.saveParticles(saved);
-    return saved;
-  }
-
-  it('averages the speeds a whole read averages, and loads the particles only up to the limit', async () => {
-    await seedParticles(3);
-    const index = sqliteStore(root).embeddingIndex;
-    const whole = loadStoredParticles(root);
-    const mean = whole.reduce((sum, p) => sum + norm(p.velocity), 0) / whole.length;
-    expect(await indexStep(index, { kind: 'particles', fullUpTo: 3 })).toEqual({
-      count: 3,
-      meanSpeed: mean,
-      particles: whole,
-    });
-    expect(await indexStep(index, { kind: 'particles', fullUpTo: 2 })).toEqual({
-      count: 3,
-      meanSpeed: mean,
-      particles: null,
-    });
-  });
-
-  it('reads one column past the limit, whatever the particle count', async () => {
-    await seedParticles(4);
-    const stats = async () => await indexStep(sqliteStore(root).embeddingIndex, { kind: 'particles', fullUpTo: 2 });
-    const reads = (await recordStatementsAsync(stats)).reads.filter((r) => r.sql.includes('memory_physics'));
-    expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
-  });
-
-  it('prints the energy for loaded particles and skips it past the limit', () => {
-    expect(physicsEnergyText({ count: 2, particles: particles(['a', 'b']) }, 1)).toMatch(
-      /^energy: -?\d.*\(KE: .*, PE: .*\)$/,
-    );
-    expect(physicsEnergyText({ count: 2001, particles: null }, 1)).toBe('energy: skipped (2001 particles)');
   });
 });

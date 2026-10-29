@@ -1,12 +1,10 @@
 /** How each config.json key is read: its wording when bad and its fallback. */
 
-import { type PhysicsConfig } from '../rank/physics-config.js';
 import {
   basisPoints,
   block,
   choice,
   count,
-  finite,
   flag,
   flagOrAuto,
   fraction,
@@ -39,28 +37,6 @@ function enabledBlock(fallback: { enabled: boolean }): Reader<{ enabled: boolean
   return block('an object like {"enabled": true}', fallback, (read) => ({
     enabled: read('enabled', flag(fallback.enabled)),
   }));
-}
-
-// A config file keeps the snake_case physics keys, such as G_query; each reads into its camelCase
-// field.
-function physicsFields(read: FieldReader): PhysicsConfig {
-  const P = D.physics;
-  return {
-    enabled: read('enabled', flagOrAuto(P.enabled)),
-    gQuery: read('G_query', finite(P.gQuery)),
-    gMemory: read('G_memory', finite(P.gMemory)),
-    kRepulsion: read('K_repulsion', finite(P.kRepulsion)),
-    drag: read('drag', finite(P.drag)),
-    interferenceGain: read('interference_gain', finite(P.interferenceGain)),
-    momentumWeight: read('momentum_weight', finite(P.momentumWeight)),
-    maxVelocity: read('max_velocity', finite(P.maxVelocity)),
-    dt: read('dt', finite(P.dt)),
-    substeps: read('substeps', count(P.substeps)),
-    feedbackAlpha: read('feedback_alpha', finite(P.feedbackAlpha)),
-    temperatureDecay: read('temperature_decay', finite(P.temperatureDecay)),
-    clusterThreshold: read('cluster_threshold', finite(P.clusterThreshold)),
-    clusterTopK: read('cluster_top_k', count(P.clusterTopK)),
-  };
 }
 
 function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
@@ -115,7 +91,6 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey('global', enabledBlock(D.global)),
   configKey('gitLearnPatterns', textList(D.gitLearnPatterns)),
-  configKey('physics', block('an object of physics constants', D.physics, physicsFields)),
   configKey(
     'mmr',
     block('an object like {"enabled": true, "lambda": 0.7}', D.mmr, (read) => ({

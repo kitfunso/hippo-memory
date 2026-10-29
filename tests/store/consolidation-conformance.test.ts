@@ -4,10 +4,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import type { SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
@@ -53,18 +51,6 @@ function seedSummaries(): void {
   seedRow('topicB', 'globex runs its own billing', { ...TOPIC, tenantId: TENANT_B });
 }
 
-function particle(memoryId: string, x: number): PhysicsParticle {
-  return {
-    memoryId,
-    position: [x, 0, 0, 0],
-    velocity: [0, 0, 0, 0],
-    mass: 1,
-    charge: 0,
-    temperature: 1,
-    lastSimulation: AT,
-  };
-}
-
 function seedTables(): void {
   const db = openHippoDb(fixture.dir);
   try {
@@ -86,7 +72,6 @@ function seedTables(): void {
     };
     dormant('the old staging host was build-01', '2001-01-01T00:00:00.000Z');
     dormant('the staging host was build-07', AT);
-    savePhysicsState(db, [particle(rows.kept!.id, 0.5), particle(rows.edited!.id, 0.25)]);
   } finally {
     closeHippoDb(db);
   }
@@ -172,15 +157,12 @@ describe('Consolidation', () => {
     expect(sqlite.audit.filter((row) => row.op === 'half_life_migrate').length).toBeGreaterThan(0);
   });
 
-  it('reads ids, tombstones, particles, duplicates and topic summaries, and writes particles and audit rows', async () => {
+  it('reads ids, tombstones, duplicates and topic summaries, and writes audit rows', async () => {
     const sqlite = await conforms([
       (g) => g.entryIdsPage({ limit: 1000 }),
       (g) => g.entryIdsPage({ limit: 2 }),
       (g) => g.rejected(TENANT_A, [rejectionDigest(REFUSED), rejectionDigest('nothing'), rejectionDigest(REFUSED)]),
       (g) => g.rejected(TENANT_B, [rejectionDigest(REFUSED)]),
-      (g) => g.particleIds(),
-      (g) => g.saveParticles([particle(id('kept'), 0.75)]),
-      (_g, s) => s.vectors.stored('particles', named('kept', 'edited')),
       (g) => g.duplicateCandidates(),
       (g) => g.unprofiledTopicSummaries({ limit: 10 }),
       (g) => g.dirtyGraphTenants(),
@@ -189,8 +171,7 @@ describe('Consolidation', () => {
     ]);
     expect(valueAt<{ ids: string[] }>(sqlite.outcomes, 1).ids).toHaveLength(2);
     expect(valueAt<unknown[]>(sqlite.outcomes, 2)).toHaveLength(1);
-    expect(valueAt<string[]>(sqlite.outcomes, 4)).toEqual(named('kept', 'edited'));
-    expect(valueAt<{ rows: MemoryEntry[] }>(sqlite.outcomes, 7).rows.map((e) => e.id)).toEqual(named('twin1', 'twin2'));
+    expect(valueAt<{ rows: MemoryEntry[] }>(sqlite.outcomes, 4).rows.map((e) => e.id)).toEqual(named('twin1', 'twin2'));
   });
 
   it('settles dirty summaries once each, keeping tombstoned content out with a refusal row', async () => {

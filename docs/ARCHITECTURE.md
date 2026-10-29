@@ -59,7 +59,6 @@ Flags (set to `1` or `true`):
   - Persisting callers (CLI recall, api context, MCP recall/context, consolidation replay) skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags).
   - The retrieval-count READ boost becomes 1.
   - Decay anchors at `created` instead of `last_retrieved`, so prior-run clock resets cannot leak in.
-  - Physics: `computeMass` ignores the count, and `physicsSearch` recomputes loaded masses LIVE under ablated strength rules (persisted masses embed recall history in their frozen strength component).
   - Replay rehearsal is silenced entirely (it IS strengthening; use config `replay.count=0` to separate replay in unflagged arms).
   - CAVEAT: half_life increments persisted by prior unflagged runs are NOT reconstructed (consolidation legitimately writes half_life too), so ablation arms run on FRESH stores, as the experiment protocol mandates.
 - `HIPPO_ABLATE_OUTCOME`: both outcome channels become neutral (`_SLOW` and `_FAST` together). The slow side also silences replay's outcome reward bias (`replayPriority`). NOT gated: the opt-in `recall --value-aware` rerank (an explicit CLI flag that also reads outcome counts); ablated arms must not pass it.
@@ -328,9 +327,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
 ### src/base/rank/compare.ts
-- `module header`: A true LEAF module ... a type-only import back to search.ts would still create the search.ts <-> physics.ts ESM import cycle this module exists to avoid (r2 critic HIGH, docs/plans/2026-07-09-recall-determinism.md T2).
+- `module header`: A leaf module ... a type-only import back from a sort site would create an ESM import cycle (r2 critic HIGH, docs/plans/2026-07-09-recall-determinism.md T2).
 - `compareEntryIdentity`: The metadata keys are only computed on a content tie, which is rare post-T1 (path-tag embedding fix), so the per-compare Set/sort cost never lands on the hot path.
-- `comparePhysicsResultsBy`: `ScoredPhysicsResult` (physics.ts) carries `{ memoryId, baseScore, clusterAmplification, finalScore }` -- NO `entry`/`content` in scope at that layer, so `compareEntryIdentity` cannot apply directly (plan T2 shape (c)).
 
 ### src/base/config/config.ts
 - `pinnedInject.skipUnchanged`: Skip a block identical to the one already injected this session (ROADMAP TE2). Default true. Needs a session id from the hook payload.
@@ -385,7 +383,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `detectConflicts`: CD5: an unreviewed quarantined row must not taint a visible memory as conflicted.
 
 ### src/domain/consolidate/decay.ts
-- `decayPass`: LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md): flag OFF keeps the single-phase loop below byte-identical to pre-E3 behavior (pre-registered gate G2). Flag ON restructures into two phases: phase 1 classifies every entry (condemned vs survivor) with ZERO commits; phase 2 runs rescueSet over the per-tenant candidate groups, then commits — rescued entries get the standard survivor bookkeeping refresh (stored strength + effective confidence; no half-life edits, no rank-derived writes) and are pushed to survivors so they fully participate in this cycle's merge/physics/conflict passes; non-rescued condemned entries follow the existing pendingDeletes/result.removed/details path.
+- `decayPass`: LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md): flag OFF keeps the single-phase loop below byte-identical to pre-E3 behavior (pre-registered gate G2). Flag ON restructures into two phases: phase 1 classifies every entry (condemned vs survivor) with ZERO commits; phase 2 runs rescueSet over the per-tenant candidate groups, then commits — rescued entries get the standard survivor bookkeeping refresh (stored strength + effective confidence; no half-life edits, no rank-derived writes) and are pushed to survivors so they fully participate in this cycle's merge and conflict passes; non-rescued condemned entries follow the existing pendingDeletes/result.removed/details path.
 
 ### src/domain/consolidate/llm-passes.ts
 - `dagRebuildPass`: 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
@@ -766,12 +764,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: --owner format validation (B2 v1.12.6).
 - `module header`: with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving the documented contract unenforced.
 - `module header`: to reject + exit. Strict mode will become the default once A5 v2 lands (see `TODOS.md` A3 follow-ups for the migration path).
-
-### src/base/rank/physics.ts
-- `queryGravity`: F1: Query gravity (retrieval-time, virtual — does not update position).
-- `attractionForce`: F2: Inter-memory attraction force vector (consolidation-time).
-- `repulsionForce`: F3: Conflict repulsion force vector (consolidation-time).
-- `dragForce`: F4: Drag force vector (consolidation-time).
 
 ### src/domain/objects/policies.ts
 - `module header`: E2 policy first-class object (docs/plans/2026-05-30-e2-policy-object.md).

@@ -197,10 +197,7 @@ export interface CommandContext {
   readonly callers?: CallerState;
 }
 
-export type EngineFlags = Pick<
-  RankRecallEngine,
-  'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'
->;
+export type EngineFlags = Pick<RankRecallEngine, 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');
@@ -212,14 +209,8 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
   return asOf;
 }
 
-/** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns
- * it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics:
-      boolFlag(flags, 'physics') ||
-      (!boolFlag(flags, 'classic') && config.physics.enabled !== false),
-    physicsConfig: config.physics,
     mmr: !boolFlag(flags, 'no-mmr') && config.mmr.enabled,
     mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
     localBump: boolFlag(flags, 'equal-sources')

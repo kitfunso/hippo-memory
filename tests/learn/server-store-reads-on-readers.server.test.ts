@@ -316,7 +316,6 @@ const READS: readonly Read[] = [
       }),
     'mem_p_plain',
   ),
-  read('vectors.stored particles', (s) => s.vectors.stored('particles', VECTOR_IDS), 'mem_p_noise'),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
@@ -357,7 +356,6 @@ const READS: readonly Read[] = [
     'deploy-duration',
   ),
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
-  read('consolidation.particlesByRecall', (s) => s.consolidation.particlesByRecall({ limit: 5 }), 'mem_p_noise'),
   read(
     'dagReads.sessionRawKeys',
     (s) => s.dagReads.sessionRawKeys({ tenantId: TENANT, sessionId: SESSION, limit: 5 }),
@@ -725,7 +723,6 @@ describe('vectors from a reader thread', () => {
     cleanups.push(() => store.close());
 
     expect(await store.vectors.stored('vectors', [])).toEqual(new Map());
-    expect(await store.vectors.stored('particles', [])).toEqual(new Map());
     expect(ops).toEqual([]);
   });
 });
