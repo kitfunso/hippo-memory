@@ -148,7 +148,7 @@ export interface GraphFileOptions {
 /** Builds and saves the store's vector graph file when it is missing or has drifted, so a store
  * with no server still gets one. Never throws: a sleep finishes without it, and reads scan until
  * a later run saves it. */
-export async function saveGraphIfDue(
+export async function saveVectorGraphIfDue(
   grant: DbGrant,
   hippoRoot: string,
   opts: GraphFileOptions,
